@@ -1,6 +1,5 @@
 /**
- * The universal collapsible tool card: one row per tool call, with an optional
- * expandable body.
+ * A bare tool row with an icon, a compact result, and lazy result disclosure.
  *
  * Ported from opencode's
  * `packages/session-ui/src/v2/components/basic-tool-v2.tsx`
@@ -10,15 +9,18 @@
 
 import { Collapsible } from '@kobalte/core/collapsible';
 import CaretRight from '@phosphor/caret-right.svg';
+import Wrench from '@phosphor/wrench.svg';
+import { Tooltip } from '@ui/components/Tooltip';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';
 import { isToolActive, type ToolStatus } from './types';
 
 export interface ToolCardProps {
+  icon?: JSX.Element;
   title: JSX.Element | string;
   /** Mono, truncated detail next to the title (a path, a command, ...). */
   subtitle?: string;
-  /** Small `key=value` chips after the subtitle. */
+  /** Compact `key=value` details after the subtitle. */
   args?: Record<string, string>;
   /** Right-aligned slot before the chevron (status text, counts, ...). */
   trailing?: JSX.Element;
@@ -35,9 +37,6 @@ export interface ToolCardProps {
   children?: JSX.Element;
 }
 
-const ROW_CLASS =
-  'flex min-h-9 w-full items-center gap-2 px-3 py-2 text-left text-xs leading-5';
-
 export function ToolCard(props: ToolCardProps) {
   const active = () => isToolActive(props.status);
   const [uncontrolledOpen, setUncontrolledOpen] = createSignal(
@@ -51,13 +50,32 @@ export function ToolCard(props: ToolCardProps) {
   // Reading children to inspect them mounts expensive bodies even while closed.
   // Conditional callers supply presence separately; Kobalte mounts the body.
   const hasChildren = () => props.hasContent ?? 'children' in props;
+  const summary = () =>
+    props.trailing ??
+    (props.status === 'failed'
+      ? 'Failed'
+      : props.status === 'completed'
+        ? 'Succeeded'
+        : undefined);
 
   const row = (expandable: boolean) => (
     <>
+      <span
+        aria-hidden="true"
+        class="flex size-4 shrink-0 items-center justify-center text-ink-extra-muted [&>svg]:size-4"
+      >
+        {props.icon ?? <Wrench />}
+      </span>
       <span class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-        <span class="shrink-0 text-ink">
+        <span class="min-w-0 truncate text-ink-muted">
           {typeof props.title === 'string' ? (
-            <TextShimmer text={props.title} active={active()} />
+            <Tooltip
+              label={props.title}
+              as="span"
+              class="min-w-0 max-w-full truncate"
+            >
+              <TextShimmer text={props.title} active={active()} />
+            </Tooltip>
           ) : (
             props.title
           )}
@@ -68,25 +86,27 @@ export function ToolCard(props: ToolCardProps) {
               <span aria-hidden="true" class="shrink-0 text-ink-placeholder">
                 ·
               </span>
-              <span class="min-w-0 truncate font-mono">{subtitle()}</span>
+              <Tooltip label={subtitle()} as="span" class="min-w-0 truncate">
+                <span class="truncate font-mono">{subtitle()}</span>
+              </Tooltip>
             </>
           )}
         </Show>
         <For each={Object.entries(props.args ?? {})}>
           {([key, value]) => (
-            <span class="shrink-0 rounded bg-hover px-1 font-mono text-ink-extra-muted">
+            <span class="min-w-0 truncate font-mono text-ink-extra-muted">
               {key}={value}
             </span>
           )}
         </For>
       </span>
-      <Show when={props.trailing || expandable}>
-        <span class="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-          {props.trailing}
+      <Show when={summary() || expandable}>
+        <span class="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs tabular-nums text-ink-extra-muted">
+          {summary()}
           <Show when={expandable}>
             <CaretRight
               aria-hidden="true"
-              class="size-3 shrink-0 text-ink-extra-muted transition-transform group-data-expanded:rotate-90 motion-reduce:transition-none"
+              class="size-3.5 shrink-0 text-ink-extra-muted group-data-expanded:rotate-90"
             />
           </Show>
         </span>
@@ -96,20 +116,28 @@ export function ToolCard(props: ToolCardProps) {
 
   return (
     <div
-      class="overflow-hidden rounded-lg bg-surface text-ink-extra-muted"
-      classList={{ 'opacity-50': props.muted }}
+      class="min-w-0 text-ink-extra-muted"
+      data-tool-row
+      data-tool-status={props.status}
+      classList={{ 'opacity-75': props.muted }}
     >
       <Show
         when={hasChildren()}
-        fallback={<div class={ROW_CLASS}>{row(false)}</div>}
+        fallback={
+          <div class="flex min-h-8 w-full min-w-0 items-center gap-2 py-1 text-left text-sm leading-6">
+            {row(false)}
+          </div>
+        }
       >
         <Collapsible open={open()} onOpenChange={setOpen}>
-          <Collapsible.Trigger class={`group hover:bg-hover ${ROW_CLASS}`}>
+          <Collapsible.Trigger class="group flex min-h-8 w-full min-w-0 items-center gap-2 py-1 text-left text-sm leading-6 outline-offset-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent">
             {row(true)}
           </Collapsible.Trigger>
           <Collapsible.Content class="data-closed:hidden">
             <Show when={open()}>
-              <div class="min-w-0 px-3 pb-2">{props.children}</div>
+              <div class="min-w-0 pb-2 pl-6 text-xs leading-5">
+                {props.children}
+              </div>
             </Show>
           </Collapsible.Content>
         </Collapsible>

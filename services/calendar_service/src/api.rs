@@ -1,5 +1,8 @@
 use anyhow::Context;
 use axum::Router;
+use calendar_events::inbound::invitation_router::{
+    CalendarInvitationRouterState, calendar_invitation_router,
+};
 use calendar_events::inbound::mutation_router::{
     CalendarMutationRouterState, calendar_mutation_router,
 };
@@ -61,14 +64,20 @@ fn swagger_ui() -> Router {
 }
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {
+    let reads = calendar_watch::router().merge(calendar_invitation_router(
+        CalendarInvitationRouterState::new(
+            state.invitation_resolver.clone(),
+            state.authorization_state.clone(),
+        ),
+    ));
     // Calendar mutations follow the calendar sync kill switch: without sync a
     // provider write would never be reflected locally.
     if state.config.calendar_sync_enabled {
-        calendar_watch::router().merge(calendar_mutation_router(CalendarMutationRouterState::new(
+        reads.merge(calendar_mutation_router(CalendarMutationRouterState::new(
             state.calendar_mutation_service.clone(),
             state.authorization_state.clone(),
         )))
     } else {
-        calendar_watch::router()
+        reads
     }
 }

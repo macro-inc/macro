@@ -4,8 +4,8 @@ use super::{
     ports::EmailService,
 };
 use calendar_events::domain::invitations::{
-    CalendarInvitationRepository, CalendarInvitationResolver, InvitationIdentity,
-    InvitationResolution, InvitationRevision,
+    CalendarInvitationService, InvitationIdentity, InvitationResolution, InvitationRevision,
+    MAX_INVITATION_BATCH,
 };
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use rootcause::Report;
@@ -142,16 +142,15 @@ fn cancelled(invite: &CalendarInvitation) -> bool {
 /// Batch resolution for one authorized thread page. Caller-supplied UIDs are never used.
 pub async fn resolve<
     E: EmailService,
-    R: CalendarInvitationRepository,
+    C: CalendarInvitationService,
     S: InvitationRevisionRepository,
 >(
     email: &E,
-    calendar: &CalendarInvitationResolver<R>,
+    calendar: &C,
     snapshots: &S,
     receipt: EntityAccessReceipt<ViewAccessLevel>,
     offset: i64,
     limit: i64,
-    actions_enabled: bool,
 ) -> Result<HashMap<String, InvitationResolution>, Report> {
     let started = std::time::Instant::now();
     if offset < 0 || !(1..=100).contains(&limit) {
@@ -194,12 +193,9 @@ pub async fn resolve<
         .collect::<Vec<_>>();
     let mut result = HashMap::new();
     let mut reasons = HashMap::<&str, usize>::new();
-    for batch in identities.chunks(100) {
+    for batch in identities.chunks(MAX_INVITATION_BATCH) {
         let resolved = calendar.resolve(&viewer, batch).await?;
-        for (identity, mut resolution) in batch.iter().zip(resolved) {
-            if let InvitationResolution::Resolved { can_respond, .. } = &mut resolution {
-                *can_respond &= actions_enabled;
-            }
+        for (identity, resolution) in batch.iter().zip(resolved) {
             let reason = match &resolution {
                 InvitationResolution::Resolved { is_stale: true, .. } => "stale",
                 InvitationResolution::Resolved { .. } => "resolved",

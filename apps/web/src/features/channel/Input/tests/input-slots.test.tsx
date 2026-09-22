@@ -243,7 +243,43 @@ vi.mock('../FormatButtons', () => ({
   FormatButtons: () => <div data-testid="format-buttons" />,
 }));
 
+const peopleMocks = vi.hoisted(() => ({
+  contactsEnabled: undefined as boolean | undefined,
+}));
+const CONTACT = {
+  id: 'macro|ann@macro.test',
+  name: 'Ann',
+  email: 'ann@macro.test',
+};
+const CHANNEL_MEMBER = { user_id: 'macro|bo@macro.test' };
+
+vi.mock('@queries/contacts/contacts', () => ({
+  useContacts: (enabled?: () => boolean) => {
+    peopleMocks.contactsEnabled = enabled?.() ?? true;
+    return () => [CONTACT];
+  },
+}));
+vi.mock('@queries/channel/channel-participants', () => ({
+  useChannelParticipantsQuery: (channelId: () => string) => ({
+    isLoading: false,
+    get data() {
+      return channelId() ? [CHANNEL_MEMBER] : [];
+    },
+  }),
+}));
+vi.mock('@core/context/user', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/context/user')>()),
+  useUserId: () => () => 'macro|me@macro.test',
+}));
+vi.mock('@queries/messages/mutations', () => ({
+  useSendMessageMutation: () => ({ mutate: vi.fn() }),
+}));
+vi.mock('@queries/messages/typing', () => ({
+  usePostTypingUpdateMutation: () => ({ mutate: vi.fn() }),
+}));
+
 import { cursorMentionUser } from '../../macroAi';
+import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
 import { createInputAttachmentTracker } from '../attachment-tracker';
 import { ChannelInput } from '../ChannelInput';
 import { DropOverlay } from '../DropOverlay';
@@ -498,5 +534,63 @@ describe('Input slots', () => {
     ));
 
     expect(screen.getByText('Drop files to attach')).toBeTruthy();
+  });
+});
+
+/**
+ * Mention people reach the shared input from its `parent`, so every composer
+ * on a document — root, reply, and edit — offers the same people. The
+ * document composers regressed once by relying on each call site to pass
+ * them: a document reply offered agents and bots but no People at all.
+ */
+describe('mention people', () => {
+  const documentParent = { type: 'document', id: 'doc-1' } as const;
+  const channelParent = { type: 'channel', id: 'channel-1' } as const;
+  const mentionIds = () => editorMocks.mentionUsers?.().map((user) => user.id);
+
+  beforeEach(() => {
+    editorMocks.mentionUsers = undefined;
+    peopleMocks.contactsEnabled = undefined;
+  });
+
+  it('offers a document composer the workspace contacts', () => {
+    render(() => <ChannelInput input={baseInput} parent={documentParent} />);
+
+    expect(mentionIds()).toContain(CONTACT.id);
+  });
+
+  it('offers a channel composer its participants, not the workspace contacts', () => {
+    render(() => <ChannelInput input={baseInput} parent={channelParent} />);
+
+    expect(mentionIds()).toContain(CHANNEL_MEMBER.user_id);
+    expect(mentionIds()).not.toContain(CONTACT.id);
+    // A channel never shows them, so it should not fetch them either.
+    expect(peopleMocks.contactsEnabled).toBe(false);
+  });
+
+  it('keeps an explicitly supplied participants list', () => {
+    render(() => (
+      <ChannelInput
+        input={baseInput}
+        parent={documentParent}
+        participants={() => []}
+      />
+    ));
+
+    expect(mentionIds()).not.toContain(CONTACT.id);
+  });
+
+  it('offers people in a document thread reply composer', () => {
+    render(() => (
+      <ThreadReplyChannelInput
+        parent={documentParent}
+        threadId="root-1"
+        replyInputState={() => undefined}
+        setReplyInputState={() => undefined}
+        onExit={() => {}}
+      />
+    ));
+
+    expect(mentionIds()).toContain(CONTACT.id);
   });
 });

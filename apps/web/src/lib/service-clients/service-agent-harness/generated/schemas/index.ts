@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './accessLevel';
 export * from './agentAction';
 export * from './agentActionId';
 export * from './agentActionOneOf';
@@ -78,6 +79,7 @@ export * from './changedFileDtoPreviousPath';
 export * from './changesetDto';
 export * from './changesetDtoRepository';
 export * from './changesetSourceDto';
+export * from './channelSharePermission';
 export * from './completeRequest';
 export * from './controlRequest';
 export * from './controlRequestAllOf';
@@ -119,6 +121,7 @@ export * from './fileChangeKindDto';
 export * from './gitRefDto';
 export * from './gitRefDtoName';
 export * from './gitRefDtoSha';
+export * from './linkShare';
 export * from './listAgentRepositoryBranchesParams';
 export * from './loadAgentModelsRequest';
 export * from './loadAgentModelsRequestHarnessId';
@@ -158,6 +161,19 @@ export * from './sessionStatusDtoOneOfFiveKind';
 export * from './sessionStatusDtoOneOfKind';
 export * from './sessionStatusDtoOneOfThree';
 export * from './sessionStatusDtoOneOfThreeKind';
+export * from './sharePermissionV2';
+export * from './sharePermissionV2ChannelSharePermissions';
+export * from './sharePermissionV2LinkShare';
+export * from './sharePermissionV2LinkShareAccessLevel';
+export * from './sharePermissionV2TeamShareAccessLevel';
 export * from './startResponse';
 export * from './statusResponse';
+export * from './updateChannelSharePermission';
+export * from './updateChannelSharePermissionAccessLevel';
+export * from './updateOperation';
+export * from './updateSharePermissionRequestV2';
+export * from './updateSharePermissionRequestV2ChannelSharePermissions';
+export * from './updateSharePermissionRequestV2LinkShare';
+export * from './updateSharePermissionRequestV2LinkShareAccessLevel';
+export * from './updateSharePermissionRequestV2TeamShareAccessLevel';
 export * from './withAgentSessionId';

@@ -19,6 +19,10 @@ fn chat() -> Entity<'static> {
     EntityType::Chat.with_entity_string("20000000-0000-0000-0000-000000000003".to_string())
 }
 
+fn agent_session() -> Entity<'static> {
+    EntityType::AgentSession.with_entity_string("20000000-0000-0000-0000-000000000009".to_string())
+}
+
 fn active_call() -> Entity<'static> {
     EntityType::Call.with_entity_string("20000000-0000-0000-0000-000000000005".to_string())
 }
@@ -148,6 +152,46 @@ async fn apply_inserts_updates_and_deletes_direct_team_entity_access_for_chat(
 ) -> rootcause::Result<()> {
     let mut tx = pool.begin().await?;
     apply_comment_view_and_clear(&mut tx, &chat()).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn apply_inserts_updates_and_deletes_direct_team_entity_access_for_agent_sessions(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    let mut tx = pool.begin().await?;
+    apply_comment_view_and_clear(&mut tx, &agent_session()).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn legacy_session_facts_stay_valid_after_permission_initialization(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    let entity = EntityType::AgentSession
+        .with_entity_string("20000000-0000-0000-0000-000000000010".to_string());
+    let mut tx = pool.begin().await?;
+    let facts = load_facts(&mut tx, &entity).await?;
+    assert_eq!(facts.current, None);
+    assert_eq!(facts.revision, 0);
+    let authorized = command(&facts, Some(AccessLevel::View));
+
+    sqlx::query!(r#"INSERT INTO "SharePermission" (id) VALUES ('initialized-session')"#)
+        .execute(tx.as_mut())
+        .await?;
+    sqlx::query!("UPDATE agent_session SET share_permission_id = 'initialized-session' WHERE id = '20000000-0000-0000-0000-000000000010'")
+        .execute(tx.as_mut())
+        .await?;
+
+    apply(&mut tx, &authorized).await?;
+    let current = load_facts(&mut tx, &entity).await?;
+    assert_eq!(current.revision, 1);
+    assert_eq!(current.current.unwrap().level, TeamShareLevel::View);
+    Ok(())
 }
 
 #[sqlx::test(

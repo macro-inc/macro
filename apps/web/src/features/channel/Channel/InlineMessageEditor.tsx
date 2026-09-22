@@ -1,9 +1,7 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { IUser } from '@core/user/types';
 import type { MessageParent } from '@service-storage/messages';
 import { cn } from '@ui';
-import type { Accessor } from 'solid-js';
 import {
   ChannelInput,
   createInputAttachmentTracker,
@@ -18,7 +16,6 @@ type MessageEditorContentProps = {
   parent: MessageParent;
   message: MessageData;
   messageEditor: MessageEditor;
-  participants?: Accessor<IUser[]>;
   class?: string;
   collapsible?: boolean;
   /** Defaults to `!isMobile()` inside `ChannelInput`. */
@@ -66,7 +63,6 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
         collapsible={props.collapsible}
         autofocus={props.autofocus}
         attachmentTracker={attachmentTracker}
-        participants={props.participants}
         bots={channelBotMentionUsers}
         markdownNamespace={`edit-message-${props.parent.type}:${props.parent.id}-${props.message.id}`}
         onReady={props.onReady}

@@ -1,7 +1,6 @@
 import type { MessageEditor } from '@channel/Channel/create-message-editor';
 import type { NewMessageCheckable } from '@channel/Channel/util';
 import type { InputHandle, InputSnapshot } from '@channel/Input';
-import type { IUser } from '@core/user/types';
 import type { MessageListItem, MessageParent } from '@service-storage/messages';
 import type { Accessor, Setter } from 'solid-js';
 import type {
@@ -60,7 +59,6 @@ export type ThreadProps = {
   listMeta?: ChannelMessageListMeta;
   threadActions?: ThreadActions;
   messageEditor?: MessageEditor;
-  participants?: Accessor<IUser[]>;
   targetNavigation?: ThreadTargetNavigation;
   /** Whether the channel's Cmd+F find bar is currently open. */
   isFindBarOpen: Accessor<boolean>;

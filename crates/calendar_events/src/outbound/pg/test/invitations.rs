@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::invitations::{
-    CalendarInvitationResolver, InvitationIdentity, InvitationResolution,
+    CalendarInvitationResolver, CalendarInvitationService, InvitationIdentity, InvitationResolution,
 };
 
 fn identity(link: Uuid) -> InvitationIdentity {
@@ -42,7 +42,19 @@ async fn invitation_accounts_are_authorized_and_ambiguity_never_guesses(pool: Pg
     let b = insert_link(&pool, viewer).await;
     let event_a = event(&pool, &repo, viewer, a).await;
     event(&pool, &repo, viewer, b).await;
-    let resolver = CalendarInvitationResolver(repo);
+    let disabled = CalendarInvitationResolver::new(PgCalendarRepository::new(pool.clone()), false);
+    assert!(
+        matches!(
+            disabled.resolve(viewer, &[identity(a)]).await.unwrap()[0],
+            InvitationResolution::Resolved {
+                can_respond: false,
+                can_join: true,
+                ..
+            }
+        ),
+        "calendar owner's kill switch disables writes while preserving reads"
+    );
+    let resolver = CalendarInvitationResolver::new(repo, true);
     let result = resolver
         .resolve(viewer, &[identity(a), identity(Uuid::nil())])
         .await
@@ -133,7 +145,7 @@ async fn invitation_moved_instance_uses_original_key_and_instance_revision(pool:
     let mut request = identity(link);
     request.occurrence_key = Some(original.clone());
     request.sequence = 8;
-    let resolver = CalendarInvitationResolver(repo);
+    let resolver = CalendarInvitationResolver::new(repo, true);
     let result = resolver
         .resolve(viewer, &[identity(link), request.clone()])
         .await
@@ -222,7 +234,7 @@ async fn master_invitation_does_not_compare_revisions_with_first_exception(pool:
         attendees: None,
     });
     repo.upsert_event_fixture(upsert).await.unwrap();
-    let resolver = CalendarInvitationResolver(repo);
+    let resolver = CalendarInvitationResolver::new(repo, true);
     let mut cancel = identity(link);
     cancel.sequence = 2;
     cancel.cancelled = true;

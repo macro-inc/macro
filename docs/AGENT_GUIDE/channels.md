@@ -36,6 +36,17 @@ button that copies the whole section; a call that failed is faded, shows the
 error as its subtitle, and adds an `Error` section. Rows for a call still running
 show whatever has arrived so far.
 
+## Reading channel attachments through MCP
+
+When an agent reads a channel through Macro MCP, `ReadChannelMessages`,
+`ReadChannelThread`, and `ReadChannelMessageContext` include download URLs for
+image and video attachments, including attachments in replies and previews.
+Up to eight distinct images per response are also returned as inline images.
+Videos are linked for inspection with a video-capable tool. If an image cannot
+be loaded or exceeds the inline limit, its URL remains available. To check this,
+ask the agent to inspect an image on a channel message and a video on a reply;
+verify that its tool response includes the matching attachment URLs.
+
 ## Message composer
 
 Composer and conversation body text use `text-base` (15px at the default root
@@ -251,6 +262,11 @@ document should update to its fetched title afterward.
 
 Message and reply links reveal the target inside its thread. Keyboard message
 navigation scrolls only when the selected message is outside the usable viewport.
+With a message selected, `E` edits your own message and does nothing on someone
+else's message. Check both root messages and thread replies from a Home split:
+an incoming selection must not mark the Home item done or edit the thread root.
+Press `Escape` to clear selection; the parent Home shortcut is then available
+again. Typing `e` in the composer or inline editor should still enter text.
 Returning through split navigation restores the saved message position and expanded
 threads. Switching channel tabs currently opens Messages at latest. The `Scroll to bottom` control appears when scrolling down through history;
 it returns to the latest page even after opening a link into old history.
@@ -419,6 +435,12 @@ useful as a guaranteed-existing channel in tests.
 Locally sent channel messages and thread replies enter with a brief upward slide
 and fade, without bubble scaling. Opening history or remounting a row does not
 replay the effect. Reduced-motion preferences disable it.
+Consecutive messages from the same sender should enter in their grouped layout,
+without briefly showing an avatar/header and collapsing after acknowledgement.
+Check this with a delayed send response in both the channel and a thread, sending
+each follow-up within five minutes of a confirmed message with no replies.
+Messages from different senders, including bot messages triggered by different
+users, should retain separate headers.
 
 For mobile send regressions, keep the software keyboard open and send several
 short and multiline messages consecutively. The keyboard should remain open,

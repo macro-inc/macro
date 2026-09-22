@@ -396,31 +396,59 @@ to open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
 merged / closed.
 
-Tool groups and individual tool cards start collapsed. Expand a group to see
-its calls, then expand an edit card to view its file diffs. Diff bodies load
-only when their card opens; syntax highlighting may appear after the diff text.
-Opening a session or expanding a group should leave the app responsive, even
-when the session contains many file edits.
+Individual tools appear as bare rows with an icon, tool name, optional detail,
+and a right-aligned result summary. The caret on the right opens the results;
+it points right when collapsed and down when expanded. Individual results start
+collapsed. Existing rich result views retain their own content and controls;
+when a result view provides its own disclosure, use that control rather than
+adding a second nested disclosure. Counts come from structured responses,
+edits show additions/deletions, and other tools show their outcome. A call cut
+off when its turn ends reads **Stopped**.
+
+Only tools with a supported result view can expand. Unknown tools, unsupported
+drafts, and payloads that do not fit their renderer stay as summary rows with
+no caret. Tool arguments and results never fall back to raw JSON.
+
+Consecutive calls collect under an expanded **Calling N tools** group while
+running. Rows appear as calls arrive; after the calls finish, the group briefly
+settles and collapses to **Called N tools**. Group growth and collapse happen
+immediately, without animation, including fast batches. Completed groups in
+history start collapsed and can be reopened. The group caret sits immediately
+after its label and appears on hover or keyboard focus. Expand an edit row to
+view its diffs. Result bodies load only when their row opens; syntax highlighting
+may appear after the diff text. Opening a session or expanding a group should
+leave the app responsive, even when the session contains many file edits.
+
+`DisplayResults` renders its dynamic view directly in the reply and stays visible
+without opening a tool row. It breaks tool groups before and after itself,
+including while pending; later calls start a separate group.
+Its dashboard supports markdown, timelines, entity lists, and channel messages,
+using the same full-width view as AI chat. Incomplete arguments stay hidden while
+streaming; a valid view updates as arguments arrive. Malformed completed views
+show **Couldn't render dashboard**; failed calls show a **Failed** summary row
+without a disclosure. Macro's built-in agents receive the complete view schema
+with the tool definition. External coding agents connected through Macro's MCP
+server do not currently receive this tool.
+
+The development gallery at `/app/component/agent-ui` includes **Replay tool
+calls** and **Replay fast batch**, both using the message renderer. Check that
+rows accumulate, completed calls stop shimmering, the group collapses after
+completion without height animation, and its carets still expand the results.
+Check that rich result controls still work and `DisplayResults` stays visible
+between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
+and confirm unknown tools have no individual disclosure or JSON payload. Repeat
+at a narrow viewport width.
 
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
 as soon as a tool or answer follows, including during long Cursor turns. A
-trailing thought stays outside the tool group so the live reasoning row stays
-visible. Only the newest turn can be live: once the composer stops showing the
+trailing thought at the end of a message stays outside the tool group so live
+reasoning stays visible; thoughts followed by prose stay inside the group.
+Only the newest turn can be live: once the composer stops showing the
 agent as working, every Thinking label, **Calling N tools** row, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
-the runtime cut off mid-call. At most one shimmering row is ever expected.
-
-A `displayResults` call is the exception: it renders the dynamic-UI view the
-model composed — the same dashboard (markdown, timelines, entity lists, channel
-messages) that AI chat shows — full width in the transcript, and never folded
-into a tool group or behind a card. Expect the view itself, not a `DisplayResults`
-row. Incomplete arguments stay hidden while streaming, and a valid view updates
-as its arguments change. A completed call whose JSON does not match the schema
-shows `Couldn't render dashboard`; a failed call keeps its error card.
-Macro's built-in agents receive the complete view schema with the tool definition.
-External coding agents connected through Macro's MCP server do not currently
-receive this tool.
+the runtime cut off mid-call. Shimmer identifies current activity: an active
+tool and its containing group can shimmer together; completed rows stay still.
 
 ### Sharing a session
 
@@ -443,16 +471,23 @@ instead of the standalone recent-sessions and tips surface.
 
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;
 on mobile, open the session title menu and choose **Share**. The owner can
-select people or channels and send the session with an optional message using
-the same Share dialog and mobile drawer as documents. Sessions also support
-**Share** from entity list menus and the entity sharing shortcut. People receive it through a direct or
-group message. Recipients can view and control the session; there is no access
-level selector. The owner sees the standard recipient-and-message form without
-an extra session notice or Copy Link footer; **Copy Share Link** remains in
-the header. Cancel closes the composer without sending.
+select people or channels, choose their access level, and send the session with
+an optional message using the same Share dialog and mobile drawer as tasks.
+Sessions also support **Share** from entity list menus and the entity sharing
+shortcut. **People with access** lists the owner and shared conversations;
+the owner can change or remove a conversation's access. **Link sharing** offers
+None / Public / Team and an access level. **Team access** shares directly with
+the owner's team when one exists. On mobile these controls are in the Share,
+People, and Link tabs. View and Comment allow reading; Edit also allows
+controlling the session. View-only sessions keep the composer, model selector,
+and queued-message controls disabled. **Copy Share Link** remains in the header. Cancel
+closes the composer without sending.
+
+Sharing a session reference in a message grants View by default and preserves
+an existing grant. Use the access selector to grant Comment or Edit.
 
 Other participants can copy a link for people who already have access, but
-cannot grant access. Copying a link alone never changes permissions. New,
+cannot grant access or change sharing settings. Copying a link alone never changes permissions. New,
 unsaved session drafts do not offer sharing.
 
 Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and agent names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.

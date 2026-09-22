@@ -914,6 +914,10 @@ when background extraction finishes while the thread is open. Scheduling updates
 RSVP and Join until their current calendar state has been checked.
 
 A connected, resolved invitation shows the responding address and Yes / Maybe / No.
+Local verification requires both email and calendar services: email supplies saved
+snapshots, while calendar service resolves the current event and authorizes RSVP.
+Email's calendar-sync flag is intentionally off after the local service cutover;
+calendar service's flag controls whether responses are available.
 The selected response remains pressed while a save is pending. Recurring invitations ask
 for `This event` or `All events`. Failures keep the card in place and report a retryable
 error; offline responses are not sent. Cancellation and response/proposal notifications

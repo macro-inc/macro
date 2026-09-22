@@ -30,6 +30,9 @@ pub type CalendarMutationSvc = CalendarMutationServiceImpl<
 /// Shared HTTP application state for the calendar service.
 #[derive(Clone)]
 pub struct ApiContext {
+    /// Calendar-owned invitation lookup and response capabilities.
+    pub invitation_resolver:
+        Arc<calendar_events::domain::invitations::CalendarInvitationResolver<PgCalendarRepository>>,
     /// Resolved service configuration.
     pub config: Arc<Config>,
     /// Authorization state for authenticated mutation routes.

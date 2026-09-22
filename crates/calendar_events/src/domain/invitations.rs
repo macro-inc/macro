@@ -6,7 +6,7 @@ use std::future::Future;
 use uuid::Uuid;
 
 /// Identity derived from an already-authorized saved invitation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InvitationIdentity {
     /// Stable snapshot component key.
     pub id: String,
@@ -32,7 +32,7 @@ pub struct InvitationIdentity {
     pub sequence: u32,
 }
 /// An email-authorized scheduling revision from a particular inbox.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InvitationRevision {
     /// Independently authorized message inbox.
     pub link_id: Uuid,
@@ -160,21 +160,50 @@ pub enum InvitationResolution {
         is_stale: bool,
     },
 }
-/// Calendar-domain authorization and ambiguity policy.
-pub struct CalendarInvitationResolver<R>(pub R);
-impl<R: CalendarInvitationRepository> CalendarInvitationResolver<R> {
+/// Maximum number of identities resolved by a single service call.
+pub const MAX_INVITATION_BATCH: usize = 100;
+
+/// Calendar-owned service boundary for email-authorized invitation identities.
+pub trait CalendarInvitationService: Send + Sync + 'static {
+    /// Independently authorize calendar access and return one result per identity, in order.
+    fn resolve(
+        &self,
+        viewer: &str,
+        items: &[InvitationIdentity],
+    ) -> impl Future<Output = Result<Vec<InvitationResolution>, Report>> + Send;
+}
+
+/// Calendar-domain authorization, ambiguity, and response capability policy.
+pub struct CalendarInvitationResolver<R> {
+    repository: R,
+    responses_enabled: bool,
+}
+
+impl<R> CalendarInvitationResolver<R> {
+    /// Configure responses using the calendar owner's sync/mutation gate.
+    pub fn new(repository: R, responses_enabled: bool) -> Self {
+        Self {
+            repository,
+            responses_enabled,
+        }
+    }
+}
+
+impl<R: CalendarInvitationRepository + 'static> CalendarInvitationService
+    for CalendarInvitationResolver<R>
+{
     /// Resolve a bounded batch. Missing data is deliberately not permanent.
-    pub async fn resolve(
+    async fn resolve(
         &self,
         viewer: &str,
         items: &[InvitationIdentity],
     ) -> Result<Vec<InvitationResolution>, Report> {
-        if items.len() > 100 {
+        if items.len() > MAX_INVITATION_BATCH {
             return Err(rootcause::report!(
                 "at most 100 invitation identities per request"
             ));
         }
-        let availability = self.0.invitation_availability(viewer).await?;
+        let availability = self.repository.invitation_availability(viewer).await?;
         if !availability.connected {
             return Ok(items
                 .iter()
@@ -187,7 +216,7 @@ impl<R: CalendarInvitationRepository> CalendarInvitationResolver<R> {
                 })
                 .collect());
         }
-        let candidates = self.0.invitation_candidates(viewer, items).await?;
+        let candidates = self.repository.invitation_candidates(viewer, items).await?;
         Ok(items
             .iter()
             .zip(candidates)
@@ -268,7 +297,8 @@ impl<R: CalendarInvitationRepository> CalendarInvitationResolver<R> {
                     && !is_stale
                     && copy.event.status != EventStatus::Cancelled
                     && !copy.occurrence.is_cancelled;
-                let can_respond = organizer_matches
+                let can_respond = self.responses_enabled
+                    && organizer_matches
                     && !is_stale
                     && !copy.event.is_read_only
                     && copy.event.status != EventStatus::Cancelled

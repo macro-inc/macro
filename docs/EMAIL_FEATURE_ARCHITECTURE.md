@@ -477,12 +477,24 @@ small presentation values. The body renderer has no calendar dependencies.
 `block-email` injects calendar navigation with both the original identity and current
 occurrence time, including when an instance has moved to another day.
 
-The resolution endpoint first authorizes the thread, then derives identities from
-stored snapshots. The calendar domain independently limits lookup to owned, connected
+The email resolution endpoint first authorizes the thread, then derives identities from
+stored snapshots. It calls the `CalendarInvitationService` port through the
+`CalendarServiceInvitations` HTTP adapter. `calendar_service` hosts the internal-only
+batch endpoint and constructs the PostgreSQL resolver; email does not read calendar
+tables for this operation. The internal call carries the verified viewer identity,
+and the calendar domain independently limits lookup to owned, connected
 Google-backed copies, prefers the owning inbox, and withholds ambiguous, read-only,
 stale, cancelled, mismatched-organizer, or unresolved-instance responses. Saved newer
 scheduling revisions suppress stale actions while calendar sync catches up. Exception
 revisions are preserved independently of the master. Reads never create calendar events.
+Response capabilities use **calendar_service's** sync/mutation gate. Email's legacy
+calendar-sync flag can stay disabled after the service cutover without disabling RSVP
+on invitation cards. The batch endpoint remains available when calendar writes are off,
+returning read-only capabilities. Calendar service failures leave the saved card useful
+and are retried through the existing frontend resolution query.
+Deploy the calendar endpoint and its dedicated gateway listener rule before the email
+client: the rule routes `/calendar/internal/invitations/resolve` to calendar service
+ahead of email's transitional `/calendar/*` rule, without moving other endpoints.
 
 RSVP uses the existing provider write-through mutation. Its writer revisions cover both
 occurrence and invitation caches, including email-only views. Failed older requests

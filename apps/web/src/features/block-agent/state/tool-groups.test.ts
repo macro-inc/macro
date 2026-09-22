@@ -1,14 +1,21 @@
-import type { MessagePart } from '@service-agent-fold/generated/types';
+import type {
+  MessagePart,
+  ToolDetail,
+  ToolName,
+} from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
 import { rendersOwnView, segmentParts } from './tool-groups';
 
 const text = (): MessagePart => ({ kind: 'text', text: 'hi' });
-const tool = (): MessagePart => ({
+const tool = (
+  overrides?: Partial<Extract<MessagePart, { kind: 'tool_use' }>>
+): MessagePart => ({
   kind: 'tool_use',
   id: 'call',
   name: { kind: 'native', name: 'Read' },
   status: 'completed',
   detail: { kind: 'read', paths: ['a.rs'] },
+  ...overrides,
 });
 const thought = (): MessagePart => ({ kind: 'thought', text: 'thinking...' });
 /**
@@ -70,6 +77,59 @@ describe('segmentParts', () => {
     ]);
   });
 
+  describe.each([
+    {
+      label: 'native',
+      name: { kind: 'native', name: 'DisplayResults' } satisfies ToolName,
+    },
+    {
+      label: 'MCP',
+      name: {
+        kind: 'mcp',
+        server: 'macro',
+        tool: 'DisplayResults',
+      } satisfies ToolName,
+    },
+  ])('DisplayResults called through $label', ({ name }) => {
+    it.each(['pending', 'running', 'completed'] as const)(
+      'breaks tool groups before and after a %s call',
+      (status) => {
+        const details: ToolDetail[] = [
+          { kind: 'macro', input: null, output: null, error: null },
+          {
+            kind: 'other',
+            acpKind: 'other',
+            input: null,
+            output: null,
+            result: null,
+            error: null,
+          },
+        ];
+        for (const detail of details) {
+          if (name.kind === 'native' && detail.kind === 'other') continue;
+          const display = tool({ name, status, detail });
+          expect(
+            segmentParts([tool(), tool(), display, tool(), tool()])
+          ).toEqual([
+            { kind: 'tools', start: 0, end: 2 },
+            { kind: 'part', start: 2, end: 3 },
+            { kind: 'tools', start: 3, end: 5 },
+          ]);
+        }
+      }
+    );
+  });
+
+  it('keeps adjacent thoughts in their own runs around inline results', () => {
+    expect(
+      segmentParts([tool(), thought(), displayResults(), thought(), tool()])
+    ).toEqual([
+      { kind: 'tools', start: 0, end: 2 },
+      { kind: 'part', start: 2, end: 3 },
+      { kind: 'tools', start: 3, end: 5 },
+    ]);
+  });
+
   it('groups a run that closes the message', () => {
     expect(segmentParts([text(), tool(), tool()])).toEqual([
       { kind: 'part', start: 0, end: 1 },
@@ -98,10 +158,17 @@ describe('segmentParts', () => {
     ]);
   });
 
-  it('leaves a trailing thought out of a tool run', () => {
+  it('leaves a trailing thought out of a run that closes the message', () => {
     expect(segmentParts([thought(), tool(), thought()])).toEqual([
       { kind: 'tools', start: 0, end: 2 },
       { kind: 'part', start: 2, end: 3 },
+    ]);
+  });
+
+  it('keeps a trailing thought in a run that prose follows', () => {
+    expect(segmentParts([tool(), tool(), thought(), text()])).toEqual([
+      { kind: 'tools', start: 0, end: 3 },
+      { kind: 'part', start: 3, end: 4 },
     ]);
   });
 
@@ -163,18 +230,35 @@ describe('segmentParts', () => {
     ]);
   });
 
-  it('keeps the last thought and the dashboard visible after grouped tools', () => {
+  it('keeps a thought before the dashboard in the preceding tool group', () => {
     expect(
       segmentParts([thought(), tool(), thought(), displayResults()])
     ).toEqual([
-      { kind: 'tools', start: 0, end: 2 },
-      { kind: 'part', start: 2, end: 3 },
+      { kind: 'tools', start: 0, end: 3 },
       { kind: 'part', start: 3, end: 4 },
     ]);
   });
 });
 
 describe('rendersOwnView', () => {
+  it('does not treat a same-named external MCP tool as a dashboard', () => {
+    const part = tool({
+      name: { kind: 'mcp', server: 'external', tool: 'DisplayResults' },
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        input: { view: { widgets: [] } },
+        output: null,
+        result: null,
+        error: null,
+      },
+    });
+    expect(rendersOwnView(part)).toBe(false);
+    expect(segmentParts([tool(), part, tool()])).toEqual([
+      { kind: 'tools', start: 0, end: 3 },
+    ]);
+  });
+
   it('is true for a Macro displayResults call', () => {
     expect(rendersOwnView(displayResults())).toBe(true);
   });

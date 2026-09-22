@@ -43,7 +43,6 @@ pub(crate) async fn handler(
         access.entity_access_receipt,
         page.offset.unwrap_or(0),
         page.limit.unwrap_or(100),
-        state.config.calendar_sync_enabled,
     )
     .await
     .map(Json)

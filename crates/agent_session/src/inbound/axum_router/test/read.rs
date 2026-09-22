@@ -50,12 +50,14 @@ async fn view_router() -> Router {
     ))
 }
 #[tokio::test]
-async fn unauthorized_view_cannot_read_saved_session() {
+async fn invalid_credentials_cannot_read_saved_session() {
     let response = view_router()
         .await
         .oneshot(
             Request::builder()
                 .uri(format!("/{}", AgentSessionId::TEST_A))
+                .header(BOT_TOKEN_HEADER, "invalid-token")
+                .header(BOT_SCOPE_HEADER, "user")
                 .body(Body::empty())
                 .unwrap(),
         )

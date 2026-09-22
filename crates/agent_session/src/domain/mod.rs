@@ -13,6 +13,8 @@ mod sandbox_size;
 pub mod search;
 pub mod service;
 pub mod session;
+/// Session link, channel, and team sharing.
+pub mod sharing;
 
 pub mod credentials;
 

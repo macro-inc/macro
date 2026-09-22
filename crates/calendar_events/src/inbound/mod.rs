@@ -1,5 +1,9 @@
 //! Inbound calendar adapters.
 
+/// Internal batch invitation resolution for authorized email snapshots.
+#[cfg(feature = "inbound")]
+pub mod invitation_router;
+
 /// Axum routes for authenticated calendar queries.
 #[cfg(feature = "inbound")]
 pub mod axum_router;
