@@ -15,9 +15,14 @@ vi.mock('./date-selector', () => ({
     selectedDate?: Date | null;
     triggerClass?: string;
     triggerLabel?: string;
+    showCurrentValue?: boolean;
     trigger: (state: { selectedDate: Date | null }) => JSX.Element;
   }) => (
-    <button class={props.triggerClass} aria-label={props.triggerLabel}>
+    <button
+      class={props.triggerClass}
+      aria-label={props.triggerLabel}
+      data-show-current-value={String(props.showCurrentValue)}
+    >
       {props.trigger({ selectedDate: props.selectedDate ?? null })}
     </button>
   ),
@@ -75,5 +80,29 @@ describe('EmailDateSelector', () => {
     });
     expect(trigger.className).not.toContain('not-touch:w-auto!');
     expect(trigger.querySelector('.truncate')).toBeNull();
+  });
+
+  it('does not repeat an unconfirmed time inside the picker menu', () => {
+    render(() => (
+      <EmailDateSelector
+        mobile={false}
+        state={{
+          type: 'editing',
+          intent: {
+            type: 'later',
+            sendTime: new Date('2026-12-31T23:59:00Z'),
+          },
+        }}
+        selectedTime={new Date('2026-12-31T23:59:00Z')}
+        onSelectTime={vi.fn()}
+        operation="idle"
+        disablePortal
+      />
+    ));
+
+    const trigger = screen.getByRole('button', {
+      name: /Will send .* after you choose Schedule send/,
+    });
+    expect(trigger.dataset.showCurrentValue).toBe('false');
   });
 });

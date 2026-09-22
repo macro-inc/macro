@@ -50,6 +50,8 @@ type DateSelectorProps = {
   triggerLabel?: string;
   clearLabel?: string;
   currentLabel?: string;
+  /** Show the selected date in the menu above its clear action. */
+  showCurrentValue?: boolean;
   clearable?: boolean;
   footer?: JSX.Element;
   trigger?:
@@ -345,6 +347,7 @@ export const DateSelector = (props: DateSelectorProps) => {
                   selectedOption={option()}
                   clearLabel={props.clearLabel}
                   currentLabel={props.currentLabel}
+                  showValue={props.showCurrentValue !== false}
                   clearable={props.clearable !== false}
                   onClear={() => {
                     void onChange(null);
@@ -411,6 +414,7 @@ interface CurrentValueDisplayProps {
   onClear: VoidFunction;
   clearLabel?: string;
   currentLabel?: string;
+  showValue: boolean;
   clearable: boolean;
 }
 
@@ -425,19 +429,24 @@ const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
   });
 
   return (
-    <div class="px-3 py-2 border-b border-edge-muted">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-ink-muted">
-            {props.currentLabel ?? 'Current:'}
-          </span>
-          <span class="text-xs font-medium">{currentDateDisplay()}</span>
-        </div>
+    <div class="border-b border-edge-muted p-1.5">
+      <div class="flex items-center justify-between gap-3">
+        <Show when={props.showValue}>
+          <div class="flex min-w-0 flex-1 items-center gap-2 px-1.5">
+            <span class="shrink-0 text-xs text-ink-muted">
+              {props.currentLabel ?? 'Current:'}
+            </span>
+            <span class="min-w-0 truncate text-xs font-medium">
+              {currentDateDisplay()}
+            </span>
+          </div>
+        </Show>
         <Show when={props.clearable}>
           <button
             onPointerDown={(e: PointerEvent) => e.preventDefault()}
             onClick={props.onClear}
-            class="text-xs text-ink-muted hover:text-ink underline"
+            class="min-h-10 shrink-0 rounded-lg px-3 text-xs text-ink-muted underline hover:bg-hover hover:text-ink"
+            classList={{ 'w-full text-left': !props.showValue }}
           >
             {props.clearLabel ?? 'Clear'}
           </button>

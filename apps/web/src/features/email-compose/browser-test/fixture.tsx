@@ -4,7 +4,7 @@ import PaperclipIcon from '@phosphor/paperclip.svg';
 import TextAa from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { Button, SendButton } from '@ui';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { EmailDateSelector } from '../components/email-date-selector';
 import type { EmailScheduleState } from '../primitives/email-send-schedule';
@@ -63,9 +63,7 @@ function Fixture() {
     const current = schedule();
     if (current.type === 'scheduled')
       return `Scheduled for ${current.confirmedTime.toLocaleString()}`;
-    return current.intent.type === 'later'
-      ? `Will send ${current.intent.sendTime.toLocaleString()}`
-      : 'No send time selected';
+    return undefined;
   };
   const submit = () => {
     const current = schedule();
@@ -122,9 +120,13 @@ function Fixture() {
           onClick={submit}
         />
       </div>
-      <p role="status" data-testid="schedule-status">
-        {status()}
-      </p>
+      <Show when={status()}>
+        {(label) => (
+          <p role="status" data-testid="schedule-status">
+            {label()}
+          </p>
+        )}
+      </Show>
       <output data-testid="commit-count">{commitCount()}</output>
     </main>
   );

@@ -114,11 +114,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
   };
   const scheduleNotice = () => {
     const schedule = ctxValue.schedule.state();
-    if (schedule.type === 'editing') {
-      return schedule.intent.type === 'later'
-        ? `Will send ${schedule.intent.sendTime.toLocaleString()} after you choose Schedule send.`
-        : undefined;
-    }
+    if (schedule.type === 'editing') return undefined;
     if (schedule.proposedTime) {
       return `Scheduled for ${schedule.confirmedTime.toLocaleString()}. Proposed replacement: ${schedule.proposedTime.toLocaleString()}. The original remains active until Update schedule succeeds.`;
     }

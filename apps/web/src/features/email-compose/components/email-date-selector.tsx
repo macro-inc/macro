@@ -65,12 +65,13 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
           triggerLabel={accessibleLabel()}
           clearable={clearable()}
           clearLabel={hasProposal() ? 'Discard proposed time' : 'Clear time'}
+          showCurrentValue={isConfirmed()}
           currentLabel={
             hasProposal()
               ? 'Proposed:'
               : isConfirmed()
                 ? 'Scheduled:'
-                : 'Will send:'
+                : undefined
           }
           footer={
             <Show when={isConfirmed()}>

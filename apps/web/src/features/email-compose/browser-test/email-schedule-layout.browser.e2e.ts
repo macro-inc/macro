@@ -78,8 +78,18 @@ test('selection stays a preview until the primary action confirms it', async ({
   await page.getByRole('combobox').fill('tomorrow 9am');
   await page.getByRole('option').first().click();
 
-  await expect(page.getByTestId('schedule-status')).toContainText('Will send');
+  await expect(page.getByTestId('schedule-status')).toHaveCount(0);
   await expect(page.getByTestId('commit-count')).toHaveText('0');
+  await page
+    .getByRole('button', {
+      name: /Will send .* after you choose Schedule send/,
+    })
+    .click();
+  await expect(page.getByText('Will send:', { exact: true })).toHaveCount(0);
+  const clearTime = page.getByRole('button', { name: 'Clear time' });
+  await expect(clearTime).toBeVisible();
+  expect((await clearTime.boundingBox())?.height).toBeGreaterThanOrEqual(36);
+  await page.keyboard.press('Escape');
   const submit = page.getByRole('button', {
     name: 'Schedule send',
     exact: true,
