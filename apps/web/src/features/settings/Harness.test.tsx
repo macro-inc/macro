@@ -232,11 +232,18 @@ describe('Harness', () => {
     ).toBeTruthy();
   });
 
-  it('places bring-your-own above the built-in and paired runtime lists', () => {
-    render(() => <Harness />);
+  it('places bring-your-own above navigation and the runtime lists', () => {
+    render(() => (
+      <Harness navigation={<nav aria-label="Agent management" />} />
+    ));
     const invitation = screen.getByRole('heading', {
       name: 'Bring your agent to Macro',
     });
+    expect(
+      invitation.compareDocumentPosition(
+        screen.getByRole('navigation', { name: 'Agent management' })
+      ) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
     for (const name of ['Built-in runtimes', 'Paired runtimes']) {
       expect(
         invitation.compareDocumentPosition(

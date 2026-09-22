@@ -142,7 +142,7 @@ permission failures should display a failed tool call without a successful resul
   configures built-in providers and paired machines. **New agent** and **New runtime**
   replace the list with full-page forms, not dialogs. Back/Cancel returns to the list;
   use **New conversation** in the sidebar to return to the composer. The animated
-  **Bring your own agent** card sits above the lists in both sections and links
+  **Bring your own agent** card sits above the Agents/Runtimes tabs and links
   directly to runtime pairing and its setup guide.
   The device-code entry page shows an example macrod terminal below the form;
   enter the code from your own terminal, not the example. Click the image to

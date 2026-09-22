@@ -259,8 +259,8 @@ export function Agents(
             </Button>
           }
         >
-          {props.navigation}
           {props.invitation}
+          {props.navigation}
           <SettingsSection
             title="Team agents"
             description="Agents shared with your team, including Macro."
