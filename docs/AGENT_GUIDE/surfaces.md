@@ -481,7 +481,7 @@ With `enable-new-app-views` enabled, Files opens **Drive** using the
 same shell as Tasks, on desktop and touch devices alike.
 
 On touch devices (phones and tablets), the Drive header is a scrollable pill
-strip — **My Files**, **Recent**, and **Shared with me** — with a leading
+strip — **Recent**, **My Files**, and **Shared with me** — with a leading
 filter-drawer button, like Tasks. The drawer holds Sort (hidden on Recent,
 where the viewer's interaction order applies) and the same filter groups as
 the desktop **Filter** menu; active selections show a count badge on the
