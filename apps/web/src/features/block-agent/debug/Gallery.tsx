@@ -110,16 +110,31 @@ const FIXTURE_MODELS: ModelOption[] = [
   },
 ];
 
+/**
+ * A Macro Agent catalog: the in-memory harness keeps no display names, so
+ * every option arrives named after its own slug.
+ */
+const FIXTURE_INMEM_MODELS: ModelOption[] = [
+  'anthropic/claude-sonnet-5',
+  'anthropic/claude-opus-5',
+  'anthropic/claude-haiku-4-5',
+  'openai/gpt-5.5',
+  'openai/gpt-5-mini',
+].map((id) => ({ id, name: id, description: null, group: null }));
+
 /** The composer as the block mounts it, with the model control wired. */
-function ModelSelectorDemo() {
-  const [model, setModel] = createSignal<string | null>('grok-4.6-high-fast');
+function ModelSelectorDemo(props: {
+  options: ModelOption[];
+  initialModel: string;
+}) {
+  const [model, setModel] = createSignal<string | null>(props.initialModel);
   return (
     <AgentInput
       onSend={(content) => console.info('[gallery] send', content)}
       modelControl={
         <AgentModelSelector
           model={model()}
-          options={FIXTURE_MODELS}
+          options={props.options}
           onSelect={(id) => {
             console.info('[gallery] model', id);
             setModel(id);
@@ -1221,8 +1236,22 @@ export default function AgentUiGallery() {
             />
           </Item>
 
-          <Item label="AgentInput with model selector">
-            <ModelSelectorDemo />
+          <Item label="AgentInput with model selector (harness names)">
+            <ModelSelectorDemo
+              options={FIXTURE_MODELS}
+              initialModel="grok-4.6-high-fast"
+            />
+          </Item>
+
+          <Item label="AgentInput with model selector (slug-named catalog)">
+            <p class="text-xs text-ink-muted">
+              What Macro Agent reports: names that are only ids, shown as names
+              with their provider's logo.
+            </p>
+            <ModelSelectorDemo
+              options={FIXTURE_INMEM_MODELS}
+              initialModel="anthropic/claude-sonnet-5"
+            />
           </Item>
 
           <Item label="AgentMessage (end-to-end)">
