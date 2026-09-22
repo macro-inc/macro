@@ -160,10 +160,11 @@ cannot be undone by cancellation; never put interrupted work back into pending.
 From the repository root, with local PostgreSQL and `SQLX_OFFLINE` unset:
 
 ```sh
-env -u SQLX_OFFLINE cargo test -p scheduled_action --bin service
-env -u SQLX_OFFLINE cargo test -p scheduled_action config
+env -u SQLX_OFFLINE cargo test -p scheduled_action --test event_routines
 env -u SQLX_OFFLINE cargo test -p scheduled_action
-just check
+nix develop --command just prepare_db
+nix develop --command just check
+nix develop --command just check full
 ```
 
 Service tests cover gated spawning, fresh-consumer supervision, bounded shutdown
@@ -171,3 +172,79 @@ Service tests cover gated spawning, fresh-consumer supervision, bounded shutdown
 Worker/domain tests cover bounded concurrency, pre-claim shutdown, access policy,
 and terminal no-retry behavior. Live Kafka/IAM and multi-replica rollout checks
 remain operator verification; unit tests do not establish production connectivity.
+
+### PostgreSQL integration regressions
+
+[`tests/event_routines.rs`](tests/event_routines.rs) wires the real Axum router,
+management/admission/dispatch services, both PostgreSQL repositories, event worker,
+and shared `InProcessExecutor`. Only authentication, current-owner access, live
+updates, and the agent-run port are fakes. SQLx creates an isolated migrated database
+per test; use a local test role allowed to create databases, never hosted data.
+No model credentials are needed and no model calls are made.
+
+The six tests cover:
+
+- Legacy cron and canonical event CRUD through one API, list compatibility, manual
+  execution without event context, chat-linked history, and deletion.
+- Two worker replicas sharing PostgreSQL, two arrivals during an active run, FIFO
+  continuation after failure, and duplicate delivery while pending/started/finished.
+- Overlapping filters, two routines matching one event, concurrent duplicate intake,
+  one-item candidate pages, and competing dispatches of the same pending snapshot.
+- Dropped admission while its transaction is blocked before commit; fresh intake
+  after durable admission but before a simulated offset acknowledgment.
+- Committed start without invoking the runner; simulated output side effects without
+  finalization; deadline reconciliation to interrupted; terminal redelivery and stale
+  dispatch. Interrupted attempts never run again, but later queued events complete.
+- A human channel event followed by simulated bot-authored document/channel outputs:
+  repeated output delivery creates no further event-run rows, even with human owner
+  and legacy actor metadata.
+
+These are durable-boundary simulations, **not** process-kill, broker-offset, live
+permission-service, Kafka/MSK IAM, tool-producer attribution, or LLM verification.
+Existing Kafka adapter tests exercise the receive/admit/commit loop with fake
+transport separately. Worker replicas here are independent tasks/adapters in one
+process, not separate deployed services.
+
+### Verified local procedure and remaining checks
+
+The database-only procedure above passed using the existing migrated loopback
+PostgreSQL and the builder's inspected `macro-build-env --local-db` toolchain wrapper:
+all six integration tests and all **137 scheduled-action tests** passed with
+`SQLX_OFFLINE` unset. Root `cargo fmt --check` and the changed-file AST rules passed;
+focused integration Clippy completed without findings in the new test file.
+All five test SQL statements reuse existing checked queries/cache entries; no schema
+or generated SQLx metadata changes are required.
+
+Environmental/check limitations recorded during this verification:
+
+- Nix is not installed, so all three Nix commands above were unavailable.
+- The equivalent root `just sqlx::prepare_db "$DATABASE_URL" --tests` reached the
+  workspace build but failed in `rs-libreoffice-bindings`: Clang could not find
+  `stddef.h`. Its incomplete cache deletion was reverted, not committed.
+- Direct `just check` / `just check full` could not discover changes in the isolated
+  JJ workspace and skipped checking. Their exit status is **not** a passing gate.
+- Strict package Clippy (`--tests -- -D warnings -D clippy::disallowed_methods`)
+  reports pre-existing `needless_return` in `inprocess_executor.rs` and non-macro
+  queries in `pg_scheduled_action_repo/test.rs`; these are outside this test-only task.
+- `just doctor-local` failed: Docker daemon unreachable, `cargo-zigbuild` and
+  `sccache` unavailable; it also reported occupied local ports. No full local stack
+  was started, no databases/volumes were reset, and no live Kafka/MSK or LLM run
+  was verified.
+
+For the remaining live smoke test, follow [Running locally](../../docs/RUNNING_LOCALLY.md)
+first: obtain a passing `just doctor-local`, then start a disposable named stack with
+`just run_local --no-doppler --instance routines-smoke --env-file ./local.env`.
+Keep the env file untracked; explicitly enable `EVENT_ROUTINES_ENABLED` and supply
+approved model credentials only if intentionally testing real agent/tool execution.
+The default integration stubs do not establish a working model connection.
+
+Using local authenticated owners and the existing API/OpenAPI, create a legacy cron
+routine and an event routine selecting a local document/channel. Produce a human
+edit/message after activation, then two more while execution is active. Observe one
+row per event/action, sequential execution, history/chat linkage, and continued cron
+behavior. Repeat with bot tool output and permission revocation: expect no loop and
+no unauthorized execution. With two service replicas, observe group assignment,
+committed offsets, and exclusive per-action claims; terminate a replica around the
+listed durable boundaries and verify interrupted work is not replayed while later
+work drains. Do not reset offsets, requeue terminal rows, or claim this live procedure
+passed based on the database-only tests.
