@@ -1,4 +1,7 @@
-import { getMeetingUrl } from '@app/features/channel/Call/call-link';
+import {
+  getMeetingPath,
+  getMeetingUrl,
+} from '@app/features/channel/Call/call-link';
 import { toast } from '@core/component/Toast/Toast';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import {
@@ -22,6 +25,7 @@ export function ManageMeetingsDialog(props: { onClose: () => void }) {
           id: meeting.id,
           title: meeting.title,
           url: getMeetingUrl(meeting.shareToken),
+          shareToken: meeting.shareToken,
           active: Boolean(meeting.callId),
         }))
       : [];
@@ -93,8 +97,7 @@ export function ManageMeetingsDialog(props: { onClose: () => void }) {
                   onCopy={(meeting) => void copy(meeting)}
                   onJoin={(meeting) => {
                     props.onClose();
-                    const url = new URL(meeting.url);
-                    navigate(url.pathname.replace(/^\/app/, ''));
+                    navigate(getMeetingPath(meeting.shareToken));
                   }}
                   onRequestRevoke={setConfirmId}
                   onRevoke={(id) => void revoke(id)}

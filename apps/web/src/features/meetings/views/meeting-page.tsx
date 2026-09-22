@@ -138,6 +138,22 @@ export function MeetingPage(props: {
             </p>
           </div>
         </Match>
+        <Match when={membersOnly()}>
+          <div class="m-auto max-w-md text-center">
+            <h2 class="text-2xl font-semibold">{ready()?.title || 'Call'}</h2>
+            <p class="mt-3 text-ink-muted">
+              This call is for Macro members. Sign in to join.
+            </p>
+            <Button
+              variant="ghost"
+              size="lg"
+              class="mt-6 bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
+              onClick={() => props.onSignIn?.()}
+            >
+              Sign in
+            </Button>
+          </div>
+        </Match>
         <Match when={ready()}>
           <div class="m-auto grid w-full max-w-4xl gap-8 py-6 md:grid-cols-2 md:items-center">
             <div class="flex aspect-video flex-col items-center justify-center gap-5 rounded-2xl border border-edge-muted bg-message px-6">

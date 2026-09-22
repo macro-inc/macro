@@ -64,7 +64,12 @@ function previewItems(): CalendarCallItem[] {
       group: 'scheduled',
       start,
       end,
-      link: { id: 'preview-link', title: 'Northwind kickoff', url: previewUrl },
+      link: {
+        id: 'preview-link',
+        title: 'Northwind kickoff',
+        url: previewUrl,
+        shareToken: 'preview-only',
+      },
       event: {
         eventId: 'preview-event',
         occurrenceKey: 'preview-occurrence',
@@ -97,7 +102,12 @@ function previewItems(): CalendarCallItem[] {
       id: 'room',
       title: 'Eric’s room',
       group: 'instant',
-      link: { id: 'preview-room', title: 'Eric’s room', url: previewUrl },
+      link: {
+        id: 'preview-room',
+        title: 'Eric’s room',
+        url: previewUrl,
+        shareToken: 'preview-only',
+      },
     },
   ];
 }
@@ -255,6 +265,7 @@ export function JoinCallPreview(props: { startInCall?: boolean }) {
                 title: title(),
                 scheduledStart: null,
                 scheduledEnd: null,
+                channelId: null,
               })}
               authenticated={member}
               author={() => 'Eric Hayes'}

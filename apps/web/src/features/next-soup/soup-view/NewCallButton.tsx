@@ -16,7 +16,7 @@ import {
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
-export function NewCallButton(props: { inline?: boolean } = {}) {
+export function NewCallButton(props: { inline?: boolean }) {
   const [isOpen, setIsOpen] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
   const [selectedOptions, setSelectedOptions] = createSignal<
@@ -67,7 +67,6 @@ export function NewCallButton(props: { inline?: boolean } = {}) {
           channelId = result.channel_id;
         } catch {
           toast.failure('Failed to create channel for call');
-          setIsSubmitting(false);
           return;
         }
       }
@@ -78,7 +77,6 @@ export function NewCallButton(props: { inline?: boolean } = {}) {
     } catch (err) {
       console.error('Failed to start call', err);
       toast.failure('Failed to start call');
-      setIsSubmitting(false);
     } finally {
       setIsSubmitting(false);
     }

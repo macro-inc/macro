@@ -64,8 +64,15 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   /** Transcript segments, ordered by sequence number. */
   readonly transcript = this.field('transcript');
 
-  /** Participants, both active and historic. */
+  /** Macro-account participants, both active and historic. */
   readonly participants = this.field('participants');
+
+  /**
+   * Non-account guests, both active and historic. A guest's `id` matches its
+   * transcript speaker id. Guests only ever exist on standalone meeting
+   * calls, never on channel calls.
+   */
+  readonly guests = this.field('guests');
 
   /**
    * The canonical access level granted to the creator's team once the call is

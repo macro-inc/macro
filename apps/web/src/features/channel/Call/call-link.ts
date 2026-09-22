@@ -13,3 +13,15 @@ export function getMeetingUrl(shareToken: string) {
 export function isMeetingPath(pathname: string) {
   return /^\/(?:app\/)?meet\/[^/]+\/?$/.test(pathname);
 }
+
+/** Share token embedded in a meeting URL, for URLs not accompanied by a model. */
+export function getMeetingShareToken(url: string): string | undefined {
+  try {
+    const match = new URL(url, getWebOrigin()).pathname.match(
+      /^\/(?:app\/)?meet\/([^/]+)\/?$/
+    );
+    return match ? decodeURIComponent(match[1]) : undefined;
+  } catch {
+    return undefined;
+  }
+}

@@ -29,6 +29,8 @@ export type CalendarCallLink = {
   id: string;
   title: string;
   url: string;
+  /** Bearer capability from the invitation URL; consumers must not re-parse it. */
+  shareToken: string;
   start?: string;
   end?: string;
   callId?: string;

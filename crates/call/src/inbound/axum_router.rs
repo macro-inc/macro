@@ -261,14 +261,16 @@ impl<S> FromRef<InternalCallRouterState<S>> for Arc<S> {
 /// Internal call router for agent-submitted transcript segments.
 ///
 /// Routes:
-/// - `POST /{channel_id}/transcript` — ingest a transcript segment (from internal agent)
+/// - `POST /{room_name}/transcript` — ingest a transcript segment (from the
+///   transcription agent; the path segment is the RTC room name, which equals
+///   the call id for new calls)
 pub fn internal_call_router<S, T>(state: InternalCallRouterState<S>) -> Router<T>
 where
     S: CallService,
     T: Send + Sync,
 {
     Router::new()
-        .route("/{channel_id}/transcript", post(transcript_handler::<S>))
+        .route("/{room_name}/transcript", post(transcript_handler::<S>))
         .with_state(state)
 }
 
@@ -760,9 +762,9 @@ pub async fn ring_status_handler<S: CallService>(
 #[utoipa::path(
     post,
     operation_id = "ingest_transcript",
-    path = "/call/{channel_id}/transcript",
+    path = "/call/{room_name}/transcript",
     params(
-        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("room_name" = Uuid, Path, description = "RTC room name; the transcription agent passes its LiveKit room verbatim"),
     ),
     request_body = TranscriptSegmentRequest,
     responses(
@@ -776,12 +778,12 @@ pub async fn ring_status_handler<S: CallService>(
 pub async fn transcript_handler<S: CallService>(
     State(state): State<InternalCallRouterState<S>>,
     _access: InternalCallAccessExtractor,
-    axum::extract::Path(channel_id): axum::extract::Path<Uuid>,
+    axum::extract::Path(room_name): axum::extract::Path<Uuid>,
     Json(segment): Json<TranscriptSegmentRequest>,
 ) -> Result<StatusCode, CallError> {
     state
         .service
-        .ingest_transcript_segment(&channel_id, segment)
+        .ingest_transcript_segment(&room_name, segment)
         .await?;
 
     Ok(StatusCode::OK)

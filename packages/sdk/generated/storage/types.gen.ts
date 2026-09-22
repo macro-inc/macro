@@ -1996,11 +1996,16 @@ export type CallRecord = {
      */
     endedAt?: string | null;
     /**
+     * Non-account guests (both active and historic). Guests only ever exist
+     * on standalone meeting calls, never on channel calls.
+     */
+    guests: Array<CallRecordGuest>;
+    /**
      * Whether the call is currently active (from `calls` table).
      */
     isActive: boolean;
     /**
-     * Participants (both active and historic).
+     * Macro-account participants (both active and historic).
      */
     participants: Array<CallRecordParticipant>;
     /**
@@ -2047,13 +2052,31 @@ export type CallRecord = {
 };
 
 /**
+ * A non-account guest as returned in a [`CallRecord`].
+ */
+export type CallRecordGuest = {
+    /**
+     * Guest-provided display name.
+     */
+    displayName: string;
+    /**
+     * Opaque guest identity; matches the guest's transcript `speaker_id`.
+     */
+    id: GuestId;
+    /**
+     * When the guest joined the call.
+     */
+    joinedAt: string;
+    /**
+     * When the guest left (None if still in an active call).
+     */
+    leftAt?: string | null;
+};
+
+/**
  * A participant as returned in a [`CallRecord`] (historic — includes `left_at`).
  */
 export type CallRecordParticipant = {
-    /**
-     * Guest-provided display name, retained after archival.
-     */
-    displayName?: string | null;
     /**
      * When the user joined the call.
      */
@@ -2063,7 +2086,7 @@ export type CallRecordParticipant = {
      */
     leftAt?: string | null;
     /**
-     * The user id.
+     * The Macro user id.
      */
     userId: string;
 };
@@ -6444,6 +6467,16 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
 
 /**
+ * A non-account guest of a single call session.
+ *
+ * The id doubles as the guest's RTC participant identity, so identities are
+ * opaque UUIDs and never share a namespace (or a column) with Macro user
+ * ids. Only the server mints them; Macro users keep `macro|…` identities,
+ * so an RTC identity classifies as exactly one of the two.
+ */
+export type GuestId = string;
+
+/**
  * Public guest join inputs. The server generates the participant identity.
  */
 export type GuestJoinRequest = {
@@ -8992,13 +9025,31 @@ export type SoupCalendarEventSoupPropertiesField = {
 };
 
 /**
- * A participant in a call record, as displayed in Soup.
+ * A non-account guest of a call record, as displayed in Soup.
+ */
+export type SoupCallRecordGuest = {
+    /**
+     * Guest-provided display name.
+     */
+    displayName: string;
+    /**
+     * Opaque guest identity; matches the guest's transcript speaker id.
+     */
+    id: string;
+    /**
+     * When the guest joined the call.
+     */
+    joinedAt: string;
+    /**
+     * When the guest left (None if still in an active call).
+     */
+    leftAt?: string | null;
+};
+
+/**
+ * A Macro-account participant in a call record, as displayed in Soup.
  */
 export type SoupCallRecordParticipant = {
-    /**
-     * Guest display name, when the participant has no Macro profile.
-     */
-    displayName?: string | null;
     /**
      * When the user joined the call.
      */
@@ -9008,7 +9059,7 @@ export type SoupCallRecordParticipant = {
      */
     leftAt?: string | null;
     /**
-     * The user id.
+     * The Macro user id.
      */
     userId: string;
 };
@@ -9057,11 +9108,15 @@ export type SoupCallRecordSoupPropertiesField = {
      */
     endedAt?: string | null;
     /**
+     * Non-account guests in the call.
+     */
+    guests: Array<SoupCallRecordGuest>;
+    /**
      * Whether the call is currently active.
      */
     isActive: boolean;
     /**
-     * Participants in the call.
+     * Macro-account participants in the call.
      */
     participants: Array<SoupCallRecordParticipant>;
     /**

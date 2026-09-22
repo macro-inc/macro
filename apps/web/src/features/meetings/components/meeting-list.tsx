@@ -5,6 +5,7 @@ export type ManagedMeeting = {
   id: string;
   title: string;
   url: string;
+  shareToken: string;
   active: boolean;
 };
 

@@ -21,12 +21,23 @@ vi.mock('@queries/channel/message-sender', () => ({
   senderFromStorageId: mocks.senderFromStorageId,
 }));
 
+const guestId = '0199478d-1daf-798c-803a-9adc402b9367';
+
 const segment: CallRecordTranscriptSegment = {
   transcriptId: 'transcript-1',
-  speakerId: 'guest:0199478d-1daf-798c-803a-9adc402b9367',
+  speakerId: guestId,
   sequenceNum: 1,
   content: 'A guest can contribute to the discussion.',
   startedAt: '2026-09-22T14:00:05Z',
+};
+
+const record = {
+  guests: [
+    {
+      id: guestId,
+      displayName: 'Ada',
+    },
+  ],
 };
 
 beforeEach(() => {
@@ -45,13 +56,13 @@ afterEach(() => {
 });
 
 describe('standalone and guest transcripts', () => {
-  it('shows the guest name in a channel call without looking up a Macro sender', () => {
+  it('shows the guest name from the record guests in a channel call without looking up a Macro sender', () => {
     const seek = vi.fn();
     render(() => (
       <CallTranscript
         transcript={[segment]}
         channelId="channel-1"
-        speakerNames={new Map([[segment.speakerId, 'Ada']])}
+        record={record}
         timelineStartMs={Date.parse('2026-09-22T14:00:00Z')}
         onSeekToSeconds={seek}
       />
@@ -68,6 +79,7 @@ describe('standalone and guest transcripts', () => {
       <CallTranscript
         transcript={[{ ...segment, speakerId: 'macro|eric@example.com' }]}
         channelId={null}
+        record={record}
         timelineStartMs={null}
       />
     ));

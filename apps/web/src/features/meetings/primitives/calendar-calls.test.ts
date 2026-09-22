@@ -14,7 +14,12 @@ describe('calendar call selection ownership', () => {
       id,
       title: id,
       group: 'instant',
-      link: { id, title: id, url: `https://macro.com/app/meet/${id}` },
+      link: {
+        id,
+        title: id,
+        url: `https://macro.com/app/meet/${id}`,
+        shareToken: id,
+      },
     });
     const [items, setItems] = createSignal([item('one'), item('two')]);
     const source: CalendarCallsSource = {

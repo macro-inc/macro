@@ -17,6 +17,7 @@ const link: CalendarCallLink = {
   id: 'meeting-1',
   title: 'Instant review',
   url: 'https://macro.com/app/meet/token-1234567890123456',
+  shareToken: 'token-1234567890123456',
 };
 const event: CalendarCallEvent = {
   eventId: 'event-1',

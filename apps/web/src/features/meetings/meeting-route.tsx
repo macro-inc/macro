@@ -10,13 +10,20 @@ import {
   useMeetingQuery,
   useUpdateMeetingMutation,
 } from '@queries/call/meetings';
-import { useParams, useSearchParams } from '@solidjs/router';
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from '@solidjs/router';
 import { Show, Suspense } from 'solid-js';
 import type { MeetingPageState } from './context/meeting-session';
 import { MeetingPage } from './views/meeting-page';
 
 function MeetingRouteContent(props: { shareToken: string }) {
   const [search] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const call = useCallContext();
   const authenticated = useIsAuthenticated();
   const author = useAuthor();
@@ -78,6 +85,10 @@ function MeetingRouteContent(props: { shareToken: string }) {
         navigator.clipboard.writeText(getMeetingUrl(props.shareToken))
       }
       onRename={canRename() ? rename : undefined}
+      onSignIn={() => {
+        const meetingRoute = `${location.pathname}${location.search}`;
+        navigate(`/login?redirect=${encodeURIComponent(meetingRoute)}`);
+      }}
       session={{
         shareToken: () => props.shareToken,
         isInCall: call.isInCall,

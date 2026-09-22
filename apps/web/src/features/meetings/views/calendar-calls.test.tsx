@@ -23,6 +23,7 @@ const item: CalendarCallItem = {
     id: 'one',
     title: 'Planning call',
     url: 'https://macro.com/app/meet/example-token-long',
+    shareToken: 'example-token-long',
   },
 };
 

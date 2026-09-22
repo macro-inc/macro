@@ -786,7 +786,7 @@ pub trait CallService: Send + Sync + 'static {
     /// Ingest a transcript segment from the LiveKit Agent STT pipeline.
     fn ingest_transcript_segment(
         &self,
-        channel_id: &Uuid,
+        room_name: &Uuid,
         segment: TranscriptSegmentRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 

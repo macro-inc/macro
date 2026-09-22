@@ -103,10 +103,7 @@ export function CalendarCallsView(props: {
             />
           ) : undefined;
         if (!item.link) return undefined;
-        const token = new URL(item.link.url).pathname
-          .split('/')
-          .filter(Boolean)
-          .at(-1)!;
+        const token = item.link.shareToken;
         return (
           <CallInvite
             onInvite={async (email) => {
@@ -194,7 +191,7 @@ export function CalendarActiveCallSidebar(props: { onShowCalls: () => void }) {
     try {
       const token =
         call.shareToken ?? (await fetchCallLink(call.callId)).shareToken;
-      navigate(getMeetingPath(token).replace(/^\/app/, ''));
+      navigate(getMeetingPath(token));
     } catch {
       setError(true);
     } finally {

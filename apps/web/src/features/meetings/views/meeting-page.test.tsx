@@ -12,7 +12,7 @@ import { MeetingPage } from './meeting-page';
 function setup(
   authenticated: boolean,
   startCall: boolean,
-  mediaAccess?: MeetingMediaAccess
+  options?: { mediaAccess?: MeetingMediaAccess; channelId?: string | null }
 ) {
   const [signedIn, setSignedIn] = createSignal(authenticated);
   const [activeCallId, setActiveCallId] = createSignal<string | null>(null);
@@ -21,7 +21,9 @@ function setup(
     title: 'Design review',
     scheduledStart: null,
     scheduledEnd: null,
+    channelId: options?.channelId ?? null,
   });
+  const onSignIn = vi.fn();
   const session: MeetingSessionCapabilities = {
     shareToken: () => 'share-token',
     activeCallId,
@@ -47,12 +49,13 @@ function setup(
     <MeetingPage
       source={source}
       session={session}
-      mediaAccess={mediaAccess}
+      mediaAccess={options?.mediaAccess}
       authenticated={signedIn}
       author={() => 'Macro Member'}
       startCall={startCall}
       url="https://macro.com/app/meet/share-token"
       onCopy={async () => undefined}
+      onSignIn={onSignIn}
       renderCall={(onLeave) => (
         <div>
           Connected call
@@ -63,7 +66,7 @@ function setup(
       )}
     />
   ));
-  return Object.assign(session, { setSource, setSignedIn });
+  return Object.assign(session, { setSource, setSignedIn, onSignIn });
 }
 
 describe('public meeting prejoin', () => {
@@ -72,7 +75,7 @@ describe('public meeting prejoin', () => {
     const request = vi.fn(
       async () => ({ getTracks: () => [{ stop }] }) as unknown as MediaStream
     );
-    const session = setup(true, true, { request });
+    const session = setup(true, true, { mediaAccess: { request } });
     await waitFor(() => {
       expect(request).toHaveBeenCalledTimes(2);
       expect(screen.getByRole('button', { name: 'Start call' })).toHaveProperty(
@@ -129,6 +132,7 @@ describe('public meeting prejoin', () => {
         title: 'Design review',
         scheduledStart: null,
         scheduledEnd: null,
+        channelId: null,
       });
       const button = await screen.findByRole('button', {
         name: creator ? 'Start call' : 'Join call',
@@ -163,6 +167,28 @@ describe('public meeting prejoin', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leave call' }));
     await screen.findByText('This call is unavailable');
     expect(session.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('gates channel-linked calls behind sign-in instead of the guest form', async () => {
+    const session = setup(false, false, { channelId: 'channel-1' });
+    expect(
+      screen.getByText('This call is for Macro members. Sign in to join.')
+    ).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Your name' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Join call' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(session.onSignIn).toHaveBeenCalledOnce();
+    expect(session.join).not.toHaveBeenCalled();
+
+    // A signed-in member gets the normal join flow.
+    session.setSignedIn(true);
+    const button = await screen.findByRole('button', { name: 'Join call' });
+    expect(
+      screen.queryByText('This call is for Macro members. Sign in to join.')
+    ).toBeNull();
+    fireEvent.click(button);
+    await screen.findByText('Connected call');
+    expect(session.join).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
   it('offers the copy action before joining', async () => {

@@ -1,4 +1,4 @@
-import { getMeetingUrl } from '@channel/Call/call-link';
+import { getMeetingShareToken, getMeetingUrl } from '@channel/Call/call-link';
 import { toast } from '@core/component/Toast/Toast';
 import { recipientEntityMapper, useContacts } from '@core/user';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
@@ -122,9 +122,12 @@ export function useEventEditor(props: UseEventEditorProps) {
     id: string;
     calendarId?: string;
   }>();
-  const [createdMeetingUrl, setCreatedMeetingUrl] = createSignal<string>();
+  const [createdMeeting, setCreatedMeeting] = createSignal<{
+    url: string;
+    shareToken: string;
+  }>();
   const macroCallUrl = () =>
-    createdMeetingUrl() ??
+    createdMeeting()?.url ??
     (props.event() ? calendarMacroCallUrl(props.event()!) : undefined);
 
   const meetingSchedule = (values: EventEditorSubmitValues) =>
@@ -139,26 +142,24 @@ export function useEventEditor(props: UseEventEditorProps) {
         };
 
   const createScheduledMeeting = async (values: EventEditorSubmitValues) => {
-    const existingUrl = createdMeetingUrl();
-    if (existingUrl) {
-      await syncScheduledMeeting(existingUrl, values);
-      return existingUrl;
+    const existing = createdMeeting();
+    if (existing) {
+      await syncScheduledMeeting(existing.shareToken, values);
+      return existing.url;
     }
     const meeting = await createMeeting.mutateAsync({
       title: values.title,
       ...meetingSchedule(values),
     });
     const url = getMeetingUrl(meeting.shareToken);
-    setCreatedMeetingUrl(url);
+    setCreatedMeeting({ url, shareToken: meeting.shareToken });
     return url;
   };
 
   const syncScheduledMeeting = async (
-    url: string,
+    shareToken: string,
     values: EventEditorSubmitValues
   ) => {
-    const shareToken = new URL(url).pathname.split('/').at(-1);
-    if (!shareToken) return;
     const meeting = await fetchMeeting(shareToken);
     await updateMeeting.mutateAsync({
       meetingId: meeting.id,
@@ -307,7 +308,9 @@ export function useEventEditor(props: UseEventEditorProps) {
           },
         });
       } else if (needsCall && canManageCall && existingMeetingUrl) {
-        await syncScheduledMeeting(existingMeetingUrl, values);
+        // The URL was extracted from the event body, so the token has no model.
+        const shareToken = getMeetingShareToken(existingMeetingUrl);
+        if (shareToken) await syncScheduledMeeting(shareToken, values);
       }
       props.onSaved();
     } catch (error) {

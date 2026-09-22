@@ -1,5 +1,6 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { getMeetingUrl } from '@channel/Call/call-link';
+import { isMacroId, macroIdToEmail } from '@core/user/macroId';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { useActiveCallsQuery } from '@queries/call/call';
 import { callKeys } from '@queries/call/keys';
@@ -12,6 +13,7 @@ import type { CalendarCallsSource } from '../context/calendar-calls';
 import {
   buildCalendarCallItems,
   type CalendarCallEvent,
+  type CalendarCallPerson,
   type CalendarCallRecord,
 } from '../core/calendar-calls';
 
@@ -60,16 +62,25 @@ export function useCalendarCallsSource(
                   channelId: entity.channelId ?? undefined,
                   durationMs: entity.durationMs,
                   status: entity.status,
-                  people: entity.participantIds.map(
-                    (id) =>
-                      entity.participantNames?.[id] ??
-                      (id.startsWith('macro|') ? id.slice(6) : 'Guest')
-                  ),
-                  participants: entity.participantIds.map((id) => ({
-                    id,
-                    name: entity.participantNames?.[id],
-                    email: id.startsWith('macro|') ? id.slice(6) : '',
-                  })),
+                  people: [
+                    ...entity.participantIds.map((id) =>
+                      isMacroId(id) ? macroIdToEmail(id) : 'Guest'
+                    ),
+                    ...(entity.guests ?? []).map(
+                      (guest) => guest.displayName.trim() || 'Guest'
+                    ),
+                  ],
+                  participants: [
+                    ...entity.participantIds.map((id) => ({
+                      id,
+                      email: isMacroId(id) ? macroIdToEmail(id) : '',
+                    })),
+                    ...(entity.guests ?? []).map((guest) => ({
+                      id: guest.id,
+                      name: guest.displayName.trim() || 'Guest',
+                      email: '',
+                    })),
+                  ],
                   summary: entity.summary,
                 },
               ]
@@ -104,17 +115,23 @@ export function useCalendarCallsSource(
     for (const query of liveDetails) {
       if (!query.isSuccess) continue;
       const call = query.data;
-      const participants = call.participants
-        .filter((person) => !call.isActive || !person.leftAt)
-        .map((person) => ({
-          id: person.userId,
-          name:
-            person.displayName ??
-            (person.userId.startsWith('macro|') ? undefined : 'Guest'),
-          email: person.userId.startsWith('macro|')
-            ? person.userId.slice(6)
-            : '',
-        }));
+      const participants: CalendarCallPerson[] = [
+        ...call.participants
+          .filter((person) => !call.isActive || !person.leftAt)
+          .map((person) => ({
+            id: person.userId,
+            email: isMacroId(person.userId)
+              ? macroIdToEmail(person.userId)
+              : '',
+          })),
+        ...call.guests
+          .filter((guest) => !call.isActive || !guest.leftAt)
+          .map((guest) => ({
+            id: guest.id,
+            name: guest.displayName.trim() || 'Guest',
+            email: '',
+          })),
+      ];
       const index = records.findIndex((record) => record.id === call.callId);
       const record: CalendarCallRecord = {
         ...(index >= 0 ? records[index] : {}),
@@ -141,6 +158,7 @@ export function useCalendarCallsSource(
               id: meeting.id,
               title: meeting.title,
               url: getMeetingUrl(meeting.shareToken),
+              shareToken: meeting.shareToken,
               start: meeting.scheduledStart ?? undefined,
               end: meeting.scheduledEnd ?? undefined,
               callId: meeting.callId ?? undefined,

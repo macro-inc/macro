@@ -1463,7 +1463,7 @@ impl<
     #[tracing::instrument(err, skip(self, segment))]
     async fn ingest_transcript_segment(
         &self,
-        channel_id: &Uuid,
+        room_name: &Uuid,
         segment: TranscriptSegmentRequest,
     ) -> Result<(), CallError> {
         if !segment.is_final {
@@ -1472,10 +1472,10 @@ impl<
 
         let call = self
             .repo
-            .get_call_by_room_name(&channel_id.to_string())
+            .get_call_by_room_name(&room_name.to_string())
             .await
             .map_err(|e| CallError::Internal(e.into()))?
-            .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?;
+            .ok_or_else(|| CallError::NotFound(room_name.to_string()))?;
 
         // Attach a stable voice id to each transcript row. Reuse an earlier
         // voice id for the same diarized speaker in this call before falling

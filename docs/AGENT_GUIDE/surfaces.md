@@ -753,7 +753,11 @@ and `Copy call link`, without an enclosing border or the full URL.
 Editing or rescheduling an owned event retains and updates its call; an owned
 editable event without a call receives one on save. Deleting a calendar event
 does not revoke its reusable call link.
-Guests can use the link without a Macro account.
+Guests can use standalone meeting links without a Macro account. Links to
+channel calls only admit signed-in Macro users; visitors without an account
+see a sign-in prompt instead of the guest name form. Inside a channel call,
+the shareable link is created on request via `Get shareable call link`, never
+automatically.
 
 Calendar's Calls view shows a people/email picker, live-call cards, and
 `Recent` / `Upcoming` tabs, with Recent leftmost and selected by default.
