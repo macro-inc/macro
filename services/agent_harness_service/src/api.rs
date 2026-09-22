@@ -69,6 +69,7 @@ pub struct ApiStates<T, R, Opener, Bots, Access, Auth, Models, Changes> {
     models: AgentModelsRouterState<Models, Auth>,
     repositories: AgentRepositoriesRouterState<Auth>,
     claude_auth: Router,
+    sharing: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
 
@@ -93,6 +94,7 @@ impl<T, R, Opener, Bots, Access, Auth, Models, Changes>
             models,
             repositories,
             claude_auth: Router::new(),
+            sharing: Router::new(),
             changes,
         }
     }
@@ -100,6 +102,12 @@ impl<T, R, Opener, Bots, Access, Auth, Models, Changes>
     /// Attach the optional owner-authenticated Claude demo connection routes.
     pub fn with_claude_auth(mut self, router: Router) -> Self {
         self.claude_auth = router;
+        self
+    }
+
+    /// Attach session-sharing routes with their independent domain service.
+    pub fn with_sharing(mut self, router: Router) -> Self {
+        self.sharing = router;
         self
     }
 }
@@ -190,6 +198,7 @@ where
     let agent_sessions = agent_session_read_router(states.read.clone())
         .merge(agent_session_control_router(states.control))
         .merge(agent_session_create_router(states.create))
+        .merge(states.sharing)
         .merge(agent_changes_router(states.changes));
     Router::new()
         .nest("/agent-sessions", agent_sessions)

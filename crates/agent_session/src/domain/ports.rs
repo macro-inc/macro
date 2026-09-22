@@ -1060,8 +1060,8 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
 mod test;
 
 /// Current view access to a session, resolved the way a read route resolves
-/// it - including access inherited from the document a session was opened
-/// from, which no access row materializes.
+/// it - including share links and access inherited from the document a session
+/// was opened from, which no access row materializes.
 ///
 /// Object-safe so the service holds it erased, like its turn observer.
 pub trait SessionViewAccess: Send + Sync + 'static {
@@ -1074,7 +1074,7 @@ pub trait SessionViewAccess: Send + Sync + 'static {
 }
 
 /// Only materialized grants count: a process with no entity-access service,
-/// or a test, never discovers inherited access.
+/// or a test, never discovers link or inherited access.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoInheritedSessionAccess;
 

@@ -715,14 +715,10 @@ where
                 previews.push(AgentSessionPreview::DoesNotExist(id));
                 continue;
             };
-            // A grant row settles it. Without one, a session opened from a
-            // document discussion may still be visible through the document
-            // itself, which only the access service knows.
-            let visible = candidate.has_grant
-                || (matches!(
-                    candidate.thread_parent,
-                    Some(messages::domain::models::MessageParent::Document(_))
-                ) && self.view_access.can_view(viewer, id).await?);
+            // Links and originating documents can grant access without a
+            // materialized row. Resolve those through the same view port as
+            // the session's read routes.
+            let visible = candidate.has_grant || self.view_access.can_view(viewer, id).await?;
             previews.push(if visible {
                 AgentSessionPreview::Access(Box::new(candidate.data))
             } else {

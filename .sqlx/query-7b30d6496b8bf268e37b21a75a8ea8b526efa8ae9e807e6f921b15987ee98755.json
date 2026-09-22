@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"SharePermission\" SET\n                \"linkShare\" = CASE WHEN $2 THEN $3 ELSE \"linkShare\" END,\n                \"linkShareAccessLevel\" = CASE\n                    WHEN $2 AND $3 IS NULL THEN NULL\n                    WHEN $2 THEN COALESCE($5::\"AccessLevel\", 'view')\n                    WHEN $4 AND \"linkShare\" IS NOT NULL THEN COALESCE($5::\"AccessLevel\", 'view')\n                    WHEN $4 THEN NULL\n                    ELSE \"linkShareAccessLevel\"\n                END,\n                \"updatedAt\" = NOW()\n            WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        "Text",
+        "Bool",
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b30d6496b8bf268e37b21a75a8ea8b526efa8ae9e807e6f921b15987ee98755"
+}

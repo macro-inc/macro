@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session SET share_permission_id = 'initialized-session' WHERE id = '20000000-0000-0000-0000-000000000010'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "3be9d6b028e1e403360eb3a5b7efb90db68325a3e4105fc4e3ad32283b96a56c"
+}

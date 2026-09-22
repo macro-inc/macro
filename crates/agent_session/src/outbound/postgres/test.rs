@@ -52,7 +52,7 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
     .expect("insert User");
 }
 
-async fn create_test_bot(pool: &PgPool) -> BotId {
+pub(super) async fn create_test_bot(pool: &PgPool) -> BotId {
     // Every session fixture is owned by the same user, and
     // `agent_session.owner_id` references `"User"(id)` - so seed the
     // row here, where every session-creating test already passes through.
@@ -78,7 +78,7 @@ async fn create_test_bot(pool: &PgPool) -> BotId {
     bot.id
 }
 
-fn new_session(
+pub(super) fn new_session(
     bot_id: BotId,
     thread_id: Option<Uuid>,
     originating_message_id: Option<Uuid>,
@@ -101,7 +101,7 @@ fn new_session(
     }
 }
 
-async fn create_session(
+pub(super) async fn create_session(
     repo: &PgAgentSessionRepo,
     params: CreateAgentSessionParams,
 ) -> AgentSession {
@@ -129,7 +129,7 @@ async fn append_system_event(
     .expect("append system event log entry");
 }
 
-async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) {
+pub(super) async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) {
     let channel_id = macro_uuid::generate_uuid_v7();
     let thread_id = macro_uuid::generate_uuid_v7();
     let originating_message_id = macro_uuid::generate_uuid_v7();

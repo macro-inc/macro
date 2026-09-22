@@ -432,16 +432,23 @@ instead of the standalone recent-sessions and tips surface.
 
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;
 on mobile, open the session title menu and choose **Share**. The owner can
-select people or channels and send the session with an optional message using
-the same Share dialog and mobile drawer as documents. Sessions also support
-**Share** from entity list menus and the entity sharing shortcut. People receive it through a direct or
-group message. Recipients can view and control the session; there is no access
-level selector. The owner sees the standard recipient-and-message form without
-an extra session notice or Copy Link footer; **Copy Share Link** remains in
-the header. Cancel closes the composer without sending.
+select people or channels, choose their access level, and send the session with
+an optional message using the same Share dialog and mobile drawer as tasks.
+Sessions also support **Share** from entity list menus and the entity sharing
+shortcut. **People with access** lists the owner and shared conversations;
+the owner can change or remove a conversation's access. **Link sharing** offers
+None / Public / Team and an access level. **Team access** shares directly with
+the owner's team when one exists. On mobile these controls are in the Share,
+People, and Link tabs. View and Comment allow reading; Edit also allows
+controlling the session. View-only sessions keep the composer, model selector,
+and queued-message controls disabled. **Copy Share Link** remains in the header. Cancel
+closes the composer without sending.
+
+Sharing a session reference in a message grants View by default and preserves
+an existing grant. Use the access selector to grant Comment or Edit.
 
 Other participants can copy a link for people who already have access, but
-cannot grant access. Copying a link alone never changes permissions. New,
+cannot grant access or change sharing settings. Copying a link alone never changes permissions. New,
 unsaved session drafts do not offer sharing.
 
 Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and agent names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.

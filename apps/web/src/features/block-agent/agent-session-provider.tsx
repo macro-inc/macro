@@ -45,7 +45,9 @@ export function AgentSessionProvider(
   const live = createAgentSession(sessionId, { userId });
   const turn = () => live.metadata()?.turn ?? 'idle';
   const served = createQueueController({
-    sessionId,
+    // Public viewers can read the transcript without signing in, while the
+    // live action queue requires an authenticated caller.
+    sessionId: () => (userId() ? sessionId() : undefined),
     messages: live.messages,
   });
   // A row the user removes may be one `sendNext` already showed as sent;

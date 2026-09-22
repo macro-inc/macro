@@ -97,6 +97,7 @@ fn entity_uuid(entity: &Entity<'_>) -> TeamShareResult<Uuid> {
             | EntityType::Chat
             | EntityType::EmailThread
             | EntityType::Call
+            | EntityType::AgentSession
             | EntityType::Initiative
     ) {
         return Err(report!(TeamShareError::InvalidEntity));
@@ -105,7 +106,7 @@ fn entity_uuid(entity: &Entity<'_>) -> TeamShareResult<Uuid> {
 }
 
 /// Load actual owner, current membership and canonical state under the shared guard.
-/// Threads without permissions read as NULL/revision zero without creating any rows.
+/// Threads and sessions without permissions read as NULL/revision zero without creating rows.
 /// Tasks and snippets use Document, and active calls take precedence during archive.
 pub async fn load_facts(
     transaction: &mut Transaction<'_, Postgres>,
@@ -146,6 +147,9 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
             UNION ALL
             SELECT i.owner_user_id, i.share_permission_id FROM initiative i
             WHERE $2 = 'initiative' AND i.id = $3
+            UNION ALL
+            SELECT s.owner_id, s.share_permission_id FROM agent_session s
+            WHERE $2 = 'agent_session' AND s.id = $3
         )
         SELECT e.owner AS "owner!", e.permission_id,
             sp.id AS "stored_permission_id?",
@@ -164,7 +168,11 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
     .ok_or_else(|| report!(TeamShareError::NotFound))?;
 
     if row.stored_permission_id.is_none()
-        && (row.permission_id.is_some() || entity.entity_type != EntityType::EmailThread)
+        && (row.permission_id.is_some()
+            || !matches!(
+                entity.entity_type,
+                EntityType::EmailThread | EntityType::AgentSession
+            ))
     {
         return Err(report!(TeamShareError::InvalidState));
     }

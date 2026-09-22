@@ -10,6 +10,7 @@ use sqlx::types::Json;
 mod test;
 
 mod pull_request;
+mod sharing;
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
@@ -936,16 +937,27 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         // A session old enough to have owned a dedicated channel leaves it
         // behind: it holds the history that channel renders, and is not this
         // operation's to destroy.
-        sqlx::query!(
+        let permission = sqlx::query!(
             r#"
             DELETE FROM agent_session
             WHERE id = $1
+            RETURNING share_permission_id
             "#,
             id.as_uuid(),
         )
-        .execute(&mut *transaction)
+        .fetch_optional(&mut *transaction)
         .await
         .context("failed to delete agent session")?;
+
+        if let Some(permission_id) = permission.and_then(|row| row.share_permission_id) {
+            sqlx::query!(
+                r#"DELETE FROM "SharePermission" WHERE id = $1"#,
+                permission_id
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("failed to delete agent session sharing settings")?;
+        }
 
         transaction
             .commit()

@@ -94,7 +94,7 @@ impl crate::domain::ports::SessionViewAccess for GrantingViewAccess {
 }
 
 #[tokio::test]
-async fn previews_resolve_inherited_document_access_through_the_view_port() {
+async fn previews_resolve_document_and_link_access_through_the_view_port() {
     let fx = fixture();
     let mut document_session = test_agent_session(AgentSessionId::new());
     document_session.thread_parent =
@@ -122,7 +122,7 @@ async fn previews_resolve_inherited_document_access_through_the_view_port() {
             .all(|preview| matches!(preview, AgentSessionPreview::NoAccess(_)))
     );
 
-    // With one, the document-born session is asked about and the rest are not.
+    // The view port can resolve document inheritance or link sharing.
     let service = fx
         .service
         .clone()
@@ -140,14 +140,13 @@ async fn previews_resolve_inherited_document_access_through_the_view_port() {
         .service
         .clone()
         .with_view_access(Arc::new(GrantingViewAccess(channel_session.id)));
-    assert_eq!(
+    assert!(matches!(
         channel_service
             .preview_sessions(&collaborator, vec![channel_session.id])
             .await
-            .unwrap(),
-        vec![AgentSessionPreview::NoAccess(channel_session.id)],
-        "channel grants are rows; the view port is never consulted for them"
-    );
+            .unwrap().as_slice(),
+        [AgentSessionPreview::Access(data)] if data.id == channel_session.id
+    ));
 }
 
 #[tokio::test]

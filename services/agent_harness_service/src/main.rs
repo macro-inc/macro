@@ -982,7 +982,7 @@ async fn run() -> anyhow::Result<()> {
     );
     let control_state = AgentSessionControlState::new(
         harness.clone(),
-        entity_access,
+        entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let bots_directory = Arc::new(PgBotDirectory::new(PgBotsRepo::new(pool.clone())));
@@ -1013,6 +1013,13 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     let http_port = config.port;
+    let sharing = agent_session::inbound::axum_router::sharing::agent_session_sharing_router(
+        AgentSessionRouterState::new(
+            agent_session::domain::sharing::SessionSharingService::new(session_repo.clone()),
+            entity_access,
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
             api::ApiStates::new(
@@ -1024,7 +1031,8 @@ async fn run() -> anyhow::Result<()> {
                 repositories_state,
                 changes_state,
             )
-            .with_claude_auth(claude_auth),
+            .with_claude_auth(claude_auth)
+            .with_sharing(sharing),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),

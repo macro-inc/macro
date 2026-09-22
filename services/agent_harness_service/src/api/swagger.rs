@@ -54,6 +54,8 @@ impl Modify for SecurityAddon {
         axum_router::get_agent_session_handler,
         axum_router::preview_agent_sessions_handler,
         axum_router::rename_agent_session_handler,
+        axum_router::sharing::get_agent_session_permissions,
+        axum_router::sharing::update_agent_session_permissions,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
         axum_router::get_agent_session_queue_handler,
