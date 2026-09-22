@@ -6,4 +6,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CreateScheduledActionTask = { [key: string]: unknown };
+export type ActionConfigurationTask = { [key: string]: unknown };

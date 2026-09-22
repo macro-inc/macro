@@ -6,4 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UpdateScheduledActionTask = { [key: string]: unknown };
+/**
+ * Next cron firing, absent for event-triggered actions.
+ */
+export type ScheduledActionNextRunAt = string | null;

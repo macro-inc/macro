@@ -32,6 +32,18 @@
       "get": {
         "tags": ["scheduled actions"],
         "operationId": "list_scheduled_actions",
+        "parameters": [
+          {
+            "name": "include_events",
+            "in": "query",
+            "description": "Backend clients must opt in to event actions; defaults to false (cron-only).",
+            "required": false,
+            "schema": {
+              "type": ["boolean", "null"],
+              "default": false
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -40,8 +52,18 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/ScheduledAction"
+                    "$ref": "#/components/schemas/ScheduledActionResponse"
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -87,7 +109,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ScheduledAction"
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -146,7 +178,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ScheduledAction"
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -163,6 +205,16 @@
           },
           "404": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Configuration changed or execution is active",
             "content": {
               "text/plain": {
                 "schema": {
@@ -256,6 +308,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InProgressExecution"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -368,6 +430,29 @@
   },
   "components": {
     "schemas": {
+      "ActionConfiguration": {
+        "type": "object",
+        "description": "Canonical client configuration. Ownership and execution state are server-owned.",
+        "required": ["name", "trigger", "kind", "task", "enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActionKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "task": {
+            "type": "object"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger"
+          }
+        },
+        "additionalProperties": false
+      },
       "ActionExecutionRecord": {
         "type": "object",
         "required": [
@@ -415,6 +500,40 @@
         "type": "string",
         "enum": ["Agent"]
       },
+      "ActionTrigger": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["schedule", "timezone", "type"],
+            "properties": {
+              "schedule": {
+                "$ref": "#/components/schemas/Schedule"
+              },
+              "timezone": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["cron"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["filters", "type"],
+            "properties": {
+              "filters": {
+                "$ref": "#/components/schemas/EventFilters"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["events"]
+              }
+            }
+          }
+        ],
+        "description": "Exactly one trigger per action. Existing cron validation is reused."
+      },
       "AgentTask": {
         "type": "object",
         "required": ["model", "prompt", "user_prompt"],
@@ -431,8 +550,75 @@
         }
       },
       "CreateScheduledAction": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ActionConfiguration"
+          },
+          {
+            "$ref": "#/components/schemas/LegacyActionConfiguration"
+          }
+        ],
+        "description": "Exactly one representation is accepted, even if mixed fields agree or are null."
+      },
+      "EmptyResponse": {
         "type": "object",
-        "description": "Client-supplied payload for creating a scheduled action. The server fills\nin `id`, `owner` (from the authenticated user), timestamps, `claimed`, and\n`next_run_at` (derived from the cron).",
+        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "EventFilter": {
+        "type": "object",
+        "description": "An event name AND an entity ID must match within the same filter.",
+        "required": ["events"],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventName"
+            }
+          },
+          "ids": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "EventFilters": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/EventFilter"
+        },
+        "description": "Bounded nonempty OR of filters, canonicalized to remove duplicates."
+      },
+      "EventName": {
+        "type": "string",
+        "description": "Closed allowlist: unknown names, deletions and ambiguous attribution are not\nselectors. Adding a broker variant does not automatically enable routines.",
+        "enum": [
+          "document.created",
+          "document.updated",
+          "channel.created",
+          "channel.message_posted",
+          "channel.mentioned",
+          "channel.message_patched",
+          "channel.message_attachment_created"
+        ]
+      },
+      "InProgressExecution": {
+        "type": "object",
+        "required": ["action_id"],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "LegacyActionConfiguration": {
+        "type": "object",
+        "description": "Deprecated cron-only input, accepted during the compatibility rollout.",
         "required": ["name", "schedule", "kind", "timezone", "task", "enabled"],
         "properties": {
           "enabled": {
@@ -453,24 +639,8 @@
           "timezone": {
             "type": "string"
           }
-        }
-      },
-      "EmptyResponse": {
-        "type": "object",
-        "description": "Empty response is required due to custom fetch forcing `response.json()`"
-      },
-      "InProgressExecution": {
-        "type": "object",
-        "required": ["action_id"],
-        "properties": {
-          "action_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "chat_id": {
-            "type": ["string", "null"]
-          }
-        }
+        },
+        "additionalProperties": false
       },
       "Schedule": {
         "type": "string"
@@ -480,13 +650,12 @@
         "required": [
           "owner",
           "name",
-          "schedule",
+          "trigger",
           "kind",
           "created_at",
           "updated_at",
-          "timezone",
+          "configuration_revision",
           "task",
-          "next_run_at",
           "enabled"
         ],
         "properties": {
@@ -494,13 +663,23 @@
             "type": ["string", "null"],
             "format": "date-time"
           },
+          "configuration_revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Independent of execution bookkeeping in `updated_at`."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
           "enabled": {
             "type": "boolean",
-            "description": "When false, the cron dispatcher skips this schedule. `run_now` remains\navailable regardless."
+            "description": "When false, automatic dispatch skips this action. `run_now` remains\navailable regardless."
+          },
+          "event_activated_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Event publication boundary; absent for cron actions."
           },
           "id": {
             "type": ["string", "null"],
@@ -513,28 +692,48 @@
             "type": "string"
           },
           "next_run_at": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "date-time",
-            "description": "Time of the next scheduled firing (derived from the cron on write). UI\nuses this to render \"next run\" without having to parse the cron itself."
+            "description": "Next cron firing, absent for event-triggered actions."
           },
           "owner": {
             "type": "string",
             "description": "Who the action belongs to. Every action is user-owned today, but the\ntype no longer says so: the principal string on the wire and in the\n`owner` column is the same, and a bot- or team-owned row decodes\nrather than failing to parse."
           },
-          "schedule": {
-            "$ref": "#/components/schemas/Schedule"
-          },
           "task": {
             "type": "object"
           },
-          "timezone": {
-            "type": "string"
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger"
           },
           "updated_at": {
             "type": "string",
             "format": "date-time"
           }
         }
+      },
+      "ScheduledActionResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ScheduledAction"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "schedule": {
+                "type": ["string", "null"],
+                "description": "Deprecated: use `trigger.schedule`. Present only for cron actions.",
+                "deprecated": true
+              },
+              "timezone": {
+                "type": ["string", "null"],
+                "description": "Deprecated: use `trigger.timezone`. Present only for cron actions.",
+                "deprecated": true
+              }
+            }
+          }
+        ],
+        "description": "Canonical trigger plus deprecated cron fields for existing clients. Event\nresponses omit legacy fields rather than inventing a schedule or timezone."
       },
       "ScheduledActionUpdate": {
         "oneOf": [
@@ -585,29 +784,15 @@
         "description": "Live status update for a scheduled-action run, broadcast via the connection\ngateway to the owner. Clients use the `chat_id` to navigate to the run\ntranscript and the variant tag to toggle the running indicator.\n\nSerialized with a `type` tag (`started`/`stopped`) and delivered over the\nsingle `scheduled_action_update` message type on the gateway."
       },
       "UpdateScheduledAction": {
-        "type": "object",
-        "description": "Client-supplied payload for updating a scheduled action. Mirrors the fields\nthe repository actually writes — `id`/`owner`/timestamps/`claimed`/\n`next_run_at` are not client-mutable.",
-        "required": ["name", "schedule", "kind", "timezone", "task", "enabled"],
-        "properties": {
-          "enabled": {
-            "type": "boolean"
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ActionConfiguration"
           },
-          "kind": {
-            "$ref": "#/components/schemas/ActionKind"
-          },
-          "name": {
-            "type": "string"
-          },
-          "schedule": {
-            "$ref": "#/components/schemas/Schedule"
-          },
-          "task": {
-            "type": "object"
-          },
-          "timezone": {
-            "type": "string"
+          {
+            "$ref": "#/components/schemas/LegacyActionConfiguration"
           }
-        }
+        ],
+        "description": "Full replacement of client configuration, not of server-owned action state."
       }
     }
   },

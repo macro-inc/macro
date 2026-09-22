@@ -11,6 +11,7 @@ import {
   parseCron as parseCronParts,
 } from '@core/util/cron';
 import { ThrownResultError } from '@core/util/result';
+import { getCronTrigger } from '@queries/agent-schedule/triggers';
 import type {
   AgentTask,
   CreateScheduledAction,
@@ -104,8 +105,12 @@ function getAgentTask(schedule: ScheduledAction): AgentTask {
   return schedule.task as unknown as AgentTask;
 }
 
-export function draftFromSchedule(schedule: ScheduledAction): ScheduleDraft {
-  const parsed = parseCron(schedule.schedule);
+export function draftFromSchedule(
+  schedule: ScheduledAction
+): ScheduleDraft | undefined {
+  const trigger = getCronTrigger(schedule);
+  if (!trigger) return undefined;
+  const parsed = parseCron(trigger.schedule);
   const task = getAgentTask(schedule);
 
   return {
@@ -132,9 +137,12 @@ function buildAgentTask(draft: ScheduleDraft): AgentTask {
 export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
   return {
     name: draft.name.trim() || deriveScheduleName(draft.prompt),
-    schedule: buildCron(draft),
+    trigger: {
+      type: 'cron',
+      schedule: buildCron(draft),
+      timezone: getDefaultTimezone(),
+    },
     kind: 'Agent',
-    timezone: getDefaultTimezone(),
     task: buildAgentTask(draft) as unknown as CreateScheduledAction['task'],
     enabled: draft.enabled,
   };
@@ -143,14 +151,29 @@ export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
 export function draftToUpdateBody(
   draft: ScheduleDraft,
   previous: ScheduledAction
-): UpdateScheduledAction {
+): UpdateScheduledAction | undefined {
+  const trigger = getCronTrigger(previous);
+  if (!trigger) return undefined;
   return {
     name: draft.name.trim() || deriveScheduleName(draft.prompt),
-    schedule: buildCron(draft),
+    trigger: { ...trigger, schedule: buildCron(draft) },
     kind: 'Agent',
-    timezone: previous.timezone || getDefaultTimezone(),
     task: buildAgentTask(draft) as unknown as UpdateScheduledAction['task'],
     enabled: draft.enabled,
+  };
+}
+
+export function scheduleToDuplicateBody(
+  schedule: ScheduledAction
+): CreateScheduledAction | undefined {
+  const trigger = getCronTrigger(schedule);
+  if (!trigger) return undefined;
+  return {
+    enabled: schedule.enabled,
+    kind: schedule.kind,
+    name: `${schedule.name} copy`,
+    trigger,
+    task: schedule.task,
   };
 }
 
