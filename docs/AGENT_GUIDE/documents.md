@@ -316,6 +316,19 @@ To verify nesting, give a list item a child and grandchild, then swipe the
 parent right and left: all three should shift one level together, preserving
 their relative depths and order.
 
+## CRM company mentions
+
+With CRM enabled, type `@` followed by a company name or domain in an editor or
+composer. Companies appear in their own mention bucket. With
+`ENABLE_GRAPHQL_SOUP` enabled, results include cached companies even if they are
+absent from the first 500 companies in the REST Quick Access feed; the REST feed
+remains a fallback. Cache search covers synchronized companies, not the entire CRM.
+
+To verify, search for a cached company absent from that REST page, select it, and
+check that the inserted company mention points to the correct company. Also check
+searching by domain and that an open picker updates when companies finish hydrating.
+Discard unsent test drafts rather than sending them.
+
 ## Reference hover previews
 
 The `@` menu includes `Recent agent sessions` after Channels and before

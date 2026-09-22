@@ -13,7 +13,7 @@ import {
 import type { Bucket } from './types';
 
 // Only these buckets can be materialized from cache hits. Other Quick Access
-// sources (contacts, CRM, sessions) are merged locally, after the search limit.
+// sources (contacts, sessions) are merged locally, after the search limit.
 const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'document',
   'note',
@@ -24,6 +24,7 @@ const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'project',
   'channel',
   'dm',
+  'crm_company',
 ]);
 const BROWSE_PAGE_SIZE = 50;
 const SEARCH_LIMIT = 500;

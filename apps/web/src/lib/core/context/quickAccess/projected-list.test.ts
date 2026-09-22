@@ -245,7 +245,7 @@ describe('Quick Access local projection', () => {
     expect(search.mock.calls[0][0].buckets).not.toEqual(
       expect.arrayContaining(['email'])
     );
-    expect(search.mock.calls[0][0].buckets).not.toEqual(
+    expect(search.mock.calls[0][0].buckets).toEqual(
       expect.arrayContaining(['crm_company'])
     );
     expect(search.mock.calls[0][0].buckets).not.toEqual(
@@ -258,7 +258,7 @@ describe('Quick Access local projection', () => {
     const list = root(() =>
       createProjectedList({
         host: { search },
-        buckets: ['email', 'person', 'crm_company', 'agent_session'],
+        buckets: ['email', 'person', 'agent_session'],
         revision: () => 0,
         materialize,
       })

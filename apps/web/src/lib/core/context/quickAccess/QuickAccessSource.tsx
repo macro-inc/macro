@@ -1,4 +1,5 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
 import {
   useChannelsContext,
   useDmActivityByUserId,
@@ -20,6 +21,7 @@ import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
 } from '@queries/channel/graphql';
+import { materializeCachedGraphqlCrmCompanies } from '@queries/crm/graphql';
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
@@ -899,14 +901,21 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         ? searchQuickAccessItems(baseList(), options.searchTerm?.() ?? '')
         : baseList()
     );
+    const projectedBuckets = (
+      buckets.length ? buckets : BUCKET_COMBINATIONS.all
+    ).filter(
+      (bucket) => bucket !== 'crm_company' || isFeatureEnabled(enableCrm)
+    );
     const projected =
       options && cacheHost
         ? createProjectedList<QuickAccessItem>({
             host: cacheHost,
-            buckets,
+            buckets: projectedBuckets,
             revision: cacheRevision,
             searchTerm: options.searchTerm,
-            enabled: options.enabled,
+            // An empty bucket list means "all" to the cache, not "none".
+            enabled: () =>
+              projectedBuckets.length > 0 && options.enabled?.() !== false,
             existingItems: localItems,
             materialize: async (documents) => {
               const idOf = (recordKey: string) =>
@@ -914,15 +923,20 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               const missing = documents.filter(
                 ({ recordKey }) => !itemCache.has(idOf(recordKey))
               );
-              const [historyItems, cachedChannelItems] = await Promise.all([
-                materializeCachedGraphqlHistoryItems(cacheHost, missing),
-                materializeCachedGraphqlChannels(cacheHost, missing),
-              ]);
+              const [historyItems, cachedChannelItems, cachedCompanies] =
+                await Promise.all([
+                  materializeCachedGraphqlHistoryItems(cacheHost, missing),
+                  materializeCachedGraphqlChannels(cacheHost, missing),
+                  materializeCachedGraphqlCrmCompanies(cacheHost, missing),
+                ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
               );
               const channelsById = new Map(
                 cachedChannelItems.map((item) => [item.id, item])
+              );
+              const companiesById = new Map(
+                cachedCompanies.map((company) => [company.id, company])
               );
               return documents.flatMap((document): QuickAccessItem[] => {
                 const id = idOf(document.recordKey);
@@ -943,6 +957,24 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                         createdAt: historyItem.createdAt,
                       },
                       data: entity,
+                    },
+                  ];
+                }
+                const company = companiesById.get(id);
+                if (company) {
+                  return [
+                    {
+                      kind: 'entity',
+                      id,
+                      bucket: 'crm_company',
+                      searchText: getCrmCompanySearchText(company),
+                      sortTimestamp: document.timestampMs,
+                      timestamps: {
+                        viewedAt: company.viewedAt,
+                        updatedAt: company.updatedAt,
+                        createdAt: company.createdAt,
+                      },
+                      data: company,
                     },
                   ];
                 }

@@ -1,9 +1,11 @@
+import type { CrmCompanyEntity } from '@entity';
 import type { CacheChangeOptions } from '@graphql-cache/host/types';
 import type {
   SearchCacheArgs,
   SearchCachePage,
   SearchDocumentWire,
 } from '@graphql-cache/index';
+import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { HistoryItem } from '@queries/history/types';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +20,14 @@ const mocks = vi.hoisted(() => ({
   unsubscribe: vi.fn(),
   channelRefetch: vi.fn(),
   onCacheChanged: vi.fn(),
+  readRecordsByKeys: vi.fn(),
+  companies: [] as CrmCompanyEntity[],
+  crmEnabled: true,
+  cacheEnabled: true,
+}));
+vi.mock('@core/constant/featureFlags', () => ({
+  enableCrm: {},
+  isFeatureEnabled: () => mocks.crmEnabled,
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name: string }) => item.name,
@@ -53,19 +63,24 @@ vi.mock('@queries/history/graphql', () => ({
     _host: unknown,
     documents: SearchDocumentWire[]
   ): Promise<HistoryItem[]> =>
-    documents.map((document) => ({
-      id: document.recordKey.split(':')[1],
-      type: 'document',
-      fileType: 'md',
-      name: document.searchText,
-      ownerId: 'owner',
-    })),
+    documents
+      .filter((document) => document.bucket === 'note')
+      .map((document) => ({
+        id: document.recordKey.split(':')[1],
+        type: 'document',
+        fileType: 'md',
+        name: document.searchText,
+        ownerId: 'owner',
+      })),
 }));
 vi.mock('@queries/soup/quick-access-agent-sessions', () => ({
   useQuickAccessAgentSessionsQuery: () => ({ query: {}, sessions: () => [] }),
 }));
 vi.mock('@queries/soup/quick-access-crm-companies', () => ({
-  useQuickAccessCrmCompaniesQuery: () => ({ query: {}, companies: () => [] }),
+  useQuickAccessCrmCompaniesQuery: () => ({
+    query: {},
+    companies: () => mocks.companies,
+  }),
 }));
 vi.mock('@queries/soup/quick-access-skills', () => ({
   useQuickAccessSkillsQuery: () => ({ query: {}, skills: () => [] }),
@@ -86,6 +101,8 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: () => ({
     search: mocks.search,
     onCacheChanged: mocks.onCacheChanged,
+    readRecordsByKeys: mocks.readRecordsByKeys,
+    disabled: !mocks.cacheEnabled,
   }),
 }));
 
@@ -121,6 +138,15 @@ function page(start: number, count: number, more = false): SearchCachePage {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.history = [];
+  mocks.companies = [];
+  mocks.crmEnabled = true;
+  mocks.cacheEnabled = true;
+  mocks.readRecordsByKeys.mockReset().mockResolvedValue({
+    revision: INITIAL_CACHE_REVISION,
+    records: [
+      { recordKey: 'GraphqlSoupCrmCompany:company-1', record: cachedCompany },
+    ],
+  });
   mocks.search.mockReset().mockResolvedValue(page(0, 0));
   mocks.onCacheChanged.mockImplementation(
     (callback: () => void, _options: CacheChangeOptions) => {
@@ -131,7 +157,125 @@ beforeEach(() => {
 });
 afterEach(() => dispose?.());
 
+const cachedCompany = {
+  __typename: 'GraphqlSoupCrmCompany',
+  name: 'Acme',
+  teamId: 'team-1',
+  hidden: false,
+  domains: ['acme.example'],
+  createdAt: '2025-01-01T00:00:00.000Z',
+  updatedAt: '2025-01-02T00:00:00.000Z',
+  viewedAt: null,
+};
+const companyHit: SearchDocumentWire = {
+  profile: 'quick-access-v1',
+  recordKey: 'GraphqlSoupCrmCompany:company-1',
+  bucket: 'crm_company',
+  searchText: 'acme | acme.example',
+  timestampMs: Date.parse(cachedCompany.updatedAt),
+  sourceHash: 'company-hash',
+};
+const restCompany: CrmCompanyEntity = {
+  id: 'company-1',
+  type: 'crm_company',
+  name: 'Acme',
+  teamId: 'team-1',
+  ownerId: 'team-1',
+  hidden: false,
+  domains: [{ id: 'domain-1', companyId: 'company-1', domain: 'acme.example' }],
+};
+
 describe('Quick Access source integration', () => {
+  it.each(['Acme', 'acme.example'])(
+    'finds a cached CRM company absent from the REST feed by %s',
+    async (query) => {
+      mocks.search.mockResolvedValue({
+        documents: [companyHit],
+        nextCursor: null,
+      });
+      const list = setup((source) =>
+        source.useList({ buckets: ['crm_company'], searchTerm: () => query })
+      );
+      await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+      expect(mocks.search).toHaveBeenCalledWith(
+        expect.objectContaining({ buckets: ['crm_company'], query })
+      );
+      expect(list.items()[0]).toMatchObject({
+        id: 'company-1',
+        kind: 'entity',
+        bucket: 'crm_company',
+        data: {
+          type: 'crm_company',
+          name: 'Acme',
+          teamId: 'team-1',
+          domains: [expect.objectContaining({ domain: 'acme.example' })],
+        },
+      });
+      expect(list.totalCount()).toBe(1);
+    }
+  );
+
+  it('merges CRM cache hits with the REST feed without duplicates', async () => {
+    mocks.companies = [restCompany];
+    mocks.search.mockResolvedValue({
+      documents: [companyHit],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({ buckets: ['crm_company'], searchTerm: () => 'Acme' })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toHaveLength(1);
+    expect(list.items()[0].data).toMatchObject(restCompany);
+  });
+
+  it('preserves REST company mentions with GraphQL disabled', () => {
+    mocks.cacheEnabled = false;
+    mocks.companies = [restCompany];
+    const list = setup((source) =>
+      source.useList({
+        buckets: ['crm_company'],
+        searchTerm: () => 'acme.example',
+      })
+    );
+    expect(list.items()).toHaveLength(1);
+    expect(mocks.search).not.toHaveBeenCalled();
+  });
+
+  it('updates an open company list when the cache is hydrated', async () => {
+    const list = setup((source) =>
+      source.useList({ buckets: ['crm_company'] })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toEqual([]);
+    mocks.search.mockResolvedValue({
+      documents: [companyHit],
+      nextCursor: null,
+    });
+    mocks.changed?.();
+    await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+  });
+
+  it('does not search cached companies when CRM is disabled', () => {
+    mocks.crmEnabled = false;
+    const list = setup((source) =>
+      source.useList({ buckets: ['crm_company'] })
+    );
+    expect(list.items()).toEqual([]);
+    expect(mocks.search).not.toHaveBeenCalled();
+  });
+
+  it('excludes CRM from mixed lists when the feature is disabled', async () => {
+    mocks.crmEnabled = false;
+    const list = setup((source) =>
+      source.useList({ buckets: ['note', 'crm_company'] })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(mocks.search).toHaveBeenCalledWith(
+      expect.objectContaining({ buckets: ['note'] })
+    );
+  });
+
   it('updates an open list on opted-in hydration notifications without changing its query', async () => {
     const list = setup((source) => source.useList({ buckets: ['note'] }));
     await vi.waitFor(() => expect(list.isLoading()).toBe(false));
