@@ -869,24 +869,28 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const first = args[0];
     const options = typeof first === 'object' ? first : undefined;
     const buckets = options ? [...options.buckets] : (args as Bucket[]);
+    const projectedBuckets = (
+      buckets.length ? buckets : BUCKET_COMBINATIONS.all
+    ).filter(
+      (bucket) => bucket !== 'crm_company' || isFeatureEnabled(enableCrm)
+    );
     const baseList = createLazyMemo(() => {
-      if (options?.enabled?.() === false) return [];
+      if (options?.enabled?.() === false || projectedBuckets.length === 0)
+        return [];
       let indices: IndexEntry[];
 
-      if (buckets.length === 0) {
-        indices = preBakedIndices().all;
-      } else if (buckets.length === 1) {
+      if (projectedBuckets.length === 1) {
         // Single bucket = return pre-computed bucket list
-        indices = bucketIndices().get(buckets[0]) ?? [];
+        indices = bucketIndices().get(projectedBuckets[0]) ?? [];
       } else {
         // Check for pre-baked combination
-        const preBaked = getPreBakedIndices(buckets);
+        const preBaked = getPreBakedIndices(projectedBuckets);
         if (preBaked) {
           indices = preBaked;
         } else {
           // Fallback: merge-sort the requested bucket index lists
           const allIndices = bucketIndices();
-          const indicesToMerge = buckets
+          const indicesToMerge = projectedBuckets
             .map((b) => allIndices.get(b) ?? [])
             .filter((arr) => arr.length > 0);
           indices = mergeMultipleSortedIndices(indicesToMerge);
@@ -900,11 +904,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       options
         ? searchQuickAccessItems(baseList(), options.searchTerm?.() ?? '')
         : baseList()
-    );
-    const projectedBuckets = (
-      buckets.length ? buckets : BUCKET_COMBINATIONS.all
-    ).filter(
-      (bucket) => bucket !== 'crm_company' || isFeatureEnabled(enableCrm)
     );
     const projected =
       options && cacheHost

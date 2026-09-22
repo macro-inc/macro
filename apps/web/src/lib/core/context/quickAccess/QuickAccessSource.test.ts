@@ -11,7 +11,7 @@ import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_BROWSE_PAGES_PER_LOAD } from './projected-list';
 import { createQuickAccessValue } from './QuickAccessSource';
-import type { QuickAccessContextValue } from './types';
+import { BUCKET_COMBINATIONS, type QuickAccessContextValue } from './types';
 
 const mocks = vi.hoisted(() => ({
   search: vi.fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>(),
@@ -258,6 +258,7 @@ describe('Quick Access source integration', () => {
 
   it('does not search cached companies when CRM is disabled', () => {
     mocks.crmEnabled = false;
+    mocks.companies = [restCompany];
     const list = setup((source) =>
       source.useList({ buckets: ['crm_company'] })
     );
@@ -267,6 +268,7 @@ describe('Quick Access source integration', () => {
 
   it('excludes CRM from mixed lists when the feature is disabled', async () => {
     mocks.crmEnabled = false;
+    mocks.companies = [restCompany];
     const list = setup((source) =>
       source.useList({ buckets: ['note', 'crm_company'] })
     );
@@ -274,7 +276,63 @@ describe('Quick Access source integration', () => {
     expect(mocks.search).toHaveBeenCalledWith(
       expect.objectContaining({ buckets: ['note'] })
     );
+    expect(list.items()).toEqual([]);
   });
+
+  it.each([true, false])(
+    'filters retained local CRM companies across list selections (GraphQL %s)',
+    async (cacheEnabled) => {
+      mocks.cacheEnabled = cacheEnabled;
+      mocks.crmEnabled = false;
+      mocks.companies = [restCompany];
+      mocks.history = [
+        {
+          id: 'note-1',
+          type: 'document',
+          name: 'Note',
+          fileType: 'md',
+          ownerId: 'owner',
+        },
+        { id: 'chat-1', type: 'chat', name: 'Chat', ownerId: 'owner' },
+      ];
+      const lists = setup((source) => [
+        { list: source.useList(), ids: ['chat-1', 'note-1'] },
+        { list: source.useList({ buckets: [] }), ids: ['chat-1', 'note-1'] },
+        { list: source.useList('crm_company'), ids: [] },
+        { list: source.useList({ buckets: ['crm_company'] }), ids: [] },
+        {
+          list: source.useList({ buckets: ['note', 'crm_company'] }),
+          ids: ['note-1'],
+        },
+        {
+          list: source.useList({
+            buckets: [...BUCKET_COMBINATIONS.documents, 'crm_company'],
+          }),
+          ids: ['chat-1', 'note-1'],
+        },
+        {
+          list: source.useList({ buckets: ['note', 'chat', 'crm_company'] }),
+          ids: ['chat-1', 'note-1'],
+        },
+        {
+          list: source.useList({ buckets: BUCKET_COMBINATIONS.all }),
+          ids: ['chat-1', 'note-1'],
+        },
+      ]);
+      await vi.waitFor(() =>
+        expect(lists.every(({ list }) => !list.isLoading())).toBe(true)
+      );
+      for (const { list, ids } of lists) {
+        expect(
+          list
+            .items()
+            .map((item) => item.id)
+            .sort()
+        ).toEqual(ids);
+        expect(list.totalCount()).toBe(ids.length);
+      }
+    }
+  );
 
   it('updates an open list on opted-in hydration notifications without changing its query', async () => {
     const list = setup((source) => source.useList({ buckets: ['note'] }));
