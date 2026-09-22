@@ -111,7 +111,12 @@ export type ChannelsRailProps = {
 
 export function ChannelsRail(props: ChannelsRailProps) {
   const channelTagsFlag = useFeatureFlag(enableChannelTags);
-  const channelTagsEnabled = () => channelTagsFlag().enabled;
+  const channelTagsEnabled = createMemo(() => channelTagsFlag().enabled);
+  // The dialog manager closes entries when their owner is disposed. Give
+  // label dialogs an owner that is cleaned up when the rollout turns off.
+  const labelDialogOwner = createMemo(() =>
+    channelTagsEnabled() ? getOwner() : undefined
+  );
   const {
     state,
     setGroupOpen,
@@ -123,7 +128,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
-  const owner = getOwner();
   const notificationSource = useGlobalNotificationSource();
 
   const favoritesData = useFavoritesData({ entityType: ['channel'] });
@@ -785,7 +789,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           setLabelOpen(created.id, true);
         },
       },
-      { owner }
+      { owner: labelDialogOwner() }
     );
     if (!name) return;
     toast.success(
@@ -817,7 +821,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           toast.success(`Created “${name}”`);
         },
       },
-      { owner }
+      { owner: labelDialogOwner() }
     );
   };
 
@@ -838,7 +842,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           toast.success(`Updated “${name}”`);
         },
       },
-      { owner }
+      { owner: labelDialogOwner() }
     );
   };
 
@@ -856,7 +860,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           await renameLabelMutation.mutateAsync({ labelId: label.id, name });
         },
       },
-      { owner }
+      { owner: labelDialogOwner() }
     );
     if (!name || name === label.name) return;
     toast.success(`Renamed to “${name}”`);
@@ -879,7 +883,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         cancelLabel: 'Cancel',
         tone: 'danger',
       },
-      { owner }
+      { owner: labelDialogOwner() }
     );
     if (!confirmed || !channelTagsEnabled()) return;
     try {

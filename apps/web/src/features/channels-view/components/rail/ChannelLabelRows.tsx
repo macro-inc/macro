@@ -191,7 +191,7 @@ export function ChannelsCreateMenu() {
 
   return (
     <Show
-      when={rail.channelTagsEnabled()}
+      when={rail.channelTagsEnabled() && rail.labelsAvailable()}
       fallback={
         <ViewSidebar.Control
           label="Create channel"
@@ -226,13 +226,11 @@ export function ChannelsCreateMenu() {
             <MenuRow
               icon={TagIcon}
               label="New label"
-              disabled={!rail.labelsAvailable()}
               onSelect={() => void rail.createLabel([])}
             />
             <MenuRow
               icon={FilterIcon}
               label="New smart label"
-              disabled={!rail.labelsAvailable()}
               onSelect={() => void rail.createSmartTag()}
             />
           </Dropdown.Group>

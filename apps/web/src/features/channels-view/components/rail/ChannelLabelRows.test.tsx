@@ -12,7 +12,7 @@ import { ChannelLabelMenuItems, ChannelsCreateMenu } from './ChannelLabelRows';
 
 const rail = vi.hoisted(() => ({
   channelTagsEnabled: (): boolean => false,
-  labelsAvailable: () => true,
+  labelsAvailable: (): boolean => true,
   labels: () => [
     { id: 'label', name: 'Cached label', channelIds: ['channel'] },
   ],
@@ -62,8 +62,10 @@ vi.mock('@kobalte/core/context-menu', () => ({
 }));
 
 let setEnabled: Setter<boolean>;
+let setLabelsAvailable: Setter<boolean>;
 beforeEach(() => {
   [rail.channelTagsEnabled, setEnabled] = createSignal(false);
+  [rail.labelsAvailable, setLabelsAvailable] = createSignal(true);
   vi.clearAllMocks();
   vi.stubGlobal('scrollTo', vi.fn());
 });
@@ -73,6 +75,42 @@ afterEach(() => {
 });
 
 describe('channel tag flag in rail menus', () => {
+  it('shows direct channel creation until labels load and removes label actions if they become unavailable', async () => {
+    setEnabled(true);
+    setLabelsAvailable(false);
+    render(() => <ChannelsCreateMenu />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create channel' }));
+    expect(openNewChannelModal).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole('button', { name: 'Create channel or label' })
+    ).toBeNull();
+    expect(screen.queryByText('New label')).toBeNull();
+    expect(screen.queryByText('New smart label')).toBeNull();
+
+    setLabelsAvailable(true);
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Create channel or label' }),
+      { key: 'ArrowDown' }
+    );
+    const labelAction = await screen.findByRole('menuitem', {
+      name: 'New label',
+    });
+    expect(labelAction.getAttribute('aria-disabled')).not.toBe('true');
+    expect(
+      screen
+        .getByRole('menuitem', { name: 'New smart label' })
+        .getAttribute('aria-disabled')
+    ).not.toBe('true');
+
+    setLabelsAvailable(false);
+    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Create channel' }));
+    expect(openNewChannelModal).toHaveBeenCalledTimes(2);
+    expect(rail.createLabel).not.toHaveBeenCalled();
+    expect(rail.createSmartTag).not.toHaveBeenCalled();
+  });
+
   it('keeps direct channel creation available and removes an open label menu when disabled', async () => {
     render(() => <ChannelsCreateMenu />);
 

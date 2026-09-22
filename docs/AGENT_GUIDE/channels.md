@@ -337,6 +337,12 @@ channel-menu label actions, and label drag targets are absent, and the app makes
 no channel-label list or smart-label preview requests. Existing saved labels
 remain unchanged and reappear when the flag is enabled.
 
+Even with the flag enabled, the heading keeps the direct `Create channel`
+action while labels are loading or unavailable. It shows the label creation
+menu only after the label list loads successfully; it never advertises disabled
+`New label` or `New smart label` actions. Changing the rollout flag to off also
+removes open label menus and dismisses label dialogs without reloading Chat.
+
 Verify both states after reloading Chat: with the flag off, inspect the heading
 action and a channel's context menu, drag between channel rows, and confirm
 there are no `/channel-labels` requests. With the flag enabled, verify the `+`
