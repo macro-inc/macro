@@ -9,6 +9,7 @@ export function channelMatchesSmartTag(
 ): boolean {
   return (
     canLabelChannel(channel) &&
+    channel.isParticipant !== false &&
     rule.contains.length > 0 &&
     channel.name.toLowerCase().includes(rule.contains.toLowerCase())
   );

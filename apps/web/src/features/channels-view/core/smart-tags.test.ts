@@ -103,6 +103,34 @@ describe('smart tag matching', () => {
     }
   });
 
+  it.each(['public', 'private', 'team'] as const)(
+    'excludes inactive %s channels from shared and private smart memberships while preserving active and legacy channels',
+    (channelType) => {
+      const inactive = {
+        ...channel('inactive', 'Support', channelType),
+        isParticipant: false,
+      };
+      const newlyLoadedInactive = { ...inactive, id: 'new-inactive' };
+      const active = {
+        ...channel('active', 'Support', channelType),
+        isParticipant: true,
+      };
+      const legacy = channel('legacy', 'Support', channelType);
+      expect(channelMatchesSmartTag(inactive, rule)).toBe(false);
+      expect(channelMatchesSmartTag(active, rule)).toBe(true);
+      expect(channelMatchesSmartTag(legacy, rule)).toBe(true);
+
+      for (const teamId of [undefined, 'label-team']) {
+        const result = resolveChannelLabelMemberships(
+          [{ ...label('smart', ['unloaded', 'inactive']), teamId }],
+          [inactive, newlyLoadedInactive, active, legacy]
+        );
+        expect(result[0].channelIds).toEqual(['unloaded', 'active', 'legacy']);
+        expect(result[0].channelCount).toBe(3);
+      }
+    }
+  );
+
   it('preserves the manual count of assignments outside the loaded viewer-relative IDs', () => {
     const result = resolveChannelLabelMemberships(
       [{ ...label('manual', ['dm', 'team']), rule: null, channelCount: 8 }],
