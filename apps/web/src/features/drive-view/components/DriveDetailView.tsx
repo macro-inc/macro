@@ -172,30 +172,33 @@ function StackEntityDetail(props: {
             </Show>
           }
         >
-          {(context) => (
-            <FileDetailBreadcrumbItem
-              value={props.entry.value}
-              metadata={props.entry.data}
-              order={props.order}
-              documentMetadata={context.documentMetadata}
-              userAccessLevel={context.userAccessLevel}
-              blockType={context.blockType}
-              fallbackName={props.entry.data.fallbackName}
-              onClose={navigationStack.pop}
-              onDuplicate={(id, name) => {
-                const target = props.entry.data;
-                if (target.type !== 'document') return;
-                navigationStack.navigate(
-                  entityDetailTarget.document({
-                    id,
-                    fileType: target.fileType,
-                    subType: target.subType,
-                    fallbackName: name,
-                  })
-                );
-              }}
-            />
-          )}
+          {(context) => {
+            return (
+              <FileDetailBreadcrumbItem
+                value={props.entry.value}
+                metadata={props.entry.data}
+                order={props.order}
+                documentMetadata={context.documentMetadata}
+                userAccessLevel={context.userAccessLevel}
+                blockType={entityDetailBlockType(props.entry.data)!}
+                operations={context.operations}
+                fallbackName={props.entry.data.fallbackName}
+                onClose={navigationStack.pop}
+                onDuplicate={(id, name) => {
+                  const target = props.entry.data;
+                  if (target.type !== 'document') return;
+                  navigationStack.navigate(
+                    entityDetailTarget.document({
+                      id,
+                      fileType: target.fileType,
+                      subType: target.subType,
+                      fallbackName: name,
+                    })
+                  );
+                }}
+              />
+            );
+          }}
         </EntityDetail>
       </Match>
     </Switch>
