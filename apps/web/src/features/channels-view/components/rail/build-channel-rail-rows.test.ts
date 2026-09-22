@@ -6,14 +6,18 @@ import {
   buildChannelSectionRows,
 } from './build-channel-rail-rows';
 
-function channel(id: string, name = id): ChannelEntity {
+function channel(
+  id: string,
+  name = id,
+  channelType: ChannelEntity['channelType'] = 'team'
+): ChannelEntity {
   return {
     id,
     name,
     type: 'channel',
     ownerId: 'alice',
-    channelType: 'public',
-  } as unknown as ChannelEntity;
+    channelType,
+  };
 }
 
 function label(
@@ -117,6 +121,52 @@ describe('buildChannelSectionRows', () => {
       rows.some((row) => row.kind === 'conversation' && row.channel === hidden)
     ).toBe(false);
   });
+
+  it.each([true, false])(
+    'keeps non-team channels in the plain list when labels are open=%s, ignoring cached memberships',
+    (isOpen) => {
+      const publicChannel = channel('public', 'Public', 'public');
+      const privateChannel = channel('private', 'Private', 'private');
+      const channels = [publicChannel, privateChannel, acme];
+      const rows = buildChannelSectionRows({
+        labels: [
+          label(
+            'manual',
+            'Manual',
+            channels.map((channel) => channel.id)
+          ),
+          {
+            ...label(
+              'smart',
+              'Smart',
+              channels.map((channel) => channel.id)
+            ),
+            rule: { attribute: 'name', contains: 'support' },
+          },
+        ],
+        channels,
+        channelsById: new Map(channels.map((channel) => [channel.id, channel])),
+        isLabelOpen: () => isOpen,
+      });
+
+      expect(
+        rows.filter((row) => row.kind === 'conversation' && !row.labelId)
+      ).toEqual([
+        { kind: 'conversation', channel: publicChannel },
+        { kind: 'conversation', channel: privateChannel },
+      ]);
+      expect(
+        rows.filter((row) => row.kind === 'conversation' && row.labelId)
+      ).toEqual(
+        isOpen
+          ? [
+              { kind: 'conversation', channel: acme, labelId: 'manual' },
+              { kind: 'conversation', channel: acme, labelId: 'smart' },
+            ]
+          : []
+      );
+    }
+  );
 });
 
 describe('buildChannelRailRows', () => {

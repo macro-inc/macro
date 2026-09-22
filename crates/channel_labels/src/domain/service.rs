@@ -53,7 +53,7 @@ fn channel_write_result(outcome: SetChannelLabelOutcome) -> Result<(), ChannelLa
             Err(ChannelLabelsError::NotFound("label not found"))
         }
         SetChannelLabelOutcome::ChannelNotLabelable => Err(ChannelLabelsError::BadRequest(
-            "direct messages cannot be added to a label".to_string(),
+            "only team channels in this label's scope can be added to a label".to_string(),
         )),
         SetChannelLabelOutcome::SmartTagReadOnly => Err(ChannelLabelsError::BadRequest(
             "smart tag membership is determined by its rule".to_string(),
@@ -231,7 +231,7 @@ where
         let rule = validate_rule(rule)?;
         Ok(self
             .repo
-            .preview_smart_tag(receipt.user_id(), &rule, 5)
+            .preview_smart_tag(receipt.scope(), receipt.user_id(), &rule, 5)
             .await
             .map_err(anyhow::Error::from)?)
     }

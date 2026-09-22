@@ -48,7 +48,8 @@ import {
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../../channels-view-context';
-import { resolveSmartTagMemberships } from '../../core/smart-tags';
+import { canLabelChannel } from '../../core/channel-label-eligibility';
+import { resolveChannelLabelMemberships } from '../../core/smart-tags';
 import {
   type ChannelsSourceScope,
   type ChannelsSources,
@@ -255,7 +256,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   // Shared or private labels; channel membership is always viewer-relative.
   const labelsQuery = useChannelLabelsQuery();
   const labels = createMemo<readonly ChannelLabel[]>(() =>
-    resolveSmartTagMemberships(
+    resolveChannelLabelMemberships(
       channelTagsEnabled() && labelsQuery.isSuccess
         ? labelsQuery.data.labels
         : [],
@@ -338,7 +339,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const labelUnreadCount = (label: ChannelLabel) => {
     const unread = channelActivity.unreadChannelIds();
-    return label.channelIds.filter((id) => unread.has(id)).length;
+    return label.channelIds.filter(
+      (id) => unread.has(id) && canLabelChannel(channelsById().get(id))
+    ).length;
   };
 
   const visibleRows = createMemo(() => {
@@ -745,10 +748,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const message = error instanceof Error ? error.message : '';
     return message || fallback;
   };
+  const labelChannelById = (channelId: string) =>
+    channelsById().get(channelId) ??
+    serviceSearchResults().find((channel) => channel.id === channelId);
   const channelName = (channelId: string) => {
-    const name = channelsById().get(channelId)?.name;
+    const name = labelChannelById(channelId)?.name;
     return name ? `#${name}` : 'the channel';
   };
+  const canLabelChannelId = (channelId: string) =>
+    canLabelChannel(labelChannelById(channelId));
 
   const sharedLabels = () =>
     labelsQuery.isSuccess && Boolean(labelsQuery.data.teamId);
@@ -759,12 +767,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const createLabel = async (channelIds: string[]) => {
     if (!channelTagsEnabled()) return;
+    if (!channelIds.every(canLabelChannelId)) return;
     if (!labelsAvailable()) {
       toast.failure(labelsUnavailableReason());
       return;
     }
     const names = channelIds
-      .map((id) => channelsById().get(id)?.name)
+      .map((id) => labelChannelById(id)?.name)
       .filter((name): name is string => Boolean(name))
       .map((name) => `#${name}`);
     const grouping =
@@ -781,6 +790,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
         onConfirm: async (name) => {
           if (!channelTagsEnabled())
             throw new Error('Channel tags are disabled.');
+          if (!channelIds.every(canLabelChannelId))
+            throw new Error('Only team channels can be added to labels.');
           const created = await createLabelMutation.mutateAsync({
             name,
             channelIds,
@@ -895,7 +906,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const setChannelLabel = (channelId: string, labelId: string | undefined) => {
-    if (!channelTagsEnabled()) return;
+    if (!channelTagsEnabled() || !canLabelChannelId(channelId)) return;
     const from = labels().find(
       (label) => !label.rule && label.channelIds.includes(channelId)
     );
@@ -924,7 +935,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const markLabelRead = (label: ChannelLabel) => {
     if (!channelTagsEnabled()) return;
-    const channelIds = new Set(label.channelIds);
+    const channelIds = new Set(label.channelIds.filter(canLabelChannelId));
     const unread = notificationSource
       .notifications()
       .filter(
@@ -939,6 +950,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
   // Drops are resolved here rather than per row so a channel dragged from
   // anywhere in the section lands the same way.
   const [dndState, dndActions] = useDragDropContext() ?? [];
+  const canDropOnChannel = (sourceId: string, targetId: string) =>
+    sourceId !== targetId && canLabelChannelId(targetId);
   // The highlight follows the whole target (a label with all its rows), not
   // the row under the cursor, so rows read this instead of their own state.
   const activeDropTarget = (): ChannelLabelDropTarget | undefined => {
@@ -948,6 +961,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       | undefined;
     if (drag?.dragType !== 'channel-label' || drag.dndScope !== listDomId)
       return undefined;
+    if (!canLabelChannelId(drag.channelId)) return undefined;
     const drop = dndState?.active.droppable?.data as
       | ChannelLabelDropData
       | undefined;
@@ -959,7 +973,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     if (drop.target.kind === 'smart-tag') return undefined;
     if (
       drop.target.kind === 'channel' &&
-      drop.target.channelId === drag.channelId
+      !canDropOnChannel(drag.channelId, drop.target.channelId)
     )
       return undefined;
     if (drop.target.kind === 'label' && drop.target.labelId === drag.labelId)
@@ -972,6 +986,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const drag = draggable?.data as ChannelLabelDragData | undefined;
     if (drag?.dragType !== 'channel-label' || drag.dndScope !== listDomId)
       return;
+    if (!canLabelChannelId(drag.channelId)) return;
     // With labels unavailable every target reports itself disabled, so the
     // drag ends on nothing; say why rather than silently doing nothing.
     if (!labelsAvailable()) {
@@ -998,7 +1013,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       if (drag.labelId) setChannelLabel(drag.channelId, undefined);
       return;
     }
-    if (target.channelId === drag.channelId) return;
+    if (!canDropOnChannel(drag.channelId, target.channelId)) return;
     // Dragging a labelled channel onto the plain list takes it out of its
     // label; dropping one plain channel on another starts a label with both.
     if (drag.labelId) {

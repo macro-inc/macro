@@ -30,6 +30,7 @@ import {
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { canLabelChannel } from '../../core/channel-label-eligibility';
 import type { ChannelListSort, ChannelsGroup } from '../../types';
 import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
@@ -260,7 +261,7 @@ function ChannelOption(props: {
   labelId?: string;
   /** Keep the timestamp visible instead of revealing it on hover. */
   alwaysShowTimestamp?: boolean;
-  /** Make the row draggable between labels (Channels section only). */
+  /** Make a team-channel row draggable between labels (Channels section only). */
   draggable?: boolean;
 }) {
   const rail = useChannelsRail();
@@ -274,7 +275,8 @@ function ChannelOption(props: {
         channel: props.channel,
         rowId: rowId(),
         labelId: () => props.labelId,
-        disabled: () => !rail.labelsAvailable(),
+        disabled: () =>
+          !rail.labelsAvailable() || !canLabelChannel(props.channel),
       })
     : undefined;
 
@@ -302,7 +304,7 @@ function ChannelOption(props: {
         dnd?.draggable.ref(element);
         dnd?.droppable.ref(element);
       }}
-      {...(dnd?.draggable.dragActivators ?? {})}
+      {...(canLabelChannel(props.channel) ? dnd?.draggable.dragActivators : {})}
       onPointerDown={() => {
         didDrag = false;
       }}
@@ -738,7 +740,7 @@ function ChannelsSectionRows(props: {
                         channelRow().channel.id,
                         channelRow().labelId
                       )}
-                      draggable
+                      draggable={canLabelChannel(channelRow().channel)}
                     />
                   )}
                 </Match>

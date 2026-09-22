@@ -141,7 +141,7 @@ describe('channel tag flag in rail menus', () => {
   it('hides cached label actions when the flag changes without remounting', () => {
     const channel = {
       id: 'channel',
-      channelType: 'public',
+      channelType: 'team',
     } as ChannelEntity;
     render(() => <ChannelLabelMenuItems channel={channel} />);
 
@@ -159,4 +159,26 @@ describe('channel tag flag in rail menus', () => {
     expect(screen.queryByText('Ungroup from “Cached label”')).toBeNull();
     expect(rail.setChannelLabel).not.toHaveBeenCalled();
   });
+
+  it.each(['public', 'private', 'direct_message'] as const)(
+    'hides all label actions for %s channels even with cached membership and the flag enabled',
+    (channelType) => {
+      setEnabled(true);
+      const channel: ChannelEntity = {
+        id: 'channel',
+        name: 'Channel',
+        ownerId: 'alice',
+        type: 'channel',
+        channelType,
+      };
+      const view = render(() => <ChannelLabelMenuItems channel={channel} />);
+
+      expect(view.container.textContent).toBe('');
+      expect(screen.queryByText('Move to label')).toBeNull();
+      expect(screen.queryByText('Add to label')).toBeNull();
+      expect(screen.queryByText('New label…')).toBeNull();
+      expect(screen.queryByText('Ungroup from “Cached label”')).toBeNull();
+      expect(rail.setChannelLabel).not.toHaveBeenCalled();
+    }
+  );
 });

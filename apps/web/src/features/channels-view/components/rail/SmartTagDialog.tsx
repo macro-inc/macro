@@ -112,7 +112,7 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
                 />
               </label>
               <Dialog.Description class="sr-only">
-                {props.scopeDescription} Matching channels are grouped
+                {props.scopeDescription} Matching team channels are grouped
                 automatically by name, ignoring capitalization.
               </Dialog.Description>
             </div>

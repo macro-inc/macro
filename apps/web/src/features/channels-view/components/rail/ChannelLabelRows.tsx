@@ -23,7 +23,7 @@ import type { ChannelLabel } from '@service-storage/generated/schemas/channelLab
 import { createDroppable } from '@thisbeyond/solid-dnd';
 import { cn, Dropdown } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
-import { isDirectMessage } from '../../utils';
+import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { isPrimaryMouseDown } from './ChannelRailItems';
 import {
   type ChannelLabelDropData,
@@ -256,7 +256,7 @@ export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
     <Show
       when={
         rail.channelTagsEnabled() &&
-        !isDirectMessage(props.channel) &&
+        canLabelChannel(props.channel) &&
         rail.labelsAvailable()
       }
     >

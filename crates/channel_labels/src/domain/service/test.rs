@@ -32,6 +32,9 @@ enum RepoCall {
         channel_id: Uuid,
         label_id: Option<Uuid>,
     },
+    Preview {
+        scope: ChannelLabelsScope,
+    },
 }
 
 #[derive(Clone, Default)]
@@ -167,14 +170,77 @@ impl ChannelLabelsRepo for FakeRepo {
     }
     async fn preview_smart_tag(
         &self,
+        scope: &ChannelLabelsScope,
         _viewer: &MacroUserIdStr<'_>,
         _rule: &ChannelLabelRule,
         _limit: u16,
     ) -> Result<SmartTagPreview, Self::Err> {
+        self.record(RepoCall::Preview {
+            scope: scope.clone(),
+        });
         Ok(SmartTagPreview {
             channels: vec![],
             total_count: 0,
         })
+    }
+}
+
+#[tokio::test]
+async fn preview_uses_the_same_authorized_scope_as_saved_labels() {
+    let repo = FakeRepo::default();
+    let service = ChannelLabelsServiceImpl::new(repo.clone());
+    let (team_id, receipt) = receipt();
+
+    service
+        .preview_smart_tag(
+            &receipt,
+            ChannelLabelRule::Name {
+                contains: "support".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.calls(),
+        vec![RepoCall::Preview {
+            scope: ChannelLabelsScope::Team(team_id),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn creation_and_assignment_report_ineligible_channels() {
+    let (_, receipt) = receipt();
+    let repo = FakeRepo {
+        create_outcome: Some(LabelWriteOutcome::InvalidChannel(
+            SetChannelLabelOutcome::ChannelNotLabelable,
+        )),
+        set_outcome: Some(SetChannelLabelOutcome::ChannelNotLabelable),
+        ..FakeRepo::default()
+    };
+    let service = ChannelLabelsServiceImpl::new(repo);
+    let channel_id = Uuid::now_v7();
+
+    let created = service
+        .create_label(
+            &receipt,
+            NewChannelLabel {
+                name: "Support".into(),
+                channel_ids: vec![channel_id],
+                rule: None,
+            },
+        )
+        .await;
+    let assigned = service
+        .set_channel_label(&receipt, channel_id, Some(Uuid::now_v7()))
+        .await;
+
+    for result in [created.map(|_| ()), assigned] {
+        assert!(matches!(
+            result,
+            Err(ChannelLabelsError::BadRequest(message)) if message.contains("only team channels")
+        ));
     }
 }
 

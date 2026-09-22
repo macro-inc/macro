@@ -14,8 +14,9 @@ pub trait ChannelLabelsRepo: Send + Sync + 'static {
     type Err: Send + std::fmt::Debug;
 
     /// Every label of the scope in manual order. `channel_ids` on each label
-    /// is restricted to channels `viewer` participates in. Manual counts include
-    /// all assignments; smart counts include only the viewer's active matches.
+    /// is restricted to eligible team channels `viewer` participates in. Shared
+    /// labels include only their own team's channels. Manual counts include all
+    /// eligible assignments; smart counts include only the viewer's active matches.
     /// Smart memberships are evaluated from current attributes, including matches
     /// already present in another smart tag or manual label.
     fn list_labels(
@@ -34,7 +35,8 @@ pub trait ChannelLabelsRepo: Send + Sync + 'static {
 
     /// Append a label to the scope's list. `name` is already trimmed and
     /// validated. Creation and all channel assignments must commit atomically.
-    /// The viewer must actively participate in every requested non-DM channel;
+    /// The viewer must actively participate in every requested channel, and
+    /// [`ChannelLabelsScope::can_label_channel`] must allow its owning team;
     /// invalid channels must leave the label and all assignments unchanged.
     /// A validated smart rule is persisted without any manual assignments.
     fn create_label(
@@ -68,8 +70,10 @@ pub trait ChannelLabelsRepo: Send + Sync + 'static {
 
     /// Put `channel_id` into `label_id` (or into no label when `None`).
     ///
-    /// The actor must actively participate in the non-DM channel. A label must
-    /// belong to the authorized scope; other scopes must remain unchanged.
+    /// The actor must actively participate in the channel. Assignments require
+    /// [`ChannelLabelsScope::can_label_channel`]; removals may clear historical
+    /// ineligible assignments. A label must belong to the authorized scope;
+    /// other scopes must remain unchanged.
     /// Smart tags reject manual assignment with `SmartTagReadOnly`.
     fn set_channel_label(
         &self,
@@ -79,11 +83,13 @@ pub trait ChannelLabelsRepo: Send + Sync + 'static {
         actor: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<SetChannelLabelOutcome, Self::Err>> + Send;
 
-    /// Preview a validated rule using only the viewer's active non-DM memberships.
+    /// Preview a validated rule using only the viewer's active channel memberships
+    /// permitted by [`ChannelLabelsScope::can_label_channel`].
     /// Match literal substrings case-insensitively; return at most `limit` names
     /// and the full visible count. The same rule determines smart tag membership.
     fn preview_smart_tag(
         &self,
+        scope: &ChannelLabelsScope,
         viewer: &MacroUserIdStr<'_>,
         rule: &ChannelLabelRule,
         limit: u16,

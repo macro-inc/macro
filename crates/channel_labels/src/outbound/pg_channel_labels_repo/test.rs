@@ -7,6 +7,8 @@ use super::PgChannelLabelsRepo;
 use crate::domain::models::{ChannelLabelsScope, LabelWriteOutcome, SetChannelLabelOutcome};
 use crate::domain::ports::ChannelLabelsRepo;
 
+mod team_channels;
+
 const USER_A: &str = "macro|labels-a@macro.com";
 const USER_B: &str = "macro|labels-b@macro.com";
 
@@ -56,25 +58,47 @@ async fn insert_channel(
     owner: &str,
     participants: &[&str],
 ) -> Uuid {
+    insert_channel_with_team(pool, name, channel_type, None, owner, participants).await
+}
+
+async fn insert_team_channel(
+    pool: &PgPool,
+    name: &str,
+    team_id: Uuid,
+    owner: &str,
+    participants: &[&str],
+) -> Uuid {
+    insert_channel_with_team(pool, Some(name), "team", Some(team_id), owner, participants).await
+}
+
+async fn insert_channel_with_team(
+    pool: &PgPool,
+    name: Option<&str>,
+    channel_type: &str,
+    team_id: Option<Uuid>,
+    owner: &str,
+    participants: &[&str],
+) -> Uuid {
     let channel_id = Uuid::now_v7();
-    sqlx::query(
-        r#"INSERT INTO comms_channels (id, name, channel_type, owner_id)
-           VALUES ($1, $2, $3::comms_channel_type, $4)"#,
+    sqlx::query!(
+        r#"INSERT INTO comms_channels (id, name, channel_type, owner_id, team_id)
+           VALUES ($1, $2, $3::text::comms_channel_type, $4, $5)"#,
+        channel_id,
+        name,
+        channel_type,
+        owner,
+        team_id,
     )
-    .bind(channel_id)
-    .bind(name)
-    .bind(channel_type)
-    .bind(owner)
     .execute(pool)
     .await
     .expect("channel should insert");
     for participant in participants {
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO comms_channel_participants (channel_id, role, user_id)
                VALUES ($1, 'member', $2)"#,
+            channel_id,
+            participant,
         )
-        .bind(channel_id)
-        .bind(participant)
         .execute(pool)
         .await
         .expect("participant should insert");
@@ -268,16 +292,10 @@ async fn channels_in_a_label_are_viewer_relative_and_sorted_by_name(pool: PgPool
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
     let team_id = insert_team(&pool, USER_A).await;
-    let shared = insert_channel(
-        &pool,
-        Some("zeta-support"),
-        "public",
-        USER_A,
-        &[USER_A, USER_B],
-    )
-    .await;
-    let only_a = insert_channel(&pool, Some("acme-support"), "public", USER_A, &[USER_A]).await;
-    let only_b = insert_channel(&pool, Some("beta-support"), "public", USER_B, &[USER_B]).await;
+    let shared =
+        insert_team_channel(&pool, "zeta-support", team_id, USER_A, &[USER_A, USER_B]).await;
+    let only_a = insert_team_channel(&pool, "acme-support", team_id, USER_A, &[USER_A]).await;
+    let only_b = insert_team_channel(&pool, "beta-support", team_id, USER_B, &[USER_B]).await;
     let repo = PgChannelLabelsRepo::new(pool);
 
     let label = written(
@@ -365,9 +383,9 @@ async fn set_channel_label_rejects_invisible_channels_dms_and_foreign_labels(poo
     insert_user(&pool, USER_B).await;
     let team_a = insert_team(&pool, USER_A).await;
     let team_b = insert_team(&pool, USER_B).await;
-    let only_b = insert_channel(&pool, Some("beta-support"), "public", USER_B, &[USER_B]).await;
+    let only_b = insert_team_channel(&pool, "beta-support", team_b, USER_B, &[USER_B]).await;
     let dm = insert_channel(&pool, None, "direct_message", USER_A, &[USER_A, USER_B]).await;
-    let mine = insert_channel(&pool, Some("acme-support"), "public", USER_A, &[USER_A]).await;
+    let mine = insert_team_channel(&pool, "acme-support", team_a, USER_A, &[USER_A]).await;
     let repo = PgChannelLabelsRepo::new(pool);
 
     let label_a = written(
@@ -443,10 +461,11 @@ async fn set_channel_label_rejects_invisible_channels_dms_and_foreign_labels(poo
 async fn private_and_team_assignments_do_not_overwrite_each_other(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
-    let team = ChannelLabelsScope::Team(insert_team(&pool, USER_A).await);
+    let team_id = insert_team(&pool, USER_A).await;
+    let team = ChannelLabelsScope::Team(team_id);
     let a = ChannelLabelsScope::User(MacroUserIdStr::try_from(USER_A.to_owned()).unwrap());
     let b = ChannelLabelsScope::User(MacroUserIdStr::try_from(USER_B.to_owned()).unwrap());
-    let channel = insert_channel(&pool, Some("Shared"), "public", USER_A, &[USER_A, USER_B]).await;
+    let channel = insert_team_channel(&pool, "Shared", team_id, USER_A, &[USER_A, USER_B]).await;
     let repo = PgChannelLabelsRepo::new(pool);
     let team_label = written(
         repo.create_label(&team, "Group", &[channel], &user(USER_A), None)
@@ -501,7 +520,8 @@ async fn private_and_team_assignments_do_not_overwrite_each_other(pool: PgPool) 
 async fn create_with_invalid_channel_leaves_no_partial_label_or_moves(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let scope = ChannelLabelsScope::User(MacroUserIdStr::try_from(USER_A.to_owned()).unwrap());
-    let channel = insert_channel(&pool, Some("Mine"), "public", USER_A, &[USER_A]).await;
+    let team_id = insert_team(&pool, USER_A).await;
+    let channel = insert_team_channel(&pool, "Mine", team_id, USER_A, &[USER_A]).await;
     let dm = insert_channel(&pool, None, "direct_message", USER_A, &[USER_A]).await;
     let repo = PgChannelLabelsRepo::new(pool);
     let original = written(
@@ -548,7 +568,8 @@ async fn smart_tags_overlap_manual_groups_and_follow_channel_changes(pool: PgPoo
     insert_user(&pool, USER_A).await;
     let scope = ChannelLabelsScope::User(MacroUserIdStr::try_from(USER_A.to_owned()).unwrap());
     let repo = PgChannelLabelsRepo::new(pool.clone());
-    let channel = insert_channel(&pool, Some("Acme SUPPORT"), "public", USER_A, &[USER_A]).await;
+    let team_id = insert_team(&pool, USER_A).await;
+    let channel = insert_team_channel(&pool, "Acme SUPPORT", team_id, USER_A, &[USER_A]).await;
     let manual = written(
         repo.create_label(&scope, "Manual", &[channel], &user(USER_A), None)
             .await
@@ -616,7 +637,7 @@ async fn smart_tags_overlap_manual_groups_and_follow_channel_changes(pool: PgPoo
             .channel_ids,
         vec![channel]
     );
-    let added = insert_channel(&pool, Some("New support"), "public", USER_A, &[USER_A]).await;
+    let added = insert_team_channel(&pool, "New support", team_id, USER_A, &[USER_A]).await;
     assert_eq!(
         repo.get_label(&scope, support.id, &user(USER_A))
             .await
@@ -647,18 +668,11 @@ async fn smart_preview_is_bounded_literal_and_respects_membership(pool: PgPool) 
         contains: "support".into(),
     };
     for n in 0..8 {
-        insert_channel(
-            &pool,
-            Some(&format!("SUPPORT {n}")),
-            "public",
-            USER_A,
-            &[USER_A],
-        )
-        .await;
+        insert_team_channel(&pool, &format!("SUPPORT {n}"), team_id, USER_A, &[USER_A]).await;
     }
-    insert_channel(&pool, Some("support hidden"), "private", USER_B, &[USER_B]).await;
+    insert_team_channel(&pool, "support hidden", team_id, USER_B, &[USER_B]).await;
     insert_channel(&pool, None, "direct_message", USER_A, &[USER_A]).await;
-    let left = insert_channel(&pool, Some("support left"), "public", USER_A, &[USER_A]).await;
+    let left = insert_team_channel(&pool, "support left", team_id, USER_A, &[USER_A]).await;
     sqlx::query!(
         "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1",
         left
@@ -667,7 +681,7 @@ async fn smart_preview_is_bounded_literal_and_respects_membership(pool: PgPool) 
     .await
     .unwrap();
     let preview = repo
-        .preview_smart_tag(&user(USER_A), &rule, 5)
+        .preview_smart_tag(&ChannelLabelsScope::Team(team_id), &user(USER_A), &rule, 5)
         .await
         .unwrap();
     assert_eq!(preview.total_count, 8);
@@ -686,18 +700,28 @@ async fn smart_preview_is_bounded_literal_and_respects_membership(pool: PgPool) 
     );
     assert_eq!(saved.channel_ids.len(), 8);
     assert_eq!(saved.channel_count, 8);
-    let literal = insert_channel(&pool, Some("100%_support"), "public", USER_A, &[USER_A]).await;
+    let literal = insert_team_channel(&pool, "100%_support", team_id, USER_A, &[USER_A]).await;
     let literal_rule = ChannelLabelRule::Name {
         contains: "%_".into(),
     };
     let literal_preview = repo
-        .preview_smart_tag(&user(USER_A), &literal_rule, 5)
+        .preview_smart_tag(
+            &ChannelLabelsScope::Team(team_id),
+            &user(USER_A),
+            &literal_rule,
+            5,
+        )
         .await
         .unwrap();
     assert_eq!(literal_preview.total_count, 1);
     assert_eq!(literal_preview.channels[0].id, literal);
     let empty = repo
-        .preview_smart_tag(&user(USER_B), &literal_rule, 5)
+        .preview_smart_tag(
+            &ChannelLabelsScope::Team(team_id),
+            &user(USER_B),
+            &literal_rule,
+            5,
+        )
         .await
         .unwrap();
     assert_eq!(empty.total_count, 0);

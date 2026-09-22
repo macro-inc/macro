@@ -1,6 +1,7 @@
 import type { ChannelEntity } from '@entity';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
+import { canLabelChannel } from '../../core/channel-label-eligibility';
 import type {
   ChannelsQueryScope,
   ChannelsRailSection,
@@ -49,7 +50,10 @@ export function buildChannelSectionRows(options: {
   for (const label of options.labels) {
     const visible = label.channelIds
       .map((id) => options.channelsById.get(id))
-      .filter((channel): channel is ChannelEntity => channel !== undefined)
+      .filter(
+        (channel): channel is ChannelEntity =>
+          channel !== undefined && canLabelChannel(channel)
+      )
       .sort(compareChannelName);
 
     for (const channel of visible) labelled.add(channel.id);
