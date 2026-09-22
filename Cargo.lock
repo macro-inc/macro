@@ -5773,6 +5773,7 @@ dependencies = [
  "models_properties",
  "non_empty",
  "rdkafka",
+ "redis",
  "reqwest 0.13.4",
  "rootcause",
  "s3_key",

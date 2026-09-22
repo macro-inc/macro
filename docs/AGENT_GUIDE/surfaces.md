@@ -199,8 +199,8 @@ insert older history above already displayed rows. Live actions and refreshes
 can still reorder rows. Short or fully filtered pages continue loading until the list
 fills or there are no more results. A failed
 source shows a retry notice while the other source stays usable. Document typing
-alone is not yet attributed by Activity; Home reflects the actions the existing
-Activity system records.
+starts an Edited activity for that editing session. Human edits
+are attributed to the signed-in editor; agent edits retain their agent attribution.
 
 Calendar reminder rows use the reminder delivery time for Home's date section,
 including on a cold GraphQL load with notification sorting disabled. Verify that
@@ -712,6 +712,13 @@ columns. Changing scope requires preparing again. Cancel stops preparation. CSV 
 quoted fields, original date timestamps and spreadsheet formula escaping.
 
 ## Activity — `/app/component/activity`
+
+To verify document content activity, keep Activity open in one tab and edit an
+existing document's body in another, without renaming it. The editor's Edited
+entry should arrive for the first edit. Keep typing across multiple saves: the
+activity count must stay unchanged. After five minutes without editing, the next
+edit should add one new event. Reconnecting within that window and opening or
+closing a document without edits must not add an event.
 
 Requires authentication and the `enable-activity-feed` flag. Direct navigation and
 restored splits wait for flags to load; when disabled, they redirect to Home

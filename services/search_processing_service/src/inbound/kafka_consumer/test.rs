@@ -919,6 +919,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
         ),
         (
             DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+                editors: Vec::new(),
                 document_id: DOCUMENT_ID.to_string(),
                 file_type: FileType::Md,
                 document_version_id: None,
@@ -1423,6 +1424,7 @@ fn document_extraction_actions_preserve_optional_versions() {
 
     let sync_content_updated =
         DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            editors: Vec::new(),
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: Some("snapshot-7".to_string()),
@@ -1785,6 +1787,7 @@ fn exact_macro_documents_envelopes_decode_into_document_events() {
             Event::with_event_id(
                 Uuid::from_u128(2),
                 DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+                    editors: Vec::new(),
                     document_id: DOCUMENT_ID.to_string(),
                     file_type: FileType::Md,
                     document_version_id: None,

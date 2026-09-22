@@ -109,6 +109,7 @@ struct SyncContentCall {
     document_id: String,
     actor: Option<String>,
     on_behalf_of: Option<String>,
+    editors: Vec<crate::domain::events::DocumentSyncEditor>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -454,6 +455,7 @@ impl DocumentContentEventService for FakeDocumentService {
         document_id: &str,
         actor: Option<String>,
         on_behalf_of: Option<String>,
+        editors: Vec<crate::domain::events::DocumentSyncEditor>,
     ) -> Result<(), DocumentError> {
         self.sync_content_calls
             .lock()
@@ -462,6 +464,7 @@ impl DocumentContentEventService for FakeDocumentService {
                 document_id: document_id.to_string(),
                 actor,
                 on_behalf_of,
+                editors,
             });
         Ok(())
     }

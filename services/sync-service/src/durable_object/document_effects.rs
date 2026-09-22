@@ -40,15 +40,16 @@ impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
     }
 
     fn publish_changed_document(&self) -> Result<(), DocumentError> {
-        let attribution = self.attribution.cloned();
+        self.session.record_edit_activity(self.attribution);
         let snapshot = self
             .document_state
             .export_shallow_snapshot()
             .map_err(notification_error)?;
+        let editors = self.session.take_editors();
         let env = self.session.env.clone();
         let document_id = self.document_id.to_owned();
         self.session.state.wait_until(async move {
-            report_new_doc_state(&document_id, &snapshot, &env, attribution).await;
+            report_new_doc_state(&document_id, &snapshot, &env, editors).await;
             report_interaction(&document_id, &env, InteractionReason::Edited).await;
         });
         Ok(())

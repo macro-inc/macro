@@ -120,19 +120,98 @@ impl ActivitySource for DocumentTopicEvent {
             }
             // Extraction-pipeline noise, not user activity.
             DocumentTopicEvent::ContentUploaded(_) => Ingest::Ignore,
-            // Only AI-attributed sessions carry an actor; human-only collab
-            // sessions stay unattributed.
-            DocumentTopicEvent::SyncContentUpdated(metadata) => match metadata.actor.clone() {
-                Some(actor) => single(
-                    Attribution::new(actor, metadata.on_behalf_of.clone()),
-                    CommonAction::Edited,
-                    &metadata.document_id,
-                    event_time(event_id),
-                ),
-                None => Ingest::Ignore,
-            },
+            DocumentTopicEvent::SyncContentUpdated(metadata) => {
+                let mut editors = metadata.editors.clone();
+                if let Some(actor) = &metadata.actor {
+                    editors.push(super::events::DocumentSyncEditor {
+                        actor: actor.as_ref().to_owned(),
+                        on_behalf_of: metadata
+                            .on_behalf_of
+                            .as_ref()
+                            .map(|user| user.as_ref().to_owned()),
+                    });
+                }
+                editors.sort_unstable();
+                editors.dedup();
+                let activities: Vec<_> = editors
+                    .into_iter()
+                    .filter_map(|editor| {
+                        let actor = Actor::try_from(editor.actor).ok()?;
+                        let on_behalf_of = editor
+                            .on_behalf_of
+                            .map(MacroUserIdStr::try_from)
+                            .transpose()
+                            .ok()?;
+                        Some(Attribution::new(actor, on_behalf_of))
+                    })
+                    .enumerate()
+                    .map(|(ordinal, attribution)| {
+                        Activity::attributed(
+                            event_id,
+                            ordinal as u32,
+                            attribution,
+                            EntityType::Document,
+                            &metadata.document_id,
+                            CommonAction::Edited,
+                            event_time(event_id),
+                        )
+                    })
+                    .collect();
+                if activities.is_empty() {
+                    Ingest::Ignore
+                } else {
+                    Ingest::Insert(activities)
+                }
+            }
             // Session lifecycle (first join / last leave), no actor.
             DocumentTopicEvent::Interaction(_) => Ingest::Ignore,
         }
+    }
+}
+
+/// Classify document activity and debounce Sync edits in the Activity consumer.
+/// Search consumes the same source event independently and never waits on this work.
+#[cfg(feature = "ports")]
+pub async fn ingest_with_editing_sessions(
+    event: &DocumentTopicEvent,
+    event_id: Uuid,
+    store: &impl super::ports::EditingActivityStore,
+) -> Ingest {
+    const EDITING_IDLE: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+    const STORE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(100);
+
+    let ingest = event.ingest(event_id);
+    if !matches!(event, DocumentTopicEvent::SyncContentUpdated(_)) {
+        return ingest;
+    }
+    let Ingest::Insert(rows) = ingest else {
+        return ingest;
+    };
+    let admitted = match tokio::time::timeout(
+        STORE_TIMEOUT,
+        store.refresh_editing_sessions(&rows, event_id, EDITING_IDLE),
+    )
+    .await
+    {
+        Ok(Ok(admitted)) => admitted,
+        Ok(Err(error)) => {
+            tracing::warn!(error = ?error, "skipping best-effort editing activity");
+            return Ingest::Ignore;
+        }
+        Err(error) => {
+            tracing::warn!(error = ?error, "editing activity debounce timed out");
+            return Ingest::Ignore;
+        }
+    };
+    // Assign ordinals before filtering so retries keep the same activity ids.
+    let rows: Vec<_> = rows
+        .into_iter()
+        .zip(admitted)
+        .filter_map(|(row, admitted)| admitted.then_some(row))
+        .collect();
+    if rows.is_empty() {
+        Ingest::Ignore
+    } else {
+        Ingest::Insert(rows)
     }
 }

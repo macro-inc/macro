@@ -20,6 +20,9 @@ pub struct SyncContentUpdatedRequest {
     pub actor: Option<String>,
     /// User represented by the actor, if any.
     pub on_behalf_of: Option<String>,
+    /// Editors accumulated by Sync since its last snapshot notification.
+    #[serde(default)]
+    pub editors: Vec<crate::domain::events::DocumentSyncEditor>,
 }
 
 /// Publish an event using the document's stored metadata.
@@ -36,7 +39,12 @@ pub async fn sync_content_updated_handler<
 ) -> Result<StatusCode, DocumentError> {
     state
         .service
-        .publish_sync_content_updated(&document_id, request.actor, request.on_behalf_of)
+        .publish_sync_content_updated(
+            &document_id,
+            request.actor,
+            request.on_behalf_of,
+            request.editors,
+        )
         .await?;
     Ok(StatusCode::OK)
 }

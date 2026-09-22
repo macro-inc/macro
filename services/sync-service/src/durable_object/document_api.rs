@@ -112,24 +112,18 @@ impl DocumentSyncSession {
         };
         let state = self.document_state().await?;
         let storage = self.session_storage().await?;
-        let attribution = match claims
-            .actor
-            .as_ref()
-            .map(|actor| {
-                document::DocumentAttribution::from_signed_claims(
-                    actor.clone(),
-                    claims.user_id.clone(),
-                )
-            })
-            .transpose()
-        {
+        let has_explicit_actor = claims.actor.is_some();
+        let attribution = match document::DocumentAttribution::from_session_claims(
+            claims.actor,
+            claims.user_id,
+        ) {
             Ok(attribution) => attribution,
             Err(error) => return error_response(error),
         };
         let port = DocumentUpdateStorage {
             document_state: &state,
             storage: &storage,
-            attribution: attribution.as_ref(),
+            attribution: attribution.as_ref().filter(|_| has_explicit_actor),
         };
         let effects = WorkerDocumentEffects {
             session: self,

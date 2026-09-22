@@ -27,7 +27,7 @@ async function migrateDatabase(mf: Miniflare) {
   }
 }
 
-export async function setupMiniflare(options: { persistPath?: string; migrate?: boolean } = {}) {
+export async function setupMiniflare(options: { persistPath?: string; migrate?: boolean; dssUrl?: string } = {}) {
   const persist = (name: string) => options.persistPath ? `${options.persistPath}/${name}` : false;
   const mf = new Miniflare({
     d1Databases: {
@@ -62,6 +62,7 @@ export async function setupMiniflare(options: { persistPath?: string; migrate?: 
       SPS_API_SECRET_KEY: "local",
       SPS_URL: "http://localhost:8092",
       local:true,
+      ...(options.dssUrl ? { DSS_URL: options.dssUrl, DSS_INTERNAL_AUTH_KEY: "local" } : {}),
     },
     compatibilityDate: '2025-03-05'
   });

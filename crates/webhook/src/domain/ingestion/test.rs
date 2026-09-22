@@ -547,6 +547,7 @@ fn search_only_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicE
             "document.sync_content_updated",
             Event::new(DocumentTopicEvent::SyncContentUpdated(
                 DocumentSyncContentUpdatedMetadata {
+                    editors: Vec::new(),
                     document_id: DOCUMENT_ID.to_string(),
                     file_type: "md".parse().expect("valid file type"),
                     document_version_id: None,

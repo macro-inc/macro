@@ -25,6 +25,7 @@ async fn sync_notifications_require_internal_auth_and_forward_only_identity_and_
         *service.sync_content_calls.lock().unwrap(),
         [SyncContentCall {
             document_id: "doc-1".into(),
+            editors: Vec::new(),
             actor: Some("bot|agent".into()),
             on_behalf_of: Some("macro|owner@example.com".into()),
         }]
@@ -40,4 +41,21 @@ async fn sync_notifications_require_internal_auth_and_forward_only_identity_and_
         StatusCode::UNPROCESSABLE_ENTITY
     );
     assert_eq!(service.sync_content_calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn sync_notifications_forward_batched_editors_without_legacy_attribution() {
+    let (router, service, _, _) = test_router();
+    let request = Request::post("/doc-1/sync-content-updated")
+        .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
+        .header("content-type", "application/json")
+        .body(Body::from(
+            r#"{"editors":[{"actor":"macro|editor@example.com","on_behalf_of":null}]}"#,
+        ))
+        .unwrap();
+    assert_eq!(send_status(&router, request).await, StatusCode::OK);
+    let calls = service.sync_content_calls.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].editors[0].actor, "macro|editor@example.com");
+    assert!(calls[0].actor.is_none());
 }
