@@ -124,7 +124,13 @@ task/snippet/skill variants, hashes for channels, read/unread envelopes or
 calendar invites for email, sparkles for agents, folders for projects, and alarms
 for reminders. Pull requests retain open, merged, and closed status glyphs and
 colors; unknown foreign sources use the generic file icon.
-There are no title tooltips, and timestamps are
+New agent-session rows always use a sparkle in the left slot, including while
+working. A coding session adds a second line with repository, captured working
+branch (when available), and PR number/status. Non-coding sessions stay on one
+line. Their timestamps and unread dots stay visible; hovering reveals the full
+title, activity, and repository/branch. The Agents workspace uses the same row
+with an activity indicator in place of the sparkle.
+Other Home items have no title tooltips, and their timestamps are
 visible only while hovering the row. An unread
 dot remains visible. Click a row to preview it; `j`/`k` navigate and update the
 preview; alternate activation and Shift-click open a split.

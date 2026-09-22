@@ -1,8 +1,15 @@
-import type { AgentSessionEntity, ChatEntity, EntityData } from '@entity';
-import { type AgentKind, modeForKind } from './agent-kind';
+import type {
+  AgentSessionEntity,
+  ChatEntity,
+  EntityData,
+  WithNotification,
+} from '@entity';
+import { type AgentKind, kindForHarness, modeForKind } from './agent-kind';
 import type { AgentsMode } from './mode';
 
-export type AgentConversationEntity = AgentSessionEntity | ChatEntity;
+export type AgentConversationEntity = WithNotification<
+  AgentSessionEntity | ChatEntity
+>;
 
 /** The persona a conversation runs, when the entity says. Chats have none. */
 export function conversationBotId(
@@ -67,7 +74,11 @@ export function conversationMode(
 ): AgentsMode {
   return conversation.type === 'chat'
     ? 'chat'
-    : modeForKind(kindOf(conversationBotId(conversation)));
+    : modeForKind(
+        conversation.harness
+          ? kindForHarness(conversation.harness)
+          : kindOf(conversationBotId(conversation))
+      );
 }
 
 type ConversationGroupId = 'recent';

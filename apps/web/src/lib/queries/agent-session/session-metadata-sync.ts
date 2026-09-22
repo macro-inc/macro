@@ -1,5 +1,6 @@
 import { queryClient } from '@queries/client';
 import { agentSessionKeys } from './keys';
+import { refreshAgentSessionLists } from './list-sync';
 import type {
   AgentSessionRenamedEvent,
   AgentSessionUpdatedEvent,
@@ -13,6 +14,7 @@ export function handleAgentSessionRenamed(
   event: AgentSessionRenamedEvent
 ): void {
   for (const listener of renameListeners) listener(event);
+  void refreshAgentSessionLists(event.agentSessionId);
 }
 
 /** Follow name changes while a session-scoped view is mounted. */
@@ -41,12 +43,18 @@ export async function handleAgentSessionUpdated(
     exact: true,
   };
   await queryClient.cancelQueries(filters);
-  await queryClient.invalidateQueries(filters);
+  await Promise.all([
+    queryClient.invalidateQueries(filters),
+    refreshAgentSessionLists(event.agentSessionId),
+  ]);
 }
 
 /** Recover session metadata updates missed while the gateway was disconnected. */
 export async function invalidateAgentSessionMetadata(): Promise<void> {
   const filters = { queryKey: agentSessionKeys.detail._def };
   await queryClient.cancelQueries(filters);
-  await queryClient.invalidateQueries(filters);
+  await Promise.all([
+    queryClient.invalidateQueries(filters),
+    refreshAgentSessionLists(),
+  ]);
 }

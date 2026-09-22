@@ -13218,6 +13218,11 @@ export const getItemsSoupResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('The time the session was created'),
+                    harness: zod
+                      .string()
+                      .describe(
+                        'The runtime snapshotted when the session was created.'
+                      ),
                     id: zod.uuid().describe('The agent session uuid'),
                     name: zod
                       .string()
@@ -13225,6 +13230,40 @@ export const getItemsSoupResponse = zod
                     ownerId: zod
                       .string()
                       .describe('Who the session belongs to'),
+                    pullRequestId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "The linked pull request's Macro entity, when visible to the viewer."
+                      ),
+                    pullRequestState: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['open', 'draft', 'closed', 'merged'])
+                          .describe(
+                            "Last synchronized state of a session's linked GitHub pull request."
+                          ),
+                      ])
+                      .optional(),
+                    pullRequestUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The persisted pull request associated with the session.'
+                      ),
+                    repoBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The starting branch selected for this session, not its current branch.'
+                      ),
+                    repoUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The repository the session works with, when one was selected.'
+                      ),
                     status: zod
                       .string()
                       .describe(
@@ -13236,6 +13275,12 @@ export const getItemsSoupResponse = zod
                       .describe(
                         'The channel thread the session was opened from, when any'
                       ),
+                    turnState: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last persisted fold turn state. Absent until an older session next runs.'
+                      ),
                     updatedAt: zod.iso
                       .datetime({})
                       .describe('The time the session was last modified'),
@@ -13245,10 +13290,16 @@ export const getItemsSoupResponse = zod
                       .describe(
                         'The time the session was last viewed by the requesting user'
                       ),
+                    workingBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last captured working branch, when the runtime has reported one.'
+                      ),
                   })
                 )
                 .describe(
-                  "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                  'An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately.'
                 ),
               tag: zod.enum(['agentSession']),
             })
@@ -17192,6 +17243,11 @@ export const postItemsSoupResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('The time the session was created'),
+                    harness: zod
+                      .string()
+                      .describe(
+                        'The runtime snapshotted when the session was created.'
+                      ),
                     id: zod.uuid().describe('The agent session uuid'),
                     name: zod
                       .string()
@@ -17199,6 +17255,40 @@ export const postItemsSoupResponse = zod
                     ownerId: zod
                       .string()
                       .describe('Who the session belongs to'),
+                    pullRequestId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "The linked pull request's Macro entity, when visible to the viewer."
+                      ),
+                    pullRequestState: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['open', 'draft', 'closed', 'merged'])
+                          .describe(
+                            "Last synchronized state of a session's linked GitHub pull request."
+                          ),
+                      ])
+                      .optional(),
+                    pullRequestUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The persisted pull request associated with the session.'
+                      ),
+                    repoBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The starting branch selected for this session, not its current branch.'
+                      ),
+                    repoUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The repository the session works with, when one was selected.'
+                      ),
                     status: zod
                       .string()
                       .describe(
@@ -17210,6 +17300,12 @@ export const postItemsSoupResponse = zod
                       .describe(
                         'The channel thread the session was opened from, when any'
                       ),
+                    turnState: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last persisted fold turn state. Absent until an older session next runs.'
+                      ),
                     updatedAt: zod.iso
                       .datetime({})
                       .describe('The time the session was last modified'),
@@ -17219,10 +17315,16 @@ export const postItemsSoupResponse = zod
                       .describe(
                         'The time the session was last viewed by the requesting user'
                       ),
+                    workingBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last captured working branch, when the runtime has reported one.'
+                      ),
                   })
                 )
                 .describe(
-                  "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                  'An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately.'
                 ),
               tag: zod.enum(['agentSession']),
             })
@@ -20609,6 +20711,11 @@ export const postItemsSoupAstResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('The time the session was created'),
+                    harness: zod
+                      .string()
+                      .describe(
+                        'The runtime snapshotted when the session was created.'
+                      ),
                     id: zod.uuid().describe('The agent session uuid'),
                     name: zod
                       .string()
@@ -20616,6 +20723,40 @@ export const postItemsSoupAstResponse = zod
                     ownerId: zod
                       .string()
                       .describe('Who the session belongs to'),
+                    pullRequestId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "The linked pull request's Macro entity, when visible to the viewer."
+                      ),
+                    pullRequestState: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['open', 'draft', 'closed', 'merged'])
+                          .describe(
+                            "Last synchronized state of a session's linked GitHub pull request."
+                          ),
+                      ])
+                      .optional(),
+                    pullRequestUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The persisted pull request associated with the session.'
+                      ),
+                    repoBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The starting branch selected for this session, not its current branch.'
+                      ),
+                    repoUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The repository the session works with, when one was selected.'
+                      ),
                     status: zod
                       .string()
                       .describe(
@@ -20627,6 +20768,12 @@ export const postItemsSoupAstResponse = zod
                       .describe(
                         'The channel thread the session was opened from, when any'
                       ),
+                    turnState: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last persisted fold turn state. Absent until an older session next runs.'
+                      ),
                     updatedAt: zod.iso
                       .datetime({})
                       .describe('The time the session was last modified'),
@@ -20636,10 +20783,16 @@ export const postItemsSoupAstResponse = zod
                       .describe(
                         'The time the session was last viewed by the requesting user'
                       ),
+                    workingBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last captured working branch, when the runtime has reported one.'
+                      ),
                   })
                 )
                 .describe(
-                  "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                  'An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately.'
                 ),
               tag: zod.enum(['agentSession']),
             })
@@ -24388,6 +24541,11 @@ export const postItemsSoupAstGroupedResponse = zod
                           createdAt: zod.iso
                             .datetime({})
                             .describe('The time the session was created'),
+                          harness: zod
+                            .string()
+                            .describe(
+                              'The runtime snapshotted when the session was created.'
+                            ),
                           id: zod.uuid().describe('The agent session uuid'),
                           name: zod
                             .string()
@@ -24395,6 +24553,40 @@ export const postItemsSoupAstGroupedResponse = zod
                           ownerId: zod
                             .string()
                             .describe('Who the session belongs to'),
+                          pullRequestId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The linked pull request's Macro entity, when visible to the viewer."
+                            ),
+                          pullRequestState: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum(['open', 'draft', 'closed', 'merged'])
+                                .describe(
+                                  "Last synchronized state of a session's linked GitHub pull request."
+                                ),
+                            ])
+                            .optional(),
+                          pullRequestUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The persisted pull request associated with the session.'
+                            ),
+                          repoBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The starting branch selected for this session, not its current branch.'
+                            ),
+                          repoUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The repository the session works with, when one was selected.'
+                            ),
                           status: zod
                             .string()
                             .describe(
@@ -24406,6 +24598,12 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'The channel thread the session was opened from, when any'
                             ),
+                          turnState: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Last persisted fold turn state. Absent until an older session next runs.'
+                            ),
                           updatedAt: zod.iso
                             .datetime({})
                             .describe('The time the session was last modified'),
@@ -24415,10 +24613,16 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'The time the session was last viewed by the requesting user'
                             ),
+                          workingBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Last captured working branch, when the runtime has reported one.'
+                            ),
                         })
                       )
                       .describe(
-                        "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                        'An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately.'
                       ),
                     tag: zod.enum(['agentSession']),
                   })
@@ -27805,6 +28009,11 @@ export const postItemsSoupAstGroupedResponse = zod
                           createdAt: zod.iso
                             .datetime({})
                             .describe('The time the session was created'),
+                          harness: zod
+                            .string()
+                            .describe(
+                              'The runtime snapshotted when the session was created.'
+                            ),
                           id: zod.uuid().describe('The agent session uuid'),
                           name: zod
                             .string()
@@ -27812,6 +28021,40 @@ export const postItemsSoupAstGroupedResponse = zod
                           ownerId: zod
                             .string()
                             .describe('Who the session belongs to'),
+                          pullRequestId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The linked pull request's Macro entity, when visible to the viewer."
+                            ),
+                          pullRequestState: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum(['open', 'draft', 'closed', 'merged'])
+                                .describe(
+                                  "Last synchronized state of a session's linked GitHub pull request."
+                                ),
+                            ])
+                            .optional(),
+                          pullRequestUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The persisted pull request associated with the session.'
+                            ),
+                          repoBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The starting branch selected for this session, not its current branch.'
+                            ),
+                          repoUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The repository the session works with, when one was selected.'
+                            ),
                           status: zod
                             .string()
                             .describe(
@@ -27823,6 +28066,12 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'The channel thread the session was opened from, when any'
                             ),
+                          turnState: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Last persisted fold turn state. Absent until an older session next runs.'
+                            ),
                           updatedAt: zod.iso
                             .datetime({})
                             .describe('The time the session was last modified'),
@@ -27832,10 +28081,16 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'The time the session was last viewed by the requesting user'
                             ),
+                          workingBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Last captured working branch, when the runtime has reported one.'
+                            ),
                         })
                       )
                       .describe(
-                        "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                        'An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately.'
                       ),
                     tag: zod.enum(['agentSession']),
                   })

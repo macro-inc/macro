@@ -137,6 +137,15 @@ not clear its dot — reading or completing the represented items does. The butt
 accessible description is `Unread items` while its dot is active.
 
 The Agents sidebar mixes chat and coding sessions in one newest-first list.
+New agent sessions reserve the left slot for activity: a pulsing accent dot for
+starting/working, an amber dot for waiting for input, and no dot when dormant.
+Hover a row for its full title and activity label. Coding sessions show a second
+line with repository, captured working branch (when available), and linked PR
+number/status; non-coding sessions stay on one line. The starting branch is never
+presented as the working branch. PR states come from synced GitHub data; an
+unsynced PR shows its number without an assumed status. An unread notification
+dot appears at the right, independently of activity. Only the selected row has
+the selected background. Legacy chat rows keep their chat icon.
 Use **Search conversations** beside the Conversations heading to filter by title.
 Results stay packed at the top with compact spacing, even with only a few matches;
 clearing the search restores the list.

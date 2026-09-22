@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT agent_session_id, head_ref AS \"head_ref!\"\n                FROM agent_session_changes\n                WHERE agent_session_id = ANY($1) AND head_ref IS NOT NULL\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "head_ref!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "f95e45af6ce44a5b3afd0aec3fa37b852a25433196974e208fb37a6cfeb7f975"
+}

@@ -600,6 +600,28 @@ impl AgentSessionLogRepo for BlockingPromptLogs {
         claim: &SessionClaim,
         boundary: Option<crate::domain::model::HistoryBoundary>,
     ) -> Result<StoredAgentSessionLog> {
+        self.create_projected(log, Some(claim), boundary, None)
+            .await
+    }
+
+    async fn create_projected(
+        &self,
+        log: AgentSessionLog,
+        claim: Option<&SessionClaim>,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+        turn_state: Option<TurnState>,
+    ) -> Result<StoredAgentSessionLog> {
+        if claim.is_none()
+            && self.hang_disconnect
+            && matches!(
+                &log.content,
+                Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::Disconnected
+                })
+            )
+        {
+            return std::future::pending().await;
+        }
         let fail = match self.fail_restore_log {
             Some(RestoreLogFailure::InitializeRequest) => matches!(&log.content,
                 Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(agent_client_protocol::RawJsonRpcMessage::Request(request))))
@@ -622,7 +644,7 @@ impl AgentSessionLogRepo for BlockingPromptLogs {
             ));
         }
         self.repo
-            .create_fenced_with_boundary(log, claim, boundary)
+            .create_projected(log, claim, boundary, turn_state)
             .await
     }
 
@@ -1914,6 +1936,7 @@ async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
 
 mod initial_model;
 mod owner_binding;
+mod turn_projection;
 
 /// The live writer's fold says what each appended frame meant for the turn;
 /// history it catches up on says nothing.
@@ -2171,12 +2194,13 @@ async fn a_fenced_connection_buffers_streamed_frames_until_it_flushes() {
         );
     }
 
-    assert!(
+    assert_eq!(
         AgentSessionLogRepo::list_by_session(&repo, test_session())
             .await
             .unwrap()
-            .is_empty(),
-        "buffered frames are not yet durable"
+            .len(),
+        1,
+        "the initial activity projection is durable; subsequent token frames stay buffered"
     );
     assert!(realtime.published().is_empty());
     assert!(logs.flush_deadline().is_some());

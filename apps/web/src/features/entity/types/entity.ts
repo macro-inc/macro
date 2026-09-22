@@ -166,6 +166,15 @@ export type ChatEntity = EntityBase & {
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
   botId: string;
+  harness?: string;
+  repoUrl?: string | null;
+  /** Starting branch selected at creation, not the current working branch. */
+  repoBranch?: string | null;
+  pullRequestUrl?: string | null;
+  workingBranch?: string | null;
+  pullRequestState?: 'open' | 'draft' | 'closed' | 'merged' | null;
+  pullRequestId?: string | null;
+  turnState?: string | null;
   bot?: { id: string; name: string; avatarUrl?: string | null } | null;
   threadId?: string | null;
   status: string;

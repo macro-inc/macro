@@ -94,6 +94,14 @@ fragment SoupItemFields on GraphqlSoupEntity {
 		sessionName: name
 		ownerId
 		botId
+		harness
+		repoUrl
+		repoBranch
+		pullRequestUrl
+		workingBranch
+		pullRequestState
+		pullRequestId
+		turnState
 		bot {
 			id
 			name

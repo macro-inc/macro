@@ -10,6 +10,10 @@ import { Suspense } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MagicChipPullRequest } from './MagicChipPullRequest';
 
+vi.mock('@queries/agent-session/list-sync', () => ({
+  refreshAgentSessionLists: vi.fn(async () => {}),
+}));
+
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return {

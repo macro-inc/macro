@@ -14327,6 +14327,11 @@
         ],
         "description": "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       },
+      "AgentPullRequestState": {
+        "type": "string",
+        "description": "Last synchronized state of a session's linked GitHub pull request.",
+        "enum": ["open", "draft", "closed", "merged"]
+      },
       "AgentSessionFilters": {
         "type": "object",
         "description": "Filters for agent sessions.",
@@ -27515,6 +27520,7 @@
               "name",
               "ownerId",
               "botId",
+              "harness",
               "status",
               "createdAt",
               "updatedAt"
@@ -27530,6 +27536,10 @@
                 "format": "date-time",
                 "description": "The time the session was created"
               },
+              "harness": {
+                "type": "string",
+                "description": "The runtime snapshotted when the session was created."
+              },
               "id": {
                 "type": "string",
                 "format": "uuid",
@@ -27543,6 +27553,34 @@
                 "type": "string",
                 "description": "Who the session belongs to"
               },
+              "pullRequestId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The linked pull request's Macro entity, when visible to the viewer."
+              },
+              "pullRequestState": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AgentPullRequestState",
+                    "description": "Last synchronized state of the linked pull request, when visible."
+                  }
+                ]
+              },
+              "pullRequestUrl": {
+                "type": ["string", "null"],
+                "description": "The persisted pull request associated with the session."
+              },
+              "repoBranch": {
+                "type": ["string", "null"],
+                "description": "The starting branch selected for this session, not its current branch."
+              },
+              "repoUrl": {
+                "type": ["string", "null"],
+                "description": "The repository the session works with, when one was selected."
+              },
               "status": {
                 "type": "string",
                 "description": "The session's last known status.\n\n`no_messages` until the first system event arrives, `disconnected` if\nthe connection dropped without a clean close, otherwise the wire name\nof the most recent system event (for example `session/end`)."
@@ -27551,6 +27589,10 @@
                 "type": ["string", "null"],
                 "format": "uuid",
                 "description": "The channel thread the session was opened from, when any"
+              },
+              "turnState": {
+                "type": ["string", "null"],
+                "description": "Last persisted fold turn state. Absent until an older session next runs."
               },
               "updatedAt": {
                 "type": "string",
@@ -27561,11 +27603,15 @@
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "The time the session was last viewed by the requesting user"
+              },
+              "workingBranch": {
+                "type": ["string", "null"],
+                "description": "Last captured working branch, when the runtime has reported one."
               }
             }
           }
         ],
-        "description": "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+        "description": "An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately."
       },
       "SoupApiItem": {
         "allOf": [

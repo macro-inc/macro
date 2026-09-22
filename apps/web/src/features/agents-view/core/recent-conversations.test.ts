@@ -62,6 +62,17 @@ describe('selectRecentAgentConversations', () => {
 });
 
 describe('mixed conversation navigation', () => {
+  it('uses the saved session harness when the bot configuration has changed', () => {
+    expect(
+      conversationMode(session('code', { harness: 'cursor' }), kindOf)
+    ).toBe('code');
+    expect(
+      conversationMode(
+        session('chat', { harness: 'in-memory', botId: 'bot-coder' }),
+        kindOf
+      )
+    ).toBe('chat');
+  });
   it('resolves each conversation mode independently of the new composer', () => {
     expect(
       conversationMode(session('code', { botId: 'bot-coder' }), kindOf)

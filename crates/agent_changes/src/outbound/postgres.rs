@@ -9,7 +9,9 @@ use crate::domain::model::{
     AttemptOutcome, CaptureAttempt, ChangedFile, Changeset, ChangesetId, ChangesetRange,
     ChangesetSource, GitRef, SessionChanges,
 };
-use crate::domain::ports::{ChangesetRepo, PatchBlobKey};
+use crate::domain::ports::{
+    ChangesetRepo, PatchBlobKey, SessionBranchReader, SessionBranchesFuture,
+};
 
 #[cfg(test)]
 mod test;
@@ -25,6 +27,37 @@ impl PgChangesetRepo {
     #[must_use]
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+}
+
+impl SessionBranchReader for PgChangesetRepo {
+    fn working_branches<'a>(&'a self, sessions: &'a [AgentSessionId]) -> SessionBranchesFuture<'a> {
+        Box::pin(async move {
+            if sessions.is_empty() {
+                return Ok(std::collections::HashMap::new());
+            }
+            let ids: Vec<_> = sessions.iter().map(AgentSessionId::as_uuid).collect();
+            let rows = sqlx::query!(
+                r#"
+                SELECT agent_session_id, head_ref AS "head_ref!"
+                FROM agent_session_changes
+                WHERE agent_session_id = ANY($1) AND head_ref IS NOT NULL
+                "#,
+                &ids,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+            Ok(rows
+                .into_iter()
+                .map(|row| {
+                    (
+                        AgentSessionId::new_from_uuid(row.agent_session_id),
+                        row.head_ref,
+                    )
+                })
+                .collect())
+        })
     }
 }
 

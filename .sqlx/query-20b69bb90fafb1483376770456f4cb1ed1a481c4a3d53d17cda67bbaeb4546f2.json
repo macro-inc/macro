@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session\n            SET turn_state = $3\n            WHERE id = $1 AND turn_state IS NULL\n              AND (SELECT id FROM agent_session_log WHERE agent_session_id = $1\n                   ORDER BY created_at DESC, id DESC LIMIT 1) IS NOT DISTINCT FROM $2::uuid\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "20b69bb90fafb1483376770456f4cb1ed1a481c4a3d53d17cda67bbaeb4546f2"
+}
