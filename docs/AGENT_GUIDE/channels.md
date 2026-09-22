@@ -36,6 +36,17 @@ button that copies the whole section; a call that failed is faded, shows the
 error as its subtitle, and adds an `Error` section. Rows for a call still running
 show whatever has arrived so far.
 
+## Reading channel attachments through MCP
+
+When an agent reads a channel through Macro MCP, `ReadChannelMessages`,
+`ReadChannelThread`, and `ReadChannelMessageContext` include download URLs for
+image and video attachments, including attachments in replies and previews.
+Up to eight distinct images per response are also returned as inline images.
+Videos are linked for inspection with a video-capable tool. If an image cannot
+be loaded or exceeds the inline limit, its URL remains available. To check this,
+ask the agent to inspect an image on a channel message and a video on a reply;
+verify that its tool response includes the matching attachment URLs.
+
 ## Message composer
 
 Composer and conversation body text use `text-base` (15px at the default root
