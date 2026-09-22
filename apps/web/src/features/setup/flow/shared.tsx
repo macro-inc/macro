@@ -1,6 +1,6 @@
-import ArrowRight from '@phosphor/arrow-right.svg';
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CheckIcon from '@phosphor/check.svg';
-import { Button, Layer } from '@ui';
+import { Layer } from '@ui';
 import { For, onCleanup, onMount } from 'solid-js';
 
 /** Where the flow persists its current step, so full-page OAuth round-trips
@@ -35,6 +35,8 @@ export function FormInput(props: {
   placeholder?: string;
   value: string;
   autoFocus?: boolean;
+  label?: string;
+  invalid?: boolean;
   onInput: (value: string) => void;
 }) {
   let inputEl: HTMLInputElement | undefined;
@@ -59,37 +61,25 @@ export function FormInput(props: {
       ref={(el) => (inputEl = el)}
       id={props.id}
       name={props.id}
+      aria-label={props.label}
+      aria-invalid={props.invalid || undefined}
       type={props.type ?? 'text'}
       placeholder={props.placeholder}
       value={props.value}
       autocomplete={props.id}
       onInput={(e) => props.onInput(e.currentTarget.value)}
-      class="obf-input w-full px-4 py-3 rounded-lg border border-edge bg-surface text-sm text-ink placeholder:text-ink-placeholder focus:border-accent focus:outline-none transition-colors"
+      class="obf-input w-full px-4 py-3 rounded-2xl border border-edge bg-input text-sm text-ink placeholder:text-ink-placeholder focus:border-ink/40 focus:outline-none transition-colors"
     />
   );
 }
 
-/**
- * Marketing-hero backdrop: an ink/surface wash plus a film-grain tile.
- * Both layers are pointer-transparent; page content must sit at z-10,
- * between the wash (z-0) and the grain (z-20).
- */
+/** A quiet inset frame, free of gradients. */
 export function NoiseBackground() {
   return (
-    <>
-      <div
-        aria-hidden="true"
-        class="pointer-events-none absolute inset-0 z-0"
-        style={{
-          background:
-            'radial-gradient(120% 90% at 50% 100%, color-mix(in srgb, var(--color-ink) 11%, var(--color-surface)) 0%, var(--color-surface) 75%)',
-        }}
-      />
-      <div
-        aria-hidden="true"
-        style={`position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);width:100vw;pointer-events:none;z-index:20;opacity:0.05;mix-blend-mode:screen;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:300px 300px;-webkit-mask:linear-gradient(to bottom, transparent 0%, #000 12%, #000 100%);mask:linear-gradient(to bottom, transparent 0%, #000 12%, #000 100%)`}
-      />
-    </>
+    <div
+      aria-hidden="true"
+      class="pointer-events-none absolute inset-4 rounded-[32px] border border-ink/[0.04] sm:inset-6"
+    />
   );
 }
 
@@ -117,15 +107,14 @@ export function SkipButton(props: {
   onClick: () => void;
 }) {
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      class="self-center text-ink-muted"
+    <button
+      type="button"
+      class="glass self-center rounded-full bg-surface px-4 py-2 text-xs text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
       disabled={props.disabled}
       onClick={props.onClick}
     >
       {props.label ?? 'Skip for now'}
-    </Button>
+    </button>
   );
 }
 
@@ -135,14 +124,27 @@ export function ContinueButton(props: {
   onClick: () => void;
 }) {
   return (
-    <Button
-      variant="cta"
-      size="xl"
-      disabled={props.disabled}
-      onClick={props.onClick}
-    >
-      {props.label ?? 'Continue'}
-      <ArrowRight class="size-5" />
-    </Button>
+    <div class="h-44 shrink-0">
+      <div class="pointer-events-none fixed inset-x-0 bottom-[max(100px,env(safe-area-inset-bottom))] z-30 flex justify-center">
+        <button
+          type="button"
+          aria-label={props.label ?? 'Continue'}
+          title={props.label ?? 'Continue'}
+          disabled={props.disabled}
+          onClick={props.onClick}
+          class="glass pointer-events-auto flex min-h-20 min-w-48 max-w-[calc(100vw-48px)] items-center justify-center gap-6 rounded-full bg-ink px-8 py-5 text-lg font-medium text-surface after:p-[2px] focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-ink disabled:opacity-40"
+          style={{
+            '--glass-tint': 'var(--color-surface)',
+            background:
+              'linear-gradient(155deg, var(--color-ink) 35%, color-mix(in oklab, var(--color-ink) 72%, var(--color-surface)))',
+            'box-shadow':
+              'inset 0 2px 1px var(--color-ink), inset 0 -4px 3px color-mix(in oklab, var(--color-surface) 35%, transparent), 0 5px 0 color-mix(in oklab, var(--color-ink) 30%, var(--color-surface)), 0 10px 16px color-mix(in oklab, var(--color-surface) 80%, transparent)',
+          }}
+        >
+          <span>{props.label ?? 'Continue'}</span>
+          <ArrowRightIcon class="size-8 shrink-0" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
   );
 }

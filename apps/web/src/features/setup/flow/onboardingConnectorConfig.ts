@@ -9,9 +9,17 @@ export const ONBOARDING_CONNECTORS = [
 ] as const;
 
 const ONBOARDING_STEP_ORDER = [
+  'welcome',
+  'vision',
+  'tools',
+  'privacy',
+  'security',
+  'explore',
+  'introduction',
   'email',
   ...ONBOARDING_CONNECTORS.map(({ key }) => `connect-${key}`),
   'team',
+  'customize',
   'building',
   'summary',
   'plan',
@@ -52,6 +60,21 @@ export function resolveOnboardingStepIndex(
   visibleStepKeys: readonly string[],
   activeStepKey: string
 ): number {
+  const exactIndex = visibleStepKeys.indexOf(activeStepKey);
+  if (exactIndex !== -1) return exactIndex;
+  if (
+    (activeStepKey === 'explore' || activeStepKey === 'introduction') &&
+    visibleStepKeys.includes('team')
+  ) {
+    return visibleStepKeys.indexOf('team');
+  }
+  // OAuth callbacks from the previous per-tool flow resume in the catalog.
+  if (
+    activeStepKey.startsWith('connect-') &&
+    visibleStepKeys.includes('tools')
+  ) {
+    return visibleStepKeys.indexOf('tools');
+  }
   const activeOrder = Math.max(ONBOARDING_STEP_ORDER.indexOf(activeStepKey), 0);
   const nextVisibleIndex = visibleStepKeys.findIndex(
     (key) => ONBOARDING_STEP_ORDER.indexOf(key) >= activeOrder

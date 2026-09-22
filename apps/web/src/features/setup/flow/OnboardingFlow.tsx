@@ -1,6 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { FEATURED_MCP_SERVERS } from '@core/component/AI/constant/mcpServers';
 import LogoIcon from '@icon/macro-logo.svg';
 import { authKeys } from '@queries/auth/keys';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
@@ -26,11 +25,15 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { OnboardingShell } from '../components/OnboardingShell';
+import { isStoryStep, StoryStage } from '../components/StoryStage';
+import { SecurityStep, VisionStep } from '../components/StorySteps';
+import { WelcomeStep } from '../components/WelcomeSteps';
 import type { ModuleLogo, ModuleState } from '../Module';
 import { MODULE_LOGOS } from '../moduleLogos';
 import { BrandHandoff, type BrandHandoffSource } from './BrandHandoff';
 import { BuildingStep, type ConnectedTools } from './BuildingStep';
-import { ConnectorStep } from './ConnectorStep';
+import { CustomizeStep } from './CustomizeStep';
 import { createFlowFinish } from './createFlowFinish';
 import { EmailStep } from './EmailStep';
 import {
@@ -40,14 +43,11 @@ import {
   resolveOnboardingStepIndex,
 } from './onboardingConnectorConfig';
 import { PlanStep } from './PlanStep';
-import { connectorLogo, StepModule } from './StepModule';
+import { StepModule } from './StepModule';
 import { SummaryStep } from './SummaryStep';
-import {
-  FLOW_NEXT_STORAGE_KEY,
-  FLOW_STEP_STORAGE_KEY,
-  NoiseBackground,
-} from './shared';
+import { FLOW_NEXT_STORAGE_KEY, FLOW_STEP_STORAGE_KEY } from './shared';
 import { TeamStep } from './TeamStep';
+import { ToolsStep } from './ToolsStep';
 
 /**
  * The full-screen onboarding flow new users land in after signup (desktop
@@ -98,104 +98,63 @@ interface StepControls {
   inviteOffer: () => GtmInviteOffer | null;
 }
 
-interface ConnectorStepCopy {
-  subtitle: string;
-  features: string[];
-  /** Shown under the row once connected — what happens behind the scenes. */
-  gatherHint?: string;
-}
-
-const CONNECTOR_COPY: Record<string, ConnectorStepCopy> = {
-  Linear: {
-    subtitle: 'Bring your issues into your unified workspace.',
-    features: [
-      'Macro imports a small set of your recent issues and tags as Macro tasks, ready to work on.',
-      'Macro AI can create, read, and update Linear issues without leaving Macro.',
-    ],
-    gatherHint:
-      "We're already looking through your Linear — you'll see what we found before you finish.",
-  },
-  Notion: {
-    subtitle: 'Bring your docs and wikis into your unified workspace.',
-    features: [
-      'Macro imports a small set of your pages as Macro docs.',
-      'Macro AI can search your pages and wikis.',
-    ],
-    gatherHint:
-      "We're already looking through your Notion — you'll see what we found before you finish.",
-  },
-  Slack: {
-    subtitle: 'Bring your conversations into your unified workspace.',
-    features: [
-      'Macro creates channels based on your existing Slack channels, with the right participants.',
-      'Macro AI can search conversations and post updates for you.',
-    ],
-    gatherHint:
-      "We're already looking through your Slack — you'll see what we found before you finish.",
-  },
-  GitHub: {
-    subtitle: 'Bring your repos into your unified workspace.',
-    features: [
-      'Pull requests show up in Macro.',
-      'Tasks get auto-updating branch names.',
-      'Macro AI can answer questions about your repos, pull requests, and issues.',
-    ],
-  },
-};
-
 function buildSteps(
   connectorNames: readonly OnboardingConnectorServerName[],
   connectedTools: () => ConnectedTools,
   onBuildingDone: (source: BrandHandoffSource | null) => void
 ): StepDef[] {
-  const connectorSteps: StepDef[] = connectorNames.flatMap((name) => {
-    const server = FEATURED_MCP_SERVERS.find(
-      (candidate) => candidate.server_name === name
-    );
-    const copy = CONNECTOR_COPY[name];
-    if (!server || !copy) return [];
-    const logo = connectorLogo(name);
-    return [
-      {
-        key: `connect-${name.toLowerCase()}`,
-        title: `Connect ${name}`,
-        subtitle: copy.subtitle,
-        ...(logo && {
-          module: { kind: 'connector', serverName: name, logo },
-        }),
-        render: (controls: StepControls) => (
-          <ConnectorStep
-            server={server}
-            features={copy.features}
-            gatherHint={copy.gatherHint}
-            onContinue={controls.next}
-            onSkip={controls.skip}
-          />
-        ),
-      },
-    ];
-  });
-
   return [
     {
-      key: 'email',
-      title: 'Connect your Google accounts',
-      subtitle:
-        'Macro builds one unified memory across everything you do. Connecting multiple email accounts brings your email, docs, and calendar together, so nothing lives in a silo.',
-      module: { kind: 'email', logo: MODULE_LOGOS.Google },
+      key: 'welcome',
+      wide: true,
+      render: (controls) => <WelcomeStep onContinue={controls.next} />,
+    },
+    {
+      key: 'vision',
+      wide: true,
+      render: (controls) => <VisionStep onContinue={controls.next} />,
+    },
+    {
+      key: 'tools',
+      wide: true,
       render: (controls) => (
-        <EmailStep onContinue={controls.next} onSkip={controls.skip} />
+        <ToolsStep
+          connectorNames={connectorNames}
+          onContinue={controls.next}
+          onSkip={controls.skip}
+        />
       ),
     },
-    ...connectorSteps,
+    {
+      key: 'security',
+      wide: true,
+      render: (controls) => <SecurityStep onContinue={controls.next} />,
+    },
     {
       key: 'team',
-      title: 'Macro is meant for teams',
+      title: 'Better, together.',
       subtitle:
         'Macro is built to be used with others. Invite your team to share docs, channels, and context from day one.',
       render: (controls) => (
         <TeamStep onContinue={controls.next} onSkip={controls.skip} />
       ),
+    },
+    {
+      key: 'email',
+      title: 'Bring your inboxes together.',
+      subtitle:
+        'Work and personal. Side projects and big plans. Bring your Google email and calendar into one place.',
+      module: { kind: 'email', logo: MODULE_LOGOS.Google },
+      render: (controls) => (
+        <EmailStep onContinue={controls.next} onSkip={controls.skip} />
+      ),
+    },
+    {
+      key: 'customize',
+      title: 'Make room for your best work.',
+      subtitle: 'A familiar space, with a fresh perspective.',
+      wide: true,
+      render: (controls) => <CustomizeStep onContinue={controls.next} />,
     },
     {
       // Pure theater while gathers land; auto-advances into the summary via
@@ -348,7 +307,7 @@ function FlowContent() {
     );
   });
 
-  const [activeStepKey, setActiveStepKey] = createSignal('email');
+  const [activeStepKey, setActiveStepKey] = createSignal('welcome');
   const stepIndex = createMemo(() =>
     resolveOnboardingStepIndex(
       steps().map((step) => step.key),
@@ -397,9 +356,23 @@ function FlowContent() {
         sessionStorage.removeItem(FLOW_NEXT_STORAGE_KEY);
         return;
       }
-      setActiveStepKey(saved.step ?? 'email');
+      setActiveStepKey(saved.step ?? 'welcome');
     } catch {
       sessionStorage.removeItem(FLOW_STEP_STORAGE_KEY);
+    }
+  });
+
+  createEffect(() => {
+    const uid = userId();
+    const step = currentStepKey();
+    if (!restored || !uid) return;
+    try {
+      sessionStorage.setItem(
+        FLOW_STEP_STORAGE_KEY,
+        JSON.stringify({ user: uid, step })
+      );
+    } catch {
+      /* The flow remains usable when browser storage is unavailable. */
     }
   });
 
@@ -500,150 +473,143 @@ function FlowContent() {
   });
 
   return (
-    <div class="relative size-full overflow-hidden bg-surface font-sans text-ink">
-      <style>{
-        /*css*/ `
-        @keyframes obf-card-in {
-          from { opacity: 0; transform: translateY(14px) scale(0.985); }
-          to   { opacity: 1; transform: translateY(0)    scale(1);     }
-        }
-        .obf-card { animation: obf-card-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-
-        /* Override browser autofill yellow with our surface/ink palette */
-        .obf-input:-webkit-autofill,
-        .obf-input:-webkit-autofill:hover,
-        .obf-input:-webkit-autofill:focus,
-        .obf-input:-webkit-autofill:active {
-          -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
-          -webkit-text-fill-color: var(--color-ink);
-          caret-color: var(--color-ink);
-          transition: background-color 5000s ease-in-out 0s;
-        }
-      `
-      }</style>
-
-      <NoiseBackground />
-
-      {/* The backdrop layers are viewport-sized absolutes, so scrolling has
-          to happen inside them — a tall step (the summary's pill cloud)
-          would otherwise scroll the wash and grain away with the content,
-          and the grain's 100vw width would add a horizontal scrollbar. */}
-      <div class="relative z-10 size-full overflow-y-auto overscroll-contain">
-        <div class="flex min-h-full items-center justify-center px-6 py-12">
-          <div
-            class={cn(
-              'w-full obf-card transition-[max-width] duration-300',
-              currentStep().wide ? 'sm:max-w-xl' : 'sm:max-w-lg'
-            )}
-          >
-            <div class="flex flex-col gap-8">
-              <Show when={currentStep().title}>
-                <div class="flex flex-col gap-1.5">
-                  {/* Hero module above the title — desktop only. Nudged left by
+    <OnboardingShell
+      wide={currentStep().wide}
+      overlay={
+        <Show when={handoff()}>
+          {(active) => (
+            <BrandHandoff
+              scene={active().scene}
+              logo={active().logo}
+              snapshot={active().snapshot}
+              targetSelector="#summary-brand-logo"
+              onDone={() => {
+                setLogoShown(true);
+                setContentShown(true);
+                setHandoff(null);
+              }}
+            />
+          )}
+        </Show>
+      }
+    >
+      <div class="flex flex-col gap-8">
+        <Show when={currentStep().title}>
+          <div class="flex flex-col gap-1.5">
+            {/* Hero module above the title — desktop only. Nudged left by
                       the module's built-in viewBox padding (reserved for the
                       click-burst trail) so its at-rest artwork left-aligns with
                       the title text. */}
-                  <Show when={currentStep().module}>
-                    {(mod) => (
-                      <StepModule
-                        logo={mod().logo}
-                        state={heroState()}
-                        class="mb-1 hidden size-32 -ml-8 sm:block"
-                      />
-                    )}
-                  </Show>
-                  {/* Landing slot for the loading-graphic → logo handoff. Kept
+            <Show when={currentStep().module}>
+              {(mod) => (
+                <StepModule
+                  logo={mod().logo}
+                  state={heroState()}
+                  class="mb-1 hidden size-32 -ml-8 sm:block"
+                />
+              )}
+            </Show>
+            {/* Landing slot for the loading-graphic → logo handoff. Kept
                       hidden while the overlay is mid-flight; the overlay lands
                       exactly here, then this static logo takes over. */}
-                  <Show when={currentStep().key === 'summary'}>
-                    <LogoIcon
-                      id="summary-brand-logo"
-                      class="mb-1 size-16 text-accent"
-                      style={{ opacity: logoShown() ? 1 : 0 }}
-                    />
-                  </Show>
-                  <div
-                    class="flex flex-col gap-1.5 transition-opacity"
-                    style={{
-                      opacity: summaryContentHidden() ? 0 : 1,
-                      'transition-duration': `${contentFadeMs()}ms`,
-                    }}
-                  >
-                    <h1 class="text-2xl font-semibold tracking-tight text-ink">
-                      {stepTitle()}
-                    </h1>
-                    <Show when={stepSubtitle()}>
-                      <p class="max-w-md text-sm leading-relaxed text-ink-muted">
-                        {stepSubtitle()}
-                      </p>
-                    </Show>
-                  </div>
-                </div>
+            <Show when={currentStep().key === 'summary'}>
+              <LogoIcon
+                id="summary-brand-logo"
+                class="mb-1 size-16 text-accent"
+                style={{ opacity: logoShown() ? 1 : 0 }}
+              />
+            </Show>
+            <div
+              class="flex flex-col gap-1.5 transition-opacity"
+              style={{
+                opacity: summaryContentHidden() ? 0 : 1,
+                'transition-duration': `${contentFadeMs()}ms`,
+              }}
+            >
+              <h1 class="text-3xl font-medium leading-tight tracking-tight text-ink sm:text-4xl">
+                {stepTitle()}
+              </h1>
+              <Show when={stepSubtitle()}>
+                <p class="max-w-md text-sm leading-relaxed text-ink-muted">
+                  {stepSubtitle()}
+                </p>
               </Show>
-
-              <div
-                class="flex flex-col gap-8 transition-opacity"
-                style={{
-                  opacity: summaryContentHidden() ? 0 : 1,
-                  'transition-duration': `${contentFadeMs()}ms`,
-                }}
-              >
-                <Stepper
-                  step={stepIndex()}
-                  transition={Stepper.transitions.scale}
-                >
-                  <For each={steps()}>
-                    {(step) => (
-                      <Stepper.Step noTransition={step.noTransition}>
-                        <Suspense fallback={<StepFallback />}>
-                          {step.render(controls)}
-                        </Suspense>
-                      </Stepper.Step>
-                    )}
-                  </For>
-                </Stepper>
-
-                <Show when={!currentStep().noDot}>
-                  <div class="flex gap-1.5">
-                    <Index each={steps().filter((step) => !step.noDot)}>
-                      {(step) => (
-                        <div
-                          class={cn(
-                            'size-1.5 rounded-full transition-colors',
-                            stepIndex() === steps().indexOf(step())
-                              ? 'bg-accent'
-                              : stepIndex() > steps().indexOf(step())
-                                ? 'bg-ink/40'
-                                : 'bg-ink/15'
-                          )}
-                        />
-                      )}
-                    </Index>
-                  </div>
-                </Show>
-              </div>
             </div>
           </div>
+        </Show>
+
+        <div
+          class="flex flex-col gap-8 transition-opacity"
+          style={{
+            opacity: summaryContentHidden() ? 0 : 1,
+            'transition-duration': `${contentFadeMs()}ms`,
+          }}
+        >
+          <Show
+            when={isStoryStep(currentStep().key)}
+            fallback={
+              <Stepper
+                step={stepIndex()}
+                transition={Stepper.transitions.scale}
+              >
+                <For each={steps()}>
+                  {(step) => (
+                    <Stepper.Step noTransition={step.noTransition}>
+                      <Suspense fallback={<StepFallback />}>
+                        {step.render(controls)}
+                      </Suspense>
+                    </Stepper.Step>
+                  )}
+                </For>
+              </Stepper>
+            }
+          >
+            <StoryStage
+              step={(() => {
+                const key = currentStep().key;
+                return isStoryStep(key) ? key : 'welcome';
+              })()}
+              onNext={controls.next}
+            >
+              <Suspense fallback={<StepFallback />}>
+                {steps()
+                  .find((step) => step.key === 'tools')
+                  ?.render(controls)}
+              </Suspense>
+            </StoryStage>
+          </Show>
+
+          <Show when={!currentStep().noDot}>
+            <div
+              class="flex justify-center gap-1.5"
+              role="progressbar"
+              aria-label="Setup progress"
+              aria-valuemin={1}
+              aria-valuemax={steps().filter((step) => !step.noDot).length}
+              aria-valuenow={
+                steps()
+                  .slice(0, stepIndex() + 1)
+                  .filter((step) => !step.noDot).length
+              }
+            >
+              <Index each={steps().filter((step) => !step.noDot)}>
+                {(step) => (
+                  <div
+                    class={cn(
+                      'size-1.5 rounded-full transition-colors',
+                      stepIndex() === steps().indexOf(step())
+                        ? 'bg-accent'
+                        : stepIndex() > steps().indexOf(step())
+                          ? 'bg-ink/40'
+                          : 'bg-ink/15'
+                    )}
+                  />
+                )}
+              </Index>
+            </div>
+          </Show>
         </div>
       </div>
-
-      {/* Brand handoff overlay — rendered outside the animated card (a
-          transformed ancestor would break its fixed positioning). */}
-      <Show when={handoff()}>
-        {(active) => (
-          <BrandHandoff
-            scene={active().scene}
-            logo={active().logo}
-            snapshot={active().snapshot}
-            targetSelector="#summary-brand-logo"
-            onDone={() => {
-              setLogoShown(true);
-              setContentShown(true);
-              setHandoff(null);
-            }}
-          />
-        )}
-      </Show>
-    </div>
+    </OnboardingShell>
   );
 }

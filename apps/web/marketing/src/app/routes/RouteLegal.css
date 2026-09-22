@@ -1,0 +1,36 @@
+/* Shared page chrome for the legal routes — /terms, /privacy, and /dpa.
+
+   Each document keeps its own typography (inline in UtilPlainText for /terms
+   and /privacy, in RouteDpa.css for /dpa); what lives here is the framing all
+   three need: clearance under the fixed header, and the spacing around the
+   site footer. Metrics match `.posts-article` / `.posts-page-footer` in
+   src/routes/posts/posts-shell.css so the legal pages sit at the same height
+   as /partners/terms and the blog. */
+
+.legal-doc {
+  margin: 0 auto;
+  max-width: 56rem;
+  /* BaseHeader is `position: fixed`, so the document has to start below it —
+     the old 2.5rem put the wordmark eyebrow and the top of the title behind
+     the bar. */
+  padding: 116px 2rem 72px;
+  width: 100%;
+}
+
+/* The footer sits outside the document's measure and brings its own rule and
+   top padding (SectionMoreFeatures), so this only owns the page edges. */
+.legal-doc-footer {
+  padding-bottom: 48px;
+  padding-inline: 24px;
+}
+
+@media (max-width: 700px) {
+  .legal-doc {
+    padding: 72px 1.25rem 56px;
+  }
+
+  .legal-doc-footer {
+    padding-bottom: 40px;
+    padding-inline: 18px;
+  }
+}

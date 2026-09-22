@@ -110,6 +110,10 @@ export function BrandHandoff(props: {
   });
 
   onMount(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      props.onDone();
+      return;
+    }
     const run = () => {
       const target = document.querySelector(props.targetSelector);
       if (!target || !frame) {

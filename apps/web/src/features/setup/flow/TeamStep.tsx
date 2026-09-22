@@ -28,9 +28,11 @@ import {
   ContinueButton,
   deriveTeamName,
   FormInput,
+  isPlausibleEmail,
   SkipButton,
 } from './shared';
 import {
+  PREFILL_CAP,
   prefillableTeammates,
   removeInviteSlot,
   validInviteEmails,
@@ -89,11 +91,10 @@ function OnTeamPanel(props: { name?: string; onContinue: () => void }) {
         <p class="text-sm font-medium text-ink">
           You're on {props.name ?? 'your team'}
         </p>
-        {/* Copy must stay true for auto-join, invite-accept, and the
-            optimistic mid-create flash alike. */}
+
         <p class="max-w-xs text-xs text-ink-muted leading-snug">
-          Your team is set up — everything your teammates bring into Macro is
-          shared with you.
+          Your team is set up. Share documents, channels, and context when
+          you’re ready.
         </p>
       </div>
       <ContinueButton onClick={props.onContinue} />
@@ -185,18 +186,55 @@ function TeamForm(props: {
   const email = useEmail();
   const createTeam = useCreateTeamWithInvitesMutation();
 
+  const draftKey = `onboarding-team-draft:${email()}`;
+  const saved = (() => {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(draftKey) ?? 'null');
+      if (
+        typeof value?.name === 'string' &&
+        typeof value?.inviteTeam === 'boolean' &&
+        Array.isArray(value?.slots) &&
+        value.slots.every((slot: unknown) => typeof slot === 'string')
+      )
+        return value as { name: string; inviteTeam: boolean; slots: string[] };
+    } catch {
+      /* A blocked or old record leaves the default form usable. */
+    }
+    return undefined;
+  })();
+  const [inviteTeam, setInviteTeam] = createSignal(saved?.inviteTeam ?? true);
   const [name, setName] = createSignal(
-    props.domain ? deriveTeamName(props.domain) : ''
+    saved?.name ?? (props.domain ? deriveTeamName(props.domain) : '')
   );
   // Same-domain teammates are pre-added rather than offered: the default is
   // "invite them", and removing a row is how you opt one out.
   const prefilled = props.prefilledTeammates;
   const [inviteSlots, setInviteSlots] = createSignal<string[]>(
-    prefilled.length > 0 ? [...prefilled, ''] : ['', '']
+    saved?.slots ?? (prefilled.length > 0 ? [...prefilled, ''] : ['', ''])
   );
+  // Persist drafts per account before following a marketing link or refreshing.
+  createEffect(() => {
+    const draft = {
+      name: name(),
+      inviteTeam: inviteTeam(),
+      slots: inviteSlots(),
+    };
+    try {
+      sessionStorage.setItem(draftKey, JSON.stringify(draft));
+    } catch {
+      /* Storage can be disabled. */
+    }
+  });
   let inviteListEl: HTMLDivElement | undefined;
 
-  const validInvites = () => validInviteEmails(inviteSlots(), email());
+  const validInvites = () =>
+    inviteTeam() ? validInviteEmails(inviteSlots(), email()) : [];
+  const hasInvalidInvites = () =>
+    inviteTeam() &&
+    inviteSlots().some(
+      (value) => value.trim() !== '' && !isPlausibleEmail(value)
+    );
+  const tooManyInvites = () => validInvites().length > PREFILL_CAP;
 
   // The X means "don't invite this person", so it belongs on rows that name
   // one. Blank rows need no removing — they're dropped on submit anyway.
@@ -213,7 +251,13 @@ function TeamForm(props: {
   };
 
   const create = async () => {
-    if (createTeam.isPending || name().trim().length === 0) return;
+    if (
+      createTeam.isPending ||
+      name().trim().length === 0 ||
+      tooManyInvites() ||
+      hasInvalidInvites()
+    )
+      return;
     // The mutation owns its toasts; stay put (form intact) on failure.
     const invites = validInvites();
     try {
@@ -223,6 +267,11 @@ function TeamForm(props: {
       });
     } catch {
       return;
+    }
+    try {
+      sessionStorage.removeItem(draftKey);
+    } catch {
+      /* Storage can be disabled. */
     }
     const kept = new Set(invites);
     analytics.track('onboarding_v4_team', {
@@ -258,70 +307,106 @@ function TeamForm(props: {
         <div class="size-7 shrink-0" />
       </div>
 
-      {/* Index, not For: slots are edited strings, and For keys by value —
+      <label class="flex items-center gap-3 rounded-2xl border border-edge bg-surface p-4">
+        <input
+          type="checkbox"
+          checked={inviteTeam()}
+          onChange={(event) => setInviteTeam(event.currentTarget.checked)}
+          class="size-4 accent-current"
+        />
+        <span class="flex flex-col gap-1">
+          <span class="text-sm font-medium">Invite my team</span>
+          <span class="text-xs leading-5 text-ink-muted">
+            Send an email invitation to the people below. Start with up to{' '}
+            {PREFILL_CAP} teammates; invite more from Settings later.
+          </span>
+        </span>
+      </label>
+      <Show when={inviteTeam()}>
+        {/* Index, not For: slots are edited strings, and For keys by value —
           each keystroke would recreate the input node and drop focus.
           No inner scroller: the list opens pre-filled now, and a capped box
           left a row sliced in half above the buttons — the flow's own
           scroll container takes the height instead. */}
-      <div ref={(el) => (inviteListEl = el)} class="flex flex-col gap-3">
-        <Index each={inviteSlots()}>
-          {(slot, i) => (
-            <div class="flex items-center gap-1.5">
-              <div class="min-w-0 flex-1">
-                <FormInput
-                  id={`invite-${i}`}
-                  type="email"
-                  placeholder="teammate@company.com"
-                  value={slot()}
-                  onInput={(value) =>
-                    setInviteSlots((slots) =>
-                      slots.map((v, j) => (j === i ? value : v))
-                    )
-                  }
-                />
-              </div>
-              {/* Gutter is always reserved, so a blank row's input still lines
-                  up with the ones carrying a remove button. */}
-              <div class="flex size-7 shrink-0 items-center justify-center">
-                <Show when={canRemoveSlot(slot())}>
-                  <button
-                    type="button"
-                    aria-label={`Don't invite ${slot().trim()}`}
-                    title={`Don't invite ${slot().trim()}`}
-                    onClick={() =>
-                      setInviteSlots((slots) => removeInviteSlot(slots, i))
+        <div ref={(el) => (inviteListEl = el)} class="flex flex-col gap-3">
+          <Index each={inviteSlots()}>
+            {(slot, i) => (
+              <div class="flex items-center gap-1.5">
+                <div class="min-w-0 flex-1">
+                  <FormInput
+                    id={`invite-${i}`}
+                    type="email"
+                    label={`Teammate ${i + 1} email`}
+                    invalid={slot().trim() !== '' && !isPlausibleEmail(slot())}
+                    placeholder="teammate@company.com"
+                    value={slot()}
+                    onInput={(value) =>
+                      setInviteSlots((slots) =>
+                        slots.map((v, j) => (j === i ? value : v))
+                      )
                     }
-                    class="rounded-md p-1.5 text-ink-extra-muted transition-colors hover:bg-ink/5 hover:text-ink"
-                  >
-                    <XIcon class="size-4" />
-                  </button>
-                </Show>
+                  />
+                </div>
+                {/* Gutter is always reserved, so a blank row's input still lines
+                  up with the ones carrying a remove button. */}
+                <div class="flex size-7 shrink-0 items-center justify-center">
+                  <Show when={canRemoveSlot(slot())}>
+                    <button
+                      type="button"
+                      aria-label={`Don't invite ${slot().trim()}`}
+                      title={`Don't invite ${slot().trim()}`}
+                      onClick={() =>
+                        setInviteSlots((slots) => removeInviteSlot(slots, i))
+                      }
+                      class="rounded-md p-1.5 text-ink-extra-muted transition-colors hover:bg-ink/5 hover:text-ink"
+                    >
+                      <XIcon class="size-4" />
+                    </button>
+                  </Show>
+                </div>
               </div>
-            </div>
-          )}
-        </Index>
-      </div>
+            )}
+          </Index>
+        </div>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        class="self-center text-ink-muted"
-        onClick={addEmptyInvite}
-      >
-        <Plus class="size-4" />
-        Add another teammate
-      </Button>
-
+        <Button
+          variant="ghost"
+          size="sm"
+          class="self-center text-ink-muted"
+          onClick={addEmptyInvite}
+          disabled={
+            inviteSlots().length >= PREFILL_CAP + 1 || createTeam.isPending
+          }
+        >
+          <Plus class="size-4" />
+          Add another teammate
+        </Button>
+      </Show>
+      <Show when={hasInvalidInvites()}>
+        <p role="alert" class="text-xs text-failure">
+          Enter a valid email address for each teammate, or remove that row.
+        </p>
+      </Show>
+      <Show when={tooManyInvites()}>
+        <p role="alert" class="text-xs text-failure">
+          Choose up to {PREFILL_CAP} teammates to invite during setup.
+        </p>
+      </Show>
       <ContinueButton
         label={
           validInvites().length > 0
             ? `Create team & invite ${validInvites().length}`
             : 'Create team'
         }
-        disabled={name().trim().length === 0 || createTeam.isPending}
+        disabled={
+          name().trim().length === 0 ||
+          createTeam.isPending ||
+          tooManyInvites() ||
+          hasInvalidInvites()
+        }
         onClick={() => void create()}
       />
-      <SkipButton onClick={props.onSkip} />
+      <SkipButton disabled={createTeam.isPending} onClick={props.onSkip} />
     </div>
   );
 }

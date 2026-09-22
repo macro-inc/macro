@@ -1,0 +1,1795 @@
+/* First-paint fonts live in public/fonts/ at stable URLs so index.html can
+   <link rel="preload"> them in parallel with the JS bundle. */
+@font-face {
+  src: url('/fonts/roboto-slab-variable.woff2') format('woff2');
+  font-family: 'display';
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  src: url('/fonts/rajdhani-medium.woff2') format('woff2');
+  font-family: 'body';
+  font-display: swap;
+}
+
+/* Rajdhani under its own name. ~146 rules say `font-family: 'rajdhani',
+   'body'`, and with no such face declared they fell through to 'body' — the
+   same file, so it looked right, but it also meant a locally-installed
+   Rajdhani would win instead. Declaring it pins them to the bundled Medium. */
+@font-face {
+  src: url('/fonts/rajdhani-medium.woff2') format('woff2');
+  font-family: 'rajdhani';
+  font-display: swap;
+}
+
+/* Neutral UI sans for the faux-app mocks (appFont). Without this the mocks
+   fall back to the OS system font, whose bold renders far heavier than
+   Inter's, making 700 read like extrabold. */
+@font-face {
+  src: url('/fonts/inter-variable.woff2') format('woff2');
+  font-family: 'Inter';
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+/* Cyberreader: a 50/50 blend of Rajdhani's edge and Inter's readability.
+   Used for the blog (headers + body). */
+@font-face {
+  src: url('/fonts/cyberreader2-regular.woff2') format('woff2');
+  font-family: 'cyberreader';
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  src: url('/fonts/cyberreader2-bold.woff2') format('woff2');
+  font-family: 'cyberreader';
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  src: url('/fonts/cyberreader2-light.woff2') format('woff2');
+  font-family: 'cyberreader';
+  font-weight: 300;
+  font-display: swap;
+}
+
+@property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.74; }
+@property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.16; }
+@property --a0h { syntax:  "<angle>"; inherits: false; initial-value:  56deg; }
+@property --a0h-drift { syntax:  "<angle>"; inherits: false; initial-value: 0deg; }
+@property --a1l { syntax: "<number>"; inherits: false; initial-value:   0.71; }
+@property --a1c { syntax: "<number>"; inherits: false; initial-value:   0.23; }
+@property --a1h { syntax:  "<angle>"; inherits: false; initial-value:  84deg; }
+@property --a2l { syntax: "<number>"; inherits: false; initial-value:   0.71; }
+@property --a2c { syntax: "<number>"; inherits: false; initial-value:   0.23; }
+@property --a2h { syntax:  "<angle>"; inherits: false; initial-value: 124deg; }
+@property --a3l { syntax: "<number>"; inherits: false; initial-value:   0.71; }
+@property --a3c { syntax: "<number>"; inherits: false; initial-value:   0.23; }
+@property --a3h { syntax:  "<angle>"; inherits: false; initial-value: 164deg; }
+@property --a4l { syntax: "<number>"; inherits: false; initial-value:   0.71; }
+@property --a4c { syntax: "<number>"; inherits: false; initial-value:   0.23; }
+@property --a4h { syntax:  "<angle>"; inherits: false; initial-value: 204deg; }
+
+@property --b0l { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b0c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b0h { syntax:  "<angle>"; inherits: false; initial-value:  44deg; }
+@property --b1l { syntax: "<number>"; inherits: false; initial-value:   0.14; }
+@property --b1c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b1h { syntax:  "<angle>"; inherits: false; initial-value:  44deg; }
+@property --b2l { syntax: "<number>"; inherits: false; initial-value:   0.16; }
+@property --b2c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b2h { syntax:  "<angle>"; inherits: false; initial-value:  44deg; }
+@property --b3l { syntax: "<number>"; inherits: false; initial-value:   0.18; }
+@property --b3c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b3h { syntax:  "<angle>"; inherits: false; initial-value:  44deg; }
+@property --b4l { syntax: "<number>"; inherits: false; initial-value:   0.36; }
+@property --b4c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b4h { syntax:  "<angle>"; inherits: false; initial-value:  44deg; }
+
+@property --c0l { syntax: "<number>"; inherits: false; initial-value:      1; }
+@property --c0c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --c0h { syntax:  "<angle>"; inherits: false; initial-value:  44deg; }
+@property --c1l { syntax: "<number>"; inherits: false; initial-value:   0.90; }
+@property --c1c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --c1h { syntax:  "<angle>"; inherits: false; initial-value:  44deg; }
+@property --c2l { syntax: "<number>"; inherits: false; initial-value:   0.80; }
+@property --c2c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --c2h { syntax:  "<angle>"; inherits: false; initial-value:  44deg; }
+@property --c3l { syntax: "<number>"; inherits: false; initial-value:   0.70; }
+@property --c3c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --c3h { syntax:  "<angle>"; inherits: false; initial-value:  44deg; }
+@property --c4l { syntax: "<number>"; inherits: false; initial-value:   0.60; }
+@property --c4c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --c4h { syntax:  "<angle>"; inherits: false; initial-value:  44deg; }
+
+:root {
+  --page-gutter: 24px;
+  --page-max-mobile: 560px;
+  --page-max: 1000px;
+  --ambient-ink: color-mix(in srgb, var(--c1) 25%, transparent);
+  --site-scale: 1;
+  --a0: oklch(
+    var(--a0l)
+    var(--a0c)
+    calc(var(--a0h) + var(--a0h-drift))
+  );
+  --a1: oklch(var(--a1l) var(--a1c) var(--a1h));
+  --a2: oklch(var(--a2l) var(--a2c) var(--a2h));
+  --a3: oklch(var(--a3l) var(--a3c) var(--a3h));
+  --a4: oklch(var(--a4l) var(--a4c) var(--a4h));
+
+  --b0: oklch(var(--b0l) var(--b0c) var(--b0h));
+  --b1: oklch(var(--b1l) var(--b1c) var(--b1h));
+  --b2: oklch(var(--b2l) var(--b2c) var(--b2h));
+  --b3: oklch(var(--b3l) var(--b3c) var(--b3h));
+  --b4: oklch(var(--b4l) var(--b4c) var(--b4h));
+
+  --c0: oklch(var(--c0l) var(--c0c) var(--c0h));
+  --c1: oklch(var(--c1l) var(--c1c) var(--c1h));
+  --c2: oklch(var(--c2l) var(--c2c) var(--c2h));
+  --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
+  --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
+
+  /* Shadow ink: always black, opacity scales with surface darkness. */
+  --shadow-strength: calc(1 - var(--b0l));
+  --shadow-ink-xs: rgb(0 0 0 / calc(var(--shadow-strength) * 0.20 + 0.04));
+  --shadow-ink-sm: rgb(0 0 0 / calc(var(--shadow-strength) * 0.28 + 0.05));
+  --shadow-ink-md: rgb(0 0 0 / calc(var(--shadow-strength) * 0.33 + 0.06));
+  --shadow-ink-lg: rgb(0 0 0 / calc(var(--shadow-strength) * 0.40 + 0.06));
+  --shadow-ink-xl: rgb(0 0 0 / calc(var(--shadow-strength) * 0.51 + 0.06));
+  --shadow-ink-2xl: rgb(0 0 0 / calc(var(--shadow-strength) * 0.64 + 0.10));
+  --shadow-inset-highlight: inset 0 1px 0 color-mix(in srgb, var(--c1) 8%, transparent);
+  --shadow-window: 0 28px 90px var(--shadow-ink-lg), var(--shadow-inset-highlight);
+  --shadow-window-focus:
+    0 28px 90px var(--shadow-ink-lg),
+    var(--shadow-inset-highlight),
+    0 0 0 3px color-mix(in srgb, var(--a0) 22%, transparent);
+  --shadow-frame: 0 32px 80px -40px var(--shadow-ink-2xl);
+  --shadow-panel-sm: 0 18px 48px var(--shadow-ink-sm);
+  --shadow-panel-md: 0 22px 60px var(--shadow-ink-md);
+  --shadow-panel-lg: 0 22px 60px var(--shadow-ink-xl);
+  --shadow-panel-xl: 0 28px 90px var(--shadow-ink-xl);
+  --shadow-panel-wide: 0 24px 64px var(--shadow-ink-md);
+  --shadow-float-sm: 0 14px 36px var(--shadow-ink-xs);
+  --shadow-elevated: 0 28px 80px var(--shadow-ink-lg);
+  --shadow-card: 0 6px 16px -6px var(--shadow-ink-lg), inset 0 1px 0 color-mix(in srgb, var(--c1) 6%, transparent);
+  --shadow-accent-panel:
+    0 32px 90px var(--shadow-ink-xl),
+    0 0 0 1px color-mix(in srgb, var(--a0) 14%, transparent),
+    var(--shadow-inset-highlight);
+  --shadow-device:
+    0 44px 100px var(--shadow-ink-xl),
+    0 12px 30px var(--shadow-ink-lg),
+    inset 0 0 0 1px color-mix(in srgb, var(--c1) 12%, transparent);
+  --shadow-menu:
+    0 24px 56px -18px var(--shadow-ink-xl),
+    0 8px 22px -14px var(--shadow-ink-lg),
+    inset 0 1px 0 color-mix(in srgb, var(--c0) 6%, transparent);
+
+  /* Hero product mocks: outer window shell + inner app chrome. */
+  --hero-window-bg: color-mix(in srgb, var(--b1) 58%, var(--b0));
+  --hero-app-chrome-bg: oklch(min(0.2, calc(var(--b0l) * 0.55 + 0.08)) 0.004 var(--b0h));
+
+  --transition: 0.5s;
+}
+
+@media (max-width: 700px) {
+  :root {
+    --page-gutter: 12px;
+  }
+}
+
+/* A fixed content measure keeps the public pages as focused as setup. */
+html, body, #root, #app-scroll-root { background: #000; }
+.marketing-content { width: 100%; max-width: 1000px; min-width: 0; padding-bottom: 100px; }
+.marketing-content > * { max-width: 100%; }
+
+*::selection{
+  background-color: var(--a0);
+  color: var(--b0);
+}
+
+/* Horizontal scroll strips (mobile tab rows, the app-preview rail) should stay
+   swipeable without painting a chrome scrollbar track over the UI. */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+body{
+  font-family: 'body';
+  color: var(--c2);
+  font-size: 16px;
+  margin: 0px;
+}
+
+/* Prerender viewport gates, rendered by the SsgMobile/SsgDesktop helpers in
+   components/utils/SsgGate.tsx. The static HTML is built once with no real
+   viewport, so components whose mobile/desktop variants differ structurally
+   render BOTH during SSR wrapped in these; the media query picks the right
+   variant before the JS bundle loads. In the browser the client render
+   mounts only one variant, so the wrappers are inert (display: contents
+   keeps them out of layout). The 700px cutoff mirrors MOBILE_CUTOFF in
+   utilBreakpoint. */
+.ssg-mobile, .ssg-desktop { display: contents; }
+@media (min-width: 700px) { .ssg-mobile { display: none; } }
+@media (max-width: 699px) { .ssg-desktop { display: none; } }
+
+/* WebKit min-content blowout guard. Grid/flex items default to `min-width: auto`,
+   so Safari sizes a track to the item's *max-content* — our single-line (nowrap)
+   mockup graphics then force sections wider than the viewport, shifting the whole
+   page right on the home + feature heroes/sections (Chrome clamps to the track
+   instead). Resetting min-width on structural boxes drops each item's base track
+   contribution to 0, so every track fills its definite container, matching
+   Chrome. Scroll strips opt out so their children stay swipeable. */
+#app-scroll-root :is(section, div):not(.no-scrollbar, .no-scrollbar *) {
+  min-width: 0;
+}
+
+input, button{
+  font-family: 'Courier New', Courier, monospace;
+  color: var(--c4);
+  font-size: 15px;
+}
+input::placeholder{
+  color: oklch(from var(--c4) l c h / 0.6);
+}
+
+a{
+  transition: color var(--transition);
+  text-decoration: none;
+  color: var(--c2);
+}
+
+.launch-back{
+  transition: fill var(--transition);
+  fill: var(--a0);
+}
+.launch{
+  transition: fill var(--transition);
+  fill: var(--b0);
+  stroke: none;
+}
+
+@media(hover){
+  .hover-background-color:hover{
+    background-color: var(--a0) !important;
+    transition: none !important;
+  }
+  .hover-color:hover{
+    transition: none !important;
+    color: var(--a0) !important;
+  }
+  .hover-relaunch:hover{
+    color: var(--a0) !important;
+    transition: none !important;
+  }
+  a:hover{
+    transition: none;
+    color: var(--a0);
+  }
+  .launch-wrap:hover{
+    .launch-back{
+      transition: none;
+      fill: var(--b0);
+    }
+    .launch{
+      transition: none;
+      fill: var(--a0);
+    }
+  }
+}
+
+/* 3D liquid-glass rim — same recipe as the home/partners CTA tray: a 1px
+   gradient stroke that catches light at the corners, plus inset highlights
+   so pill buttons read as polished panes rather than flat fills. */
+.home-hero-cta,
+.base-header-pill-cta,
+.base-header-github-stars,
+.pricing-cta-button,
+.pricing-final-cta,
+.feat-lite-cta-primary,
+.feat-lite-cta-secondary,
+.email-cta-button,
+.agents-cta-button,
+.crm-cta-button,
+.channels-cta-button,
+.docs-cta-button,
+.docs-final-cta,
+.migrate-cta-button,
+.tasks-cta-button,
+.gh-cta-button,
+.calls-cta-button,
+.hero-cta-button,
+.final-bento-cta-button,
+.mobile-signup-submit {
+  border: 1px solid color-mix(in srgb, var(--b4) 32%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--c1) 6%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--b0) 40%, transparent),
+    0 14px 32px -22px rgb(0 0 0 / 0.55);
+  position: relative;
+}
+
+.home-hero-cta-bar::after,
+.home-hero-cta::after,
+.base-header-pill-cta::after,
+.base-header-github-stars::after,
+.pricing-cta-button::after,
+.pricing-final-cta::after,
+.feat-lite-cta-primary::after,
+.feat-lite-cta-secondary::after,
+.email-cta-button::after,
+.agents-cta-button::after,
+.crm-cta-button::after,
+.channels-cta-button::after,
+.docs-cta-button::after,
+.docs-final-cta::after,
+.migrate-cta-button::after,
+.tasks-cta-button::after,
+.gh-cta-button::after,
+.calls-cta-button::after,
+.hero-cta-button::after,
+.final-bento-cta-button::after,
+.mobile-signup-submit::after {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--c1) 18%, transparent) 0%,
+    transparent 24%,
+    transparent 76%,
+    color-mix(in srgb, var(--c1) 12%, transparent) 100%
+  );
+  border-radius: inherit;
+  content: '';
+  inset: 0;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  padding: 1px;
+  pointer-events: none;
+  position: absolute;
+}
+
+.scene-panel{
+  transition: stroke var(--transition);
+}
+.scene-panel-fill{
+  fill: oklch(from var(--b1) l c h / 0.58);
+  transition: fill var(--transition);
+}
+.scene-panel-grid{
+  stroke: oklch(from var(--b4) l c h / 0.42);
+  transition: stroke var(--transition);
+}
+
+@media(hover){
+  .scene-panel:hover{
+    stroke: var(--a0);
+  }
+  .scene-panel:hover .scene-panel-fill{
+    fill: oklch(from var(--a0) l c h / 0.5);
+  }
+  .scene-panel:hover .scene-panel-grid{
+    stroke: var(--a0);
+  }
+}
+
+.lifetime-pricing {
+  background: var(--b0);
+  box-sizing: border-box;
+  grid-column: 1 / -1;
+  margin: 0 auto;
+  max-width: 1280px;
+  padding: 64px 22px;
+  width: 100%;
+}
+
+.lifetime-pricing__header {
+  display: grid;
+  gap: 16px;
+  margin: 0 auto;
+  max-width: 720px;
+  text-align: center;
+}
+
+.lifetime-pricing__header span {
+  color: var(--a0);
+  font-family: 'rajdhani', 'body';
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.lifetime-pricing__header h2 {
+  color: var(--c1);
+  font-family: 'display';
+  font-size: clamp(40px, 5vw, 56px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  margin: 0;
+}
+
+.lifetime-pricing__header p {
+  color: var(--c4);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.lifetime-pricing__panel {
+  background: color-mix(in srgb, var(--b1) 50%, transparent);
+  border-radius: 24px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c0) 10%, transparent);
+  box-sizing: border-box;
+  margin: 56px auto 0;
+  max-width: 1060px;
+}
+
+.lifetime-pricing__content {
+  box-sizing: border-box;
+  padding: 32px;
+}
+
+.lifetime-pricing__stage-progress ol {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lifetime-pricing__stage-step {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  position: relative;
+}
+
+.lifetime-pricing__stage-step:not(:last-child)::before {
+  background: color-mix(in srgb, var(--c4) 18%, transparent);
+  content: "";
+  height: 2px;
+  left: 50%;
+  position: absolute;
+  top: 15px;
+  width: 100%;
+}
+
+.lifetime-pricing__stage-step--complete:not(:last-child)::before {
+  background: var(--a0);
+}
+
+.lifetime-pricing__stage-step button {
+  align-items: center;
+  background: var(--b0);
+  border: 2px solid color-mix(in srgb, var(--c4) 26%, transparent);
+  border-radius: 999px;
+  box-sizing: border-box;
+  color: transparent;
+  display: flex;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+  width: 32px;
+  z-index: 1;
+}
+
+.lifetime-pricing__stage-step button > span {
+  align-items: center;
+  border-radius: 999px;
+  display: flex;
+  height: 10px;
+  justify-content: center;
+  width: 10px;
+}
+
+.lifetime-pricing__stage-step button svg {
+  color: var(--b0);
+  display: block;
+  height: 18px;
+  width: 18px;
+}
+
+.lifetime-pricing__stage-step--complete button {
+  background: var(--a0);
+  border-color: var(--a0);
+}
+
+.lifetime-pricing__stage-step--current button {
+  border-color: var(--a0);
+}
+
+.lifetime-pricing__stage-step--current button > span {
+  background: var(--a0);
+}
+
+.lifetime-pricing__stage-step--upcoming button:hover {
+  border-color: color-mix(in srgb, var(--c4) 46%, transparent);
+}
+
+.lifetime-pricing__stage-step > span {
+  color: var(--c4);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.lifetime-pricing__stage-step--current > span {
+  color: var(--a0);
+}
+
+.lifetime-pricing__selected-features {
+  border-top: 1px solid color-mix(in srgb, var(--c4) 10%, transparent);
+  color: var(--c2);
+  display: grid;
+  font-size: 15px;
+  gap: 10px 20px;
+  grid-template-columns: 1fr;
+  line-height: 1.5;
+  list-style: none;
+  margin: 34px 0 0;
+  padding: 24px 0 0;
+}
+
+.lifetime-pricing__aside {
+  margin-top: -8px;
+  padding: 8px;
+}
+
+.lifetime-pricing__card {
+  background: var(--b0);
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c0) 10%, transparent);
+  padding: 40px 0;
+  text-align: center;
+}
+
+.lifetime-pricing__card-inner {
+  margin: 0 auto;
+  max-width: 320px;
+  padding: 0 32px;
+}
+
+.lifetime-pricing__card-inner p {
+  color: var(--c4);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.lifetime-pricing__price {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1.5rem !important;
+}
+
+.lifetime-pricing__price span:first-child {
+  color: var(--c0);
+  font-family: 'display';
+  font-size: 52px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.lifetime-pricing__price span:last-child {
+  color: var(--c4);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  line-height: 1.5rem;
+}
+
+.lifetime-pricing__primary-cta,
+.lifetime-pricing__secondary-cta {
+  border-radius: 0.375rem;
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25rem;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.lifetime-pricing__primary-cta {
+  background: var(--a0);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  color: var(--b0);
+  margin-top: 36px;
+}
+
+.lifetime-pricing__secondary-cta {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--c4) 18%, transparent);
+  color: var(--c2);
+  margin-top: 0.75rem;
+}
+
+.lifetime-pricing__card-inner a:focus-visible {
+  outline: 2px solid var(--a0);
+  outline-offset: 2px;
+}
+
+@media (hover) {
+  .lifetime-pricing__primary-cta:hover {
+    background: color-mix(in srgb, var(--a0) 82%, var(--c0) 18%);
+    color: var(--b0);
+  }
+
+  .lifetime-pricing__secondary-cta:hover {
+    border-color: color-mix(in srgb, var(--a0) 36%, transparent);
+    color: var(--a0);
+  }
+}
+
+@media (min-width: 640px) {
+  .lifetime-pricing {
+    padding-bottom: 80px;
+    padding-top: 80px;
+  }
+
+  .lifetime-pricing__content {
+    padding: 40px;
+  }
+
+  .lifetime-pricing__selected-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .lifetime-pricing__panel {
+    display: flex;
+    max-width: none;
+  }
+
+  .lifetime-pricing__content {
+    flex: 1 1 auto;
+    padding: 40px;
+  }
+
+  .lifetime-pricing__aside {
+    flex-shrink: 0;
+    margin-top: 0;
+    max-width: 448px;
+    padding: 8px;
+    width: 100%;
+  }
+
+  .lifetime-pricing__card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100%;
+    padding-bottom: 64px;
+    padding-top: 64px;
+  }
+}
+
+.lifetime-pricing {
+  align-items: center;
+  column-gap: clamp(56px, 8vw, 120px);
+  display: grid;
+  grid-template-areas:
+    "header quote"
+    "progress progress";
+  grid-template-columns: minmax(260px, 380px) minmax(0, 720px);
+  margin: 0;
+  max-width: none;
+  padding: clamp(72px, 10vw, 128px) clamp(40px, 7vw, 92px);
+}
+
+.lifetime-pricing__header {
+  align-content: center;
+  display: grid;
+  gap: 20px;
+  grid-area: header;
+  margin: 0;
+  max-width: none;
+  text-align: left;
+}
+
+.lifetime-pricing__header span {
+  color: var(--a0);
+  font-family: 'rajdhani', 'body';
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.lifetime-pricing__header h2 {
+  color: var(--c1);
+  font-family: 'display';
+  font-size: clamp(34px, 4vw, 46px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.06;
+  margin: 0;
+}
+
+.lifetime-pricing__header p {
+  color: var(--c4);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.62;
+  margin: 0;
+}
+
+.lifetime-pricing__quote {
+  display: grid;
+  gap: 38px;
+  grid-area: quote;
+}
+
+.lifetime-pricing__stage-control {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: end;
+}
+
+.lifetime-pricing__stage-control > span {
+  color: var(--c4);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.lifetime-pricing__stage-control label {
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--a0) 54%, transparent);
+  border-radius: 11px;
+  box-sizing: border-box;
+  color: var(--a0);
+  display: inline-flex;
+  gap: 14px;
+  min-width: 198px;
+  padding: 12px 16px;
+}
+
+.lifetime-pricing__stage-control select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--c1);
+  flex: 1 1 auto;
+  font-family: 'body';
+  font-size: 16px;
+  font-weight: 700;
+  outline: 0;
+}
+
+.lifetime-pricing__stage-control option {
+  background: var(--b0);
+  color: var(--c1);
+}
+
+.lifetime-pricing__stage-control svg {
+  color: var(--a0);
+  flex: none;
+  height: 18px;
+  pointer-events: none;
+  width: 18px;
+}
+
+.lifetime-pricing__card {
+  background: color-mix(in srgb, var(--b0) 86%, var(--b1));
+  border: 1px solid color-mix(in srgb, var(--c4) 20%, transparent);
+  border-radius: 16px;
+  box-shadow: none;
+  box-sizing: border-box;
+  padding: clamp(32px, 5vw, 56px);
+  text-align: left;
+}
+
+.lifetime-pricing__card h3 {
+  color: var(--a0);
+  font-family: 'display';
+  font-size: 34px;
+  font-weight: 650;
+  line-height: 1;
+  margin: 0;
+}
+
+.lifetime-pricing__price {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: start;
+  margin: 14px 0 0 !important;
+}
+
+.lifetime-pricing__price span:first-child {
+  color: var(--c0);
+  font-family: 'display';
+  font-size: clamp(52px, 6vw, 66px);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.lifetime-pricing__price span:last-child {
+  color: var(--c4);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.lifetime-pricing__features {
+  border-top: 1px solid color-mix(in srgb, var(--c4) 11%, transparent);
+  color: var(--c3);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 12px 18px;
+  line-height: 1.4;
+  list-style: none;
+  margin: 34px 0 0;
+  padding: 24px 0 0;
+}
+
+.lifetime-pricing__features li {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+}
+
+.lifetime-pricing__features li > span {
+  border: 1px solid var(--a0);
+  border-radius: 999px;
+  box-sizing: border-box;
+  flex: none;
+  height: 13px;
+  position: relative;
+  width: 13px;
+}
+
+.lifetime-pricing__features li > span::after {
+  background: var(--a0);
+  border-radius: 999px;
+  content: "";
+  height: 5px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  width: 5px;
+}
+
+.lifetime-pricing__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.lifetime-pricing__primary-cta,
+.lifetime-pricing__secondary-cta {
+  border-radius: 6px;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 1 1 0;
+  font-size: 14px;
+  font-weight: 700;
+  justify-content: center;
+  line-height: 1.25;
+  margin: 0;
+  padding: 11px 14px;
+  text-align: center;
+}
+
+.lifetime-pricing__primary-cta {
+  background: var(--a0);
+  color: var(--b0);
+}
+
+.lifetime-pricing__secondary-cta {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--c4) 18%, transparent);
+  color: var(--c2);
+}
+
+.lifetime-pricing__stage-progress {
+  grid-area: progress;
+  margin: clamp(52px, 7vw, 84px) auto 0;
+  max-width: 980px;
+  width: 100%;
+}
+
+.lifetime-pricing__stage-progress ol {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lifetime-pricing__stage-step {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  position: relative;
+}
+
+.lifetime-pricing__stage-step:not(:last-child)::before {
+  background: color-mix(in srgb, var(--c4) 18%, transparent);
+  content: "";
+  height: 2px;
+  left: 50%;
+  position: absolute;
+  top: 14px;
+  transition: background-color 260ms ease;
+  width: 100%;
+}
+
+.lifetime-pricing__stage-step--complete:not(:last-child)::before {
+  background: var(--a0);
+}
+
+.lifetime-pricing__stage-step button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-sizing: border-box;
+  display: flex;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+  transition: transform 260ms ease;
+  width: 42px;
+  z-index: 1;
+}
+
+.lifetime-pricing__stage-step button:hover {
+  transform: translateY(-2px);
+}
+
+.lifetime-pricing__stage-step button:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--a0) 58%, transparent);
+  outline-offset: 4px;
+}
+
+.lifetime-pricing__stage-step button > span {
+  background: color-mix(in srgb, var(--c4) 4%, var(--b0));
+  border: 2px solid color-mix(in srgb, var(--c4) 42%, transparent);
+  border-radius: 999px;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--c4) 10%, transparent);
+  box-sizing: border-box;
+  display: block;
+  height: 8px;
+  transition: background-color 260ms ease, border-color 260ms ease, box-shadow 260ms ease, height 260ms ease, opacity 260ms ease, width 260ms ease;
+  width: 26px;
+}
+
+.lifetime-pricing__stage-step button:hover > span,
+.lifetime-pricing__stage-step button:focus-visible > span {
+  border-color: color-mix(in srgb, var(--a0) 58%, transparent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--a0) 9%, transparent),
+    0 0 16px color-mix(in srgb, var(--a0) 18%, transparent);
+}
+
+.lifetime-pricing__stage-step--complete button,
+.lifetime-pricing__stage-step--current button {
+  border-color: transparent;
+}
+
+.lifetime-pricing__stage-step--complete button > span,
+.lifetime-pricing__stage-step--current button > span {
+  background: var(--a0);
+  border-color: var(--a0);
+}
+
+.lifetime-pricing__stage-step--current button > span {
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--a0) 18%, transparent),
+    0 0 18px color-mix(in srgb, var(--a0) 42%, transparent),
+    0 0 34px color-mix(in srgb, var(--a0) 18%, transparent);
+  height: 10px;
+}
+
+.lifetime-pricing__stage-step > span {
+  color: var(--c4);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  transition: color 260ms ease, transform 260ms ease;
+}
+
+.lifetime-pricing__stage-step--current > span,
+.lifetime-pricing__stage-step--complete > span {
+  color: var(--a0);
+}
+
+.lifetime-pricing__stage-step--current > span {
+  transform: translateY(-1px);
+}
+
+@media (max-width: 900px) {
+  .lifetime-pricing {
+    grid-template-areas:
+      "header"
+      "quote"
+      "progress";
+    grid-template-columns: 1fr;
+    padding: 64px 22px;
+    row-gap: 38px;
+  }
+
+  .lifetime-pricing__quote {
+    gap: 18px;
+  }
+
+  .lifetime-pricing__stage-control {
+    justify-content: start;
+  }
+
+  .lifetime-pricing__stage-progress {
+    margin-top: 12px;
+  }
+
+  .lifetime-pricing__stage-step button {
+    height: 42px;
+    width: 42px;
+  }
+
+  .lifetime-pricing__stage-step:not(:last-child)::before {
+    top: 20px;
+  }
+
+  .lifetime-pricing__stage-step > span {
+    font-size: 14px;
+  }
+}
+
+.lifetime-pricing {
+  align-items: stretch;
+  display: grid;
+  gap: clamp(34px, 5vw, 58px);
+  grid-template-areas:
+    "header card"
+    "progress card";
+  grid-template-columns: minmax(0, 760px) minmax(320px, 480px);
+  justify-content: center;
+  justify-items: stretch;
+  padding: clamp(72px, 10vw, 120px) clamp(28px, 6vw, 72px);
+}
+
+.lifetime-pricing__header {
+  grid-area: header;
+  justify-items: start;
+  max-width: 760px;
+  text-align: left;
+}
+
+.lifetime-pricing__header > span {
+  color: var(--a0);
+  font-family: 'rajdhani', 'body';
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.lifetime-pricing__header h2 {
+  color: var(--c1);
+  font-family: 'display';
+  font-size: 44px;
+  font-weight: 410;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  margin: 0;
+  text-align: left;
+}
+
+.lifetime-pricing__header h2 span {
+  color: var(--a0);
+  white-space: nowrap;
+}
+
+.lifetime-pricing__stage-progress {
+  grid-area: progress;
+  margin: 0;
+  max-width: 760px;
+  width: min(100%, 760px);
+}
+
+.lifetime-pricing > .lifetime-pricing__card {
+  align-self: center;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  grid-area: card;
+  max-width: 480px;
+  padding: 0;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .lifetime-pricing {
+    grid-template-areas:
+      "header"
+      "progress"
+      "card";
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+
+  .lifetime-pricing > .lifetime-pricing__card {
+    max-width: 720px;
+  }
+}
+
+.lifetime-pricing {
+  align-items: center;
+  display: grid;
+  gap: 0;
+  grid-template-areas: none;
+  grid-template-columns: 1fr;
+  justify-content: center;
+  justify-items: center;
+  min-height: 560px;
+  padding: clamp(42px, 5vw, 70px) clamp(28px, 6vw, 72px);
+  position: relative;
+}
+
+.lifetime-pricing__bento,
+.lifetime-pricing > .lifetime-pricing__card {
+  background: var(--b0);
+  border: 1px solid color-mix(in srgb, var(--c4) 10%, transparent);
+  border-bottom: 0;
+  box-sizing: border-box;
+  min-height: 420px;
+  outline: 0;
+}
+
+.lifetime-pricing__bento--timeline {
+  align-content: center;
+  display: grid;
+  gap: 56px;
+  grid-area: timeline;
+  padding: clamp(34px, 4vw, 54px);
+}
+
+.lifetime-pricing__bento--timeline > .lifetime-pricing__header,
+.lifetime-pricing__bento--timeline > .lifetime-pricing__stage-progress {
+  grid-area: auto;
+}
+
+.lifetime-pricing__header {
+  justify-items: start;
+  max-width: 660px;
+  text-align: left;
+}
+
+.lifetime-pricing__header h2 {
+  color: var(--c1);
+  font-family: 'display';
+  font-size: 44px;
+  font-weight: 410;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  margin: 0;
+  text-align: left;
+}
+
+.lifetime-pricing__headline-stage {
+  align-items: center;
+  color: var(--a0);
+  display: inline-flex;
+  position: relative;
+  vertical-align: baseline;
+}
+
+.lifetime-pricing__headline-stage select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--a0);
+  field-sizing: content;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  margin: 0;
+  outline: none;
+  padding: 0 0.55em 0 0;
+}
+
+.lifetime-pricing__headline-stage option {
+  background: var(--b0);
+  color: var(--c1);
+}
+
+.lifetime-pricing__headline-stage svg {
+  color: var(--a0);
+  height: 0.38em;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-35%);
+  width: 0.38em;
+}
+
+.lifetime-pricing__stage-progress {
+  margin: 0;
+  max-width: 660px;
+  width: 100%;
+}
+
+.lifetime-pricing > .lifetime-pricing__card {
+  align-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: grid;
+  grid-area: auto;
+  max-width: 434px;
+  padding: 0;
+  position: absolute;
+  text-align: left;
+  width: min(100%, 434px);
+}
+
+.lifetime-pricing > .lifetime-pricing__card--free {
+  opacity: 0.72;
+  transform: translate(-180px, 8px) scale(0.94);
+  z-index: 1;
+}
+
+.lifetime-pricing > .lifetime-pricing__card--paid {
+  transform: translate(180px, -20px);
+  z-index: 2;
+}
+
+.lifetime-pricing > .lifetime-pricing__card::before,
+.lifetime-pricing > .lifetime-pricing__card::after {
+  content: none;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+.lifetime-pricing > .lifetime-pricing__card::before {
+  background-image: repeating-linear-gradient(to right, color-mix(in srgb, var(--c4) 22%, transparent) 0 7px, transparent 7px 26px);
+  height: 1px;
+  left: 0;
+  right: 0;
+  top: 50%;
+}
+
+.lifetime-pricing > .lifetime-pricing__card::after {
+  background-image: repeating-linear-gradient(to bottom, color-mix(in srgb, var(--c4) 22%, transparent) 0 7px, transparent 7px 26px);
+  bottom: 0;
+  left: 50%;
+  top: 0;
+  width: 1px;
+}
+
+.lifetime-pricing__card-body {
+  align-self: center;
+  background: var(--b0);
+  border: 1px solid color-mix(in srgb, var(--c4) 14%, transparent);
+  border-radius: 24px;
+  box-sizing: border-box;
+  display: grid;
+  interpolate-size: allow-keywords;
+  justify-self: center;
+  max-width: 434px;
+  padding: 34px;
+  position: relative;
+  row-gap: 28px;
+  transition:
+    width 220ms ease,
+    max-width 220ms ease,
+    min-height 220ms ease,
+    padding 220ms ease;
+  width: 100%;
+  z-index: 1;
+}
+
+.lifetime-pricing__card-top > span {
+  color: var(--a0);
+  display: inline-flex;
+  font-family: 'rajdhani', 'body';
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.lifetime-pricing__card-top label {
+  align-items: center;
+  color: var(--a0);
+  display: inline-flex;
+  position: relative;
+  width: max-content;
+}
+
+.lifetime-pricing__card-top select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--a0);
+  font-family: 'rajdhani', 'body';
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  margin: 0;
+  outline: none;
+  padding: 0 16px 0 0;
+  text-transform: uppercase;
+}
+
+.lifetime-pricing__card-top select:focus-visible {
+  outline: 1px solid var(--a0);
+  outline-offset: 4px;
+}
+
+.lifetime-pricing__card-top option {
+  background: var(--b0);
+  color: var(--c1);
+}
+
+.lifetime-pricing__card-top svg {
+  color: var(--a0);
+  height: 14px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+}
+
+.lifetime-pricing__purchase {
+  display: grid;
+  gap: 35px;
+  margin-top: 0;
+}
+
+.lifetime-pricing__price-wrap {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  width: max-content;
+}
+
+.lifetime-pricing__price {
+  margin: 0 !important;
+}
+
+.lifetime-pricing__price span:first-child {
+  color: var(--c0);
+  font-family: 'display';
+  font-size: 44px;
+  font-weight: 410;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.lifetime-pricing__price-wrap > div p:first-child {
+  color: var(--c1);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.lifetime-pricing__price-wrap > div p:last-child {
+  color: var(--c4);
+  font-size: 15px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.lifetime-pricing__actions {
+  display: flex;
+  align-items: stretch;
+  flex-direction: row;
+  gap: 10px;
+  margin: 8px 0 0;
+  width: max-content;
+}
+
+.lifetime-pricing__primary-cta,
+.lifetime-pricing__secondary-cta {
+  align-items: center;
+  border-radius: 999px;
+  box-sizing: border-box;
+  cursor: default;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-family: 'body';
+  font-size: 14px;
+  font-weight: 700;
+  gap: 7px;
+  height: 30px;
+  justify-content: center;
+  letter-spacing: 0.045em;
+  line-height: 1;
+  margin: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 16px;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: background-color 220ms ease, border-color 220ms ease, color 220ms ease, transform 160ms ease;
+  white-space: nowrap;
+  width: max-content;
+}
+
+.lifetime-pricing__primary-cta {
+  background: var(--a0);
+  border: 0;
+  color: var(--b0);
+}
+
+.lifetime-pricing__secondary-cta {
+  background: var(--b1);
+  border: 1px solid color-mix(in srgb, var(--b4) 28%, transparent);
+  color: var(--c1);
+}
+
+.lifetime-pricing__feature-note {
+  border-top: 1px solid color-mix(in srgb, var(--c4) 10%, transparent);
+  color: var(--c4);
+  display: flex;
+  gap: 16px;
+  font-size: 15px;
+  line-height: 1.7;
+  margin-top: 0;
+  padding-top: 28px;
+}
+
+.lifetime-pricing__feature-note svg {
+  color: var(--a0);
+  fill: currentColor;
+  flex: 0 0 auto;
+  height: 48px;
+  width: 48px;
+}
+
+.lifetime-pricing__feature-note p {
+  margin: 0;
+}
+
+.lifetime-pricing__feature-note strong {
+  color: var(--c1);
+  font-weight: 700;
+}
+
+.pricing-faq {
+  background: var(--b0);
+  box-sizing: border-box;
+}
+
+.pricing-faq__list {
+  box-sizing: border-box;
+}
+
+.pricing-faq__list {
+  margin: 0;
+}
+
+.pricing-faq__item {
+  border-bottom: 1px solid color-mix(in srgb, var(--c4) 10%, transparent);
+  box-sizing: border-box;
+  display: block;
+}
+
+.pricing-faq__item:last-child {
+  border-bottom: 0;
+}
+
+.pricing-faq__item dt {
+  margin: 0;
+}
+
+.pricing-faq__trigger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  box-sizing: border-box;
+  color: var(--c1);
+  display: grid;
+  font-family: 'display';
+  font-size: 18px;
+  font-weight: 450;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  line-height: 1.12;
+  padding: 30px clamp(24px, 4vw, 48px);
+  text-align: left;
+  width: 100%;
+}
+
+.pricing-faq__chevron {
+  color: var(--c4);
+  display: block;
+  height: 20px;
+  opacity: 0.76;
+  transition: transform 180ms ease, opacity 180ms ease;
+  width: 20px;
+}
+
+.pricing-faq__trigger[aria-expanded="true"] .pricing-faq__chevron {
+  opacity: 1;
+  transform: rotate(180deg);
+}
+
+.pricing-faq__item p {
+  color: var(--c4);
+  font-size: 17px;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 680px;
+}
+
+.pricing-faq__item dd {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin: 0;
+  overflow: hidden;
+  padding: 0 clamp(24px, 4vw, 48px);
+  transition: grid-template-rows 220ms ease, padding-bottom 220ms ease;
+}
+
+.pricing-faq__item dd.pricing-faq__panel--open {
+  grid-template-rows: 1fr;
+  padding-bottom: 30px;
+}
+
+.pricing-faq__panel-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1030px) {
+  .lifetime-pricing {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 760px;
+  }
+
+  .lifetime-pricing__bento,
+  .lifetime-pricing > .lifetime-pricing__card {
+    min-height: 0;
+  }
+
+  .lifetime-pricing > .lifetime-pricing__card--free {
+    transform: translate(-70px, 32px) scale(0.94);
+  }
+
+  .lifetime-pricing > .lifetime-pricing__card--paid {
+    transform: translate(70px, -160px);
+  }
+
+  .lifetime-pricing__purchase {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lifetime-pricing__header h2 {
+    font-size: 28px;
+    line-height: 1.12;
+  }
+}
+
+@media (max-width: 900px) {
+  .lifetime-pricing {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+    padding: 34px 22px;
+    row-gap: 18px;
+  }
+
+  .lifetime-pricing__bento,
+  .lifetime-pricing > .lifetime-pricing__card {
+    min-height: 0;
+  }
+
+  .lifetime-pricing > .lifetime-pricing__card {
+    position: relative;
+  }
+
+  .lifetime-pricing > .lifetime-pricing__card--free,
+  .lifetime-pricing > .lifetime-pricing__card--paid {
+    opacity: 1;
+    transform: none;
+  }
+
+  .lifetime-pricing__purchase {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lifetime-pricing__header h2 {
+    font-size: 28px;
+    line-height: 1.12;
+  }
+
+  .pricing-faq__trigger {
+    gap: 14px;
+    padding: 24px 22px;
+  }
+
+  .pricing-faq__item dd {
+    padding: 0 22px;
+  }
+
+  .pricing-faq__item dd.pricing-faq__panel--open {
+    padding-bottom: 24px;
+  }
+}
+
+.lifetime-pricing {
+  align-content: start;
+  gap: clamp(54px, 7vw, 86px);
+  grid-template-rows: auto auto;
+  min-height: 0;
+}
+
+.lifetime-pricing__cards {
+  display: grid;
+  height: 500px;
+  justify-items: center;
+  position: relative;
+  width: min(100%, 920px);
+}
+
+.lifetime-pricing__cards > .lifetime-pricing__card {
+  align-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: grid;
+  max-width: 434px;
+  padding: 0;
+  position: absolute;
+  text-align: left;
+  top: 50%;
+  width: min(100%, 434px);
+}
+
+.lifetime-pricing__cards > .lifetime-pricing__card--free {
+  opacity: 0.72;
+  transform: translate(-245px, calc(-50% - 8px)) scale(0.94);
+  z-index: 1;
+}
+
+.lifetime-pricing__cards > .lifetime-pricing__card--paid {
+  transform: translate(205px, calc(-50% - 20px));
+  z-index: 2;
+}
+
+.lifetime-pricing > .lifetime-pricing__card {
+  position: static;
+  transform: none;
+}
+
+.lifetime-pricing__security {
+  align-items: center;
+  display: grid;
+  gap: clamp(28px, 4vw, 42px);
+  justify-items: center;
+  max-width: 860px;
+  text-align: center;
+  width: min(100%, 860px);
+}
+
+.lifetime-pricing__security-copy {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+}
+
+.lifetime-pricing__security-copy span {
+  color: var(--a0);
+  font-family: 'rajdhani', 'body';
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.lifetime-pricing__security-copy h2 {
+  color: var(--c1);
+  font-family: 'display';
+  font-size: clamp(39px, 5vw, 51px);
+  font-weight: 410;
+  letter-spacing: -0.015em;
+  line-height: 1.08;
+  margin: 0;
+}
+
+.lifetime-pricing__security-copy p {
+  color: var(--c4);
+  font-size: 20px;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 660px;
+}
+
+.lifetime-pricing__security-badges {
+  align-items: center;
+  color: color-mix(in srgb, var(--c2) 78%, var(--c4));
+  display: flex;
+  gap: clamp(26px, 5vw, 46px);
+  justify-content: center;
+  opacity: 0.78;
+}
+
+.lifetime-pricing__security-badges svg {
+  display: block;
+  height: clamp(82px, 10vw, 112px);
+  width: clamp(82px, 10vw, 112px);
+}
+
+@media (max-width: 1030px) {
+  .lifetime-pricing__cards {
+    height: 560px;
+  }
+
+  .lifetime-pricing__cards > .lifetime-pricing__card--free {
+    transform: translate(-86px, calc(-50% + 12px)) scale(0.94);
+  }
+
+  .lifetime-pricing__cards > .lifetime-pricing__card--paid {
+    transform: translate(86px, calc(-50% - 160px));
+  }
+}
+
+@media (max-width: 900px) {
+  .lifetime-pricing {
+    gap: 36px;
+  }
+
+  .lifetime-pricing__cards {
+    gap: 18px;
+    height: auto;
+  }
+
+  .lifetime-pricing__cards > .lifetime-pricing__card {
+    max-width: 720px;
+    position: relative;
+    top: auto;
+  }
+
+  .lifetime-pricing__cards > .lifetime-pricing__card--free,
+  .lifetime-pricing__cards > .lifetime-pricing__card--paid {
+    opacity: 1;
+    transform: none;
+  }
+
+  .lifetime-pricing__security-copy h2 {
+    font-size: 38px;
+  }
+
+  .lifetime-pricing__security-copy p {
+    font-size: 18px;
+  }
+
+  .lifetime-pricing__security-badges svg {
+    height: 68px;
+    width: 68px;
+  }
+}

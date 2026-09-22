@@ -105,6 +105,11 @@ export function BuildingStep(props: {
   let sceneEl: HTMLDivElement | undefined;
 
   onMount(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const timer = setTimeout(() => props.onDone(null), 300);
+      onCleanup(() => clearTimeout(timer));
+      return;
+    }
     // The hold scales 5s → 15s with the connected count (maxing out past two
     // accounts); the whole theatrical timeline compresses by `scale` to fit.
     const n = modules.length;

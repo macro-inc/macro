@@ -6,6 +6,7 @@ verified live against a local stack (`just run_local`).
 
 | File | Contents |
 | --- | --- |
+| [onboarding.md](onboarding.md) | New-account setup, connector catalog, team invitations, and replayable view tours |
 | [login.md](login.md) | Passwordless login end to end, Mailpit, known crash + recovery |
 | [navigation.md](navigation.md) | Routes, sidebar, command menu, keyboard model, splits |
 | [documents.md](documents.md) | Creating docs, typing in the editor, AI edit, comments, side panel |

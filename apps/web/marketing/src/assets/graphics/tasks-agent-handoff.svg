@@ -1,0 +1,182 @@
+<svg width="400" height="365" viewBox="0 0 400 365" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<rect width="400" height="131" rx="14.5" fill="url(#tasks-agent-handoff-paint0_linear_769_12929)"/>
+<rect x="0.5" y="0.5" width="399" height="130" rx="14" fill="#060709"/>
+<rect x="14.5" y="17.5" width="24" height="24" rx="12" fill="url(#tasks-agent-handoff-pattern0_769_12929)"/>
+<g clip-path="url(#tasks-agent-handoff-clip0_769_12929)">
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="48.6514" y="27.1364">Gabriel</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="346.786" y="27.1364">9:41 AM</tspan></text>
+</g>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="88.1875" y="43.1364"> can you take </tspan></text>
+<text fill="#FF8F00" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="48.5" y="43.1364">@Macro</tspan></text>
+<path d="M156.375 35.8125H155C154.448 35.8125 154 36.2602 154 36.8125V38.1875C154 38.7398 154.448 39.1875 155 39.1875H156.375C156.927 39.1875 157.375 38.7398 157.375 38.1875V36.8125C157.375 36.2602 156.927 35.8125 156.375 35.8125Z" stroke="#15DA43" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M154 41.1433L155.507 42.7933L157.867 40.4333" stroke="#15DA43" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M159.125 37.5H165.125" stroke="#15DA43" stroke-width="0.8" stroke-linecap="round"/>
+<path d="M159.125 41.5625H165.125" stroke="#15DA43" stroke-width="0.8" stroke-linecap="round"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em" text-decoration="underline"><tspan x="167.5" y="43.1364">Fix pricing step drop-off</tspan></text>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M290.5 35.5C292.707 35.5 294.5 37.2933 294.5 39.5C294.5 41.7067 292.707 43.5 290.5 43.5C288.293 43.5 286.5 41.7067 286.5 39.5C286.5 37.2933 288.293 35.5 290.5 35.5ZM290.5 36.7C292.047 36.7 293.3 37.9533 293.3 39.5C293.3 41.0467 292.047 42.3 290.5 42.3C288.953 42.3 287.7 41.0467 287.7 39.5C287.7 37.9533 288.953 36.7 290.5 36.7Z" fill="#FFAE00"/>
+<path d="M290.5 35.5C288.293 35.5 286.5 37.2933 286.5 39.5C286.5 41.7067 288.293 43.5 290.5 43.5V35.5Z" fill="#FFAE00"/>
+<path d="M298.5 39.5H300.583V42.8333H298.812C298.642 42.8333 298.5 42.6444 298.5 42.4167V39.5Z" fill="#BFBFBF"/>
+<path d="M304.541 37.8333H302.458V42.8333H304.541V37.8333Z" fill="#BFBFBF"/>
+<path d="M306.417 36.1667H308.188C308.359 36.1667 308.5 36.35 308.5 36.5833V42.8333H306.417V36.1667Z" fill="#BFBFBF"/>
+<rect x="310.5" y="34.5" width="10" height="10" rx="5" fill="url(#tasks-agent-handoff-pattern1_769_12929)"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="322.5" y="43.1364">?</tspan></text>
+<rect x="47" y="34" width="43" height="12" rx="2" fill="#FF8F00" fill-opacity="0.2"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="48.5" y="57.1364">I&#x2019;m heads down on launch prep.</tspan></text>
+<rect x="14.75" y="77.75" width="22.5" height="22.5" rx="11.25" fill="black"/>
+<rect x="14.75" y="77.75" width="22.5" height="22.5" rx="11.25" stroke="#353535" stroke-width="0.5"/>
+<path d="M19 87.8415V91.8087C19.0035 91.9217 19.0505 92.0289 19.1313 92.108L20.7308 93.6503L21.8986 93.1837V89.0426L20.1661 87.3748L19 87.8415Z" fill="#FF8F00"/>
+<path d="M21.3789 84.8V88.1752L22.1722 88.9388V89.7047L26.2807 93.6667L27.4485 93.2L27.4479 89.0583L22.5456 84.3333L21.3789 84.8Z" fill="#FF8F00"/>
+<path d="M26.9297 84.8V88.1752L27.723 88.9399L27.7154 89.6983L31.8332 93.6667L32.9999 93.2V89.245C32.9997 89.1871 32.9879 89.1298 32.9654 89.0764C32.9429 89.023 32.91 88.9746 32.8686 88.9341L28.0969 84.3333L26.9297 84.8Z" fill="#FF8F00"/>
+<g clip-path="url(#tasks-agent-handoff-clip1_769_12929)">
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="47.7998" y="87.1364">Macro</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="81.9229" y="87.1364">Agent</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="346.786" y="87.1364">9:41 AM</tspan></text>
+</g>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="47.5" y="103.136">Sure thing &#x2014; I&#x2019;ll update the task as I got and hand it back for review.</tspan></text>
+<g class="tah-card"><rect y="195" width="400" height="170" rx="14.5" fill="url(#tasks-agent-handoff-paint1_linear_769_12929)"/>
+<rect x="0.5" y="195.5" width="399" height="169" rx="14" fill="#060709"/>
+<path d="M20.8125 211.469H18.75C17.9216 211.469 17.25 212.14 17.25 212.969V215.031C17.25 215.86 17.9216 216.531 18.75 216.531H20.8125C21.6409 216.531 22.3125 215.86 22.3125 215.031V212.969C22.3125 212.14 21.6409 211.469 20.8125 211.469Z" stroke="#15DA43" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.25 219.465L19.51 221.94L23.05 218.4" stroke="#15DA43" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M24.9375 214H33.9375" stroke="#15DA43" stroke-linecap="round"/>
+<path d="M24.9375 220.094H33.9375" stroke="#15DA43" stroke-linecap="round"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="38.9307" y="220.636">Fix pricing step drop-off</tspan></text>
+<g clip-path="url(#tasks-agent-handoff-clip2_769_12929)">
+<rect x="276.75" y="208.75" width="31.5" height="16.5" rx="8.25" fill="#16191F"/>
+<rect x="276.75" y="208.75" width="31.5" height="16.5" rx="8.25" stroke="#353535" stroke-width="0.5"/>
+<g clip-path="url(#tasks-agent-handoff-clip3_769_12929)">
+<g clip-path="url(#tasks-agent-handoff-clip4_769_12929)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M286 212C288.758 212 291 214.242 291 217C291 219.758 288.758 222 286 222C283.242 222 281 219.758 281 217C281 214.242 283.242 212 286 212ZM286 213.5C287.933 213.5 289.5 215.067 289.5 217C289.5 218.933 287.933 220.5 286 220.5C284.067 220.5 282.5 218.933 282.5 217C282.5 215.067 284.067 213.5 286 213.5Z" fill="#ECC7FF"/>
+<path d="M286 212C283.242 212 281 214.242 281 217C281 219.758 283.242 222 286 222C288.758 222 291 219.758 291 217H286V212Z" fill="#ECC7FF"/>
+</g>
+</g>
+<path d="M301.765 216.265L299.265 218.765C299.23 218.8 299.189 218.828 299.143 218.847C299.098 218.866 299.049 218.876 299 218.876C298.95 218.876 298.901 218.866 298.856 218.847C298.81 218.828 298.769 218.8 298.734 218.765L296.234 216.265C296.164 216.195 296.124 216.099 296.124 216C296.124 215.9 296.164 215.805 296.234 215.734C296.304 215.664 296.4 215.624 296.5 215.624C296.599 215.624 296.695 215.664 296.765 215.734L299 217.969L301.235 215.734C301.305 215.663 301.401 215.624 301.5 215.624C301.6 215.624 301.695 215.663 301.766 215.734C301.836 215.804 301.876 215.9 301.876 215.999C301.876 216.099 301.836 216.195 301.766 216.265L301.765 216.265Z" fill="white"/>
+<rect x="316.75" y="207.75" width="33.5" height="18.5" rx="9.25" fill="#16191F"/>
+<rect x="316.75" y="207.75" width="33.5" height="18.5" rx="9.25" stroke="#353535" stroke-width="0.5"/>
+<path d="M321 217H323.5V221H321.375C321.17 221 321 220.773 321 220.5V217Z" fill="#BFBFBF"/>
+<path d="M328.25 215H325.75V221H328.25V215Z" fill="#BFBFBF"/>
+<path d="M330.5 213H332.625C332.83 213 333 213.22 333 213.5V221H330.5V213Z" fill="#BFBFBF"/>
+<path d="M343.765 216.265L341.265 218.765C341.23 218.8 341.189 218.828 341.143 218.847C341.098 218.866 341.049 218.876 341 218.876C340.95 218.876 340.901 218.866 340.856 218.847C340.81 218.828 340.769 218.8 340.734 218.765L338.234 216.265C338.164 216.195 338.124 216.099 338.124 216C338.124 215.9 338.164 215.805 338.234 215.734C338.304 215.664 338.4 215.624 338.5 215.624C338.599 215.624 338.695 215.664 338.765 215.734L341 217.969L343.235 215.734C343.305 215.663 343.401 215.624 343.5 215.624C343.6 215.624 343.695 215.663 343.766 215.734C343.836 215.804 343.876 215.9 343.876 215.999C343.876 216.099 343.836 216.195 343.766 216.265L343.765 216.265Z" fill="white"/>
+<rect x="358.75" y="207.75" width="32.5" height="18.5" rx="9.25" fill="#16191F"/>
+<rect x="358.75" y="207.75" width="32.5" height="18.5" rx="9.25" stroke="#353535" stroke-width="0.5"/>
+<rect x="361.5" y="210.5" width="13" height="13" rx="6.5" fill="url(#tasks-agent-handoff-pattern2_769_12929)" stroke="#16191F"/>
+<path d="M384.765 216.265L382.265 218.765C382.23 218.8 382.189 218.828 382.143 218.847C382.098 218.866 382.049 218.876 382 218.876C381.95 218.876 381.901 218.866 381.856 218.847C381.81 218.828 381.769 218.8 381.734 218.765L379.234 216.265C379.164 216.195 379.124 216.099 379.124 216C379.124 215.9 379.164 215.805 379.234 215.734C379.304 215.664 379.4 215.624 379.5 215.624C379.599 215.624 379.695 215.664 379.765 215.734L382 217.969L384.235 215.734C384.305 215.663 384.401 215.624 384.5 215.624C384.6 215.624 384.695 215.663 384.766 215.734C384.836 215.804 384.876 215.9 384.876 215.999C384.876 216.099 384.836 216.195 384.766 216.265L384.765 216.265Z" fill="white"/>
+</g>
+<g clip-path="url(#tasks-agent-handoff-clip5_769_12929)">
+<line x1="8.5" y1="247.25" x2="17.5" y2="247.25" stroke="#353535" stroke-width="0.5"/>
+<path d="M28.2653 246.765L25.7653 249.265C25.7305 249.3 25.6891 249.328 25.6435 249.347C25.5979 249.366 25.549 249.376 25.4997 249.376C25.4503 249.376 25.4014 249.366 25.3559 249.347C25.3103 249.328 25.2689 249.3 25.234 249.265L22.734 246.765C22.6636 246.695 22.624 246.599 22.624 246.5C22.624 246.4 22.6636 246.305 22.734 246.234C22.8045 246.164 22.9 246.124 22.9997 246.124C23.0993 246.124 23.1949 246.164 23.2653 246.234L25.5 248.469L27.7347 246.234C27.8051 246.163 27.9007 246.124 28.0003 246.124C28.0999 246.124 28.1955 246.163 28.2659 246.234C28.3364 246.304 28.3759 246.4 28.3759 246.499C28.3759 246.599 28.3364 246.695 28.2659 246.765L28.2653 246.765Z" fill="#BFBFBF"/>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="8" letter-spacing="0em"><tspan x="33.8047" y="250.409">Activity</tspan></text>
+<line x1="66.5" y1="247.25" x2="391.5" y2="247.25" stroke="#353535" stroke-width="0.5"/>
+<line x1="25.25" y1="253" x2="25.25" y2="348" stroke="#353535" stroke-width="0.5"/>
+<g clip-path="url(#tasks-agent-handoff-clip6_769_12929)">
+<rect x="16.75" y="260.75" width="17.5" height="17.5" rx="8.75" fill="black"/>
+<rect x="16.75" y="260.75" width="17.5" height="17.5" rx="8.75" stroke="#353535" stroke-width="0.5"/>
+<g clip-path="url(#tasks-agent-handoff-clip7_769_12929)">
+<path d="M20.5 268.672V271.506C20.5025 271.587 20.5361 271.664 20.5938 271.72L21.7363 272.822L22.5704 272.488V269.53L21.3329 268.339L20.5 268.672Z" fill="#FF8F00"/>
+<path d="M22.1992 266.5V268.911L22.7659 269.456V270.003L25.7005 272.833L26.5346 272.5L26.5342 269.542L23.0326 266.167L22.1992 266.5Z" fill="#FF8F00"/>
+<path d="M26.1641 266.5V268.911L26.7307 269.457L26.7253 269.999L29.6666 272.833L30.4999 272.5V269.675C30.4998 269.634 30.4914 269.593 30.4753 269.555C30.4592 269.516 30.4357 269.482 30.4061 269.453L26.9978 266.167L26.1641 266.5Z" fill="#FF8F00"/>
+</g>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="8" letter-spacing="0em"><tspan x="38.7266" y="272.409">Updated the description with repro steps</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="8" letter-spacing="0em"><tspan x="359.527" y="268.409">9:42 AM</tspan></text>
+</g>
+<g clip-path="url(#tasks-agent-handoff-clip8_769_12929)">
+<rect x="16.75" y="286.75" width="17.5" height="17.5" rx="8.75" fill="black"/>
+<rect x="16.75" y="286.75" width="17.5" height="17.5" rx="8.75" stroke="#353535" stroke-width="0.5"/>
+<g clip-path="url(#tasks-agent-handoff-clip9_769_12929)">
+<path d="M20.5 294.673V297.506C20.5025 297.587 20.5361 297.664 20.5938 297.72L21.7363 298.822L22.5704 298.488V295.53L21.3329 294.339L20.5 294.673Z" fill="#FF8F00"/>
+<path d="M22.1992 292.5V294.911L22.7659 295.456V296.003L25.7005 298.833L26.5346 298.5L26.5342 295.542L23.0326 292.167L22.1992 292.5Z" fill="#FF8F00"/>
+<path d="M26.1641 292.5V294.911L26.7307 295.457L26.7253 295.999L29.6666 298.833L30.4999 298.5V295.675C30.4998 295.634 30.4914 295.593 30.4753 295.555C30.4592 295.516 30.4357 295.482 30.4061 295.453L26.9978 292.167L26.1641 292.5Z" fill="#FF8F00"/>
+</g>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="8" letter-spacing="0em"><tspan x="38.9141" y="298.409">Commented: root cause is the coupon validator</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="8" letter-spacing="0em"><tspan x="359.617" y="294.409">9:58 AM</tspan></text>
+</g>
+<g clip-path="url(#tasks-agent-handoff-clip10_769_12929)">
+<rect x="16.75" y="312.75" width="17.5" height="17.5" rx="8.75" fill="black"/>
+<rect x="16.75" y="312.75" width="17.5" height="17.5" rx="8.75" stroke="#353535" stroke-width="0.5"/>
+<g clip-path="url(#tasks-agent-handoff-clip11_769_12929)">
+<path d="M20.5 320.673V323.506C20.5025 323.587 20.5361 323.664 20.5938 323.72L21.7363 324.822L22.5704 324.488V321.53L21.3329 320.339L20.5 320.673Z" fill="#FF8F00"/>
+<path d="M22.1992 318.5V320.911L22.7659 321.456V322.003L25.7005 324.833L26.5346 324.5L26.5342 321.542L23.0326 318.167L22.1992 318.5Z" fill="#FF8F00"/>
+<path d="M26.1641 318.5V320.911L26.7307 321.457L26.7253 321.999L29.6666 324.833L30.4999 324.5V321.675C30.4998 321.634 30.4914 321.593 30.4753 321.555C30.4592 321.516 30.4357 321.482 30.4061 321.453L26.9978 318.167L26.1641 318.5Z" fill="#FF8F00"/>
+</g>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="8" letter-spacing="0em"><tspan x="38.6562" y="324.409">Opened a fix PR: </tspan></text>
+<g clip-path="url(#tasks-agent-handoff-clip12_769_12929)">
+<path d="M109.5 317.599C107.29 317.599 105.5 319.39 105.5 321.599C105.5 323.367 106.646 324.866 108.235 325.394C108.435 325.432 108.508 325.308 108.508 325.202C108.508 325.107 108.505 324.855 108.503 324.522C107.391 324.763 107.156 323.985 107.156 323.985C106.974 323.523 106.711 323.4 106.711 323.4C106.349 323.152 106.739 323.157 106.739 323.157C107.141 323.185 107.352 323.569 107.352 323.569C107.708 324.181 108.288 324.004 108.517 323.902C108.553 323.643 108.656 323.467 108.77 323.367C107.882 323.267 106.948 322.923 106.948 321.39C106.948 320.953 107.103 320.597 107.36 320.317C107.315 320.216 107.18 319.809 107.395 319.258C107.395 319.258 107.73 319.151 108.495 319.668C108.815 319.579 109.155 319.535 109.495 319.533C109.835 319.535 110.175 319.579 110.495 319.668C111.255 319.151 111.59 319.258 111.59 319.258C111.805 319.809 111.67 320.216 111.63 320.317C111.885 320.597 112.04 320.953 112.04 321.39C112.04 322.927 111.105 323.265 110.215 323.363C110.355 323.483 110.485 323.729 110.485 324.103C110.485 324.639 110.48 325.069 110.48 325.199C110.48 325.304 110.55 325.429 110.755 325.389C112.355 324.864 113.5 323.364 113.5 321.599C113.5 319.39 111.709 317.599 109.5 317.599Z" fill="#BFBFBF"/>
+</g>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="8" letter-spacing="0em" text-decoration="underline"><tspan x="115.992" y="324.409">fix(onboarding): coupon validator fallback</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="8" letter-spacing="0em"><tspan x="356.727" y="320.409">10:14 AM</tspan></text>
+</g>
+<g clip-path="url(#tasks-agent-handoff-clip13_769_12929)">
+<g clip-path="url(#tasks-agent-handoff-clip14_769_12929)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M25.5 342.5C28.2583 342.5 30.5 344.742 30.5 347.5C30.5 350.258 28.2583 352.5 25.5 352.5C22.7417 352.5 20.5 350.258 20.5 347.5C20.5 344.742 22.7417 342.5 25.5 342.5ZM25.5 344C27.4333 344 29 345.567 29 347.5C29 349.433 27.4333 351 25.5 351C23.5667 351 22 349.433 22 347.5C22 345.567 23.5667 344 25.5 344Z" fill="#C589E2"/>
+<path d="M25.5 342.5C22.7417 342.5 20.5 344.742 20.5 347.5C20.5 350.258 22.7417 352.5 25.5 352.5C28.2583 352.5 30.5 350.258 30.5 347.5H25.5V342.5Z" fill="#C589E2"/>
+</g>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="8" letter-spacing="0em"><tspan x="38.5117" y="350.409">Moved to In Review &#x2022; handed back to Gabriel</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="8" letter-spacing="0em"><tspan x="356.859" y="346.409">10:15 AM</tspan></text>
+</g>
+</g></g>
+<g class="tah-arrow"><path d="M200.5 132C200.5 131.724 200.276 131.5 200 131.5C199.724 131.5 199.5 131.724 199.5 132H200H200.5ZM199.5 194C199.5 194.276 199.724 194.5 200 194.5C200.276 194.5 200.5 194.276 200.5 194H200H199.5ZM200 132H199.5V132.969H200H200.5V132H200ZM200 134.906H199.5V136.844H200H200.5V134.906H200ZM200 138.781H199.5V140.719H200H200.5V138.781H200ZM200 142.656H199.5V144.594H200H200.5V142.656H200ZM200 146.531H199.5V148.469H200H200.5V146.531H200ZM200 150.406H199.5V152.344H200H200.5V150.406H200ZM200 154.281H199.5V156.219H200H200.5V154.281H200ZM200 158.156H199.5V160.094H200H200.5V158.156H200ZM200 162.031H199.5V163.969H200H200.5V162.031H200ZM200 165.906H199.5V167.844H200H200.5V165.906H200ZM200 169.781H199.5V171.719H200H200.5V169.781H200ZM200 173.656H199.5V175.594H200H200.5V173.656H200ZM200 177.531H199.5V179.469H200H200.5V177.531H200ZM200 181.406H199.5V183.344H200H200.5V181.406H200ZM200 185.281H199.5V187.219H200H200.5V185.281H200ZM200 189.156H199.5V191.094H200H200.5V189.156H200ZM200 193.031H199.5V194H200H200.5V193.031H200Z" fill="#8B8B8B"/></g>
+<defs>
+<pattern id="tasks-agent-handoff-pattern0_769_12929" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#tasks-agent-handoff-image0_769_12929" transform="translate(-0.166667) scale(0.00416667)"/>
+</pattern>
+<pattern id="tasks-agent-handoff-pattern1_769_12929" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#tasks-agent-handoff-image0_769_12929" transform="translate(-0.166667) scale(0.00416667)"/>
+</pattern>
+<pattern id="tasks-agent-handoff-pattern2_769_12929" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#tasks-agent-handoff-image0_769_12929" transform="translate(-0.166667) scale(0.00416667)"/>
+</pattern>
+<linearGradient id="tasks-agent-handoff-paint0_linear_769_12929" x1="200" y1="0" x2="200" y2="131" gradientUnits="userSpaceOnUse">
+<stop stop-color="#A2B2FF" stop-opacity="0.4"/>
+<stop offset="1" stop-color="#A2B2FF" stop-opacity="0.1"/>
+</linearGradient>
+<linearGradient id="tasks-agent-handoff-paint1_linear_769_12929" x1="200" y1="195" x2="200" y2="365" gradientUnits="userSpaceOnUse">
+<stop stop-color="#15DA43" stop-opacity="0.6"/>
+<stop offset="1" stop-color="#15DA43" stop-opacity="0.3"/>
+</linearGradient>
+<clipPath id="tasks-agent-handoff-clip0_769_12929">
+<rect width="337" height="12" fill="white" transform="translate(48.5 17.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip1_769_12929">
+<rect width="338" height="12" fill="white" transform="translate(47.5 77.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip2_769_12929">
+<rect width="123" height="27" fill="white" transform="translate(268.5 203.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip3_769_12929">
+<rect width="10" height="10" fill="white" transform="translate(281 212)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip4_769_12929">
+<rect width="10" height="10" fill="white" transform="translate(281 212)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip5_769_12929">
+<rect width="383" height="118" fill="white" transform="translate(8.5 238.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip6_769_12929">
+<rect width="375" height="18" fill="white" transform="translate(16.5 260.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip7_769_12929">
+<rect width="10" height="10" fill="white" transform="translate(20.5 264.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip8_769_12929">
+<rect width="375" height="18" fill="white" transform="translate(16.5 286.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip9_769_12929">
+<rect width="10" height="10" fill="white" transform="translate(20.5 290.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip10_769_12929">
+<rect width="375" height="18" fill="white" transform="translate(16.5 312.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip11_769_12929">
+<rect width="10" height="10" fill="white" transform="translate(20.5 316.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip12_769_12929">
+<rect width="8" height="8" fill="white" transform="translate(105.5 317.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip13_769_12929">
+<rect width="375" height="18" fill="white" transform="translate(16.5 338.5)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-clip14_769_12929">
+<rect width="10" height="10" fill="white" transform="translate(20.5 342.5)"/>
+</clipPath>
+<image id="tasks-agent-handoff-image0_769_12929" width="320" height="240" preserveAspectRatio="none" xlink:href="data:image/webp;base64,UklGRmgCAABXRUJQVlA4IFwCAACwDACdASo8AC0APj0aiUMiIaEYCq4AIAPEoAnTOOiz2q9vFz4/ol3hjebZcA31Nr3Zt/Zz2BUecsz2XOJFNuoSFridpFGfXbWFPTvIoZg0Q3Rpv9pqcHq8Sn9MYjpppdU0FM9Gkcjj8JsQpI96CAD+/twHxlSz6sOCxDQGyk9cSw8tfR3Sa4G6ANEv/jVqSdiO1znHsJZSGL3L0XbOVon+7WTlkITwrvJwnJDdKbrOIUQ9gsj34dcb6NseKlrxWarPkvAFjaF5/+jOFaIEQy5gfLP6Lbjr0vj5rT1WYxLT+Bc5HRXn2yB2V/D+ebxPzNvfUKHJly92uFbovmnG6mx4ouUoNZlC3/zPwiqIvW5/gNU50C33fhvIMtGyUG9IUEhxo3VzJG132aXBr5weB9ui/4LuixLfIHqk2v2hp8j6evzVD5aBSn8i6AS1O6t5LYzIcwySU39bSVPEwcCWS+qdJw0AcJ5pCAOYrCCvrTPhOqV5/Rc4+VfCk/IHAQpQIsWcDb/mZ5a5kgv/g+33BcaCI3U7k8aZNm9VnM2w0pHWwSJEQBoTzgH60ms+h0eqv8XQWqqK2d6zjQ9Un4X7A63CLGhlMLzbz1vZ2nVD0YKzr/I4mD/uLSzQ4rB2q4DAq5Kg703kzkhQXoBUuef/av7ohM4TM4JZTQQopFUpxdOsrZWEweRoxyxE7JHCw+LFtFyuBRI7wK/mGzYT8iUSzRSd8UvTr33GWLqqpw/WzCFzpYPAWNC6ppMmo2UezEuaKnkDdw5bc6zbnL/k1xycTyl5hWuMlY3tOmM6rEQA"/>
+</defs>
+</svg>

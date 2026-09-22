@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" style="overscroll-behavior: none; scrollbar-width: none; background-color: var(--b0, #000);">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>Macro — The Unified System for Work</title>
+    <!-- Default SEO tags. Tags marked data-seo are replaced per-route by the
+         prerender step (scripts/prerender.ts) and updated at runtime by
+         src/app/utils/utilSeo.ts. -->
+    <meta data-seo name="description" content="Macro brings your mail, messages, agents, tasks, calls, docs, and CRM into one interface with shared memory — with AI that separates signal from noise." />
+    <meta data-seo property="og:site_name" content="Macro" />
+    <meta data-seo property="og:title" content="Macro — The Unified System for Work" />
+    <meta data-seo property="og:description" content="Macro brings your mail, messages, agents, tasks, calls, docs, and CRM into one interface with shared memory — with AI that separates signal from noise." />
+    <meta data-seo property="og:type" content="website" />
+    <meta data-seo property="og:image" content="https://macro.com/og-image.jpg" />
+    <meta data-seo name="twitter:card" content="summary_large_image" />
+    <meta data-seo name="twitter:site" content="@macrodotcom" />
+    <!-- First-paint fonts download in parallel with the JS bundle instead of
+         after it executes (the SPA renders no text until then). -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/roboto-slab-variable.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/rajdhani-medium.woff2" />
+    <link rel="preconnect" href="https://www.googletagmanager.com" />
+    <link id="favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E"/>
+    <script>
+      if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq.disablePushState = true;
+        fbq('init', '639142540393286');
+        fbq('track', 'PageView');
+      }
+    </script>
+  </head>
+  <body>
+    <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=639142540393286&ev=PageView&noscript=1"/></noscript>
+    <div id="root"></div>
+    <script type="module" src="./src/app/main/index.tsx"></script>
+  </body>
+</html>

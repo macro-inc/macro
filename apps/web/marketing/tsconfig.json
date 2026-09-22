@@ -1,0 +1,25 @@
+{
+  "include": ["src/**/*", "scripts/prerender*.ts", "scripts/prerender*.tsx"],
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "jsxImportSource": "solid-js",
+    "moduleResolution": "bundler",
+    "types": ["vite-plugin-solid-svg/types-component-solid", "vite/client", "node"],
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "module": "ESNext",
+    "target": "ESNext",
+    "jsx": "preserve",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@animal/*": ["src/lib/animal/*"],
+      "@svggg/*": ["src/lib/svggg/*"],
+      "@theme/*": ["src/lib/theme/*"],
+      "@assets/*": ["src/assets/*"],
+      "@app/*": ["src/app/*"],
+    }
+  }
+}

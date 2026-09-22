@@ -1,0 +1,80 @@
+.feature-overview {
+  width: min(780px, calc(100vw - 40px));
+  margin-left: calc((100% - min(780px, 100vw - 40px)) / 2);
+}
+.feature-flow {
+  position: relative;
+  width: 100%;
+  height: clamp(280px, 36vw, 370px);
+  isolation: isolate;
+}
+.feature-flow-core {
+  position: absolute;
+  left: 48%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  color: var(--color-ink);
+
+}
+.feature-flow-core svg { width: 43px; height: 43px; }
+.feature-flow-node { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; }
+.feature-flow-node > span { position: absolute; top: calc(100% + 12px); font-size: 13px; color: var(--color-ink-muted); white-space: nowrap; }
+.feature-flow-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  color: var(--color-ink);
+}
+.feature-flow-icon {
+  background: color-mix(in srgb, var(--color-surface), var(--color-ink) 8%);
+}
+.feature-flow-core {
+  background: color-mix(in srgb, var(--color-surface), var(--color-ink) 12%);
+}
+.feature-flow-icon svg { width: 27px; height: 27px; }
+@media (max-width: 639px) {
+  .feature-flow { height: 280px; }
+  .feature-flow-core { width: 66px; height: 66px; }
+  .feature-flow-core svg { width: 33px; height: 33px; }
+  .feature-flow-icon { width: 54px; height: 54px; }
+  .feature-flow-icon svg { width: 21px; height: 21px; }
+  .feature-flow-node > span { font-size: 11px; top: calc(100% + 9px); }
+}
+
+/* Halo centers share the exact node coordinates, independently of icon surfaces. */
+.feature-flow-light {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.feature-flow-halo {
+  position: absolute;
+  width: clamp(200px, 48vw, 420px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--halo-color) 11%, transparent) 0%,
+    color-mix(in srgb, var(--halo-color) 7%, transparent) 22%,
+    color-mix(in srgb, var(--halo-color) 3%, transparent) 45%,
+    transparent 72%);
+}
+.feature-flow-halo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0.045;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23888' filter='url(%23n)' d='M0 0h160v160H0z'/%3E%3C/svg%3E");
+  mask-image: radial-gradient(circle, black 5%, transparent 70%);
+}

@@ -1,3 +1,4 @@
+import { isPublicSurface } from '@core/constant/publicSurface';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import {
   ConstantBackoff,
@@ -30,7 +31,7 @@ const ws = new WebsocketBuilder(SERVER_HOSTS['websocket-service'])
     interval: HEARTBEAT_INTERVAL,
     maxMissedHeartbeats: 3,
   })
-  .build();
+  .build({ autoConnect: !isPublicSurface });
 
 export const storageWS = ws;
 
@@ -47,7 +48,11 @@ function handleVisibilityChange() {
 // When the browser regains connectivity or a background tab becomes visible,
 // kick the connection immediately instead of waiting for heartbeat/backoff
 // timers, which may have been throttled while the tab was stale.
-if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+if (
+  !isPublicSurface &&
+  typeof window !== 'undefined' &&
+  typeof document !== 'undefined'
+) {
   window.addEventListener('online', reconnectIfDisconnected);
   document.addEventListener('visibilitychange', handleVisibilityChange);
 }

@@ -8,9 +8,11 @@ import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
+import { solidSvgOptions } from './marketing/vite.svgo';
 // @ts-ignore
 import { version } from './package.json';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
+import { marketingDev } from './scripts/marketing-dev';
 
 function readShortSha(): string {
   try {
@@ -84,10 +86,11 @@ export const createAppViteConfig = (): UserConfigFn => {
       },
       plugins: [
         // solidDevtools({ autoname: true }),
+        marketingDev(),
         solid(),
         wasm(),
         tailwind(),
-        solidSvg({ defaultAsComponent: true }),
+        solidSvg({ ...solidSvgOptions, defaultAsComponent: true }),
         tsconfigpaths({
           root: './',
         }),
@@ -207,7 +210,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         watch: {
           usePolling: true,
           interval: 100,
-          ignored: /(^|[\\/])target([\\/]|$)/,
+          ignored: /(^|[\\/])(target|dist-site|dist-site-prerender)([\\/]|$)/,
         },
         fs: {
           allow: [

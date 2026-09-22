@@ -15,7 +15,6 @@ import type { ToggleNonAdminInvitesResponse } from '@service-auth/generated/sche
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
-import { authKeys } from '../auth';
 import { queryClient } from '../client';
 import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -348,12 +347,21 @@ type CreateTeamWithInvitesArgs = {
   name: string;
   invites?: { email: string }[];
 };
-type CreateTeamWithInvitesContext = { previousTeams: Team[] | undefined };
+class TeamCreatedInvitesFailedError extends Error {
+  constructor(
+    readonly team: Team,
+    options: ErrorOptions
+  ) {
+    super(
+      'Your team was created, but invitations could not be sent. Retry from Team settings.',
+      options
+    );
+  }
+}
 type CreateTeamWithInvitesCallbacks = MutationCallbacks<
   Team,
   Error,
-  CreateTeamWithInvitesArgs,
-  CreateTeamWithInvitesContext
+  CreateTeamWithInvitesArgs
 >;
 
 export function useCreateTeamWithInvitesMutation(
@@ -366,54 +374,18 @@ export function useCreateTeamWithInvitesMutation(
       );
 
       if (invites && invites.length > 0) {
-        await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
+        try {
+          await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
+        } catch (cause) {
+          throw new TeamCreatedInvitesFailedError(team, { cause });
+        }
       }
 
       return team;
     },
 
-    ...withCallbacks<
-      Team,
-      Error,
-      CreateTeamWithInvitesArgs,
-      CreateTeamWithInvitesContext
-    >(
+    ...withCallbacks<Team, Error, CreateTeamWithInvitesArgs>(
       {
-        onMutate: async ({ name }) => {
-          await queryClient.cancelQueries({
-            queryKey: teamKeys.userTeams.queryKey,
-          });
-
-          const previousTeams = queryClient.getQueryData<Team[]>(
-            teamKeys.userTeams.queryKey
-          );
-
-          const userInfo = queryClient.getQueryData<{ userId: string }>(
-            authKeys.userInfo.queryKey
-          );
-
-          if (userInfo?.userId) {
-            const optimisticTeam: Team = {
-              id: `optimistic-${Date.now()}`,
-              name,
-              slug: 'MACRO', // optimisitc slug
-              owner_id: userInfo.userId,
-              crm_enabled: false,
-              auto_join_domain: null,
-              enterprise: false,
-              allow_non_admin_invites: true,
-              default_link_share: 'TEAM',
-            };
-
-            queryClient.setQueryData<Team[]>(
-              teamKeys.userTeams.queryKey,
-              (old) => (old ? [...old, optimisticTeam] : [optimisticTeam])
-            );
-          }
-
-          return { previousTeams };
-        },
-
         onSuccess: (_team, { invites }) => {
           invalidateUserTeams();
           const hasInvites = invites && invites.length > 0;
@@ -422,16 +394,21 @@ export function useCreateTeamWithInvitesMutation(
           );
         },
 
-        onError: (error, _args, context) => {
+        onError: (error) => {
+          if (error instanceof TeamCreatedInvitesFailedError) {
+            queryClient.setQueryData<Team[]>(
+              teamKeys.userTeams.queryKey,
+              (old) => [
+                ...(old ?? []).filter((team) => team.id !== error.team.id),
+                error.team,
+              ]
+            );
+            invalidateUserTeams();
+            toast.failure(error.message);
+            return;
+          }
           console.error('Failed to create team', error);
           toast.failure('Failed to create team');
-
-          if (context?.previousTeams) {
-            queryClient.setQueryData(
-              teamKeys.userTeams.queryKey,
-              context.previousTeams
-            );
-          }
         },
       },
       callbacks

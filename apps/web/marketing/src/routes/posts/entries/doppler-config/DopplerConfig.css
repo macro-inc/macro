@@ -1,0 +1,68 @@
+.dpl-post {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+}
+
+.dpl-post,
+.dpl-post * {
+  box-sizing: border-box;
+}
+
+.dpl-post a {
+  color: var(--a0);
+  text-decoration: none;
+}
+
+.dpl-post a:hover {
+  color: var(--c1);
+}
+
+.dpl-lede {
+  color: var(--c2);
+  font-size: 20px;
+  line-height: 1.6;
+}
+
+/* Brighter (near-white) emphasis without extra weight */
+.dpl-hl {
+  color: var(--c0);
+  font-weight: inherit;
+}
+
+.dpl-post ol.dpl-list {
+  line-height: 1.7;
+  margin: 0 0 20px;
+  padding-left: 1.4em;
+}
+
+.dpl-post .dpl-list li + li {
+  margin-top: 8px;
+}
+
+/* Rust config / CI snippets */
+.dpl-post pre.dpl-code {
+  background: color-mix(in srgb, var(--b1) 72%, var(--b0));
+  border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
+  border-radius: 10px;
+  color: var(--c3);
+  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-size: 14.5px;
+  line-height: 1.8;
+  margin: 26px 0;
+  overflow-x: auto;
+  padding: 16px 20px;
+  white-space: pre;
+}
+
+.dpl-post code {
+  color: var(--c1);
+  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-size: 0.95em;
+}
+
+/* Headings that are just a crate name shouldn't inherit inline-code sizing */
+.dpl-post h2 code {
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+}

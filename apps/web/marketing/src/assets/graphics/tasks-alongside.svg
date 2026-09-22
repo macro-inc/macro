@@ -1,0 +1,60 @@
+<svg width="321" height="101" viewBox="0 0 321 101" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+<rect x="20.5" y="0.25" width="299.5" height="28.5" rx="7.75" fill="#16191F"/>
+<rect x="20.5" y="0.25" width="299.5" height="28.5" rx="7.75" stroke="url(#tasks-alongside-paint0_linear_740_12456)" stroke-width="0.5"/>
+<path d="M33.6665 13.125H43.2915" stroke="#A2B2FF" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M33.2085 15.875H42.8335" stroke="#A2B2FF" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M35.729 17.9375L38.0207 11.0625" stroke="#A2B2FF" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M38.479 17.9375L40.7707 11.0625" stroke="#A2B2FF" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="50.75" y="18.1364">bug-reports</tspan></text>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="136.75" y="18.1364">Teo</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="158.75" y="18.1364">Confirmed on st</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="270.75" y="18.1364">3:11 PM</tspan></text>
+
+<rect x="20.25" y="72" width="300" height="28" rx="8" fill="#16191F"/>
+<rect x="20.25" y="72" width="300" height="28" rx="8" stroke="url(#tasks-alongside-paint1_linear_740_12456)" stroke-width="0.5"/>
+<path d="M41.8752 82.6198H33.6252C33.1189 82.6198 32.7085 83.0302 32.7085 83.5365V88.4254C32.7085 88.9316 33.1189 89.342 33.6252 89.342H41.8752C42.3814 89.342 42.7918 88.9316 42.7918 88.4254V83.5365C42.7918 83.0302 42.3814 82.6198 41.8752 82.6198Z" stroke="#FA6B52" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M32.9883 83.0717L37.7499 86.4583L42.5115 83.0717" stroke="#FA6B52" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="50.25" y="89.6364">Grace Jones</tspan></text>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="136.25" y="89.6364">Re: onboarding feedback</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="269.25" y="89.6364">9:14 AM</tspan></text>
+
+<rect x="0.25" y="36" width="300" height="28" rx="8" fill="url(#tasks-alongside-paint2_linear_740_12456)"/>
+<rect x="0.25" y="36" width="300" height="28" rx="8" stroke="url(#tasks-alongside-paint3_linear_740_12456)" stroke-width="0.5"/>
+<path d="M14.8856 46.6198H13.6252C13.1189 46.6198 12.7085 47.0302 12.7085 47.5365V48.7969C12.7085 49.3032 13.1189 49.7136 13.6252 49.7136H14.8856C15.3918 49.7136 15.8022 49.3032 15.8022 48.7969V47.5365C15.8022 47.0302 15.3918 46.6198 14.8856 46.6198Z" stroke="#15DA43" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.7085 51.5064L14.0896 53.0189L16.2529 50.8555" stroke="#15DA43" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.4062 48.1667H22.9063" stroke="#15DA43" stroke-width="0.75" stroke-linecap="round"/>
+<path d="M17.4062 51.8906H22.9063" stroke="#15DA43" stroke-width="0.75" stroke-linecap="round"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="30.25" y="53.6364">flag on calendar feature</tspan></text>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M185.75 44.5C188.784 44.5 191.25 46.9658 191.25 50C191.25 53.0342 188.784 55.5 185.75 55.5C182.716 55.5 180.25 53.0342 180.25 50C180.25 46.9658 182.716 44.5 185.75 44.5ZM185.75 46.15C187.877 46.15 189.6 47.8733 189.6 50C189.6 52.1267 187.877 53.85 185.75 53.85C183.623 53.85 181.9 52.1267 181.9 50C181.9 47.8733 183.623 46.15 185.75 46.15Z" fill="#15DA43"/>
+<path d="M203.083 46.3333H201.25V50.9166H203.083V46.3333Z" fill="#FF8F00"/>
+<path d="M201.25 51.8333H203.083V53.6666H201.708C201.458 53.6666 201.25 53.465 201.25 53.2083V51.8333Z" fill="#FF8F00"/>
+<path d="M210.417 46.3333H211.792C212.042 46.3333 212.25 46.535 212.25 46.7916V50.9166H210.417V46.3333Z" fill="#FF8F00"/>
+<path d="M212.25 51.8333H210.417V53.6666H212.25V51.8333Z" fill="#FF8F00"/>
+<path d="M207.667 46.3333H205.833V50.9166H207.667V46.3333Z" fill="#FF8F00"/>
+<path d="M207.667 51.8333H205.833V53.6666H207.667V51.8333Z" fill="#FF8F00"/>
+<rect x="221.75" y="44" width="12" height="12" rx="6" fill="url(#tasks-alongside-pattern0_740_12456)" stroke="#16191F"/>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="243.25" y="53.6364">12:04 PM</tspan></text>
+<defs>
+<pattern id="tasks-alongside-pattern0_740_12456" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#tasks-alongside-image0_740_12456" transform="translate(-0.166667) scale(0.00416667)"/>
+</pattern>
+<linearGradient id="tasks-alongside-paint0_linear_740_12456" x1="156.75" y1="-19.6786" x2="162.106" y2="17.5559" gradientUnits="userSpaceOnUse">
+<stop stop-color="#292D36"/>
+<stop offset="0.81832" stop-color="#16191F"/>
+</linearGradient>
+<linearGradient id="tasks-alongside-paint1_linear_740_12456" x1="156.75" y1="53" x2="161.75" y2="89" gradientUnits="userSpaceOnUse">
+<stop stop-color="#292D36"/>
+<stop offset="0.81832" stop-color="#16191F"/>
+</linearGradient>
+<linearGradient id="tasks-alongside-paint2_linear_740_12456" x1="75.25" y1="-66" x2="143.25" y2="77.5" gradientUnits="userSpaceOnUse">
+<stop stop-color="#1C1F27"/>
+<stop offset="1" stop-color="#16191F"/>
+</linearGradient>
+<linearGradient id="tasks-alongside-paint3_linear_740_12456" x1="136.75" y1="17" x2="141.75" y2="53" gradientUnits="userSpaceOnUse">
+<stop stop-color="#292D36"/>
+<stop offset="0.81832" stop-color="#16191F"/>
+</linearGradient>
+<image id="tasks-alongside-image0_740_12456" width="320" height="240" preserveAspectRatio="none" xlink:href="data:image/webp;base64,UklGRkgBAABXRUJQVlA4IDwBAADQBwCdASoeABcAPj0ai0OiIaEUBVQgA8SxAFYZQWrt2z0P/JVT2Zpwd5A80ontDXDQ5LDIxf6t8lM889eNtlxn10Fth6qsAAD+/99OUpQCEFMBYwh2Nq1hTIP/t/uevrO9jf7q9TXGn3v1J2w0nXVHWqINyZf+cdlt33agrVF+GT+/86PgI+2IzWsNH0BJ931b3RPxhJw0R9gIULaLx80+kIUu3Ie2RtRrXHijlpzto63vCCooualctFnl+izQrxgX/OBTiQ0a6Us0ihCeOrTqt4/jhwAs0G1n5MnLCPu992v00xl4eke+e22h9A4HdD1GbYXb7pPg7eLiMapILzRYaDiGMujGDekb/MUfOvtM0YKCfYi1tpc7/xgCmEWEm26rd+4kRiumiExvgbsO4g/WD+mKZSqSk9iJAAAA"/>
+</defs>
+</svg>

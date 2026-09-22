@@ -1,6 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -351,6 +352,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                     fallback={
                       <>
                         <Topbar title={pageTitle()} />
+                        <ViewGettingStarted view="agents" />
                         <div class="body">
                           <Suspense fallback={<LoadingComposer />}>
                             <Switch>

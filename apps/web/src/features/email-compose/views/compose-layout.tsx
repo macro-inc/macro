@@ -41,6 +41,9 @@ export function ComposeLayout(props: {
   notice?: JSX.Element;
   class?: string;
   bodyDebugName?: string;
+  /** Optional standalone editor and address fields for local compose surfaces. */
+  body?: JSX.Element;
+  recipients?: (visibility: { cc: boolean; bcc: boolean }) => JSX.Element;
 }) {
   const ctx = useCompose();
 
@@ -269,16 +272,23 @@ export function ComposeLayout(props: {
           <div class="mb-4">{props.notice}</div>
         </Show>
 
-        <ComposeRecipients
-          toRef={registerRef('directRecipientsSelector')}
-          ccRef={registerRef('ccRecipientsSelector')}
-          bccRef={registerRef('bccRecipientsSelector')}
-          showCc={showCc}
-          setShowCc={setShowCc}
-          showBcc={showBcc}
-          setShowBcc={setShowBcc}
-          onToRowFocusIn={collapseCcBccIfEmpty}
-        />
+        <Show
+          when={props.recipients}
+          fallback={
+            <ComposeRecipients
+              toRef={registerRef('directRecipientsSelector')}
+              ccRef={registerRef('ccRecipientsSelector')}
+              bccRef={registerRef('bccRecipientsSelector')}
+              showCc={showCc}
+              setShowCc={setShowCc}
+              showBcc={showBcc}
+              setShowBcc={setShowBcc}
+              onToRowFocusIn={collapseCcBccIfEmpty}
+            />
+          }
+        >
+          {props.recipients?.({ cc: isCcVisible(), bcc: isBccVisible() })}
+        </Show>
 
         <div onFocusIn={collapseCcBccIfEmpty}>
           <ComposeSubject inputRef={registerRef('subjectInput')} />
@@ -286,16 +296,23 @@ export function ComposeLayout(props: {
       </div>
 
       <div class="size-full flex flex-col min-h-0 mt-4">
-        <ComposeBody
-          debugName={props.bodyDebugName}
-          inputRef={registerRef('messageInput')}
-          mobileScrollRef={() => mobileScrollRef}
-          onAddFiles={(files) => {
-            ctx.onAddAttachments(
-              files.map((file) => ({ type: 'local', file }))
-            );
-          }}
-        />
+        <Show
+          when={props.body}
+          fallback={
+            <ComposeBody
+              debugName={props.bodyDebugName}
+              inputRef={registerRef('messageInput')}
+              mobileScrollRef={() => mobileScrollRef}
+              onAddFiles={(files) => {
+                ctx.onAddAttachments(
+                  files.map((file) => ({ type: 'local', file }))
+                );
+              }}
+            />
+          }
+        >
+          {props.body}
+        </Show>
         {props.toolbar}
       </div>
     </Dynamic>

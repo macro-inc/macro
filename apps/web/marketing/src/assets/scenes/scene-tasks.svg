@@ -1,0 +1,15 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  stroke-linejoin="round"
+  stroke-linecap="round"
+  stroke="currentColor"
+  viewBox="0 0 74 46"
+  stroke-width="0.4"
+  fill="none"
+>
+  <path id="panel" d="m3 1h68c1.108 0 2 0.892 2 2v40c0 1.108-0.892 2-2 2h-68c-1.1055 0.002218-2.0022-0.89451-2-2v-40c0-1.108 0.892-2 2-2"/>
+  <path id="header" d="m1 9v-6c0-1.1046 0.89543-2 2-2h68c1.1046 0 2 0.89543 2 2v6z"/>
+  <path id="tasks" d="m3.0005 3.4115v0.397h0.8v0.796h-0.8v-0.796h-0.402v1.192h1.601v-1.589zm1.732 0.596v0.397h2.669v-0.397zm-0.527 1.223-0.803 0.797-0.518-0.517-0.284 0.284 0.802 0.794 1.086-1.078zm0.528 0.397v0.397h2.668v-0.397z"/>
+  <path id="box" d="m1 43v-34h72v34c0 1.1046-0.89543 2-2 2h-68c-1.1046 0-2-0.89543-2-2z"/>
+  <path id="boxl" d="m1 27h72"/>
+</svg>

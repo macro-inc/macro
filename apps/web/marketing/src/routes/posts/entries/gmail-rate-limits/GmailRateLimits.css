@@ -1,0 +1,61 @@
+.grl-post {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+}
+
+.grl-post,
+.grl-post * {
+  box-sizing: border-box;
+}
+
+.grl-post a {
+  color: var(--a0);
+  text-decoration: none;
+}
+
+.grl-post a:hover {
+  color: var(--c1);
+}
+
+.grl-lede {
+  color: var(--c2);
+  font-size: 20px;
+  line-height: 1.6;
+}
+
+/* Brighter (near-white) emphasis without extra weight */
+.grl-hl {
+  color: var(--c0);
+  font-weight: inherit;
+}
+
+/* Product screenshot in a framed panel (the screenshot is already dark) */
+.grl-shot {
+  margin: 28px 0 12px;
+}
+
+.grl-shot-frame {
+  background: color-mix(in srgb, var(--b1) 72%, var(--b0));
+  border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
+  padding: clamp(16px, 3vw, 28px);
+}
+
+.grl-shot-frame img {
+  border-radius: 6px;
+  display: block;
+}
+
+.grl-figcaption {
+  color: var(--c4);
+  font-size: 14px;
+  margin: 14px auto 44px;
+  text-align: center;
+}
+
+.grl-post code {
+  color: var(--c1);
+  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-size: 0.95em;
+}

@@ -5,14 +5,13 @@ import {
   type PlanTier,
 } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import ArrowRight from '@phosphor/arrow-right.svg';
 import Check from '@phosphor/check.svg';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { useSearchParams } from '@solidjs/router';
-import { Button, cn } from '@ui';
+import { cn } from '@ui';
 import { createSignal, Index, onCleanup, onMount, Show } from 'solid-js';
-import { SkipButton } from './shared';
+import { ContinueButton, SkipButton } from './shared';
 
 // The license flips via Stripe webhook after checkout; poll briefly so the
 // app already reflects Premium when the user continues in.
@@ -93,15 +92,11 @@ export function PlanStep(props: {
               </p>
             </div>
           </div>
-          <Button
-            variant="cta"
-            size="xl"
+          <ContinueButton
             disabled={props.finishing}
             onClick={() => props.onPremiumPaid()}
-          >
-            {props.finishing ? 'Setting up your workspace…' : 'Continue'}
-            <ArrowRight class="size-5" />
-          </Button>
+            label={props.finishing ? 'Setting up your workspace…' : 'Continue'}
+          />
         </div>
       }
     >
@@ -197,19 +192,17 @@ function PlanPicker(props: {
       </div>
 
       <div class="flex flex-col gap-3">
-        <Button
-          variant="cta"
-          size="xl"
+        <ContinueButton
           disabled={props.finishing}
           onClick={() => props.onFinish()}
-        >
-          {props.finishing
-            ? selected() === 'free'
-              ? 'Setting up your workspace…'
-              : 'Heading to checkout…'
-            : `Continue with ${selected() === 'free' ? 'Free' : 'Premium'}`}
-          <ArrowRight class="size-5" />
-        </Button>
+          label={
+            props.finishing
+              ? selected() === 'free'
+                ? 'Setting up your workspace…'
+                : 'Heading to checkout…'
+              : `Continue with ${selected() === 'free' ? 'Free' : 'Premium'}`
+          }
+        />
         <SkipButton
           label="Decide later"
           disabled={props.finishing}

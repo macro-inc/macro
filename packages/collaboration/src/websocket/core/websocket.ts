@@ -132,7 +132,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       this._url = resolver;
     }
 
-    this.tryConnect();
+    if (options?.autoConnect !== false) this.tryConnect();
   }
 
   /**

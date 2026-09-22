@@ -1,0 +1,9 @@
+<path> ━━━━━┳━┳━┳━ <path>
+<line> ━━━━━┫ ┃ ┃
+<polyline> ━┫ ┃ ┃
+<polygon> ━━┛ ┃ ┃
+              ┃ ┃
+<circle> ━━┳━━┛ ┃
+<ellipse> ━┛    ┃
+                ┃
+<rect> ━━━━━━━━━┛

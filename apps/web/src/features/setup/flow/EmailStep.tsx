@@ -1,8 +1,8 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useHasPaidAccess } from '@core/auth/license';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import GmailIcon from '@icon/mcp-gmail.svg';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { cn, Layer } from '@ui';
@@ -33,6 +33,7 @@ export function EmailStep(props: {
   onSkip: () => void;
 }) {
   const linksQuery = useEmailLinksQuery();
+  const hasPaidAccess = useHasPaidAccess();
   const userId = useUserId();
   const startAddInbox = useAddInboxFlow();
   const analytics = useAnalytics();
@@ -61,13 +62,12 @@ export function EmailStep(props: {
     );
   });
 
-  // Connecting more than two accounts is a premium feature, and the plan
-  // step hasn't happened yet — past two, stop offering connect slots.
+  // Keep the free-plan limit, while existing paid accounts can add more.
   const connectSlots = createMemo(() => {
     const connected = links().length;
-    if (connected >= 2) return [];
+    if (connected >= 2 && !hasPaidAccess()) return [];
     return connected === 0
-      ? ['Connect primary account', 'Connect secondary account']
+      ? ['Connect work email', 'Connect personal email']
       : ['Connect another email'];
   });
 
@@ -108,7 +108,7 @@ export function EmailStep(props: {
         <For each={links()}>
           {(link) => (
             <Layer depth={2}>
-              <div class="flex h-11 w-full items-center gap-2.5 rounded-xl border border-ink/[0.05] bg-surface px-3.5 text-sm">
+              <div class="flex h-11 w-full items-center gap-2.5 rounded-xl bg-surface px-3.5 text-sm">
                 <Show
                   when={typeof link.photo_url === 'string' && link.photo_url}
                   fallback={<GmailIcon class="size-4 shrink-0" />}
@@ -141,9 +141,8 @@ export function EmailStep(props: {
                 disabled={connecting() !== undefined}
                 onClick={() => void connect(slot)}
                 class={cn(
-                  'group flex h-11 w-full items-center gap-2.5 rounded-xl border border-ink/[0.05] bg-surface px-3.5 text-sm',
-                  'cursor-default outline-none focus-visible:ring-1 focus-visible:ring-ink/30',
-                  connecting() === undefined && 'hover:border-ink/10'
+                  'glass flex h-11 w-full items-center gap-2.5 rounded-xl bg-surface px-3.5 text-sm',
+                  'cursor-default outline-none focus-visible:ring-1 focus-visible:ring-ink/30'
                 )}
               >
                 <GmailIcon class="size-4 shrink-0" />
@@ -154,9 +153,8 @@ export function EmailStep(props: {
                   <Show
                     when={connecting() === slot}
                     fallback={
-                      <span class="flex items-center gap-1 text-xs font-medium text-ink-muted group-hover:text-ink">
+                      <span class="flex items-center gap-1 text-xs font-medium text-ink-muted">
                         Connect
-                        <ArrowUpRightIcon class="size-3 shrink-0" />
                       </span>
                     }
                   >

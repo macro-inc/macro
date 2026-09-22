@@ -9,6 +9,16 @@ import { ArrayQueue, ConstantBackoff, Websocket, WebsocketBuilder } from '../';
 describe('Testsuite for WebSocketBuilder', () => {
   const url = 'ws://localhost:8080';
 
+  test('deferred sockets do not resolve authenticated URLs until explicitly connected', async () => {
+    const resolveUrl = vi.fn(async () => url);
+    const ws = new WebsocketBuilder(resolveUrl).build({ autoConnect: false });
+    await Promise.resolve();
+    expect(resolveUrl).not.toHaveBeenCalled();
+    ws.reconnect();
+    expect(resolveUrl).toHaveBeenCalledTimes(1);
+    ws.close();
+  });
+
   test('WebsocketBuilder should set url', () => {
     const builder = new WebsocketBuilder(url);
     expect(builder.url).toBe(url);

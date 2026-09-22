@@ -1,0 +1,34 @@
+.homepage-unification { position: relative; isolation: isolate; width: min(780px, calc(100% - 40px)); margin: 0 auto; padding: 80px 0 28px; color: var(--color-ink); }
+.homepage-unification .feature-flow { height: clamp(280px, 36vw, 370px); }
+.unification-copy { position: relative; max-width: 680px; margin: 58px auto 0; text-align: center; }
+.unification-copy h2, .unification-before { margin: 0; font-family: 'Roboto Slab Variable', display, serif; font-weight: 315; font-size: 48px; line-height: 1.12; letter-spacing: -.025em; }
+.unification-before { position: absolute; inset: 0 0 auto; visibility: hidden; }
+.unification-subtext { margin: 24px 0 0; font-size: 14px; line-height: 1.8; color: var(--color-ink-muted); }
+.unification-travel { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.homepage-unification[data-motion=waiting] .feature-flow-node,
+.homepage-unification[data-motion=waiting] .feature-flow-core,
+.homepage-unification[data-motion=waiting] .feature-flow-light,
+.homepage-unification[data-motion=waiting] h2,
+.homepage-unification[data-motion=waiting] .unification-subtext { opacity: 0; }
+.homepage-unification[data-motion=scrubbing] .unification-before { visibility: visible; }
+/* Match the hero's 125% desktop scale with real layout dimensions, so native
+   scroll measurements and the traveling icon positions remain accurate. */
+@media (min-width: 768px) {
+  .homepage-unification { width: min(975px, calc(100% - 40px)); padding: 100px 0 35px; }
+  .homepage-unification .feature-flow { height: 462.5px; }
+  .homepage-unification .feature-flow-core { width: 130px; height: 130px; }
+  .homepage-unification .feature-flow-core svg { width: 53.75px; height: 53.75px; }
+  .homepage-unification .feature-flow-icon { width: 95px; height: 95px; }
+  .homepage-unification .feature-flow-icon svg { width: 33.75px; height: 33.75px; }
+  .homepage-unification .feature-flow-node > span { top: calc(100% + 15px); font-size: 16.25px; }
+  .homepage-unification .feature-flow-halo { width: 525px; }
+  .unification-copy { max-width: 850px; margin-top: 72.5px; }
+  .unification-copy h2, .unification-before { font-size: 60px; }
+  .unification-subtext { margin-top: 30px; font-size: 17.5px; }
+}
+@media(max-width: 639px) {
+  .homepage-unification { padding: 60px 0 24px; }
+  .unification-copy { margin-top: 46px; }
+  .unification-copy h2, .unification-before { font-size: 36px; }
+  .unification-subtext { font-size: 13px; }
+}

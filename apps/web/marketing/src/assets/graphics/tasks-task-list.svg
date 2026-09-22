@@ -1,0 +1,195 @@
+<svg width="918" height="390" viewBox="0 0 918 390" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<defs>
+<linearGradient id="tasks-task-list-paint1_linear_496_5699" x1="189.068" y1="-224.85" x2="374.104" y2="131.844" gradientUnits="userSpaceOnUse">
+<stop stop-color="white"/>
+<stop offset="1" stop-color="white" stop-opacity="0"/>
+</linearGradient>
+<clipPath id="tasks-task-list-clip14_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(38.5 235.5)"/>
+</clipPath>
+<clipPath id="tasks-task-list-clip13_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(38.5 235.5)"/>
+</clipPath>
+<clipPath id="tasks-task-list-clip12_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(38.5 209.5)"/>
+</clipPath>
+<clipPath id="tasks-task-list-clip11_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(38.5 209.5)"/>
+</clipPath>
+<pattern id="tasks-task-list-pattern2_496_5699" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#tasks-task-list-image0_496_5699" transform="translate(-0.166667) scale(0.00416667)"/>
+</pattern>
+<image id="tasks-task-list-image0_496_5699" width="320" height="240" preserveAspectRatio="none" xlink:href="data:image/webp;base64,UklGRj4BAABXRUJQVlA4IDIBAACwBgCdASohABkAPj0YiUMiIaEarAQAIAPEoAtRrCpZP9gDGP8GLIU2DwY/GNBLOGtnSh36ReCEevq/F6WOAAD+/8IjCfN7t6/CPvJwjXL6Mi5s7AzqX9/HW5WfQ6/HPqesok21MQzP20rD3X0b6fLVTt9WS8pDFfMeNQAFHXnjr0uGAGYk2f9+9UoH4+4l9TVv17nU7u2SlL+IvFXxI0ZNOEMIHa4DkN4oKUPW7vhyPBwpGbG2ulq2JLXhZTnSvRtwcDZLDxnFpZpv9G+sW1paBZLFWfDYbeE11Ix+4O2aN0ZH+78NR0008gNOVn+ER+poiRATMjp20t1uRd0fys79Xjr7X+O8dSUTh42xFHbCDBjEOovV4+g7XDWyjyKwDIvnmJKh37kLDI+RJmpPP2qgAAA="/>
+<clipPath id="tasks-task-list-clip10_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(521.5 182.5)"/>
+</clipPath>
+<clipPath id="tasks-task-list-clip9_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(521.5 182.5)"/>
+</clipPath>
+<clipPath id="tasks-task-list-clip8_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(38.5 159.5)"/>
+</clipPath>
+<clipPath id="tasks-task-list-clip7_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(38.5 159.5)"/>
+</clipPath>
+<pattern id="tasks-task-list-pattern1_496_5699" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#tasks-task-list-image0_496_5699" transform="translate(-0.166667) scale(0.00416667)"/>
+</pattern>
+<clipPath id="tasks-task-list-clip6_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(521.5 132.5)"/>
+</clipPath>
+<clipPath id="tasks-task-list-clip5_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(521.5 132.5)"/>
+</clipPath>
+<pattern id="tasks-task-list-pattern0_496_5699" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#tasks-task-list-image0_496_5699" transform="translate(-0.166667) scale(0.00416667)"/>
+</pattern>
+<clipPath id="tasks-task-list-clip4_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(521.5 108.5)"/>
+</clipPath>
+<clipPath id="tasks-task-list-clip3_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(521.5 108.5)"/>
+</clipPath>
+<clipPath id="tasks-task-list-clip2_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(38.5 85.5)"/>
+</clipPath>
+<clipPath id="tasks-task-list-clip1_496_5699">
+<rect width="12" height="12" fill="white" transform="translate(38.5 85.5)"/>
+</clipPath>
+<linearGradient id="tasks-task-list-paint0_linear_496_5699" x1="459" y1="0" x2="459" y2="390" gradientUnits="userSpaceOnUse">
+<stop stop-color="#353535"/>
+<stop offset="1" stop-color="#353535" stop-opacity="0.4"/>
+</linearGradient>
+<clipPath id="tasks-task-list-clip0_496_5699">
+<rect width="918" height="390" rx="14.5" fill="white"/>
+</clipPath>
+</defs>
+<g clip-path="url(#tasks-task-list-clip0_496_5699)">
+<rect width="918" height="390" rx="14.5" fill="url(#tasks-task-list-paint0_linear_496_5699)"/>
+<rect x="0.5" y="0.5" width="917" height="389" rx="14" fill="#060709"/>
+<mask id="tasks-task-list-path-3-inside-1_496_5699" fill="white">
+<path d="M0.5 0.5H917.5V40.5H0.5V0.5Z"/>
+</mask>
+<path d="M917.5 40.5V40H0.5V40.5V41H917.5V40.5Z" fill="#353535" mask="url(#tasks-task-list-path-3-inside-1_496_5699)"/>
+<path d="M19.1356 17.1198H17.8752C17.3689 17.1198 16.9585 17.5302 16.9585 18.0365V19.2969C16.9585 19.8031 17.3689 20.2135 17.8752 20.2135H19.1356C19.6418 20.2135 20.0522 19.8031 20.0522 19.2969V18.0365C20.0522 17.5302 19.6418 17.1198 19.1356 17.1198Z" stroke="#15DA43" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M16.9585 22.0064L18.3396 23.5189L20.5029 21.3556" stroke="#15DA43" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M21.6562 18.6667H27.1563" stroke="#15DA43" stroke-width="0.75" stroke-linecap="round"/>
+<path d="M21.6562 22.3906H27.1563" stroke="#15DA43" stroke-width="0.75" stroke-linecap="round"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="12" font-weight="600" letter-spacing="0em"><tspan x="35.5371" y="24.8636">Tasks</tspan></text>
+<rect x="85.75" y="8.75" width="144.5" height="23.5" rx="6.75" fill="black"/>
+<rect x="85.75" y="8.75" width="144.5" height="23.5" rx="6.75" stroke="#1F1F1F" stroke-width="0.5"/>
+<rect x="87.75" y="10.75" width="57.5" height="19.5" rx="5.25" fill="#16191F"/>
+<rect x="87.75" y="10.75" width="57.5" height="19.5" rx="5.25" stroke="#353535" stroke-width="0.5"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="94.2734" y="23.6364">Assigned</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="155.325" y="23.6364">Created</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="210.009" y="23.6364">All</tspan></text>
+<rect x="705.25" y="8.25" width="24.5" height="24.5" rx="12.25" fill="#16191F"/>
+<rect x="705.25" y="8.25" width="24.5" height="24.5" rx="12.25" stroke="#1F1F1F" stroke-width="0.5"/>
+<path d="M718.28 15.7177H714.595C713.516 15.7177 712.641 16.5929 712.641 17.6725V23.5072C712.641 24.5868 713.516 25.462 714.595 25.462H720.43C721.51 25.462 722.385 24.5868 722.385 23.5072V19.7302" stroke="#BFBFBF" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M722.385 15.2135C722.514 15.2135 722.643 15.2625 722.741 15.361C722.938 15.5578 722.938 15.8772 722.741 16.0741L717.869 20.9462C717.641 21.1553 716.904 21.5911 716.708 21.3942C716.511 21.1973 716.931 20.4727 717.156 20.2331L722.028 15.361C722.127 15.2625 722.256 15.2135 722.385 15.2135Z" fill="#BFBFBF"/>
+<rect x="745.75" y="8.75" width="163.5" height="23.5" rx="6.75" fill="black"/>
+<rect x="745.75" y="8.75" width="163.5" height="23.5" rx="6.75" stroke="#1F1F1F" stroke-width="0.5"/>
+<path d="M764.765 24.7347L762.418 22.3881C763.099 21.5714 763.438 20.5239 763.365 19.4635C763.293 18.403 762.815 17.4113 762.03 16.6947C761.245 15.978 760.214 15.5916 759.151 15.6157C758.088 15.6399 757.076 16.0728 756.324 16.8243C755.573 17.5759 755.14 18.5883 755.116 19.651C755.092 20.7136 755.478 21.7446 756.195 22.5296C756.911 23.3145 757.903 23.793 758.964 23.8654C760.024 23.9378 761.072 23.5985 761.888 22.9183L764.235 25.2653C764.27 25.3002 764.311 25.3278 764.357 25.3466C764.402 25.3655 764.451 25.3752 764.5 25.3752C764.549 25.3752 764.598 25.3655 764.644 25.3466C764.689 25.3278 764.731 25.3002 764.765 25.2653C764.8 25.2305 764.828 25.1891 764.847 25.1436C764.866 25.0981 764.875 25.0493 764.875 25C764.875 24.9507 764.866 24.9019 764.847 24.8564C764.828 24.8109 764.8 24.7695 764.765 24.7347ZM755.875 19.75C755.875 19.0825 756.073 18.43 756.444 17.875C756.815 17.3199 757.342 16.8874 757.959 16.6319C758.575 16.3765 759.254 16.3096 759.909 16.4398C760.563 16.5701 761.165 16.8915 761.637 17.3635C762.109 17.8355 762.43 18.4369 762.56 19.0916C762.69 19.7463 762.624 20.4249 762.368 21.0416C762.113 21.6583 761.68 22.1854 761.125 22.5562C760.57 22.9271 759.918 23.125 759.25 23.125C758.355 23.124 757.497 22.7681 756.865 22.1354C756.232 21.5027 755.876 20.6448 755.875 19.75Z" fill="#8B8B8B"/>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="772.335" y="23.6364">Search</tspan></text>
+<path d="M889.438 21.25H888.5V19.75H889.438C889.771 19.75 890.098 19.651 890.375 19.4656C890.653 19.2802 890.869 19.0166 890.997 18.7083C891.124 18.3999 891.158 18.0606 891.093 17.7333C891.027 17.4059 890.867 17.1053 890.631 16.8693C890.395 16.6333 890.094 16.4725 889.767 16.4074C889.439 16.3423 889.1 16.3757 888.792 16.5035C888.483 16.6312 888.22 16.8475 888.034 17.125C887.849 17.4025 887.75 17.7287 887.75 18.0625V19H886.25V18.0625C886.25 17.7287 886.151 17.4025 885.966 17.125C885.78 16.8475 885.517 16.6312 885.208 16.5035C884.9 16.3757 884.561 16.3423 884.233 16.4074C883.906 16.4725 883.605 16.6333 883.369 16.8693C883.133 17.1053 882.973 17.4059 882.907 17.7333C882.842 18.0606 882.876 18.3999 883.003 18.7083C883.131 19.0166 883.347 19.2802 883.625 19.4656C883.902 19.651 884.229 19.75 884.563 19.75H885.5V21.25H884.563C884.229 21.25 883.902 21.349 883.625 21.5344C883.347 21.7198 883.131 21.9834 883.003 22.2917C882.876 22.6001 882.842 22.9394 882.907 23.2667C882.973 23.5941 883.133 23.8947 883.369 24.1307C883.605 24.3667 883.906 24.5275 884.233 24.5926C884.561 24.6577 884.9 24.6243 885.208 24.4965C885.517 24.3688 885.78 24.1525 885.966 23.875C886.151 23.5975 886.25 23.2713 886.25 22.9375V22H887.75V22.9375C887.75 23.2713 887.849 23.5975 888.034 23.875C888.22 24.1525 888.483 24.3688 888.792 24.4965C889.1 24.6243 889.439 24.6577 889.767 24.5926C890.094 24.5275 890.395 24.3667 890.631 24.1307C890.867 23.8947 891.027 23.5941 891.093 23.2667C891.158 22.9394 891.124 22.6001 890.997 22.2917C890.869 21.9834 890.653 21.7198 890.375 21.5344C890.098 21.349 889.771 21.25 889.438 21.25ZM888.5 18.0625C888.5 17.8771 888.555 17.6958 888.658 17.5417C888.761 17.3875 888.907 17.2673 889.079 17.1964C889.25 17.1254 889.439 17.1068 889.62 17.143C889.802 17.1792 889.969 17.2685 890.1 17.3996C890.232 17.5307 890.321 17.6977 890.357 17.8796C890.393 18.0615 890.375 18.25 890.304 18.4213C890.233 18.5926 890.113 18.739 889.958 18.842C889.804 18.945 889.623 19 889.438 19H888.5V18.0625ZM883.625 18.0625C883.625 17.8139 883.724 17.5754 883.9 17.3996C884.075 17.2238 884.314 17.125 884.563 17.125C884.811 17.125 885.05 17.2238 885.225 17.3996C885.401 17.5754 885.5 17.8139 885.5 18.0625V19H884.563C884.314 19 884.075 18.9012 883.9 18.7254C883.724 18.5496 883.625 18.3111 883.625 18.0625ZM885.5 22.9375C885.5 23.1229 885.445 23.3042 885.342 23.4583C885.239 23.6125 885.093 23.7327 884.921 23.8036C884.75 23.8746 884.561 23.8932 884.38 23.857C884.198 23.8208 884.031 23.7315 883.9 23.6004C883.768 23.4693 883.679 23.3023 883.643 23.1204C883.607 22.9385 883.625 22.75 883.696 22.5787C883.767 22.4074 883.887 22.261 884.042 22.158C884.196 22.055 884.377 22 884.563 22H885.5V22.9375ZM886.25 19.75H887.75V21.25H886.25V19.75ZM889.438 23.875C889.189 23.875 888.95 23.7762 888.775 23.6004C888.599 23.4246 888.5 23.1861 888.5 22.9375V22H889.438C889.686 22 889.925 22.0988 890.1 22.2746C890.276 22.4504 890.375 22.6889 890.375 22.9375C890.375 23.1861 890.276 23.4246 890.1 23.6004C889.925 23.7762 889.686 23.875 889.438 23.875Z" fill="#353535"/>
+<text fill="#353535" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="895.07" y="23.6364">F</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="36.5" y="66.1364">Task Name</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="521.5" y="66.1364">Status</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="627.5" y="66.1364">Priority</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="733.5" y="66.1364">Assignee</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="864.5" y="66.1364">Created</tspan></text>
+<path d="M29.2653 90.7653L26.7653 93.2653C26.7305 93.3003 26.6891 93.328 26.6435 93.3469C26.5979 93.3659 26.549 93.3756 26.4997 93.3756C26.4503 93.3756 26.4014 93.3659 26.3559 93.3469C26.3103 93.328 26.2689 93.3003 26.234 93.2653L23.734 90.7653C23.6636 90.6949 23.624 90.5993 23.624 90.4997C23.624 90.4001 23.6636 90.3045 23.734 90.2341C23.8045 90.1636 23.9 90.124 23.9997 90.124C24.0993 90.124 24.1949 90.1636 24.2653 90.2341L26.5 92.4688L28.7347 90.2338C28.8051 90.1633 28.9007 90.1237 29.0003 90.1237C29.0999 90.1237 29.1955 90.1633 29.2659 90.2338C29.3364 90.3042 29.3759 90.3997 29.3759 90.4994C29.3759 90.599 29.3364 90.6946 29.2659 90.765L29.2653 90.7653Z" fill="#BFBFBF"/>
+<g clip-path="url(#tasks-task-list-clip1_496_5699)">
+<g clip-path="url(#tasks-task-list-clip2_496_5699)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M44.5 85.5C47.81 85.5 50.5 88.19 50.5 91.5C50.5 94.81 47.81 97.5 44.5 97.5C41.19 97.5 38.5 94.81 38.5 91.5C38.5 88.19 41.19 85.5 44.5 85.5ZM44.5 87.3C46.82 87.3 48.7 89.18 48.7 91.5C48.7 93.82 46.82 95.7 44.5 95.7C42.18 95.7 40.3 93.82 40.3 91.5C40.3 89.18 42.18 87.3 44.5 87.3Z" fill="#15DA43"/>
+</g>
+</g>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="58.5" y="95.1364">Not Started</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="134.445" y="95.1364">2</tspan></text>
+<path d="M40.8543 110.198H39.2502C38.6058 110.198 38.0835 110.72 38.0835 111.365V112.969C38.0835 113.613 38.6058 114.135 39.2502 114.135H40.8543C41.4987 114.135 42.021 113.613 42.021 112.969V111.365C42.021 110.72 41.4987 110.198 40.8543 110.198Z" stroke="#15DA43" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M38.0835 116.417L39.8413 118.342L42.5946 115.589" stroke="#15DA43" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M44.0625 112.167H51.0625" stroke="#15DA43" stroke-linecap="round"/>
+<path d="M44.0625 116.906H51.0625" stroke="#15DA43" stroke-linecap="round"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="58.5" y="118.136">Port PDF package to Solid.js</tspan></text>
+<g clip-path="url(#tasks-task-list-clip3_496_5699)">
+<g clip-path="url(#tasks-task-list-clip4_496_5699)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M527.5 108.5C530.81 108.5 533.5 111.19 533.5 114.5C533.5 117.81 530.81 120.5 527.5 120.5C524.19 120.5 521.5 117.81 521.5 114.5C521.5 111.19 524.19 108.5 527.5 108.5ZM527.5 110.3C529.82 110.3 531.7 112.18 531.7 114.5C531.7 116.82 529.82 118.7 527.5 118.7C525.18 118.7 523.3 116.82 523.3 114.5C523.3 112.18 525.18 110.3 527.5 110.3Z" fill="#15DA43"/>
+</g>
+</g>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="537.5" y="118.136">Not Started</tspan></text>
+<path d="M627.5 114.5H630V118.5H627.875C627.67 118.5 627.5 118.273 627.5 118V114.5Z" fill="#BFBFBF"/>
+<path d="M634.75 112.5H632.25V118.5H634.75V112.5Z" fill="#BFBFBF"/>
+<path opacity="0.3" d="M637.167 110.5H639.292C639.497 110.5 639.667 110.72 639.667 111V118.5H637.167V110.5Z" fill="#BFBFBF"/>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="643.5" y="118.136">Medium</tspan></text>
+<rect x="733" y="108" width="13" height="13" rx="6.5" fill="url(#tasks-task-list-pattern0_496_5699)" stroke="#16191F"/>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="749.5" y="118.136">Gabriel</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="870.5" y="118.136">Aug 15</tspan></text>
+<path d="M40.8543 134.198H39.2502C38.6058 134.198 38.0835 134.72 38.0835 135.365V136.969C38.0835 137.613 38.6058 138.135 39.2502 138.135H40.8543C41.4987 138.135 42.021 137.613 42.021 136.969V135.365C42.021 134.72 41.4987 134.198 40.8543 134.198Z" stroke="#15DA43" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M38.0835 140.417L39.8413 142.342L42.5946 139.589" stroke="#15DA43" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M44.0625 136.167H51.0625" stroke="#15DA43" stroke-linecap="round"/>
+<path d="M44.0625 140.906H51.0625" stroke="#15DA43" stroke-linecap="round"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="58.5" y="142.136">Extend team memory to MCPs</tspan></text>
+<g clip-path="url(#tasks-task-list-clip5_496_5699)">
+<g clip-path="url(#tasks-task-list-clip6_496_5699)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M527.5 132.5C530.81 132.5 533.5 135.19 533.5 138.5C533.5 141.81 530.81 144.5 527.5 144.5C524.19 144.5 521.5 141.81 521.5 138.5C521.5 135.19 524.19 132.5 527.5 132.5ZM527.5 134.3C529.82 134.3 531.7 136.18 531.7 138.5C531.7 140.82 529.82 142.7 527.5 142.7C525.18 142.7 523.3 140.82 523.3 138.5C523.3 136.18 525.18 134.3 527.5 134.3Z" fill="#15DA43"/>
+</g>
+</g>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="537.5" y="142.136">Not Started</tspan></text>
+<path d="M629.5 134.5H627.5V139.5H629.5V134.5Z" fill="#BFBFBF"/>
+<path d="M627.5 140.5H629.5V142.5H628C627.727 142.5 627.5 142.28 627.5 142V140.5Z" fill="#BFBFBF"/>
+<path d="M637.5 134.5H639C639.273 134.5 639.5 134.72 639.5 135V139.5H637.5V134.5Z" fill="#BFBFBF"/>
+<path d="M639.5 140.5H637.5V142.5H639.5V140.5Z" fill="#BFBFBF"/>
+<path d="M634.5 134.5H632.5V139.5H634.5V134.5Z" fill="#BFBFBF"/>
+<path d="M634.5 140.5H632.5V142.5H634.5V140.5Z" fill="#BFBFBF"/>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="643.5" y="142.136">Medium</tspan></text>
+<rect x="733" y="132" width="13" height="13" rx="6.5" fill="url(#tasks-task-list-pattern1_496_5699)" stroke="#16191F"/>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="749.5" y="142.136">Gabriel</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="875.5" y="142.136">Aug 4</tspan></text>
+<path d="M29.2653 164.765L26.7653 167.265C26.7305 167.3 26.6891 167.328 26.6435 167.347C26.5979 167.366 26.549 167.376 26.4997 167.376C26.4503 167.376 26.4014 167.366 26.3559 167.347C26.3103 167.328 26.2689 167.3 26.234 167.265L23.734 164.765C23.6636 164.695 23.624 164.599 23.624 164.5C23.624 164.4 23.6636 164.305 23.734 164.234C23.8045 164.164 23.9 164.124 23.9997 164.124C24.0993 164.124 24.1949 164.164 24.2653 164.234L26.5 166.469L28.7347 164.234C28.8051 164.163 28.9007 164.124 29.0003 164.124C29.0999 164.124 29.1955 164.163 29.2659 164.234C29.3364 164.304 29.3759 164.4 29.3759 164.499C29.3759 164.599 29.3364 164.695 29.2659 164.765L29.2653 164.765Z" fill="#BFBFBF"/>
+<g clip-path="url(#tasks-task-list-clip7_496_5699)">
+<g clip-path="url(#tasks-task-list-clip8_496_5699)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M44.5 159.5C47.81 159.5 50.5 162.19 50.5 165.5C50.5 168.81 47.81 171.5 44.5 171.5C41.19 171.5 38.5 168.81 38.5 165.5C38.5 162.19 41.19 159.5 44.5 159.5ZM44.5 161.3C46.82 161.3 48.7 163.18 48.7 165.5C48.7 167.82 46.82 169.7 44.5 169.7C42.18 169.7 40.3 167.82 40.3 165.5C40.3 163.18 42.18 161.3 44.5 161.3Z" fill="#FFAE00"/>
+<path d="M44.5 159.5C41.19 159.5 38.5 162.19 38.5 165.5C38.5 168.81 41.19 171.5 44.5 171.5V159.5Z" fill="#FFAE00"/>
+</g>
+</g>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="58.5" y="169.136">In Progress</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="135.852" y="169.136">1</tspan></text>
+<path d="M40.8543 184.198H39.2502C38.6058 184.198 38.0835 184.72 38.0835 185.365V186.969C38.0835 187.613 38.6058 188.135 39.2502 188.135H40.8543C41.4987 188.135 42.021 187.613 42.021 186.969V185.365C42.021 184.72 41.4987 184.198 40.8543 184.198Z" stroke="#15DA43" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M38.0835 190.417L39.8413 192.342L42.5946 189.589" stroke="#15DA43" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M44.0625 186.167H51.0625" stroke="#15DA43" stroke-linecap="round"/>
+<path d="M44.0625 190.906H51.0625" stroke="#15DA43" stroke-linecap="round"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="58.5" y="192.136">Realtime sync issues across browsers</tspan></text>
+<g clip-path="url(#tasks-task-list-clip9_496_5699)">
+<g clip-path="url(#tasks-task-list-clip10_496_5699)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M527.5 182.5C530.81 182.5 533.5 185.19 533.5 188.5C533.5 191.81 530.81 194.5 527.5 194.5C524.19 194.5 521.5 191.81 521.5 188.5C521.5 185.19 524.19 182.5 527.5 182.5ZM527.5 184.3C529.82 184.3 531.7 186.18 531.7 188.5C531.7 190.82 529.82 192.7 527.5 192.7C525.18 192.7 523.3 190.82 523.3 188.5C523.3 186.18 525.18 184.3 527.5 184.3Z" fill="#FFAE00"/>
+<path d="M527.5 182.5C524.19 182.5 521.5 185.19 521.5 188.5C521.5 191.81 524.19 194.5 527.5 194.5V182.5Z" fill="#FFAE00"/>
+</g>
+</g>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="537.5" y="192.136">Not Started</tspan></text>
+<path d="M627.5 188.5H630V192.5H627.875C627.67 192.5 627.5 192.273 627.5 192V188.5Z" fill="#BFBFBF"/>
+<path d="M634.75 186.5H632.25V192.5H634.75V186.5Z" fill="#BFBFBF"/>
+<path d="M637 184.5H639.125C639.33 184.5 639.5 184.72 639.5 185V192.5H637V184.5Z" fill="#BFBFBF"/>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="643.5" y="192.136">Medium</tspan></text>
+<rect x="733" y="182" width="13" height="13" rx="6.5" fill="url(#tasks-task-list-pattern2_496_5699)" stroke="#16191F"/>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="749.5" y="192.136">Gabriel</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="874.5" y="192.136">Jul 24</tspan></text>
+<path d="M28.2653 215.765L25.7653 218.265C25.6949 218.336 25.5993 218.375 25.4997 218.375C25.4 218.375 25.3045 218.336 25.234 218.265C25.1636 218.195 25.124 218.099 25.124 218C25.124 217.9 25.1636 217.805 25.234 217.734L27.4687 215.5L25.2347 213.265C25.1998 213.23 25.1721 213.189 25.1532 213.143C25.1344 213.098 25.1246 213.049 25.1246 213C25.1246 212.95 25.1344 212.902 25.1532 212.856C25.1721 212.81 25.1998 212.769 25.2347 212.734C25.2696 212.699 25.311 212.672 25.3565 212.653C25.4021 212.634 25.451 212.624 25.5003 212.624C25.5496 212.624 25.5985 212.634 25.6441 212.653C25.6896 212.672 25.731 212.699 25.7659 212.734L28.2659 215.234C28.3008 215.269 28.3285 215.31 28.3474 215.356C28.3663 215.402 28.376 215.45 28.3759 215.5C28.3758 215.549 28.366 215.598 28.3471 215.644C28.3281 215.689 28.3003 215.731 28.2653 215.765Z" fill="#BFBFBF"/>
+<g clip-path="url(#tasks-task-list-clip11_496_5699)">
+<g clip-path="url(#tasks-task-list-clip12_496_5699)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M44.5 209.5C47.81 209.5 50.5 212.19 50.5 215.5C50.5 218.81 47.81 221.5 44.5 221.5C41.19 221.5 38.5 218.81 38.5 215.5C38.5 212.19 41.19 209.5 44.5 209.5ZM44.5 211.3C46.82 211.3 48.7 213.18 48.7 215.5C48.7 217.82 46.82 219.7 44.5 219.7C42.18 219.7 40.3 217.82 40.3 215.5C40.3 213.18 42.18 211.3 44.5 211.3Z" fill="#ECC7FF"/>
+<path d="M44.5 209.5C41.19 209.5 38.5 212.19 38.5 215.5C38.5 218.81 41.19 221.5 44.5 221.5C47.81 221.5 50.5 218.81 50.5 215.5H44.5V209.5Z" fill="#ECC7FF"/>
+</g>
+</g>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="58.5" y="219.136">In Review</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="134.25" y="219.136">0</tspan></text>
+<path d="M28.2653 241.765L25.7653 244.265C25.6949 244.336 25.5993 244.375 25.4997 244.375C25.4 244.375 25.3045 244.336 25.234 244.265C25.1636 244.195 25.124 244.099 25.124 244C25.124 243.9 25.1636 243.805 25.234 243.734L27.4687 241.5L25.2347 239.265C25.1998 239.23 25.1721 239.189 25.1532 239.143C25.1344 239.098 25.1246 239.049 25.1246 239C25.1246 238.95 25.1344 238.902 25.1532 238.856C25.1721 238.81 25.1998 238.769 25.2347 238.734C25.2696 238.699 25.311 238.672 25.3565 238.653C25.4021 238.634 25.451 238.624 25.5003 238.624C25.5496 238.624 25.5985 238.634 25.6441 238.653C25.6896 238.672 25.731 238.699 25.7659 238.734L28.2659 241.234C28.3008 241.269 28.3285 241.31 28.3474 241.356C28.3663 241.402 28.376 241.45 28.3759 241.5C28.3758 241.549 28.366 241.598 28.3471 241.644C28.3281 241.689 28.3003 241.731 28.2653 241.765Z" fill="#BFBFBF"/>
+<g clip-path="url(#tasks-task-list-clip13_496_5699)">
+<g clip-path="url(#tasks-task-list-clip14_496_5699)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M44.5 235.5C47.81 235.5 50.5 238.19 50.5 241.5C50.5 244.81 47.81 247.5 44.5 247.5C41.19 247.5 38.5 244.81 38.5 241.5C38.5 238.19 41.19 235.5 44.5 235.5ZM47.84 239.36C48 239.53 48.1 239.76 48.1 240C48.1 240.24 48 240.47 47.84 240.64L44.24 244.24C44.07 244.4 43.84 244.5 43.6 244.5C43.36 244.5 43.13 244.4 42.96 244.24L41.16 242.44C40.82 242.09 40.82 241.51 41.16 241.16C41.51 240.82 42.09 240.82 42.44 241.16L43.6 242.33L46.56 239.36C46.91 239.02 47.49 239.02 47.84 239.36Z" fill="#15DA43"/>
+</g>
+</g>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="58.5" y="245.136">Completed</tspan></text>
+<text fill="#BFBFBF" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="128.732" y="245.136">72</tspan></text>
+<rect opacity="0.15" width="918" height="390" fill="url(#tasks-task-list-paint1_linear_496_5699)" fill-opacity="0.3"/>
+</g>
+</svg>
