@@ -59,6 +59,21 @@ impl WebSocketMetadata {
     }
 }
 
+/// A pending session has no writers. Exact seed bytes identify a retry of the
+/// binary initializer, which has no separate operation ID. Unknown seeds must
+/// be rolled back before another initialization can write a replacement.
+async fn prepare_surface_snapshot(storage: &impl SnapshotStorage, snapshot: &[u8]) -> Result<bool> {
+    if storage.has_snapshot().await? {
+        if storage.get_snapshot().await? != snapshot {
+            storage.delete_snapshot().await?;
+            return Ok(false);
+        }
+    } else {
+        storage.store_snapshot(snapshot).await?;
+    }
+    Ok(true)
+}
+
 fn now_seconds() -> usize {
     (Date::now().as_millis() / 1000) as usize
 }
@@ -186,14 +201,16 @@ impl DocumentSyncSession {
             Some(SurfaceLifecycle::Initializing);
         let result: Result<Response> = async {
             let storage = get_snapshot_storage(&self.env, &self.state, key.to_owned())?;
-            if storage.has_snapshot().await? {
+            if !prepare_surface_snapshot(&storage, &body.snapshot).await? {
                 return Ok(response(409));
             }
-            storage.store_snapshot(&body.snapshot).await?;
+            #[cfg(feature = "migration-test-hooks")]
+            if req.headers().get("x-sync-test-stop-after")?.as_deref() == Some("surface_snapshot") {
+                return Err(worker::Error::from("injected surface persistence failure"));
+            }
             if self.surface_lifecycle().await? == SurfaceLifecycle::Revoked {
                 return Ok(response(status_codes::FORBIDDEN));
             }
-            *self.surface_lifecycle.lock("surface ready") = Some(SurfaceLifecycle::Ready);
             self.state
                 .storage()
                 .put(LIFECYCLE_KEY, SurfaceLifecycle::Ready)
@@ -201,6 +218,7 @@ impl DocumentSyncSession {
             if self.surface_lifecycle().await? == SurfaceLifecycle::Revoked {
                 return Ok(response(status_codes::FORBIDDEN));
             }
+            *self.surface_lifecycle.lock("surface ready") = Some(SurfaceLifecycle::Ready);
             Ok(response(status_codes::OK))
         }
         .await;
@@ -212,7 +230,9 @@ impl DocumentSyncSession {
                 .surface_lifecycle
                 .lock("release surface initialization");
             if *lifecycle != Some(SurfaceLifecycle::Revoked) {
-                *lifecycle = Some(SurfaceLifecycle::Pending);
+                // A failed Ready write may have committed. Reload durable truth
+                // rather than admitting a new initializer against a ready seed.
+                *lifecycle = None;
             }
         }
         result
