@@ -45,7 +45,7 @@ type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
 interface MobileForwardToChannelLayoutProps
   extends Pick<
     ForwardToChannelProps,
-    'submitPermissionInfo' | 'hideAccessLevelSelector'
+    'submitPermissionInfo' | 'hideAccessLevelSelector' | 'editPermissionEnabled'
   > {
   isAuthenticated: Accessor<boolean | undefined>;
   selectedOptions: Accessor<Recipient[]>;
@@ -134,6 +134,7 @@ function MobileForwardToChannelLayout(
         <div class="px-3 py-2 flex items-center">
           <span class="text-sm text-ink-muted pr-2">Access:</span>
           <ShareOptions
+            editPermissionEnabled={props.editPermissionEnabled}
             setPermissions={(accessLevel) =>
               props.setSubmitAccessLevel(accessLevel)
             }
@@ -165,6 +166,7 @@ function MobileForwardToChannelLayout(
 }
 
 interface ForwardToChannelProps {
+  editPermissionEnabled?: boolean;
   submitPermissionInfo?: {
     setChannelPermissions: (
       channelId: string,
@@ -326,36 +328,67 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     });
   };
 
+  // Keep confirmed deliveries until the whole share succeeds. Retrying a
+  // failed grant must not send the same message to that recipient again.
+  const deliveries = new Map<
+    string,
+    {
+      result: NonNullable<Awaited<ReturnType<typeof sendToChannel>>>;
+      accessLevel?: AccessLevel | null;
+    }
+  >();
+
   async function sendForward(
     target: NonNullable<ReturnType<typeof destination>>,
     accessLevel: AccessLevel | null
   ) {
-    let result;
-    try {
-      const message = {
-        attachments: [asAttachment()],
-        content: markdown(),
-        mentions: [],
-      };
-      result =
-        target.type === 'channel'
-          ? await sendToChannel({ ...message, channelId: target.id })
-          : await sendToUsers({ ...message, users: target.users });
-    } catch (error) {
-      console.error('Failed to forward message', error);
-    }
-    if (!result) {
-      toast.failure('Message failed to send');
-      return;
+    const message = {
+      attachments: [asAttachment()],
+      content: markdown(),
+      mentions: [],
+    };
+    const deliveryKey = JSON.stringify([
+      message,
+      target.type === 'channel'
+        ? target
+        : { type: target.type, users: [...target.users].sort() },
+    ]);
+    let delivery = deliveries.get(deliveryKey);
+    if (!delivery) {
+      let result;
+      try {
+        result =
+          target.type === 'channel'
+            ? await sendToChannel({ ...message, channelId: target.id })
+            : await sendToUsers({ ...message, users: target.users });
+      } catch (error) {
+        console.error('Failed to forward message', error);
+      }
+      if (!result) {
+        toast.failure('Message failed to send');
+        return;
+      }
+      delivery = { result };
+      deliveries.set(deliveryKey, delivery);
     }
 
     // Sending an attachment can automatically grant access. Apply the selected
     // level afterward so that auto-grant cannot overwrite the user's choice.
-    if (!(await submitChannelPermissions(result.channelId, accessLevel))) {
-      return;
+    if (delivery.accessLevel !== accessLevel) {
+      if (
+        !(await submitChannelPermissions(
+          delivery.result.channelId,
+          accessLevel
+        ))
+      ) {
+        return;
+      }
+      if (delivery.accessLevel === undefined) {
+        trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
+      }
+      delivery.accessLevel = accessLevel;
     }
-    trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
-    return result;
+    return delivery.result;
   }
 
   async function handleSubmit() {
@@ -403,6 +436,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           });
         }
       }
+      deliveries.clear();
       props.onSubmit?.();
     } finally {
       setIsSubmitting(false);
@@ -452,6 +486,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         when={!isMobile()}
         fallback={
           <MobileForwardToChannelLayout
+            editPermissionEnabled={props.editPermissionEnabled}
             isAuthenticated={isAuthenticated}
             selectedOptions={selectedOptions}
             setSelectedOptions={(v) => setSelectedOptions(v)}
@@ -498,6 +533,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   <span class="text-sm text-ink-extra-muted">can</span>
                 </Show>
                 <ShareOptions
+                  editPermissionEnabled={props.editPermissionEnabled}
                   setPermissions={(accessLevel) =>
                     setSubmitAccessLevel(accessLevel)
                   }

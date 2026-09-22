@@ -301,6 +301,7 @@ function GroupChannelLabel(props: { channelId: string; fallbackName: string }) {
 }
 
 interface LinkSharingControlsProps {
+  editPermissionEnabled?: boolean;
   linkShare: LinkShare | null | undefined;
   linkShareAccessLevel: AccessLevel | null | undefined;
   hasExplicitShares: boolean;
@@ -413,6 +414,7 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
           <div class="flex items-center gap-2 text-ink-muted">
             <span>Access level</span>
             <ShareOptions
+              editPermissionEnabled={props.editPermissionEnabled}
               permissions={props.linkShareAccessLevel ?? 'view'}
               hideNoAccess={true}
               setPermissions={props.setLinkShareAccessLevel}
@@ -436,6 +438,7 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
 }
 
 interface MobileShareDrawerProps {
+  editPermissionEnabled?: boolean;
   canForward: boolean;
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
@@ -558,6 +561,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
             </Show>
             <Show when={props.canForward}>
               <ForwardToChannel
+                editPermissionEnabled={props.editPermissionEnabled}
                 ref={(handle) => setForwardRef(handle)}
                 submitPermissionInfo={{
                   setChannelPermissions: (id, accessLevel) =>
@@ -645,6 +649,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                     </div>
                     <div class="flex items-center">
                       <ShareOptions
+                        editPermissionEnabled={props.editPermissionEnabled}
                         disabled={props.userPermissions !== Permissions.OWNER}
                         permissions={recipient.access_level}
                         setPermissions={(accessLevel) => {
@@ -666,6 +671,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
           </Show>
           <Show when={effectiveActiveTab() === 'link'}>
             <LinkSharingControls
+              editPermissionEnabled={props.editPermissionEnabled}
               linkShare={props.linkShare}
               linkShareAccessLevel={props.linkShareAccessLevel}
               hasExplicitShares={(props.recipients?.length ?? 0) > 0}
@@ -729,6 +735,8 @@ export function ShareModal(props: ShareModalProps) {
     props.itemType === 'agent_session' && !canForward()
       ? Permissions.CAN_VIEW
       : props.userPermissions;
+  const editPermissionEnabled = () =>
+    props.itemType === 'agent_session' ? true : undefined;
 
   const [recipientScrollRef, setRecipientScrollRef] =
     createSignal<HTMLElement>();
@@ -1206,6 +1214,7 @@ export function ShareModal(props: ShareModalProps) {
       when={!isMobile()}
       fallback={
         <MobileShareDrawer
+          editPermissionEnabled={editPermissionEnabled()}
           canForward={canForward()}
           isOpen={props.isSharePermOpen}
           setIsOpen={props.setIsSharePermOpen}
@@ -1263,6 +1272,7 @@ export function ShareModal(props: ShareModalProps) {
                   </Show>
                   <Show when={canForward()}>
                     <ForwardToChannel
+                      editPermissionEnabled={editPermissionEnabled()}
                       submitPermissionInfo={{
                         setChannelPermissions: (id, accessLevel) =>
                           setChannelPermissions(id, accessLevel, true),
@@ -1392,6 +1402,7 @@ export function ShareModal(props: ShareModalProps) {
                                 </div>
                                 <div class="flex items-center">
                                   <ShareOptions
+                                    editPermissionEnabled={editPermissionEnabled()}
                                     disabled={
                                       userPermissions() !== Permissions.OWNER
                                     }
@@ -1432,6 +1443,7 @@ export function ShareModal(props: ShareModalProps) {
                 <Panel depth={2} class="rounded-xl bg-dialog">
                   <Panel.Body>
                     <LinkSharingControls
+                      editPermissionEnabled={editPermissionEnabled()}
                       linkShare={linkShare()}
                       linkShareAccessLevel={linkShareAccessLevel()}
                       hasExplicitShares={(recipients()?.length ?? 0) > 0}
@@ -1647,6 +1659,7 @@ const PERMISSION_ICONS = {
 } as const;
 
 export function ShareOptions(props: {
+  editPermissionEnabled?: boolean;
   setPermissions: (accessLevel: AccessLevel | null) => void;
   permissions?: AccessLevel | null;
   hideNoAccess?: boolean;
@@ -1654,9 +1667,11 @@ export function ShareOptions(props: {
   disabled?: boolean;
   noBorder?: boolean;
 }) {
-  const editPermissionEnabled = isInBlock()
-    ? blockEditPermissionEnabledSignal()
-    : true;
+  const blockEditPermissionEnabled = isInBlock()
+    ? blockEditPermissionEnabledSignal
+    : () => true;
+  const editPermissionEnabled = () =>
+    props.editPermissionEnabled ?? blockEditPermissionEnabled();
   const blockName = isInBlock() ? useBlockName() : undefined;
 
   const options = createMemo(() => {
@@ -1671,7 +1686,7 @@ export function ShareOptions(props: {
     }
 
     // Add edit option if enabled
-    if (editPermissionEnabled) {
+    if (editPermissionEnabled()) {
       optionsList.push({ value: 'edit', label: accessLevelText('edit') });
     }
 

@@ -123,6 +123,8 @@ function mountForward(
     onSubmit,
     refetch,
     setChannelPermissions,
+    setAccessLevel: (level: 'view' | 'edit') =>
+      controls?.setSubmitAccessLevel(level),
     submit: () => controls?.handleSubmit(),
   };
 }
@@ -212,6 +214,86 @@ describe('forwarding with selected access', () => {
     expect(mocks.success).not.toHaveBeenCalled();
   });
 
+  it.each(['channel', 'user', 'group'] as const)(
+    'retries a failed grant for a %s without repeating its delivered message',
+    async (target) => {
+      mocks.recipients =
+        target === 'channel'
+          ? [{ kind: 'channel', id: 'channel-1' }]
+          : target === 'user'
+            ? [{ kind: 'user', id: 'user-1' }]
+            : [
+                { kind: 'user', id: 'user-1' },
+                { kind: 'user', id: 'user-2' },
+              ];
+      const sendMessage =
+        target === 'channel' ? mocks.sendToChannel : mocks.sendToUsers;
+      sendMessage.mockResolvedValue({
+        channelId: 'channel-1',
+        navigateToChannel: vi.fn(),
+      });
+      const grant = vi
+        .fn()
+        .mockResolvedValueOnce(false)
+        .mockResolvedValue(true);
+      const { submit, onSubmit, setAccessLevel } = mountForward(grant);
+
+      await submit();
+      expect(onSubmit).not.toHaveBeenCalled();
+      setAccessLevel('edit');
+      // Reordering a group's recipients still addresses the same group.
+      mocks.recipients = [...mocks.recipients].reverse();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Select recipients' })
+      );
+      await submit();
+
+      expect(sendMessage).toHaveBeenCalledOnce();
+      expect(grant).toHaveBeenNthCalledWith(1, 'channel-1', 'view');
+      expect(grant).toHaveBeenNthCalledWith(2, 'channel-1', 'edit');
+      expect(onSubmit).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('keeps completed recipients while retrying only the failed grant', async () => {
+    mocks.recipients = [
+      { kind: 'channel', id: 'channel-1' },
+      { kind: 'channel', id: 'channel-2' },
+    ];
+    mocks.sendToChannel.mockImplementation(async ({ channelId }) => ({
+      channelId,
+      navigateToChannel: vi.fn(),
+    }));
+    const grant = vi
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true);
+    const { submit, onSubmit } = mountForward(grant);
+
+    await submit();
+    expect(onSubmit).not.toHaveBeenCalled();
+    // A newly added recipient needs delivery; existing recipients do not.
+    mocks.recipients = [
+      ...mocks.recipients,
+      { kind: 'channel', id: 'channel-3' },
+    ];
+    fireEvent.click(screen.getByRole('button', { name: 'Select recipients' }));
+    await submit();
+
+    expect(mocks.sendToChannel).toHaveBeenCalledTimes(3);
+    expect(
+      mocks.sendToChannel.mock.calls.map(([message]) => message.channelId)
+    ).toEqual(['channel-1', 'channel-2', 'channel-3']);
+    expect(grant.mock.calls).toEqual([
+      ['channel-1', 'view'],
+      ['channel-2', 'view'],
+      ['channel-2', 'view'],
+      ['channel-3', 'view'],
+    ]);
+    expect(onSubmit).toHaveBeenCalledOnce();
+  });
+
   it('handles rejected permission updates without closing the dialog', async () => {
     const error = new Error('Permission update failed');
     const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -271,5 +353,20 @@ describe('forwarding with selected access', () => {
     expect(setChannelPermissions).toHaveBeenCalledOnce();
     expect(onSubmit).not.toHaveBeenCalled();
     expect(mocks.failure).toHaveBeenCalledWith('Some messages failed to send');
+
+    mocks.sendToChannel.mockResolvedValueOnce({
+      channelId: 'channel-2',
+      navigateToChannel: vi.fn(),
+    });
+    await submit();
+
+    expect(
+      mocks.sendToChannel.mock.calls.map(([message]) => message.channelId)
+    ).toEqual(['channel-1', 'channel-2', 'channel-2']);
+    expect(setChannelPermissions.mock.calls).toEqual([
+      ['channel-1', 'view'],
+      ['channel-2', 'view'],
+    ]);
+    expect(onSubmit).toHaveBeenCalledOnce();
   });
 });
