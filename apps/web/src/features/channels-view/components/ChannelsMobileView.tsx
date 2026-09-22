@@ -23,7 +23,6 @@ import {
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import { useChannelsView } from '../channels-view-context';
 import type { ChannelsDataSource } from '../queries';
 import type { ChannelsQueryScope } from '../types';
 import { channelMentionsUser } from '../utils';
@@ -55,7 +54,6 @@ export function ChannelsMobileView(props: {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const currentUserId = useUserId();
-  const { state, setSelectedChannelId } = useChannelsView();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
@@ -108,7 +106,6 @@ export function ChannelsMobileView(props: {
   }
 
   const openChannel = (channel: ChannelEntity) => {
-    setSelectedChannelId(channel.id);
     void openEntityInSplitFromUnifiedList(channel, {
       splitHandle: panel.handle,
       referredFrom: 'channels',
@@ -228,7 +225,7 @@ export function ChannelsMobileView(props: {
                       incomingCallId={channelActivity
                         .incomingCallIds()
                         .get(channel.id)}
-                      selected={state.selectedChannelId === channel.id}
+                      selected={false}
                       focused={false}
                       onActivate={() => openChannel(channel)}
                     />

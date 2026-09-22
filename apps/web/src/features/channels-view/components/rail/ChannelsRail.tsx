@@ -9,6 +9,7 @@ import {
   useViewTabHotkeys,
 } from '@app/components/view-shell';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import { favoriteSplitContent } from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -162,8 +163,14 @@ export function buildChannelRailRows(
 }
 
 export function ChannelsRail(props: ChannelsRailProps) {
-  const { state, setGroupOpen, setSelectedChannelId, setSortBy, setTab } =
-    useChannelsView();
+  const {
+    state,
+    selectedChannelId,
+    setGroupOpen,
+    setSelectedChannel,
+    setSortBy,
+    setTab,
+  } = useChannelsView();
 
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
@@ -191,7 +198,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   let searchInput: HTMLInputElement | undefined;
 
-  const previewAfterNavigation = debounce(setSelectedChannelId, 150);
+  const previewAfterNavigation = debounce(
+    (channel: ChannelPreviewSelection) => setSelectedChannel(channel),
+    150
+  );
   onCleanup(() => previewAfterNavigation.clear());
 
   const closeSearch = () => {
@@ -315,15 +325,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
     });
   });
 
+  const initialSelectedChannelId = selectedChannelId();
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
     createListController<ChannelRailRow, ChannelRailActivationMetadata>({
       items: visibleRows,
       getKey: (row) => row.id,
       isSelectable: () => false,
-      initialFocusKey:
-        state.selectedChannelId === undefined
-          ? undefined
-          : rowKeyForChannel(state.selectedChannelId),
+      initialFocusKey: initialSelectedChannelId
+        ? rowKeyForChannel(initialSelectedChannelId)
+        : undefined,
       onActivate: ({ item, metadata }) => {
         previewAfterNavigation.clear();
         const openInNewSplit =
@@ -356,7 +366,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
           return;
         }
 
-        setSelectedChannelId(channelId);
+        setSelectedChannel(
+          item.kind === 'conversation'
+            ? item.channel
+            : { type: 'channel', id: channelId }
+        );
       },
     })
   );
@@ -400,7 +414,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const items = props.sources[scope].items();
 
     const selectedIndex = items.findIndex(
-      (channel) => channel.id === state.selectedChannelId
+      (channel) => channel.id === selectedChannelId()
     );
 
     const targetIndex = selectedIndex >= 0 ? selectedIndex : 0;
@@ -422,7 +436,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const items = searchResults();
 
     const selectedIndex = items.findIndex(
-      (channel) => channel.id === state.selectedChannelId
+      (channel) => channel.id === selectedChannelId()
     );
 
     const virtualizer = virtualizers().search;
@@ -441,8 +455,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
     const favorite = favorites().find(
       (item) =>
-        item.entityType === 'channel' &&
-        item.entityId === state.selectedChannelId
+        item.entityType === 'channel' && item.entityId === selectedChannelId()
     );
     if (!favorite) return;
 
@@ -563,12 +576,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
           const row = event.result?.item;
           if (row?.kind === 'conversation') {
-            previewAfterNavigation(row.channel.id);
+            previewAfterNavigation(row.channel);
           } else if (
             row?.kind === 'favorite' &&
             row.favorite.entityType === 'channel'
           ) {
-            previewAfterNavigation(row.favorite.entityId);
+            previewAfterNavigation({
+              type: 'channel',
+              id: row.favorite.entityId,
+            });
           }
         },
       },
@@ -662,7 +678,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     selectTab,
     sources: props.sources,
     favorites,
-    selectedChannelId: () => state.selectedChannelId,
+    selectedChannelId,
     isGroupOpen: (group) => state.expandedGroups[group],
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
     sortBy: (group) => state.sortBy[group],

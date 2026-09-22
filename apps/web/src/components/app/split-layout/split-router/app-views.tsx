@@ -2,15 +2,30 @@ import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { AgentsView } from '@app/features/agents-view/views/AgentsView';
-import { ChannelsView } from '@app/features/channels-view/channels-view';
+import { channelDetailSearch } from '@app/features/channels-view/channels-route';
+import {
+  ChannelDetailRouteView,
+  ChannelsView,
+} from '@app/features/channels-view/channels-view';
+import { DriveDetailView } from '@app/features/drive-view/components/DriveDetailView';
 import {
   DriveView,
   type DriveViewProps,
 } from '@app/features/drive-view/drive-view';
+import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
+import { EmailDetailRouteView } from '@app/features/email-view/components/EmailDetailView';
+import { emailDetailSearch } from '@app/features/email-view/email-route';
 import { EmailView } from '@app/features/email-view/email-view';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
-import { InboxView } from '@app/features/inbox-view/inbox-view';
+import {
+  inboxPreviewLegacyTarget,
+  inboxPreviewSearch,
+} from '@app/features/inbox-view/inbox-route';
+import {
+  InboxDetailRouteView,
+  InboxView,
+} from '@app/features/inbox-view/inbox-view';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
@@ -19,9 +34,12 @@ import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-prese
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { McpConnections } from '@app/features/settings/McpConnections';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
+import { TasksDetailRouteView } from '@app/features/tasks-view/components/TasksDetailView';
 import { TasksView } from '@app/features/tasks-view/tasks-view';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag, usePosthog } from '@app/lib/analytics/posthog';
+import { createSearchParams, useRouteParams } from '@app/lib/split-router';
+import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import {
   CRM_VIEW_URL_PARAM,
   decodeCrmViewParam,
@@ -50,6 +68,12 @@ import {
 } from 'solid-js';
 import type { SplitContent } from '../layoutManager';
 import { useSplitPanelOrThrow } from '../layoutUtils';
+import {
+  channelDetailRoute,
+  emailThreadRoute,
+  inboxPreviewRoute,
+  taskDetailRoute,
+} from './app-routes';
 
 // Legacy fallbacks are loaded only when a view actually needs them.
 const SoupView = lazy(async () => ({
@@ -76,18 +100,6 @@ export function withAuth<P extends object>(View: Component<P>): Component<P> {
   };
 }
 
-// Settings URL helpers also read app routes. Resolve the component only when
-// rendering, so route declarations never capture a partially initialized module.
-export function withLaunchParams(
-  view: () => Component<Record<string, unknown>>
-) {
-  return () => {
-    const View = view();
-    const content = useSplitPanelOrThrow().handle.content();
-    return <View {...(content.type === 'component' ? content.params : {})} />;
-  };
-}
-
 export function RedirectSplit(props: { to: SplitContent }) {
   const panel = useSplitPanelOrThrow();
   onMount(() => panel.handle.replace({ next: props.to }));
@@ -101,6 +113,9 @@ function NewAppView(props: {
   fallback: JSX.Element;
   desktopOnly?: boolean;
   composableOnTouch?: boolean;
+  detailRequested?: () => boolean;
+  detailFallback?: JSX.Element;
+  detailDesktopOnly?: boolean;
 }) {
   usePageViewTracking(props.id);
   const panel = useSplitPanelOrThrow();
@@ -110,24 +125,36 @@ function NewAppView(props: {
   onCleanup(() => clearTimeout(timer));
   const ready = () => !flag().loading || timedOut();
   const enabled = () => ready() && flag().enabled;
+  const detailUnsupported = () =>
+    Boolean(
+      props.detailRequested?.() && props.detailDesktopOnly && isTouchDevice()
+    );
+  const surfaceSupported = () => !props.desktopOnly || !isTouchDevice();
+  const renderModern = () =>
+    enabled() && surfaceSupported() && !detailUnsupported();
+  const fallback = () => {
+    if (!props.detailRequested?.()) return props.fallback;
+    // JSX props are getters: evaluate the chosen fallback only once.
+    const detail = props.detailFallback;
+    return detail === undefined ? props.fallback : detail;
+  };
   createRenderEffect(() => {
     if (!ready()) return;
     panel.handle.updateMeta?.({
       splitPanelLayout:
-        enabled() && (!isTouchDevice() || props.composableOnTouch)
+        renderModern() && (!isTouchDevice() || props.composableOnTouch)
           ? 'composable'
           : 'legacy',
     });
   });
   return (
     <Show
-      when={ready() || (props.desktopOnly && isTouchDevice())}
+      when={
+        ready() || (props.desktopOnly && isTouchDevice()) || detailUnsupported()
+      }
       fallback={<LoadingBlock />}
     >
-      <Show
-        when={enabled() && (!props.desktopOnly || !isTouchDevice())}
-        fallback={props.fallback}
-      >
+      <Show when={renderModern()} fallback={fallback()}>
         {props.children}
       </Show>
     </Show>
@@ -155,11 +182,41 @@ function LegacyInboxView() {
     />
   );
 }
-export const InboxRouteView = withAuth(() => (
-  <NewAppView id="inbox" desktopOnly fallback={<LegacyInboxView />}>
-    <InboxView />
-  </NewAppView>
-));
+function InboxLegacyRouteView() {
+  const params = useRouteParams(inboxPreviewRoute);
+  const [search] = createSearchParams(inboxPreviewSearch);
+  const detailRequested = () =>
+    typeof params.blockType === 'string' &&
+    typeof params.previewId === 'string';
+
+  return (
+    <Show when={detailRequested()} fallback={<LegacyInboxView />}>
+      <RedirectSplit
+        to={inboxPreviewLegacyTarget(params, search) as SplitContent}
+      />
+    </Show>
+  );
+}
+
+export const InboxRouteView = withAuth(() => {
+  const params = useRouteParams(inboxPreviewRoute);
+  const detailRequested = () =>
+    typeof params.blockType === 'string' &&
+    typeof params.previewId === 'string';
+
+  return (
+    <NewAppView
+      id="inbox"
+      desktopOnly
+      detailDesktopOnly
+      detailRequested={detailRequested}
+      detailFallback={<InboxLegacyRouteView />}
+      fallback={<LegacyInboxView />}
+    >
+      <InboxView />
+    </NewAppView>
+  );
+});
 
 function TrackedRecentView() {
   usePageViewTracking('recent');
@@ -316,11 +373,54 @@ function LegacyMailView() {
     />
   );
 }
-export const MailView = withAuth(() => (
-  <NewAppView id="mail" fallback={<LegacyMailView />}>
-    <EmailView />
-  </NewAppView>
-));
+function MailLegacyRouteView() {
+  const params = useRouteParams(emailThreadRoute);
+  const [search] = createSearchParams(emailDetailSearch);
+  const messageId = () =>
+    search.messageId ||
+    new URLSearchParams(window.location.search)
+      .getAll(EMAIL_URL_PARAMS.messageId)
+      .at(-1);
+
+  return (
+    <Show when={params.threadId} fallback={<LegacyMailView />}>
+      {(threadId) => (
+        <RedirectSplit
+          to={
+            {
+              type: 'email',
+              id: threadId(),
+              ...(messageId()
+                ? {
+                    params: {
+                      [EMAIL_URL_PARAMS.messageId]: messageId(),
+                    },
+                  }
+                : {}),
+            } as SplitContent
+          }
+        />
+      )}
+    </Show>
+  );
+}
+
+export const MailView = withAuth(() => {
+  const params = useRouteParams(emailThreadRoute);
+  const detailRequested = () => typeof params.threadId === 'string';
+
+  return (
+    <NewAppView
+      id="mail"
+      detailDesktopOnly
+      detailRequested={detailRequested}
+      detailFallback={<MailLegacyRouteView />}
+      fallback={<LegacyMailView />}
+    >
+      <EmailView />
+    </NewAppView>
+  );
+});
 
 export const DriveRouteView = withAuth(
   (
@@ -389,11 +489,32 @@ function LegacyTasksView() {
     />
   );
 }
-export const TasksRouteView = withAuth(() => (
-  <NewAppView id="tasks" composableOnTouch fallback={<LegacyTasksView />}>
-    <TasksView />
-  </NewAppView>
-));
+function TasksLegacyRouteView() {
+  const params = useRouteParams(taskDetailRoute);
+  return (
+    <Show when={params.taskId} fallback={<LegacyTasksView />}>
+      {(taskId) => <RedirectSplit to={{ type: 'task', id: taskId() }} />}
+    </Show>
+  );
+}
+
+export const TasksRouteView = withAuth(() => {
+  const params = useRouteParams(taskDetailRoute);
+  const detailRequested = () => typeof params.taskId === 'string';
+
+  return (
+    <NewAppView
+      id="tasks"
+      composableOnTouch
+      detailDesktopOnly
+      detailRequested={detailRequested}
+      detailFallback={<TasksLegacyRouteView />}
+      fallback={<LegacyTasksView />}
+    >
+      <TasksView />
+    </NewAppView>
+  );
+});
 
 function LegacyChannelsView() {
   const preset = getViewPreset('channels');
@@ -406,11 +527,57 @@ function LegacyChannelsView() {
     />
   );
 }
-export const ChannelsRouteView = withAuth(() => (
-  <NewAppView id="channels" fallback={<LegacyChannelsView />}>
-    <ChannelsView />
-  </NewAppView>
-));
+function ChannelsLegacyRouteView() {
+  const params = useRouteParams(channelDetailRoute);
+  const [search] = createSearchParams(channelDetailSearch);
+  const raw = new URLSearchParams(window.location.search);
+  const messageId = () =>
+    search.messageId || raw.getAll(CHANNEL_URL_PARAMS.message).at(-1);
+  const threadId = () =>
+    search.threadId || raw.getAll(CHANNEL_URL_PARAMS.thread).at(-1);
+
+  return (
+    <Show when={params.channelId} fallback={<LegacyChannelsView />}>
+      {(channelId) => (
+        <RedirectSplit
+          to={
+            {
+              type: 'channel',
+              id: channelId(),
+              ...(messageId()
+                ? {
+                    params: {
+                      [CHANNEL_URL_PARAMS.message]: messageId(),
+                      ...(threadId()
+                        ? { [CHANNEL_URL_PARAMS.thread]: threadId() }
+                        : {}),
+                    },
+                  }
+                : {}),
+            } as SplitContent
+          }
+        />
+      )}
+    </Show>
+  );
+}
+
+export const ChannelsRouteView = withAuth(() => {
+  const params = useRouteParams(channelDetailRoute);
+  const detailRequested = () => typeof params.channelId === 'string';
+
+  return (
+    <NewAppView
+      id="channels"
+      detailDesktopOnly
+      detailRequested={detailRequested}
+      detailFallback={<ChannelsLegacyRouteView />}
+      fallback={<LegacyChannelsView />}
+    >
+      <ChannelsView />
+    </NewAppView>
+  );
+});
 
 export const CallsView = withAuth(() => {
   usePageViewTracking('calls');
@@ -485,3 +652,36 @@ export const SearchView = withAuth(
   }
 );
 export const SettingsView = SettingsPanelComponentWrapper;
+
+const appRouteViews = {
+  home: HomeView,
+  'getting-started': GettingStartedView,
+  inbox: InboxRouteView,
+  'inbox-detail': InboxDetailRouteView,
+  recent: RecentView,
+  activity: ActivityView,
+  reminders: RemindersView,
+  agents: AgentsRouteView,
+  mail: MailView,
+  'mail-detail': EmailDetailRouteView,
+  drive: DriveRouteView,
+  'drive-detail': DriveDetailView,
+  tasks: TasksRouteView,
+  'tasks-detail': TasksDetailRouteView,
+  channels: ChannelsRouteView,
+  'channels-detail': ChannelDetailRouteView,
+  calls: CallsView,
+  companies: CompaniesView,
+  folders: FoldersView,
+  search: SearchView,
+  settings: SettingsView,
+} as const;
+
+export type AppRouteViewId = keyof typeof appRouteViews;
+
+/** Shared lazy boundary target for every application route component. */
+export function AppRouteRenderer(props: { view: AppRouteViewId }) {
+  const View = appRouteViews[props.view] as Component<Record<string, unknown>>;
+  const content = useSplitPanelOrThrow().handle.content();
+  return <View {...(content.type === 'component' ? content.params : {})} />;
+}

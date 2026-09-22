@@ -6,7 +6,7 @@ import { batch, type ParentProps, Show } from 'solid-js';
 import { useDriveView } from './context/drive-context';
 import type { DriveLocation } from './core/types';
 import { DriveFolderActions } from './drive-folder-actions';
-import { driveDestination } from './primitives/drive-route';
+import { driveDestination } from './drive-route-navigation';
 
 /** App-specific split/menu wiring shared by Drive's sidebar locations. */
 export function DriveLocationMenu(

@@ -21,10 +21,10 @@ import {
   type Setter,
 } from 'solid-js';
 import type { DriveLocation, DriveState } from '../core/types';
+import { driveDestination } from '../drive-route-navigation';
 import {
   type DriveRouteParams,
   type DriveSearchParams,
-  driveDestination,
   driveLocationFromParams,
   driveSearch,
 } from './drive-route';

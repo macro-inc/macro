@@ -3,10 +3,7 @@ import {
   agentsRouteSegments,
 } from '@app/features/agents-view/core/route';
 import type { DriveLocation } from '@app/features/drive-view/core/types';
-import {
-  type DriveDocumentRoute,
-  driveDestination,
-} from '@app/features/drive-view/primitives/drive-route';
+import type { DriveDocumentRoute } from '@app/features/drive-view/primitives/drive-route';
 import {
   defineRoute,
   routeParams,
@@ -177,7 +174,12 @@ export function driveSplitContent(
   }
   if (document) {
     matches.push({
-      id: driveDestination(location, document).route.id,
+      id:
+        location.kind === 'folder'
+          ? 'drive-folder-document'
+          : location.tab === 'owned'
+            ? 'drive-document'
+            : 'drive-tab-document',
       params: { documentId: document.id, documentType: document.type },
     });
   }

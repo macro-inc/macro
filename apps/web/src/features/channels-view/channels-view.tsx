@@ -1,5 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
+import { SplitRouter } from '@app/lib/split-router';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -7,16 +8,11 @@ import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createMemo, createSignal, onMount, Show, Suspense } from 'solid-js';
+import { createSignal, onMount, Show, Suspense } from 'solid-js';
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
-import {
-  deduplicateChannels,
-  resolveSelectedChannel,
-  useChannelByIdQuery,
-  useChannelsSources,
-} from './queries';
+import { useChannelsSources } from './queries';
 import type { ChannelsViewStateOptions } from './types';
 
 export type ChannelsViewProps = {
@@ -26,8 +22,7 @@ export type ChannelsViewProps = {
 
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const orchestrator = useGlobalBlockOrchestrator();
-  const { state, mobileLayout, previewChannelId, setAsideWidth, setMobileTab } =
+  const { state, mobileLayout, setAsideWidth, setMobileTab } =
     useChannelsView();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
@@ -42,38 +37,6 @@ function ChannelsViewRoot() {
     },
     (group) => state.sortBy[group]
   );
-  const loadedChannels = createMemo(() =>
-    deduplicateChannels([
-      sources.channels.items(),
-      sources.direct_messages.items(),
-      sources.recents.items(),
-      sources.search.items(),
-    ])
-  );
-  const loadedSelectedChannel = createMemo(() =>
-    resolveSelectedChannel(previewChannelId(), loadedChannels())
-  );
-  const selectedChannelQuery = useChannelByIdQuery(
-    previewChannelId,
-    () =>
-      !mobileLayout() &&
-      previewChannelId() !== undefined &&
-      loadedSelectedChannel() === undefined
-  );
-  const selectedChannel = createMemo(() => {
-    const loaded = loadedSelectedChannel();
-    if (loaded) return loaded;
-    if (!selectedChannelQuery.isEnabled || selectedChannelQuery.isLoading) {
-      return;
-    }
-
-    return resolveSelectedChannel(
-      previewChannelId(),
-      loadedChannels(),
-      selectedChannelQuery.data?.entities
-    );
-  });
-
   onMount(() => panel.handle.setDisplayName('Channels'));
 
   return (
@@ -102,9 +65,8 @@ function ChannelsViewRoot() {
                       />
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
-                      <Show
-                        when={selectedChannel()}
-                        fallback={
+                      <SplitRouter.Outlet
+                        fallback={() => (
                           <>
                             <ViewShell.TopBar>
                               <span class="text-sm font-semibold">Chat</span>
@@ -121,18 +83,8 @@ function ChannelsViewRoot() {
                               </div>
                             </div>
                           </>
-                        }
-                      >
-                        {(channel) => (
-                          <Suspense>
-                            <PreviewPanel
-                              selectedEntity={channel()}
-                              orchestrator={orchestrator}
-                              splitPanelContext={panel}
-                            />
-                          </Suspense>
                         )}
-                      </Show>
+                      />
                     </ViewShell.Main>
                   </ViewShell.Root>
                 </div>
@@ -161,6 +113,22 @@ function ChannelsViewRoot() {
         </SplitPanel.Root>
       </StaticMarkdownContext>
     </ListEntityMetadataQueryProvider>
+  );
+}
+
+export function ChannelDetailRouteView() {
+  const panel = useSplitPanelOrThrow();
+  const orchestrator = useGlobalBlockOrchestrator();
+  const { selectedChannel } = useChannelsView();
+
+  return (
+    <Suspense>
+      <PreviewPanel
+        selectedEntity={selectedChannel()}
+        orchestrator={orchestrator}
+        splitPanelContext={panel}
+      />
+    </Suspense>
   );
 }
 

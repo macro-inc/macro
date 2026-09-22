@@ -11,7 +11,6 @@ export type ChannelsQueryScope = ChannelsGroup | 'recents';
 export type ChannelsViewState = {
   tab: ChannelsTab;
   mobileTab: ChannelsQueryScope;
-  selectedChannelId?: string;
   expandedGroups: Record<ChannelsRailSection, boolean>;
   sortBy: Record<ChannelsGroup, ChannelListSort>;
   asideWidth: number;

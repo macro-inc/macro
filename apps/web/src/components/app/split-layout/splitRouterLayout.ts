@@ -98,14 +98,16 @@ export function createAppSplitRouterLayout(
 
       if (!handle) return;
 
-      handle.updateCurrentEntry((content) => {
-        const next = update({
-          splitId,
-          location: locationOf(content),
-        });
-
-        return contentForLocation(next.location, content);
-      });
+      const current = locationOf(handle.content());
+      const next = update({ splitId, location: current });
+      // Child routes keep the workspace mounted but can dispose its list.
+      // Capture list focus/scroll before committing that accepted transition.
+      if (!deepEqual(current.route, next.location.route)) {
+        handle.captureEntryState();
+      }
+      handle.updateCurrentEntry((content) =>
+        contentForLocation(next.location, content)
+      );
     },
 
     open({ location, target, replace }) {
@@ -122,6 +124,16 @@ export function createAppSplitRouterLayout(
     },
 
     reconcile(entries) {
+      for (const [index, split] of manager.getVisibleSplits().entries()) {
+        if (
+          !deepEqual(
+            locationOf(split.content).route,
+            entries[index]?.location.route
+          )
+        ) {
+          manager.getSplit(split.id)?.captureEntryState();
+        }
+      }
       const visible = manager.getVisibleSplits();
       manager.reconcile(
         entries.map((entry, index) =>

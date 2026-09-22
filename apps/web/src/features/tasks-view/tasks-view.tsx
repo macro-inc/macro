@@ -1,21 +1,10 @@
-import {
-  EntityDetailNavigationStack,
-  useEntityDetailNavigationStack,
-} from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { SplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import {
-  createSignal,
-  Match,
-  onMount,
-  type ParentProps,
-  Suspense,
-  Switch,
-} from 'solid-js';
-import { TasksDetailView } from './components/TasksDetailView';
+import { createSignal, onMount, type ParentProps, Suspense } from 'solid-js';
 import {
   TasksHeader,
   TasksTopBar,
@@ -40,18 +29,17 @@ function TasksListFallback() {
 }
 
 function TasksViewBreadcrumbs(props: ParentProps) {
-  const { closeTask } = useTasksView();
-  const navigationStack = useEntityDetailNavigationStack();
+  const { closeTask, selectedTask } = useTasksView();
+  const value = () => {
+    const task = selectedTask();
+    return task ? `task:${task.id}` : 'tasks-view';
+  };
 
   return (
     <ViewBreadcrumbs.Root
-      value={navigationStack.active()?.value ?? 'tasks-view'}
-      onChange={(value) => {
-        if (value === 'tasks-view') {
-          closeTask();
-          return;
-        }
-        navigationStack.popTo(value);
+      value={value()}
+      onChange={(next) => {
+        if (next === 'tasks-view') closeTask();
       }}
     >
       <TaskViewBreadcrumbItem />
@@ -62,10 +50,23 @@ function TasksViewBreadcrumbs(props: ParentProps) {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { selectedTask } = useTasksView();
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
 
   onMount(() => panel.handle.setDisplayName('Tasks'));
+
+  const list = () => (
+    <>
+      <TasksTopBar />
+      <ViewShell.Header>
+        <TasksHeader onSearchEscape={() => listElement()?.focus()} />
+      </ViewShell.Header>
+      <ViewShell.Content>
+        <Suspense fallback={<TasksListFallback />}>
+          <TaskList ref={setListElement} />
+        </Suspense>
+      </ViewShell.Content>
+    </>
+  );
 
   return (
     <SplitPanel.Root>
@@ -80,22 +81,7 @@ function TasksViewRoot() {
             <TasksSidebar />
           </ViewShell.Aside>
           <ViewShell.Main>
-            <Switch>
-              <Match when={selectedTask()}>
-                {(task) => <TasksDetailView task={task()} />}
-              </Match>
-              <Match when={!selectedTask()}>
-                <TasksTopBar />
-                <ViewShell.Header>
-                  <TasksHeader onSearchEscape={() => listElement()?.focus()} />
-                </ViewShell.Header>
-                <ViewShell.Content>
-                  <Suspense fallback={<TasksListFallback />}>
-                    <TaskList ref={setListElement} />
-                  </Suspense>
-                </ViewShell.Content>
-              </Match>
-            </Switch>
+            <SplitRouter.Outlet fallback={list} />
           </ViewShell.Main>
         </ViewShell.Root>
       </SplitPanel.Body>
@@ -106,14 +92,12 @@ function TasksViewRoot() {
 /** Production Tasks view. */
 export function TasksView(props: TasksViewProps) {
   return (
-    <EntityDetailNavigationStack.Root>
-      <ListEntityMetadataQueryProvider>
-        <TasksViewProvider initialState={props.initialState}>
-          <TasksViewBreadcrumbs>
-            <TasksViewRoot />
-          </TasksViewBreadcrumbs>
-        </TasksViewProvider>
-      </ListEntityMetadataQueryProvider>
-    </EntityDetailNavigationStack.Root>
+    <ListEntityMetadataQueryProvider>
+      <TasksViewProvider initialState={props.initialState}>
+        <TasksViewBreadcrumbs>
+          <TasksViewRoot />
+        </TasksViewBreadcrumbs>
+      </TasksViewProvider>
+    </ListEntityMetadataQueryProvider>
   );
 }

@@ -3,40 +3,22 @@ import {
   normalizeFacetSelection,
 } from '@app/features/soup/filters/facets/selection';
 import {
-  defineRoute,
-  defineRoutes,
-  routeParams,
-} from '@app/lib/split-router/routes';
-import {
   type CreateSearchParamsOptions,
   isSafeName,
   type SerializedSearchParams,
-  type SplitRouteNavigationTarget,
   type SplitRouteParams,
-  type SplitRouterEntry,
-  type SplitRouteUnion,
   takeLast,
 } from '@app/split-router';
-import { URL_PARAMS as MARKDOWN_URL_PARAMS } from '@block-md/constants';
-import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import { z } from 'zod';
 import type { DriveLocation, DriveTab } from '../core/types';
+import {
+  DRIVE_DOCUMENT_TYPES,
+  type DriveDocumentType,
+  driveDocumentBlockType,
+} from './drive-route-schema';
 
-export const DRIVE_DOCUMENT_TYPES = [
-  'md',
-  'task',
-  'skill',
-  'snippet',
-  'canvas',
-  'pdf',
-  'code',
-  'csv',
-  'image',
-  'video',
-  'spreadsheet',
-  'unknown',
-] as const;
-export type DriveDocumentType = (typeof DRIVE_DOCUMENT_TYPES)[number];
+export type { DriveDocumentType };
+export { DRIVE_DOCUMENT_TYPES };
 export type DriveDocumentRoute = { id: string; type: DriveDocumentType };
 export type DriveRouteParams = SplitRouteParams & {
   tab?: DriveTab;
@@ -46,77 +28,7 @@ export type DriveRouteParams = SplitRouteParams & {
   documentType?: DriveDocumentType;
 };
 
-function documentBlockType(type: string) {
-  if (type === 'task' || type === 'snippet' || type === 'skill') return 'md';
-  return type === 'csv' ? 'code' : type;
-}
-
 const documentType = z.enum(DRIVE_DOCUMENT_TYPES);
-const documentParams = z.object({
-  documentType,
-  documentId: z.string().min(1),
-});
-
-function documentRoute<const TId extends string>(id: TId) {
-  return defineRoute({
-    id,
-    path: ':documentType/:documentId',
-    params: documentParams,
-    claim: ({ documentType, documentId }) => ({
-      namespace: 'block',
-      id: `${documentBlockType(documentType)}:${documentId}`,
-    }),
-  });
-}
-
-const rootDocument = documentRoute('drive-document');
-const folderDocument = documentRoute('drive-folder-document');
-const tabDocument = documentRoute('drive-tab-document');
-const folderRoute = defineRoute({
-  id: 'drive-folder',
-  path: 'folder/:folderId?',
-  params: z
-    .object({ folderId: z.string().min(1).optional() })
-    .transform(({ folderId }) => ({ view: 'folder' as const, folderId })),
-  children: [folderDocument],
-});
-const tabRoute = defineRoute({
-  id: 'drive-tab',
-  path: ':tab',
-  aliases: ['tab/:tab'],
-  params: z.object({ tab: z.enum(['recent', 'shared']) }),
-  children: [tabDocument],
-});
-
-const driveRoutes = defineRoutes({
-  definitions: [
-    defineRoute({
-      id: 'drive',
-      path: 'drive',
-      aliases: ['drive/owned', 'drive/tab/owned'],
-      params: z.object({}),
-      // Drive lists are independent workspaces, not singleton content. Only the
-      // document children claim content; returning to a list must stay in its pane.
-      search: ['drive'],
-      externalSearch: (entry: Readonly<SplitRouterEntry>) => {
-        const type = routeParams<DriveRouteParams>(
-          entry.location.route
-        ).documentType;
-        if (
-          type === 'md' ||
-          type === 'task' ||
-          type === 'snippet' ||
-          type === 'skill'
-        ) {
-          return Object.values(MARKDOWN_URL_PARAMS);
-        }
-        return type === 'pdf' ? Object.values(PDF_URL_PARAMS) : [];
-      },
-      children: [folderRoute, tabRoute, rootDocument],
-    }),
-  ],
-});
-export const driveSplitRoute = driveRoutes.definitions[0];
 
 export function driveLocationFromParams(
   params: DriveRouteParams
@@ -131,40 +43,6 @@ export function driveDocumentFromParams(
 ): DriveDocumentRoute | undefined {
   if (!params.documentId || !params.documentType) return;
   return { id: params.documentId, type: params.documentType };
-}
-
-type DriveDestination = SplitRouteNavigationTarget<
-  SplitRouteUnion<typeof driveRoutes>
->;
-
-/** One typed destination builder for list and detail navigation. */
-export function driveDestination(
-  location: DriveLocation,
-  document?: DriveDocumentRoute
-): DriveDestination {
-  const [folder, tab, rootDetail] = driveSplitRoute.children;
-  const detail = document && {
-    documentId: document.id,
-    documentType: document.type,
-  };
-  if (location.kind === 'folder') {
-    const params = {
-      view: 'folder' as const,
-      folderId: location.id ?? undefined,
-    };
-    return detail
-      ? { route: folder.children[0], params: { ...params, ...detail } }
-      : { route: folder, params };
-  }
-  if (location.tab !== 'owned') {
-    const params = { tab: location.tab };
-    return detail
-      ? { route: tab.children[0], params: { ...params, ...detail } }
-      : { route: tab, params };
-  }
-  return detail
-    ? { route: rootDetail, params: detail }
-    : { route: driveSplitRoute, params: {} };
 }
 
 /** String URLs are only needed at legacy redirect boundaries. */
@@ -190,7 +68,7 @@ export function driveDocumentRoute(document: {
     id: document.id,
     type:
       documentType.safeParse(
-        documentBlockType(document.subType ?? document.fileType)
+        driveDocumentBlockType(document.subType ?? document.fileType)
       ).data ?? 'unknown',
   };
 }
@@ -199,7 +77,9 @@ export function driveDocumentFromContent(content: {
   type: string;
   id: string;
 }): DriveDocumentRoute | undefined {
-  const type = documentType.safeParse(documentBlockType(content.type)).data;
+  const type = documentType.safeParse(
+    driveDocumentBlockType(content.type)
+  ).data;
   return type ? { id: content.id, type } : undefined;
 }
 

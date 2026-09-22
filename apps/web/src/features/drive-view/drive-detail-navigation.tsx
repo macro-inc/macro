@@ -22,10 +22,10 @@ import {
   useContext,
 } from 'solid-js';
 import type { DriveLocation } from './core/types';
+import { driveDestination } from './drive-route-navigation';
 import {
   type DriveDocumentRoute,
   type DriveRouteParams,
-  driveDestination,
   driveDocumentFromParams,
   driveDocumentRoute,
 } from './primitives/drive-route';
