@@ -5566,6 +5566,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "mention_utils",
  "messages",
  "mockall",
  "model",

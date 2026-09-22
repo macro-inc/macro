@@ -19,10 +19,13 @@ pub mod outbound;
 pub use domain::error::PropertiesErr;
 pub use domain::model::{
     CRM_TEAM_STAGE_DEFINITION_NAME, EditReceipt, EntityPropertiesKey, EntityPropertyInfo,
-    PropertyAccessReceiptExt, PropertyOptionInfo, PropertyTargetKey, ViewReceipt,
-    canonical_entity_type,
+    PropertyAccessReceiptExt, PropertyOptionInfo, PropertyTargetKey, TaskAgentAssignment,
+    TaskAssignees, ViewReceipt, canonical_entity_type,
 };
-pub use domain::ports::{NotificationService, PermissionService, PropertiesRepo};
+pub use domain::ports::{
+    AgentAssignmentService, NoAgentAssignment, NotificationService, PermissionService,
+    PropertiesRepo,
+};
 pub use domain::service::{PropertiesService, TeamReceipt};
 pub use domain::service_impl::PropertiesServiceImpl;
 #[cfg(feature = "outbound")]

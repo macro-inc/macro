@@ -145,6 +145,7 @@ macro_sync_service_jwt = { path = "../../crates/macro_sync_service_jwt" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
+mention_utils = { path = "../../crates/mention_utils" }
 mockall = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }

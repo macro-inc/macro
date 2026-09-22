@@ -24,8 +24,8 @@ use super::model::{
     EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
     EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreatePropertyOptionResult,
     GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, PropertyOptionReplaceOutcome,
-    PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
-    UpdatePropertyOptionOutcome, ViewReceipt,
+    PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome, TaskAgentAssignment,
+    TaskAssignedNotification, UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
 /// Repository trait for property operations.
@@ -458,4 +458,56 @@ pub trait NotificationService: Send + Sync + 'static {
         &self,
         notification: TaskAssignedNotification<'a>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Puts an agent to work on a task it was just assigned to.
+///
+/// Assigning an agent is the same act as summoning it in a conversation, so
+/// the adapter is expected to invoke it the way a person would - addressed in
+/// the task's own discussion, on the assigning user's authority - rather than
+/// to open a session behind the agent-invocation rules' back.
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait AgentAssignmentService: Send + Sync + 'static {
+    type Err;
+
+    /// Ask the assigned agent to start on the task.
+    ///
+    /// Only called for agents that were not already assigned, so an adapter
+    /// does not have to deduplicate repeat writes of an unchanged value.
+    fn start_assigned_agent<'a>(
+        &self,
+        assignment: TaskAgentAssignment<'a>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+impl<T: AgentAssignmentService> AgentAssignmentService for std::sync::Arc<T> {
+    type Err = T::Err;
+
+    fn start_assigned_agent<'a>(
+        &self,
+        assignment: TaskAgentAssignment<'a>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send {
+        T::start_assigned_agent(self, assignment)
+    }
+}
+
+/// The [`AgentAssignmentService`] used where assigning an agent does nothing,
+/// such as services that never host task discussions.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoAgentAssignment;
+
+impl AgentAssignmentService for NoAgentAssignment {
+    type Err = anyhow::Error;
+
+    async fn start_assigned_agent<'a>(
+        &self,
+        assignment: TaskAgentAssignment<'a>,
+    ) -> Result<(), Self::Err> {
+        tracing::debug!(
+            task_id = %assignment.task_id,
+            bot_id = %assignment.bot_id,
+            "no agent assignment service configured; assigned agent not started"
+        );
+        Ok(())
+    }
 }

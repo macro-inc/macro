@@ -1,11 +1,12 @@
 use super::*;
 
-impl<R, P, N, B> PropertiesServiceImpl<R, P, N, B>
+impl<R, P, N, B, A> PropertiesServiceImpl<R, P, N, B, A>
 where
     R: PropertiesRepo,
     P: PermissionService,
     N: NotificationService,
     B: MacroEventBroker,
+    A: AgentAssignmentService,
     anyhow::Error: From<R::Err>,
 {
     pub(super) async fn prepare_property_option(

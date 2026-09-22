@@ -46,7 +46,10 @@ use super::model::{
     ResolvedPropertySubject, TagPromotionOutcome, TagRemapOutcome, TagScope, TagSet,
     UpdatePropertyOptionOutcome, ViewReceipt,
 };
-use super::ports::{NotificationService, PermissionService, PropertiesRepo};
+use super::ports::{
+    AgentAssignmentService, NoAgentAssignment, NotificationService, PermissionService,
+    PropertiesRepo,
+};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
 
 use helpers::{
@@ -89,19 +92,21 @@ fn published_event_actors(access: &EditReceipt) -> PublishedEventActors {
 }
 
 /// Implementation of [`PropertiesService`] using repository, permission,
-/// notification, and event-publishing ports.
+/// notification, agent-assignment, and event-publishing ports.
 #[derive(Debug)]
-pub struct PropertiesServiceImpl<R, P, N, B = NoopMacroEventBroker>
+pub struct PropertiesServiceImpl<R, P, N, B = NoopMacroEventBroker, A = NoAgentAssignment>
 where
     R: PropertiesRepo,
     P: PermissionService,
     N: NotificationService,
     B: MacroEventBroker,
+    A: AgentAssignmentService,
 {
     repository: R,
     permission_service: Option<P>,
     notification_service: Option<N>,
     event_broker: B,
+    agent_assignment: A,
 }
 
 impl<R, P, N> PropertiesServiceImpl<R, P, N>
@@ -121,27 +126,44 @@ where
             permission_service,
             notification_service,
             event_broker: NoopMacroEventBroker,
+            agent_assignment: NoAgentAssignment,
         }
     }
 }
 
-impl<R, P, N, B> PropertiesServiceImpl<R, P, N, B>
+impl<R, P, N, B, A> PropertiesServiceImpl<R, P, N, B, A>
 where
     R: PropertiesRepo,
     P: PermissionService,
     N: NotificationService,
     B: MacroEventBroker,
+    A: AgentAssignmentService,
 {
     /// Replace the event broker while preserving every other service dependency.
     pub fn with_event_broker<B2: MacroEventBroker>(
         self,
         event_broker: B2,
-    ) -> PropertiesServiceImpl<R, P, N, B2> {
+    ) -> PropertiesServiceImpl<R, P, N, B2, A> {
         PropertiesServiceImpl {
             repository: self.repository,
             permission_service: self.permission_service,
             notification_service: self.notification_service,
             event_broker,
+            agent_assignment: self.agent_assignment,
+        }
+    }
+
+    /// Supply the capability that puts a newly assigned agent to work.
+    pub fn with_agent_assignment<A2: AgentAssignmentService>(
+        self,
+        agent_assignment: A2,
+    ) -> PropertiesServiceImpl<R, P, N, B, A2> {
+        PropertiesServiceImpl {
+            repository: self.repository,
+            permission_service: self.permission_service,
+            notification_service: self.notification_service,
+            event_broker: self.event_broker,
+            agent_assignment,
         }
     }
 
@@ -509,13 +531,14 @@ where
     }
 }
 
-impl<R, P, N, B> PropertiesService for PropertiesServiceImpl<R, P, N, B>
+impl<R, P, N, B, A> PropertiesService for PropertiesServiceImpl<R, P, N, B, A>
 where
     R: PropertiesRepo,
     P: PermissionService,
     N: NotificationService,
     B: MacroEventBroker,
-    anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
+    A: AgentAssignmentService,
+    anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err> + From<A::Err>,
 {
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]
     async fn get_entity_properties(

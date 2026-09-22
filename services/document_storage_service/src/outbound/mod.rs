@@ -2,3 +2,4 @@
 
 pub mod entity_mutation;
 pub mod initiative_description_documents;
+pub mod task_agent_assignment;

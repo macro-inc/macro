@@ -4,11 +4,14 @@ use super::service_impl::PropertiesServiceImpl;
 use crate::domain::error::PropertiesErr;
 use crate::domain::model::{
     EditReceipt, EntityPropertyMutationSnapshot, GetOrCreateTagDefinitionResult,
-    PropertyAccessReceiptExt, TagScope, UpdatePropertyOptionOutcome, ViewReceipt,
+    PropertyAccessReceiptExt, TagScope, TaskAssignees, UpdatePropertyOptionOutcome, ViewReceipt,
     canonical_entity_type,
 };
 use crate::domain::{
-    ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
+    ports::{
+        MockAgentAssignmentService, MockNotificationService, MockPermissionService,
+        MockPropertiesRepo,
+    },
     service::PropertiesService,
 };
 use anyhow::anyhow;
@@ -33,7 +36,7 @@ use models_properties::{
         property_value::PropertyValue,
     },
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
@@ -2419,39 +2422,13 @@ struct NotificationTestCase {
 }
 
 async fn check_notifications(test_case: NotificationTestCase) {
-    let mut repo = MockPropertiesRepo::new();
+    let repo = MockPropertiesRepo::new();
     let mut notif_service = MockNotificationService::new();
 
     let task_id = test_case.task_id;
     let assigned_by = test_case.assigned_by.clone();
     let assignees = test_case.assignees.clone();
-    let existing_assignees = test_case.existing_assignees.clone();
-
-    // Mock: get current assignees
-    repo.expect_get_entity_property_value()
-        .withf(move |entity_id, entity_type, prop_id| {
-            entity_id == task_id.to_string()
-                && *entity_type == EntityType::Task
-                && *prop_id == SystemPropertyKey::ASSIGNEES_UUID
-        })
-        .returning({
-            let existing = existing_assignees.clone();
-            move |_, _, _| {
-                if existing.is_empty() {
-                    Box::pin(async { Ok(None) })
-                } else {
-                    let refs: Vec<models_properties::shared::EntityReference> = existing
-                        .iter()
-                        .map(|id| models_properties::shared::EntityReference {
-                            entity_type: EntityType::User,
-                            entity_id: id.clone(),
-                            specific_message_id: None,
-                        })
-                        .collect();
-                    Box::pin(async { Ok(Some(PropertyValue::EntityRef(refs))) })
-                }
-            }
-        });
+    let previous: HashSet<String> = test_case.existing_assignees.iter().cloned().collect();
 
     // Mock: send notifications (one batched call covering all new assignees)
     if test_case.notification_service_available && test_case.expected_notification_count > 0 {
@@ -2489,7 +2466,7 @@ async fn check_notifications(test_case: NotificationTestCase) {
 
     let assigned_by = MacroUserIdStr::parse_from_str(&assigned_by).unwrap();
     service
-        .handle_task_assignee_notifications(task_id, &assignees, Some(&assigned_by))
+        .handle_task_assignee_notifications(task_id, &assignees, &previous, Some(&assigned_by))
         .await
         .unwrap();
 }
@@ -2585,6 +2562,7 @@ async fn test_handle_task_assignee_notifications_internal_write_skips() {
         .handle_task_assignee_notifications(
             Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
             &[MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap()],
+            &HashSet::new(),
             None,
         )
         .await
@@ -2646,6 +2624,239 @@ async fn test_handle_task_assignees_property_calls_both_handlers() {
     let assigned_by = MacroUserIdStr::parse_from_str(&assigned_by).unwrap();
     service
         .handle_task_assignees_property(&entity_id, value, Some(&assigned_by))
+        .await
+        .unwrap();
+}
+
+// ============================================================================
+// agent assignee unit tests
+// ============================================================================
+
+const TEST_AGENT_BOT: &str = "bot|00000000-0000-0000-0000-00000000c5c5";
+
+fn assignee_references(
+    principal_ids: &[&str],
+) -> Option<models_properties::api::requests::SetPropertyValue> {
+    Some(
+        models_properties::api::requests::SetPropertyValue::MultiEntityReference {
+            references: principal_ids
+                .iter()
+                .map(|id| models_properties::shared::EntityReference {
+                    entity_type: EntityType::User,
+                    entity_id: (*id).to_string(),
+                    specific_message_id: None,
+                })
+                .collect(),
+        },
+    )
+}
+
+/// A repository whose stored assignee list is `existing`.
+fn repo_with_assignees(existing: &[&str]) -> MockPropertiesRepo {
+    let mut repo = MockPropertiesRepo::new();
+    let existing: Vec<String> = existing.iter().map(|id| (*id).to_string()).collect();
+    repo.expect_get_entity_property_value()
+        .returning(move |_, _, _| {
+            if existing.is_empty() {
+                return Box::pin(async { Ok(None) });
+            }
+            let refs: Vec<models_properties::shared::EntityReference> = existing
+                .iter()
+                .map(|id| models_properties::shared::EntityReference {
+                    entity_type: EntityType::User,
+                    entity_id: id.clone(),
+                    specific_message_id: None,
+                })
+                .collect();
+            Box::pin(async { Ok(Some(PropertyValue::EntityRef(refs))) })
+        });
+    repo
+}
+
+#[test]
+fn test_task_assignees_split_people_from_bots() {
+    let assignees = TaskAssignees::parse(vec![
+        "macro|user1@macro.com",
+        TEST_AGENT_BOT,
+        "macro|user2@macro.com",
+    ])
+    .unwrap();
+
+    assert_eq!(
+        assignees
+            .users
+            .iter()
+            .map(|id| id.as_ref().to_owned())
+            .collect::<Vec<_>>(),
+        vec!["macro|user1@macro.com", "macro|user2@macro.com"]
+    );
+    assert_eq!(assignees.bots.len(), 1);
+    assert_eq!(assignees.bots[0].into_storage_id().as_ref(), TEST_AGENT_BOT);
+}
+
+#[test]
+fn test_task_assignees_rejects_a_principal_that_is_neither() {
+    assert!(TaskAssignees::parse(vec!["not-a-principal"]).is_err());
+}
+
+#[tokio::test]
+async fn test_assigning_an_agent_starts_it_and_notifies_nobody() {
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let mut perm_service = MockPermissionService::new();
+    let mut notif_service = MockNotificationService::new();
+    let mut agents = MockAgentAssignmentService::new();
+
+    // A bot is not a person: no task permissions and no assignment notification.
+    perm_service.expect_grant_permissions_to_task().times(0);
+    notif_service.expect_send_task_assigned().times(0);
+    agents
+        .expect_start_assigned_agent()
+        .times(1)
+        .withf(move |assignment| {
+            assignment.task_id == task_id
+                && assignment.bot_id.into_storage_id().as_ref() == TEST_AGENT_BOT
+                && assignment.assigned_by.as_ref() == "macro|assigner@macro.com"
+        })
+        .returning(|_| Box::pin(async { Ok(()) }));
+
+    let service = PropertiesServiceImpl::new(
+        repo_with_assignees(&[]),
+        Some(perm_service),
+        Some(notif_service),
+    )
+    .with_agent_assignment(agents);
+
+    service
+        .handle_task_assignees_property(
+            &task_id.to_string(),
+            assignee_references(&[TEST_AGENT_BOT]),
+            Some(&MacroUserIdStr::parse_from_str("macro|assigner@macro.com").unwrap()),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_reassigning_an_agent_already_assigned_does_not_start_it_again() {
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let mut agents = MockAgentAssignmentService::new();
+    agents.expect_start_assigned_agent().times(0);
+
+    let mut perm_service = MockPermissionService::new();
+    perm_service
+        .expect_grant_permissions_to_task()
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let mut notif_service = MockNotificationService::new();
+    notif_service
+        .expect_send_task_assigned()
+        .returning(|_| Box::pin(async { Ok(()) }));
+
+    let service = PropertiesServiceImpl::new(
+        repo_with_assignees(&[TEST_AGENT_BOT]),
+        Some(perm_service),
+        Some(notif_service),
+    )
+    .with_agent_assignment(agents);
+
+    service
+        .handle_task_assignees_property(
+            &task_id.to_string(),
+            assignee_references(&[TEST_AGENT_BOT, "macro|user1@macro.com"]),
+            Some(&MacroUserIdStr::parse_from_str("macro|assigner@macro.com").unwrap()),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_assigning_a_person_and_an_agent_together_serves_both() {
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let mut perm_service = MockPermissionService::new();
+    let mut notif_service = MockNotificationService::new();
+    let mut agents = MockAgentAssignmentService::new();
+
+    // Only the person is granted access and notified; the bot is not a user id.
+    perm_service
+        .expect_grant_permissions_to_task()
+        .times(1)
+        .withf(|user_ids, _| user_ids.len() == 1 && user_ids[0].as_ref() == "macro|user1@macro.com")
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    notif_service
+        .expect_send_task_assigned()
+        .times(1)
+        .withf(|notification| {
+            notification.recipient_ids.len() == 1
+                && notification.recipient_ids[0].as_ref() == "macro|user1@macro.com"
+        })
+        .returning(|_| Box::pin(async { Ok(()) }));
+    agents
+        .expect_start_assigned_agent()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(()) }));
+
+    let service = PropertiesServiceImpl::new(
+        repo_with_assignees(&[]),
+        Some(perm_service),
+        Some(notif_service),
+    )
+    .with_agent_assignment(agents);
+
+    service
+        .handle_task_assignees_property(
+            &task_id.to_string(),
+            assignee_references(&["macro|user1@macro.com", TEST_AGENT_BOT]),
+            Some(&MacroUserIdStr::parse_from_str("macro|assigner@macro.com").unwrap()),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_internal_write_does_not_start_an_assigned_agent() {
+    // A machine write has no user to run the agent on behalf of.
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let mut agents = MockAgentAssignmentService::new();
+    agents.expect_start_assigned_agent().times(0);
+
+    let service = PropertiesServiceImpl::new(
+        repo_with_assignees(&[]),
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    )
+    .with_agent_assignment(agents);
+
+    service
+        .handle_task_assignees_property(
+            &task_id.to_string(),
+            assignee_references(&[TEST_AGENT_BOT]),
+            None,
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_agent_start_failure_leaves_the_assignment_in_place() {
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let mut agents = MockAgentAssignmentService::new();
+    agents
+        .expect_start_assigned_agent()
+        .times(1)
+        .returning(|_| Box::pin(async { Err(anyhow!("harness unavailable")) }));
+
+    let service = PropertiesServiceImpl::new(
+        repo_with_assignees(&[]),
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    )
+    .with_agent_assignment(agents);
+
+    service
+        .handle_task_assignees_property(
+            &task_id.to_string(),
+            assignee_references(&[TEST_AGENT_BOT]),
+            Some(&MacroUserIdStr::parse_from_str("macro|assigner@macro.com").unwrap()),
+        )
         .await
         .unwrap();
 }
@@ -3001,6 +3212,8 @@ async fn canonical_document_task_assignee_write_grants_permissions() {
             }))
         })
     });
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
     repo.expect_upsert_entity_property()
         .withf(move |entity_id, entity_type, property_id, _| {
             entity_id == task_id.to_string()

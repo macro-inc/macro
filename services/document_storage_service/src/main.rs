@@ -430,13 +430,23 @@ async fn run() -> anyhow::Result<()> {
         },
         db.clone(),
     );
+    // Assigning an agent to a task summons it in the task's own discussion.
+    // The message boundary that carries that is composed further down, so the
+    // adapter is handed to properties now and bound to messages once they exist.
+    let task_agent_assignment = Arc::new(
+        outbound::task_agent_assignment::TaskDiscussionAgentAssignment::new(
+            (*entity_access_service).clone(),
+            PgBotsRepo::new(db.clone()),
+        ),
+    );
     let properties_service = Arc::new(
         PropertiesServiceImpl::new(
             PropertiesPgRepo::new(db.clone()),
             Some(permission_checker),
             Some(notification_service),
         )
-        .with_event_broker(macro_event_broker.clone()),
+        .with_event_broker(macro_event_broker.clone())
+        .with_agent_assignment(task_agent_assignment.clone()),
     );
 
     // Create the channel list service used by soup.
@@ -1050,6 +1060,7 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     let message_commands: Arc<dyn messages::domain::api::MessageCommands> = message_service.clone();
+    task_agent_assignment.bind_messages(message_commands.clone());
     let channel_messages: Arc<dyn channels::domain::ports::ChannelMessageCommands> = Arc::new(
         channels::domain::message_commands::ChannelMessageAdapter::new(message_commands.clone()),
     );

@@ -230,11 +230,19 @@ pub(crate) type DssActivityReader =
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
+pub(crate) type TaskAgentAssignmentService = Arc<
+    crate::outbound::task_agent_assignment::TaskDiscussionAgentAssignment<
+        EntityAccessService,
+        PgBotsRepo,
+    >,
+>;
+
 pub(crate) type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl<EntityAccessService>,
     NotificationServiceImpl<NotificationIngressType>,
     DssEventBroker,
+    TaskAgentAssignmentService,
 >;
 
 /// Concrete properties router state wired into DSS.

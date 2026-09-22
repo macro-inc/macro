@@ -3,10 +3,12 @@
 #[cfg(test)]
 mod test;
 
+use bot_id::{BotId, BotIdStr};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType,
     RequiredPermission, ViewAccessLevel,
 };
+use macro_user_id::error::ParseErr;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property::EntityProperty;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -392,4 +394,48 @@ pub struct TaskAssignedNotification<'a> {
     pub assigned_by: MacroUserIdStr<'a>,
     /// The newly assigned users to notify.
     pub recipient_ids: Vec<MacroUserIdStr<'a>>,
+}
+
+/// An agent newly assigned to a task, to be put to work on it.
+#[derive(Debug, Clone)]
+pub struct TaskAgentAssignment<'a> {
+    /// The task the agent was assigned to.
+    pub task_id: Uuid,
+    /// The agent's bot principal.
+    pub bot_id: BotId,
+    /// The user who assigned the agent, on whose authority it runs.
+    pub assigned_by: MacroUserIdStr<'a>,
+}
+
+/// The principals a task can be assigned to, split by kind.
+///
+/// Assignees are entity references of type `USER` whose id is a canonical
+/// principal, which is either a `macro|<email>` person or a `bot|<uuid>` bot -
+/// the same principal vocabulary message senders and mentions use.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaskAssignees<'a> {
+    /// People assigned to the task.
+    pub users: Vec<MacroUserIdStr<'a>>,
+    /// Bots assigned to the task.
+    pub bots: Vec<BotId>,
+}
+
+impl<'a> TaskAssignees<'a> {
+    /// Split assignee principal ids into people and bots.
+    ///
+    /// Bots are recognised first: a `bot|<uuid>` id is never a person, and a
+    /// person's id never parses as a bot.
+    pub fn parse<I>(principal_ids: I) -> Result<Self, ParseErr>
+    where
+        I: IntoIterator<Item = &'a str>,
+    {
+        let mut assignees = Self::default();
+        for id in principal_ids {
+            match BotIdStr::parse_from_str(id) {
+                Ok(bot) => assignees.bots.push(bot.bot_id()),
+                Err(_) => assignees.users.push(MacroUserIdStr::parse_from_str(id)?),
+            }
+        }
+        Ok(assignees)
+    }
 }

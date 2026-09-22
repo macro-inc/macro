@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use bot_id::BotId;
 use entity_access::domain::models::EntityAccessAuth;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::cowlike::CowLike;
@@ -13,17 +14,23 @@ use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::error::PropertiesErr;
-use crate::domain::model::{EditReceipt, PropertyAccessReceiptExt, TaskAssignedNotification};
-use crate::domain::ports::{NotificationService, PermissionService, PropertiesRepo};
+use crate::domain::model::{
+    EditReceipt, PropertyAccessReceiptExt, TaskAgentAssignment, TaskAssignedNotification,
+    TaskAssignees,
+};
+use crate::domain::ports::{
+    AgentAssignmentService, NotificationService, PermissionService, PropertiesRepo,
+};
 use crate::domain::service_impl::PropertiesServiceImpl;
 
-impl<R, P, N, B> PropertiesServiceImpl<R, P, N, B>
+impl<R, P, N, B, A> PropertiesServiceImpl<R, P, N, B, A>
 where
     R: PropertiesRepo,
     P: PermissionService,
     N: NotificationService,
     B: MacroEventBroker,
-    anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
+    A: AgentAssignmentService,
+    anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err> + From<A::Err>,
 {
     /// Require edit access to every referenced task before linking: linking
     /// mutates the referenced task's Parent Task / Subtasks property, so edit
@@ -144,6 +151,10 @@ where
     }
 
     /// Handle task assignees property with permissions.
+    ///
+    /// An assignee is a principal, so the same property carries people and
+    /// agents: a person gains edit access and an assignment notification, and
+    /// an agent is put to work on the task.
     pub(crate) async fn handle_task_assignees_property(
         &self,
         entity_id: &str,
@@ -159,23 +170,102 @@ where
             return Ok(());
         };
 
-        let assignee_ids = references
-            .iter()
-            .map(|r| MacroUserIdStr::parse_from_str(&r.entity_id))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| PropertiesErr::Validation(e.to_string()))?;
-        if assignee_ids.is_empty() {
+        let assignees = TaskAssignees::parse(
+            references
+                .iter()
+                .map(|reference| reference.entity_id.as_str()),
+        )
+        .map_err(|e| PropertiesErr::Validation(e.to_string()))?;
+        if assignees.users.is_empty() && assignees.bots.is_empty() {
             return Ok(());
         }
 
         let task_id = Uuid::parse_str(entity_id)
             .map_err(|_| PropertiesErr::Validation("Invalid task ID".to_string()))?;
 
-        self.handle_task_assignee_permissions(task_id, &assignee_ids)
+        // Read before the caller's upsert, so this is who the task was
+        // assigned to until now: both notifications and agent starts fire for
+        // new assignees only.
+        let previous = self.current_task_assignees(task_id).await?;
+
+        self.handle_task_assignee_permissions(task_id, &assignees.users)
             .await?;
-        self.handle_task_assignee_notifications(task_id, &assignee_ids, assigned_by_user_id)
-            .await?;
+        self.handle_task_assignee_notifications(
+            task_id,
+            &assignees.users,
+            &previous,
+            assigned_by_user_id,
+        )
+        .await?;
+        self.start_newly_assigned_agents(task_id, &assignees.bots, &previous, assigned_by_user_id)
+            .await;
         Ok(())
+    }
+
+    /// Put every agent that this write newly assigns to work on the task.
+    ///
+    /// Re-saving an unchanged assignee list must not summon an agent twice, so
+    /// only bots absent from the stored value are started.
+    ///
+    /// A machine write has no assigning user to run the agent on behalf of, and
+    /// an agent that fails to start leaves an ordinary assignment behind rather
+    /// than failing the write the user asked for.
+    async fn start_newly_assigned_agents(
+        &self,
+        task_id: Uuid,
+        bot_ids: &[BotId],
+        previous: &HashSet<String>,
+        assigned_by_user_id: Option<&MacroUserIdStr<'_>>,
+    ) {
+        let Some(assigned_by) = assigned_by_user_id else {
+            if !bot_ids.is_empty() {
+                tracing::debug!(
+                    task_id = %task_id,
+                    "no assigning user (internal write), not starting assigned agents"
+                );
+            }
+            return;
+        };
+
+        for bot_id in bot_ids {
+            if previous.contains(bot_id.into_storage_id().as_ref()) {
+                continue;
+            }
+            let assignment = TaskAgentAssignment {
+                task_id,
+                bot_id: *bot_id,
+                assigned_by: assigned_by.copied(),
+            };
+            if let Err(error) = self.agent_assignment.start_assigned_agent(assignment).await {
+                tracing::error!(
+                    error = ?anyhow::Error::from(error),
+                    task_id = %task_id,
+                    bot_id = %bot_id,
+                    "failed to start agent assigned to task"
+                );
+            }
+        }
+    }
+
+    /// The principal ids currently stored as the task's assignees.
+    async fn current_task_assignees(
+        &self,
+        task_id: Uuid,
+    ) -> Result<HashSet<String>, PropertiesErr> {
+        let current = self
+            .repository
+            .get_entity_property_value(
+                &task_id.to_string(),
+                EntityType::Task,
+                SystemPropertyKey::ASSIGNEES_UUID,
+            )
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(PropertiesErr::Repo)?;
+        Ok(match current {
+            Some(PropertyValue::EntityRef(refs)) => refs.into_iter().map(|r| r.entity_id).collect(),
+            _ => HashSet::new(),
+        })
     }
 
     /// Handle notifications when task assignees are updated. Internal
@@ -184,6 +274,7 @@ where
         &self,
         task_id: Uuid,
         assignee_ids: &[MacroUserIdStr<'_>],
+        previous_assignee_ids: &HashSet<String>,
         assigned_by_user_id: Option<&MacroUserIdStr<'_>>,
     ) -> Result<(), PropertiesErr> {
         if assignee_ids.is_empty() {
@@ -203,28 +294,10 @@ where
             }
         };
 
-        let current_value = self
-            .repository
-            .get_entity_property_value(
-                &task_id.to_string(),
-                EntityType::Task,
-                SystemPropertyKey::ASSIGNEES_UUID,
-            )
-            .await
-            .map_err(anyhow::Error::from)
-            .map_err(PropertiesErr::Repo)?;
-
-        let current_assignee_ids: HashSet<String> = match current_value {
-            Some(PropertyValue::EntityRef(refs)) => {
-                refs.iter().map(|r| r.entity_id.clone()).collect()
-            }
-            _ => Default::default(),
-        };
-
         let recipient_ids: Vec<MacroUserIdStr<'_>> = assignee_ids
             .iter()
             .filter(|id| {
-                !current_assignee_ids.contains(id.as_ref())
+                !previous_assignee_ids.contains(id.as_ref())
                     && id.as_ref() != assigned_by_user_id.as_ref()
             })
             .map(|id| id.copied())
