@@ -67,9 +67,9 @@ pub struct VoiceOption {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceOptions {
-    /// Both deployment configuration and harness eligibility are satisfied.
+    /// The session uses a harness that supports voice.
     pub enabled: bool,
-    /// Voice catalog remains visible while the deployment is unavailable.
+    /// Available voices for supported sessions.
     pub voices: Vec<VoiceOption>,
     /// Maximum duration of one media session.
     pub max_duration_seconds: u32,
@@ -194,9 +194,6 @@ impl From<&VoiceLease> for DispatchMetadata {
 /// Domain failures, mapped to safe HTTP errors at the edge.
 #[derive(Debug, thiserror::Error)]
 pub enum VoiceError {
-    /// Missing optional deployment configuration.
-    #[error("Voice mode is not configured")]
-    Disabled,
     /// The selected execution harness is not certified in this release.
     #[error("Voice mode is currently available for Macro agents")]
     UnsupportedHarness,

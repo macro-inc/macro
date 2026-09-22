@@ -29,11 +29,12 @@ docker build -t macro-agent-voice .
 
 The image runs `worker.py start` as a non-root user. The dispatch name is
 `macro-agent-voice`; do not reuse the channel transcription worker's deployment ID.
-Deploy this as a separate LiveKit worker, then enable `AGENT_VOICE_ENABLED=true` in
-`agent_harness_service`, with its existing `LIVEKIT_SERVER_URL`, `LIVEKIT_API_KEY`
-and `LIVEKIT_API_SECRET`. Register the new flag/model setting in the deployment's
-Doppler config before rollout. The flag defaults off. No deployment is performed
-by this change.
+Deploy this as a separate LiveKit worker in the same project as
+`agent_harness_service`. Voice is always enabled for Macro agents; there is no
+enable switch. The harness service requires `LIVEKIT_SERVER_URL`, `LIVEKIT_API_KEY`
+and `LIVEKIT_API_SECRET` and validates them at startup. Use the existing LiveKit
+settings in the deployment's Doppler config, and register `AGENT_VOICE_MODEL`
+there if overriding the default model. No deployment is performed by this change.
 
 ## Conversation behavior
 
@@ -84,7 +85,7 @@ provider credentials:
 PYTHONPATH=services/agent_voice services/agent_voice/.venv/bin/python -m unittest discover -s services/agent_voice/tests -v
 ```
 
-Before enabling rollout, run real-microphone checks for turn timing, interruption,
+Before rollout, run real-microphone checks for turn timing, interruption,
 echo/noise, accents, task corrections, pending reviews, tab/call contention,
 reconnect and provider failure. A headless UI test does not measure perceived
 conversation quality or establish ChatGPT voice parity. Desktop web is the initial

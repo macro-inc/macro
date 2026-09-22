@@ -138,11 +138,7 @@ fn fixture(eligible: bool) -> (AgentVoiceService, Arc<Store>, Arc<Media>) {
     let store = Arc::new(Store::default());
     let media = Arc::new(Media::default());
     (
-        AgentVoiceService::new(
-            Arc::new(Directory(eligible)),
-            store.clone(),
-            Some(media.clone()),
-        ),
+        AgentVoiceService::new(Arc::new(Directory(eligible)), store.clone(), media.clone()),
         store,
         media,
     )
@@ -201,8 +197,22 @@ async fn only_controller_can_end_and_old_end_cannot_close_new_room() {
 }
 
 #[tokio::test]
-async fn disabled_and_external_harnesses_never_provision() {
-    let (service, store, media) = fixture(false);
+async fn macro_harness_always_advertises_voice_without_provisioning() {
+    let (service, store, media) = fixture(true);
+    let options = service
+        .options(receipt("macro|alice@example.com"))
+        .await
+        .unwrap();
+    assert!(options.enabled);
+    assert_eq!(options.voices.len(), Voice::catalog().len());
+    assert_eq!(options.max_duration_seconds, MAX_DURATION_SECONDS);
+    assert_eq!(media.provisions.load(Ordering::SeqCst), 0);
+    assert!(store.0.lock().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn external_harnesses_never_provision() {
+    let (service, _, media) = fixture(false);
     assert!(
         !service
             .options(receipt("macro|alice@example.com"))
@@ -215,19 +225,6 @@ async fn disabled_and_external_harnesses_never_provision() {
             .start(receipt("macro|alice@example.com"), request())
             .await,
         Err(VoiceError::UnsupportedHarness)
-    ));
-    let disabled = AgentVoiceService::new(Arc::new(Directory(true)), store, None);
-    let options = disabled
-        .options(receipt("macro|alice@example.com"))
-        .await
-        .unwrap();
-    assert!(!options.enabled);
-    assert_eq!(options.voices.len(), Voice::catalog().len());
-    assert!(matches!(
-        disabled
-            .start(receipt("macro|alice@example.com"), request())
-            .await,
-        Err(VoiceError::Disabled)
     ));
     assert_eq!(media.provisions.load(Ordering::SeqCst), 0);
 }

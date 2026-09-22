@@ -12,12 +12,12 @@ use super::ports::{AgentVoiceDirectory, VoiceLeaseStore, VoiceMedia};
 #[cfg(test)]
 mod test;
 
-/// Agent voice use cases. Optional media configuration disables start cleanly.
+/// Agent voice use cases for supported Macro harness sessions.
 #[derive(Clone)]
 pub struct AgentVoiceService {
     directory: Arc<dyn AgentVoiceDirectory>,
     store: Arc<dyn VoiceLeaseStore>,
-    media: Option<Arc<dyn VoiceMedia>>,
+    media: Arc<dyn VoiceMedia>,
 }
 
 impl AgentVoiceService {
@@ -25,7 +25,7 @@ impl AgentVoiceService {
     pub fn new(
         directory: Arc<dyn AgentVoiceDirectory>,
         store: Arc<dyn VoiceLeaseStore>,
-        media: Option<Arc<dyn VoiceMedia>>,
+        media: Arc<dyn VoiceMedia>,
     ) -> Self {
         Self {
             directory,
@@ -40,7 +40,7 @@ impl AgentVoiceService {
         access: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<VoiceOptions> {
         let (session, _) = identity(&access)?;
-        let enabled = self.media.is_some() && self.directory.is_macro_session(session).await?;
+        let enabled = self.directory.is_macro_session(session).await?;
         Ok(VoiceOptions {
             enabled,
             voices: Voice::catalog(),
@@ -55,7 +55,6 @@ impl AgentVoiceService {
         request: StartVoice,
     ) -> Result<VoiceConnection> {
         let (session_id, owner) = identity(&access)?;
-        self.media.as_ref().ok_or(VoiceError::Disabled)?;
         if !self.directory.is_macro_session(session_id).await? {
             return Err(VoiceError::UnsupportedHarness);
         }
@@ -80,7 +79,7 @@ impl AgentVoiceService {
     }
 
     async fn start_claim(&self, lease: VoiceLease) -> Result<VoiceConnection> {
-        let media = self.media.as_ref().ok_or(VoiceError::Disabled)?;
+        let media = &self.media;
         if let Some(existing) = self.store.claim(&lease).await? {
             if existing.state == LeaseState::Ending
                 && existing.owner == lease.owner
@@ -165,7 +164,7 @@ impl AgentVoiceService {
     }
 
     fn connection(&self, lease: &VoiceLease) -> Result<VoiceConnection> {
-        let media = self.media.as_ref().ok_or(VoiceError::Disabled)?;
+        let media = &self.media;
         let remaining = (lease.expires_at - Utc::now()).num_seconds();
         let ttl = u32::try_from(remaining)
             .ok()
@@ -219,11 +218,7 @@ impl AgentVoiceService {
     }
 
     async fn close_lease(&self, lease: &VoiceLease) -> Result<()> {
-        self.media
-            .as_ref()
-            .ok_or(VoiceError::Disabled)?
-            .close(lease)
-            .await?;
+        self.media.close(lease).await?;
         self.store
             .release(lease.session_id, lease.voice_session_id)
             .await

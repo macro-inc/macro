@@ -6,7 +6,7 @@ use agent_session::domain::{model::AgentSessionId, service::AgentSessionService}
 use agent_voice::{
     domain::{
         model::{Result, VoiceError},
-        ports::{AgentVoiceDirectory, VoiceMedia},
+        ports::AgentVoiceDirectory,
         service::AgentVoiceService,
     },
     outbound::{livekit::LivekitVoiceMedia, redis::RedisVoiceLeaseStore},
@@ -28,22 +28,17 @@ impl<Sessions: AgentSessionService> AgentVoiceDirectory for SessionDirectory<Ses
     }
 }
 
-/// Build the optional media adapter while keeping routes consistently available.
+/// Build the required media adapter and validate its configuration at startup.
 pub fn service<Sessions: AgentSessionService>(
     sessions: Sessions,
     redis: redis::Client,
     config: &Config,
 ) -> anyhow::Result<AgentVoiceService> {
-    let media: Option<Arc<dyn VoiceMedia>> = if config.agent_voice_enabled {
-        Some(Arc::new(LivekitVoiceMedia::new(
-            &config.livekit_server_url,
-            config.livekit_api_key.clone(),
-            config.livekit_api_secret.clone(),
-        )?))
-    } else {
-        tracing::info!("agent voice is disabled");
-        None
-    };
+    let media = Arc::new(LivekitVoiceMedia::new(
+        &config.livekit_server_url,
+        config.livekit_api_key.clone(),
+        config.livekit_api_secret.clone(),
+    )?);
     Ok(AgentVoiceService::new(
         Arc::new(SessionDirectory(sessions)),
         Arc::new(RedisVoiceLeaseStore::new(redis)),

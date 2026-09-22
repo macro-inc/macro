@@ -55,17 +55,11 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
-    /// Enable private agent voice only after the named voice worker is deployed.
-    #[macro_config_default(false)]
-    pub agent_voice_enabled: bool,
-    /// Existing LiveKit endpoint; required when agent voice is enabled.
-    #[macro_config_default(String::new())]
+    /// Existing LiveKit endpoint for private agent voice.
     pub livekit_server_url: String,
     /// Existing LiveKit project API key, used only by the server.
-    #[macro_config_default(String::new())]
     pub livekit_api_key: String,
     /// Existing LiveKit project API secret, used only by the server.
-    #[macro_config_default(String::new())]
     pub livekit_api_secret: String,
     /// OAuth encryption key; deployments without a key do not advertise sign-in.
     pub claude_oauth_kms_key_id: ClaudeOauthKmsKeyId,

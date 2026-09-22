@@ -19,13 +19,13 @@ the prompt cancels startup and releases any microphone granted afterward.
 Connecting remains visible until the worker is ready; listening, thinking and
 speaking are separate from the agent's background work. The waveform responds to
 microphone and playback levels. Recent live captions identify **You** and **Macro**.
-If voice is not enabled for the deployment, the panel shows **Voice unavailable**
-and explains that microphone permission has not been requested. This requires
-voice service configuration; changing browser permissions cannot enable it.
+Voice is always available for supported Macro agents; there is no deployment
+enable switch. An unsupported agent shows **Voice unavailable** and directs you
+to choose a Macro agent. Connection failures show an error with **Try again**.
 
 - Speak naturally and interrupt Macro's speech to take a turn. Interrupting audio
   does not cancel a task. Ask explicitly to stop or correct a task when needed.
-- **Mute microphone** stops capture; **Unmute microphone** resumes. If the browser
+- **Mute microphone** stops sending your audio; **Unmute microphone** resumes. If the browser
   blocks playback, use **Enable audio playback**.
 - **Minimize voice** leaves the conversation running. **Voice is on** reopens it,
   including after navigating elsewhere. **End conversation** releases media and

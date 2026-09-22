@@ -29,7 +29,8 @@ Task results use existing viewer batching. Media/provider usage is logged
 separately; account-level voice billing aggregation remains to be wired.
 
 See [worker operations and verification](../../services/agent_voice/README.md).
-The feature defaults off pending provider credentials and listening tests.
+Voice is always enabled for supported Macro agents. The harness service requires
+valid LiveKit settings at startup, and the voice worker needs provider credentials.
 
 **Recommendation: attach a LiveKit voice conversation to an existing agent
 session.** A responsive speech model handles the conversation and delegates work

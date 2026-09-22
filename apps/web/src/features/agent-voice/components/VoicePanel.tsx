@@ -171,8 +171,8 @@ export function VoicePanel(props: {
           </Show>
           <Show when={props.state.options && !props.state.options.enabled}>
             <p class="mt-4 text-sm text-ink-muted">
-              Voice hasn’t been enabled here yet. You can keep chatting with
-              text. Changing microphone permissions won’t enable voice.
+              Voice is available for Macro agents. Choose a Macro agent to start
+              a voice conversation.
             </p>
           </Show>
         </Show>

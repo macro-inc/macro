@@ -87,7 +87,7 @@ impl From<VoiceError> for ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = match &self.0 {
-            VoiceError::Disabled | VoiceError::Infrastructure(_) => StatusCode::SERVICE_UNAVAILABLE,
+            VoiceError::Infrastructure(_) => StatusCode::SERVICE_UNAVAILABLE,
             VoiceError::UnsupportedHarness => StatusCode::BAD_REQUEST,
             VoiceError::Forbidden => StatusCode::FORBIDDEN,
             VoiceError::Conflict => StatusCode::CONFLICT,
