@@ -47,50 +47,53 @@ export function DriveFilterDrawer() {
         </MobileDrawer.Section>
       </Show>
 
-      <MobileDrawer.Label class="pt-4">Filters</MobileDrawer.Label>
-      <Accordion
-        multiple
-        collapsible
-        defaultValue={[filters.groups()[0]?.id ?? 'type']}
-      >
-        <div class="flex flex-col gap-3">
-          <For each={filters.groups()}>
-            {(group) => {
-              const activeCount = createMemo(
-                () =>
-                  group.options.filter(
-                    (option) =>
-                      option.id !== group.defaultOptionId &&
-                      filters.isSelected(group.id, option.id)
-                  ).length
-              );
+      {/* Folder locations offer no filters, matching the desktop header. */}
+      <Show when={state.value().location.kind === 'tab'}>
+        <MobileDrawer.Label class="pt-4">Filters</MobileDrawer.Label>
+        <Accordion
+          multiple
+          collapsible
+          defaultValue={[filters.groups()[0]?.id ?? 'type']}
+        >
+          <div class="flex flex-col gap-3">
+            <For each={filters.groups()}>
+              {(group) => {
+                const activeCount = createMemo(
+                  () =>
+                    group.options.filter(
+                      (option) =>
+                        option.id !== group.defaultOptionId &&
+                        filters.isSelected(group.id, option.id)
+                    ).length
+                );
 
-              return (
-                <MobileFilterDrawer.Section
-                  value={group.id}
-                  label={group.label}
-                  activeCount={activeCount()}
-                >
-                  <For each={group.options}>
-                    {(option) => (
-                      <MobileFilterDrawer.Option
-                        selectionMode={group.selectionMode}
-                        checked={filters.isSelected(group.id, option.id)}
-                        onChange={(checked) =>
-                          filters.setSelected(group.id, option.id, checked)
-                        }
-                        icon={option.icon?.()}
-                      >
-                        {option.label}
-                      </MobileFilterDrawer.Option>
-                    )}
-                  </For>
-                </MobileFilterDrawer.Section>
-              );
-            }}
-          </For>
-        </div>
-      </Accordion>
+                return (
+                  <MobileFilterDrawer.Section
+                    value={group.id}
+                    label={group.label}
+                    activeCount={activeCount()}
+                  >
+                    <For each={group.options}>
+                      {(option) => (
+                        <MobileFilterDrawer.Option
+                          selectionMode={group.selectionMode}
+                          checked={filters.isSelected(group.id, option.id)}
+                          onChange={(checked) =>
+                            filters.setSelected(group.id, option.id, checked)
+                          }
+                          icon={option.icon?.()}
+                        >
+                          {option.label}
+                        </MobileFilterDrawer.Option>
+                      )}
+                    </For>
+                  </MobileFilterDrawer.Section>
+                );
+              }}
+            </For>
+          </div>
+        </Accordion>
+      </Show>
     </MobileFilterDrawer>
   );
 }
