@@ -21024,7 +21024,7 @@
           },
           "owner": {
             "type": "string",
-            "description": "The owner of the new copy (the copier)."
+            "description": "The principal who owns the new copy."
           },
           "project_id": {
             "type": ["string", "null"],
@@ -21059,7 +21059,7 @@
         "properties": {
           "actor": {
             "type": ["string", "null"],
-            "description": "Who mechanically created the document. Absent on events published\nbefore attribution: ingest then treats [`Self::owner`] as the actor."
+            "description": "Who mechanically created the document. Absent on events published\nbefore attribution: ingest derives a user/bot actor from [`Self::owner`].\nTeam owners fall back to [`Self::on_behalf_of`], then the system bot."
           },
           "created_at": {
             "type": ["string", "null"],
@@ -21098,7 +21098,7 @@
           },
           "owner": {
             "type": "string",
-            "description": "The owner (creator) of the document."
+            "description": "The principal who owns the document."
           },
           "project_id": {
             "type": ["string", "null"],

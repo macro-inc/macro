@@ -4522,7 +4522,7 @@ export type DocumentCopiedMetadata = {
     document_name: string;
     file_type?: null | FileType;
     /**
-     * The owner of the new copy (the copier).
+     * The principal who owns the new copy.
      */
     owner: string;
     /**
@@ -4546,7 +4546,8 @@ export type DocumentCopiedMetadata = {
 export type DocumentCreatedMetadata = {
     /**
      * Who mechanically created the document. Absent on events published
-     * before attribution: ingest then treats [`Self::owner`] as the actor.
+     * before attribution: ingest derives a user/bot actor from [`Self::owner`].
+     * Team owners fall back to [`Self::on_behalf_of`], then the system bot.
      */
     actor?: string | null;
     /**
@@ -4564,7 +4565,7 @@ export type DocumentCreatedMetadata = {
     file_type?: null | FileType;
     on_behalf_of?: null | MacroUserIdStr;
     /**
-     * The owner (creator) of the document.
+     * The principal who owns the document.
      */
     owner: string;
     /**
