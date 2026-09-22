@@ -27,6 +27,7 @@ import type {
   SplitRouteParams,
   SplitRouterBeforeLeaveHandler,
   SplitRouter as SplitRouterController,
+  SplitRouterEntry,
   SplitRouterExternalLocation,
   SplitRouterLayout,
   SplitRouterMiddleware,
@@ -46,11 +47,19 @@ export type SplitRouterContextValue = {
 type SplitRouterOutletContextValue = {
   splitId: Accessor<unknown>;
   depth: Accessor<number>;
+  entry: Accessor<SplitRouterEntry | undefined>;
+  snapshot: Accessor<boolean>;
 };
 
 export const SplitRouterContext = createContext<SplitRouterContextValue>();
 export const SplitRouterScopeContext = createContext<Accessor<unknown>>();
 const SplitRouterOutletContext = createContext<SplitRouterOutletContextValue>();
+
+/** Hosts and resource-registration effects can distinguish render-only snapshots. */
+export function useIsRouteSnapshot(): Accessor<boolean> {
+  const outlet = useContext(SplitRouterOutletContext);
+  return () => outlet?.snapshot() ?? false;
+}
 
 function useSplitRouterContext() {
   const context = useContext(SplitRouterContext);
@@ -65,13 +74,36 @@ function useSplitRouterContext() {
 }
 
 export function useSplitRouter<TSplitId>(): SplitRouterController<TSplitId> {
-  return useSplitRouterContext()
+  const router = useSplitRouterContext()
     .router as unknown as SplitRouterController<TSplitId>;
+  const render = useContext(SplitRouterOutletContext);
+  if (!render) return router;
+
+  const scoped = (id: TSplitId) => Object.is(id, render.splitId());
+  return {
+    ...router,
+    route: (id) =>
+      scoped(id) ? render.entry()?.location.route : router.route(id),
+    location: (id) =>
+      scoped(id) ? render.entry()?.location : router.location(id),
+    search: (id, namespace) =>
+      scoped(id)
+        ? render.entry()?.location.search?.[namespace]
+        : router.search(id, namespace),
+    navigate: ((...args: Parameters<typeof router.navigate>) => {
+      if (!render.snapshot()) router.navigate(...args);
+    }) as typeof router.navigate,
+    updateSearch: (...args) => {
+      if (!render.snapshot()) router.updateSearch(...args);
+    },
+    beforeLeave: (id, handler) =>
+      render.snapshot() ? () => {} : router.beforeLeave(id, handler),
+  };
 }
 
 export function useSplitRouterState<TSplitId>() {
   const context = useSplitRouterContext();
-  const router = context.router as unknown as SplitRouterController<TSplitId>;
+  const router = useSplitRouter<TSplitId>();
 
   return {
     router,
@@ -135,7 +167,9 @@ export function useBeforeLeave<TSplitId = unknown>(
   const router = useSplitRouter<TSplitId>();
   const splitId = useSplitRouterScope<TSplitId>();
 
+  const isSnapshot = useIsRouteSnapshot();
   createEffect(() => {
+    if (isSnapshot()) return;
     const unregister = router.beforeLeave(splitId(), handler);
     onCleanup(unregister);
   });
@@ -264,6 +298,8 @@ export function Scope<TSplitId>(props: SplitRouterScopeProps<TSplitId>) {
 }
 
 export type SplitRouterOutletProps<TSplitId> = {
+  /** A render-only route snapshot; omitted entries follow the logical pane. */
+  entry?: SplitRouterEntry;
   splitId?: TSplitId;
   fallback?: () => JSX.Element;
 };
@@ -272,6 +308,7 @@ export function Outlet<TSplitId>(props: SplitRouterOutletProps<TSplitId>) {
   const context = useSplitRouterContext();
   const parent = useContext(SplitRouterOutletContext);
   const scope = useContext(SplitRouterScopeContext);
+  const parentRender = parent;
   const splitId: Accessor<unknown> = () => {
     if (props.splitId !== undefined) return props.splitId;
     if (parent) return parent.splitId();
@@ -283,10 +320,19 @@ export function Outlet<TSplitId>(props: SplitRouterOutletProps<TSplitId>) {
   };
   const startDepth = () =>
     props.splitId === undefined && parent ? parent.depth() : 0;
-  const route = (): SplitRouteState | undefined => {
+  const inherits = () =>
+    props.splitId === undefined && parentRender !== undefined;
+  const entry = (): SplitRouterEntry | undefined => {
+    if (props.entry !== undefined) return props.entry;
+    if (inherits()) return parentRender?.entry();
     context.track(splitId());
-    return context.router.route(splitId());
+    const location = context.router.location(splitId());
+    return location ? { location } : undefined;
   };
+  const snapshot = () =>
+    props.entry !== undefined ||
+    (inherits() && (parentRender?.snapshot() ?? false));
+  const route = (): SplitRouteState | undefined => entry()?.location.route;
   const resolved = createMemo(() => {
     const currentRoute = route();
     if (!currentRoute) return;
@@ -313,18 +359,18 @@ export function Outlet<TSplitId>(props: SplitRouterOutletProps<TSplitId>) {
   const outletContext: SplitRouterOutletContextValue = {
     splitId,
     depth: () => resolved()?.nextDepth ?? startDepth(),
+    entry,
+    snapshot,
   };
   const Fallback = () => props.fallback?.();
 
   return (
     <SplitRouterScopeContext.Provider value={splitId}>
-      <Show keyed when={renderKey()} fallback={<Fallback />}>
-        {(_key) => (
-          <SplitRouterOutletContext.Provider value={outletContext}>
-            <Dynamic component={component()} />
-          </SplitRouterOutletContext.Provider>
-        )}
-      </Show>
+      <SplitRouterOutletContext.Provider value={outletContext}>
+        <Show keyed when={renderKey()} fallback={<Fallback />}>
+          {(_key) => <Dynamic component={component()} />}
+        </Show>
+      </SplitRouterOutletContext.Provider>
     </SplitRouterScopeContext.Provider>
   );
 }

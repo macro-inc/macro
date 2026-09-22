@@ -1,5 +1,5 @@
 import { cleanup, render } from '@solidjs/testing-library';
-import { type Accessor, onCleanup } from 'solid-js';
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
@@ -10,6 +10,7 @@ import { createMemorySplitRouterLocation } from '../integrations/memory';
 import { defineRoute, defineRoutes } from '../routes';
 import {
   SplitRouter,
+  useBeforeLeave,
   useCanGo,
   useNavigate,
   useParams,
@@ -104,6 +105,88 @@ afterEach(() => {
 });
 
 describe('Solid split router hooks', () => {
+  it('renders reactive snapshots through nested outlets without writing the live pane', async () => {
+    const location = createMemorySplitRouterLocation('/root/live');
+    const layout = createLayout();
+    let mounts = 0;
+    let navigate: ReturnType<typeof useNavigate> | undefined;
+    let setSearch: SetSearchParams<{ value: string }> | undefined;
+    const leave = vi.fn();
+    const Detail = () => {
+      mounts++;
+      const params = useParams<{ id: string }>();
+      const [search, set] = createSearchParams({
+        namespace: 'detail',
+        schema: z.object({ value: z.string() }),
+        defaults: { value: 'default' },
+      });
+      setSearch = set;
+      navigate = useNavigate();
+      useBeforeLeave(leave);
+      return (
+        <span>
+          {params.id}:{search.value}
+        </span>
+      );
+    };
+    const definitions: SplitRoutes = {
+      definitions: [
+        {
+          id: 'root',
+          path: 'root',
+          component: () => <SplitRouter.Outlet />,
+          children: [
+            {
+              id: 'detail',
+              path: ':id',
+              search: ['detail'],
+              component: Detail,
+            },
+          ],
+        },
+      ],
+    };
+    const snapshot = (id: string): SplitRouterEntry => ({
+      location: {
+        route: {
+          matches: [
+            { id: 'root', params: {} },
+            { id: 'detail', params: { id } },
+          ],
+        },
+        search: { detail: { value: [id] } },
+      },
+    });
+    const [entry, setEntry] = createSignal<SplitRouterEntry | undefined>(
+      snapshot('preview')
+    );
+    const result = render(() => (
+      <SplitRouter.Root
+        layout={layout}
+        routes={definitions}
+        location={location}
+      >
+        <SplitRouter.Outlet splitId="split" entry={entry()} />
+      </SplitRouter.Root>
+    ));
+    expect(result.container.textContent).toBe('preview:preview');
+    navigate?.('/root/blocked');
+    setSearch?.({ value: 'blocked' });
+    await Promise.resolve();
+    expect(location.read().pathname).toBe('/root/live');
+    expect(location.read().search).toBe('');
+    expect(leave).not.toHaveBeenCalled();
+    setEntry(snapshot('other'));
+    expect(result.container.textContent).toBe('other:other');
+    expect(mounts).toBe(1);
+    setEntry(undefined);
+    expect(result.container.textContent).toBe('live:default');
+    navigate?.('/root/next');
+    expect(location.read().pathname).toBe('/root/next');
+    expect(result.container.textContent).toBe('next:default');
+    expect(mounts).toBe(1);
+  });
+
   it('reads typed branch params only through the referenced node and stays reactive', () => {
     const tree = defineRoutes({
       definitions: [

@@ -484,7 +484,7 @@ export function createSplitRouter<TSplitId>(
           if (!checkClaim(entry)) return;
           throwIfAborted(controller.signal);
           const changed = config.apply(entry);
-          if (changed && splitId === undefined) notify();
+          if (changed) notify(splitId);
         } finally {
           finish();
         }
@@ -612,7 +612,6 @@ export function createSplitRouter<TSplitId>(
   const navigateHistory = (
     splitId: TSplitId,
     delta: number,
-    current: SplitRouterEntry,
     navigateOptions: SplitNavigateOptions<TSplitId>
   ) => {
     if (
@@ -631,7 +630,7 @@ export function createSplitRouter<TSplitId>(
       key: splitId,
       event: createEvent({
         splitId,
-        from: current,
+        from: layout.find(splitId),
         to: historical,
         cause: 'history',
         direction: delta < 0 ? 'back' : 'forward',
@@ -678,16 +677,17 @@ export function createSplitRouter<TSplitId>(
   const router: SplitRouter<TSplitId> = {
     routes,
     route(splitId) {
-      const entry = findEntry(splitId);
+      const entry = layout.find(splitId);
       return entry?.location.route;
     },
 
-    location: (splitId) => findEntry(splitId)?.location,
+    location: (splitId) => layout.find(splitId)?.location,
+    pendingLocation: (splitId) => transitions.pending(splitId)?.location,
 
     search(splitId, namespace) {
       assertSafeSearchName(namespace, 'namespace');
 
-      return findEntry(splitId)?.location?.search?.[namespace];
+      return layout.find(splitId)?.location.search?.[namespace];
     },
 
     canGo(splitId, delta) {
@@ -715,7 +715,7 @@ export function createSplitRouter<TSplitId>(
       if (!current) return;
 
       if (typeof to === 'number') {
-        navigateHistory(splitId, to, current, navigateOptions);
+        navigateHistory(splitId, to, navigateOptions);
         return;
       }
 
@@ -746,7 +746,7 @@ export function createSplitRouter<TSplitId>(
         key: targetId ?? Symbol('new-split-transition'),
         event: createEvent({
           splitId: targetId,
-          from: targetEntry,
+          from: targetId === undefined ? undefined : layout.find(targetId),
           to: next,
           cause: 'navigate',
           direction: navigateOptions.replace ? 'replace' : 'push',
@@ -782,7 +782,7 @@ export function createSplitRouter<TSplitId>(
         key: splitId,
         event: createEvent({
           splitId,
-          from: entry,
+          from: layout.find(splitId),
           to: next,
           cause: 'search',
           direction: history,
@@ -801,7 +801,7 @@ export function createSplitRouter<TSplitId>(
     },
 
     href(splitId) {
-      const entry = findEntry(splitId);
+      const entry = layout.find(splitId);
 
       if (!entry) return '';
 

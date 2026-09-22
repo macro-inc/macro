@@ -439,6 +439,8 @@ export interface SplitRouter<TSplitId> {
   readonly routes: SplitRoutesManifest;
   route(splitId: TSplitId): SplitRouteState | undefined;
   location(splitId: TSplitId): SplitLocation | undefined;
+  /** Proposed location while middleware or before-leave is pending. */
+  pendingLocation(splitId: TSplitId): SplitLocation | undefined;
   search(
     splitId: TSplitId,
     namespace: string

@@ -468,7 +468,8 @@ describe('split router', () => {
         if (
           handled ||
           splitId !== first!.splitId ||
-          routeParams(router.route(splitId)).folderId !== 'shared'
+          routeParams(router.pendingLocation(splitId)?.route).folderId !==
+            'shared'
         )
           return;
         handled = true;
@@ -787,7 +788,10 @@ describe('split router', () => {
     });
     const [first, second] = layout.snapshot().entries;
     router.navigate(first!.splitId, '/drive/folder/three');
-    expect(routeParams(router.route(first!.splitId)).folderId).toBe('three');
+    expect(routeParams(router.route(first!.splitId)).folderId).toBe('one');
+    expect(
+      routeParams(router.pendingLocation(first!.splitId)?.route).folderId
+    ).toBe('three');
     router.navigate(second!.splitId, '/drive/folder/one');
     expect(routeParams(router.route(first!.splitId)).folderId).toBe('one');
     gate.resolve();
@@ -854,7 +858,11 @@ describe('split router', () => {
     const seen: unknown[] = [];
     router.subscribe((splitId) => {
       if (splitId === second!.splitId)
-        seen.push(routeParams(router.route(splitId)).folderId);
+        seen.push(
+          routeParams(
+            router.pendingLocation(splitId)?.route ?? router.route(splitId)
+          ).folderId
+        );
     });
     router.navigate(second!.splitId, '/drive/folder/three');
     router.navigate(second!.splitId, '/drive/folder/one');
@@ -1027,7 +1035,10 @@ describe('split router', () => {
     router.navigate(splitId, -1);
 
     expect(location.read().pathname).toBe('/drive/folder/two');
-    expect(routeParams(router.route(splitId)).folderId).toBe('one');
+    expect(routeParams(router.route(splitId)).folderId).toBe('two');
+    expect(routeParams(router.pendingLocation(splitId)?.route).folderId).toBe(
+      'one'
+    );
 
     release();
     await router.settled();
@@ -1252,7 +1263,10 @@ describe('split router', () => {
     expect(
       routeParams(layout.snapshot().entries[0]?.location?.route).folderId
     ).toBe('one');
-    expect(routeParams(router.location(splitId)?.route).folderId).toBe('two');
+    expect(routeParams(router.location(splitId)?.route).folderId).toBe('one');
+    expect(routeParams(router.pendingLocation(splitId)?.route).folderId).toBe(
+      'two'
+    );
 
     release();
     await router.settled();

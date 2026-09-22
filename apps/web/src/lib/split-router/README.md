@@ -78,7 +78,27 @@ catch-all parameters. Reads include differently named alias params; destinations
 the canonical path's params. Renamed aliases need a schema or serializer that maps
 those fields back to canonical names. Widened `string` paths retain untyped params.
 
+## Outlet snapshots
+
+`<SplitRouter.Outlet splitId={id} entry={entry} />` renders an explicit
+`SplitRouterEntry` without changing the pane's route, history, URL, or claims.
+`entry` is a normal reactive Solid prop, not an accessor prop. Omit it to follow
+the pane's committed location. Nested outlets inherit the entry through the
+existing outlet context; an explicit `splitId` starts an independent outlet.
+Params and search hooks read the rendered entry. Scoped navigation, search writes,
+and before-leave registration are disabled while an explicit snapshot is supplied.
+Removing the snapshot resumes live reads and writes without forcing a remount.
+
+Snapshot rendering does not suppress arbitrary application side effects. Hosts
+still own DOM inertness and focus, and application resource-registration effects
+must consult `useIsRouteSnapshot()` before acquiring ownership. Do not mount
+unadapted application views as background snapshots yet.
+
 ## Search and history
+
+- `location()`, `route()`, `search()`, and `href()` read committed state.
+  `pendingLocation()` exposes an in-flight proposal separately. Navigation target
+  resolution can still compose against pending work without displaying it.
 
 - Raw query values are `Record<string, string[]>`; repeated values retain order.
   Route namespaces are inherited. URL reads filter unowned namespaces, while

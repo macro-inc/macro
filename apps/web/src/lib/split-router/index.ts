@@ -59,6 +59,7 @@ export {
   type SplitRouterScopeProps,
   useBeforeLeave,
   useCanGo,
+  useIsRouteSnapshot,
   useNavigate,
   useParams,
   useRouteParams,
