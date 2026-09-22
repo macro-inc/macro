@@ -8,6 +8,7 @@ import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { propertiesKeys } from '@queries/properties/keys';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
+import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
 import { authServiceClient } from '@service-auth/client';
 import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
@@ -35,6 +36,7 @@ export async function clearLocalAuthSession() {
   document.cookie =
     'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
   syncLoginStorage(false);
+  const documentContextsCleared = clearOfflineDocumentContexts();
   clearDocumentQueryCache(queryClient);
   queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
   queryClient.removeQueries({ queryKey: emailKeys.links.queryKey });
@@ -42,7 +44,7 @@ export async function clearLocalAuthSession() {
 
   // Queued mutations are user intent; never allow them to replay under a
   // subsequent account sharing this anonymous device cache scope.
-  await clearRegisteredCaches();
+  await Promise.all([documentContextsCleared, clearRegisteredCaches()]);
 }
 
 export function useLogout() {

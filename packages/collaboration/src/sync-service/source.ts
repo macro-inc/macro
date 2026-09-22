@@ -316,10 +316,21 @@ export class SyncServiceSource implements LiveSyncSource {
     const message = event.data;
     const syncEvent = syncEventForMessage(message);
     if (syncEvent) this.emit(syncEvent);
-    // Resolve every pending request whose predicate matches this message.
-    for (const waiter of [...this.waiters]) {
-      if (waiter.match(message)) waiter.resolve(message);
+    const waiting = [...this.waiters].filter((waiter) => waiter.match(message));
+    if (message.isRemoteInitialSync() && waiting.length === 0) {
+      // An offline bootstrap (or a slow reconnect) can outlive the initial
+      // waiter. Accept the eventual authorized connection and converge the
+      // locally seeded document instead of permanently blocking WAL replay.
+      this.initialSyncReceived = true;
+      this.ws.startHeartbeat();
+      const sync = message.value as InitialSync;
+      this.emit({
+        type: 'reconnect',
+        snapshot: sync.snapshot,
+        awareness: sync.awareness,
+      });
     }
+    for (const waiter of waiting) waiter.resolve(message);
   };
 
   private onClose: WebsocketEventListener<

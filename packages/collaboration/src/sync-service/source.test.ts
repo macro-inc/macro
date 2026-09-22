@@ -163,6 +163,51 @@ describe('SyncServiceSource', () => {
     expect(ws.heartbeats).toBe(1);
   });
 
+  it('recovers a first sync arriving after offline bootstrap timed out and acknowledges queued edits', async () => {
+    vi.useFakeTimers();
+    const ws = new FakeSocket();
+    const src = new SyncServiceSource(ws, 'doc1', { newId: () => 'late-op' });
+    try {
+      const events: SyncSourceEvent[] = [];
+      src.listen((event) => events.push(event));
+      await vi.advanceTimersByTimeAsync(TIMEOUTS.INITIAL_SYNC + 1);
+      expect((await src.doInitialSync()).isErr()).toBe(true);
+      expect(await src.pushUpdate([snap])).toBe(false);
+      ws.deliver(remote.initialSync(snap, aw));
+      expect(events).toEqual([
+        { type: 'reconnect', snapshot: snap, awareness: aw },
+      ]);
+      expect(ws.heartbeats).toBe(1);
+      const delivered = src.pushUpdate([snap]);
+      ws.deliver(remote.ack('late-op'));
+      expect(await delivered).toBe(true);
+    } finally {
+      src.cleanup();
+      vi.useRealTimers();
+    }
+  });
+
+  it('accepts a reconnect snapshot even after its waiter expired', async () => {
+    vi.useFakeTimers();
+    const ws = new FakeSocket();
+    const src = new SyncServiceSource(ws, 'doc1');
+    try {
+      ws.deliver(remote.initialSync(snap, aw));
+      await src.doInitialSync();
+      const events: SyncSourceEvent[] = [];
+      src.listen((event) => events.push(event));
+      ws.fireReconnect();
+      await vi.advanceTimersByTimeAsync(TIMEOUTS.INITIAL_SYNC + 1);
+      ws.deliver(remote.initialSync(snap, aw));
+      expect(events).toEqual([
+        { type: 'reconnect', snapshot: snap, awareness: aw },
+      ]);
+    } finally {
+      src.cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it('maps RemoteUpdate to an update event', () => {
     const ws = new FakeSocket();
     const src = new SyncServiceSource(ws, 'doc1');

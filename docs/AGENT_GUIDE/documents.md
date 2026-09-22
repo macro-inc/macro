@@ -333,6 +333,20 @@ check that the inserted company mention points to the correct company. Also chec
 searching by domain and that an open picker updates when companies finish hydrating.
 Discard unsent test drafts rather than sending them.
 
+## Native offline reopening
+
+On native mobile, previously opened Markdown documents/tasks can reopen after an
+app restart using their cached body and last-known permissions. Warm the document
+online first, then restart with API traffic blocked: verify the existing body,
+make a disposable edit, and restart offline again to check local recovery.
+Restoring connectivity must reauthorize synchronization before queued edits reach
+the server; verify the server copy, not just the still-cached editor text.
+
+Cached open context is scoped to the signed-in user and invalidated at logout;
+permission tokens are never persisted. A missing body snapshot still requires an
+online open—metadata alone must not produce an editable empty document. This path
+does not imply offline coverage for PDFs, attachments, or other binary files.
+
 ## Reference hover previews
 
 The `@` menu includes `Recent agent sessions` after Channels and before

@@ -27,7 +27,7 @@ import { peerCounterAttr, telemetrySpan } from './telemetry';
 // SnapshotStore in the engine is always Loro updates — RawUpdate.
 type LoroSnapshotStore = SnapshotStore<RawUpdate>;
 
-import type { LiveSyncSource, SyncSourceEvent, TimeoutError } from './source';
+import type { LiveSyncSource, SyncError, SyncSourceEvent } from './source';
 import type { WALSyncer } from './wal';
 
 const SNAPSHOT_INTERVAL_MS = 5_000;
@@ -64,7 +64,7 @@ export type SyncEngineParams<S extends GenericRootSchema, D> = {
   makeChatter?: (documentId: string) => Chatter;
 };
 
-type SnapshotThunk = () => ResultAsync<Uint8Array, TimeoutError>;
+type SnapshotThunk = () => ResultAsync<Uint8Array, SyncError>;
 
 export class SyncEngine<S extends GenericRootSchema, D> {
   private _isRunning = false;
@@ -471,7 +471,7 @@ export type ReactiveSyncEngine<S extends GenericRootSchema, D> = {
   start: () => void;
   stop: () => void;
   reset: (
-    snapshotThunk?: () => ResultAsync<Uint8Array, TimeoutError>
+    snapshotThunk?: () => ResultAsync<Uint8Array, SyncError>
   ) => Promise<void>;
   syncStateToLoro: (state: InferType<S>) => Promise<void>;
   syncAwarenessToLoro: (awareness: D) => void;
