@@ -7,26 +7,25 @@ import { Widget } from './widget';
 /**
  * Renders a `displayResults` tool call's `view` argument as a dashboard.
  *
- * The backend tool input is `any`, so the view arrives as unknown JSON — we
- * validate it against the Zod {@link ViewSchema} here (the schema's source of
- * truth lives on the frontend) and render it with the dynamic-ui component lib.
+ * The wire input remains unknown JSON so streamed or malformed arguments can
+ * reach the renderer. Validate it against the Zod {@link ViewSchema}, which
+ * also generates the model-facing tool schema, before composing the widgets.
  *
  * Lives in the `app` package (not `core`) because the dynamic-ui lib depends on
  * `app` internals; the core tool handler lazy-imports this to avoid a circular
  * dependency. Default export so it can be `lazy()`-loaded.
  */
-export default function DashboardToolView(props: { view: unknown }) {
-  // The arguments stream in, and an agent session opens the call before it
-  // reports any input at all. Nothing has been composed yet at that point, so
-  // there is nothing to fail to render either - the "didn't match" notice is
-  // for a view the model actually sent.
-  const pending = () => props.view == null;
-  const parsed = createMemo(() =>
-    pending() ? undefined : ViewSchema.safeParse(props.view)
-  );
+export default function DashboardToolView(props: {
+  view: unknown;
+  pending?: boolean;
+}) {
+  // Agent calls open before their input arrives. Render any valid view as it
+  // streams in, but only report malformed or missing input once the call ends.
+  const pending = () => props.pending ?? props.view == null;
+  const parsed = createMemo(() => ViewSchema.safeParse(props.view));
   const view = () => {
     const r = parsed();
-    return r?.success ? r.data : undefined;
+    return r.success ? r.data : undefined;
   };
 
   return (

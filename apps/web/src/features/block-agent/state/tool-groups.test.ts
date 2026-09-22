@@ -15,7 +15,7 @@ const thought = (): MessagePart => ({ kind: 'thought', text: 'thinking...' });
  * `displayResults`: the model composes a dynamic-UI view and the call renders
  * it. The answer itself, not a card about one.
  */
-const displayResults = (): MessagePart => ({
+const displayResults = (): Extract<MessagePart, { kind: 'tool_use' }> => ({
   kind: 'tool_use',
   id: 'view',
   name: { kind: 'native', name: 'DisplayResults' },
@@ -162,11 +162,31 @@ describe('segmentParts', () => {
       { kind: 'part', start: 1, end: 2 },
     ]);
   });
+
+  it('keeps the last thought and the dashboard visible after grouped tools', () => {
+    expect(
+      segmentParts([thought(), tool(), thought(), displayResults()])
+    ).toEqual([
+      { kind: 'tools', start: 0, end: 2 },
+      { kind: 'part', start: 2, end: 3 },
+      { kind: 'part', start: 3, end: 4 },
+    ]);
+  });
 });
 
 describe('rendersOwnView', () => {
   it('is true for a Macro displayResults call', () => {
     expect(rendersOwnView(displayResults())).toBe(true);
+  });
+
+  it('recognizes a Macro displayResults call with an MCP namespace', () => {
+    const part = displayResults();
+    expect(
+      rendersOwnView({
+        ...part,
+        name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
+      })
+    ).toBe(true);
   });
 
   it('is false for any other tool call, and for a non-tool part', () => {
@@ -185,7 +205,14 @@ describe('rendersOwnView', () => {
         id: 'other',
         name: { kind: 'native', name: 'DisplayResults' },
         status: 'completed',
-        detail: { kind: 'other', acpKind: 'other', output: null, input: null },
+        detail: {
+          kind: 'other',
+          acpKind: 'other',
+          output: null,
+          input: null,
+          result: null,
+          error: null,
+        },
       })
     ).toBe(false);
   });

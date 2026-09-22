@@ -19,6 +19,7 @@ import {
   deserializeToolResponse,
 } from '@service-cognition/generated/tools/tool';
 import { createMemo, ErrorBoundary, type JSX, Show } from 'solid-js';
+import { DashboardToolView } from '../../../dynamic-ui/DashboardToolView.lazy';
 import { FoldedExchange, ToolCard } from '../../ui';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
@@ -31,12 +32,24 @@ export function MacroToolCall(props: {
 }): JSX.Element {
   const finished = () =>
     props.common.status === 'completed' || props.common.status === 'failed';
+  const displayResults = () =>
+    props.common.label === 'DisplayResults' &&
+    props.common.status !== 'failed' &&
+    props.detail.error == null;
+  const dashboardView = () => {
+    const input = props.detail.input;
+    return input != null && typeof input === 'object' && 'view' in input
+      ? input.view
+      : undefined;
+  };
   // The chat renderer renders nothing for a tool it has no component for or
   // arguments that do not fit the tool's schema, and it shows a *completed*
   // call whose response it cannot read as failed. A call it would drop or
   // misreport keeps the generic card, so no row vanishes or lies.
   const chatRenders = createMemo(() => {
-    if (props.detail.error != null) return false;
+    if (props.detail.error != null || props.common.status === 'failed') {
+      return false;
+    }
     const call = deserializeToolCall({
       id: props.common.id,
       name: props.common.label,
@@ -52,25 +65,39 @@ export function MacroToolCall(props: {
   });
 
   return (
-    <Show when={chatRenders()} fallback={<GenericMacroToolCall {...props} />}>
+    <Show
+      when={displayResults()}
+      fallback={
+        <Show
+          when={chatRenders()}
+          fallback={<GenericMacroToolCall {...props} />}
+        >
+          <ErrorBoundary fallback={<GenericMacroToolCall {...props} />}>
+            <RenderTool
+              tool_id={props.common.id}
+              name={props.common.label}
+              json={props.detail.input}
+              response={
+                props.detail.output == null
+                  ? undefined
+                  : { json: props.detail.output, name: props.common.label }
+              }
+              chat_id={props.context?.sessionId ?? ''}
+              message_id={props.context?.messageId ?? ''}
+              part_index={props.context?.partIndex ?? 0}
+              isComplete={finished()}
+              renderContext={{
+                renderContext: { isStreaming: !finished(), grouped: false },
+              }}
+            />
+          </ErrorBoundary>
+        </Show>
+      }
+    >
+      {/* The view is the tool's user-facing result. Keep its streamed input
+          reactive and let the dashboard validate it, even without a response. */}
       <ErrorBoundary fallback={<GenericMacroToolCall {...props} />}>
-        <RenderTool
-          tool_id={props.common.id}
-          name={props.common.label}
-          json={props.detail.input}
-          response={
-            props.detail.output == null
-              ? undefined
-              : { json: props.detail.output, name: props.common.label }
-          }
-          chat_id={props.context?.sessionId ?? ''}
-          message_id={props.context?.messageId ?? ''}
-          part_index={props.context?.partIndex ?? 0}
-          isComplete={finished()}
-          renderContext={{
-            renderContext: { isStreaming: !finished(), grouped: false },
-          }}
-        />
+        <DashboardToolView view={dashboardView()} pending={!finished()} />
       </ErrorBoundary>
     </Show>
   );

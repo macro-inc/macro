@@ -2,53 +2,26 @@ import { z } from 'zod';
 import { ViewSchema } from './schema';
 
 /**
- * Prompt text describing the `displayResults` tool's `view` argument.
- *
- * The backend tool input is `any` (so the schema isn't duplicated in Rust), so
- * the model learns the shape from here instead: we convert the Zod `ViewSchema`
- * to JSON Schema and embed it in the prompt. Kept in its own module so
- * importing it only pulls the Zod schema, not the dynamic-ui component tree.
- *
- * Two surfaces read this, from the one source:
- *
- * - The AI chat embeds {@link displayResultsInstructions} in the chat
- *   request's `additional_instructions` (see `buildRequest.ts`).
- * - Agent sessions run their turn entirely on the backend, so the body is
- *   generated into `crates/prompt/src/dynamic_ui.md`
- *   (`bun run gen-dynamic-ui-prompt`) and composed into the session prompt
- *   there. `bun run check` fails when that file goes stale.
- *
- * `unrepresentable: "any"` lets opaque schemas (the soup `Query` `z.custom`) fall
- * back to "accepts anything" rather than throwing during conversion.
+ * The complete model-facing DisplayResults contract, generated from the same
+ * Zod schema the renderer validates. The Rust tool includes the generated JSON
+ * directly, so every host that advertises the tool also supplies its schema.
  */
-let cachedBody: string | undefined;
-
-/** The heading the instructions are filed under in a composed prompt. */
-const PROMPT_TITLE = 'displayResults';
-
-/**
- * The instructions without their heading, so a host that files prompt
- * sections under their own title (the Rust `StaticPrompt`) does not print it
- * twice.
- */
-export function displayResultsPromptBody(): string {
-  if (cachedBody !== undefined) return cachedBody;
-  const jsonSchema = z.toJSONSchema(ViewSchema, { unrepresentable: 'any' });
-  cachedBody = [
-    '`displayResults` renders a rich, interactive view (lists, timelines, channel messages) directly in the conversation — the chat, or the transcript of an agent session. PREFER it over a plain-text answer whenever your response is largely about the user\'s workspace data — summaries of tasks/docs/activity, lists of entities, anything you would otherwise format as a markdown table or a long bulleted list. You do NOT need the user to ask for a "dashboard" or a "view": proactively call `displayResults` whenever it presents the information more clearly than text would.',
-    'Typical triggers — call it even though the user never said "dashboard": "what did I get done this week?", "what\'s <teammate> working on?", "show me my open tasks", "summarize this project", "what happened in <channel>?". When in doubt and the answer is mostly workspace entities or metrics, render a view.',
-    '`ReadActivity` is the exception: it already renders its complete, entity-resolved response as a rich user-facing activity timeline. After calling `ReadActivity`, do NOT call `displayResults` to restate or summarize those events. Add at most one short textual takeaway.',
-    'When you DO render a view, keep any accompanying text short (a one-line lead-in at most) — the view IS the answer; do not also restate it in prose.',
-    'Its `view` argument MUST be a JSON object matching this JSON Schema (a `title` plus an ordered `widgets` array; layout is flexbox via the `container` widget):',
-    '```json',
-    JSON.stringify(jsonSchema, null, 2),
-    '```',
-    'Entity-backed widgets (`list`, `timeline`, `channelMessage`) take real workspace entity ids — use ids you obtained from other tools (ListEntities, search, etc.), never invented ones.',
-  ].join('\n');
-  return cachedBody;
-}
-
-/** The instructions as a standalone prompt section, heading included. */
-export function displayResultsInstructions(): string {
-  return `# ${PROMPT_TITLE}\n${displayResultsPromptBody()}`;
+export function displayResultsToolSchema() {
+  return z.toJSONSchema(
+    z.object({ view: ViewSchema }).meta({
+      title: 'DisplayResults',
+      description: [
+        'Present results as a rich, interactive view (lists, timelines, channel messages) directly in the conversation.',
+        'Prefer this tool when answering questions about workspace data: summaries of tasks/docs/activity, lists of entities, and information that would otherwise need a markdown table or long bulleted list. The user does not need to ask for a dashboard.',
+        'Typical triggers: "what did I get done this week?", "what is a teammate working on?", "show my open tasks", "summarize this project", and "what happened in this channel?".',
+        'ReadActivity already renders a complete activity timeline: do not call DisplayResults to repeat its events; add at most one short textual takeaway.',
+        'The view is the answer. Keep accompanying prose to a one-line lead-in at most and do not restate the same data.',
+        'Entity-backed widgets take real workspace entity ids obtained from other tools such as ListEntities or search; never invent ids. Prefer list sources with kind "items" and those entity references.',
+        'The frontend renders the view from the tool arguments immediately; this tool only acknowledges it.',
+      ].join(' '),
+    }),
+    // The existing soup Query schema is an opaque pass-through owned by the
+    // filter store. All widget/layout/entity fields retain their full schema.
+    { unrepresentable: 'any' }
+  );
 }

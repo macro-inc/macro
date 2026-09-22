@@ -48,7 +48,10 @@ export function rendersOwnView(part: MessagePart | undefined): boolean {
 
 /** Whether a part may be folded into a collapsed run with its neighbours. */
 function isGroupable(part: MessagePart | undefined): boolean {
-  return (part?.kind === 'tool_use' || part?.kind === 'thought') && !rendersOwnView(part);
+  return (
+    (part?.kind === 'tool_use' || part?.kind === 'thought') &&
+    !rendersOwnView(part)
+  );
 }
 
 export function segmentParts(parts: readonly MessagePart[]): PartSegment[] {
