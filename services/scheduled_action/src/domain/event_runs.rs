@@ -3,15 +3,25 @@
 //! domain concerns.
 
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{
+    EntityAccessReceipt, EntityType, RequiredPermission, ViewAccessLevel, ViewOnly,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7};
 use model_owner::Owner;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 
-use super::event_trigger::{EventFilters, EventId, EventReference, EventRejection, IncomingEvent};
+use super::event_trigger::{
+    EventEntityType, EventFilters, EventId, EventReference, EventRejection, IncomingEvent,
+};
 use super::models::{ActionExecutionRecord, ScheduledAction};
+
+pub mod admission;
+pub mod dispatch;
+
+#[cfg(test)]
+mod test_support;
 
 /// Independent of `updated_at`, which execution bookkeeping also changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -187,11 +197,84 @@ impl PendingEventRun {
     }
 }
 
-/// Receipt minted for the current action owner and triggering entity. The
-/// domain preparation service must verify that the receipt is bound to both.
+/// Entity-specific view capability. Channel permission semantics are distinct
+/// from item access levels and must not be converted into document permissions.
+#[derive(Debug, Clone)]
+pub enum EventAccessCapability {
+    Document(EntityAccessReceipt<ViewAccessLevel>),
+    Channel(EntityAccessReceipt<ViewOnly>),
+}
+
+impl EventAccessCapability {
+    /// Require a directly authenticated owner, the exact entity, and its kind.
+    /// In particular, a bot acting on behalf of the owner is not the owner.
+    pub fn authorizes(&self, owner: &MacroUserIdStr<'static>, event: &EventReference) -> bool {
+        match (self, event.entity_type()) {
+            (Self::Document(receipt), EventEntityType::Document) => {
+                receipt_matches(receipt, owner, event, EntityType::Document)
+            }
+            (Self::Channel(receipt), EventEntityType::Channel) => {
+                receipt_matches(receipt, owner, event, EntityType::Channel)
+            }
+            _ => false,
+        }
+    }
+}
+
+fn receipt_matches<T: RequiredPermission>(
+    receipt: &EntityAccessReceipt<T>,
+    owner: &MacroUserIdStr<'static>,
+    event: &EventReference,
+    kind: EntityType,
+) -> bool {
+    receipt
+        .get_authenticated_user()
+        .is_ok_and(|user| user == owner)
+        && receipt.entity().entity_type == kind
+        && Uuid::parse_str(&receipt.entity().entity_id).ok() == Some(event.entity_id())
+}
+
+/// Receipt minted for the current action owner and triggering entity.
 pub struct AuthorizedEventRun {
     pub pending: PendingEventRun,
-    pub access: EntityAccessReceipt<ViewAccessLevel>,
+    pub access: EventAccessCapability,
+}
+
+impl AuthorizedEventRun {
+    /// Validate current configuration and receipt binding before the fenced
+    /// started transition. A revision race is checked again by the repository.
+    pub fn prepare(
+        pending: PendingEventRun,
+        configuration: &EventActionConfiguration,
+        access: EventAccessCapability,
+    ) -> Result<Self, CancellationReason> {
+        configuration.check_pending(&pending)?;
+        let Owner::User(owner) = &configuration.owner else {
+            return Err(CancellationReason::NotUserOwned);
+        };
+        if !access.authorizes(owner, &pending.event) {
+            return Err(CancellationReason::AccessDenied);
+        }
+        Ok(Self { pending, access })
+    }
+}
+
+impl EventActionConfiguration {
+    fn check_pending(&self, pending: &PendingEventRun) -> Result<(), CancellationReason> {
+        if !self.enabled {
+            return Err(CancellationReason::Disabled);
+        }
+        if self.action_id != pending.action_id
+            || self.revision != pending.revision
+            || !self.filters.matches(&pending.event, self.activated_at)
+        {
+            return Err(CancellationReason::Superseded);
+        }
+        if !matches!(self.owner, Owner::User(_)) {
+            return Err(CancellationReason::NotUserOwned);
+        }
+        Ok(())
+    }
 }
 
 /// Claim is the start linearization point. Configuration changes after this
@@ -311,7 +394,7 @@ pub trait CurrentOwnerAccess: Send + Sync + 'static {
         &self,
         owner: &MacroUserIdStr<'static>,
         event: &EventReference,
-    ) -> impl Future<Output = Result<Option<EntityAccessReceipt<ViewAccessLevel>>, Report>> + Send;
+    ) -> impl Future<Output = Result<Option<EventAccessCapability>, Report>> + Send;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

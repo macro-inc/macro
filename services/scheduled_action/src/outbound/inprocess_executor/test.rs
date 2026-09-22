@@ -165,10 +165,12 @@ fn event_run() -> ClaimedEventRun {
     };
     ClaimedEventRun {
         run: AuthorizedEventRun {
-            access: EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
-                MacroUserIdStr::parse_from_str(USER).unwrap(),
-                &entity.to_string(),
-                EntityType::Document,
+            access: crate::domain::event_runs::EventAccessCapability::Document(
+                EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
+                    MacroUserIdStr::parse_from_str(USER).unwrap(),
+                    &entity.to_string(),
+                    EntityType::Document,
+                ),
             ),
             pending,
         },

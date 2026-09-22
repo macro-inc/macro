@@ -84,7 +84,10 @@ fn authorized(pending: PendingEventRun) -> AuthorizedEventRun {
         &pending.event.entity_id().to_string(),
         EntityType::Document,
     );
-    AuthorizedEventRun { pending, access }
+    AuthorizedEventRun {
+        pending,
+        access: crate::domain::event_runs::EventAccessCapability::Document(access),
+    }
 }
 
 async fn claim(repo: &PgEventRunRepo, pending: PendingEventRun) -> Option<ClaimedEventRun> {
