@@ -88,7 +88,10 @@ incomplete predicate-index facts into authoritative membership evidence.
 On desktop with the new app views enabled, Home defaults to a Signal feed merging
 notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
-action. On desktop, the funnel button to the right of **Home** opens **Filter Home**.
+action. Editing a document or spreadsheet counts as an own action, so typing in
+one moves it to the top of Home; the collab session publishes those edits a few
+seconds after the last keystroke, and the row moves immediately in the editing
+tab. On desktop, the funnel button to the right of **Home** opens **Filter Home**.
 The menu shares the legacy compact submenus: **Status** offers **Unread**, **Read**,
 and **All** as single-select radio items with a checkmark on the right of the selected
 option, and **Type** contains the entity checkboxes. Status closes the menu

@@ -46,6 +46,11 @@ function vvAttr(vv: VersionVector): string {
 
 export type EngineBindings<S extends GenericRootSchema> = {
   onRemoteState: (state: InferType<S>) => void;
+  /**
+   * This peer changed the document. Called per accepted local update, which
+   * is as often as the surface commits — keystroke frequency for text.
+   */
+  onLocalEdit?: () => void;
 };
 
 export type SyncSources = {
@@ -277,6 +282,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.log('debug', 'engine: local update, appending to WAL');
     void this.syncs.wal.append(update);
     this.chatter?.post({ type: 'update', data: update });
+    this.bindings.onLocalEdit?.();
   }
 
   private async persistSnapshot() {

@@ -8,10 +8,10 @@
  *
  * Only mutations whose server side records an activity (the domain
  * `ActivitySource` impls: create, rename, file-type change, project move,
- * property change, channel message send) may stamp — bumping an
+ * property change, channel message send, and the content edits a collab
+ * session publishes as `SyncContentUpdated` editors) may stamp — bumping an
  * unattributed action would reorder the Recent feed only to snap back once
- * the server truth arrives. Doc content edits are NOT attributed yet
- * (`SyncContentUpdated` carries no actor), so typing must not stamp.
+ * the server truth arrives.
  */
 
 import { createStampFloors } from './stamp-floors';

@@ -20,6 +20,7 @@ import {
   type WALStore,
   WALSyncer,
 } from '@macro-inc/collaboration/collab/wal';
+import { stampOwnContentEdit } from '@queries/soup/normalized-cache';
 import type { LoroDoc } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
@@ -158,7 +159,13 @@ export function createSpreadsheetSession(
     loroManager: manager,
     awareness,
     syncs: { live: options.syncSource, wal },
-    bindings: { onRemoteState: () => setDoc(manager.doc) },
+    bindings: {
+      onRemoteState: () => setDoc(manager.doc),
+      // The session publishes these edits attributed to this user, which is
+      // what moves the spreadsheet up Home; stamp the touch now rather than
+      // wait for that round trip.
+      onLocalEdit: () => stampOwnContentEdit(options.documentId),
+    },
     readonly: () => !options.canEdit(),
     snapshotStore: snapshots,
     makeChatter: persistence?.makeChatter,

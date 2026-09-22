@@ -45,6 +45,7 @@ import {
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
 import type { Span } from '@macro-inc/observability';
+import { stampOwnContentEdit } from '@queries/soup/normalized-cache';
 import type { NodeKey, UpdateListenerPayload } from 'lexical';
 import {
   $addUpdateTag,
@@ -155,6 +156,10 @@ export function CollabProvider(props: CollabProviderProps) {
     bindings: {
       onRemoteState: (state) =>
         syncStateToLexical(state as unknown as SerializedEditorState),
+      // The session publishes these edits attributed to this user, which is
+      // what moves the document up Home; stamp the touch now rather than wait
+      // for that round trip.
+      onLocalEdit: () => stampOwnContentEdit(syncSource()!.documentId),
     },
     readonly: readOnly,
     snapshotStore: new IDBSnapshotStore(

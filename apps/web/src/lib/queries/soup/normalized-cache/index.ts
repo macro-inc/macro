@@ -18,6 +18,7 @@ export {
   removeSoupEntitiesFromQueriesReferencing,
   restoreSoupEntityToDoneFilteredQueries,
 } from './operations';
+export { stampOwnContentEdit } from './own-content-edit';
 export type {
   SoupEntityTag,
   SoupTransaction,
