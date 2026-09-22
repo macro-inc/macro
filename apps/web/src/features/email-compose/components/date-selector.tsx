@@ -196,25 +196,14 @@ export const DateSelector = (props: DateSelectorProps) => {
       return;
     }
 
+    onOpenChange(false);
     const dateValue = option?.date ?? null;
-    let closed = false;
     try {
-      const acceptance = props.onSelectDate?.(dateValue);
-      if (acceptance instanceof Promise) {
-        // Async consumers keep the previous confirmed value while their
-        // mutation settles, but the menu still closes immediately.
-        onOpenChange(false);
-        closed = true;
-        if ((await acceptance) !== false) setSelectedOption(option);
-      } else if (acceptance !== false) {
-        // Apply synchronous form changes before revealing the trigger so it
-        // never paints with a stale selected icon or label after Clear.
-        setSelectedOption(option);
-      }
+      const accepted = await props.onSelectDate?.(dateValue);
+      if (accepted !== false) setSelectedOption(option);
     } catch {
       // The caller owns request feedback. Keep showing the last confirmed value.
     }
-    if (!closed) onOpenChange(false);
   };
 
   const options = createMemo(() => {
