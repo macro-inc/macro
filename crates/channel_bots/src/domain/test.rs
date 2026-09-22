@@ -8,7 +8,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::MockMessageServiceApi,
     events::MessagePostedMetadata,
-    models::{Message, MessageParent, MessageThread, ThreadState},
+    models::{Message, MessageParent, MessageThread, ThreadAnchor, ThreadState},
     service::MessageWrite,
 };
 use std::sync::{
@@ -59,6 +59,15 @@ pub(super) fn thread(root: Message, replies: Vec<Message>) -> MessageThread {
         root,
         replies,
     }
+}
+/// A discussion anchored to marked document text, as the editor records it.
+pub(super) fn marked_thread(root: Message, marked_text: Option<&str>) -> MessageThread {
+    let mut thread = thread(root, vec![]);
+    thread.state.anchor = Some(ThreadAnchor::Markdown {
+        mark_id: Uuid::from_u128(0xaa),
+        marked_text: marked_text.map(ToOwned::to_owned),
+    });
+    thread
 }
 pub(super) fn configure_reads(
     api: &mut MockMessageServiceApi,

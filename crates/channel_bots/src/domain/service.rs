@@ -9,7 +9,7 @@ use messages::domain::{
     api::MessageServiceApi,
     models::{
         MessageAttribution, MessageParent, PatchMessageNotificationPolicy, PostMessage,
-        PostMessageNotificationPolicy,
+        PostMessageNotificationPolicy, ThreadAnchor,
     },
     ports::{MessageError, MessagePatch},
     service::MessageView,
@@ -46,6 +46,26 @@ triggering message.";
 const CHANNEL_CONTEXT_INSTRUCTION: &str = "Recent messages in the channel around the mention \
 (oldest to newest).";
 
+const ANCHOR_INSTRUCTION: &str = "The document text this discussion is attached to. It is what \
+the mark covered when the discussion was started, so the document may have changed since — read \
+the document itself if you need its current wording.";
+
+/// The thread a mention sits in, read once for everything the prompt needs.
+struct ThreadContext {
+    lines: Vec<PromptLine>,
+    ids: HashSet<Uuid>,
+    /// Present only for a document discussion the author anchored to text,
+    /// and only when the anchor carries a snapshot of what it marked.
+    marked: Option<MarkedText>,
+}
+
+/// The text a markdown discussion marks, with the mark that identifies it —
+/// the same id the comment reads carry, so the two can be matched up.
+struct MarkedText {
+    mark_id: Uuid,
+    text: String,
+}
+
 /// A single message rendered into the prompt.
 struct PromptLine {
     sender: String,
@@ -67,6 +87,20 @@ fn trigger_line(event: &BotEvent) -> PromptLine {
         content: trimmed_content(&event.message.content).unwrap_or_default(),
         is_trigger: true,
     }
+}
+
+/// Write the block naming what a document discussion is anchored to, so a
+/// mention that says "this" can be resolved to words rather than to a mark id
+/// the agent has no way to look up.
+fn append_anchor(prompt: &mut String, marked: Option<&MarkedText>) {
+    let Some(marked) = marked else {
+        return;
+    };
+    let _ = write!(
+        prompt,
+        "\n<anchor mark=\"{}\">\n{ANCHOR_INSTRUCTION}\n\n{}\n</anchor>\n",
+        marked.mark_id, marked.text
+    );
 }
 
 /// Write a tagged context block: an instruction line followed by one message
@@ -170,8 +204,15 @@ where
         event: &BotEvent,
         access: EntityAccessReceipt<MessageView>,
         root_id: Uuid,
-    ) -> anyhow::Result<(Vec<PromptLine>, HashSet<Uuid>)> {
+    ) -> anyhow::Result<ThreadContext> {
         let thread = self.messages.get_thread(access, root_id).await?;
+        let marked = match thread.state.anchor {
+            Some(ThreadAnchor::Markdown {
+                mark_id,
+                marked_text: Some(text),
+            }) => Some(MarkedText { mark_id, text }),
+            _ => None,
+        };
         let mut thread_ids = HashSet::new();
         let mut lines = Vec::new();
         for message in std::iter::once(thread.root).chain(thread.replies) {
@@ -191,7 +232,11 @@ where
         if !lines.iter().any(|line| line.is_trigger) {
             lines.push(trigger_line(event));
         }
-        Ok((lines, thread_ids))
+        Ok(ThreadContext {
+            lines,
+            ids: thread_ids,
+            marked,
+        })
     }
 
     /// Build the prompt for a mention.
@@ -268,7 +313,12 @@ where
                 ),
             };
             let _ = writeln!(prompt, "{intro}");
-            let (thread, thread_ids) = self.thread_lines(event, view, root_id).await?;
+            let ThreadContext {
+                lines: thread,
+                ids: thread_ids,
+                marked,
+            } = self.thread_lines(event, view, root_id).await?;
+            append_anchor(&mut prompt, marked.as_ref());
             append_block(&mut prompt, "thread", thread_instruction, marker, &thread);
 
             let background: Vec<PromptLine> = nearby

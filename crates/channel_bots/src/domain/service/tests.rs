@@ -131,6 +131,41 @@ async fn root_comment_is_valid_agent_context_before_any_replies_exist() {
 }
 
 #[tokio::test]
+async fn an_anchored_discussion_names_the_text_it_marks() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        marked_thread(
+            trigger.clone(),
+            Some("backfills the ledger from the archive"),
+        ),
+    );
+    let prompt = handler(api, Arc::new(Access::default()), responder("reply"))
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(prompt.contains("<anchor mark=\"00000000-0000-0000-0000-0000000000aa\">"));
+    assert!(prompt.contains("backfills the ledger from the archive"));
+    // The snapshot is dated, and the prompt says so rather than implying it is current.
+    assert!(prompt.contains("the document may have changed since"));
+}
+
+#[tokio::test]
+async fn a_discussion_with_no_marked_text_claims_no_anchor() {
+    let trigger = message(1, None, "@macro help with this document");
+    let mut api = MockMessageServiceApi::new();
+    // Both an unanchored discussion and one anchored before snapshots existed.
+    configure_reads(&mut api, &trigger, marked_thread(trigger.clone(), None));
+    let prompt = handler(api, Arc::new(Access::default()), responder("reply"))
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(!prompt.contains("<anchor"));
+}
+
+#[tokio::test]
 async fn revoked_document_access_prevents_context_reads_and_agent_work() {
     let trigger = message(1, None, "@macro help");
     let access = Arc::new(Access::default());
