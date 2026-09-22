@@ -80,7 +80,7 @@ describe('shared model selector', () => {
     const [changingTo, setChangingTo] = createSignal<string>();
     const ids = [
       'anthropic/claude-sonnet-5',
-      'anthropic/claude-opus-5',
+      'anthropic/claude-opus-5-5',
       'anthropic/claude-haiku-4-5',
     ];
     render(() => (
@@ -102,13 +102,13 @@ describe('shared model selector', () => {
     fireEvent.keyDown(trigger, { key: 'Enter' });
     expect(screen.getByRole('menuitem', { name: /^Haiku 4.5/ })).toBeTruthy();
     expect(screen.queryByText(ids[0])).toBeNull();
-    fireEvent.keyDown(screen.getByRole('menuitem', { name: /^Opus 5/ }), {
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: /^Opus 5.5/ }), {
       key: 'Enter',
     });
     expect(select).toHaveBeenCalledWith(ids[1]);
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     setChangingTo(ids[1]);
-    expect(trigger.textContent).toBe('Opus 5');
+    expect(trigger.textContent).toBe('Opus 5.5');
   });
   it('keeps the new-session default selectable before models are available', async () => {
     const selectDefault = vi.fn();

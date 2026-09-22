@@ -26,6 +26,8 @@ async fn seeded_pricing_is_available(pool: PgPool) {
     assert_eq!(price, Some((5.0, 25.0)));
     let price = repo.get_pricing("claude-opus-5").await.unwrap();
     assert_eq!(price, Some((5.0, 25.0)));
+    let price = repo.get_pricing("claude-opus-5-5").await.unwrap();
+    assert_eq!(price, Some((4.0, 20.0)));
     assert_eq!(repo.get_pricing("nonexistent-model").await.unwrap(), None);
 }
 

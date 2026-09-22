@@ -41,7 +41,7 @@
   grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
   Macro’s available models with readable names (for example, **Sonnet 5**) and
   provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
-  Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
+  Opus 5.5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
   The built-in Macro agent is the only agent excluded from these sections; its models remain available.

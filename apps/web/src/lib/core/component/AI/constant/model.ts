@@ -10,7 +10,7 @@ import ClaudeIcon from '@icon/wide-claude.svg';
  */
 export const Model = {
   sonnet5: 'anthropic/claude-sonnet-5',
-  opus5: 'anthropic/claude-opus-5',
+  opus55: 'anthropic/claude-opus-5-5',
   haiku45: 'anthropic/claude-haiku-4-5',
   gpt56: 'openai/gpt-5.6',
   gpt56Mini: 'openai/gpt-5.6-mini',
@@ -27,7 +27,7 @@ type ExhaustiveMap = {
 
 export const MODEL_PRETTYNAME: ExhaustiveMap = {
   'anthropic/claude-sonnet-5': 'Sonnet 5',
-  'anthropic/claude-opus-5': 'Opus 5',
+  'anthropic/claude-opus-5-5': 'Opus 5.5',
   'anthropic/claude-haiku-4-5': 'Haiku 4.5',
   'openai/gpt-5.6': 'GPT-5.6',
   'openai/gpt-5.6-mini': 'GPT-5.6 mini',
@@ -35,7 +35,7 @@ export const MODEL_PRETTYNAME: ExhaustiveMap = {
 
 export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
   'anthropic/claude-sonnet-5': ClaudeIcon,
-  'anthropic/claude-opus-5': ClaudeIcon,
+  'anthropic/claude-opus-5-5': ClaudeIcon,
   'anthropic/claude-haiku-4-5': ClaudeIcon,
   'openai/gpt-5.6': OpenAiIcon,
   'openai/gpt-5.6-mini': OpenAiIcon,
@@ -75,7 +75,7 @@ export function modelsForPlan(hasPaidAccess: boolean): readonly TModel[] {
 /** Provider serving each model — mirrors the backend `provider` field. */
 export const MODEL_PROVIDER: ExhaustiveMap = {
   'anthropic/claude-sonnet-5': 'anthropic',
-  'anthropic/claude-opus-5': 'anthropic',
+  'anthropic/claude-opus-5-5': 'anthropic',
   'anthropic/claude-haiku-4-5': 'anthropic',
   'openai/gpt-5.6': 'openai',
   'openai/gpt-5.6-mini': 'openai',

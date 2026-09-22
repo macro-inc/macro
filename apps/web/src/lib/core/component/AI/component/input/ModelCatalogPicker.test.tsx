@@ -87,7 +87,7 @@ vi.mock('@ui', () => {
 const OPTIONS: CatalogModelOption[] = [
   { id: 'auto', label: 'Auto', group: 'Auto' },
   { id: 'grok', label: 'Cursor Grok 4.6 High Fast' },
-  { id: 'opus', label: 'Claude Opus 5 High' },
+  { id: 'opus', label: 'Claude Opus 5.5 High' },
   { id: 'sonnet', label: 'Claude Sonnet 5 High' },
   { id: 'sol', label: 'GPT-5.6 Sol High' },
   { id: 'gemini', label: 'Gemini 3.8 Flash High' },
