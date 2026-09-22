@@ -913,6 +913,14 @@ export type Content =
     }
   | {
       markdown: MarkdownNode[];
+    }
+  | {
+      download: {
+        /**
+         * Short-lived URL the raw file can be downloaded from.
+         */
+        url: string;
+      };
     };
 /**
  * A single node of a markdown document as seen by the AI.

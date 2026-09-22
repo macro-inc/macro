@@ -4814,6 +4814,7 @@ export const ReadContentResponse = z.object({
           ),
         })
         .strict(),
+      z.object({ download: z.object({ url: z.string() }) }).strict(),
     ];
     const errors = schemas.reduce<z.ZodError[]>(
       (errors, schema) =>
