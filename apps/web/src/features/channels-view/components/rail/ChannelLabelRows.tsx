@@ -190,42 +190,55 @@ export function ChannelsCreateMenu() {
   const rail = useChannelsRail();
 
   return (
-    <Dropdown placement="bottom-end">
-      <Dropdown.Trigger
-        as={ViewSidebar.Control}
-        variant="ghost"
-        size="icon-sm"
-        label="Create channel or label"
-      >
-        <PlusIcon class="size-3.5" />
-      </Dropdown.Trigger>
-      <Dropdown.Content
-        class="min-w-44"
-        onCloseAutoFocus={(event) => {
-          if (document.querySelector('[role="dialog"]')) event.preventDefault();
-        }}
-      >
-        <Dropdown.Group>
-          <MenuRow
-            icon={HashIcon}
-            label="New channel"
-            onSelect={openNewChannelModal}
-          />
-          <MenuRow
-            icon={TagIcon}
-            label="New label"
-            disabled={!rail.labelsAvailable()}
-            onSelect={() => void rail.createLabel([])}
-          />
-          <MenuRow
-            icon={FilterIcon}
-            label="New smart label"
-            disabled={!rail.labelsAvailable()}
-            onSelect={() => void rail.createSmartTag()}
-          />
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
+    <Show
+      when={rail.channelTagsEnabled()}
+      fallback={
+        <ViewSidebar.Control
+          label="Create channel"
+          onClick={openNewChannelModal}
+        >
+          <PlusIcon class="size-3.5" />
+        </ViewSidebar.Control>
+      }
+    >
+      <Dropdown placement="bottom-end">
+        <Dropdown.Trigger
+          as={ViewSidebar.Control}
+          variant="ghost"
+          size="icon-sm"
+          label="Create channel or label"
+        >
+          <PlusIcon class="size-3.5" />
+        </Dropdown.Trigger>
+        <Dropdown.Content
+          class="min-w-44"
+          onCloseAutoFocus={(event) => {
+            if (document.querySelector('[role="dialog"]'))
+              event.preventDefault();
+          }}
+        >
+          <Dropdown.Group>
+            <MenuRow
+              icon={HashIcon}
+              label="New channel"
+              onSelect={openNewChannelModal}
+            />
+            <MenuRow
+              icon={TagIcon}
+              label="New label"
+              disabled={!rail.labelsAvailable()}
+              onSelect={() => void rail.createLabel([])}
+            />
+            <MenuRow
+              icon={FilterIcon}
+              label="New smart label"
+              disabled={!rail.labelsAvailable()}
+              onSelect={() => void rail.createSmartTag()}
+            />
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+    </Show>
   );
 }
 
@@ -242,7 +255,13 @@ export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
       );
 
   return (
-    <Show when={!isDirectMessage(props.channel) && rail.labelsAvailable()}>
+    <Show
+      when={
+        rail.channelTagsEnabled() &&
+        !isDirectMessage(props.channel) &&
+        rail.labelsAvailable()
+      }
+    >
       <Show when={currentLabel()}>
         {(label) => (
           <MenuItem

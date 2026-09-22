@@ -628,6 +628,13 @@ export const enableTagTeamSharing = defineFlag({
   default: onInDev,
 });
 
+// Manual and smart channel labels, including their queries and drag/drop UI.
+// Off until PostHog enables them; override with VITE_ENABLE_CHANNEL_TAGS.
+export const enableChannelTags = defineFlag({
+  key: 'enable-channel-tags',
+  env: 'ENABLE_CHANNEL_TAGS',
+});
+
 // The "Activity" section in the entity side panel: the entity's recent
 // activity timeline from the GraphQL activity log (who did what, when).
 // Purely additive — when off, the section never mounts and no activity

@@ -129,6 +129,8 @@ export type ChannelsRailContext = {
   selectedChannelId: Accessor<string | undefined>;
   isGroupOpen: (group: ChannelsRailSection) => boolean;
   toggleGroup: (group: ChannelsRailSection) => void;
+  /** Whether channel labels and smart tags are enabled for this user. */
+  channelTagsEnabled: Accessor<boolean>;
   /** Every label in the authorized scope, including empty labels. */
   labels: Accessor<readonly ChannelLabel[]>;
   /** Whether labels can be used after loading successfully. */

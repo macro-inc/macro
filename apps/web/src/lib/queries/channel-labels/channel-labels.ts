@@ -1,3 +1,5 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableChannelTags } from '@core/constant/featureFlags';
 import { debouncedDependent } from '@core/util/debounce';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
@@ -14,8 +16,10 @@ export type { ChannelLabel };
 
 /** Shared labels for team members; account-private labels otherwise. */
 export function useChannelLabelsQuery() {
+  const channelTagsFlag = useFeatureFlag(enableChannelTags);
   return useQuery(() => ({
     queryKey: channelLabelKeys.list.queryKey,
+    enabled: channelTagsFlag().enabled,
     queryFn: async () =>
       await throwOnErr(() => storageServiceClient.channelLabels.list()),
     staleTime: 30_000,
@@ -28,7 +32,8 @@ export function useChannelLabelsQuery() {
 /** Non-suspending view of labels, undefined until successfully loaded. */
 export function useChannelLabelsData(): Accessor<ChannelLabel[] | undefined> {
   const query = useChannelLabelsQuery();
-  return () => (query.isSuccess ? query.data.labels : undefined);
+  return () =>
+    query.isEnabled && query.isSuccess ? query.data.labels : undefined;
 }
 
 export function invalidateChannelLabels() {
@@ -53,12 +58,16 @@ async function cancelLabelFetch() {
 }
 
 export function useSmartTagPreviewQuery(pattern: Accessor<string>) {
+  const channelTagsFlag = useFeatureFlag(enableChannelTags);
   const debouncedPattern = debouncedDependent(pattern, 150);
   return useQuery(() => {
     const contains = pattern();
     return {
       queryKey: channelLabelKeys.preview(contains).queryKey,
-      enabled: contains.length > 0 && contains === debouncedPattern(),
+      enabled:
+        channelTagsFlag().enabled &&
+        contains.length > 0 &&
+        contains === debouncedPattern(),
       queryFn: async ({ signal }) =>
         await throwOnErr(() =>
           storageServiceClient.channelLabels.preview(

@@ -760,20 +760,26 @@ function ChannelsSectionRows(props: {
   );
 }
 
+/** Register the heading only while tags are enabled, so disabling removes it. */
+function ChannelHeadingDropTarget(props: { element: HTMLElement }) {
+  const rail = useChannelsRail();
+  const droppable = createDroppable(
+    `${rail.railId}:channel-label:unlabelled-heading`,
+    {
+      dragType: 'channel-label-target',
+      dndScope: rail.railId,
+      target: { kind: 'unlabelled' },
+      isDropTargetDisabled: () => !rail.labelsAvailable(),
+    } satisfies ChannelLabelDropData
+  );
+  droppable.ref(props.element);
+  return null;
+}
+
 function ExpandedGroupSection(props: { config: GroupConfig }) {
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  // The Channels heading is a large, obvious place to drag a channel out of
-  // its label; the group a section renders is fixed per mount.
-  const headerDroppable =
-    props.config.group === 'channels'
-      ? createDroppable(`${rail.railId}:channel-label:unlabelled-heading`, {
-          dragType: 'channel-label-target',
-          dndScope: rail.railId,
-          target: { kind: 'unlabelled' },
-          isDropTargetDisabled: () => !rail.labelsAvailable(),
-        } satisfies ChannelLabelDropData)
-      : undefined;
+  const [headerElement, setHeaderElement] = createSignal<HTMLElement>();
   const { state: section } = useChannelRailSectionState(
     () => props.config.group
   );
@@ -792,12 +798,23 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
         focused={section().focused}
         focusWithin={section().containsFocus}
         class={cn(
-          headerDroppable &&
+          rail.channelTagsEnabled() &&
+            props.config.group === 'channels' &&
             rail.activeDropTarget()?.kind === 'unlabelled' &&
             'bg-selected ring-1 ring-inset ring-accent'
         )}
-        ref={headerDroppable?.ref}
+        ref={setHeaderElement}
       >
+        <Show
+          when={
+            rail.channelTagsEnabled() &&
+            props.config.group === 'channels' &&
+            headerElement()
+          }
+          keyed
+        >
+          {(element) => <ChannelHeadingDropTarget element={element} />}
+        </Show>
         <button
           id={section().domId}
           type="button"
@@ -868,7 +885,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           >
             <RailListError retry={section().source.refresh} />
           </Match>
-          <Match when={section().rows}>
+          <Match when={rail.channelTagsEnabled() && section().rows}>
             {(rows) => (
               <ChannelsSectionRows
                 rows={rows()}

@@ -9,6 +9,7 @@ import {
   useViewTabHotkeys,
 } from '@app/components/view-shell';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { favoriteSplitContent } from '@app/util/favorites';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -17,6 +18,7 @@ import {
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { enableChannelTags } from '@core/constant/featureFlags';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { debouncedDependent } from '@core/util/debounce';
 import { thrownResultErrorHasCode } from '@core/util/result';
@@ -108,6 +110,8 @@ export type ChannelsRailProps = {
 };
 
 export function ChannelsRail(props: ChannelsRailProps) {
+  const channelTagsFlag = useFeatureFlag(enableChannelTags);
+  const channelTagsEnabled = () => channelTagsFlag().enabled;
   const {
     state,
     setGroupOpen,
@@ -248,11 +252,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const labelsQuery = useChannelLabelsQuery();
   const labels = createMemo<readonly ChannelLabel[]>(() =>
     resolveSmartTagMemberships(
-      labelsQuery.isSuccess ? labelsQuery.data.labels : [],
+      channelTagsEnabled() && labelsQuery.isSuccess
+        ? labelsQuery.data.labels
+        : [],
       channels()
     )
   );
-  const labelsAvailable = () => labelsQuery.isSuccess;
+  const labelsAvailable = () => channelTagsEnabled() && labelsQuery.isSuccess;
   const labelsUnavailableReason = () => {
     if (labelsQuery.isSuccess) return '';
     if (labelsQuery.isPending) return 'Loading labels…';
@@ -280,6 +286,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   });
   const labelledChannelsQuery = useChannelsByIdsQuery(missingLabelledIds);
   const labelledChannels = createMemo<ChannelEntity[]>((previous) => {
+    if (!channelTagsEnabled()) return [];
     if (!labelledChannelsQuery.isEnabled || labelledChannelsQuery.isLoading)
       return previous;
     return deduplicateChannels([
@@ -747,6 +754,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       : 'Labels are private to your account.';
 
   const createLabel = async (channelIds: string[]) => {
+    if (!channelTagsEnabled()) return;
     if (!labelsAvailable()) {
       toast.failure(labelsUnavailableReason());
       return;
@@ -767,6 +775,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
         body: `${labelScopeDescription()}${grouping}`,
         confirmLabel: 'Create label',
         onConfirm: async (name) => {
+          if (!channelTagsEnabled())
+            throw new Error('Channel tags are disabled.');
           const created = await createLabelMutation.mutateAsync({
             name,
             channelIds,
@@ -786,6 +796,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const createSmartTag = async () => {
+    if (!channelTagsEnabled()) return;
     if (!labelsAvailable()) {
       toast.failure(labelsUnavailableReason());
       return;
@@ -794,6 +805,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
       {
         scopeDescription: labelScopeDescription(),
         onConfirm: async (name, rule) => {
+          if (!channelTagsEnabled())
+            throw new Error('Channel tags are disabled.');
           const created = await createLabelMutation.mutateAsync({
             name,
             rule,
@@ -809,12 +822,14 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const editSmartTag = async (label: ChannelLabel) => {
-    if (!label.rule) return;
+    if (!channelTagsEnabled() || !label.rule) return;
     await promptSmartTag(
       {
         scopeDescription: labelScopeDescription(),
         initial: { name: label.name, rule: label.rule },
         onConfirm: async (name, rule) => {
+          if (!channelTagsEnabled())
+            throw new Error('Channel tags are disabled.');
           await renameLabelMutation.mutateAsync({
             labelId: label.id,
             name,
@@ -828,6 +843,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const renameLabel = async (label: ChannelLabel) => {
+    if (!channelTagsEnabled()) return;
     const name = await promptLabelName(
       {
         title: 'Rename label',
@@ -835,6 +851,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
         confirmLabel: 'Rename',
         initialValue: label.name,
         onConfirm: async (name) => {
+          if (!channelTagsEnabled())
+            throw new Error('Channel tags are disabled.');
           await renameLabelMutation.mutateAsync({ labelId: label.id, name });
         },
       },
@@ -845,6 +863,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const deleteLabel = async (label: ChannelLabel) => {
+    if (!channelTagsEnabled()) return;
     const channelsText = label.rule
       ? 'Channels stop appearing in this smart label. Other labels are unchanged.'
       : label.channelCount === 0
@@ -862,7 +881,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       },
       { owner }
     );
-    if (!confirmed) return;
+    if (!confirmed || !channelTagsEnabled()) return;
     try {
       await deleteLabelMutation.mutateAsync({ labelId: label.id });
       toast.success(`Deleted “${label.name}”`);
@@ -872,6 +891,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const setChannelLabel = (channelId: string, labelId: string | undefined) => {
+    if (!channelTagsEnabled()) return;
     const from = labels().find(
       (label) => !label.rule && label.channelIds.includes(channelId)
     );
@@ -899,6 +919,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const markLabelRead = (label: ChannelLabel) => {
+    if (!channelTagsEnabled()) return;
     const channelIds = new Set(label.channelIds);
     const unread = notificationSource
       .notifications()
@@ -917,6 +938,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   // The highlight follows the whole target (a label with all its rows), not
   // the row under the cursor, so rows read this instead of their own state.
   const activeDropTarget = (): ChannelLabelDropTarget | undefined => {
+    if (!channelTagsEnabled()) return undefined;
     const drag = dndState?.active.draggable?.data as
       | ChannelLabelDragData
       | undefined;
@@ -942,6 +964,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return drop.target;
   };
   dndActions?.onDragEnd(({ draggable, droppable }) => {
+    if (!channelTagsEnabled()) return;
     const drag = draggable?.data as ChannelLabelDragData | undefined;
     if (drag?.dragType !== 'channel-label' || drag.dndScope !== listDomId)
       return;
@@ -1008,6 +1031,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     selectedChannelId: () => state.selectedChannelId,
     isGroupOpen: (group) => state.expandedGroups[group],
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
+    channelTagsEnabled,
     labels,
     labelsAvailable,
     labelsUnavailableReason,

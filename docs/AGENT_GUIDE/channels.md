@@ -326,6 +326,25 @@ it from the list. It is capped at a third of the column and scrolls inside.
 
 ### Channel labels
 
+Channel labels require the `enable-channel-tags` feature flag. The flag is off
+until explicitly enabled, including in development. For a local frontend,
+`VITE_ENABLE_CHANNEL_TAGS=true` enables it and `VITE_ENABLE_CHANNEL_TAGS=false`
+forces it off; restart the frontend after changing the environment override.
+
+With the flag off, Channels remains a flat list in its selected sort order.
+The heading's `+` creates a channel directly. Label headings, creation dialogs,
+channel-menu label actions, and label drag targets are absent, and the app makes
+no channel-label list or smart-label preview requests. Existing saved labels
+remain unchanged and reappear when the flag is enabled.
+
+Verify both states after reloading Chat: with the flag off, inspect the heading
+action and a channel's context menu, drag between channel rows, and confirm
+there are no `/channel-labels` requests. With the flag enabled, verify the `+`
+menu offers `New channel`, `New label`, and `New smart label`; open each label
+dialog and cancel to check the controls without changing shared data. The
+creation, assignment, and persistence checks below require the label backend
+and an account where those changes are safe.
+
 Labels group channels inside the `Channels` section. Team members share the
 same labels and can create, rename, delete, or move their channels between them.
 Users without a team have labels private to their account. The naming and delete

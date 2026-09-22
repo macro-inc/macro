@@ -15,6 +15,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { promptSmartTag } from './SmartTagDialog';
 
 const fetchPreview = vi.hoisted(() => vi.fn());
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: true }),
+}));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { channelLabels: { preview: fetchPreview } },
 }));
