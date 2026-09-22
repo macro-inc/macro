@@ -550,6 +550,7 @@ where
             announce: command.announce,
             announced: None,
             created_at: chrono::Utc::now(),
+            trace_context: TraceContext::capture(),
         };
         let enqueued = if steers {
             self.queues.enqueue_front(session_id, entry)
@@ -686,11 +687,30 @@ where
     /// line for the next turn end or the next prompt, and stays visible in
     /// the queue meanwhile. The error still propagates, so a caller whose
     /// own action triggered this dispatch hears about it.
-    #[tracing::instrument(err, skip(self), fields(%session_id))]
+    #[tracing::instrument(
+        err,
+        skip(self),
+        fields(
+            %session_id,
+            agent.action.id = tracing::field::Empty,
+            agent.queue.wait_ms = tracing::field::Empty,
+        )
+    )]
     pub(super) async fn dispatch_next(&self, session_id: AgentSessionId) -> Result<Dispatch> {
         let Some(mut entry) = self.queues.claim_next(session_id) else {
             return Ok(Dispatch::QueueEmpty);
         };
+
+        // What the person who sent this actually waited for: the queue holds
+        // the raw action from admission until the turn ahead of it ends, and
+        // that whole stretch is invisible from either trace on its own.
+        let span = tracing::Span::current();
+        span.record("agent.action.id", tracing::field::display(entry.action_id));
+        span.record(
+            "agent.queue.wait_ms",
+            (chrono::Utc::now() - entry.created_at).num_milliseconds(),
+        );
+        entry.trace_context.link(&span);
 
         // Compose a copy: the queued entry stays raw so a retry still edits
         // and re-composes the user's text, and the chip (below) still shows

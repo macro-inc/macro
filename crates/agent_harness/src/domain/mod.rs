@@ -14,6 +14,8 @@ pub mod queue;
 pub mod sandbox;
 /// The harness orchestrator: containers, announcements, and trigger commands.
 pub mod service;
+/// Carrying a trace across work the harness defers.
+pub mod telemetry;
 /// Policy for turning broker trigger events into harness work.
 pub mod trigger_router;
 

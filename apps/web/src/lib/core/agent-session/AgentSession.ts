@@ -34,6 +34,7 @@ import type {
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { v7 as uuidv7 } from 'uuid';
+import { ActionTrace } from './action-telemetry';
 import { SessionLoadTrace, traceAcquire } from './load-telemetry';
 import { publishSessionTurn } from './session-turn';
 
@@ -132,10 +133,19 @@ export class AgentSession {
    * wait in the server's queue.
    */
   private turn: TurnState = 'idle';
+  /** The span for a stop whose turn has not ended — the one wait this class
+   *  can time and the harness cannot. See {@link ./action-telemetry}. */
+  private stopTrace: ActionTrace | undefined;
 
   private setTurn(turn: TurnState | undefined): void {
     const next = turn ?? 'idle';
     this.turn = next;
+    // The stop's whole point was to end the turn, so the turn no longer
+    // being in flight is what its span was open for.
+    if (next === 'idle' || next === 'disconnected') {
+      this.stopTrace?.end('settled');
+      this.stopTrace = undefined;
+    }
     publishSessionTurn(this.id, next);
   }
 
@@ -184,6 +194,7 @@ export class AgentSession {
     options: { userId?: string } = {}
   ): Promise<IssueResult> {
     const actionId = uuidv7();
+    const trace = new ActionTrace(this.id, action, this.turn);
     const speculated = this.reaches(action);
     if (speculated) {
       // A prompt we just folded opens a turn, so the next one belongs in the
@@ -204,6 +215,7 @@ export class AgentSession {
     // names the id it was accepted under and `issue` reconciles the two.
     const request: ControlRequest = { ...action, actionId };
     const result = await agentHarnessServiceClient.control(this.id, request);
+    this.traceAnswer(trace, action, result);
 
     if (!speculated) return result;
     if (result.isErr()) {
@@ -274,6 +286,42 @@ export class AgentSession {
   }
 
   /**
+   * Record what the harness did with an issued action. Only a stop stays
+   * open: it waits for the turn it cancelled to end, which nothing on the
+   * server can see. A queued action's wait is timed by the harness, on the
+   * dispatch that ends it.
+   */
+  private traceAnswer(
+    trace: ActionTrace,
+    action: AgentAction,
+    result: IssueResult
+  ): void {
+    if (result.isErr()) {
+      trace.end('failed', result.error);
+      return;
+    }
+    trace.accepted(result.value.actionId);
+    if (result.value.status === 'queued') {
+      trace.end('queued');
+      return;
+    }
+    if (action.type !== 'stop') {
+      trace.end('sent');
+      return;
+    }
+    // Nothing was running by the time it landed, so there is no turn end
+    // left to wait for.
+    if (this.turn === 'idle' || this.turn === 'disconnected') {
+      trace.end('settled');
+      return;
+    }
+    // A second stop on the same turn replaces the first: one turn end cannot
+    // settle two spans, and the older one would otherwise stall.
+    this.stopTrace?.end('superseded');
+    this.stopTrace = trace;
+  }
+
+  /**
    * Whether this action reaches the runtime now, rather than waiting in the
    * server's queue.
    *
@@ -324,6 +372,8 @@ export class AgentSession {
     // Ended here rather than where the load notices: a fetch that never
     // answers never reaches that check, and an unended span never reports.
     this.trace.end('released');
+    this.stopTrace?.end('abandoned');
+    this.stopTrace = undefined;
     this.listeners.clear();
     this.unsubscribeSocket();
     closeSession(this.id);

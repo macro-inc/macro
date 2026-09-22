@@ -2,6 +2,7 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::AgentSessionId;
 
 use super::*;
+use crate::domain::telemetry::TraceContext;
 
 fn prompt_entry(text: &str) -> QueuedEntry {
     QueuedEntry {
@@ -11,6 +12,7 @@ fn prompt_entry(text: &str) -> QueuedEntry {
         announce: None,
         announced: None,
         created_at: Utc::now(),
+        trace_context: TraceContext::default(),
     }
 }
 
@@ -132,6 +134,7 @@ fn only_prompts_are_editable() {
         announce: None,
         announced: None,
         created_at: Utc::now(),
+        trace_context: TraceContext::default(),
     };
     queues.enqueue(session, compact.clone()).unwrap();
 

@@ -40,6 +40,25 @@ vi.mock('@queries/agent-session/queue-sync', () => ({
   subscribeSocketSessionStarted: socket.subscribeSocketSessionStarted,
 }));
 
+/** What each issued action's span was told, in the order they were opened. */
+type TraceRecord = { type: string; accepted?: string; outcome?: string };
+const traces = vi.hoisted(() => ({ opened: [] as TraceRecord[] }));
+vi.mock('./action-telemetry', () => ({
+  ActionTrace: class {
+    private readonly record: TraceRecord;
+    constructor(_sessionId: string, action: { type: string }) {
+      this.record = { type: action.type };
+      traces.opened.push(this.record);
+    }
+    accepted(actionId: string) {
+      this.record.accepted = actionId;
+    }
+    end(outcome: string) {
+      this.record.outcome ??= outcome;
+    }
+  },
+}));
+
 import { AgentSession, AgentSessionReleased } from './AgentSession';
 import { resetSessionTurns, sessionTurn } from './session-turn';
 
@@ -79,6 +98,7 @@ function deferred<T>() {
 beforeEach(() => {
   vi.clearAllMocks();
   resetSessionTurns();
+  traces.opened = [];
   socket.listeners.clear();
   // Instances are shared and refcounted, so a test that fails before its
   // `release()` would hand the next one a session that is already loaded.
@@ -489,5 +509,73 @@ describe('AgentSession', () => {
     await live.load();
     expect(harness.getLog).toHaveBeenCalledTimes(2);
     live.release();
+  });
+});
+
+/**
+ * The spans that measure what a person waits for. The class decides what
+ * each action's span is still open for; `action-telemetry` only records it.
+ */
+describe('action telemetry', () => {
+  const loaded = async (turn: string) => {
+    fold.readSession.mockResolvedValue({ messages: [], metadata: { turn } });
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    return live;
+  };
+
+  it('ends a sent action as soon as the harness takes it', async () => {
+    const live = await loaded('idle');
+
+    await live.issue({ type: 'prompt', prompt: 'now' });
+
+    expect(traces.opened).toEqual([
+      expect.objectContaining({ type: 'prompt', outcome: 'sent' }),
+    ]);
+    live.release();
+  });
+
+  it('closes a queued prompt at the queue — the harness times the rest', async () => {
+    harness.control.mockResolvedValue(
+      ok({ actionId: 'queued-id', status: 'queued' })
+    );
+    const live = await loaded('running');
+
+    await live.issue({ type: 'prompt', prompt: 'later' });
+    await settle();
+
+    expect(traces.opened[0]).toEqual({
+      type: 'prompt',
+      accepted: 'queued-id',
+      outcome: 'queued',
+    });
+    live.release();
+  });
+
+  it('holds a stop open until the turn it cancelled ends', async () => {
+    const live = await loaded('running');
+
+    await live.issue({ type: 'stop' });
+    await settle();
+    expect(traces.opened[0]?.outcome).toBeUndefined();
+
+    fold.pushSession.mockResolvedValueOnce([
+      { kind: 'metadata', metadata: { turn: 'idle' } },
+    ]);
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+    await settle();
+
+    expect(traces.opened[0]?.outcome).toBe('settled');
+    live.release();
+  });
+
+  it('ends a stop still outstanding when the session is released', async () => {
+    const live = await loaded('running');
+    await live.issue({ type: 'stop' });
+    await settle();
+
+    live.release();
+
+    expect(traces.opened[0]?.outcome).toBe('abandoned');
   });
 });

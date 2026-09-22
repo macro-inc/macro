@@ -59,6 +59,7 @@ use crate::domain::ports::{
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
+use crate::domain::telemetry::TraceContext;
 
 use self::queue::{ErasedForwarder, SessionWorkers};
 

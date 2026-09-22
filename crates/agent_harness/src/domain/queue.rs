@@ -31,6 +31,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use super::model::AnnounceOrigin;
+use super::telemetry::TraceContext;
 
 #[cfg(test)]
 mod test;
@@ -59,6 +60,10 @@ pub struct QueuedEntry {
     pub announced: Option<Uuid>,
     /// When it was accepted.
     pub created_at: DateTime<Utc>,
+    /// The trace of the request that queued it, so the dispatch that
+    /// eventually runs it links back to whoever asked. See
+    /// [`crate::domain::telemetry`].
+    pub trace_context: TraceContext,
 }
 
 /// The turn a session is running: what the busy mark remembers once the

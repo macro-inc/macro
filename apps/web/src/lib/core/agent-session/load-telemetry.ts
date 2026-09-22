@@ -14,7 +14,7 @@
  */
 
 import type { Span } from '@macro-inc/observability';
-import { Telemetry } from '@macro-inc/observability';
+import { startSessionSpan } from './session-span';
 
 /** How an attempt to open a session ended. */
 export type LoadOutcome =
@@ -55,7 +55,7 @@ export class SessionLoadTrace {
   #stallTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(sessionId: string) {
-    this.#span = start('agent.session.load', sessionId);
+    this.#span = startSessionSpan('agent.session.load', sessionId);
     this.#stallTimer = setTimeout(
       () => this.end('stalled'),
       STALL_THRESHOLD_MS
@@ -121,7 +121,7 @@ export function traceAcquire(
   created: boolean,
   references: number
 ): void {
-  const span = start('agent.session.acquire', sessionId);
+  const span = startSessionSpan('agent.session.acquire', sessionId);
   if (!span) return;
   try {
     span.setAttr('agent.session.acquire.created', created);
@@ -129,15 +129,5 @@ export function traceAcquire(
     span.end();
   } catch {
     // See the module comment.
-  }
-}
-
-function start(name: string, sessionId: string): Span | undefined {
-  try {
-    const span = Telemetry.span(name);
-    span.setAttr('agent.session.id', sessionId);
-    return span;
-  } catch {
-    return undefined;
   }
 }
