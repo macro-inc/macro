@@ -456,6 +456,20 @@ preview replies per thread. Expand a thread to load its replies;
 `Load earlier comments` pages backward. Live updates preserve unsent replies
 and edits while updating the surrounding thread.
 
+With `enable-document-channel-mentions` on (off by default; override locally
+with `VITE_ENABLE_DOCUMENT_CHANNEL_MENTIONS`), a `Channel mentions` heading and
+count appear under the document's own comments, listing channel threads whose
+messages mention this document. Each sits under a `From <channel>` chip that
+resolves the channel's current name, so an unnamed channel or a DM reads as its
+participants; clicking it opens that message in its channel. These threads stay
+channel-owned: replies, edits, and reactions post to the channel and
+`Copy link` yields the channel link. Only channels the viewer can read are
+listed, and a thread from a channel the viewer cannot post in has no reply,
+edit, or delete controls. The list refreshes on live channel message changes,
+on reconnect, and every 30 seconds while shown. A reply draft in a listed
+thread survives those refreshes. With the flag off the section does not render
+and its discovery query never runs.
+
 Select text and choose the comment action to create an anchored comment. These
 threads appear beside their text in the margin (or in the active thread drawer
 on phones) and never in the bottom Discussion, including after live updates or

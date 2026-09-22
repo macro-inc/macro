@@ -7893,6 +7893,39 @@ export type RecentlyDeletedResponseData = {
 };
 
 /**
+ * A source channel thread that mentions the requested document.
+ */
+export type ReferencedThread = {
+    /**
+     * Whether this viewer currently has permission to reply in the source channel.
+     */
+    can_reply: boolean;
+    /**
+     * Source channel's current display name, returned only after access checks.
+     */
+    channel_name?: string | null;
+    /**
+     * Source parent used by the common message reader and mutations.
+     */
+    parent: MessageParent;
+    /**
+     * Source root identity; discovery does not copy its message content.
+     */
+    root_id: string;
+};
+
+/**
+ * Authorized source threads, deduplicated by root.
+ */
+export type ReferencedThreadPage = {
+    next_cursor?: null | MessageCursor;
+    /**
+     * Accessible channel discussions mentioning the document.
+     */
+    threads: Array<ReferencedThread>;
+};
+
+/**
  * A reminder belonging to a user.
  *
  * `user_id` is deliberately absent: a reminder is only ever read by its owner,
@@ -15158,6 +15191,35 @@ export type EntityMessageLegacyResponses = {
 };
 
 export type EntityMessageLegacyResponse = EntityMessageLegacyResponses[keyof EntityMessageLegacyResponses];
+
+export type EntityMessageReferencesData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+    };
+    query?: {
+        /**
+         * Maximum number of roots.
+         */
+        limit?: number | null;
+        /**
+         * Last root's creation timestamp.
+         */
+        created_at?: string | null;
+        /**
+         * Last root's UUID.
+         */
+        cursor_id?: string | null;
+    };
+    url: '/messages/{parent_type}/{parent_id}/references';
+};
+
+export type EntityMessageReferencesResponses = {
+    200: ReferencedThreadPage;
+};
+
+export type EntityMessageReferencesResponse = EntityMessageReferencesResponses[keyof EntityMessageReferencesResponses];
 
 export type EntityMessageDeleteThreadData = {
     body?: never;

@@ -713,3 +713,16 @@ export const enableUnifiedDocumentDiscussions = defineFlag({
   env: 'ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS',
   default: onInDev,
 });
+
+/**
+ * The document Discussion also lists channel threads whose messages mention
+ * this document, under the channel they came from. Off everywhere until
+ * PostHog says otherwise: the discovery query fetches on open and polls while
+ * shown, so it stays dark until the surface is wanted. Requires
+ * `enableUnifiedDocumentDiscussions` — the section only exists on the message
+ * path. Override locally with VITE_ENABLE_DOCUMENT_CHANNEL_MENTIONS.
+ */
+export const enableDocumentChannelMentions = defineFlag({
+  key: 'enable-document-channel-mentions',
+  env: 'ENABLE_DOCUMENT_CHANNEL_MENTIONS',
+});
