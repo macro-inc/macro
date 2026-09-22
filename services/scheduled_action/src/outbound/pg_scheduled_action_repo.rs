@@ -15,8 +15,8 @@ use std::str::FromStr;
 use crate::domain::event_runs::ConfigurationRevision;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, AlreadyRunningError, MAX_ACTION_TIME, Schedule,
-    ScheduledAction,
+    ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, MAX_ACTION_TIME,
+    Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionRepo;
 
@@ -273,6 +273,17 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
                 event_activated_at = $11,
                 updated_at = now()
             WHERE id = $12 AND owner = $13
+              AND configuration_revision = $10::bigint - 1
+              AND (
+                  claimed IS NULL OR claimed < $14
+                  OR (
+                      NOT $7 AND name = $1 AND kind = $3 AND task = $5
+                      AND trigger_type = $8
+                      AND schedule IS NOT DISTINCT FROM $2
+                      AND timezone IS NOT DISTINCT FROM $4
+                      AND event_filters IS NOT DISTINCT FROM $9
+                  )
+              )
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
                       configuration_revision, event_activated_at
@@ -290,9 +301,11 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             action.event_activated_at,
             id,
             owner,
+            Utc::now() - MAX_ACTION_TIME,
         )
-        .fetch_one(&self.pool)
-        .await?;
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(ActionPolicyError::UpdateConflict)?;
         ScheduledAction::try_from(row)
     }
 

@@ -161,6 +161,7 @@ async fn update_action_changes_name_schedule_and_enabled(pool: PgPool) {
         .expect("schedule has a future firing");
     let updated = repo
         .update_action(ScheduledAction {
+            configuration_revision: created.configuration_revision.next().unwrap(),
             name: "evening standup".to_string(),
             trigger: ActionTrigger::Cron {
                 schedule,
@@ -179,6 +180,48 @@ async fn update_action_changes_name_schedule_and_enabled(pool: PgPool) {
     };
     assert_eq!(schedule.as_str(), "0 0 18 * * *");
     assert!(!updated.enabled);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn replacement_is_fenced_against_claims_and_stale_revisions(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgScheduledActionRepo::new(pool);
+    let action = repo.create_action(event_action()).await.unwrap();
+    let id = action.id.unwrap();
+    let mut replacement = action.clone();
+    replacement.configuration_revision = action.configuration_revision.next().unwrap();
+    replacement.name = "replacement".into();
+
+    // Claim after management read, before its write.
+    repo.claim_action(&id).await.unwrap();
+    let error = repo.update_action(replacement.clone()).await.unwrap_err();
+    assert!(matches!(
+        error.downcast_ref(),
+        Some(ActionPolicyError::UpdateConflict)
+    ));
+    let disabled = repo
+        .update_action(ScheduledAction {
+            enabled: false,
+            configuration_revision: replacement.configuration_revision,
+            ..action
+        })
+        .await
+        .unwrap();
+    assert!(disabled.claimed.is_some());
+    repo.release_action(&id).await.unwrap();
+
+    // The earlier replacement is stale even after execution has finished.
+    let error = repo.update_action(replacement).await.unwrap_err();
+    assert!(matches!(
+        error.downcast_ref(),
+        Some(ActionPolicyError::UpdateConflict)
+    ));
+    let current = repo.get_action(&id, user(USER_A)).await.unwrap().unwrap();
+    assert!(!current.enabled);
+    assert_eq!(
+        current.configuration_revision,
+        disabled.configuration_revision
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -366,6 +409,7 @@ async fn lookup_update_and_delete_are_owner_scoped(pool: PgPool) {
         assert!(repo.get_action(&id, user(USER_B)).await.unwrap().is_none());
         let mut foreign_update = created.clone();
         foreign_update.owner = user_owner(USER_B);
+        foreign_update.configuration_revision = created.configuration_revision.next().unwrap();
         assert!(repo.update_action(foreign_update).await.is_err());
         repo.delete_action(&id, user(USER_B)).await.unwrap();
         assert!(repo.get_action(&id, user(USER_A)).await.unwrap().is_some());

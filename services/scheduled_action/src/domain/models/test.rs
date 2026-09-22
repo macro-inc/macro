@@ -3,9 +3,37 @@ use macro_uuid::{Uuid, generate_uuid_v7};
 use model_owner::{Owner, OwnerType};
 use serde_json::json;
 
-use super::{ActionKind, Schedule, ScheduledAction};
+use super::{
+    ActionConfiguration, ActionKind, CreateScheduledAction, Schedule, ScheduledAction,
+    UpdateScheduledAction,
+};
 use crate::domain::event_runs::ConfigurationRevision;
 use crate::domain::event_trigger::ActionTrigger;
+
+#[test]
+fn both_request_representations_normalize_to_the_same_configuration() {
+    let legacy = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
+        "schedule":"0 0 9 * * *", "timezone":"UTC"});
+    let canonical = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
+        "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
+    for input in [legacy, canonical] {
+        let create: CreateScheduledAction = serde_json::from_value(input.clone()).unwrap();
+        let update: UpdateScheduledAction = serde_json::from_value(input).unwrap();
+        let create = serde_json::to_value(ActionConfiguration::from(create)).unwrap();
+        let update = serde_json::to_value(ActionConfiguration::from(update)).unwrap();
+        assert_eq!(create, update);
+        assert_eq!(create["trigger"]["type"], "cron");
+    }
+}
+
+#[test]
+fn mixed_representations_are_rejected_even_when_the_values_agree() {
+    let input = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
+        "schedule":"0 0 9 * * *", "timezone":"UTC",
+        "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
+    assert!(serde_json::from_value::<CreateScheduledAction>(input.clone()).is_err());
+    assert!(serde_json::from_value::<UpdateScheduledAction>(input).is_err());
+}
 
 const DAILY_9AM: &str = "0 0 9 * * *";
 const USER_PRINCIPAL: &str = "macro|sched-owner@macro.com";
