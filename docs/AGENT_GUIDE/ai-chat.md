@@ -44,7 +44,10 @@ permission failures should display a failed tool call without a successful resul
   GitHub PR entity in a split (the same destination as the session header chip
   and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
   tab. Either click leaves the session unopened. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
-  Selecting a row opens its own mode; Shift-click opens it in a new split.
+  Selecting a row opens its own mode and updates the URL to that session
+  (`/app/agents/<id>`, `/app/coders/<id>`, or `/app/agent-chats/<id>`), so
+  reload and back/forward restore it. Home agent-session rows do the same
+  instead of previewing in place. Shift-click opens it in a new split.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Delete, and the other session actions.
 - The starting page has a compact composer that starts at one line and grows

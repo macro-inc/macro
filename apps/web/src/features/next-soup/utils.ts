@@ -1,4 +1,5 @@
 import { isListViewID } from '@app/constants/list-views';
+import { agentsSessionSplitContent } from '@app/features/agents-view/core/route';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
@@ -687,7 +688,11 @@ export const openEntityInSplitFromUnifiedList = async (
 
   // Navigate to specific location if provided
   if (location) {
-    await navigateToLocation(content.id, location, blockOrchestrator);
+    await navigateToLocation(
+      entity.type === 'agent_session' ? entity.id : content.id,
+      location,
+      blockOrchestrator
+    );
   } else if (channelMessageTarget) {
     // NOTE: This will force target message navigation in case the split is already open.
     await navigateToLocation(
@@ -850,10 +855,9 @@ function getEntitySplitContent(entity: EntityData) {
       .with({ type: 'foreign' }, (entity) => {
         return { type: 'unknown' as const, id: entity.id };
       })
-      .with({ type: 'agent_session' }, (entity) => ({
-        type: 'agent' as const,
-        id: entity.id,
-      }))
+      .with({ type: 'agent_session' }, (entity) =>
+        agentsSessionSplitContent(entity.id, entity.botId)
+      )
       .with({ type: 'crm_company' }, (entity) => {
         return { type: 'company' as const, id: entity.id };
       })

@@ -96,6 +96,7 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   };
 });
 
+import { agentsSessionSplitContent } from '@app/features/agents-view/core/route';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import type { ChannelEntityTarget, EntityData } from '@entity';
@@ -164,8 +165,7 @@ describe('agent session search navigation', () => {
     await openEntityInSplitFromUnifiedList(entity, {});
     expect(openWithSplit).toHaveBeenCalledWith(
       {
-        type: 'agent',
-        id: 'session',
+        ...agentsSessionSplitContent('session', 'bot'),
         params: { agent_message_turn: '0', agent_message_author: 'user' },
       },
       expect.any(Object)

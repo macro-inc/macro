@@ -158,6 +158,13 @@ export function InboxList(props: InboxListProps) {
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
     if (!isTouchDevice() && !newSplit) {
+      if (sourceRow.entity.type === 'agent_session') {
+        void openEntity(sourceRow.entity, {
+          event: metadata?.event,
+          newSplit: false,
+        });
+        return;
+      }
       markEntitySeen(sourceRow.entity);
       showPreview(sourceRow.entity);
       props.onPreviewActivate?.();

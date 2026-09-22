@@ -144,6 +144,7 @@ Its **New conversation** button opens the unified composer with one **Agent**
 selector on the right. Choosing a coding agent reveals the repository drawer;
 there is no Chat/Code switch. New sessions use the selected agent's default model
 and the URL for its kind. Opening an existing row restores its own kind and URL.
+Home agent-session rows use the same session URLs instead of previewing in place.
 Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
 the other entity actions used on Home.
 

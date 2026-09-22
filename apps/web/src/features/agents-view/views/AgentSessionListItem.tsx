@@ -20,6 +20,7 @@ import {
 import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
 import { conversationTimestamp } from '../core/recent-conversations';
+import { agentsRouteHref } from '../core/route';
 
 type Props = {
   entity: AgentSessionEntity;
@@ -78,13 +79,20 @@ function SessionListItem(props: Props) {
       data-kind={mode()}
       data-session-state={state()}
     >
-      <button
-        type="button"
+      <a
+        href={agentsRouteHref({
+          mode: mode(),
+          conversation: { type: 'agent_session', id: props.entity.id },
+        })}
         class="absolute inset-0 rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-accent"
         aria-label={label()}
         aria-current={props.active ? 'page' : undefined}
         title={title()}
-        {...pressHandlers((event) => props.onOpen?.(event))}
+        {...pressHandlers((event) => {
+          if (event.metaKey || event.ctrlKey || event.altKey) return;
+          event.preventDefault();
+          props.onOpen?.(event);
+        })}
       />
       <ViewSidebar.Icon class="pointer-events-none relative">
         <Show
