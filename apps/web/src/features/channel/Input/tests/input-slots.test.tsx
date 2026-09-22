@@ -20,6 +20,18 @@ const editorMocks = vi.hoisted(() => ({
   onEnter: undefined as (() => boolean) | undefined,
 }));
 
+// These slots render the microphone, so they run with dictation rolled out.
+// Other flags keep their real values.
+vi.mock('@core/constant/featureFlags', async (original) => {
+  const actual =
+    await original<typeof import('@core/constant/featureFlags')>();
+  return {
+    ...actual,
+    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
+      flag === actual.enableDictation || actual.isFeatureEnabled(flag),
+  };
+});
+
 vi.mock('../../../dictation/composer-dictation', () => ({
   createComposerDictation: () => {
     const [active, setActive] = createSignal(false);
