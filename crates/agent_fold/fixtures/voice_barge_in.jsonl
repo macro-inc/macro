@@ -1,0 +1,9 @@
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"i","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"i","result":{"protocolVersion":1,"agentCapabilities":{},"agentInfo":{"name":"macro-voice","version":"1"}}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"first","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"create a document"}]}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"create-1","title":"CreateDocument","status":"in_progress","rawInput":{"title":"Notes"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"first","result":{"stopReason":"cancelled"}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"second","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"give it a short title"}]}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"I will."}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"create-1","status":"completed","rawOutput":{"documentId":"created-document"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"second","result":{"stopReason":"end_turn"}}}

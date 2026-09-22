@@ -202,13 +202,14 @@ impl<Token> SessionMachine<Token> {
                         result: Err(AgentSessionError::Forbidden),
                     }];
                 }
-                if !matches!(self.phase, SessionPhase::Live { .. }) {
+                if matches!(self.phase, SessionPhase::Dead) {
                     return vec![Effect::Complete {
                         token,
                         result: Err(AgentSessionError::Disconnected(self.id)),
                     }];
                 }
                 let mut effects = self.on_inbound(message);
+                effects.push(Effect::Flush);
                 effects.push(Effect::Complete {
                     token,
                     result: Ok(()),

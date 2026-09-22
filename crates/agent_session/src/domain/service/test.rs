@@ -1,4 +1,5 @@
 use super::*;
+mod native;
 use crate::PROTOCOL_VERSION;
 use crate::domain::model::{
     DEFAULT_AGENT_SESSION_NAME, Message, ReplicaAddress, SessionBot, SessionManager,

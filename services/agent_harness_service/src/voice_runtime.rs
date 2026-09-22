@@ -1,5 +1,8 @@
 //! Composition and authenticated transport for a native voice session runtime.
 
+#[cfg(test)]
+mod test;
+
 use std::sync::Arc;
 
 use agent_client_protocol::RawJsonRpcMessage;
@@ -182,7 +185,11 @@ impl<Sessions: AgentSessionService, Egress: SandboxEgressProvisioner>
         {
             worker.drained.cancel();
         }
-        let _ = self.voice().worker_stopped(&lease).await;
+        if !result.as_ref().err().is_some_and(attachment_conflict) {
+            if let Err(error) = self.voice().worker_stopped(&lease).await {
+                tracing::error!(%session, %generation, error = ?error, "voice worker cleanup failed");
+            }
+        }
         result
     }
 
@@ -202,30 +209,25 @@ impl<Sessions: AgentSessionService, Egress: SandboxEgressProvisioner>
         let history = self.sessions.session_log(session).await?;
         let history = normalized_history(history.entries.into_iter().map(|entry| entry.entry));
         let (server, mut runtime) = Channel::duplex();
-        let servers = self.mcp_servers(session).await?;
         let reviews_lifetime = CancellationToken::new();
         let actor_lifetime = CancellationToken::new();
-        let tools = self
-            .tools
-            .get()
-            .expect("tool factory wired")
-            .prepare(
-                lease,
-                servers.clone(),
-                runtime.tx.clone(),
-                reviews_lifetime.clone(),
-            )
-            .await?;
+        // Claim the canonical actor before rotating credentials or preparing
+        // owner tools. A duplicate socket must have no effect on its owner.
         self.pending.lock().expect("voice pending lock").insert(
             (session, generation),
-            RuntimeAttachment::solo(server)
-                .mcp_servers(servers)
-                .with_closed(actor_lifetime.clone()),
+            RuntimeAttachment::solo(server).with_closed(actor_lifetime.clone()),
         );
         tokio::select! {
             _ = lifetime.cancelled() => anyhow::bail!("voice attachment ended"),
             result = self.commands().attach_voice_here(session, generation) => result?,
         }
+        let servers = self.mcp_servers(session).await?;
+        let tools = self
+            .tools
+            .get()
+            .expect("tool factory wired")
+            .prepare(lease, servers, runtime.tx.clone(), reviews_lifetime.clone())
+            .await?;
 
         let (mut sink, mut source) = socket.split();
         let (outbox, mut outgoing) = tokio::sync::mpsc::unbounded_channel::<Value>();
@@ -322,7 +324,7 @@ impl<Sessions: AgentSessionService, Egress: SandboxEgressProvisioner>
                                     if active_action == Some(action) { active_action = None; }
                                 }
                             }
-                            runtime.tx.send(message).map_err(|_| anyhow::anyhow!("voice actor stopped"))?;
+                            self.sessions.record_runtime_frame(session, generation, message).await?;
                         }
                         _ => anyhow::bail!("unsupported voice runtime message"),
                     }
@@ -346,6 +348,16 @@ impl<Sessions: AgentSessionService, Egress: SandboxEgressProvisioner>
     }
 }
 
+fn attachment_conflict(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<agent_harness::domain::error::HarnessError>(),
+        Some(agent_harness::domain::error::HarnessError::Session(
+            agent_session::domain::error::AgentSessionError::AlreadyConnected(_)
+                | agent_session::domain::error::AgentSessionError::ManagedElsewhere(_)
+        ))
+    )
+}
+
 #[derive(Clone)]
 struct WorkerLifetime {
     stop: CancellationToken,
@@ -359,7 +371,10 @@ struct ToolCallReceipt {
     cancel: CancellationToken,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "The actor capability, tool ledger, and transport each have distinct ownership"
+)]
 async fn start_tool_call<Sessions: AgentSessionService>(
     jobs: &mut tokio::task::JoinSet<()>,
     calls: &Arc<Mutex<HashMap<String, ToolCallReceipt>>>,
@@ -563,7 +578,12 @@ impl<Sessions: AgentSessionService, Egress: SandboxEgressProvisioner> VoiceRunti
                 },
             )
             .await
-            .map_err(|error| VoiceError::Infrastructure(rootcause::report!(error).into()))
+            .map_err(|error| match error {
+                agent_harness::domain::error::HarnessError::Session(
+                    agent_session::domain::error::AgentSessionError::TurnConflict,
+                ) => VoiceError::Conflict,
+                error => VoiceError::Infrastructure(rootcause::report!(error).into()),
+            })
     }
 
     async fn end(&self, lease: &VoiceLease) -> agent_voice::domain::model::Result<()> {

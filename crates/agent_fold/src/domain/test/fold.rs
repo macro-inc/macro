@@ -9,6 +9,28 @@ use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use serde_json::json;
 
+#[test]
+fn voice_barge_in_keeps_a_late_tool_result_on_the_original_message() {
+    let (messages, warnings) = fold_capturing_warnings(parse_log(include_str!(
+        "../../../fixtures/voice_barge_in.jsonl"
+    )));
+    assert!(warnings.is_empty(), "{warnings:#?}");
+    assert_eq!(messages.len(), 4);
+    assert_eq!(messages[1].stop, Some(StopReason::Cancelled));
+    assert!(matches!(
+        messages[1].parts.as_slice(),
+        [MessagePart::ToolUse { id, status: ToolStatus::Completed, .. }]
+            if id == &ToolUseId("create-1".to_owned())
+    ));
+    assert_eq!(messages[3].stop, Some(StopReason::EndTurn));
+    assert_eq!(
+        messages[3].parts.as_slice(),
+        [MessagePart::Text {
+            text: "I will.".to_owned()
+        }]
+    );
+}
+
 /// Fold a log while capturing anything it logs at `WARN`.
 fn fold_capturing_warnings(
     log: impl IntoIterator<Item = AgentSessionLog>,

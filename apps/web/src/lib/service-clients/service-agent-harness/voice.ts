@@ -43,30 +43,6 @@ const path = (sessionId: string) =>
   `${SERVER_HOSTS['agent-harness']}/agent-sessions/${encodeURIComponent(sessionId)}/voice`;
 
 export const agentVoiceClient = {
-  cancel(
-    sessionId: string,
-    request: {
-      requestId: string;
-      expectedActionId: string;
-      replacement?: { actionId: string; prompt: string };
-    }
-  ) {
-    return fetchWithToken<
-      {
-        status: 'stopping' | 'replaced';
-        replacementActionId?: string;
-      },
-      VoiceErrorCode
-    >(
-      `${SERVER_HOSTS['agent-harness']}/agent-sessions/${encodeURIComponent(sessionId)}/turn/cancel`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-        errorResponseHandler: voiceError,
-      }
-    );
-  },
   options(sessionId: string) {
     return fetchWithToken<VoiceOptionsResponse, VoiceErrorCode>(
       `${path(sessionId)}/options`,

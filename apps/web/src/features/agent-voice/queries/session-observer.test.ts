@@ -30,6 +30,7 @@ vi.mock('@core/agent-session/AgentSession', () => ({
     }),
   },
 }));
+
 import { observeVoiceSession } from './session-observer';
 
 beforeEach(() => {

@@ -543,7 +543,10 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Commands carry distinct actor, action, generation, and completion semantics"
+    )]
     async fn deliver_action(
         &self,
         id: AgentSessionId,

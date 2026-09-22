@@ -12,7 +12,7 @@ from uuid import UUID, uuid5
 
 import aiohttp
 from livekit import api
-from livekit.agents import llm
+from livekit.agents import StopResponse, llm
 
 from protocol import VoiceJob
 
@@ -366,8 +366,16 @@ class NativeRuntime:
             turn.tool_dispatches.append(dispatched)
             task = self.spawn(self._execute_tool(turn, context, name, arguments, dispatched))
             self._tool_runs[call_id] = (fingerprint, task)
-        # Audio interruption never abandons ambiguous side effects. The server
-        # owns the durable result; this task also restores it to model context.
+        # The SDK waits for its tool coroutine before completing interrupted
+        # speech. Release that waiter with its explicit no-response signal,
+        # while our separate task retains the durable side effect and result.
+        # SpeechHandle exposes interrupted as a property, not an async event.
+        while not task.done():
+            if context.speech_handle.interrupted:
+                raise StopResponse()
+            await asyncio.wait({task}, timeout=0.02)
+        if context.speech_handle.interrupted:
+            raise StopResponse()
         return await asyncio.shield(task)
 
     async def _execute_tool(self, turn, context, name: str, arguments: dict, dispatched):
@@ -375,7 +383,9 @@ class NativeRuntime:
         try:
             await turn.accepted.wait()
             if context.speech_handle.interrupted or turn.completed:
-                return {"error": "The call was interrupted before execution."}
+                output = {"error": "The call was interrupted before execution."}
+                self.spawn(self._restore_tool_result(context, output, True))
+                return output
             future = asyncio.get_running_loop().create_future()
             self._tool_results[call_id] = future
             await self.send({"type": "toolCall", "actionId": turn.action_id,
@@ -391,12 +401,12 @@ class NativeRuntime:
             await self.agent.load_tools(result["loadedTools"])
         output = result.get("output")
         if context.speech_handle.interrupted:
-            self.spawn(self._restore_tool_result(context, name, output, bool(result.get("isError"))))
+            self.spawn(self._restore_tool_result(context, output, bool(result.get("isError"))))
         if result.get("isError"):
             return {"error": output}
         return output
 
-    async def _restore_tool_result(self, context, name: str, output, is_error: bool) -> None:
+    async def _restore_tool_result(self, context, output, is_error: bool) -> None:
         # SDK interrupted generations skip their normal tool-output insertion.
         # Restore only at a conversation gap; never create another response.
         while self.session.user_state == "speaking" or self.session.agent_state in {"speaking", "thinking"}:
@@ -408,7 +418,9 @@ class NativeRuntime:
                 chat.items.append(call)
             if not any(isinstance(item, llm.FunctionCallOutput) and item.call_id == call.call_id for item in chat.items):
                 chat.items.append(llm.FunctionCallOutput(
-                    call_id=call.call_id, name=name, output=json.dumps(output), is_error=is_error,
+                    # Context filtering uses the provider alias, while the
+                    # backend call uses its original Macro/integration name.
+                    call_id=call.call_id, name=call.name, output=json.dumps(output), is_error=is_error,
                 ))
                 await self.agent.update_chat_ctx(chat)
 

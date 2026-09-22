@@ -330,6 +330,15 @@ where
 
         while let Some(effect) = effects.pop_front() {
             match effect {
+                Effect::Flush => {
+                    let result = tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, self.logs.flush())
+                        .await
+                        .unwrap_or(Err(AgentSessionError::LogTimedOut(self.machine.id())));
+                    if let Err(error) = result {
+                        self.fail_remaining_completions(&mut effects, error);
+                        effects.extend(self.machine.handle(Input::Closed(CloseReason::LogFailed)));
+                    }
+                }
                 Effect::RecordNativePrompt { from, mut message } => {
                     let command_span = effects.front().and_then(|effect| match effect {
                         Effect::Complete { token, .. } => Some(token.span.clone()),
@@ -776,6 +785,7 @@ where
                 effect @ Effect::Stop { .. } => stop = Some(effect),
                 Effect::Send { .. }
                 | Effect::RecordNativePrompt { .. }
+                | Effect::Flush
                 | Effect::Log { .. }
                 | Effect::EstablishInitialization { .. }
                 | Effect::PersistAcpSession { .. }

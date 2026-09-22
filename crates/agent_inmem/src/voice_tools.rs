@@ -18,9 +18,31 @@ use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::engine::AgentIdentity;
-use crate::domain::user_input::SharedUserInputRequester;
+use crate::domain::user_input::{
+    SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
+    UserInputRequester,
+};
 use crate::inbound::ask_user::AskUserContext;
 use crate::rig_engine::{InMemToolContext, fetch_user_memory, system_prompt, tools_for_turn};
+
+#[cfg(test)]
+mod test;
+
+struct TurnQuestionRequester {
+    inner: SharedUserInputRequester,
+    cancel: CancellationToken,
+}
+
+#[async_trait::async_trait]
+impl UserInputRequester for TurnQuestionRequester {
+    async fn ask(&self, request: UserInputRequest) -> Result<UserInputOutcome, UserInputError> {
+        tokio::select! {
+            biased;
+            _ = self.cancel.cancelled() => Ok(UserInputOutcome::Cancelled),
+            response = self.inner.ask(request) => response,
+        }
+    }
+}
 
 /// Product context used to prepare one realtime runtime's tool capability.
 #[derive(Clone)]
@@ -161,12 +183,19 @@ impl VoiceTools {
                 }),
             );
         request.cancel = cancel.clone();
+        let mut context = self.context.clone();
+        context.ask_user.requester = context.ask_user.requester.map(|inner| {
+            Arc::new(TurnQuestionRequester {
+                inner,
+                cancel: review_cancel.clone(),
+            }) as SharedUserInputRequester
+        });
         let response = if cancel.is_cancelled() {
             Err("The call was cancelled before execution.".to_owned())
         } else {
             match self
                 .tools
-                .try_tool_call(self.context.clone(), request, name, arguments)
+                .try_tool_call(context, request, name, arguments)
                 .await
             {
                 Ok(Ok(value)) => Ok(value),

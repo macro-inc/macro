@@ -208,3 +208,52 @@ fn a_call_the_log_never_answered_is_closed_rather_than_left_dangling() {
 fn an_empty_log_replays_to_an_empty_conversation() {
     assert!(replay_history(Vec::new()).is_empty());
 }
+
+#[test]
+fn a_tool_finishing_after_barge_in_stays_with_its_original_turn() {
+    let result = serde_json::json!({"documentId": "created-document"});
+    let history = replay_history(vec![
+        prompt_frame("create a document"),
+        update_frame(SessionUpdate::ToolCall(
+            AcpToolCall::new("create-1", "CreateDocument").status(ToolCallStatus::InProgress),
+        )),
+        prompt_frame("give it a short title"),
+        update_frame(message_chunk("I will.")),
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "create-1",
+            ToolCallUpdateFields::new()
+                .status(ToolCallStatus::Completed)
+                .raw_output(result.clone()),
+        ))),
+        // Repeated delivery must not replay a second result or cancel a
+        // committed action when the text harness reattaches.
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "create-1",
+            ToolCallUpdateFields::new()
+                .status(ToolCallStatus::Completed)
+                .raw_output(result.clone()),
+        ))),
+    ]);
+
+    let [
+        HistoryEntry::User(_),
+        HistoryEntry::Assistant(first),
+        HistoryEntry::User(_),
+        HistoryEntry::Assistant(second),
+    ] = history.as_slice()
+    else {
+        panic!("both turns should replay, got {history:#?}");
+    };
+    assert!(matches!(
+        first.as_slice(),
+        [AssistantMessagePart::ToolCall { id, .. },
+         AssistantMessagePart::ToolCallResponseJson { id: response_id, json, .. }]
+            if id == "create-1" && response_id == id && json == &result
+    ));
+    assert_eq!(
+        second.as_slice(),
+        [AssistantMessagePart::Text {
+            text: "I will.".to_owned()
+        }]
+    );
+}

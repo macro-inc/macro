@@ -259,6 +259,72 @@ async fn cancellation_racing_approval_never_executes_the_reviewed_tool() {
     assert!(ran.0.lock().unwrap().is_empty());
 }
 
+#[derive(Clone, Default)]
+struct RunningCall {
+    started: CancellationToken,
+    finish: CancellationToken,
+}
+
+#[async_trait]
+impl AsyncTool<RunningCall> for Greet {
+    type Output = Greeting;
+
+    async fn call(
+        &self,
+        context: ServiceContext<RunningCall>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        context.0.started.cancel();
+        tokio::select! {
+            biased;
+            _ = request.cancel.cancelled() => Err(ToolCallError {
+                description: "work cancelled".to_owned(),
+                internal_error: anyhow::anyhow!("work cancelled"),
+            }),
+            _ = context.0.finish.cancelled() => Ok(Greeting { text: "finished".to_owned() }),
+        }
+    }
+}
+
+#[tokio::test]
+async fn barge_in_preserves_approved_work_but_explicit_stop_cancels_it() {
+    for stop_work in [false, true] {
+        let tools = Arc::new(
+            AsyncToolCollection::<RunningCall>::new().add_user_tool::<Greet, RunningCall>(),
+        );
+        let running = RunningCall::default();
+        let work_cancel = CancellationToken::new();
+        let review_cancel = CancellationToken::new();
+        let finisher = user_tool_finisher_with_review_cancel(
+            tools,
+            running.clone(),
+            owner(),
+            Arc::new(Scripted {
+                asked: Mutex::new(Vec::new()),
+                answer: Ok(ReviewOutcome::Accepted(BTreeMap::new())),
+            }),
+            work_cancel.clone(),
+            review_cancel.clone(),
+        );
+        let call = tokio::spawn(finisher(pending(json!({"name": "Alice"}))));
+        running.started.cancelled().await;
+        review_cancel.cancel();
+        if stop_work {
+            work_cancel.cancel();
+        }
+        running.finish.cancel();
+        let result = call.await.expect("the call completes");
+        assert_eq!(
+            result,
+            Some(if stop_work {
+                FinishedUserTool::Error("work cancelled".to_owned())
+            } else {
+                FinishedUserTool::Result(json!({"UserAction": {"text": "finished"}}))
+            })
+        );
+    }
+}
+
 #[tokio::test]
 async fn an_accepted_review_runs_the_tool_with_the_edited_arguments() {
     let (finisher, reviewer, ran) = finisher_over_greet(Ok(ReviewOutcome::Accepted(

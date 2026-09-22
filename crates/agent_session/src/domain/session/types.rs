@@ -259,6 +259,8 @@ pub enum Input<Token> {
 
 #[derive(Debug)]
 pub enum Effect<Token> {
+    /// Persist and publish buffered frames before acknowledging a runtime write.
+    Flush,
     /// Record a prompt the native runtime already received over its audio input.
     RecordNativePrompt {
         /// Authenticated speaker.

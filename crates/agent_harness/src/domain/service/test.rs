@@ -3,6 +3,7 @@
 //! recording announcer. Only the edges are doubles.
 
 mod cancel;
+mod voice;
 
 use messages::domain::models::MessageParent;
 use std::sync::{Arc, Mutex};
@@ -395,6 +396,22 @@ fn harness_with_policies_and_mentions(
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
     mentions: PromptMentionsMock,
 ) -> (TestBench, TurnSignals) {
+    harness_with_voice(
+        prompt_context,
+        prompt_composer,
+        permission_policies,
+        mentions,
+        Arc::new(crate::domain::voice::NoVoiceRuntime),
+    )
+}
+
+fn harness_with_voice(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+    mentions: PromptMentionsMock,
+    voice: Arc<dyn crate::domain::voice::VoiceRuntimeConnections>,
+) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
@@ -443,7 +460,8 @@ fn harness_with_policies_and_mentions(
         crate::domain::pending::PendingCommands::new(),
         mentions,
         notifier.clone(),
-    );
+    )
+    .with_voice_runtime(voice);
     let (ended, ended_rx) = mpsc::unbounded_channel();
     turn_observer.bind(SignallingTurnObserver {
         harness: service.clone(),

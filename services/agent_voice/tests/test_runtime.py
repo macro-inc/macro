@@ -5,9 +5,12 @@ import json
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock
+from unittest.mock import patch
+
+import aiohttp
 
 from livekit import api
-from livekit.agents import RunContext, llm
+from livekit.agents import RunContext, StopResponse, llm
 from livekit.agents.llm.tool_context import get_raw_function_info
 from livekit.agents.metrics import AgentSessionUsage
 from livekit.agents.metrics.usage import LLMModelUsage
@@ -161,7 +164,8 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         await self.settle()
         speech.finish(interrupted=True)
         await self.accept()
-        self.assertIn("interrupted", (await waiter)["error"])
+        with self.assertRaises(StopResponse):
+            await waiter
         self.assertFalse(any(frame["type"] == "toolCall" for frame in self.sent))
         self.assertEqual(self.sent[-1]["result"]["stopReason"], "cancelled")
 
@@ -175,7 +179,8 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.sent[-1]["result"]["stopReason"], "cancelled")
         self.agent.update_chat_ctx = AsyncMock()
         await self.runtime.receive({"type": "toolResult", "callId": "call-1", "output": "actual result", "isError": False})
-        await waiter
+        with self.assertRaises(StopResponse):
+            await waiter
         await self.settle()
         chat = self.agent.update_chat_ctx.call_args.args[0]
         self.assertTrue(any(isinstance(item, llm.FunctionCallOutput) and "actual result" in item.output for item in chat.items))
@@ -238,6 +243,49 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class RuntimeContractTests(unittest.IsolatedAsyncioTestCase):
+    async def test_backend_configure_initialize_resume_handshake_over_actual_reader(self):
+        incoming = asyncio.Queue()
+        sent = []
+
+        class Socket:
+            async def receive_json(self, **_options):
+                return configuration()
+
+            async def send_json(self, payload):
+                sent.append(payload)
+                request = None
+                if payload.get("event") == "acp_ready":
+                    request = {"type": "acp", "jsonrpc": "2.0", "id": 1, "method": "initialize"}
+                elif payload.get("id") == 1:
+                    request = {"type": "acp", "jsonrpc": "2.0", "id": 2, "method": "session/resume",
+                               "params": {"sessionId": "acp-session"}}
+                if request:
+                    incoming.put_nowait(SimpleNamespace(type=aiohttp.WSMsgType.TEXT, data=json.dumps(request)))
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                return await incoming.get()
+
+            async def close(self):
+                return None
+
+        http = SimpleNamespace(ws_connect=AsyncMock(return_value=Socket()), close=AsyncMock())
+        failures = []
+        with patch("runtime.aiohttp.ClientSession", return_value=http):
+            runtime = await NativeRuntime.connect(VoiceJob.parse(json.dumps(job_data())), "room", "offline-key",
+                                                  "offline-secret-value-for-contract-tests", failures.append)
+        try:
+            await asyncio.wait_for(runtime.initialized.wait(), timeout=1)
+            self.assertEqual(sent[0], {"type": "event", "event": "acp_ready"})
+            self.assertEqual(sent[-1]["result"], {"sessionId": "acp-session"})
+            self.assertFalse(failures)
+            self.assertTrue(http.ws_connect.call_args.args[0].startswith("wss://"))
+        finally:
+            await runtime.close()
+        http.close.assert_awaited_once()
+
     async def test_direct_tool_schema_uses_sdk_raw_arguments_and_preserves_original_name(self):
         runtime = SimpleNamespace(configuration=configuration(tools=[{
             "name": "mcp/calendar/create", "description": "Create an event",

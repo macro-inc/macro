@@ -407,10 +407,20 @@ where
                     InFlightTurn {
                         action_id,
                         turn: prompt.turn,
-                        actor: Some(binding.speaker),
+                        actor: Some(binding.speaker.clone()),
                         announcement_message_id: None,
                     },
                 );
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::TurnStarted(TurnStartedMetadata {
+                        identity,
+                        turn: prompt.turn,
+                        action_id,
+                        actor: Some(binding.speaker),
+                        announcement_message_id: None,
+                    })
+                })
+                .await;
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::CancelTurn { request, actor } => self

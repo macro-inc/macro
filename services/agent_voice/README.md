@@ -117,6 +117,11 @@ provider credentials:
 PYTHONPATH=services/agent_voice services/agent_voice/.venv/bin/python -m unittest discover -s services/agent_voice/tests -v
 ```
 
+The integration suite runs the pinned LiveKit/OpenAI SDK against a simulated
+provider WebSocket. It covers native and typed turns, heard-only transcript
+truncation, interrupted tool results, dynamic tool aliases, and provider reconnects
+without making provider API calls.
+
 Before rollout, run real-microphone checks for turn timing, interruption,
 echo/noise, accents, task corrections, pending reviews, tab/call contention,
 reconnect and provider failure. A headless UI test does not measure perceived
