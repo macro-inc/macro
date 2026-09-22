@@ -259,7 +259,6 @@ export function Agents(
           }
         >
           {props.navigation}
-          {props.invitation}
           <SettingsSection
             title="Team agents"
             description="Agents shared with your team, including Macro."
@@ -329,6 +328,7 @@ export function Agents(
               </Show>
             </SettingsCard>
           </SettingsSection>
+          {props.invitation}
         </SettingsPage>
       </Show>
 

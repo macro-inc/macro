@@ -314,6 +314,19 @@ const MACROD_HARNESS = {
 } satisfies Harness;
 
 describe('Agents', () => {
+  it('places the bring-your-own invitation after both agent lists', () => {
+    render(() => <Agents invitation={<p>Bring your own agent</p>} />);
+    const invitation = screen.getByText('Bring your own agent');
+    for (const name of ['Team agents', 'Private agents']) {
+      expect(
+        screen
+          .getByRole('heading', { name })
+          .compareDocumentPosition(invitation) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    }
+  });
+
   it.each([false, true])(
     'gates Claude harness selection and discovery when enabled=%s',
     (enabled) => {

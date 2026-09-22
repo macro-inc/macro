@@ -182,7 +182,6 @@ export function Harness(
           }
         >
           {props.navigation}
-          <BringYourOwnAgent onAddRuntime={() => setPairingDialog({})} />
           <div>
             <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
               Built-in runtimes
@@ -480,6 +479,7 @@ export function Harness(
               </Show>
             </SettingsCard>
           </div>
+          <BringYourOwnAgent onAddRuntime={() => setPairingDialog({})} />
         </SettingsPage>
       </Show>
 

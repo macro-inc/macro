@@ -218,6 +218,21 @@ beforeEach(() => {
 });
 
 describe('Harness', () => {
+  it('places bring-your-own below the built-in and paired runtime lists', () => {
+    render(() => <Harness />);
+    const invitation = screen.getByRole('heading', {
+      name: 'Bring your agent to Macro',
+    });
+    for (const name of ['Built-in runtimes', 'Paired runtimes']) {
+      expect(
+        screen
+          .getByRole('heading', { name })
+          .compareDocumentPosition(invitation) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    }
+  });
+
   it.each([false, true])(
     'offers Codex settings even when rollout access is %s',
     (enabled) => {
