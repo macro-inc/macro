@@ -193,7 +193,7 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
                     <h2 class="min-w-0 text-sm/5 font-medium text-ink">
                       {MACRO_HARNESS_NAME}
                     </h2>
-                    <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-success-bg px-2 text-[11px]/none font-medium text-success">
+                    <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md bg-success-bg px-2 text-[11px]/none font-medium text-success">
                       Built in
                     </span>
                   </div>
@@ -216,7 +216,7 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
                       Cursor
                     </h2>
                     <Show when={cursorRegistered()}>
-                      <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-success-bg px-2 text-[11px]/none font-medium text-success">
+                      <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md bg-success-bg px-2 text-[11px]/none font-medium text-success">
                         Connected
                       </span>
                     </Show>
@@ -287,80 +287,83 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
                         </div>
                       }
                     >
-                      <div class="mt-4 flex flex-col gap-1.5">
-                        <span class="text-xs text-ink">Default model</span>
-                        <Show
-                          when={!cursorModels.isPending}
-                          fallback={
-                            <SettingsSelect
-                              label="Default model"
-                              class="w-56 max-w-full"
-                              options={[]}
-                              placeholder="Loading models…"
-                              onChange={(id) =>
-                                void handleCursorModelChange(id)
-                              }
-                              disabled
-                            />
-                          }
-                        >
+                      <div class="mt-4 flex flex-col gap-3">
+                        <div class="flex w-full max-w-sm flex-col gap-2">
+                          <span class="text-xs font-medium text-ink">
+                            Default model
+                          </span>
                           <Show
-                            when={!cursorModels.isError}
+                            when={!cursorModels.isPending}
                             fallback={
-                              <div class="flex items-center gap-2">
-                                <p class="text-xs text-negative">
-                                  Could not load Cursor models.
-                                </p>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => void cursorModels.refetch()}
-                                >
-                                  Retry
-                                </Button>
-                              </div>
+                              <SettingsSelect
+                                label="Default model"
+                                options={[]}
+                                placeholder="Loading models…"
+                                onChange={(id) =>
+                                  void handleCursorModelChange(id)
+                                }
+                                disabled
+                              />
                             }
                           >
                             <Show
-                              when={cursorModelData()?.status === 'available'}
+                              when={!cursorModels.isError}
                               fallback={
-                                <p class="text-xs text-ink-muted">
-                                  Cursor does not support model selection.
-                                </p>
+                                <div class="flex items-center gap-2">
+                                  <p class="text-xs text-negative">
+                                    Could not load Cursor models.
+                                  </p>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => void cursorModels.refetch()}
+                                  >
+                                    Retry
+                                  </Button>
+                                </div>
                               }
                             >
                               <Show
-                                when={isLargeModelCatalog(
-                                  cursorCatalogOptions()
-                                )}
+                                when={cursorModelData()?.status === 'available'}
                                 fallback={
-                                  <SettingsSelect
-                                    label="Default model"
-                                    class="w-56 max-w-full"
-                                    options={cursorModelOptions()}
-                                    value={selectedCursorModelId()}
-                                    disabled={setCursorDefaultModel.isPending}
-                                    onChange={(id) =>
-                                      void handleCursorModelChange(id)
-                                    }
-                                  />
+                                  <p class="text-xs text-ink-muted">
+                                    Cursor does not support model selection.
+                                  </p>
                                 }
                               >
-                                <ModelCatalogPicker
-                                  value={selectedCursorModelId()}
-                                  options={cursorCatalogOptions()}
-                                  onSelect={(id) =>
-                                    void handleCursorModelChange(id)
+                                <Show
+                                  when={isLargeModelCatalog(
+                                    cursorCatalogOptions()
+                                  )}
+                                  fallback={
+                                    <SettingsSelect
+                                      label="Default model"
+                                      options={cursorModelOptions()}
+                                      value={selectedCursorModelId()}
+                                      disabled={setCursorDefaultModel.isPending}
+                                      onChange={(id) =>
+                                        void handleCursorModelChange(id)
+                                      }
+                                    />
                                   }
-                                  disabled={setCursorDefaultModel.isPending}
-                                  ariaLabel="Default model"
-                                  triggerClass="w-72 max-w-full justify-between"
-                                />
+                                >
+                                  <ModelCatalogPicker
+                                    value={selectedCursorModelId()}
+                                    options={cursorCatalogOptions()}
+                                    onSelect={(id) =>
+                                      void handleCursorModelChange(id)
+                                    }
+                                    disabled={setCursorDefaultModel.isPending}
+                                    ariaLabel="Default model"
+                                    triggerClass="h-9 w-full justify-between text-base [&>span]:flex-1"
+                                    placement="bottom-start"
+                                  />
+                                </Show>
                               </Show>
                             </Show>
                           </Show>
-                        </Show>
+                        </div>
                         <p class="text-xs text-ink-extra-muted">
                           The model new `@cursor` sessions start on. Recommended
                           models stay up top; everything else is behind More
@@ -368,8 +371,8 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
                         </p>
                       </div>
 
-                      <div class="mt-4 flex items-center justify-between gap-4 mobile:items-start">
-                        <p class="text-xs text-ink-extra-muted">
+                      <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                        <p class="flex-1 basis-56 text-xs text-ink-extra-muted">
                           Disconnecting removes Macro's copy of the key but does
                           not revoke it in Cursor.
                         </p>
@@ -433,7 +436,7 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
                         <p class="min-w-0 flex-1 truncate text-sm text-ink">
                           {harness.name}
                         </p>
-                        <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
+                        <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
                           {harness.owner.type === 'team' ? 'Team' : 'Private'}
                         </span>
                         <StatusDot

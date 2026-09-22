@@ -28,7 +28,7 @@ export function ConnectionCard(props: ConnectionCardProps) {
         <div class="flex min-h-5 items-start justify-between gap-3">
           <h2 class="min-w-0 text-sm/5 font-medium text-ink">Claude Cloud</h2>
           <Show when={props.status?.connected}>
-            <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-success-bg px-2 text-[11px]/none font-medium text-success">
+            <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md bg-success-bg px-2 text-[11px]/none font-medium text-success">
               Connected
             </span>
           </Show>

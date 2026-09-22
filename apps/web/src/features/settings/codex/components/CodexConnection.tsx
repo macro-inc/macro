@@ -45,7 +45,7 @@ export function CodexConnection(props: {
         <div class="flex min-h-5 items-start justify-between gap-3">
           <h2 class="min-w-0 text-sm/5 font-medium text-ink">Codex</h2>
           <Show when={connected()}>
-            <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-success-bg px-2 text-[11px]/none font-medium text-success">
+            <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md bg-success-bg px-2 text-[11px]/none font-medium text-success">
               Connected
             </span>
           </Show>
@@ -143,11 +143,12 @@ export function CodexConnection(props: {
               </p>
             </Show>
             <div class="mt-4 flex flex-col gap-3">
-              <div class="flex flex-col gap-1.5 text-xs text-ink">
-                <span>Cloud environment</span>
+              <div class="flex w-full max-w-sm flex-col gap-2">
+                <span class="text-xs font-medium text-ink">
+                  Cloud environment
+                </span>
                 <SettingsSelect
                   label="Cloud environment"
-                  class="min-w-0 w-full max-w-sm"
                   placeholder="Choose an environment"
                   options={props.environments.map((item) => ({
                     id: item.id,
