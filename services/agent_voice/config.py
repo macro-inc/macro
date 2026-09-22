@@ -8,6 +8,19 @@ class VoiceConfigurationError(ValueError):
     """A missing, placeholder or malformed worker setting."""
 
 
+def worker_name(environment: Mapping[str, str]) -> str:
+    """Match the harness's dispatch scope without introducing another setting."""
+    scope = environment.get("ENVIRONMENT", "prod")
+    if scope == "local":
+        scope += "-" + environment.get("COMPOSE_PROJECT_NAME", "macro")
+    elif scope not in {"dev", "prod"}:
+        raise VoiceConfigurationError("Invalid ENVIRONMENT")
+    name = "macro-agent-voice-" + scope
+    if len(name) > 200 or not all(character.isascii() and (character.isalnum() or character in "-_") for character in name):
+        raise VoiceConfigurationError("Invalid COMPOSE_PROJECT_NAME")
+    return name
+
+
 def credential_present(value: str | None) -> bool:
     if not value or not value.strip():
         return False

@@ -102,5 +102,7 @@ tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+agent = { path = "../../crates/agent" }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
+tokio-tungstenite = { workspace = true }

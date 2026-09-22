@@ -349,6 +349,7 @@ dependencies = [
 name = "agent_harness_service"
 version = "0.1.0"
 dependencies = [
+ "agent",
  "agent-client-protocol",
  "agent_changes",
  "agent_egress",
@@ -417,6 +418,7 @@ dependencies = [
  "static_file_service_client",
  "tokio",
  "tokio-retry",
+ "tokio-tungstenite 0.28.0",
  "tokio-util",
  "tower 0.5.3",
  "tracing",

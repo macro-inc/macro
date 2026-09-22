@@ -8,6 +8,7 @@ import os
 import sys
 from time import monotonic
 
+import aiohttp
 from dotenv import load_dotenv
 from openai.types import realtime
 from livekit import rtc
@@ -24,13 +25,39 @@ from livekit.agents import (
 from livekit.plugins import openai, silero
 
 from agent import MacroVoiceAgent, NativeRealtimeModel
-from config import VoiceConfigurationError, connection_options, credential_present, requires_credentials
-from protocol import AGENT_NAME, VOICE_TOPIC, VoiceJob
-from runtime import NativeRuntime
+from config import VoiceConfigurationError, connection_options, credential_present, requires_credentials, worker_name
+from protocol import VOICE_TOPIC, VoiceJob
+from runtime import NativeRuntime, runtime_token, runtime_url
 
 logger = logging.getLogger("macro-agent-voice")
 load_dotenv()
 CALLER_RECONNECT_GRACE_SECONDS = 120
+
+
+async def runtime_available(job: VoiceJob, room: str) -> bool:
+    """Reject jobs for another stack before claiming their room or runtime."""
+    try:
+        websocket_url = runtime_url(job.runtime_url)
+        url = websocket_url.replace("wss://", "https://", 1).replace("ws://", "http://", 1)
+        token = runtime_token(job, room, os.environ["LIVEKIT_API_KEY"], os.environ["LIVEKIT_API_SECRET"])
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2)) as client:
+            async with client.get(
+                url + "/availability",
+                headers={"Authorization": "Bearer " + token},
+                allow_redirects=False,
+            ) as response:
+                if response.status != 204:
+                    logger.info("Voice runtime is unavailable for dispatch", extra={
+                        "voice_session_id": job.voice_session_id,
+                        "stage": "runtime_availability", "http_status": response.status,
+                    })
+                return response.status == 204
+    except (aiohttp.ClientError, TimeoutError, ValueError, KeyError) as error:
+        logger.info("Voice runtime availability check failed", extra={
+            "voice_session_id": job.voice_session_id,
+            "stage": "runtime_availability", "error_type": type(error).__name__,
+        })
+        return False
 
 
 async def request_job(request: JobRequest) -> None:
@@ -39,6 +66,12 @@ async def request_job(request: JobRequest) -> None:
     except (ValueError, TypeError, KeyError) as error:
         logger.warning("Rejecting invalid or expired voice dispatch", extra={"stage": "dispatch_validation", "error_type": type(error).__name__})
         await request.reject()
+        return
+    if not await runtime_available(job, request.job.room.name):
+        logger.info("Rejecting voice dispatch for an unavailable runtime", extra={
+            "voice_session_id": job.voice_session_id, "stage": "runtime_availability",
+        })
+        await request.reject(terminate=False)
         return
     await request.accept(
         name="Macro",
@@ -251,7 +284,7 @@ def worker_options(*, validate: bool) -> WorkerOptions:
         entrypoint_fnc=entrypoint,
         request_fnc=request_job,
         prewarm_fnc=prewarm,
-        agent_name=AGENT_NAME,
+        agent_name=worker_name(os.environ),
         num_idle_processes=1,
         job_memory_warn_mb=1_024,
         drain_timeout=110,

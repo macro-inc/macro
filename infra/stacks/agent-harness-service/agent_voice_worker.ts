@@ -85,6 +85,7 @@ export function createAgentVoiceWorker(
             image: image.imageUri,
             essential: true,
             stopTimeout: 120,
+            environment: [{ name: 'ENVIRONMENT', value: stack }],
             // Extract only the four voice credentials, never APP_SECRETS_JSON.
             secrets: Object.entries(secretKeys).map(([name, key]) => ({
               name,

@@ -11,6 +11,8 @@ use agent_session::testing::{InMemoryAgentSessionRepo, test_agent_session};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Notify;
 
+mod socket;
+
 type Sessions = AgentSessionServiceImpl<
     InMemoryAgentSessionRepo,
     FoldedMessageService<InMemoryAgentSessionRepo>,

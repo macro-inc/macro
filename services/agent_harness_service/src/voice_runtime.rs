@@ -617,7 +617,23 @@ pub fn worker_router<Sessions: AgentSessionService, Egress: SandboxEgressProvisi
             "/{session}/voice/{voice}/runtime",
             get(worker::<Sessions, Egress>),
         )
+        .route(
+            "/{session}/voice/{voice}/runtime/availability",
+            get(worker_availability::<Sessions, Egress>),
+        )
         .with_state(registry)
+}
+
+// LiveKit may offer a job to a worker in another local stack using the same
+// project credentials. Confirm the exact lease exists in this worker's backend
+// before accepting the job. This must never attach an actor or rotate tokens.
+async fn worker_availability<Sessions: AgentSessionService, Egress: SandboxEgressProvisioner>(
+    State(registry): State<Arc<VoiceRuntimeRegistry<Sessions, Egress>>>,
+    Path((session, voice)): Path<(Uuid, Uuid)>,
+    headers: HeaderMap,
+) -> Result<StatusCode, StatusCode> {
+    worker_lease(&registry, session, voice, &headers).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn worker<Sessions: AgentSessionService, Egress: SandboxEgressProvisioner>(
@@ -626,16 +642,7 @@ async fn worker<Sessions: AgentSessionService, Egress: SandboxEgressProvisioner>
     headers: HeaderMap,
     upgrade: WebSocketUpgrade,
 ) -> Result<Response, StatusCode> {
-    let token = headers
-        .get("authorization")
-        .and_then(|header| header.to_str().ok())
-        .and_then(|header| header.strip_prefix("Bearer "))
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-    let lease = registry
-        .voice()
-        .authorize_worker(session, VoiceSessionId(voice), token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let lease = worker_lease(&registry, session, voice, &headers).await?;
     Ok(upgrade
         .max_message_size(128_000)
         .on_upgrade(move |socket| async move {
@@ -643,4 +650,22 @@ async fn worker<Sessions: AgentSessionService, Egress: SandboxEgressProvisioner>
                 tracing::warn!(error = ?error, "voice runtime disconnected");
             }
         }))
+}
+
+async fn worker_lease<Sessions: AgentSessionService, Egress: SandboxEgressProvisioner>(
+    registry: &VoiceRuntimeRegistry<Sessions, Egress>,
+    session: Uuid,
+    voice: Uuid,
+    headers: &HeaderMap,
+) -> Result<VoiceLease, StatusCode> {
+    let token = headers
+        .get("authorization")
+        .and_then(|header| header.to_str().ok())
+        .and_then(|header| header.strip_prefix("Bearer "))
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    registry
+        .voice()
+        .authorize_worker(session, VoiceSessionId(voice), token)
+        .await
+        .map_err(|_| StatusCode::UNAUTHORIZED)
 }

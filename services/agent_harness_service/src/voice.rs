@@ -1,6 +1,6 @@
 //! Composition-root bridge between voice policy and the owning session service.
 
-use crate::config::Config;
+use crate::config::{Config, Environment};
 use agent_harness::domain::model::AgentKind;
 use agent_session::domain::{model::AgentSessionId, service::AgentSessionService};
 use agent_voice::{
@@ -40,6 +40,7 @@ pub fn service<Sessions: AgentSessionService>(
         config.livekit_api_key.clone(),
         config.livekit_api_secret.clone(),
         &macro_service_urls::AgentHarnessServiceUrl::new()?.to_string(),
+        worker_name(config.environment, config.compose_project_name.value()),
     )?);
     Ok(AgentVoiceService::new(
         Arc::new(SessionDirectory(sessions)),
@@ -48,3 +49,13 @@ pub fn service<Sessions: AgentSessionService>(
         runtime,
     ))
 }
+
+fn worker_name(environment: Environment, project: Option<&str>) -> String {
+    match environment {
+        Environment::Local => format!("macro-agent-voice-local-{}", project.unwrap_or("macro")),
+        _ => format!("macro-agent-voice-{environment}"),
+    }
+}
+
+#[cfg(test)]
+mod test;

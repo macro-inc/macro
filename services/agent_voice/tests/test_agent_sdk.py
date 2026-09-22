@@ -22,7 +22,7 @@ class SdkTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict("os.environ", configured_environment(), clear=True):
             options = worker_options(validate=True)
         self.assertEqual(options.ws_url, "wss://macro.invalid/")
-        self.assertEqual(options.agent_name, "macro-agent-voice")
+        self.assertEqual(options.agent_name, "macro-agent-voice-prod")
         self.assertEqual(options.drain_timeout, 110)
 
     async def test_provider_configuration_and_session_construct_without_network(self):

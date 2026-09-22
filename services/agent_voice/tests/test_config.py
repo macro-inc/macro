@@ -1,6 +1,6 @@
 import unittest
 
-from config import VoiceConfigurationError, connection_options, requires_credentials
+from config import VoiceConfigurationError, connection_options, requires_credentials, worker_name
 
 
 def configured_environment():
@@ -13,6 +13,21 @@ def configured_environment():
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_worker_names_match_the_backend_scope(self):
+        for environment, expected in (
+            ({}, "macro-agent-voice-prod"),
+            ({"ENVIRONMENT": "prod"}, "macro-agent-voice-prod"),
+            ({"ENVIRONMENT": "dev", "COMPOSE_PROJECT_NAME": "ignored-local-project"}, "macro-agent-voice-dev"),
+            ({"ENVIRONMENT": "local"}, "macro-agent-voice-local-macro"),
+            ({"ENVIRONMENT": "local", "COMPOSE_PROJECT_NAME": "macro-voice-test"}, "macro-agent-voice-local-macro-voice-test"),
+        ):
+            with self.subTest(environment=environment):
+                self.assertEqual(worker_name(environment), expected)
+        self.assertNotEqual(
+            worker_name({"ENVIRONMENT": "local", "COMPOSE_PROJECT_NAME": "macro-one"}),
+            worker_name({"ENVIRONMENT": "local", "COMPOSE_PROJECT_NAME": "macro-two"}),
+        )
+
     def test_shared_server_url_maps_to_sdk_websocket_url(self):
         environment = configured_environment()
         result = connection_options(environment, required=True)

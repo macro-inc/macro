@@ -40,6 +40,8 @@ macro_env_var::maybe_env_vars!(
     pub struct ClaudeOauthKmsKeyId;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
     pub struct CodexOauthKmsKeyId;
+    /// Existing Compose identity used to isolate local voice workers.
+    pub struct ComposeProjectName;
 );
 
 /// The Pipedream project environment matching this deployment: production in
@@ -66,6 +68,8 @@ pub struct Config {
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
+    /// Local stack identity; hosted workers are scoped by environment instead.
+    pub compose_project_name: ComposeProjectName,
     /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.

@@ -10,6 +10,7 @@ fn browser_token_is_room_scoped_and_microphone_only() {
         "test-key".into(),
         "test-secret".into(),
         "https://agent.example/agent-harness",
+        "macro-agent-voice-test".into(),
     )
     .unwrap();
     let lease = VoiceLease {
@@ -46,8 +47,14 @@ fn invalid_media_configuration_fails_before_serving_requests() {
         "",
     ] {
         assert!(
-            LivekitVoiceMedia::new(url, "key".into(), "secret".into(), "https://agent.example")
-                .is_err()
+            LivekitVoiceMedia::new(
+                url,
+                "key".into(),
+                "secret".into(),
+                "https://agent.example",
+                "macro-agent-voice-test".into(),
+            )
+            .is_err()
         );
     }
     assert!(
@@ -55,7 +62,8 @@ fn invalid_media_configuration_fails_before_serving_requests() {
             "https://voice.example",
             "".into(),
             "secret".into(),
-            "https://agent.example"
+            "https://agent.example",
+            "macro-agent-voice-test".into(),
         )
         .is_err()
     );
@@ -64,7 +72,8 @@ fn invalid_media_configuration_fails_before_serving_requests() {
             "https://voice.example",
             "key".into(),
             "  ".into(),
-            "https://agent.example"
+            "https://agent.example",
+            "macro-agent-voice-test".into(),
         )
         .is_err()
     );
@@ -77,6 +86,7 @@ fn worker_identity_requires_a_valid_signed_room_grant() {
         "test-key".into(),
         "test-secret".into(),
         "https://agent.example",
+        "macro-agent-voice-test".into(),
     )
     .unwrap();
     let token = |secret: &str, join: bool| {

@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 import json
 from uuid import UUID
 
-AGENT_NAME = "macro-agent-voice"
 VOICES = frozenset(("marin", "cedar", "alloy", "coral", "sage", "verse"))
 VOICE_TOPIC = "macro.voice.event"
 MAX_PAYLOAD_BYTES = 15_000

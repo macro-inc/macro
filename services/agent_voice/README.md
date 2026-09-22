@@ -35,12 +35,17 @@ For a container, build from this directory and inject the environment at runtime
 docker build -t macro-agent-voice .
 ```
 
-The image runs `worker.py start` as a non-root user. The dispatch name is
-`macro-agent-voice`; do not reuse the channel transcription worker's deployment ID.
+The image runs `worker.py start` as a non-root user. Dispatch and registration
+derive the same name from existing stack identity: `macro-agent-voice-dev` or
+`macro-agent-voice-prod` when hosted, and
+`macro-agent-voice-local-<COMPOSE_PROJECT_NAME>` for local stacks. Normal stack
+startup supplies `ENVIRONMENT` and `COMPOSE_PROJECT_NAME` automatically. When
+running directly, use the same values as the harness (local defaults to project
+`macro`). Do not reuse the channel transcription worker's deployment ID.
 Voice is always enabled for Macro agents; there is no enable switch. The harness
 service requires `LIVEKIT_SERVER_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`
-and validates them at startup. Local Compose and ECS pass only the voice worker's
-LiveKit and OpenAI settings, without Macro backend credentials. ECS uses the
+and validates them at startup. Local Compose and ECS pass the voice worker's
+LiveKit/OpenAI settings and stack identity, without Macro backend credentials. ECS uses the
 same Doppler-synced secret as the harness, selecting just those four keys, and a
 separate task role without Macro permissions. Its health check verifies LiveKit
 registration at `http://127.0.0.1:8081/`.
@@ -60,8 +65,13 @@ readiness and never blocks the connection deadline.
 
 Check the `agent_voice` container locally or `/ecs/agent-voice-<stack>` logs in
 CloudWatch. Startup logs identify the failing stage and exception type without
-printing credentials or conversation content. The worker must register as
-`macro-agent-voice` in the same LiveKit project used to create the voice room.
+printing credentials or conversation content. The worker must register with the
+same stack-scoped name as the harness in the LiveKit project used for the room.
+Before accepting a dispatch, it probes the job's runtime URL with a short-lived,
+room-scoped credential. Only the backend holding that exact active voice lease
+returns availability. An unreachable or different stack is rejected within two
+seconds so LiveKit can offer the job to another worker. This also separates
+developers who share a project name and LiveKit credentials on different machines.
 If no worker becomes ready, the browser stops capture and reports a connection
 error instead of remaining on Connecting.
 
@@ -121,6 +131,15 @@ The integration suite runs the pinned LiveKit/OpenAI SDK against a simulated
 provider WebSocket. It covers native and typed turns, heard-only transcript
 truncation, interrupted tool results, dynamic tool aliases, and provider reconnects
 without making provider API calls.
+
+The native socket smoke test connects the actual Python runtime to the Rust
+router, harness, and session actor, with fake product tools and no provider or
+media API calls. From the repository root:
+
+```sh
+docker build -t macro-agent-voice-local services/agent_voice
+nix develop --command cargo test -p agent_harness_service --bin agent_harness_service voice_runtime::test::socket -- --include-ignored
+```
 
 Before rollout, run real-microphone checks for turn timing, interruption,
 echo/noise, accents, task corrections, pending reviews, tab/call contention,

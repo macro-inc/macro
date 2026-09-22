@@ -16,8 +16,6 @@ use livekit_api::{
 use livekit_protocol::CreateAgentDispatchRequest;
 use std::time::Duration;
 
-/// Named worker registered independently from call transcription workers.
-pub const VOICE_AGENT_NAME: &str = "macro-agent-voice";
 const MEDIA_TIMEOUT: Duration = Duration::from_secs(20);
 // The browser and worker both allow two minutes for a transient connection
 // loss. Keep the room alive for that recovery window as well.
@@ -31,6 +29,7 @@ pub struct LivekitVoiceMedia {
     api_secret: String,
     websocket_url: String,
     runtime_url: String,
+    agent_name: String,
 }
 
 impl LivekitVoiceMedia {
@@ -40,7 +39,18 @@ impl LivekitVoiceMedia {
         api_key: String,
         api_secret: String,
         runtime_url: &str,
+        agent_name: String,
     ) -> Result<Self> {
+        if agent_name.is_empty()
+            || agent_name.len() > 200
+            || !agent_name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        {
+            return Err(VoiceError::Infrastructure(rootcause::report!(
+                "Invalid voice worker name"
+            )));
+        }
         let runtime = url::Url::parse(runtime_url)
             .map_err(|error| VoiceError::Infrastructure(rootcause::report!(error).into()))?;
         if !matches!(runtime.scheme(), "https" | "http")
@@ -87,6 +97,7 @@ impl LivekitVoiceMedia {
             api_secret,
             websocket_url: url.to_string(),
             runtime_url: runtime_url.trim_end_matches('/').to_owned(),
+            agent_name,
         })
     }
 }
@@ -117,7 +128,7 @@ impl VoiceMedia for LivekitVoiceMedia {
             self.agents
                 .create_dispatch(CreateAgentDispatchRequest {
                     room: lease.room_name(),
-                    agent_name: VOICE_AGENT_NAME.to_owned(),
+                    agent_name: self.agent_name.clone(),
                     metadata,
                     ..Default::default()
                 })

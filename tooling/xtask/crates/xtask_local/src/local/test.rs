@@ -104,6 +104,8 @@ fn voice_worker_receives_only_speech_and_media_configuration() {
     assert!(worker["env_file"].is_null());
     let env = worker["environment"].as_mapping().unwrap();
     let expected = [
+        ("ENVIRONMENT", "${ENVIRONMENT:-local}"),
+        ("COMPOSE_PROJECT_NAME", "${COMPOSE_PROJECT_NAME:-macro}"),
         ("LIVEKIT_URL", "${LIVEKIT_SERVER_URL:-}"),
         ("LIVEKIT_API_KEY", "${LIVEKIT_API_KEY:-}"),
         ("LIVEKIT_API_SECRET", "${LIVEKIT_API_SECRET:-}"),
