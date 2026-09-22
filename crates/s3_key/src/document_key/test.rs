@@ -168,25 +168,39 @@ fn url_path_leaves_owner_less_keys_unchanged() {
     }
 }
 
+/// `%` is legal in an email local part, so an owner can contain a literal
+/// percent sequence. Parsing must not decode it into a different owner.
 #[test]
-fn from_s3_key_accepts_a_percent_encoded_owner_segment() {
-    let key = DocumentKey::from_s3_key(
-        "macro%7Chutch%40macro.com/01a0914f-1fde-7873-80ba-6eef315d3b50/789",
-    )
-    .unwrap();
+fn owner_with_a_literal_percent_sequence_round_trips_unchanged() {
+    let owner = owner("macro|a%2bb@macro.com");
+    let key = build_cloud_storage_bucket_document_key(&owner, DOCUMENT_ID, 1);
+    assert_eq!(key, format!("macro|a%2bb@macro.com/{DOCUMENT_ID}/1"));
+
+    let parsed = DocumentKey::from_s3_key(&key).unwrap();
+    assert_eq!(parsed.owner_segment(), Some("macro|a%2bb@macro.com"));
+    assert_eq!(parsed.to_key(), key);
+    assert_eq!(
+        Owner::from_principal_str(parsed.owner_segment().unwrap()).unwrap(),
+        owner
+    );
+}
+
+/// A form-encoded key is a different key. Callers decode at their inbound
+/// boundary; the parser never guesses.
+#[test]
+fn from_s3_key_keeps_a_percent_encoded_owner_segment_verbatim() {
+    let encoded = "macro%7Chutch%40macro.com/01a0914f-1fde-7873-80ba-6eef315d3b50/789";
+    let key = DocumentKey::from_s3_key(encoded).unwrap();
 
     assert_eq!(
         key,
         DocumentKey::Versioned {
-            owner_segment: USER_PRINCIPAL.to_string(),
+            owner_segment: "macro%7Chutch%40macro.com".to_string(),
             document_id: DOCUMENT_ID.to_string(),
             version_id: 789,
         }
     );
-    assert_eq!(
-        key.to_key(),
-        "macro|hutch@macro.com/01a0914f-1fde-7873-80ba-6eef315d3b50/789"
-    );
+    assert_eq!(key.to_key(), encoded);
 }
 
 #[test]
@@ -250,19 +264,6 @@ fn test_sync_service_snapshot_key_from_s3_key() {
     assert!(!key.is_temp());
     assert!(!key.is_bom_part());
     assert!(!key.is_converted_pdf());
-}
-
-#[test]
-fn test_url_encoded_user_id() {
-    let key = DocumentKey::from_s3_key("user%20123/doc456/789").unwrap();
-    assert_eq!(
-        key,
-        DocumentKey::Versioned {
-            owner_segment: "user 123".to_string(),
-            document_id: "doc456".to_string(),
-            version_id: 789,
-        }
-    );
 }
 
 #[test]

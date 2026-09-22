@@ -87,17 +87,21 @@ fn owner_segment(owner: &Owner) -> String {
 
 /// Reads the owner segment of a key back into an owner principal string.
 ///
-/// Inverse of [`owner_segment`]: a canonical segment passes through unchanged.
-/// Percent-escapes are decoded because S3 event notifications deliver keys
-/// form-encoded and not every listener decodes them before parsing.
-fn parse_owner_segment(segment: &str) -> anyhow::Result<String> {
-    Ok(urlencoding::decode(segment)
-        .context("owner segment is not valid UTF-8")?
-        .into_owned())
+/// Exact inverse of [`owner_segment`]: the segment is taken verbatim, so
+/// [`DocumentKey::to_key`] reproduces the parsed key byte for byte. Nothing is
+/// percent-decoded here; `%` is a legal character in a user principal's email,
+/// so decoding would turn one owner into another. A listener that receives
+/// form-encoded keys (classic S3 event notifications, unlike EventBridge)
+/// decodes the whole key at its inbound boundary before parsing.
+fn parse_owner_segment(segment: &str) -> String {
+    segment.to_string()
 }
 
 impl DocumentKey {
     /// Parses an S3 key from the document storage bucket into a `DocumentKey`.
+    ///
+    /// The key must be the object key as stored, not a form-encoded copy from
+    /// an event notification; see [`parse_owner_segment`].
     pub fn from_s3_key(key: &str) -> Result<Self, anyhow::Error> {
         let split: Vec<&str> = key.split('/').collect();
 
@@ -116,7 +120,7 @@ impl DocumentKey {
                 document_id: split[1].to_string(),
             }),
             3 => {
-                let owner_segment = parse_owner_segment(split[0])?;
+                let owner_segment = parse_owner_segment(split[0]);
                 let document_id = split[1].to_string();
                 let tail = split[2];
 
