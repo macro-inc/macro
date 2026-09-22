@@ -8,6 +8,7 @@ import {
 import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
+import { AgentSessionReadMarker } from '@app/features/block-agent/component/AgentSessionReadMarker';
 import {
   agentSessionTitle,
   sessionRepositoryUrl,
@@ -47,7 +48,6 @@ import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import ShareIcon from '@phosphor/share.svg';
 import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
-import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
 import { Topbar } from './Topbar';

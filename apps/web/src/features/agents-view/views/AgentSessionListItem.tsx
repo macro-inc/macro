@@ -46,6 +46,7 @@ export function AgentSessionListItem(props: Props) {
       repositoryLabel(props.entity.repoUrl) ??
       (pr ? `${pr.owner}/${pr.repo}` : undefined);
     const branch = props.entity.workingBranch ?? undefined;
+    if (!repository && !branch && !pr) return undefined;
     return {
       repository,
       branch,
@@ -75,11 +76,24 @@ export function AgentSessionListItem(props: Props) {
       leading={
         <Show
           when={props.surface === 'home'}
-          fallback={<AgentSessionStatusIndicator state={state()} />}
+          fallback={
+            <AgentSessionStatusIndicator
+              state={state()}
+              unread={props.unread}
+            />
+          }
         >
           <Show when={mode() === 'code'} fallback={<SparkleIcon />}>
             <FilledSparkleIcon />
           </Show>
+        </Show>
+      }
+      trailing={
+        <Show when={props.surface === 'home' && props.unread}>
+          <span
+            aria-label="Unread"
+            class="size-1.5 shrink-0 rounded-full bg-accent"
+          />
         </Show>
       }
     >

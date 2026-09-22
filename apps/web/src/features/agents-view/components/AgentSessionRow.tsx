@@ -13,6 +13,7 @@ export function AgentSessionRow(props: {
   kind: 'chat' | 'code';
   state: ConversationState;
   leading: JSX.Element;
+  trailing?: JSX.Element;
   timestamp: string;
   detailsLabel?: string;
   unread?: boolean;
@@ -38,6 +39,7 @@ export function AgentSessionRow(props: {
         label={[
           props.title,
           conversationStateLabel(props.state),
+          props.unread ? 'Unread' : undefined,
           props.detailsLabel,
         ]
           .filter(Boolean)
@@ -49,7 +51,12 @@ export function AgentSessionRow(props: {
           type="button"
           class="absolute inset-0 rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-accent"
           aria-label={props.title}
-          aria-description={conversationStateLabel(props.state)}
+          aria-description={[
+            conversationStateLabel(props.state),
+            props.unread ? 'Unread' : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
           aria-current={props.active ? 'page' : undefined}
           {...pressHandlers((event) => props.onOpen?.(event))}
         />
@@ -63,12 +70,7 @@ export function AgentSessionRow(props: {
           <span class="shrink-0 text-xs text-ink-extra-muted tabular-nums">
             {props.timestamp}
           </span>
-          <Show when={props.unread}>
-            <span
-              aria-label="Unread"
-              class="size-1.5 shrink-0 rounded-full bg-accent"
-            />
-          </Show>
+          {props.trailing}
         </span>
         {metadata()}
       </span>
@@ -76,25 +78,28 @@ export function AgentSessionRow(props: {
   );
 }
 
-/** Dormant sessions leave this slot empty, keeping every title aligned. */
+/** One leading dot combines activity and unread state; read dormant rows are empty. */
 export function AgentSessionStatusIndicator(props: {
   state: ConversationState;
+  unread?: boolean;
 }) {
   return (
     <Show
       when={
         props.state === 'starting' ||
         props.state === 'working' ||
-        props.state === 'waiting'
+        props.state === 'waiting' ||
+        props.unread
       }
     >
       <span
         data-agent-status-indicator
+        aria-label={props.unread ? 'Unread' : undefined}
         class={cn(
           'size-1.5 rounded-full',
-          props.state === 'waiting'
-            ? 'bg-warning'
-            : 'bg-accent motion-safe:animate-pulse'
+          props.state === 'waiting' ? 'bg-warning' : 'bg-accent',
+          (props.state === 'starting' || props.state === 'working') &&
+            'motion-safe:animate-pulse'
         )}
       />
     </Show>

@@ -33,10 +33,6 @@ export function AgentSessionCodeDetails(props: {
       data-agent-code-details
       class="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-ink-extra-muted"
     >
-      <Show when={!context() && !props.details.pullRequest}>
-        <GitBranchIcon aria-hidden="true" class="size-3.5 shrink-0" />
-        <span>Coding agent</span>
-      </Show>
       <Show when={props.details.pullRequest}>
         {(pr) => (
           <a

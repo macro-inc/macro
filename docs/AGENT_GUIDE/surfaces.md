@@ -128,8 +128,11 @@ New agent-session rows always use a sparkle in the left slot, including while
 working. A coding session adds a second line with repository, captured working
 branch (when available), and PR number/status. Non-coding sessions stay on one
 line. Their timestamps and unread dots stay visible; hovering reveals the full
-title, activity, and repository/branch. The Agents workspace uses the same row
-with an activity indicator in place of the sparkle.
+title, activity, and repository/branch. Missing repository metadata is omitted.
+The Agents workspace uses a single left dot for activity and unread state in
+place of the sparkle. Opening a loaded session from Home or Agents marks its
+notifications read after the viewing delay, including notifications arriving
+while that session remains active.
 Other Home items have no title tooltips, and their timestamps are
 visible only while hovering the row. An unread
 dot remains visible. Click a row to preview it; `j`/`k` navigate and update the

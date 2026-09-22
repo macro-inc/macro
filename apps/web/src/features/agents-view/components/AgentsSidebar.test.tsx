@@ -15,6 +15,7 @@ import {
 import { AgentsSidebar } from './AgentsSidebar';
 
 const openWithSplit = vi.fn();
+const unreadFilter = vi.hoisted(() => vi.fn(() => false));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit }),
 }));
@@ -30,7 +31,7 @@ vi.mock('@entity', () => ({
   Entity: { Title: () => 'Recent chat', Timestamp: () => 'now' },
   MaybeEntityRow: (props: { children: JSX.Element }) => props.children,
 }));
-vi.mock('@entity/utils/filter', () => ({ unreadFilterFn: () => false }));
+vi.mock('@entity/utils/filter', () => ({ unreadFilterFn: unreadFilter }));
 vi.mock('@app/features/inbox-view/components/HomeEntityIcon', () => ({
   HomeEntityIcon: () => null,
 }));
@@ -40,7 +41,10 @@ vi.mock('@core/user', () => ({
   tryMacroId: (id: string) => id,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  unreadFilter.mockReturnValue(false);
+});
 
 vi.mock('@solid-primitives/resize-observer', () => ({
   createResizeObserver: () => {},
@@ -353,15 +357,54 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(screen.queryByText('Open')).toBeNull();
   });
 
-  it('still identifies a coding agent before its repository is available', () => {
-    const { setEntity } = setup();
+  it('does not substitute a label or starting branch for missing repository metadata', () => {
+    const { view, setEntity } = setup();
     setEntity({
       ...conversation,
       repoUrl: undefined,
       workingBranch: undefined,
     });
-    expect(screen.getByText('Coding agent')).toBeTruthy();
+    expect(screen.queryByText('Coding agent')).toBeNull();
     expect(screen.queryByText('main')).toBeNull();
+    expect(
+      view.container.querySelector('[data-agent-code-details]')
+    ).toBeNull();
+    expect(view.container.querySelector('[data-kind="code"]')).toBeTruthy();
+  });
+
+  it('combines unread and activity in the Agents left dot while Home keeps its trailing unread dot', () => {
+    unreadFilter.mockReturnValue(true);
+    const { view, setEntity } = setup();
+    const dot = () => screen.getByLabelText('Unread');
+    const isLeading = () => !!dot().closest('[data-view-sidebar-icon]');
+    expect(isLeading()).toBe(surface === 'sidebar');
+    expect(dot().classList.contains('motion-safe:animate-pulse')).toBe(false);
+
+    for (const turnState of ['running', 'blocked', 'idle']) {
+      setEntity({ ...conversation, turnState });
+      expect(screen.getAllByLabelText('Unread')).toHaveLength(1);
+      expect(isLeading()).toBe(surface === 'sidebar');
+      expect(
+        view.container.querySelectorAll('[data-agent-status-indicator]')
+      ).toHaveLength(surface === 'sidebar' ? 1 : 0);
+      expect(dot().classList.contains('motion-safe:animate-pulse')).toBe(
+        surface === 'sidebar' && turnState === 'running'
+      );
+      expect(dot().classList.contains('bg-warning')).toBe(
+        surface === 'sidebar' && turnState === 'blocked'
+      );
+    }
+
+    unreadFilter.mockReturnValue(false);
+    setEntity({ ...conversation, turnState: 'running' });
+    expect(screen.queryByLabelText('Unread')).toBeNull();
+    expect(
+      view.container.querySelectorAll('[data-agent-status-indicator]')
+    ).toHaveLength(surface === 'sidebar' ? 1 : 0);
+    setEntity({ ...conversation, turnState: 'idle' });
+    expect(
+      view.container.querySelector('[data-agent-status-indicator]')
+    ).toBeNull();
   });
 
   it('opens a synced PR in Macro without activating its session', () => {
