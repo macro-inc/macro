@@ -1,3 +1,4 @@
+import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
@@ -41,10 +42,21 @@ export function agentModelsQueryOptions(target: AgentModelTarget) {
       signal,
     }: {
       signal: AbortSignal;
-    }): Promise<LoadAgentModelsResponse> =>
-      await throwOnErr(() =>
+    }): Promise<LoadAgentModelsResponse> => {
+      const catalog = await throwOnErr(() =>
         agentHarnessServiceClient.loadAgentModels(target, signal)
-      ),
+      );
+      if (target.harness !== 'in-memory') return catalog;
+      // Older Macro runtimes still advertise Opus 5 during the upgrade.
+      return {
+        ...catalog,
+        models: catalog.models.map((model) =>
+          model.id === 'anthropic/claude-opus-5'
+            ? { ...model, id: Model.opus5, name: MODEL_PRETTYNAME[Model.opus5] }
+            : model
+        ),
+      };
+    },
     gcTime: 0,
     staleTime: 0,
     retry: false,

@@ -36,7 +36,7 @@ const ALL_AVAILABLE: ModelOption[] = (Object.values(Model) as TModel[]).map(
 
 const MODEL_DESCRIPTION: Record<TModel, string> = {
   [Model.sonnet5]: 'Everyday writing, coding, and questions',
-  [Model.opus55]: 'Complex tasks and deeper analysis',
+  [Model.opus5]: 'Complex tasks and deeper analysis',
   [Model.haiku45]: 'Quick answers and lighter tasks',
   [Model.gpt56]: 'Reasoning, writing, and problem solving',
   [Model.gpt56Mini]: 'Fast help with everyday tasks',

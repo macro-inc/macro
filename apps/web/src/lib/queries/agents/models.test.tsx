@@ -4,10 +4,15 @@
 
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildAgentModelTargets, useAgentModelsQueries } from './models';
+import {
+  agentModelsQueryOptions,
+  buildAgentModelTargets,
+  useAgentModelsQueries,
+} from './models';
 
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: {
@@ -46,6 +51,29 @@ afterEach(() => {
 });
 
 describe('agent model discovery', () => {
+  it.each(['in-memory', 'cursor', 'claude-cloud'] as const)(
+    'replaces the old Opus option only for Macro (%s)',
+    async (harness) => {
+      const oldOpus = {
+        id: 'anthropic/claude-opus-5',
+        name: 'anthropic/claude-opus-5',
+      };
+      vi.mocked(agentHarnessServiceClient.loadAgentModels).mockResolvedValue(
+        ok({ status: 'available', models: [oldOpus] })
+      );
+
+      const catalog = await agentModelsQueryOptions({ harness }).queryFn({
+        signal: new AbortController().signal,
+      });
+
+      expect(catalog.models).toEqual([
+        harness === 'in-memory'
+          ? { id: 'anthropic/claude-opus-5-5', name: 'Opus 5.5' }
+          : oldOpus,
+      ]);
+    }
+  );
+
   it('constructs every available target in parallel without waiting for another target', async () => {
     const targets = buildAgentModelTargets(
       true,

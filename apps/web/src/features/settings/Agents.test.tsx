@@ -294,7 +294,7 @@ beforeEach(() => {
   modelMocks.queries = {
     'in-memory:': successfulModels([
       { id: Model.sonnet5, name: 'Claude Sonnet 4.5' },
-      { id: Model.opus55, name: 'Claude Opus 4.5' },
+      { id: Model.opus5, name: 'Claude Opus 4.5' },
     ]),
   };
 });

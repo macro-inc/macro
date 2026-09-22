@@ -10,7 +10,7 @@ import ClaudeIcon from '@icon/wide-claude.svg';
  */
 export const Model = {
   sonnet5: 'anthropic/claude-sonnet-5',
-  opus55: 'anthropic/claude-opus-5-5',
+  opus5: 'anthropic/claude-opus-5-5',
   haiku45: 'anthropic/claude-haiku-4-5',
   gpt56: 'openai/gpt-5.6',
   gpt56Mini: 'openai/gpt-5.6-mini',

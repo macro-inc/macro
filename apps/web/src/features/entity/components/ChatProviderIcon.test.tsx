@@ -85,7 +85,7 @@ describe('soup chat provider selection', () => {
     const { container } = render(() => (
       <>
         <ChatProviderIcon id="openai-chat" model={Model.gpt56} />
-        <ChatProviderIcon id="anthropic-chat" model={Model.opus55} />
+        <ChatProviderIcon id="anthropic-chat" model={Model.opus5} />
       </>
     ));
     expect(
