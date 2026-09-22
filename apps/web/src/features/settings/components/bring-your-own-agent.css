@@ -7,8 +7,8 @@
 .byoa-word > span {
   grid-area: 1 / 1;
   opacity: 0;
-  animation: byoa-word-cycle 12s infinite;
-  animation-delay: calc(var(--word-index) * 3s);
+  animation: byoa-word-cycle 11s infinite;
+  animation-delay: calc(var(--word-index) * 2.75s);
 }
 
 @keyframes byoa-word-cycle {
