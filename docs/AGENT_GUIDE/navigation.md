@@ -421,13 +421,13 @@ Shared Mail restart rules still apply.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
 
-Settings → Agents and Settings → Harness render while their requests are pending.
+Settings → Agents → Agents / Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 
 With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
-Settings → Harness, above Cursor, with the
-Anthropic logo. Settings → Agents selects an agent's harness but does not host
+Settings → Agents → Runtimes, above Cursor, with the
+Anthropic logo. Settings → Agents → Agents selects an agent's runtime but does not host
 Claude's connection form. **Connect Claude** starts authorization and opens sign-in
 on the first click; a fallback link remains if the browser blocks the tab.
 Approve on Claude's page, copy the complete `code#state`, then use **Finish

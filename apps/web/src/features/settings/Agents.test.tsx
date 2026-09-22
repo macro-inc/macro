@@ -253,6 +253,7 @@ vi.mock('@queries/pipedream-connectors', () => ({
       };
     },
     isFetching: false,
+    isSuccess: true,
     isFetchingNextPage: false,
     hasNextPage: false,
     isError: false,
@@ -322,7 +323,7 @@ describe('Agents', () => {
       ]);
       try {
         render(() => <Agents />);
-        fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+        fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
         const option = screen.queryByRole('option', {
           name: 'Claude Cloud',
         });
@@ -340,7 +341,7 @@ describe('Agents', () => {
   it('opens the new-agent form from a link and clears the action on cancel', () => {
     updateSearchParams({ createAgent: 'true' });
     render(() => <Agents />);
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(
       within(dialog).getByRole('button', { name: 'Create agent' })
     ).toBeTruthy();
@@ -385,8 +386,8 @@ describe('Agents', () => {
           </Suspense>
         </QueryClientProvider>
       ));
-      fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
-      fireEvent.change(screen.getByRole('combobox', { name: 'Harness' }), {
+      fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Runtime' }), {
         target: { value: 'cursor' },
       });
       expect(screen.queryByText('Settings suspended')).toBeNull();
@@ -488,7 +489,7 @@ describe('Agents', () => {
     ));
     try {
       fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
-      const harness = screen.getByRole('combobox', { name: 'Harness' });
+      const harness = screen.getByRole('combobox', { name: 'Runtime' });
       expect(harness).toHaveProperty('value', 'claude-cloud');
       expect(screen.getByText('Loading models…')).toBeTruthy();
       resolveModels({
@@ -690,8 +691,8 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
 
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText('Edit agent')).toBeTruthy();
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    expect(screen.getByRole('heading', { name: 'Edit agent' })).toBeTruthy();
     expect(within(dialog).getByLabelText('Name')).toHaveProperty(
       'value',
       'Bug fixer'
@@ -764,7 +765,7 @@ describe('Agents', () => {
     ).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(within(dialog).getByLabelText('Team')).toHaveProperty(
       'checked',
       true
@@ -804,7 +805,9 @@ describe('Agents', () => {
     const view = render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
     expect(
-      within(screen.getByRole('dialog')).getByLabelText('Private')
+      within(
+        screen.getByRole('region', { name: /^(New|Edit) agent$/ })
+      ).getByLabelText('Private')
     ).toHaveProperty('disabled', false);
     view.unmount();
 
@@ -861,10 +864,10 @@ describe('Agents', () => {
 
   it('offers agent configuration without description and only connected harnesses', () => {
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
 
-    const dialog = screen.getByRole('dialog');
-    const harness = within(dialog).getByLabelText('Harness');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    const harness = within(dialog).getByLabelText('Runtime');
 
     expect(
       within(dialog).getByRole('button', { name: 'Upload avatar' })
@@ -906,9 +909,9 @@ describe('Agents', () => {
     agentMocks.currentTeam = null;
 
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     const teamOption = within(dialog).getByLabelText('Team');
     expect(teamOption).toHaveProperty('disabled', true);
     const teamCardClasses = teamOption.closest('label')?.classList;
@@ -923,9 +926,9 @@ describe('Agents', () => {
 
   it('persists creation through the agents API', async () => {
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Bug fixer' },
     });
@@ -967,10 +970,10 @@ describe('Agents', () => {
     ]);
 
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
 
-    const dialog = screen.getByRole('dialog');
-    const harness = within(dialog).getByLabelText('Harness');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    const harness = within(dialog).getByLabelText('Runtime');
     expect(within(harness).getAllByRole('option')).toHaveLength(2);
 
     fireEvent.change(harness, { target: { value: 'cursor' } });
@@ -987,10 +990,10 @@ describe('Agents', () => {
     harnessMocks.query.data = [MACROD_HARNESS];
 
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
 
-    const dialog = screen.getByRole('dialog');
-    const harness = within(dialog).getByLabelText('Harness');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    const harness = within(dialog).getByLabelText('Runtime');
     expect(within(harness).getAllByRole('option')).toHaveLength(2);
     expect(
       within(harness).getByRole('option', { name: 'Dev box' })
@@ -1023,9 +1026,9 @@ describe('Agents', () => {
       </QueryClientProvider>
     ));
     await waitFor(() => expect(fetchHarnesses).toHaveBeenCalledOnce());
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
-    const dialog = screen.getByRole('dialog');
-    const harness = within(dialog).getByRole('combobox', { name: 'Harness' });
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    const harness = within(dialog).getByRole('combobox', { name: 'Runtime' });
     await waitFor(() =>
       expect(
         within(harness).getByRole('option', { name: 'Dev box' })
@@ -1093,9 +1096,9 @@ describe('Agents', () => {
     };
 
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
-    const dialog = screen.getByRole('dialog');
-    const harness = within(dialog).getByLabelText('Harness');
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    const harness = within(dialog).getByLabelText('Runtime');
 
     expect(
       within(dialog).getByRole('option', { name: 'Claude Sonnet 4.5' })
@@ -1113,7 +1116,7 @@ describe('Agents', () => {
     fireEvent.change(harness, { target: { value: MACROD_HARNESS.id } });
     expect(
       within(dialog).getByText(
-        'Model selection is unsupported by this harness.'
+        'Model selection is unsupported by this runtime.'
       )
     ).toBeTruthy();
 
@@ -1132,10 +1135,10 @@ describe('Agents', () => {
     );
 
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
 
-    const dialog = screen.getByRole('dialog');
-    const harness = within(dialog).getByLabelText('Harness');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    const harness = within(dialog).getByLabelText('Runtime');
     fireEvent.change(harness, { target: { value: MACROD_HARNESS.id } });
 
     const defaultModel = within(dialog).getByLabelText('Default model');
@@ -1155,9 +1158,9 @@ describe('Agents', () => {
     );
 
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
-    const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Harness'), {
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    fireEvent.change(within(dialog).getByLabelText('Runtime'), {
       target: { value: MACROD_HARNESS.id },
     });
 
@@ -1175,9 +1178,9 @@ describe('Agents', () => {
     );
 
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
-    const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Harness'), {
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    fireEvent.change(within(dialog).getByLabelText('Runtime'), {
       target: { value: MACROD_HARNESS.id },
     });
 
@@ -1198,13 +1201,13 @@ describe('Agents', () => {
     );
 
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Bug fixer' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Harness'), {
+    fireEvent.change(within(dialog).getByLabelText('Runtime'), {
       target: { value: MACROD_HARNESS.id },
     });
     fireEvent.click(
@@ -1253,9 +1256,9 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
 
-    const defaultModel = within(screen.getByRole('dialog')).getByLabelText(
-      'Default model'
-    );
+    const defaultModel = within(
+      screen.getByRole('region', { name: /^(New|Edit) agent$/ })
+    ).getByLabelText('Default model');
     expect(defaultModel).toHaveProperty('value', 'retired-model');
     expect(
       within(defaultModel).getByRole('option', {
@@ -1294,8 +1297,8 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
 
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByLabelText('Harness')).toHaveProperty(
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    expect(within(dialog).getByLabelText('Runtime')).toHaveProperty(
       'value',
       'claude-cloud'
     );
@@ -1342,8 +1345,8 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
 
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByLabelText('Harness')).toHaveProperty(
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    expect(within(dialog).getByLabelText('Runtime')).toHaveProperty(
       'value',
       MACROD_HARNESS.id
     );
@@ -1384,7 +1387,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Triage bot' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(within(dialog).queryByText('Connections')).toBeNull();
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Save changes' })
@@ -1401,9 +1404,9 @@ describe('Agents', () => {
 
   it('defaults new agents to the owner connections policy', () => {
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(
       within(dialog).getByLabelText('Use my connected apps')
     ).toHaveProperty('checked', true);
@@ -1412,9 +1415,9 @@ describe('Agents', () => {
 
   it('picks apps from the whole catalog, shows the viewer connection state, and persists them', async () => {
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Triage bot' },
     });
@@ -1425,15 +1428,14 @@ describe('Agents', () => {
       within(dialog).getByRole('button', { name: 'Create agent' })
     ).toHaveProperty('disabled', true);
 
+    within(dialog).getByLabelText('Search connectors').focus();
     fireEvent.input(within(dialog).getByLabelText('Search connectors'), {
       target: { value: 'lin' },
     });
     await waitFor(() => {
-      expect(
-        within(dialog).getByRole('option', { name: /Linear/ })
-      ).toBeTruthy();
+      expect(screen.getByRole('option', { name: /Linear/ })).toBeTruthy();
     });
-    fireEvent.click(within(dialog).getByRole('option', { name: /Linear/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Linear/ }));
 
     // The pick is listed as not connected for this viewer, with a way in.
     await waitFor(() => {
@@ -1448,9 +1450,7 @@ describe('Agents', () => {
       target: { value: 'lin' },
     });
     await waitFor(() => {
-      expect(
-        within(dialog).queryByRole('option', { name: /Linear/ })
-      ).toBeNull();
+      expect(screen.queryByRole('option', { name: /Linear/ })).toBeNull();
     });
 
     // Unconnected picks never block saving: the agent's author chooses the
@@ -1476,7 +1476,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Triage bot' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(within(dialog).getByLabelText('Specific apps')).toHaveProperty(
       'checked',
       true
@@ -1525,9 +1525,9 @@ it('requires prompts unless the harness operator permits bypass', async () => {
     { id: 'claude-code', name: 'Claude Code' },
   ]);
   render(() => <Agents />);
-  fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
-  const dialog = screen.getByRole('dialog');
-  fireEvent.change(within(dialog).getByLabelText('Harness'), {
+  fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+  const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+  fireEvent.change(within(dialog).getByLabelText('Runtime'), {
     target: { value: MACROD_HARNESS.id },
   });
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
@@ -1546,9 +1546,9 @@ it('offers bypass only after harness consent and resets the choice on harness ch
     { id: 'claude-code', name: 'Claude Code' },
   ]);
   render(() => <Agents />);
-  fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
-  const dialog = screen.getByRole('dialog');
-  fireEvent.change(within(dialog).getByLabelText('Harness'), {
+  fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+  const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+  fireEvent.change(within(dialog).getByLabelText('Runtime'), {
     target: { value: MACROD_HARNESS.id },
   });
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
@@ -1560,7 +1560,7 @@ it('offers bypass only after harness consent and resets the choice on harness ch
     'checked',
     true
   );
-  fireEvent.change(within(dialog).getByLabelText('Harness'), {
+  fireEvent.change(within(dialog).getByLabelText('Runtime'), {
     target: { value: 'prompt-only' },
   });
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
@@ -1579,12 +1579,12 @@ it.each(['in-memory', 'cursor', 'claude-cloud'])(
     ]);
     agentMocks.create.mockClear();
     render(() => <Agents />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
-    const dialog = screen.getByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Built-in agent' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Harness'), {
+    fireEvent.change(within(dialog).getByLabelText('Runtime'), {
       target: { value: harness },
     });
     expect(within(dialog).queryByText('Permission requests')).toBeNull();

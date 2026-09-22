@@ -143,7 +143,7 @@ export function ConnectionCard(props: ConnectionCardProps) {
         <Show when={props.status?.connected}>
           <p class="text-xs text-ink-muted">
             Ready. In Settings → Agents, choose Claude Cloud as the agent’s
-            harness. Disconnecting forgets Macro’s grant; it does not revoke
+            runtime. Disconnecting forgets Macro’s grant; it does not revoke
             consent at Claude or stop an already-running cloud turn.
           </p>
         </Show>

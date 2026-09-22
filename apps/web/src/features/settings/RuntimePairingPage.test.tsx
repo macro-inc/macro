@@ -10,7 +10,7 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HarnessPairingDialog } from './HarnessPairingDialog';
+import { RuntimePairingPage } from './RuntimePairingPage';
 
 const mocks = vi.hoisted(() => ({
   pairing: {
@@ -53,7 +53,7 @@ vi.mock('@queries/harnesses/harnesses', () => ({
 }));
 
 vi.mock('@queries/team/teams', () => ({
-  useCurrentTeamQuery: () => ({ data: mocks.currentTeam }),
+  useCurrentTeamQuery: () => ({ isSuccess: true, data: mocks.currentTeam }),
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -75,11 +75,11 @@ beforeEach(() => {
   mocks.currentTeam = { team: { id: 'team-1' } };
 });
 
-describe('HarnessPairingDialog', () => {
+describe('RuntimePairingPage', () => {
   it('looks up a typed code and shows the pairing request', () => {
-    render(() => <HarnessPairingDialog onClose={() => {}} />);
+    render(() => <RuntimePairingPage onClose={() => {}} />);
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: 'New runtime' });
     const codeInput = within(dialog).getByLabelText('Pairing code');
     fireEvent.input(codeInput, { target: { value: 'kx7m-4qhd' } });
     expect(codeInput).toHaveProperty('value', 'KX7M-4QHD');
@@ -101,10 +101,10 @@ describe('HarnessPairingDialog', () => {
 
   it('approves a private harness without a team id', async () => {
     render(() => (
-      <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
+      <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: 'New runtime' });
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Home desktop' },
     });
@@ -117,16 +117,16 @@ describe('HarnessPairingDialog', () => {
         allowPermissionBypass: false,
         teamId: undefined,
       });
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Harness connected');
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Runtime connected');
     });
   });
 
   it('approves a team harness with the current team id', async () => {
     render(() => (
-      <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
+      <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: 'New runtime' });
     fireEvent.click(within(dialog).getByLabelText('Team'));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
 
@@ -144,18 +144,16 @@ describe('HarnessPairingDialog', () => {
     mocks.currentTeam = null;
 
     render(() => (
-      <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
+      <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: 'New runtime' });
     expect(within(dialog).getByLabelText('Team')).toHaveProperty(
       'disabled',
       true
     );
     expect(
-      within(dialog).getByText(
-        'Create or join a team before sharing harnesses.'
-      )
+      within(dialog).getByText('Create or join a team before sharing runtimes.')
     ).toBeTruthy();
   });
 
@@ -163,10 +161,10 @@ describe('HarnessPairingDialog', () => {
     mocks.pairing.isError = true;
 
     render(() => (
-      <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
+      <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: 'New runtime' });
     expect(
       within(dialog).getByText(
         'This pairing code is invalid, expired, or already claimed.'
@@ -182,16 +180,16 @@ describe('HarnessPairingDialog', () => {
   it('shows the success phase after approving', async () => {
     const onClose = vi.fn();
     render(() => (
-      <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={onClose} />
+      <RuntimePairingPage initialCode="KX7M-4QHD" onClose={onClose} />
     ));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: 'New runtime' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
 
     await waitFor(() => {
       expect(
         within(dialog).getByText(
-          'Harness connected. macrod will finish pairing automatically.'
+          'Runtime connected. macrod will finish pairing automatically.'
         )
       ).toBeTruthy();
     });
@@ -203,9 +201,9 @@ describe('HarnessPairingDialog', () => {
 
 it('warns before opting a harness into permission bypass', async () => {
   render(() => (
-    <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
+    <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
   ));
-  const dialog = screen.getByRole('dialog');
+  const dialog = screen.getByRole('region', { name: 'New runtime' });
   const toggle = within(dialog).getByRole('checkbox');
   expect(toggle).toHaveProperty('checked', false);
   fireEvent.click(toggle);
@@ -223,7 +221,7 @@ it('warns before opting a harness into permission bypass', async () => {
 it('preselects daemon bypass consent and lets the approving user decline it', async () => {
   mocks.pairing.data.requested_allow_permission_bypass = true;
   render(() => (
-    <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
+    <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
   ));
   const checkbox = screen.getByRole('checkbox', {
     name: 'Allow bypassing permission requests',
@@ -242,7 +240,7 @@ it('preselects daemon bypass consent and lets the approving user decline it', as
 it('prevents approval from overriding the daemon prompt-only choice', async () => {
   mocks.pairing.data.requested_allow_permission_bypass = false;
   render(() => (
-    <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
+    <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
   ));
   const checkbox = screen.getByRole('checkbox', {
     name: 'Allow bypassing permission requests',

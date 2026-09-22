@@ -330,9 +330,11 @@ describe('Harness', () => {
     ).toBeTruthy();
     expect(screen.getByLabelText('Anthropic')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: 'Bring your own agent' })
+      screen.getByRole('heading', { name: 'Bring your agent to Macro' })
     ).toBeTruthy();
-    expect(screen.getByText(/This is not a coding harness/)).toBeTruthy();
+    expect(
+      screen.getByText(/Use it for chat and workspace tasks/)
+    ).toBeTruthy();
   });
 
   it('validates and saves a Cursor API key', async () => {
@@ -403,19 +405,19 @@ describe('Harness', () => {
   it('links the empty BYOA list to the setup documentation', () => {
     render(() => <Harness />);
 
-    expect(screen.getByText('No agents connected')).toBeTruthy();
+    expect(screen.getByText('No paired runtimes yet')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Setup guide/ })).toHaveProperty(
       'href',
       'https://docs.macro.com/AI/bring-your-own'
     );
   });
 
-  it('offers "Enter pairing code" in the header and empty state', () => {
+  it('offers new runtime actions and an empty-state pairing shortcut', () => {
     render(() => <Harness />);
 
-    expect(
-      screen.getAllByRole('button', { name: 'Enter pairing code' })
-    ).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'New runtime' })).toHaveLength(
+      2
+    );
   });
 
   it('renders a registered harness row', () => {
@@ -456,19 +458,19 @@ describe('Harness', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Remove Dev box?')).toBeTruthy();
     expect(
-      within(dialog).getByText(/Agents using this harness will stop running/)
+      within(dialog).getByText(/Agents using this runtime will stop running/)
     ).toBeTruthy();
     expect(harnessMocks.deleteHarness).not.toHaveBeenCalled();
 
     fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Remove harness' })
+      within(dialog).getByRole('button', { name: 'Remove runtime' })
     );
 
     await waitFor(() => {
       expect(harnessMocks.deleteHarness).toHaveBeenCalledWith({
         harnessId: REGISTERED_HARNESS.id,
       });
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Harness removed');
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Runtime removed');
       expect(screen.queryByRole('dialog')).toBeNull();
     });
   });
@@ -478,7 +480,8 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: 'New runtime' });
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(within(dialog).getByText('KX7M-4QHD')).toBeTruthy();
     expect(within(dialog).getByText('Dev laptop')).toBeTruthy();
     expect(harnessMocks.setSearchParams).toHaveBeenCalledWith(
