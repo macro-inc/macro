@@ -80,6 +80,21 @@ fn agent_sessions_advertise_the_same_complete_contract_as_chat() {
 }
 
 #[test]
+fn display_results_is_omitted_on_hosts_without_a_view_renderer() {
+    for host in [AiHost::ChannelBot, AiHost::Mcp] {
+        let toolset = tools_for(host);
+        assert!(
+            !toolset.toolset.tools.contains_key("DisplayResults"),
+            "{host:?}"
+        );
+    }
+
+    let channel_tools = tools_for(AiHost::ChannelBot);
+    assert!(channel_tools.toolset.tools.contains_key("SearchTools"));
+    assert!(channel_tools.toolset.tools.contains_key("LoadTools"));
+}
+
+#[test]
 fn frontend_wire_schema_leaves_view_validation_to_the_renderer() {
     let schemas = frontend_schemas_builder()
         .merge(&tools_for(AiHost::Chat))
