@@ -165,7 +165,7 @@ async fn a_later_turn_announces_only_what_it_has_not_announced_before() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn an_empty_first_listing_is_listed_once_more() {
+async fn an_empty_first_listing_polls_until_the_artifact_appears() {
     let harness = harness();
     harness.cursor.script_artifact_listing(Vec::new());
     harness
@@ -193,6 +193,34 @@ async fn an_empty_first_listing_is_listed_once_more() {
             .filter(|call| matches!(call, CursorCall::ListArtifacts(_)))
             .count(),
         2
+    );
+}
+
+/// The common turn: nothing was ever going to appear, so the wait is bounded
+/// by the poll budget rather than paid in full after the answer is on screen.
+#[tokio::test(start_paused = true)]
+async fn a_listing_that_stays_empty_stops_at_the_poll_budget() {
+    let harness = harness();
+    let session = harness.service.new_session(Path::new(""), Vec::new());
+
+    let started = tokio::time::Instant::now();
+    turn(&harness, &session, "run-fake-1", "done").await;
+    let waited = started.elapsed();
+
+    assert_eq!(chunks(&harness.notifier), vec!["done".to_owned()]);
+    assert!(
+        waited <= ARTIFACT_LISTING_POLL_BUDGET,
+        "a turn with no artifacts waited {waited:?}"
+    );
+    assert_eq!(
+        harness
+            .cursor
+            .calls()
+            .iter()
+            .filter(|call| matches!(call, CursorCall::ListArtifacts(_)))
+            .count(),
+        4,
+        "one listing, then one per poll interval across the budget"
     );
 }
 

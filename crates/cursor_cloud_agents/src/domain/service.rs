@@ -163,15 +163,29 @@ const STREAM_RECONNECT_ATTEMPTS: usize = 5;
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
 
-/// How long a turn that saw no new artifacts waits before listing once more.
+/// How often a turn that saw no new artifacts looks again.
 ///
 /// Cursor uploads a run's artifacts as the run finishes, so the listing can
-/// still be empty a moment after the terminal frame that ended the turn. The
-/// trade is plain: every turn that produced nothing pays this before it
-/// answers, and without it a walkthrough's screenshots are silently missing
-/// from the turn that took them. Five seconds is long enough to cover the
-/// upload lag seen in practice and short enough to read as the turn ending.
-const ARTIFACT_LISTING_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+/// still be empty a moment after the terminal frame that ended the turn.
+/// This was one blind five-second sleep, which meant every turn that
+/// produced nothing - nearly all of them - paid five seconds after its
+/// answer was already on screen, reading as an agent still working. Polling
+/// ends the wait at the first artifact instead of at the clock.
+///
+/// Wide rather than tight because `list_artifacts` shares one rate limit with
+/// everything else this service asks of Cursor, and an artifact-less turn is
+/// the common case: at this interval the budget below costs three extra
+/// listings, not a dozen.
+const ARTIFACT_LISTING_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// How long that looking goes on before the turn stops waiting.
+///
+/// Short, because a straggler is not lost: `list_artifacts` is agent-scoped
+/// and `known` subtracts everything this session has already collected, so
+/// an artifact that lands after this budget is picked up by the next turn's
+/// collection. The whole cost of giving up early is that the artifact reads
+/// as belonging to the following turn rather than the one that took it.
+const ARTIFACT_LISTING_POLL_BUDGET: std::time::Duration = std::time::Duration::from_millis(1500);
 
 /// The largest artifact this service will pull into memory, 64 MiB.
 ///
@@ -2040,7 +2054,7 @@ where
             cursor.agent.id = %agent,
             artifacts.known = tracing::field::Empty,
             artifacts.collected = tracing::field::Empty,
-            artifacts.retried = tracing::field::Empty,
+            artifacts.listings = tracing::field::Empty,
         ),
     )]
     async fn collect_artifacts(
@@ -2075,18 +2089,23 @@ where
         let Some(mut fresh) = self.new_artifacts(agent, &known).await else {
             return Ok(());
         };
-        let retried = fresh.is_empty();
-        span.record("artifacts.retried", retried);
-        if retried {
+        let mut listings = 1usize;
+        let deadline = tokio::time::Instant::now() + ARTIFACT_LISTING_POLL_BUDGET;
+        while fresh.is_empty() && tokio::time::Instant::now() < deadline {
             // A cancelled turn skips the wait and lists once more anyway:
-            // `sleep_unless_cancelled` returns immediately, and the second
+            // `sleep_unless_cancelled` returns immediately, and one more
             // listing is the cheap half of this.
-            sleep_unless_cancelled(cancel, ARTIFACT_LISTING_RETRY_DELAY).await;
-            let Some(second) = self.new_artifacts(agent, &known).await else {
+            let cancelled = sleep_unless_cancelled(cancel, ARTIFACT_LISTING_POLL_INTERVAL).await;
+            let Some(next) = self.new_artifacts(agent, &known).await else {
                 return Ok(());
             };
-            fresh = second;
+            fresh = next;
+            listings += 1;
+            if cancelled {
+                break;
+            }
         }
+        span.record("artifacts.listings", listings);
         if fresh.is_empty() {
             return Ok(());
         }
