@@ -11,12 +11,17 @@ available to editors of that session. It does not appear for external coding
 harnesses, legacy chat, or native/mobile clients.
 
 The voice panel offers **Marin**, **Cedar**, **Alloy**, **Coral**, **Sage** and
-**Verse** before **Start conversation**. Starting requests microphone access.
+**Verse** before **Start conversation**. Starting requests microphone access before
+opening the voice connection. **Allow microphone access** means the browser's
+permission prompt is pending; choose Allow there. Permission denial, a missing
+microphone, and an insecure URL each show their own recovery message. End during
+the prompt cancels startup and releases any microphone granted afterward.
 Connecting remains visible until the worker is ready; listening, thinking and
 speaking are separate from the agent's background work. The waveform responds to
 microphone and playback levels. Recent live captions identify **You** and **Macro**.
-If voice is not enabled for the deployment, the panel explains this and disables
-Start while the written conversation remains available.
+If voice is not enabled for the deployment, the panel shows **Voice unavailable**
+and explains that microphone permission has not been requested. This requires
+voice service configuration; changing browser permissions cannot enable it.
 
 - Speak naturally and interrupt Macro's speech to take a turn. Interrupting audio
   does not cancel a task. Ask explicitly to stop or correct a task when needed.

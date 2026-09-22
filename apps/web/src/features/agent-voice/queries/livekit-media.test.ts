@@ -3,6 +3,7 @@ import type {
   VoiceBridge,
   VoiceCredentials,
   VoiceMediaEvents,
+  VoiceMicrophone,
 } from '../core/types';
 
 const fake = vi.hoisted(() => {
@@ -17,6 +18,7 @@ const fake = vi.hoisted(() => {
     connect: vi.fn(async () => {}),
     disconnect: vi.fn(async () => {}),
     microphone: vi.fn(async () => {}),
+    publishTrack: vi.fn(async () => {}),
     publish: vi.fn(async () => {}),
   };
 });
@@ -49,6 +51,7 @@ vi.mock('livekit-client', () => ({
       ) => fake.rpc.set(name, handler),
       unregisterRpcMethod: (name: string) => fake.rpc.delete(name),
       setMicrophoneEnabled: fake.microphone,
+      publishTrack: fake.publishTrack,
       getTrackPublication: () => undefined,
       publishData: fake.publish,
     };
@@ -103,6 +106,9 @@ function workerEvent(identity: string, type: string) {
     'macro.voice.event'
   );
 }
+function microphone(): VoiceMicrophone {
+  return { track: {} as MediaStreamTrack, stop: vi.fn() };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -115,7 +121,12 @@ describe('LiveKit voice boundary', () => {
   it('accepts agent RPCs only from the dispatched worker identity', async () => {
     const bridge = bridges();
     bridge.request.mockResolvedValue({ taskId, status: 'accepted' });
-    const media = await createLivekitVoiceMedia(credentials, events(), bridge);
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      events(),
+      bridge,
+      microphone()
+    );
     const request = fake.rpc.get('macro.agent.request')!;
     const payload = JSON.stringify({
       version: 1,
@@ -138,10 +149,11 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges()
+      bridges(),
+      microphone()
     );
     const connected = media.connect();
-    await vi.waitFor(() => expect(fake.microphone).toHaveBeenCalled());
+    await vi.waitFor(() => expect(fake.publishTrack).toHaveBeenCalled());
     workerEvent('untrusted', 'ready');
     expect(callbacks.connection).not.toHaveBeenCalled();
     workerEvent(credentials.agentIdentity, 'ready');
@@ -149,7 +161,7 @@ describe('LiveKit voice boundary', () => {
     expect(callbacks.connection).toHaveBeenCalledExactlyOnceWith('connected');
     await media.disconnect();
   });
-  it('ends an interrupted connect without enabling late microphone capture', async () => {
+  it('ends an interrupted connect without publishing late microphone audio', async () => {
     let resolve!: () => void;
     fake.connect.mockImplementationOnce(
       () =>
@@ -158,23 +170,28 @@ describe('LiveKit voice boundary', () => {
         })
     );
     const callbacks = events();
+    const capture = microphone();
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges()
+      bridges(),
+      capture
     );
     const connected = media.connect();
     await media.disconnect();
     resolve();
     await connected;
     expect(fake.microphone).not.toHaveBeenCalled();
+    expect(fake.publishTrack).not.toHaveBeenCalled();
+    expect(capture.stop).toHaveBeenCalled();
     expect(callbacks.connection).not.toHaveBeenCalled();
   });
   it('publishes ordered, bounded events to only the expected worker', async () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       events(),
-      bridges()
+      bridges(),
+      microphone()
     );
     await media.publish({
       version: 1,
@@ -203,5 +220,80 @@ describe('LiveKit voice boundary', () => {
     ).rejects.toThrow('too large');
     expect(fake.publish).toHaveBeenCalledOnce();
     await media.disconnect();
+  });
+  it('publishes the granted track without opening a second microphone', async () => {
+    const capture = microphone();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      events(),
+      bridges(),
+      capture
+    );
+    const connected = media.connect();
+    await vi.waitFor(() => expect(fake.publishTrack).toHaveBeenCalled());
+    expect(fake.publishTrack).toHaveBeenCalledExactlyOnceWith(capture.track, {
+      source: 'microphone',
+      stopMicTrackOnMute: false,
+    });
+    expect(fake.microphone).not.toHaveBeenCalled();
+    workerEvent(credentials.agentIdentity, 'ready');
+    await connected;
+    await media.mute(true);
+    await media.mute(false);
+    expect(fake.microphone.mock.calls).toEqual([[false], [true]]);
+    await media.disconnect();
+    expect(capture.stop).toHaveBeenCalled();
+  });
+  it('releases microphone capture when room connection fails', async () => {
+    fake.connect.mockRejectedValueOnce(new Error('Network failed'));
+    const capture = microphone();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      events(),
+      bridges(),
+      capture
+    );
+    await expect(media.connect()).rejects.toThrow('Network failed');
+    expect(capture.stop).toHaveBeenCalled();
+    expect(fake.publishTrack).not.toHaveBeenCalled();
+    expect(fake.disconnect).toHaveBeenCalled();
+  });
+  it('releases microphone capture when track publication fails', async () => {
+    fake.publishTrack.mockRejectedValueOnce(new Error('Publish failed'));
+    const capture = microphone();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      events(),
+      bridges(),
+      capture
+    );
+    await expect(media.connect()).rejects.toThrow('Publish failed');
+    expect(capture.stop).toHaveBeenCalled();
+    expect(fake.disconnect).toHaveBeenCalled();
+  });
+  it('stops capture during pending publication and ignores its late completion', async () => {
+    let resolve!: () => void;
+    fake.publishTrack.mockImplementationOnce(
+      () =>
+        new Promise<void>((done) => {
+          resolve = done;
+        })
+    );
+    const capture = microphone();
+    const callbacks = events();
+    const media = await createLivekitVoiceMedia(
+      credentials,
+      callbacks,
+      bridges(),
+      capture
+    );
+    const connected = media.connect();
+    await vi.waitFor(() => expect(fake.publishTrack).toHaveBeenCalled());
+    await media.disconnect();
+    expect(capture.stop).toHaveBeenCalled();
+    resolve();
+    await connected;
+    expect(callbacks.connection).not.toHaveBeenCalled();
+    expect(fake.microphone).not.toHaveBeenCalled();
   });
 });

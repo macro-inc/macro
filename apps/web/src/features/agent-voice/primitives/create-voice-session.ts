@@ -4,6 +4,7 @@ import type {
   VoiceCredentials,
   VoiceDependencies,
   VoiceMedia,
+  VoiceMicrophone,
   VoiceState,
   VoiceTarget,
 } from '../core/types';
@@ -39,9 +40,13 @@ export function createVoiceSession(deps: VoiceDependencies) {
   const patch = (next: Partial<VoiceState>) =>
     setState((value) => ({ ...value, ...next }));
   const active = () =>
-    ['connecting', 'connected', 'reconnecting', 'ending'].includes(
-      state().phase
-    );
+    [
+      'requesting-microphone',
+      'connecting',
+      'connected',
+      'reconnecting',
+      'ending',
+    ].includes(state().phase);
 
   const end = async (message?: string) => {
     const current = ++generation;
@@ -109,13 +114,14 @@ export function createVoiceSession(deps: VoiceDependencies) {
     const current = ++generation;
     const target = value.target;
     patch({
-      phase: 'connecting',
+      phase: 'requesting-microphone',
       error: undefined,
       captions: [],
       muted: false,
       reviewRequired: false,
     });
     let release: (() => void) | undefined;
+    let microphone: VoiceMicrophone | undefined;
     let credentials: VoiceCredentials | undefined;
     let bridge: VoiceBridge | undefined;
     let ownMedia: VoiceMedia | undefined;
@@ -132,6 +138,8 @@ export function createVoiceSession(deps: VoiceDependencies) {
       release = undefined;
       const closingCredentials = credentials;
       credentials = undefined;
+      microphone?.stop();
+      microphone = undefined;
       closingBridge?.close();
       try {
         await closingMedia?.disconnect();
@@ -156,6 +164,12 @@ export function createVoiceSession(deps: VoiceDependencies) {
         await close();
         return;
       }
+      microphone = await deps.requestMicrophone();
+      if (stale()) {
+        await close();
+        return;
+      }
+      patch({ phase: 'connecting' });
       const prior = pendingStarts.get(target.sessionId);
       const attempt =
         prior && !prior.inFlight
@@ -254,7 +268,8 @@ export function createVoiceSession(deps: VoiceDependencies) {
             return bridge.context();
           },
           close: () => {},
-        }
+        },
+        microphone
       );
       if (stale()) {
         await close();

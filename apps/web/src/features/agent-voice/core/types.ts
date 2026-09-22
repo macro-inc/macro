@@ -29,6 +29,7 @@ export type VoicePhase =
   | 'idle'
   | 'loading'
   | 'ready'
+  | 'requesting-microphone'
   | 'connecting'
   | 'connected'
   | 'reconnecting'
@@ -102,6 +103,11 @@ export type VoiceMedia = {
   enablePlayback: () => Promise<void>;
   publish: (event: AgentTaskEvent) => Promise<void>;
 };
+/** Local capture acquired before opening a remote voice session. */
+export type VoiceMicrophone = {
+  track: MediaStreamTrack;
+  stop: () => void;
+};
 export type VoiceBridge = {
   request: (request: AgentRequest) => Promise<AgentTaskAccepted>;
   cancel: (request: AgentCancel) => Promise<AgentCancelled>;
@@ -117,11 +123,13 @@ export type VoiceDependencies = {
   ) => Promise<VoiceCredentials>;
   end: (sessionId: string, voiceSessionId: string) => Promise<void>;
   acquireMicrophone: () => Promise<() => void>;
+  requestMicrophone: () => Promise<VoiceMicrophone>;
   callActive: () => boolean;
   media: (
     credentials: VoiceCredentials,
     events: VoiceMediaEvents,
-    bridge: VoiceBridge
+    bridge: VoiceBridge,
+    microphone: VoiceMicrophone
   ) => Promise<VoiceMedia>;
   bridge: (
     sessionId: string,

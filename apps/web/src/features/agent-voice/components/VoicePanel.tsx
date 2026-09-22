@@ -20,14 +20,19 @@ export function VoicePanel(props: {
   const connected = () => props.state.phase === 'connected';
   const active = () =>
     connected() ||
+    props.state.phase === 'requesting-microphone' ||
     props.state.phase === 'connecting' ||
     props.state.phase === 'reconnecting';
+  const unavailable = () => props.state.options?.enabled === false;
   const status = () => {
     if (props.state.phase === 'loading') return 'Getting ready';
+    if (props.state.phase === 'requesting-microphone')
+      return 'Allow microphone access';
     if (props.state.phase === 'connecting') return 'Connecting';
     if (props.state.phase === 'reconnecting') return 'Reconnecting';
     if (props.state.phase === 'ending') return 'Ending conversation';
     if (props.state.phase === 'error') return 'Let’s reconnect';
+    if (unavailable()) return 'Voice unavailable';
     if (!connected()) return 'A little more human';
     if (props.state.reviewRequired) return 'Your review is needed';
     if (props.state.agentState === 'speaking') return 'Macro is speaking';
@@ -64,9 +69,11 @@ export function VoicePanel(props: {
             {status()}
           </Dialog.Title>
           <Dialog.Description class="mt-2 text-sm text-ink-muted">
-            {connected()
-              ? 'Speak naturally. You can interrupt anytime.'
-              : 'Talk through ideas and get things done, together.'}
+            {props.state.phase === 'requesting-microphone'
+              ? 'Choose Allow in your browser’s microphone prompt to continue.'
+              : connected()
+                ? 'Speak naturally. You can interrupt anytime.'
+                : 'Talk through ideas and get things done, together.'}
           </Dialog.Description>
         </div>
         <VoiceWaveform
@@ -164,8 +171,8 @@ export function VoicePanel(props: {
           </Show>
           <Show when={props.state.options && !props.state.options.enabled}>
             <p class="mt-4 text-sm text-ink-muted">
-              Voice isn’t available for this agent yet. You can keep chatting
-              with text.
+              Voice hasn’t been enabled here yet. You can keep chatting with
+              text. Changing microphone permissions won’t enable voice.
             </p>
           </Show>
         </Show>
@@ -186,9 +193,11 @@ export function VoicePanel(props: {
                 onClick={props.onStart}
               >
                 <Waveform class="size-5" />
-                {props.state.phase === 'error'
-                  ? 'Try again'
-                  : 'Start conversation'}
+                {unavailable()
+                  ? 'Voice unavailable'
+                  : props.state.phase === 'error'
+                    ? 'Try again'
+                    : 'Start conversation'}
               </Button>
             }
           >
@@ -221,9 +230,11 @@ export function VoicePanel(props: {
           </Show>
         </div>
         <p class="mt-4 text-center text-[11px] leading-relaxed text-ink-muted">
-          {active()
-            ? 'Ending voice keeps your agent’s work running.'
-            : 'Your microphone turns on when you start.\nNo audio recording.'}
+          {unavailable()
+            ? 'Microphone access has not been requested.'
+            : active()
+              ? 'Ending voice keeps your agent’s work running.'
+              : 'Your microphone turns on when you start.\nNo audio recording.'}
         </p>
       </div>
     </Dialog>

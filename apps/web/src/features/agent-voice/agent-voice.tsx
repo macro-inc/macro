@@ -9,6 +9,7 @@ import { VoicePanel } from './components/VoicePanel';
 import { useAgentVoice, VoiceContext } from './context/voice-context';
 import { createVoiceSession } from './primitives/create-voice-session';
 import { createLivekitVoiceMedia } from './queries/livekit-media';
+import { requestVoiceMicrophone } from './queries/microphone';
 import { acquireVoiceMicrophone } from './queries/microphone-lease';
 import { createAgentVoiceBridge } from './queries/session-bridge';
 import { voiceSource } from './queries/voice-source';
@@ -21,6 +22,7 @@ export function AgentVoiceProvider(props: ParentProps) {
   const controller = createVoiceSession({
     ...voiceSource,
     acquireMicrophone: acquireVoiceMicrophone,
+    requestMicrophone: requestVoiceMicrophone,
     callActive,
     media: createLivekitVoiceMedia,
     bridge: (sessionId, publish) => {

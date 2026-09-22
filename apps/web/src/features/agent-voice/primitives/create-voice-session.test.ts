@@ -4,6 +4,7 @@ import type {
   VoiceCredentials,
   VoiceDependencies,
   VoiceMediaEvents,
+  VoiceMicrophone,
 } from '../core/types';
 import { VoiceStartError } from '../core/types';
 import { createVoiceSession } from './create-voice-session';
@@ -33,6 +34,10 @@ afterEach(() => {
 function setup(overrides: Partial<VoiceDependencies> = {}) {
   let events!: VoiceMediaEvents;
   const release = vi.fn();
+  const microphone: VoiceMicrophone = {
+    track: {} as MediaStreamTrack,
+    stop: vi.fn(),
+  };
   const media = {
     connect: vi.fn(async () => {}),
     disconnect: vi.fn(async () => {}),
@@ -58,6 +63,7 @@ function setup(overrides: Partial<VoiceDependencies> = {}) {
     start: vi.fn(async () => credentials),
     end: vi.fn(async () => {}),
     acquireMicrophone: vi.fn(async () => release),
+    requestMicrophone: vi.fn(async () => microphone),
     callActive: () => false,
     media: vi.fn(async (_credentials, callbacks) => {
       events = callbacks;
@@ -72,9 +78,71 @@ function setup(overrides: Partial<VoiceDependencies> = {}) {
     return createVoiceSession(deps);
   });
   cleanups.push(controller.dispose);
-  return { controller, deps, media, bridge, release, events: () => events };
+  return {
+    controller,
+    deps,
+    media,
+    microphone,
+    bridge,
+    release,
+    events: () => events,
+  };
 }
 describe('agent voice lifetime', () => {
+  it('waits for microphone permission before provisioning or connecting media', async () => {
+    const pending = deferred<VoiceMicrophone>();
+    const { controller, deps, microphone } = setup({
+      requestMicrophone: vi.fn(() => pending.promise),
+    });
+    await controller.open({ sessionId: 'a', title: 'A' });
+    expect(deps.requestMicrophone).not.toHaveBeenCalled();
+    const starting = controller.start();
+    await vi.waitFor(() =>
+      expect(deps.requestMicrophone).toHaveBeenCalledOnce()
+    );
+    expect(controller.state().phase).toBe('requesting-microphone');
+    expect(deps.start).not.toHaveBeenCalled();
+    expect(deps.media).not.toHaveBeenCalled();
+    pending.resolve(microphone);
+    await starting;
+    expect(deps.media).toHaveBeenCalledWith(
+      credentials,
+      expect.any(Object),
+      expect.any(Object),
+      microphone
+    );
+  });
+  it('stops a late microphone grant after the user ends the permission step', async () => {
+    const pending = deferred<VoiceMicrophone>();
+    const { controller, deps, microphone, release } = setup({
+      requestMicrophone: vi.fn(() => pending.promise),
+    });
+    await controller.open({ sessionId: 'a', title: 'A' });
+    const starting = controller.start();
+    await vi.waitFor(() =>
+      expect(deps.requestMicrophone).toHaveBeenCalledOnce()
+    );
+    await controller.end();
+    pending.resolve(microphone);
+    await starting;
+    expect(microphone.stop).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledOnce();
+    expect(deps.start).not.toHaveBeenCalled();
+    expect(controller.state().phase).toBe('ready');
+  });
+  it('does not request microphone access when voice is disabled by the server', async () => {
+    const { controller, deps } = setup({
+      options: async () => ({
+        enabled: false,
+        voices: [],
+        maxDurationSeconds: 1800,
+      }),
+    });
+    await controller.open({ sessionId: 'a', title: 'A' });
+    await controller.start();
+    expect(deps.requestMicrophone).not.toHaveBeenCalled();
+    expect(deps.start).not.toHaveBeenCalled();
+  });
   it('retries unavailable options without turning on the microphone', async () => {
     const options = vi
       .fn()
@@ -111,11 +179,11 @@ describe('agent voice lifetime', () => {
   it('ends a late-created backend room after the user cancels connecting', async () => {
     const pending = deferred<VoiceCredentials>();
     const { controller, deps, release } = setup({
-      start: () => pending.promise,
+      start: vi.fn(() => pending.promise),
     });
     await controller.open({ sessionId: 'a', title: 'A' });
     const starting = controller.start();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(deps.start).toHaveBeenCalledOnce());
     await controller.end();
     pending.resolve(credentials);
     await starting;
@@ -125,7 +193,7 @@ describe('agent voice lifetime', () => {
     expect(controller.state().phase).toBe('ready');
   });
   it('ignores stale media callbacks after ending and releases every resource', async () => {
-    const { controller, media, bridge, release, events } = setup();
+    const { controller, media, microphone, bridge, release, events } = setup();
     await controller.open({ sessionId: 'a', title: 'A' });
     await controller.start();
     const old = events();
@@ -137,20 +205,38 @@ describe('agent voice lifetime', () => {
     expect(media.disconnect).toHaveBeenCalledOnce();
     expect(bridge.close).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledOnce();
+    expect(microphone.stop).toHaveBeenCalledOnce();
   });
   it('cleans up and exposes a recoverable microphone permission error', async () => {
-    const { controller, media, release, deps } = setup();
-    media.connect.mockRejectedValueOnce(
-      new Error('Microphone permission denied')
-    );
+    const requestMicrophone = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Microphone permission denied'));
+    const { controller, microphone, release, deps } = setup({
+      requestMicrophone,
+    });
+    requestMicrophone.mockResolvedValue(microphone);
     await controller.open({ sessionId: 'a', title: 'A' });
     await controller.start();
     expect(controller.state().phase).toBe('error');
     expect(controller.state().error).toContain('permission denied');
     expect(release).toHaveBeenCalled();
-    expect(deps.end).toHaveBeenCalled();
+    expect(deps.start).not.toHaveBeenCalled();
+    expect(deps.media).not.toHaveBeenCalled();
+    expect(deps.end).not.toHaveBeenCalled();
     await controller.start();
     expect(controller.state().phase).toBe('connected');
+  });
+  it('releases the granted microphone when backend provisioning fails', async () => {
+    const { controller, microphone, release } = setup({
+      start: async () => {
+        throw new Error('Voice service is unavailable');
+      },
+    });
+    await controller.open({ sessionId: 'a', title: 'A' });
+    await controller.start();
+    expect(microphone.stop).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledOnce();
+    expect(controller.state().error).toBe('Voice service is unavailable');
   });
   it('replaces interim captions without accumulating duplicates and fences active voice selection', async () => {
     const { controller, events } = setup();

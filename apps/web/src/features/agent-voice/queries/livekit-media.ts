@@ -10,15 +10,24 @@ import type {
   VoiceCredentials,
   VoiceMedia,
   VoiceMediaEvents,
+  VoiceMicrophone,
 } from '../core/types';
 
-/** Dedicated agent audio transport; SDK and capture load only after Start. */
+/** Publish the microphone already granted by the browser's Start gesture. */
 export async function createLivekitVoiceMedia(
   credentials: VoiceCredentials,
   events: VoiceMediaEvents,
-  bridge: VoiceBridge
+  bridge: VoiceBridge,
+  microphone: VoiceMicrophone
 ): Promise<VoiceMedia> {
-  const { Room, RoomEvent, Track, RpcError } = await import('livekit-client');
+  let livekit: typeof import('livekit-client');
+  try {
+    livekit = await import('livekit-client');
+  } catch (error) {
+    microphone.stop();
+    throw error;
+  }
+  const { Room, RoomEvent, Track, RpcError } = livekit;
   const room: Room = new Room({
     audioCaptureDefaults: {
       echoCancellation: true,
@@ -46,6 +55,7 @@ export async function createLivekitVoiceMedia(
     | undefined;
   const fail = (message: string) => {
     if (disposed) return;
+    microphone.stop();
     workerFailure = message;
     resolveReady?.();
     events.failure(message);
@@ -156,6 +166,7 @@ export async function createLivekitVoiceMedia(
       fail('Your connection changed. Start voice again to continue safely.');
   });
   room.on(RoomEvent.Disconnected, () => {
+    microphone.stop();
     resolveReady?.();
     if (!disposed) events.connection('disconnected');
   });
@@ -244,96 +255,112 @@ export async function createLivekitVoiceMedia(
     if (event?.type === 'error' || event?.type === 'ended')
       fail(event.message ?? 'The voice agent disconnected. Please try again.');
   });
+  const connect = async () => {
+    if (disposed) return;
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+    await room.connect(credentials.url, credentials.token, {
+      autoSubscribe: true,
+      websocketTimeout: 15_000,
+      peerConnectionTimeout: 15_000,
+    });
+    if (disposed) {
+      await room.disconnect();
+      return;
+    }
+    if (workerFailure) throw new Error(workerFailure);
+    await room.localParticipant.publishTrack(microphone.track, {
+      source: Track.Source.Microphone,
+      stopMicTrackOnMute: false,
+    });
+    if (disposed) {
+      await room.disconnect();
+      return;
+    }
+    const track = room.localParticipant.getTrackPublication(
+      Track.Source.Microphone
+    )?.track;
+    if (track) {
+      try {
+        inputMeter = createMeter(track.mediaStreamTrack);
+      } catch {
+        /* Mic still works without a meter. */
+      }
+    }
+    try {
+      await audioContext?.resume();
+      await room.startAudio();
+    } catch {
+      if (!disposed) events.playbackBlocked(true);
+    }
+    if (disposed) {
+      await room.disconnect();
+      return;
+    }
+    interval = setInterval(
+      () =>
+        events.levels(
+          room.localParticipant.isMicrophoneEnabled ? level(inputMeter) : 0,
+          level(outputMeter)
+        ),
+      50
+    );
+    if (!workerReady)
+      workerTimer = setTimeout(
+        () => fail('The voice agent did not connect. Please try again.'),
+        30_000
+      );
+    if (!workerReady) await ready;
+    if (disposed) return;
+    if (workerFailure) throw new Error(workerFailure);
+    if (!workerReady)
+      throw new Error('The voice agent disconnected before it was ready.');
+    events.connection('connected');
+  };
+  const disconnect = async () => {
+    disposed = true;
+    microphone.stop();
+    resolveReady?.();
+    clearInterval(interval);
+    clearTimeout(reconnectTimer);
+    clearTimeout(workerTimer);
+    room.localParticipant.unregisterRpcMethod('macro.agent.request');
+    room.localParticipant.unregisterRpcMethod('macro.agent.cancel');
+    room.localParticipant.unregisterRpcMethod('macro.voice.context');
+    room.unregisterTextStreamHandler('lk.transcription');
+    for (const stream of streams) stream.abort();
+    streams.clear();
+    for (const [track, element] of audioElements) {
+      track.detach(element);
+      element.remove();
+    }
+    audioElements.clear();
+    inputMeter?.source.disconnect();
+    outputMeter?.source.disconnect();
+    try {
+      await audioContext?.close();
+    } catch {
+      /* A context may already be closed during browser teardown. */
+    }
+    try {
+      await room.disconnect();
+    } finally {
+      room.removeAllListeners();
+    }
+  };
   return {
     connect: async () => {
-      const ready = new Promise<void>((resolve) => {
-        resolveReady = resolve;
-      });
-      await room.connect(credentials.url, credentials.token, {
-        autoSubscribe: true,
-        websocketTimeout: 15_000,
-        peerConnectionTimeout: 15_000,
-      });
-      if (disposed) {
-        await room.disconnect();
-        return;
-      }
-      await room.localParticipant.setMicrophoneEnabled(true);
-      if (disposed) {
-        await room.disconnect();
-        return;
-      }
-      const track = room.localParticipant.getTrackPublication(
-        Track.Source.Microphone
-      )?.track;
-      if (track) {
-        try {
-          inputMeter = createMeter(track.mediaStreamTrack);
-        } catch {
-          /* Mic still works without a meter. */
-        }
-      }
       try {
-        await audioContext?.resume();
-        await room.startAudio();
-      } catch {
-        if (!disposed) events.playbackBlocked(true);
-      }
-      if (disposed) {
-        await room.disconnect();
-        return;
-      }
-      interval = setInterval(
-        () =>
-          events.levels(
-            room.localParticipant.isMicrophoneEnabled ? level(inputMeter) : 0,
-            level(outputMeter)
-          ),
-        50
-      );
-      if (!workerReady)
-        workerTimer = setTimeout(
-          () => fail('The voice agent did not connect. Please try again.'),
-          30_000
-        );
-      if (!workerReady) await ready;
-      if (disposed) return;
-      if (workerFailure) throw new Error(workerFailure);
-      if (!workerReady)
-        throw new Error('The voice agent disconnected before it was ready.');
-      events.connection('connected');
-    },
-    disconnect: async () => {
-      disposed = true;
-      resolveReady?.();
-      clearInterval(interval);
-      clearTimeout(reconnectTimer);
-      clearTimeout(workerTimer);
-      room.localParticipant.unregisterRpcMethod('macro.agent.request');
-      room.localParticipant.unregisterRpcMethod('macro.agent.cancel');
-      room.localParticipant.unregisterRpcMethod('macro.voice.context');
-      room.unregisterTextStreamHandler('lk.transcription');
-      for (const stream of streams) stream.abort();
-      streams.clear();
-      for (const [track, element] of audioElements) {
-        track.detach(element);
-        element.remove();
-      }
-      audioElements.clear();
-      inputMeter?.source.disconnect();
-      outputMeter?.source.disconnect();
-      try {
-        await audioContext?.close();
-      } catch {
-        /* A context may already be closed during browser teardown. */
-      }
-      try {
-        await room.disconnect();
-      } finally {
-        room.removeAllListeners();
+        await connect();
+      } catch (error) {
+        await disconnect();
+        throw error;
       }
     },
+    disconnect,
     mute: async (muted) => {
+      if (disposed) return;
       await room.localParticipant.setMicrophoneEnabled(!muted);
       if (!muted) {
         const track = room.localParticipant.getTrackPublication(
