@@ -89,7 +89,8 @@ export function defineRoute<
 >;
 export function defineRoute(
   definition: SplitRouteDefinitionConstraint
-): SplitRouteDefinitionConstraint {
+): unknown {
+  // The overloads add phantom ancestry; runtime declarations remain untouched.
   return definition;
 }
 
