@@ -3,6 +3,7 @@ use tracing::error;
 use worker::{Env, Fetch, Method, Request, RequestInit};
 
 use crate::constants::header_names::MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY;
+use crate::domain::document::DocumentAttribution;
 
 /// Why a document interaction was reported to DSS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -22,8 +23,7 @@ struct InteractionRequest {
 }
 
 pub trait DssInternal {
-    /// Uploads the raw snapshot bytes for storage, and publishes a
-    /// `document.edited` event.
+    /// Uploads the raw snapshot bytes for storage.
     async fn publish_shallow_snapshot(
         &self,
         document_id: &str,
@@ -35,6 +35,13 @@ pub trait DssInternal {
         &self,
         document_id: &str,
         reason: InteractionReason,
+    ) -> worker::Result<()>;
+
+    /// Let the document backend resolve content type and notify its consumers.
+    async fn publish_sync_content_updated(
+        &self,
+        document_id: &str,
+        attribution: Option<DocumentAttribution>,
     ) -> worker::Result<()>;
 }
 
@@ -64,6 +71,42 @@ impl<'a> DssInternalClient<'a> {
 }
 
 impl DssInternal for DssInternalClient<'_> {
+    async fn publish_sync_content_updated(
+        &self,
+        document_id: &str,
+        attribution: Option<DocumentAttribution>,
+    ) -> worker::Result<()> {
+        let url = format!(
+            "{}/internal/documents/{document_id}/sync-content-updated",
+            self.dss_url()?,
+        );
+        let body = serde_json::json!({
+            "actor": attribution.as_ref().map(|value| &value.actor),
+            "on_behalf_of": attribution.as_ref().and_then(|value| value.on_behalf_of.as_ref()),
+        });
+        let mut request = Request::new_with_init(
+            &url,
+            RequestInit::new()
+                .with_method(Method::Post)
+                .with_body(Some(body.to_string().into())),
+        )?;
+        request.headers_mut()?.set(
+            MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY,
+            &self.internal_auth_key()?,
+        )?;
+        request
+            .headers_mut()?
+            .set("Content-Type", "application/json")?;
+        let response = Fetch::Request(request).send().await?;
+        if response.status_code() != 200 {
+            return Err(worker::Error::from(format!(
+                "DSS sync-content notification returned {}",
+                response.status_code()
+            )));
+        }
+        Ok(())
+    }
+
     async fn publish_shallow_snapshot(
         &self,
         document_id: &str,

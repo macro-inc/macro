@@ -37,7 +37,10 @@ export function useSessionTurn(
     const id = sessionId();
     if (!follow()) return;
     const session = AgentSession.acquire(id);
-    void session.load();
+    // A row follows a session to show its turn and renders nothing from the
+    // load, so a load it abandons by unmounting is not this caller's problem.
+    // Left floating it surfaced as an unhandled rejection on every scroll.
+    void session.load().catch(() => undefined);
     onCleanup(() => session.release());
   });
 

@@ -39,7 +39,9 @@ describe('useSessionTurn', () => {
   });
 
   it('acquires a session that just produced a live frame', () => {
-    const load = vi.fn();
+    // Resolves like the real one: the hook drops the load's rejection, so a
+    // mock that returns nothing would not exercise that path.
+    const load = vi.fn().mockResolvedValue(undefined);
     const release = vi.fn();
     session.get.mockReturnValue(undefined);
     session.acquire.mockReturnValue({ load, release });

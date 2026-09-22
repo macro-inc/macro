@@ -404,10 +404,11 @@ export function MarkdownEditor(props: {
     const dragInsertPosition = getValidDragInsertPosition(editor, res.mousePos);
     if (!dragInsertPosition) return;
 
-    const mentionId =
-      res.item.type === 'agent_session'
-        ? undefined
-        : await trackMention(blockId, 'document', res.id);
+    const mentionId = await trackMention(
+      blockId,
+      res.item.type === 'agent_session' ? 'agent_session' : 'document',
+      res.id
+    );
 
     let blockParams: Record<string, string> | undefined;
     if (res.blockName === 'channel') {
@@ -1149,10 +1150,12 @@ export function MarkdownEditor(props: {
         </Show>
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
-          <CommentsProvider
-            activeComment={activeCommentIdParam}
-            loroManager={props.loroManager}
-          />
+          <Suspense>
+            <CommentsProvider
+              activeComment={activeCommentIdParam}
+              loroManager={props.loroManager}
+            />
+          </Suspense>
         </Show>
 
         <Show when={canEdit()}>

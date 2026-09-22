@@ -41,13 +41,6 @@ pub trait MessageReader: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> Result<Message, MessageError>;
-    /// Discover accessible source threads mentioning the authorized document.
-    async fn referenced_threads(
-        &self,
-        access: EntityAccessReceipt<MessageView>,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<ReferencedThreadPage, MessageError>;
 }
 
 /// Conversation mutations under a verified actor and parent capability.
@@ -152,14 +145,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
     ) -> Result<Message, MessageError> {
         MessageService::resolve_legacy(self, access, id, is_thread).await
     }
-    async fn referenced_threads(
-        &self,
-        access: EntityAccessReceipt<MessageView>,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<ReferencedThreadPage, MessageError> {
-        MessageService::referenced_threads(self, access, cursor, limit).await
-    }
 }
 
 #[async_trait::async_trait]
@@ -258,8 +243,6 @@ mockall::mock! {
     ) -> Result<Vec<Message>, MessageError>;
     /// Read an old link under current parent access.
     async fn resolve_legacy(&self, access: EntityAccessReceipt<MessageView>, id: i64, is_thread: bool) -> Result<Message, MessageError>;
-    /// Discover accessible source threads mentioning the authorized document.
-    async fn referenced_threads(&self, access: EntityAccessReceipt<MessageView>, cursor: Option<MessageCursor>, limit: u16) -> Result<ReferencedThreadPage, MessageError>;
     }
     #[async_trait::async_trait]
     impl MessageCommands for MessageServiceApi {

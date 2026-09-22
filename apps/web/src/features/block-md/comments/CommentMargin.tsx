@@ -57,7 +57,8 @@ function useCommentOperations(): Pick<
 const useCommentsContext = (
   setThreadHeight: CommentsContextType['setThreadHeight']
 ): CommentsContextType => {
-  const { documentId, permissions, state } = useMarkdownDocument();
+  const { documentId, kind, permissions, state } = useMarkdownDocument();
+  const documentKind = kind();
   const { comments: commentState, setCommentState } = state;
   const ownedCommentIds = createMemo(() => {
     const userId = useUserId()();
@@ -88,6 +89,7 @@ const useCommentsContext = (
     isDocumentOwner: permissions.isOwner,
     getCommentById,
     documentId: documentId(),
+    documentType: documentKind === 'document' ? 'md' : documentKind,
     ownedComment: ownedCommentSelector,
     ...operations,
     inComment: true,

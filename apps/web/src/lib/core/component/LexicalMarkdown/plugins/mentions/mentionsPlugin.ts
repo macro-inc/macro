@@ -579,8 +579,13 @@ function registerMentionsPlugin(
           if (!$isAgentSessionMentionNode(node)) continue;
           if (mutation === 'created')
             onCreateMention?.($mentionItemFromNode(node));
-          if (mutation === 'destroyed')
+          if (mutation === 'destroyed') {
+            const mentionUuid = node.getMentionUuid();
+            if (mentionUuid && sourceDocumentId) {
+              untrackMention(sourceDocumentId, mentionUuid);
+            }
             onRemoveMention?.($mentionItemFromNode(node));
+          }
         }
         updateMentionsSignal();
       }

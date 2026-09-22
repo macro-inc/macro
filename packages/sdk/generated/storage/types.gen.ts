@@ -195,8 +195,9 @@ export type AgentSessionFilters = {
      */
     include?: boolean;
     /**
-     * Filter by session owner. Examples: ['macro|user1@user.com']. Empty to
-     * include every owner.
+     * Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
      */
     owners?: Array<string>;
 };
@@ -2925,7 +2926,10 @@ export type ChatFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -4413,7 +4417,7 @@ export type DocumentContentUploadedMetadata = {
     /**
      * The owner of the document (used by the extractor to resolve S3 keys).
      */
-    owner: MacroUserIdStr;
+    owner: string;
 };
 
 /**
@@ -4432,7 +4436,7 @@ export type DocumentCopiedMetadata = {
     /**
      * The owner of the new copy (the copier).
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the copy belongs to, when any.
      */
@@ -4474,7 +4478,7 @@ export type DocumentCreatedMetadata = {
     /**
      * The owner (creator) of the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the document was created in, when any.
      */
@@ -4529,7 +4533,10 @@ export type DocumentFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -4876,7 +4883,7 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
-     * File type of the sync document (markdown today).
+     * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
     on_behalf_of?: null | MacroUserIdStr;
@@ -4975,7 +4982,7 @@ export type DocumentUpdatedMetadata = {
     /**
      * The owner of the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project id before the update.
      */
@@ -7688,7 +7695,10 @@ export type ProjectFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -7880,39 +7890,6 @@ export type RecentlyDeletedResponseData = {
      * The items returned from the call
      */
     items: Array<Item>;
-};
-
-/**
- * A source channel thread that mentions the requested document.
- */
-export type ReferencedThread = {
-    /**
-     * Whether this viewer currently has permission to reply in the source channel.
-     */
-    can_reply: boolean;
-    /**
-     * Source channel's current display name, returned only after access checks.
-     */
-    channel_name?: string | null;
-    /**
-     * Source parent used by the common message reader and mutations.
-     */
-    parent: MessageParent;
-    /**
-     * Source root identity; discovery does not copy its message content.
-     */
-    root_id: string;
-};
-
-/**
- * Authorized source threads, deduplicated by root.
- */
-export type ReferencedThreadPage = {
-    next_cursor?: null | MessageCursor;
-    /**
-     * Accessible channel discussions mentioning the document.
-     */
-    threads: Array<ReferencedThread>;
 };
 
 /**
@@ -9484,7 +9461,7 @@ export type SoupProjectSoupPropertiesField = {
      */
     name: string;
     /**
-     * The user id of who created the project
+     * The owner of the project
      */
     ownerId: string;
     /**
@@ -15181,35 +15158,6 @@ export type EntityMessageLegacyResponses = {
 };
 
 export type EntityMessageLegacyResponse = EntityMessageLegacyResponses[keyof EntityMessageLegacyResponses];
-
-export type EntityMessageReferencesData = {
-    body?: never;
-    path: {
-        parent_type: string;
-        parent_id: string;
-    };
-    query?: {
-        /**
-         * Maximum number of roots.
-         */
-        limit?: number | null;
-        /**
-         * Last root's creation timestamp.
-         */
-        created_at?: string | null;
-        /**
-         * Last root's UUID.
-         */
-        cursor_id?: string | null;
-    };
-    url: '/messages/{parent_type}/{parent_id}/references';
-};
-
-export type EntityMessageReferencesResponses = {
-    200: ReferencedThreadPage;
-};
-
-export type EntityMessageReferencesResponse = EntityMessageReferencesResponses[keyof EntityMessageReferencesResponses];
 
 export type EntityMessageDeleteThreadData = {
     body?: never;

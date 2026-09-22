@@ -40,6 +40,7 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -51,7 +52,7 @@ use crate::domain::model::{
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
     ManagedPersonaError, OpenExternalAgentSession, OpenManagedSession, SessionOpener,
-    SessionThread, managed_persona_for_user,
+    SessionThread, managed_persona_for_owner,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
@@ -1302,7 +1303,14 @@ pub struct AgentSessionLogResponse {
 ///
 /// An unknown session is an error: the response has to name the session's
 /// agent, and a session that never existed has none to name.
-#[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
+#[tracing::instrument(
+    skip_all,
+    fields(
+        session_id = %session_id,
+        agent.session.log.rows = tracing::field::Empty,
+    ),
+    err(Debug)
+)]
 pub async fn get_agent_session_log_handler<
     T: AgentSessionService,
     Access: EntityAccessService,
@@ -1316,6 +1324,12 @@ pub async fn get_agent_session_log_handler<
         .service
         .session_log(AgentSessionId::new_from_uuid(session_id))
         .await?;
+
+    // How much history this response carries. Without it the endpoint's
+    // latency cannot be read against the size of the session that produced
+    // it, and "is this slow because the session is huge" costs a trip to the
+    // database to answer.
+    tracing::Span::current().record("agent.session.log.rows", log.entries.len());
 
     Ok(Json(AgentSessionLogResponse {
         bot: log.bot,
@@ -1665,7 +1679,11 @@ fn resolve_bot(
     }
 }
 
-/// Resolve the user who owns the session.
+/// Resolve who owns the session.
+///
+/// Only ever a user here: every caller this route admits acts as a person,
+/// and the body's `owner` claim is a user id. The type is wider than that so
+/// the row and the runtimes are asked, not told, what kind of owner they got.
 ///
 /// A user caller always owns their own sessions. A harness caller always has a
 /// verified acting user - the owner for a private harness, a confirmed team
@@ -1680,12 +1698,14 @@ fn resolve_bot(
 fn resolve_owner(
     caller: &UserBotOrHarnessAuthorization,
     claimed: Option<String>,
-) -> Result<MacroUserIdStr<'static>, CreateSessionApiError> {
+) -> Result<Owner, CreateSessionApiError> {
     if let Some(user) = caller.acting_user() {
-        return Ok(user.macro_user_id.clone());
+        return Ok(Owner::User(user.macro_user_id.clone()));
     }
     let claimed = claimed.ok_or(CreateSessionApiError::OwnerRequired)?;
-    MacroUserIdStr::try_from(claimed).map_err(|_| CreateSessionApiError::UnparseableOwner)
+    MacroUserIdStr::try_from(claimed)
+        .map(Owner::User)
+        .map_err(|_| CreateSessionApiError::UnparseableOwner)
 }
 
 #[utoipa::path(
@@ -1734,16 +1754,19 @@ pub async fn create_agent_session_handler<
         }
         let owner = resolve_owner(&caller.authorization, None)?;
         let profile = if let Some(bot_id) = request.bot_id {
-            let selected =
-                managed_persona_for_user(state.bots.as_ref(), BotId::new_from_uuid(bot_id), &owner)
-                    .await
-                    .map_err(|error| match error {
-                        ManagedPersonaError::Unknown => CreateSessionApiError::UnknownBot,
-                        ManagedPersonaError::NotAgent => CreateSessionApiError::NotAnAgentBot,
-                        ManagedPersonaError::External => CreateSessionApiError::ExternalPersona,
-                        ManagedPersonaError::Forbidden => CreateSessionApiError::NotYourBot,
-                        ManagedPersonaError::Lookup(error) => CreateSessionApiError::Domain(error),
-                    })?;
+            let selected = managed_persona_for_owner(
+                state.bots.as_ref(),
+                BotId::new_from_uuid(bot_id),
+                &owner,
+            )
+            .await
+            .map_err(|error| match error {
+                ManagedPersonaError::Unknown => CreateSessionApiError::UnknownBot,
+                ManagedPersonaError::NotAgent => CreateSessionApiError::NotAnAgentBot,
+                ManagedPersonaError::External => CreateSessionApiError::ExternalPersona,
+                ManagedPersonaError::Forbidden => CreateSessionApiError::NotYourBot,
+                ManagedPersonaError::Lookup(error) => CreateSessionApiError::Domain(error),
+            })?;
             Some(selected)
         } else {
             None

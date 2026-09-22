@@ -71,7 +71,7 @@ where
             async move {
                 let result = async {
                     let stored = self.repo.get(session).await?;
-                    if &stored.owner_id != owner {
+                    if !stored.owner_id.is_user(owner) {
                         return Err(AgentSessionError::Forbidden);
                     }
                     let url = canonical_url(url)?;

@@ -19,6 +19,7 @@ pub(crate) struct InvitationPage {
 }
 
 #[utoipa::path(get, path = "/email/threads/{thread_id}/calendar-invitations", tag = "email",
+    operation_id = "get_thread_calendar_invitations",
     params(("thread_id" = uuid::Uuid, Path, description = "Authorized email thread"), InvitationPage),
     responses((status = 200, body = HashMap<String, InvitationResolution>), (status = 401), (status = 403)))]
 pub(crate) async fn handler(

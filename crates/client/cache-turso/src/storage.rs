@@ -564,7 +564,8 @@ impl TursoFileDatabase {
         Ok(Self { path, turso_path })
     }
 
-    /// Opens and initializes or validates this database for `scope`.
+    /// Opens this database, validating compatibility and queued writes for `scope`.
+    /// Full-file integrity scans are explicit via [`TursoStorage::check_integrity`].
     pub fn open(&self, scope: &str) -> Result<TursoStorage, TursoStorageError> {
         let fresh = !self.path.exists();
         let io: Arc<dyn IO> = Arc::new(PlatformIO::new().map_err(TursoStorageError::turso)?);
@@ -2546,10 +2547,12 @@ fn compile_predicate_selection(
     compiler
         .parameters
         .push(text(descriptor.sort_attribute.as_str()));
-    // Look up identity and sort facts by their real primary keys. Joining three
-    // materialized sets loses those indexes and makes even small queries quadratic.
+    // Drive the join from matching IDs and point-probe the sort-fact primary key.
+    // Without both constraints Turso prefers the (attribute, value, document_id)
+    // lookup index using only attribute, rescanning all sort facts for each match.
+    // The composite primary keys are part of the validated storage schema.
     compiler.ctes.push(format!(
-        "{hits}(record_key, value) AS MATERIALIZED (SELECT d.record_key, s.value FROM {matches} AS m JOIN index_documents AS d ON m.source = 0 AND d.id = m.document_id JOIN sort_facts AS s ON s.document_id = m.document_id AND s.attribute = ? UNION ALL SELECT d.record_key, s.value FROM {matches} AS m JOIN optimistic_index_documents AS d ON m.source = 1 AND d.id = m.document_id JOIN optimistic_sort_facts AS s ON s.document_id = m.document_id AND s.attribute = ?)"
+        "{hits}(record_key, value) AS MATERIALIZED (SELECT d.record_key, s.value FROM {matches} AS m CROSS JOIN index_documents AS d ON m.source = 0 AND d.id = m.document_id CROSS JOIN sort_facts AS s INDEXED BY sqlite_autoindex_sort_facts_1 ON s.document_id = m.document_id AND s.attribute = ? UNION ALL SELECT d.record_key, s.value FROM {matches} AS m CROSS JOIN optimistic_index_documents AS d ON m.source = 1 AND d.id = m.document_id CROSS JOIN optimistic_sort_facts AS s INDEXED BY sqlite_autoindex_optimistic_sort_facts_1 ON s.document_id = m.document_id AND s.attribute = ?)"
     ));
     compiler
         .parameters
@@ -2814,7 +2817,8 @@ fn initialize(
         return Ok(());
     }
 
-    validate_quick_check(connection)?;
+    // Reopening must not scan every cached record/page. Keep compatibility and
+    // pending-write validation here; full scans belong to explicit diagnostics.
     validate_frozen_schema(connection)?;
     let metadata = driver::query(
         connection,
@@ -4223,23 +4227,6 @@ fn compatibility() -> TursoStorageError {
     TursoStorageError::reset(PhysicalResetReason::Compatibility)
 }
 
-fn validate_quick_check(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
-    let rows = driver::query(connection, "PRAGMA quick_check", Vec::new())
-        .map_err(TursoStorageError::initialization)?;
-    validate_quick_check_rows(&rows)
-}
-
-fn validate_quick_check_rows(rows: &[Vec<Value>]) -> Result<(), TursoStorageError> {
-    if rows.len() == 1
-        && rows[0].len() == 1
-        && required_text(&rows[0], 0).ok().as_deref() == Some("ok")
-    {
-        Ok(())
-    } else {
-        Err(TursoStorageError::reset(PhysicalResetReason::Integrity))
-    }
-}
-
 fn validate_queue_consistency(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
     let queue = driver::query(connection, QUEUE_SELECT, Vec::new())
         .map_err(TursoStorageError::initialization)?;
@@ -4792,6 +4779,7 @@ impl TursoStorage {
 }
 
 mod alternatives;
+mod integrity;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

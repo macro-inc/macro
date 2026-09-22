@@ -186,6 +186,24 @@ impl AgentKind {
         }
     }
 
+    /// Fixed harness slug for kinds that map one-to-one onto one.
+    ///
+    /// Inverse of [`Self::from_harness`] for Cursor, Codex, and Claude — a
+    /// session of those bots is always stored under that slug, even when the
+    /// open path fell through to a deployment default (`opencode`). The
+    /// sandboxed coder's slug is deployment configuration, in-memory accepts
+    /// both `in-memory` and `macro-inmem`, and an external runtime is whoever
+    /// dialed in; those keep the slug the open path already chose.
+    #[must_use]
+    pub const fn harness_slug(self) -> Option<&'static str> {
+        match self {
+            Self::Cursor => Some("cursor"),
+            Self::CodexCloud => Some("codex-cloud"),
+            Self::ClaudeCloud => Some("claude-cloud"),
+            Self::SandboxedCoder | Self::InMemory | Self::External => None,
+        }
+    }
+
     /// Whether a deployment provisions this kind's runtimes itself.
     ///
     /// Membership is about who provisions, not whether *this* deployment is

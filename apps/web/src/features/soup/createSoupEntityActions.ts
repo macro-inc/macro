@@ -70,7 +70,7 @@ type BuildActionGroups = (
     openTagPicker?: () => void;
     /**
      * The split hosting the list. Open actions route through it so they match
-     * their click/hotkey equivalents, including Preview Pair routing.
+     * their click/hotkey equivalents.
      */
     splitHandle?: SplitHandle;
     /** Creates a view-owned follow-up for action-driven navigation. */
@@ -236,10 +236,7 @@ export function createSoupEntityActions(): {
      * The single entity these open actions apply to, if any.
      *
      * Content already mounted in another split is skipped — reopening it would
-     * duplicate it. The Preview Pair's own Viewer is the exception: its copy is
-     * the preview of this very row, which opening supersedes rather than
-     * duplicates, so the row keeps its open actions while it is being
-     * previewed.
+     * duplicate it.
      */
     const openableEntity = (): EntityData | undefined => {
       if (isMobile()) return undefined;
@@ -257,7 +254,7 @@ export function createSoupEntityActions(): {
           'component',
           `reminder-view~${entity.id}`
         );
-        if (open && open.id !== splitHandle?.viewerId()) return undefined;
+        if (open) return undefined;
         return entity;
       }
       const contentId =
@@ -266,34 +263,30 @@ export function createSoupEntityActions(): {
           : entity.id;
       const contentType = itemToBlockName(entity);
       const existing = splitManager.getSplitByContent(contentType, contentId);
-      if (existing && existing.id !== splitHandle?.viewerId()) return undefined;
+      if (existing) return undefined;
       return entity;
     };
 
-    const openEntity =
-      (options: { openInNewSplit?: boolean; replacePreview?: boolean }) =>
-      async () => {
-        const entity = openableEntity();
-        if (!entity) return;
+    const openEntity = (options: { openInNewSplit?: boolean }) => async () => {
+      const entity = openableEntity();
+      if (!entity) return;
 
-        if (options.openInNewSplit) {
-          analytics.track('split_created', {
-            from: 'soup_view_entity_actions_menu',
-          });
-        }
-
-        markReminderSeenOnOpen(entity, notificationSource);
-
-        // Same path as shift/opt+click, so the menu inherits Preview Pair
-        // routing (new split when it fits; replacing the pair outright) and
-        // per-entity targeting such as a thread row's driving message.
-        await openEntityInSplitFromUnifiedList(entity, {
-          ...options,
-          splitHandle,
-          referredFrom: 'entity-actions-menu',
-          notificationSource,
+      if (options.openInNewSplit) {
+        analytics.track('split_created', {
+          from: 'soup_view_entity_actions_menu',
         });
-      };
+      }
+
+      markReminderSeenOnOpen(entity, notificationSource);
+
+      // Match row navigation, including a thread row's driving message.
+      await openEntityInSplitFromUnifiedList(entity, {
+        ...options,
+        splitHandle,
+        referredFrom: 'entity-actions-menu',
+        notificationSource,
+      });
+    };
 
     if (openableEntity()) {
       topItems.push({
@@ -305,15 +298,6 @@ export function createSoupEntityActions(): {
         disabled: !globalSplitManager()?.canAppendSplit(),
         onClick: openEntity({ openInNewSplit: true }),
       });
-
-      if (splitHandle?.isControllerSplit()) {
-        topItems.push({
-          id: 'open-to-replace-preview',
-          label: 'Open to replace preview',
-          shortcut: 'opt+enter',
-          onClick: openEntity({ replacePreview: true }),
-        });
-      }
     }
 
     // Middle group: Rename, Move to folder, Duplicate, Copy Link, Copy Branch Name, Share

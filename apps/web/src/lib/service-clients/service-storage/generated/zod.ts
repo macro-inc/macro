@@ -10872,9 +10872,7 @@ export const getItemsSoupResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -13316,7 +13314,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+            "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           ),
       })
       .optional()
@@ -13533,7 +13531,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -13618,7 +13616,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -13843,7 +13841,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -14848,9 +14846,7 @@ export const postItemsSoupResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -18265,9 +18261,7 @@ export const postItemsSoupAstResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -21952,7 +21946,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe('The name of the project'),
                           ownerId: zod
                             .string()
-                            .describe('The user id of who created the project'),
+                            .describe('The owner of the project'),
                           parentId: zod
                             .uuid()
                             .nullish()
@@ -25369,7 +25363,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe('The name of the project'),
                           ownerId: zod
                             .string()
-                            .describe('The user id of who created the project'),
+                            .describe('The owner of the project'),
                           parentId: zod
                             .uuid()
                             .nullish()
@@ -29299,99 +29293,6 @@ export const entityMessageLegacyResponse = zod
   .describe(
     'Shared message representation for channel timelines and entity discussions.'
   );
-
-/**
- * @summary Read source channel threads mentioning this document under both parents' permissions.
- */
-export const entityMessageReferencesParams = zod.object({
-  parent_type: zod.string(),
-  parent_id: zod.string(),
-});
-
-export const entityMessageReferencesQueryLimitMin = 0;
-
-export const entityMessageReferencesQueryParams = zod.object({
-  limit: zod
-    .number()
-    .min(entityMessageReferencesQueryLimitMin)
-    .nullish()
-    .describe('Maximum number of roots.'),
-  created_at: zod.iso
-    .datetime({})
-    .nullish()
-    .describe("Last root's creation timestamp."),
-  cursor_id: zod.uuid().nullish().describe("Last root's UUID."),
-});
-
-export const entityMessageReferencesResponse = zod
-  .object({
-    next_cursor: zod
-      .union([
-        zod.null(),
-        zod
-          .object({
-            created_at: zod.iso
-              .datetime({})
-              .describe('Last root creation time.'),
-            id: zod
-              .uuid()
-              .describe('Last root UUID, used to break timestamp ties.'),
-          })
-          .describe('Cursor for a chronological parent timeline.'),
-      ])
-      .optional(),
-    threads: zod
-      .array(
-        zod
-          .object({
-            can_reply: zod
-              .boolean()
-              .describe(
-                'Whether this viewer currently has permission to reply in the source channel.'
-              ),
-            channel_name: zod
-              .string()
-              .nullish()
-              .describe(
-                "Source channel's current display name, returned only after access checks."
-              ),
-            parent: zod
-              .union([
-                zod
-                  .object({
-                    id: zod
-                      .uuid()
-                      .describe('A channel, including direct messages.'),
-                    type: zod.enum(['channel']),
-                  })
-                  .describe('A channel, including direct messages.'),
-                zod
-                  .object({
-                    id: zod
-                      .string()
-                      .describe(
-                        'A validated document identifier. Historical document ids need not be UUIDs.'
-                      ),
-                    type: zod.enum(['document']),
-                  })
-                  .describe('A document, including tasks and PDFs.'),
-              ])
-              .describe(
-                'The entity whose permissions and lifecycle govern a message.'
-              ),
-            root_id: zod
-              .uuid()
-              .describe(
-                'Source root identity; discovery does not copy its message content.'
-              ),
-          })
-          .describe(
-            'A source channel thread that mentions the requested document.'
-          )
-      )
-      .describe('Accessible channel discussions mentioning the document.'),
-  })
-  .describe('Authorized source threads, deduplicated by root.');
 
 /**
  * @summary Open a specific discussion from a link or annotation.

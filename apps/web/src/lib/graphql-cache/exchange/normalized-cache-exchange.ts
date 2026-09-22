@@ -964,8 +964,8 @@ export function normalizedCacheExchange(
         try {
           enqueue = await host.enqueueOptimisticMutation(args, claim);
         } catch (error) {
-          options.onCacheError?.(error, op);
           if (isAdmittedEnqueueUncertainError(error)) {
+            options.onCacheError?.(error, op);
             // The old-scope queue may already contain the side effect. It is
             // unsafe to forward or retry without a coordinator fence.
             return uncertainEnqueueResult(op, error);
@@ -974,9 +974,22 @@ export function normalizedCacheExchange(
           // not expose a partial relation move: retain entity optimism and
           // the post-success revalidation descriptors instead.
           if (args.linkPatches.length === 0) {
+            options.onCacheError?.(error, op);
             enqueueForward(op);
             return undefined;
           }
+          // Deliberately loud: this fallback is durable but invisible until
+          // reconnect — the mutation's optimistic list membership silently
+          // becomes eventual. A systematic rejection (schema drift, a patch
+          // path the cache cannot resolve) looks identical to a transient
+          // race without this trace, and production wires no onCacheError.
+          const degraded = new Error(
+            'optimistic link patches rejected at enqueue; degrading to ' +
+              `post-commit revalidations for ${args.operationName ?? 'mutation'}`,
+            { cause: error }
+          );
+          console.warn(`[graphql-cache] ${degraded.message}`, error);
+          options.onCacheError?.(degraded, op);
           try {
             enqueue = await host.enqueueOptimisticMutation(
               {

@@ -71,6 +71,13 @@ pub enum HarnessError {
     /// App's credentials, an installation record, or a call to github.com.
     #[error("failed to list reachable repositories: {0}")]
     Repositories(rootcause::Report),
+    /// The named repository is not one the user reaches through the GitHub App.
+    ///
+    /// The same sentence the create-session path uses, so a picker that listed
+    /// a repository the user can no longer reach and a typed URL they never
+    /// could both explain themselves the same way.
+    #[error("repository is not available to this user")]
+    RepositoryUnavailable,
     /// A bot's persisted agent runtime configuration could not be loaded.
     #[error("failed to resolve agent runtime configuration: {0}")]
     RuntimeDirectory(rootcause::Report),

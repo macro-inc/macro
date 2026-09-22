@@ -6082,6 +6082,40 @@ export interface UpdateThreadLabelsResponse {
   summary: string;
 }
 /**
+ * Upload an existing file to Macro from base64-encoded bytes, up to 25 MiB decoded. Use for PDFs, images, Office files, and other files; use CreateDocument for generated text or native Macro spreadsheets. Encode actual file bytes programmatically; never invent or transcribe binary content. Returns a document ID after the bytes are uploaded; preview and indexing may finish asynchronously. Does not read local paths or fetch URLs.
+ */
+export interface UploadFile {
+  /**
+   * Filename including its extension, for example report.pdf. Do not include a directory path.
+   */
+  fileName: string;
+  /**
+   * Standard padded base64 of the exact file bytes (maximum 25 MiB decoded). No data URL prefix or whitespace. Prefer constructing this argument programmatically from the file.
+   */
+  contentBase64: string;
+  /**
+   * Optional destination project (folder) ID. Requires edit access. Omit to upload to the user's top-level files.
+   */
+  projectId?: string | null;
+}
+/**
+ * Metadata for an uploaded file. Does not echo the file contents.
+ */
+export interface UploadFileResponse {
+  /**
+   * ID of the new Macro document.
+   */
+  documentId: string;
+  /**
+   * Uploaded filename, including its extension.
+   */
+  fileName: string;
+  /**
+   * Number of uploaded bytes.
+   */
+  sizeBytes: number;
+}
+/**
  * Fetch the contents of a web page using Claude's built-in web fetch tool.
  */
 export interface WebFetch {

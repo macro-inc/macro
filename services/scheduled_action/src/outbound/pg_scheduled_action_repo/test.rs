@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::Owner;
 use serde_json::json;
 use sqlx::{PgPool, Row};
 
@@ -15,6 +16,10 @@ const DAILY_9AM: &str = "0 0 9 * * *";
 
 fn user(id: &'static str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).expect("valid user id")
+}
+
+fn user_owner(id: &'static str) -> Owner {
+    Owner::User(user(id))
 }
 
 async fn insert_user(pool: &PgPool, id: &str) {
@@ -35,7 +40,7 @@ async fn insert_user(pool: &PgPool, id: &str) {
         .expect("user should insert");
 }
 
-fn sample_action(owner: MacroUserIdStr<'static>, name: &str) -> ScheduledAction {
+fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
     let now = Utc::now();
     let schedule = Schedule::from_cron(DAILY_9AM.to_string()).expect("valid cron");
     let timezone = chrono_tz::UTC;
@@ -98,10 +103,11 @@ async fn create_action_returns_id_and_is_listable_by_owner(pool: PgPool) {
     let repo = PgScheduledActionRepo::new(pool);
 
     let created = repo
-        .create_action(sample_action(user(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"))
         .await
         .expect("create should succeed");
     assert!(created.id.is_some());
+    assert_eq!(created.owner, user_owner(USER_A));
 
     let listed = repo
         .get_actions(user(USER_A))
@@ -110,6 +116,7 @@ async fn create_action_returns_id_and_is_listable_by_owner(pool: PgPool) {
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].name, "standup");
     assert_eq!(listed[0].id, created.id);
+    assert_eq!(listed[0].owner, user_owner(USER_A));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -118,7 +125,7 @@ async fn other_owner_list_is_empty(pool: PgPool) {
     insert_user(&pool, USER_B).await;
     let repo = PgScheduledActionRepo::new(pool);
 
-    repo.create_action(sample_action(user(USER_A), "standup"))
+    repo.create_action(sample_action(user_owner(USER_A), "standup"))
         .await
         .expect("create should succeed");
 
@@ -141,7 +148,7 @@ async fn update_action_changes_name_schedule_and_enabled(pool: PgPool) {
     let repo = PgScheduledActionRepo::new(pool);
 
     let created = repo
-        .create_action(sample_action(user(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"))
         .await
         .expect("create should succeed");
 
@@ -171,7 +178,7 @@ async fn second_claim_returns_already_running(pool: PgPool) {
     let repo = PgScheduledActionRepo::new(pool);
 
     let created = repo
-        .create_action(sample_action(user(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"))
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -192,7 +199,7 @@ async fn delete_action_removes_row_from_owner_list(pool: PgPool) {
     let repo = PgScheduledActionRepo::new(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"))
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -214,7 +221,7 @@ async fn create_action_registers_entity_row(pool: PgPool) {
     let repo = PgScheduledActionRepo::new(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"))
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -232,7 +239,7 @@ async fn delete_action_removes_entity_row(pool: PgPool) {
     let repo = PgScheduledActionRepo::new(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"))
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -250,7 +257,7 @@ async fn delete_action_succeeds_when_entity_row_is_missing(pool: PgPool) {
     let repo = PgScheduledActionRepo::new(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"))
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");

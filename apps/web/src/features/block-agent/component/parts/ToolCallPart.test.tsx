@@ -5,7 +5,9 @@
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import { render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { describe, expect, it, vi } from 'vitest';
+import type { View } from '../../../dynamic-ui/schema';
 import type { ToolCallContext } from './shared';
 import { ToolCallPart } from './ToolCallPart';
 
@@ -33,6 +35,34 @@ vi.mock('@core/component/AI/component/tool/handler', () => ({
       {props.name}
     </div>
   ),
+}));
+
+// Exercise the dashboard's validation and streaming behavior, while replacing
+// the entity-heavy widgets and Lexical context with presentation markers.
+vi.mock('@app/features/dynamic-ui/DashboardToolView.lazy', async () => ({
+  DashboardToolView: (
+    await import('@app/features/dynamic-ui/DashboardToolView')
+  ).default,
+}));
+
+vi.mock('@app/features/dynamic-ui/widget', () => ({
+  Widget: {
+    Compose: (props: { view: View }) => (
+      <div data-testid="dashboard">{JSON.stringify(props.view)}</div>
+    ),
+  },
+}));
+
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({
+    StaticMarkdownContext: (props: { children?: JSX.Element }) =>
+      props.children,
+  })
+);
+
+vi.mock('@core/component/LexicalMarkdown/theme', () => ({
+  aiChatTheme: {},
 }));
 
 // The entity link a finished email's outcome carries needs the query client
@@ -346,6 +376,101 @@ describe('ToolCallPart Macro tools', () => {
     ));
     expect(rendered.getByTestId('macro-tool').dataset.complete).toBe('true');
     expect(rendered.getByTestId('macro-tool').dataset.hasResponse).toBe('true');
+  });
+
+  it('renders the displayResults view as a dashboard', () => {
+    const view = {
+      title: 'This week',
+      widgets: [{ type: 'md', markdown: 'hi' }],
+    };
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'macro',
+            input: { view },
+            output: { message: 'The results have been displayed to the user.' },
+            error: null,
+          },
+          { name: 'DisplayResults', status: 'completed' }
+        )}
+      />
+    ));
+    expect(rendered.getByTestId('dashboard').textContent).toBe(
+      JSON.stringify(view)
+    );
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
+  });
+
+  it('renders a view as its arguments arrive and keeps it when no response arrives', () => {
+    const displayResults = (
+      input: unknown,
+      status: ToolUsePart['status'] = 'running'
+    ) =>
+      toolUse(
+        { kind: 'macro', input, output: null, error: null },
+        { name: 'DisplayResults', status }
+      );
+    const [part, setPart] = createStore(displayResults(null));
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(true)} />
+    ));
+
+    for (const input of [null, {}, { view: null }, { view: {} }]) {
+      setPart(reconcile(displayResults(input)));
+      expect(rendered.container.textContent).toBe('');
+    }
+
+    const view = {
+      title: 'This week',
+      widgets: [{ type: 'md', markdown: 'First results' }],
+    };
+    setPart(reconcile(displayResults({ view })));
+    expect(rendered.getByTestId('dashboard').textContent).toBe(
+      JSON.stringify(view)
+    );
+
+    const finalView = {
+      title: 'All results',
+      widgets: [{ type: 'md', markdown: 'Final results' }],
+    };
+    setPart(reconcile(displayResults({ view: finalView }, 'completed')));
+    expect(rendered.getByTestId('dashboard').textContent).toBe(
+      JSON.stringify(finalView)
+    );
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
+  });
+
+  it.each([null, {}, { view: null }, { view: { widgets: 'invalid' } }])(
+    'reports malformed completed dashboard input: %j',
+    (input) => {
+      const rendered = render(() => (
+        <ToolCallPart
+          part={toolUse(
+            { kind: 'macro', input, output: null, error: null },
+            { name: 'DisplayResults' }
+          )}
+        />
+      ));
+      expect(rendered.container.textContent).toContain(
+        "Couldn't render dashboard"
+      );
+      expect(rendered.queryByTestId('dashboard')).toBeNull();
+    }
+  );
+
+  it('keeps a failed displayResults call on a faded card', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          { kind: 'macro', input: { view: null }, output: null, error: null },
+          { name: 'DisplayResults', status: 'failed' }
+        )}
+      />
+    ));
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
+    expect(rendered.queryByTestId('dashboard')).toBeNull();
   });
 
   it('keeps a Macro tool the chat has no component for on a labelled card', () => {

@@ -40,7 +40,7 @@ vi.mock('@queries/agent-session/queue-sync', () => ({
   subscribeSocketSessionStarted: socket.subscribeSocketSessionStarted,
 }));
 
-import { AgentSession } from './AgentSession';
+import { AgentSession, AgentSessionReleased } from './AgentSession';
 import { resetSessionTurns, sessionTurn } from './session-turn';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
@@ -117,6 +117,21 @@ describe('AgentSession', () => {
       { kind: 'confirmed', row: row(3) },
     ]);
     live.release();
+  });
+
+  it('names a load abandoned by its last release, rather than failing it', async () => {
+    const log = deferred<LogResult>();
+    harness.getLog.mockReturnValue(log.promise);
+
+    const live = AgentSession.acquire(SESSION);
+    const loading = live.load();
+    // The surface goes away while the log is still on the wire - a list row
+    // scrolling out, or a route change - and nothing is left to render it.
+    live.release();
+    log.resolve(logOf([row(1)]));
+
+    await expect(loading).rejects.toBeInstanceOf(AgentSessionReleased);
+    expect(fold.pushSession).not.toHaveBeenCalled();
   });
 
   it('ignores rows for sessions nobody has open', () => {

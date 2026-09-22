@@ -60,18 +60,17 @@ impl InvitationExtractionNotifier for InvitationNotifier {
         if let Some(link) = email_db_client::links::get::fetch_link_by_id(&self.db, link_id)
             .await
             .map_err(|e| rootcause::report!(e.to_string()))?
+            && cfg!(feature = "connection_gateway")
         {
-            if cfg!(feature = "connection_gateway") {
-                let payload = serde_json::to_value(
-                    models_email::api::refresh::RefreshEmailEvent::CalendarInvitationsUpdated {
-                        link_id,
-                    },
-                )?;
-                self.gateway
-                    .refresh_email(link.macro_id.as_ref(), payload)
-                    .await
-                    .map_err(|error| rootcause::report!(error.to_string()))?;
-            }
+            let payload = serde_json::to_value(
+                models_email::api::refresh::RefreshEmailEvent::CalendarInvitationsUpdated {
+                    link_id,
+                },
+            )?;
+            self.gateway
+                .refresh_email(link.macro_id.as_ref(), payload)
+                .await
+                .map_err(|error| rootcause::report!(error.to_string()))?;
         }
         Ok(())
     }

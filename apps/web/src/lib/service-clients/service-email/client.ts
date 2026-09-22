@@ -45,6 +45,7 @@ import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { InvitationResolution } from './generated/schemas/invitationResolution';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
+const calendarHost: string = SERVER_HOSTS['calendar-service'];
 
 /**
  * Header that scopes a mutating email request to a specific inbox. Omitted for
@@ -593,16 +594,13 @@ export const emailClient = {
     });
   },
   async listCalendars() {
-    return fetchWithToken<ListCalendarsResponse>(
-      `${emailHost}/calendar/calendars`,
-      {
-        method: 'GET',
-      }
-    );
+    return fetchWithToken<ListCalendarsResponse>(`${calendarHost}/calendars`, {
+      method: 'GET',
+    });
   },
   async createCalendarEvent(args: CreateCalendarEventRequest) {
     return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
-      `${emailHost}/calendar/events`,
+      `${calendarHost}/events`,
       {
         method: 'POST',
         body: JSON.stringify(args),
@@ -612,7 +610,7 @@ export const emailClient = {
   },
   async updateCalendarEvent(eventId: string, args: UpdateCalendarEventRequest) {
     return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
-      `${emailHost}/calendar/events/${eventId}`,
+      `${calendarHost}/events/${eventId}`,
       {
         method: 'PATCH',
         body: JSON.stringify(args),
@@ -640,7 +638,7 @@ export const emailClient = {
     }
     const query = params.toString();
     return fetchWithToken<EmptyResponse, CalendarMutationErrorCode>(
-      `${emailHost}/calendar/events/${eventId}${query ? `?${query}` : ''}`,
+      `${calendarHost}/events/${eventId}${query ? `?${query}` : ''}`,
       {
         method: 'DELETE',
         errorResponseHandler: calendarMutationErrorHandler,
@@ -649,7 +647,7 @@ export const emailClient = {
   },
   async rsvpCalendarEvent(eventId: string, args: RsvpCalendarEventRequest) {
     return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
-      `${emailHost}/calendar/events/${eventId}/rsvp`,
+      `${calendarHost}/events/${eventId}/rsvp`,
       {
         method: 'PUT',
         body: JSON.stringify(args),

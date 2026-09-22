@@ -111,6 +111,17 @@ export type AgentRepositoriesResponse = {
 };
 
 /**
+ * Response body for `GET /agent-repositories/branches`.
+ */
+export type AgentRepositoryBranchesResponse = {
+    /**
+     * Branch names on the repository, in the order GitHub returned them.
+     * Empty when the repository has no commits yet.
+     */
+    branches: Array<string>;
+};
+
+/**
  * One repository the caller can select for a coding session.
  */
 export type AgentRepositoryDto = {
@@ -1147,6 +1158,46 @@ export type ListAgentRepositoriesResponses = {
 };
 
 export type ListAgentRepositoriesResponse = ListAgentRepositoriesResponses[keyof ListAgentRepositoriesResponses];
+
+export type ListAgentRepositoryBranchesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Canonical https://github.com/owner/name URL
+         */
+        repoUrl: string;
+    };
+    url: '/agent-repositories/branches';
+};
+
+export type ListAgentRepositoryBranchesErrors = {
+    /**
+     * The query did not name a GitHub repository
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * The caller cannot reach this repository
+     */
+    403: unknown;
+    /**
+     * GitHub could not be asked which branches the repository has
+     */
+    502: unknown;
+};
+
+export type ListAgentRepositoryBranchesResponses = {
+    /**
+     * The repository's branches
+     */
+    200: AgentRepositoryBranchesResponse;
+};
+
+export type ListAgentRepositoryBranchesResponse = ListAgentRepositoryBranchesResponses[keyof ListAgentRepositoryBranchesResponses];
 
 export type GetAgentSandboxSizeData = {
     body?: never;

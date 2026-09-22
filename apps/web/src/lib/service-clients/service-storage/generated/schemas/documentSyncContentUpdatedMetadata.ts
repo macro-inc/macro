@@ -20,7 +20,7 @@ before attribution, and on human-only collab sessions. */
   document_id: string;
   /** Version marker for the sync snapshot, when the caller supplies one. */
   document_version_id?: DocumentSyncContentUpdatedMetadataDocumentVersionId;
-  /** File type of the sync document (markdown today). */
+  /** File type of the sync document, resolved by the document backend. */
   file_type: FileType;
   on_behalf_of?: DocumentSyncContentUpdatedMetadataOnBehalfOf;
 }

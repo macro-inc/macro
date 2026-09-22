@@ -3229,7 +3229,7 @@
     "/email/threads/{thread_id}/calendar-invitations": {
       "get": {
         "tags": ["email"],
-        "operationId": "handler",
+        "operationId": "get_thread_calendar_invitations",
         "parameters": [
           {
             "name": "thread_id",

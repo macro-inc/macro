@@ -149,6 +149,14 @@ export function CallControlsDefaultAndPanelRow(
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
 
+  async function handleLeave() {
+    try {
+      await props.onLeave();
+    } catch (error) {
+      console.error('Failed to leave call', error);
+    }
+  }
+
   return (
     <div class="inline-flex items-center overflow-hidden rounded-lg border border-ink-muted/[0.08] bg-ink-muted/[0.025] divide-x divide-ink-muted/[0.08]">
       <Cell>
@@ -269,7 +277,7 @@ export function CallControlsDefaultAndPanelRow(
           <Button
             size="icon-sm"
             class="text-failure not-disabled:hover:text-failure not-disabled:hover:bg-failure/10"
-            onClick={() => void props.onLeave()}
+            onClick={handleLeave}
             disabled={isConnecting()}
             aria-label="Leave call"
           >

@@ -89,6 +89,16 @@ export default defineDoc({
   status: 'beta',
   description:
     'Native email invitation cards with saved event details, notifications, and accessible RSVP states.',
+  guidelines: {
+    do: [
+      'Render saved invitation details immediately and supply current calendar state through the host actions.',
+      'Keep the original email accessible and show which connected address will respond.',
+    ],
+    dont: [
+      'Enable RSVP or Join until an authorized calendar resolution permits the action.',
+      'Parse ICS or fetch provider data from the card.',
+    ],
+  },
   demos: [
     {
       id: 'interactive',

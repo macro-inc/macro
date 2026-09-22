@@ -191,6 +191,14 @@ export interface CacheWasmModule {
     hotCapacity?: number
   ): Promise<CacheOpenResult>;
   destroyCache(scope: string): Promise<void>;
+  /** Optional while older cached WASM artifacts are still in circulation. */
+  setSlowQueryCallback?(
+    callback: (
+      fingerprint: string,
+      durationMs: number,
+      success: boolean
+    ) => void
+  ): void;
   schemaHash(): string;
   /** Read-only binary metadata; optional so fixtures can diagnose stale artifacts. */
   cacheBuildInfo?(): unknown;
@@ -279,6 +287,15 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
           throw new Error('cache WASM did not export its linear memory');
         }
         wasmMemory = exports.memory;
+        mod.setSlowQueryCallback?.((queryFingerprint, durationMs, success) => {
+          telemetry.record({
+            name: 'graphql_cache.slow_query',
+            operationCategory: 'storage',
+            queryFingerprint,
+            durationMs,
+            outcome: success ? 'success' : 'error',
+          });
+        });
         telemetry.record({
           name: 'graphql_cache.wasm_instantiate',
           operationCategory: 'initialization',

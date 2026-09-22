@@ -28,9 +28,8 @@ vi.hoisted(() => {
 vi.mock('@core/constant/allBlocks', () => ({
   verifyBlockName: (name: string) => name,
 }));
-vi.mock('@core/signal/mention', () => ({
-  untrackMention: vi.fn(),
-}));
+const { untrackMention } = vi.hoisted(() => ({ untrackMention: vi.fn() }));
+vi.mock('@core/signal/mention', () => ({ untrackMention }));
 vi.mock('@service-storage/client', () => ({
   blockNameToItemType: (name: string) => {
     const map: Record<string, string> = {
@@ -70,6 +69,7 @@ import {
   type LexicalEditor,
 } from 'lexical';
 import {
+  INSERT_AGENT_SESSION_MENTION_COMMAND,
   INSERT_CONTACT_MENTION_COMMAND,
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
@@ -353,6 +353,51 @@ describe('mentionsPlugin callbacks', () => {
       itemType: 'call',
       itemId: 'call-1',
     });
+
+    cleanup();
+  });
+
+  test('removing an agent session mention untracks its document reference', () => {
+    untrackMention.mockClear();
+    const editor = createTestEditor();
+    const created: ItemMention[] = [];
+    const removed: ItemMention[] = [];
+    const cleanup = mentionsPlugin({
+      sourceDocumentId: 'doc-1',
+      onCreateMention: (mention) => created.push(mention),
+      onRemoveMention: (mention) => removed.push(mention),
+    })(editor);
+
+    editor.dispatchCommand(INSERT_AGENT_SESSION_MENTION_COMMAND, {
+      id: 'session-1',
+      label: 'Fix mentions',
+      mentionUuid: 'uuid-session',
+    });
+    editor.read(() => {});
+
+    expect(created).toContainEqual(
+      expect.objectContaining({
+        itemType: 'agent_session',
+        itemId: 'session-1',
+      })
+    );
+    expect(untrackMention).not.toHaveBeenCalled();
+
+    editor.update(
+      () => {
+        $getRoot().clear().append($createParagraphNode());
+      },
+      { discrete: true }
+    );
+    editor.read(() => {});
+
+    expect(removed).toContainEqual(
+      expect.objectContaining({
+        itemType: 'agent_session',
+        itemId: 'session-1',
+      })
+    );
+    expect(untrackMention).toHaveBeenCalledWith('doc-1', 'uuid-session');
 
     cleanup();
   });

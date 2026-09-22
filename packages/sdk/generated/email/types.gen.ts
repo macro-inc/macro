@@ -302,6 +302,7 @@ export type ApiMessage = {
     body_macro?: string | null;
     body_replyless?: string | null;
     body_text?: string | null;
+    calendar_invitations?: MessageCalendarInvitations;
     cc: Array<ApiContactInfo>;
     created_at: string;
     db_id: string;
@@ -765,6 +766,116 @@ export type CalendarEventSourceContent = {
 };
 
 /**
+ * Display snapshot of one meaningful VEVENT, owned by the email domain.
+ */
+export type CalendarInvitation = {
+    /**
+     * Attachment to download when the original invitation is needed.
+     */
+    attachment_id?: string | null;
+    /**
+     * Historical attendee identities and participation metadata.
+     */
+    attendees: Array<InvitationParticipant>;
+    /**
+     * Reply or counter-proposal comment.
+     */
+    comment?: string | null;
+    /**
+     * Validated HTTP(S) conferencing URL; never fetched during rendering.
+     */
+    conference_url?: string | null;
+    /**
+     * SHA-256 of the decoded calendar part.
+     */
+    content_hash: string;
+    /**
+     * Plaintext description, retaining passwords and dial-in instructions.
+     */
+    description?: string | null;
+    /**
+     * Scheduling timestamp in its original spelling.
+     */
+    dtstamp?: string | null;
+    /**
+     * Original DURATION when no explicit end was supplied.
+     */
+    duration?: string | null;
+    end?: null | InvitationDateTime;
+    /**
+     * Validated HTTP(S) event URL.
+     */
+    event_url?: string | null;
+    /**
+     * External file references; never fetched during rendering.
+     */
+    files: Array<string>;
+    /**
+     * Content-derived component identity, stable across repeated extraction.
+     */
+    id: string;
+    /**
+     * Last modification timestamp in its original spelling.
+     */
+    last_modified?: string | null;
+    /**
+     * Bounded, non-content reason codes describing incomplete interpretation.
+     */
+    limitations: Array<string>;
+    /**
+     * Plaintext event location.
+     */
+    location?: string | null;
+    /**
+     * Original scheduling method.
+     */
+    method: InvitationMethod;
+    organizer?: null | InvitationParticipant;
+    /**
+     * Version of the parser and policy producing this snapshot.
+     */
+    parser_version: number;
+    /**
+     * Producer identifier; format recognition grants no permission.
+     */
+    prodid?: string | null;
+    /**
+     * Unexpanded RRULE/RDATE/EXDATE properties and parameters.
+     */
+    recurrence: Array<string>;
+    recurrence_id?: null | InvitationDateTime;
+    /**
+     * Original recurrence identifier spelling and parameters.
+     */
+    recurrence_id_raw?: string | null;
+    /**
+     * Scheduling revision, distinct from delivery order.
+     */
+    sequence: number;
+    /**
+     * Original provider MIME part identifier.
+     */
+    source_part: string;
+    start?: null | InvitationDateTime;
+    /**
+     * Original event status.
+     */
+    status?: string | null;
+    /**
+     * Preserved VTIMEZONE definitions for unresolved timezone interpretation.
+     */
+    timezones: Array<string>;
+    /**
+     * Event summary.
+     */
+    title?: string | null;
+    /**
+     * iCalendar UID; never a Google provider event ID.
+     */
+    uid: string;
+};
+
+/**
  * HTTP error body returned by calendar mutation endpoints.
  */
 export type CalendarMutationApiError = {
@@ -782,6 +893,32 @@ export type CalendarMutationApiError = {
  * Machine-readable failure category for calendar mutations.
  */
 export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
+
+/**
+ * A materialized recurrence instance optimized for range queries.
+ */
+export type CalendarOccurrence = {
+    /**
+     * Owning event entity.
+     */
+    eventId: string;
+    /**
+     * Whether the instance was cancelled.
+     */
+    isCancelled: boolean;
+    /**
+     * Stable key within the event.
+     */
+    occurrenceKey: string;
+    /**
+     * Provider recurrence identifier, when applicable.
+     */
+    recurrenceId?: string | null;
+    /**
+     * Instance time.
+     */
+    time: EventTime;
+};
 
 /**
  * How much of a recurring series an RSVP applies to.
@@ -1124,6 +1261,120 @@ export type InitResponse = {
     link_id: string;
 };
 
+/**
+ * Preserve date-only and unresolved times without manufacturing UTC instants.
+ */
+export type InvitationDateTime = {
+    kind: 'date';
+    /**
+     * ISO calendar date.
+     */
+    value: string;
+} | {
+    kind: 'zoned';
+    /**
+     * Original local wall time.
+     */
+    local: string;
+    /**
+     * Original TZID, or UTC.
+     */
+    time_zone: string;
+    /**
+     * RFC3339 instant.
+     */
+    value: string;
+} | {
+    kind: 'unresolved';
+    /**
+     * Original TZID if present.
+     */
+    time_zone?: string | null;
+    /**
+     * ISO local wall time, without an offset.
+     */
+    value: string;
+};
+
+/**
+ * Extraction lifecycle, independent from calendar connectivity.
+ */
+export type InvitationExtractionStatus = 'unprocessed' | 'pending' | 'ready' | 'absent' | 'unsupported';
+
+/**
+ * Original scheduling method, including methods unsupported for actions.
+ */
+export type InvitationMethod = 'request' | 'reply' | 'cancel' | 'counter' | 'publish' | 'unknown';
+
+/**
+ * Scheduling participant; saved responses are historical, not current RSVP.
+ */
+export type InvitationParticipant = {
+    /**
+     * Participant calendar address.
+     */
+    email: string;
+    /**
+     * Original CUTYPE, including resources and rooms.
+     */
+    kind?: string | null;
+    /**
+     * Sender-supplied display name.
+     */
+    name?: string | null;
+    /**
+     * Original PARTSTAT, retaining extensions.
+     */
+    participation_status?: string | null;
+    /**
+     * Original ROLE, including optional and non-participants.
+     */
+    role?: string | null;
+};
+
+/**
+ * Refreshable result, distinct from the immutable email contents.
+ */
+export type InvitationResolution = {
+    kind: 'disconnected';
+} | {
+    kind: 'still_syncing';
+} | {
+    kind: 'cancelled';
+} | {
+    kind: 'unavailable';
+} | {
+    kind: 'no_match';
+} | {
+    kind: 'ambiguous';
+} | {
+    /**
+     * Whether the conference link belongs to the reconciled scheduling target.
+     */
+    can_join: boolean;
+    /**
+     * Whether a response is currently allowed.
+     */
+    can_respond: boolean;
+    /**
+     * Current occurrence-specific content.
+     */
+    event: CalendarEvent;
+    /**
+     * Whether the provider projection trails the email revision.
+     */
+    is_stale: boolean;
+    kind: 'resolved';
+    /**
+     * Original occurrence identity and current time.
+     */
+    occurrence: CalendarOccurrence;
+    /**
+     * Connected address that would respond.
+     */
+    responding_email: string;
+};
+
 export type Label = {
     created_at: string;
     id?: string | null;
@@ -1295,6 +1546,20 @@ export type Message = {
     updated_at: string;
 };
 
+/**
+ * Saved invitation data accompanying an email through every transport.
+ */
+export type MessageCalendarInvitations = {
+    /**
+     * Distinct scheduling components, including recurrence overrides.
+     */
+    invitations: Array<CalendarInvitation>;
+    /**
+     * Whether extraction ran and whether it needs retrying.
+     */
+    status: InvitationExtractionStatus;
+};
+
 export type MessageListVisibility = 'Show' | 'Hide';
 
 /**
@@ -1388,6 +1653,9 @@ export type RefreshEmailEvent = {
     link_id: string;
     status: BackfillStatus;
     total_threads: number;
+} | {
+    event: 'calendar_invitations_updated';
+    link_id: string;
 };
 
 /**
@@ -1418,6 +1686,10 @@ export type RsvpCalendarEventRequest = {
      * Original-start key of the occurrence the response targets.
      */
     recurrenceId?: string | null;
+    /**
+     * The owned connected address whose attendance is changed. Validated by the domain.
+     */
+    respondingEmail?: string | null;
     /**
      * The response to record for the connected account.
      */
@@ -3056,6 +3328,34 @@ export type GetThreadResponses = {
 };
 
 export type GetThreadResponse2 = GetThreadResponses[keyof GetThreadResponses];
+
+export type GetThreadCalendarInvitationsData = {
+    body?: never;
+    path: {
+        /**
+         * Authorized email thread
+         */
+        thread_id: string;
+    };
+    query?: {
+        offset?: number | null;
+        limit?: number | null;
+    };
+    url: '/email/threads/{thread_id}/calendar-invitations';
+};
+
+export type GetThreadCalendarInvitationsErrors = {
+    401: unknown;
+    403: unknown;
+};
+
+export type GetThreadCalendarInvitationsResponses = {
+    200: {
+        [key: string]: InvitationResolution;
+    };
+};
+
+export type GetThreadCalendarInvitationsResponse = GetThreadCalendarInvitationsResponses[keyof GetThreadCalendarInvitationsResponses];
 
 export type UpdateThreadProjectData = {
     body: UpdateThreadProjectRequest;

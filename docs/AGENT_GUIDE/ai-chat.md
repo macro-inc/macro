@@ -1,5 +1,19 @@
 # AI Chat (Agents)
 
+## Uploading files with AI
+
+`UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
+decoded. An optional project ID places the file in a folder the caller can edit.
+Use `CreateDocument` for generated text and native Macro spreadsheets. Agents with
+code execution should construct the base64 argument from the original bytes;
+the tool cannot access an agent's local path or download a URL.
+
+The tool row displays the filename and, on success, **Uploaded**. Expand it to
+open the created document and see the uploaded byte count. Success means the
+bytes reached storage; previews, DOCX conversion, Markdown initialization, and
+indexing may finish asynchronously. Invalid contents, oversized files, and folder
+permission failures should display a failed tool call without a successful result.
+
 ## Where chats live
 
 - If session creation fails, the session view shows **Unable to start this agent**
@@ -11,6 +25,12 @@
 
 - Open **Go to Agents** → `/app/component/agents`. With AI agents enabled
   (`enable-chat-v3-agents`), the workspace uses one sidebar for Chat and Code.
+  Below **New conversation**, **Agents** opens the same roster as the composer’s
+  **Create agent** action. **Connections** manages MCP integrations (including
+  app authentication and disconnection); this section has moved out of Settings.
+  Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
+  Connections page. Personal Gmail/GitHub account links remain under Settings →
+  Integrations.
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
@@ -32,7 +52,7 @@
   non-paragraph blocks expand immediately, even with short text. This also applies
   to session composers. The editor takes the full width and controls move below;
   returning to a short paragraph restores the compact row. Height changes animate
-  over 150ms, with reduced-motion preferences respected. **Agent** and **Send**
+  over 200ms, with reduced-motion preferences respected. **Agent** and **Send**
   sit inside the input on the right.
   Direct model selections show only the model name and provider icon in the input.
   Saved and coding agents show their identity beside the current model. There is
@@ -63,10 +83,17 @@
   when changing agents. **Create agent** stays pinned at the bottom of the dropdown
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.
-- Selecting a coding agent reveals a repository drawer directly under the input
-  with a short slide and fade; it extends 32px behind the rounded input and stays
-  behind it throughout the transition, keeping its existing edge-muted border.
-  Selecting a chat agent retracts it. Reduced-motion
+- On Home and New conversation, selecting a coding agent expands the input even
+  with an empty or short draft. Both pages place the composer above the viewport's
+  vertical center. The heading and first input line stay anchored while the composer
+  expands downward. The plus attachment button stays at the far left: before the
+  text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
+  on the left and the agent/model and Send on the right. A full-width repository bar
+  slides and fades in below the rounded input over 200ms, with rounded bottom corners
+  and a subtle border along its sides and bottom, with a darker surface in dark mode.
+  Selecting a chat agent retracts the bar and
+  restores the compact input when the draft fits on one line, without remounting
+  the editor or losing the draft. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
   (**Choose repository** until one is picked) opens a searchable list:
   **Choose automatically**, then the repositories the signed-in user reaches
@@ -80,11 +107,15 @@
   GitHub**, which opens Settings → Connected. Listed recents are remembered
   per user in local storage and offered first, without changing the Automatic
   default. Once selected, **Branch** shows the repository's default branch (`main` when it
-  has none) and opens a starting-branch field confirmed with **Use branch**;
-  picking a different repository resets the branch to that repository's
-  default. Omitting the branch on the create-session API likewise starts on
-  the repository's default branch.
-  Both controls open above the drawer without clipping. The selections survive
+  has none) and opens a searchable list of that repository's branches
+  (`GET /agent-repositories/branches?repoUrl=…` on the agent harness),
+  default first. Typing filters the list; an unlisted valid name adds a
+  **Use name** row. Arrow keys move the highlight and Enter or a click picks
+  it; there is no separate confirm button. Someone whose listing fails sees
+  **Retry**. Picking a different repository resets the branch to that
+  repository's default. Omitting the branch on the create-session API
+  likewise starts on the repository's default branch.
+  Both controls open above the footer without clipping. The selections survive
   agent changes and are sent only to coding agents. Cursor honors the explicit
   repository and branch instead of choosing a repository from the prompt;
   the owner must have access through the connected GitHub App.
@@ -115,8 +146,9 @@
   saved-title precedence, and title menu as `/app/agent/<id>`; click the caret
   beside the title for shared block actions such as Rename, Copy link, Favorite,
   and Delete
-  (Rename, Copy link, Delete). A metadata strip lists the agent, runtime,
-  model, repository, and status. Chat and Code session inputs
+  (Rename, Copy link, Delete). A metadata strip lists the agent, model,
+  repository, and status. Coding sessions also list the harness; in-memory
+  chat agents omit that row. Chat and Code session inputs
   use the same growing, initially single-line input with the model selector on
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
@@ -379,14 +411,32 @@ agent as working, every Thinking label, **Calling N tools** row, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. At most one shimmering row is ever expected.
 
+A `displayResults` call is the exception: it renders the dynamic-UI view the
+model composed — the same dashboard (markdown, timelines, entity lists, channel
+messages) that AI chat shows — full width in the transcript, and never folded
+into a tool group or behind a card. Expect the view itself, not a `DisplayResults`
+row. Incomplete arguments stay hidden while streaming, and a valid view updates
+as its arguments change. A completed call whose JSON does not match the schema
+shows `Couldn't render dashboard`; a failed call keeps its error card.
+Macro's built-in agents receive the complete view schema with the tool definition.
+External coding agents connected through Macro's MCP server do not currently
+receive this tool.
+
 ### Sharing a session
 
 In the Agents workspace, saved sessions use the shared top-bar controls: session
 icon, title and action menu, Share, Copy Share Link, and a side-panel toggle.
 There is no breadcrumb because Agents has no subspaces. Unknown model providers
 fall back to the chat icon. The toggle (or `]`) opens the session's Details, Plan,
-Changes, and Activity sections when available, beside the transcript in wide
+Changes, Activity, and References sections when available, beside the transcript in wide
 layouts or over it in narrow layouts; it does not open another split.
+Details lists Status, Agent, Model, and dates for every session; the Harness
+row appears only for coding runtimes, never for in-memory chat agents.
+`References` is the same section documents show: one row per channel message that
+`@`-mentioned or shared the session (sender, channel chip, time, and a two-line
+message excerpt) and per document that mentions it (author and document chip).
+Click a row to open that message or document in a split. The section is hidden
+until at least one reference exists, and only lists channels you belong to.
 New conversation pages have no disabled session action buttons. Older chats
 also have one header row, and empty chats show a simple conversation prompt
 instead of the standalone recent-sessions and tips surface.
@@ -397,7 +447,9 @@ select people or channels and send the session with an optional message using
 the same Share dialog and mobile drawer as documents. Sessions also support
 **Share** from entity list menus and the entity sharing shortcut. People receive it through a direct or
 group message. Recipients can view and control the session; there is no access
-level selector. Cancel closes the composer without sending.
+level selector. The owner sees the standard recipient-and-message form without
+an extra session notice or Copy Link footer; **Copy Share Link** remains in
+the header. Cancel closes the composer without sending.
 
 Other participants can copy a link for people who already have access, but
 cannot grant access. Copying a link alone never changes permissions. New,
@@ -418,10 +470,13 @@ Existing announcement chips remain locked to the turn they announced.
 ### Reviewing a linked GitHub pull request
 
 Sessions with a linked GitHub pull request capture that PR's diff when each
-turn ends, regardless of the agent runtime. Unpushed workspace changes and
+turn ends, regardless of the coding runtime. Unpushed workspace changes and
 branches without a PR are not included. The session header gains a **Changes**
 toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it opens a resizable
 **Changes** pane beside the transcript (drag the 1px divider between them).
+Chat sessions on Macro's in-memory harness have no repository, so they show
+none of this: no **Changes** toggle, pane, hand-off card, or review-notes chip,
+and the title menu offers **Open repository** only when the session has one.
 The URL's `diff` query parameter stores each session's pane state and diff
 layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
 `split` for side-by-side diffs). Copying the URL preserves that view; reload
@@ -444,10 +499,19 @@ review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
 The chip's count row expands (`aria-expanded`) to show each queued note's
 file, line, and text so the reviewer can read or edit them before sending;
 **Send to agent** then posts one prompt listing every non-empty note by file
-and line and marks them "sent to agent". Clicking a note's path opens that
-file in the Changes pane. Notes never go to GitHub. Collapsed files and
+and line and marks them "sent to agent". Sending a typed composer message
+while notes are queued includes those notes in the same prompt and marks them
+sent — a second Enter does not post them again. Clicking a note's path opens
+that file in the Changes pane. Notes never go to GitHub. Collapsed files and
 unsent notes persist per session in localStorage; a new capture expands all
 files.
+
+The session header's **Changes** pill and sidebar totals display the linked
+PR's `additions` and `deletions` returned by the GitHub API, without summing
+transcript edits. The sidebar lists files from the captured PR diff. Counts
+refresh when a capture changes and every 30 seconds while the session is open.
+Zero-valued counts and unavailable GitHub statistics are hidden; a missing PR
+or failed GitHub request never falls back to estimated transcript totals.
 
 While the pane is closed and a capture has files, a **Changes ready to
 review** card sits above the composer with **Review changes**, **Pull request
@@ -462,8 +526,10 @@ The pane does not create PRs or generate their descriptions.
 
 Agent sessions reuse the channel's TanStack `ThreadList`. Opening a session lands
 at the latest message, including when history arrives after the empty view. Short
-transcripts sit at the bottom, above the composer. Only the visible rows and an
-overscan buffer are mounted: scroll to older turns before searching their DOM text.
+transcripts start with 16px of top padding, with the user prompt followed by the
+agent response; streaming output grows downward into the available space. Only
+the visible rows and an overscan buffer are mounted: scroll to older turns before
+searching their DOM text.
 
 Search links add `agent_message_turn=<zero-based turn>&agent_message_author=user|agent`.
 They wait for history to load, then scroll to and highlight the matching folded
@@ -523,7 +589,12 @@ must stay hidden; subsequent live messages must still appear.
   walks back and past the bottom row returns to the input. When the composer is empty
   and a prompt is queued, its action becomes `Send next queued message` (an Enter
   symbol); pressing Enter or clicking that button cancels the current turn so the next
-  queued prompt starts immediately. Typed composer text still takes priority and Enter
+  queued prompt starts immediately. The advance is held — the control reads `Stop` and
+  Enter is inert — while a stop is already in flight or while the prompt the last
+  advance sent is still unconfirmed (it shows as a pending bubble); once the server
+  confirms that prompt as the running turn, Enter advances the queue again. Two rapid
+  Enters therefore advance one entry, not two: each advance ends the turn the server is
+  actually running. Typed composer text still takes priority and Enter
   queues that new prompt normally.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued

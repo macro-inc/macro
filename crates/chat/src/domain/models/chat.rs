@@ -1,4 +1,5 @@
 use model::chat::ChatMessageWithAttachments;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
 use serde::{Deserialize, Serialize};
@@ -69,7 +70,8 @@ pub struct ChatResponse {
     /// The chat uuid.
     pub id: String,
     /// Who the chat belongs to.
-    pub user_id: String,
+    #[schema(value_type = String)]
+    pub user_id: Owner,
     /// The project id the chat belongs to.
     pub project_id: Option<String>,
     /// The name of the chat.

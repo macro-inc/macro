@@ -19,6 +19,7 @@ function picker(
     onSelectRepository: vi.fn(),
     onSelectBranch: vi.fn(),
     onRetryRepositories: vi.fn(),
+    onRetryBranches: vi.fn(),
     onConnectGitHub: vi.fn(),
   };
   render(() => (
@@ -28,6 +29,9 @@ function picker(
       repositoriesLoading={false}
       repositoriesError={false}
       recentRepositories={[]}
+      branches={['main', 'develop', 'feature/home']}
+      branchesLoading={false}
+      branchesError={false}
       {...handlers}
       {...overrides}
     />
@@ -39,7 +43,9 @@ const openRepositories = () =>
 const search = () =>
   screen.getByRole('combobox', { name: 'Search repositories' });
 const optionNames = () =>
-  screen.getAllByRole('option').map((option) => option.textContent?.trim());
+  screen
+    .getAllByRole('option')
+    .map((option) => option.textContent?.replace(/\s+/g, ' ').trim());
 
 describe('RepositoryPicker', () => {
   beforeEach(() => vi.stubGlobal('scrollTo', vi.fn()));
@@ -172,23 +178,78 @@ describe('RepositoryPicker', () => {
     expect(handlers.onSelectRepository).not.toHaveBeenCalled();
   });
 
-  it('shows the branch only with a repository and validates the one typed', () => {
+  it('shows the branch only with a repository and picks a listed one', () => {
     expect(picker().onSelectBranch).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Branch' })).toBeNull();
     cleanup();
 
-    const handlers = picker({ repoUrl: infra.url, branch: 'develop' });
+    const handlers = picker({
+      repoUrl: infra.url,
+      branch: 'develop',
+      branches: ['main', 'develop', 'feature/home'],
+    });
     const branch = screen.getByRole('button', { name: 'Branch' });
     expect(branch.textContent).toContain('develop');
     fireEvent.click(branch);
-    const field = screen.getByRole('textbox', { name: 'Starting branch' });
-    expect((field as HTMLInputElement).value).toBe('develop');
-    fireEvent.input(field, { target: { value: 'bad..name' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
-    expect(screen.getByRole('alert')).toBeTruthy();
-    expect(handlers.onSelectBranch).not.toHaveBeenCalled();
-    fireEvent.input(field, { target: { value: 'feature/home' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
+    expect(optionNames()).toEqual([
+      'develop (default)',
+      'main',
+      'feature/home',
+    ]);
+    const selected = screen.getByRole('option', { name: /develop/ });
+    expect(selected.querySelector('svg.ml-auto')).toBeTruthy();
+    fireEvent.click(screen.getByRole('option', { name: 'feature/home' }));
     expect(handlers.onSelectBranch).toHaveBeenCalledWith('feature/home');
+  });
+
+  it('filters branches as you type and offers an unlisted name', () => {
+    const handlers = picker({
+      repoUrl: infra.url,
+      branch: 'develop',
+      branches: ['main', 'develop', 'feature/home'],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    const field = screen.getByRole('combobox', { name: 'Search branches' });
+    fireEvent.input(field, { target: { value: 'HOME' } });
+    expect(optionNames()).toEqual(['feature/home', 'Use HOME']);
+    fireEvent.input(field, { target: { value: 'feature/other' } });
+    expect(optionNames()).toEqual(['Use feature/other']);
+    fireEvent.click(screen.getByRole('option', { name: 'Use feature/other' }));
+    expect(handlers.onSelectBranch).toHaveBeenCalledWith('feature/other');
+  });
+
+  it('refuses to submit text that is not a branch name', () => {
+    const handlers = picker({ repoUrl: infra.url, branch: 'develop' });
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    const field = screen.getByRole('combobox', { name: 'Search branches' });
+    fireEvent.input(field, { target: { value: 'bad..name' } });
+    fireEvent.submit(field.closest('form') as HTMLFormElement);
+    expect(screen.getByRole('alert').textContent).toContain('valid branch');
+    expect(handlers.onSelectBranch).not.toHaveBeenCalled();
+  });
+
+  it('shows the loading, failed, and empty branch listings', () => {
+    picker({
+      repoUrl: infra.url,
+      branches: [],
+      branchesLoading: true,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    expect(screen.getByText('Loading branches…')).toBeTruthy();
+    cleanup();
+
+    const failed = picker({
+      repoUrl: infra.url,
+      branches: [],
+      branchesError: true,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(failed.onRetryBranches).toHaveBeenCalledOnce();
+    cleanup();
+
+    picker({ repoUrl: infra.url, branches: [] });
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    expect(screen.getByText(/No branches yet/)).toBeTruthy();
   });
 });

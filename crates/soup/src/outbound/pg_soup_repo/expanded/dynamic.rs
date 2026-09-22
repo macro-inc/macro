@@ -18,7 +18,8 @@ use item_filters::ast::{
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{
     calendar_event::SoupCalendarEvent,
@@ -813,7 +814,9 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
         filter_ast::ExprFrame::Literal(DocumentLiteral::ProjectId(p)) => {
             nullable_eq(r#"d."projectId""#, p)
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::Owner(o)) => format!("d.owner = '{o}'"),
+        filter_ast::ExprFrame::Literal(DocumentLiteral::Owner(o)) => {
+            format!("d.owner = {}", sql_string_literal(&o.principal_id()))
+        }
         filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(true)) => {
             // "Important" documents: non-tasks OR tasks where user is an assignee
             r#"(
@@ -880,10 +883,11 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
     }
 }
 
-/// A single-quoted SQL string literal with embedded quotes doubled. The
-/// calendar filter inlines caller-supplied strings (statuses, attendee and
-/// organizer emails), which unlike the ids the sibling builders inline are
-/// not shaped by a parser first.
+/// A single-quoted SQL string literal with embedded quotes doubled. Used for
+/// every caller-supplied string these bind-free builders inline: the calendar
+/// filter's statuses and attendee/organizer emails, and the owner principals,
+/// none of which are constrained to the shape of the uuids the sibling
+/// builders inline.
 fn sql_string_literal(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
@@ -964,7 +968,7 @@ pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
         filter_ast::ExprFrame::Literal(ChatLiteral::Role(_r)) => "TRUE".to_string(),
         filter_ast::ExprFrame::Literal(ChatLiteral::ChatId(i)) => format!("c.id = '{i}'"),
         filter_ast::ExprFrame::Literal(ChatLiteral::Owner(o)) => {
-            format!(r#"c."userId" = '{o}'"#)
+            format!(r#"c."userId" = {}"#, sql_string_literal(&o.principal_id()))
         }
         // all chats are important
         filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => "TRUE".to_string(),
@@ -1005,7 +1009,7 @@ pub(in crate::outbound::pg_soup_repo) fn build_project_filter(
             format!(r#"p.id = '{p}'"#)
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => {
-            format!(r#"p."userId" = '{o}'"#)
+            format!(r#"p."userId" = {}"#, sql_string_literal(&o.principal_id()))
         }
         // all projects are important; TRUE (not empty) keeps the literal
         // valid SQL inside And/Or/Not.
@@ -1681,9 +1685,7 @@ impl SoupRow {
                 document_version_id: document_version_id
                     .parse()
                     .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                owner_id: MacroUserIdStr::parse_from_str(&user_id)
-                    .map_err(type_err)?
-                    .into_owned(),
+                owner_id: Owner::from_principal_str(&user_id).map_err(type_err)?,
                 name,
                 file_type,
                 sha,
@@ -1721,9 +1723,7 @@ impl SoupRow {
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 name,
                 model,
-                owner_id: MacroUserIdStr::parse_from_str(&user_id)
-                    .map_err(type_err)?
-                    .into_owned(),
+                owner_id: Owner::from_principal_str(&user_id).map_err(type_err)?,
                 project_id: project_id
                     .as_deref()
                     .map(Uuid::parse_str)
@@ -1748,9 +1748,7 @@ impl SoupRow {
             }) => SoupItem::Project(SoupProject {
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 name,
-                owner_id: MacroUserIdStr::parse_from_str(&user_id)
-                    .map_err(type_err)?
-                    .into_owned(),
+                owner_id: Owner::from_principal_str(&user_id).map_err(type_err)?,
                 parent_id: project_id
                     .as_deref()
                     .map(Uuid::from_str)

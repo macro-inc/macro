@@ -1,4 +1,4 @@
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use model_owner::Owner;
 use sqlx::{Pool, Postgres, Transaction};
 
 use document_sub_type::DocumentSubType;
@@ -156,9 +156,8 @@ pub async fn get_basic_document(
         Ok(DocumentBasic {
             document_id: row.document_id,
             document_name: row.document_name,
-            owner: MacroUserIdStr::parse_from_str(&row.owner)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
+            owner: Owner::from_principal_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             file_type: row.file_type,
             sub_type: row.sub_type,
             branched_from_id: row.branched_from_id,
@@ -207,9 +206,8 @@ pub async fn get_basic_documents(
         Ok(DocumentBasic {
             document_id: row.document_id,
             document_name: row.document_name,
-            owner: MacroUserIdStr::parse_from_str(&row.owner)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
+            owner: Owner::from_principal_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             file_type: row.file_type,
             sub_type: row.sub_type,
             branched_from_id: row.branched_from_id,
@@ -255,9 +253,8 @@ pub async fn get_deleted_document_info(
         Ok(DocumentBasic {
             document_id: row.document_id,
             document_name: row.document_name,
-            owner: MacroUserIdStr::parse_from_str(&row.owner)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
+            owner: Owner::from_principal_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             file_type: row.file_type,
             sub_type: row.sub_type,
             branched_from_id: row.branched_from_id,
@@ -365,9 +362,8 @@ pub async fn get_document(
         Ok(DocumentMetadata {
             document_id: row.document_id,
             document_version_id: row.document_version_id,
-            owner: MacroUserIdStr::parse_from_str(&row.owner)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
+            owner: Owner::from_principal_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             document_name: row.document_name,
             file_type: row.file_type,
             sha: row.sha,
@@ -481,9 +477,8 @@ pub async fn get_document_version(
         Ok(DocumentMetadata {
             document_id: row.document_id,
             document_version_id: row.document_version_id,
-            owner: MacroUserIdStr::parse_from_str(&row.owner)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
+            owner: Owner::from_principal_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             document_name: row.document_name,
             file_type: row.file_type,
             sha: row.sha,
@@ -635,9 +630,8 @@ mod tests {
             get_basic_document(&pool, "document-one")
                 .await
                 .unwrap()
-                .owner
-                .as_ref(),
-            "macro|user@user.com",
+                .owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
         );
     }
 
@@ -660,7 +654,10 @@ mod tests {
             document_metadata.document_name,
             "test_document_name".to_string()
         );
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_documents")))]
@@ -675,7 +672,10 @@ mod tests {
             document_metadata.document_name,
             "test_document_name".to_string()
         );
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_documents")))]
@@ -692,7 +692,10 @@ mod tests {
             document_metadata.document_name,
             "test_document_name".to_string()
         );
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_documents")))]

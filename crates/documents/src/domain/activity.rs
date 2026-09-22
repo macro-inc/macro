@@ -14,6 +14,15 @@ use uuid::Uuid;
 
 use super::events::DocumentTopicEvent;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
+
+fn actor_from_owner(owner: &Owner) -> Option<Actor<'static>> {
+    match owner {
+        Owner::User(user) => Some(Actor::new_from_user(user.clone())),
+        Owner::Bot(bot_id) => Some(Actor::new_from_bot(*bot_id)),
+        Owner::Team(_) => None,
+    }
+}
 
 /// Attribution for `updated` / `deleted` events. Bot receipts publish `actor`;
 /// user receipts (and events from before attribution) only `actor_user_id`.
@@ -52,16 +61,19 @@ impl ActivitySource for DocumentTopicEvent {
 
         match self {
             DocumentTopicEvent::Created(metadata) => {
-                let actor = metadata
+                match metadata
                     .actor
                     .clone()
-                    .unwrap_or_else(|| Actor::new_from_user(metadata.owner.clone()));
-                single(
-                    Attribution::new(actor, metadata.on_behalf_of.clone()),
-                    CommonAction::Created,
-                    &metadata.document_id,
-                    metadata.created_at.unwrap_or_else(|| event_time(event_id)),
-                )
+                    .or_else(|| actor_from_owner(&metadata.owner))
+                {
+                    Some(actor) => single(
+                        Attribution::new(actor, metadata.on_behalf_of.clone()),
+                        CommonAction::Created,
+                        &metadata.document_id,
+                        metadata.created_at.unwrap_or_else(|| event_time(event_id)),
+                    ),
+                    None => Ingest::Ignore,
+                }
             }
             DocumentTopicEvent::Updated(metadata) => {
                 match mutation_attribution(
@@ -94,12 +106,15 @@ impl ActivitySource for DocumentTopicEvent {
                 }
             }
             // The copy is a new document; its creation is the activity.
-            DocumentTopicEvent::Copied(metadata) => single(
-                Attribution::direct(Actor::new_from_user(metadata.owner.clone())),
-                CommonAction::Created,
-                &metadata.document_id,
-                event_time(event_id),
-            ),
+            DocumentTopicEvent::Copied(metadata) => match actor_from_owner(&metadata.owner) {
+                Some(actor) => single(
+                    Attribution::direct(actor),
+                    CommonAction::Created,
+                    &metadata.document_id,
+                    event_time(event_id),
+                ),
+                None => Ingest::Ignore,
+            },
             DocumentTopicEvent::Purged(metadata) => {
                 Ingest::Purge(vec![(EntityType::Document, metadata.document_id.clone())])
             }

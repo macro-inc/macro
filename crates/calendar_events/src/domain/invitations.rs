@@ -147,7 +147,7 @@ pub enum InvitationResolution {
     /// Current authorized event and explicit capabilities.
     Resolved {
         /// Current occurrence-specific content.
-        event: CalendarEvent,
+        event: Box<CalendarEvent>,
         /// Original occurrence identity and current time.
         occurrence: CalendarOccurrence,
         /// Connected address that would respond.
@@ -275,7 +275,7 @@ impl<R: CalendarInvitationRepository> CalendarInvitationResolver<R> {
                     && !copy.occurrence.is_cancelled
                     && copy.event.attendees.iter().any(|a| a.is_self);
                 InvitationResolution::Resolved {
-                    event: copy.event,
+                    event: Box::new(copy.event),
                     occurrence: copy.occurrence,
                     responding_email: copy.email,
                     can_respond,

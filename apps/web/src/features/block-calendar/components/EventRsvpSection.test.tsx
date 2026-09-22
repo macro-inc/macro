@@ -76,6 +76,7 @@ describe('event RSVP confirmation', () => {
       {
         eventId: 'event',
         response: 'tentative',
+        respondingEmail: 'self@example.com',
         scope: 'this_event',
         recurrenceId: 'instance',
         occurrenceKey: '2026-09-11',
@@ -93,6 +94,7 @@ describe('event RSVP confirmation', () => {
       {
         eventId: 'event',
         response: 'declined',
+        respondingEmail: 'self@example.com',
         scope: 'all',
         recurrenceId: undefined,
         occurrenceKey: undefined,

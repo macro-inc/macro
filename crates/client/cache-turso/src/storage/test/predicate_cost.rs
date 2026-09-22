@@ -61,6 +61,106 @@ fn compound_predicates_materialize_sets_once_instead_of_reexecuting_for_each_joi
     });
 }
 
+/// A bounded page must use point lookups for sort facts, not repeatedly scan
+/// every row with the requested sort attribute. Exercise each SQL source leg
+/// independently so the usually small optimistic set cannot hide a bad plan.
+#[test]
+fn sort_fact_lookups_stay_linear_at_thousands_of_matches() {
+    block_on(async {
+        for optimistic in [false, true] {
+            for count in [1_000_u32, 3_000] {
+                let mut storage = TursoStorage::open_in_memory("sort-lookup-cost").unwrap();
+                let documents = (0..count)
+                    .map(|n| {
+                        let mut document =
+                            authoritative_projection(&format!("Thing:{n:05}"), "owner-1");
+                        // Include ties and rows lacking this sort attribute.
+                        document.sort_facts = if n % 7 == 0 {
+                            Vec::new()
+                        } else {
+                            vec![predicate_index::IntegerFact {
+                                attribute: Token::new("updated-at").unwrap(),
+                                value: i64::from(n / 3),
+                            }]
+                        };
+                        document
+                    })
+                    .collect::<Vec<_>>();
+                if optimistic {
+                    storage
+                        .enqueue_mutation_with_shadow(
+                            queued("SortLookupCost"),
+                            documents
+                                .into_iter()
+                                .map(|document| PendingOptimisticProjection {
+                                    state: OptimisticProjectionState::Complete(document),
+                                    uncertainty: OptimisticUncertainty::Attributes(BTreeSet::new()),
+                                })
+                                .collect(),
+                        )
+                        .await
+                        .unwrap();
+                } else {
+                    storage
+                        .put_batch_with_projections(
+                            Vec::new(),
+                            documents
+                                .into_iter()
+                                .map(ProjectionMutation::Replace)
+                                .collect(),
+                        )
+                        .await
+                        .unwrap();
+                }
+
+                for direction in [SortDirection::Asc, SortDirection::Desc] {
+                    let query = ValidatedIndexQuery::new(IndexQuery {
+                        profile: Profile::new(Token::new("profile-v1").unwrap()),
+                        partitions: vec![PartitionPredicate {
+                            partition: Token::new("thing").unwrap(),
+                            predicate: PredicateExpr::All,
+                        }],
+                        sort_attribute: Token::new("updated-at").unwrap(),
+                        sort_direction: direction,
+                        tie_break_direction: direction,
+                        limit: 100,
+                    })
+                    .unwrap();
+                    let (sql, parameters) = compile_predicate_selection(&query, &[], true);
+                    let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
+                    let rows = driver::query_prepared(&mut statement, parameters).unwrap();
+                    let actual = rows
+                        .iter()
+                        .map(|row| {
+                            (
+                                required_text(row, 0).unwrap(),
+                                required_i64(row, 1).unwrap(),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    let mut expected = (0..count).filter(|n| n % 7 != 0).collect::<Vec<_>>();
+                    if direction == SortDirection::Desc {
+                        expected.reverse();
+                    }
+                    let expected = expected
+                        .into_iter()
+                        .take(100)
+                        .map(|n| (format!("Thing:{n:05}"), i64::from(n / 3)))
+                        .collect::<Vec<_>>();
+                    assert_eq!(actual, expected);
+                    let steps = statement.metrics().vm_steps;
+                    let budget = u64::from(count) * 300;
+                    assert!(
+                        steps < budget,
+                        "sort lookup: {count} rows, optimistic={optimistic}, {direction:?}: \
+                         {steps} VM steps exceeds linear budget {budget}"
+                    );
+                }
+            }
+        }
+    });
+}
+
 #[test]
 fn exact_alternatives_use_one_lookup_without_widening_nested_boolean_filters() {
     block_on(async {

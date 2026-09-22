@@ -8,6 +8,8 @@
 #[cfg(test)]
 mod test;
 
+pub mod upload;
+
 use activity::Attribution;
 use anyhow::Context;
 use base64::Engine;

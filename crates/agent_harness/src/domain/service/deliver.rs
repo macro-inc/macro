@@ -78,7 +78,11 @@ where
                 if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     let mcp_servers = self
-                        .resumed_mcp_servers(session_id, &session.owner_id, &session.mcp_servers)
+                        .resumed_mcp_servers(
+                            session_id,
+                            session.owner_user()?,
+                            &session.mcp_servers,
+                        )
                         .await?;
                     self.sessions
                         .attach_session(
@@ -110,7 +114,7 @@ where
                         .egress
                         .provision(
                             session_id,
-                            &session.owner_id,
+                            session.owner_user()?,
                             &AgentMcpServers::Selected {
                                 servers: Vec::new(),
                             },
