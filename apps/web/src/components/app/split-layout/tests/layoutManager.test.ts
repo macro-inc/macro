@@ -385,6 +385,124 @@ describe('layoutManager', () => {
   });
 
   describe('router layout synchronization', () => {
+    function ingressRouter(
+      url: string,
+      options: { enabled?: boolean; loading?: boolean; touch?: boolean } = {}
+    ) {
+      return createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        const routes = createRoutesManifest(appSplitRoutes);
+        const location = createMemorySplitRouterLocation(url);
+        const router = createSplitRouter({
+          routes,
+          layout: createAppSplitRouterLayout(manager, routes),
+          location,
+          middleware: createAppSplitRouterMiddleware({
+            newAppViews: () => ({
+              enabled: options.enabled ?? true,
+              loading: options.loading ?? false,
+            }),
+            isTouchDevice: () => options.touch ?? false,
+          }),
+        });
+        return { manager, location, router, dispose };
+      });
+    }
+
+    it('normalizes legacy search per detail pane without overriding canonical values', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/mail/one/~/channels/channel/c1/~/mail/two/~/mail' +
+          '?email_message_id=legacy&channel_message_id=first&channel_message_id=last' +
+          '&channel_thread_id=thread&s0.email-detail.messageId=explicit' +
+          '&s0.email-detail.extra=keep&s2.email-detail.messageId=&referral_code=code#focus'
+      );
+      await router.settled();
+      const [firstMail, channel, secondMail, mailList] = manager.splits();
+      expect(router.search(firstMail.id, 'email-detail')).toEqual({
+        messageId: ['explicit'],
+        extra: ['keep'],
+      });
+      expect(router.search(channel.id, 'channel-detail')).toEqual({
+        messageId: ['first', 'last'],
+        threadId: ['thread'],
+      });
+      expect(router.search(secondMail.id, 'email-detail')).toEqual({
+        messageId: [''],
+      });
+      expect(router.search(mailList.id, 'email-detail')).toBeUndefined();
+      expect(
+        new URLSearchParams(location.read().search).get('referral_code')
+      ).toBe('code');
+      expect(location.read().hash).toBe('#focus');
+      expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
+    it('normalizes every external URL and restores targets through browser history', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/mail/one?email_message_id=first'
+      );
+      await router.settled();
+      const split = manager.splits()[0];
+      const mount = split.mount;
+      expect(router.search(split.id, 'email-detail')).toEqual({
+        messageId: ['first'],
+      });
+
+      location.set('/mail/one?email_message_id=second');
+      await router.settled();
+      expect(router.search(split.id, 'email-detail')).toEqual({
+        messageId: ['second'],
+      });
+      expect(location.history()).toHaveLength(2);
+      expect(manager.splits()[0].mount).toBe(mount);
+
+      expect(location.back()).toBe(true);
+      await router.settled();
+      expect(router.search(split.id, 'email-detail')).toEqual({
+        messageId: ['first'],
+      });
+      expect(location.forward()).toBe(true);
+      await router.settled();
+      expect(router.search(split.id, 'email-detail')).toEqual({
+        messageId: ['second'],
+      });
+      expect(location.history()).toHaveLength(2);
+      router.dispose();
+      dispose();
+    });
+
+    it.each([
+      { enabled: false, loading: false, touch: false },
+      { enabled: true, loading: true, touch: false },
+      { enabled: true, loading: false, touch: true },
+    ])(
+      'preserves full-block legacy targets when inline detail is unsupported: %o',
+      async (options) => {
+        const { location, router, dispose } = ingressRouter(
+          '/email/one/~/channel/c1?email_message_id=message&channel_message_id=first' +
+            '&channel_message_id=last&channel_thread_id=thread',
+          options
+        );
+        await router.settled();
+        expect(location.read().pathname).toBe('/email/one/~/channel/c1');
+        const query = new URLSearchParams(location.read().search);
+        expect(query.getAll('email_message_id')).toEqual(['message']);
+        expect(query.getAll('channel_message_id')).toEqual(['first', 'last']);
+        expect(query.get('channel_thread_id')).toBe('thread');
+        expect(
+          [...query.keys()].some(
+            (key) => key.startsWith('s0.') || key.startsWith('s1.')
+          )
+        ).toBe(false);
+        router.dispose();
+        dispose();
+      }
+    );
+
     it('upgrades renderable legacy details and preserves repeated raw target values', async () => {
       let dispose!: () => void;
       let router!: ReturnType<typeof createSplitRouter<string>>;
@@ -410,10 +528,14 @@ describe('layoutManager', () => {
       });
 
       await router.settled();
-      expect(location.read()).toMatchObject({
-        pathname: '/mail/thread-1',
-        search: '?email_message_id=first&email_message_id=last',
-      });
+      expect(location.read().pathname).toBe('/mail/thread-1');
+      const query = new URLSearchParams(location.read().search);
+      expect(query.getAll('email_message_id')).toEqual(['first', 'last']);
+      expect(query.getAll('s0.email-detail.messageId')).toEqual([
+        'first',
+        'last',
+      ]);
+      expect(location.history()).toHaveLength(1);
       dispose();
     });
 

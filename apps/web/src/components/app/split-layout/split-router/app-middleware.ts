@@ -1,8 +1,17 @@
+import { CHANNEL_DETAIL_SEARCH_NAMESPACE } from '@app/features/channels-view/channels-route';
 import {
   driveDocumentFromContent,
   drivePath,
 } from '@app/features/drive-view/primitives/drive-route';
-import { routeParams, type SplitRouterMiddleware } from '@app/lib/split-router';
+import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
+import { EMAIL_DETAIL_SEARCH_NAMESPACE } from '@app/features/email-view/email-route';
+import {
+  routeParams,
+  type SerializedSearchParams,
+  type SplitRouterMiddleware,
+} from '@app/lib/split-router';
+import { replaceSplitSearchParams } from '@app/lib/split-router/search';
+import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { appSplitRoutes } from './app-routes';
 import { decodeLegacyPair } from './legacy-route';
 
@@ -53,6 +62,46 @@ export function createAppSplitRouterMiddleware(options: {
       const document = driveDocumentFromContent(content);
       if (!document) return;
       return redirect(drivePath({ kind: 'tab', tab: 'owned' }, document));
+    },
+    ({ to, path, cause, externalSearch, redirect }) => {
+      if (cause !== 'initial' && cause !== 'external') return;
+      if (!externalSearch) return;
+
+      const leafId = to.location.route.matches.at(-1)?.id;
+      let namespace: string;
+      let fields: [string, string][];
+      if (leafId === 'mail-thread') {
+        namespace = EMAIL_DETAIL_SEARCH_NAMESPACE;
+        fields = [[EMAIL_URL_PARAMS.messageId, 'messageId']];
+      } else if (leafId === 'channels-channel') {
+        namespace = CHANNEL_DETAIL_SEARCH_NAMESPACE;
+        fields = [
+          [CHANNEL_URL_PARAMS.message, 'messageId'],
+          [CHANNEL_URL_PARAMS.thread, 'threadId'],
+        ];
+      } else {
+        return;
+      }
+
+      const raw = new URLSearchParams(externalSearch);
+      const current = to.location.search?.[namespace] ?? {};
+      const additions: SerializedSearchParams = {};
+      for (const [legacyKey, field] of fields) {
+        // Explicit canonical values, including empty ones, take precedence.
+        if (Object.hasOwn(current, field)) continue;
+        const values = raw.getAll(legacyKey);
+        if (values.length) additions[field] = values;
+      }
+      if (!Object.keys(additions).length) return;
+
+      const search = {
+        ...to.location.search,
+        [namespace]: { ...current, ...additions },
+      };
+      const query = new URLSearchParams();
+      // Middleware redirects describe one entry; the router assigns its pane index.
+      replaceSplitSearchParams(query, [{ location: { search } }]);
+      return redirect(`${path}?${query}`);
     },
   ];
 }

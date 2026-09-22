@@ -8,7 +8,6 @@ import {
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
-import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
@@ -51,7 +50,6 @@ export type ChannelsViewContext = {
   /** The mobile list opens channels in the split; only desktop renders detail. */
   mobileLayout: () => boolean;
   selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
-  selectedChannelId: Accessor<string | undefined>;
   setTab: (tab: ChannelsTab) => void;
   setMobileTab: (tab: ChannelsQueryScope) => void;
   setSelectedChannel: (channel: ChannelPreviewSelection | undefined) => boolean;
@@ -96,8 +94,7 @@ export const [ChannelsViewProvider, useChannelsView] =
       const userId = useUserId();
       const navigate = useNavigate();
       const params = useRouteParams(channelDetailRoute);
-      const [detailSearch, setDetailSearch] =
-        createSearchParams(channelDetailSearch);
+      const [detailSearch] = createSearchParams(channelDetailSearch);
       const selectPreview = createPreviewSelectionGuard();
       const initial = props.initialState ?? {};
       const [state, setState] = makePersistedState(
@@ -110,23 +107,6 @@ export const [ChannelsViewProvider, useChannelsView] =
           restorePreferences: shouldRestorePreferences(initial),
         })
       );
-
-      let checkedLegacySearch = false;
-      createEffect(() => {
-        if (checkedLegacySearch) return;
-        checkedLegacySearch = true;
-        if (!params.channelId || detailSearch.messageId) return;
-        const raw = new URLSearchParams(window.location.search);
-        const messageId = raw.getAll(CHANNEL_URL_PARAMS.message).at(-1);
-        if (!messageId) return;
-        setDetailSearch(
-          {
-            messageId,
-            threadId: raw.getAll(CHANNEL_URL_PARAMS.thread).at(-1) ?? '',
-          },
-          { history: 'replace' }
-        );
-      });
 
       const mobileLayout = () => isTouchDevice();
       const selectedChannel = createMemo<ChannelPreviewSelection | undefined>(
@@ -148,7 +128,6 @@ export const [ChannelsViewProvider, useChannelsView] =
           };
         }
       );
-      const selectedChannelId = () => selectedChannel()?.id;
       const routeSearch = (channel: ChannelPreviewSelection) => {
         const target = getChannelEntityTarget(channel);
         const value = {
@@ -202,7 +181,6 @@ export const [ChannelsViewProvider, useChannelsView] =
         state,
         mobileLayout,
         selectedChannel,
-        selectedChannelId,
         setTab: (tab) => setState('tab', tab),
         setMobileTab: (tab) => setState('mobileTab', tab),
         setSelectedChannel,

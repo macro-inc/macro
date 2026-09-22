@@ -25,7 +25,7 @@ export function useChannelRailItemState(channelId: Accessor<string>) {
 
     return {
       domId: domIdForRow(rail.railId, rowId),
-      selected: rail.selectedChannelId() === id,
+      selected: rail.selectedChannel()?.id === id,
       focused: rail.list.focus.key() === rowId,
       muted: isMutedItem(notificationSource.mutedEntities(), {
         item_id: id,
@@ -49,7 +49,7 @@ export function useChannelRailFavoriteItemState(favorite: Accessor<Favorite>) {
       domId: domIdForRow(rail.railId, rowId),
       selected:
         current.entityType === 'channel' &&
-        rail.selectedChannelId() === current.entityId,
+        rail.selectedChannel()?.id === current.entityId,
       focused: rail.list.focus.key() === rowId,
     };
   });

@@ -147,7 +147,6 @@ describe('ChannelsViewProvider route selection', () => {
       id: 'c1',
       target: { messageId: 'm1', threadId: 't1' },
     });
-    expect(context.selectedChannelId()).toBe('c1');
     expect(guard.selections.at(-1)).toEqual(context.selectedChannel());
   });
 
@@ -166,7 +165,7 @@ describe('ChannelsViewProvider route selection', () => {
       pathname: '/channels/channel/c1',
       search: '?s0.channel-detail.messageId=m1&s0.channel-detail.threadId=t1',
     });
-    expect(context.selectedChannelId()).toBe('c1');
+    expect(context.selectedChannel()?.id).toBe('c1');
 
     expect(context.setSelectedChannel(undefined)).toBe(true);
     await router.settled();
@@ -185,7 +184,7 @@ describe('ChannelsViewProvider route selection', () => {
     );
     await router.settled();
     expect(location.read().pathname).toBe('/channels/channel/current');
-    expect(context.selectedChannelId()).toBe('current');
+    expect(context.selectedChannel()?.id).toBe('current');
   });
 
   it('replaces a directly loaded incompatible preview with the list route', async () => {

@@ -6,16 +6,11 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
-import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import { registerInboxFilterSplit } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import { makePersistedState } from '@app/lib/persistence';
-import {
-  createSearchParams,
-  useNavigate,
-  useRouteParams,
-} from '@app/lib/split-router';
+import { useNavigate, useRouteParams } from '@app/lib/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   useSplitPanelOrThrow,
@@ -112,7 +107,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const panel = useSplitPanelOrThrow();
   const navigate = useNavigate();
   const routeParams = useRouteParams(emailThreadRoute);
-  const [detailSearch, setDetailSearch] = createSearchParams(emailDetailSearch);
   const selectPreview = createPreviewSelectionGuard();
   const userId = useUserId();
   const tagSets = useTagSets();
@@ -185,19 +179,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       if (listActivationHandler === handler) listActivationHandler = undefined;
     });
   };
-
-  let checkedLegacySearch = false;
-  createEffect(() => {
-    if (checkedLegacySearch) return;
-    checkedLegacySearch = true;
-    if (!routeParams.threadId || detailSearch.messageId) return;
-    const messageId = new URLSearchParams(window.location.search)
-      .getAll(EMAIL_URL_PARAMS.messageId)
-      .at(-1);
-    if (messageId) {
-      setDetailSearch({ messageId }, { history: 'replace' });
-    }
-  });
 
   const selectedThread = createMemo<EmailThreadTarget | undefined>(() => {
     const threadId = routeParams.threadId;

@@ -165,7 +165,7 @@ export function buildChannelRailRows(
 export function ChannelsRail(props: ChannelsRailProps) {
   const {
     state,
-    selectedChannelId,
+    selectedChannel,
     setGroupOpen,
     setSelectedChannel,
     setSortBy,
@@ -325,7 +325,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     });
   });
 
-  const initialSelectedChannelId = selectedChannelId();
+  const initialSelectedChannelId = selectedChannel()?.id;
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
     createListController<ChannelRailRow, ChannelRailActivationMetadata>({
       items: visibleRows,
@@ -414,7 +414,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const items = props.sources[scope].items();
 
     const selectedIndex = items.findIndex(
-      (channel) => channel.id === selectedChannelId()
+      (channel) => channel.id === selectedChannel()?.id
     );
 
     const targetIndex = selectedIndex >= 0 ? selectedIndex : 0;
@@ -436,7 +436,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const items = searchResults();
 
     const selectedIndex = items.findIndex(
-      (channel) => channel.id === selectedChannelId()
+      (channel) => channel.id === selectedChannel()?.id
     );
 
     const virtualizer = virtualizers().search;
@@ -455,7 +455,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
     const favorite = favorites().find(
       (item) =>
-        item.entityType === 'channel' && item.entityId === selectedChannelId()
+        item.entityType === 'channel' && item.entityId === selectedChannel()?.id
     );
     if (!favorite) return;
 
@@ -678,7 +678,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     selectTab,
     sources: props.sources,
     favorites,
-    selectedChannelId,
+    selectedChannel,
     isGroupOpen: (group) => state.expandedGroups[group],
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
     sortBy: (group) => state.sortBy[group],

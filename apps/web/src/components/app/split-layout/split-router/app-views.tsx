@@ -376,31 +376,15 @@ function LegacyMailView() {
 function MailLegacyRouteView() {
   const params = useRouteParams(emailThreadRoute);
   const [search] = createSearchParams(emailDetailSearch);
-  const messageId = () =>
-    search.messageId ||
-    new URLSearchParams(window.location.search)
-      .getAll(EMAIL_URL_PARAMS.messageId)
-      .at(-1);
+  const legacyThread = (id: string): SplitContent => {
+    const params: Record<string, string> = {};
+    if (search.messageId) params[EMAIL_URL_PARAMS.messageId] = search.messageId;
+    return { type: 'email', id, params };
+  };
 
   return (
     <Show when={params.threadId} fallback={<LegacyMailView />}>
-      {(threadId) => (
-        <RedirectSplit
-          to={
-            {
-              type: 'email',
-              id: threadId(),
-              ...(messageId()
-                ? {
-                    params: {
-                      [EMAIL_URL_PARAMS.messageId]: messageId(),
-                    },
-                  }
-                : {}),
-            } as SplitContent
-          }
-        />
-      )}
+      {(threadId) => <RedirectSplit to={legacyThread(threadId())} />}
     </Show>
   );
 }
@@ -530,34 +514,16 @@ function LegacyChannelsView() {
 function ChannelsLegacyRouteView() {
   const params = useRouteParams(channelDetailRoute);
   const [search] = createSearchParams(channelDetailSearch);
-  const raw = new URLSearchParams(window.location.search);
-  const messageId = () =>
-    search.messageId || raw.getAll(CHANNEL_URL_PARAMS.message).at(-1);
-  const threadId = () =>
-    search.threadId || raw.getAll(CHANNEL_URL_PARAMS.thread).at(-1);
+  const legacyChannel = (id: string): SplitContent => {
+    const params: Record<string, string> = {};
+    if (search.messageId) params[CHANNEL_URL_PARAMS.message] = search.messageId;
+    if (search.threadId) params[CHANNEL_URL_PARAMS.thread] = search.threadId;
+    return { type: 'channel', id, params };
+  };
 
   return (
     <Show when={params.channelId} fallback={<LegacyChannelsView />}>
-      {(channelId) => (
-        <RedirectSplit
-          to={
-            {
-              type: 'channel',
-              id: channelId(),
-              ...(messageId()
-                ? {
-                    params: {
-                      [CHANNEL_URL_PARAMS.message]: messageId(),
-                      ...(threadId()
-                        ? { [CHANNEL_URL_PARAMS.thread]: threadId() }
-                        : {}),
-                    },
-                  }
-                : {}),
-            } as SplitContent
-          }
-        />
-      )}
+      {(channelId) => <RedirectSplit to={legacyChannel(channelId())} />}
     </Show>
   );
 }

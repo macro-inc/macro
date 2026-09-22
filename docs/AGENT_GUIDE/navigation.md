@@ -65,7 +65,9 @@ activate another pane. Opening a resource already displayed in another pane
 still activates its owner through router claim arbitration; the compatibility
 preview guard can instead reject a conflicting embedded preview. On touch, or
 when the new-app-view flag cannot render the detail, Home, Email, Tasks, and
-Channels detail URLs fall back to the existing full-block surface.
+Channels detail URLs fall back to the existing full-block surface. Legacy email
+and channel message targets are normalized into per-pane search by ingress
+middleware, including external/history navigation; explicit namespaced values win.
 Unavailable documents retain their error/retry UI rather than navigating away.
 Long destination names are single-line and
 expose the full name on hover. Section chevrons point right and stay visible when
