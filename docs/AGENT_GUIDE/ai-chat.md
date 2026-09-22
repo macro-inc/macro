@@ -88,9 +88,10 @@ permission failures should display a failed tool call without a successful resul
   vertical center. The heading and first input line stay anchored while the composer
   expands downward. The plus attachment button stays at the far left: before the
   text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
-  on the left and the agent/model and Send on the right. An inset repository bar
+  on the left and the agent/model and Send on the right. A full-width repository bar
   slides and fades in below the rounded input over 200ms, with rounded bottom corners
-  and a darker surface in dark mode. Selecting a chat agent retracts the bar and
+  and a subtle border along its sides and bottom, with a darker surface in dark mode.
+  Selecting a chat agent retracts the bar and
   restores the compact input when the draft fits on one line, without remounting
   the editor or losing the draft. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
