@@ -48,12 +48,12 @@ export function availableBotMentionUsers(
 }
 
 /**
- * The agents that can be addressed on a document, as synthetic [`IUser`]
- * entries. Documents have no installed-bot list of their own, so this is the
- * global agent roster under the same rules the `@`-mention typeahead uses
- * there — which is also who a task may be assigned to.
+ * The persisted agents that can be addressed on a document. Documents have no
+ * installed-bot list of their own, so this is the global agent roster under
+ * the same rules the `@`-mention typeahead uses there. Built-in agents are
+ * added by `useAgentMentionUsers`, as they are for a composer.
  */
-export function useDocumentAgentMentionUsers(): Accessor<IUser[]> {
+export function useDocumentAgentRoster(): Accessor<IUser[]> {
   const agents = useAgentsQuery();
   const canUseCursor = useCursorAgentsAccess();
 

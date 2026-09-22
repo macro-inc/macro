@@ -5,6 +5,7 @@ import {
   enableChatV3Agents,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { isMacroSystemId } from '@core/constant/macroSystem';
 import { useCursorAgentsAccess } from '@core/cursor/flag';
 import type { IUser } from '@core/user/types';
 import { uniqueByKey } from '@core/util/compareUtils';
@@ -20,6 +21,7 @@ import {
   macroCoderMentionUser,
   macroNewMentionUser,
 } from './macroAi';
+import { useDocumentAgentRoster } from './use-channel-bot-mention-users';
 
 /**
  * Built-in agent entries shared by every message composer. Account setup does
@@ -65,4 +67,25 @@ export function useAgentMentionUsers(
     }
     return uniqueByKey(base, (user) => user.id);
   };
+}
+
+/**
+ * The agents from a mention list that a task can be handed to: the ones whose
+ * mention opens a session. Macro answers in the thread it was asked in and the
+ * platform bot posts only on its own behalf, so assigning either would leave
+ * the task sitting with nobody working on it.
+ */
+export function agentsAssignableToTasks(users: readonly IUser[]): IUser[] {
+  return users.filter(
+    (user) => !isMacroAiId(user.id) && !isMacroSystemId(user.id)
+  );
+}
+
+/**
+ * The agents a task can be assigned to, in the order the mention typeahead
+ * offers them on a document.
+ */
+export function useTaskAssignableAgents(): Accessor<IUser[]> {
+  const mentionUsers = useAgentMentionUsers(useDocumentAgentRoster());
+  return () => agentsAssignableToTasks(mentionUsers());
 }

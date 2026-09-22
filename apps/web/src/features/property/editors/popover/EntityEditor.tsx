@@ -1,4 +1,4 @@
-import { useDocumentAgentMentionUsers } from '@channel/use-channel-bot-mention-users';
+import { useTaskAssignableAgents } from '@channel/use-agent-mention-users';
 import type { IUser } from '@core/user';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -58,7 +58,7 @@ function EntityEditorBody(props: EntityEditorProps) {
   // so the assignee picker lists agents beside people.
   const isAssignees =
     property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES;
-  const agents = useDocumentAgentMentionUsers();
+  const agents = useTaskAssignableAgents();
 
   const initialRefs: EntityReference[] = property.value ?? [];
   const [selectedRefs, setSelectedRefs] =
