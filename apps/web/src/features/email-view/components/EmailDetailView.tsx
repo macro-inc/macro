@@ -3,6 +3,7 @@ import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
+import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { EmailThreadLoadGate } from '@block-email/component/EmailThreadLoadGate';
 import { EmailThreadHostView } from '@block-email/EmailThreadHostView';
@@ -71,6 +72,7 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
+  const source = createEmailThreadSource(threadId, threadQuery);
   const threadData = createMemo(
     (previous: typeof threadQuery.data | undefined) =>
       threadQuery.isSuccess || threadQuery.isError ? threadQuery.data : previous
@@ -207,6 +209,8 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
               <EmailThreadHostView
                 title={title()}
                 threadId={threadId}
+                source={source}
+                threadTransport={() => threadQuery.transport}
                 host={host}
                 sidePanelHeaderToggle={false}
                 shareOpen={shareOpen()}

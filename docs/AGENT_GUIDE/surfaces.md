@@ -388,6 +388,12 @@ scrolls it into view, and briefly highlights it. For navigation regressions,
 exercise both a recent message and one outside the first page. Open another
 target while loading or highlighting: the previous request must not scroll the
 new thread or clear its highlight. Closing the split cancels pending positioning.
+The load gate and message body share one live thread source in both hosts. Cached
+body rendering should not wait for a second thread fetch, optional References,
+or inbox metadata. Inbox-dependent actions stay gated while ownership is unknown;
+explicit inbox IDs must never silently route to primary while links are loading.
+Background refreshes and older-message loading still update the same thread.
+Verify with API traffic delayed and with previously opened bodies offline.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop

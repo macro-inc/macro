@@ -1,7 +1,13 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
-import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
+import type {
+  EmailThreadHost,
+  EmailThreadSource,
+} from '@app/features/email-thread/context/email-thread-context';
 import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
-import { EmailThread } from '@app/features/email-thread/email-thread';
+import {
+  EmailThread,
+  type EmailThreadProps,
+} from '@app/features/email-thread/email-thread';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { buildMentionMarkdownString } from '@macro-inc/lexical-core';
@@ -18,6 +24,8 @@ export type EmailThreadHostViewContext = {
 export type EmailThreadHostViewProps = {
   title: string;
   threadId: Accessor<string>;
+  source: EmailThreadSource;
+  threadTransport: EmailThreadProps['threadTransport'];
   host: EmailThreadHost;
   topBar?: (context: EmailThreadHostViewContext) => JSX.Element;
   sidePanelHeaderToggle?: boolean;
@@ -54,6 +62,8 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
     <EmailThread
       title={props.title}
       threadId={props.threadId}
+      source={props.source}
+      threadTransport={props.threadTransport}
       host={props.host}
       header={props.topBar?.({ createTask })}
       actions={<ThreadActions title={props.title} onCreateTask={createTask} />}
