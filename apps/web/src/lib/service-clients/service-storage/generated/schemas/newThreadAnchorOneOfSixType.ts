@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ThreadAnchorOneOfFiveType =
-  (typeof ThreadAnchorOneOfFiveType)[keyof typeof ThreadAnchorOneOfFiveType];
+export type NewThreadAnchorOneOfSixType =
+  (typeof NewThreadAnchorOneOfSixType)[keyof typeof NewThreadAnchorOneOfSixType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ThreadAnchorOneOfFiveType = {
+export const NewThreadAnchorOneOfSixType = {
   pdf_placeable: 'pdf_placeable',
 } as const;

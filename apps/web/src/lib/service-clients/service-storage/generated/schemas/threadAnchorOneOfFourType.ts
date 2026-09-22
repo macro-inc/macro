@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ThreadAnchorOneOfThreeType =
-  (typeof ThreadAnchorOneOfThreeType)[keyof typeof ThreadAnchorOneOfThreeType];
+export type ThreadAnchorOneOfFourType =
+  (typeof ThreadAnchorOneOfFourType)[keyof typeof ThreadAnchorOneOfFourType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ThreadAnchorOneOfThreeType = {
+export const ThreadAnchorOneOfFourType = {
   pdf_highlight: 'pdf_highlight',
 } as const;

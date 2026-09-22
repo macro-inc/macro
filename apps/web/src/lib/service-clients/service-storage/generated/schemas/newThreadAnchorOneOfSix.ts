@@ -4,19 +4,19 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NewThreadAnchorOneOfFiveType } from './newThreadAnchorOneOfFiveType';
+import type { NewThreadAnchorOneOfSixType } from './newThreadAnchorOneOfSixType';
 
 /**
  * Atomically create a placeable annotation with the root message.
  */
-export type NewThreadAnchorOneOfFive = {
+export type NewThreadAnchorOneOfSix = {
   /** Client-generated annotation identifier used by optimistic rendering. */
   anchor_id: string;
   /** Height as a fraction of the page height. */
   height_pct: number;
   /** PDF page number. */
   page: number;
-  type: NewThreadAnchorOneOfFiveType;
+  type: NewThreadAnchorOneOfSixType;
   /** Width as a fraction of the page width. */
   width_pct: number;
   /** Horizontal position as a fraction of the page width. */

@@ -7066,6 +7066,12 @@ export type NewThreadAnchor = {
      * Serialized mark identifier.
      */
     mark_id: string;
+    /**
+     * The document text the mark covers, captured by the editor as the
+     * comment is written. Trimmed and bounded before it is stored, so an
+     * oversized or whitespace-only claim cannot reach the thread row.
+     */
+    marked_text?: string | null;
     type: 'markdown';
 } | {
     /**
@@ -9797,6 +9803,13 @@ export type ThreadAnchor = {
      * Mark UUID serialized in the document.
      */
     mark_id: string;
+    /**
+     * The marked text as it read when the discussion was created, already
+     * trimmed and bounded. Absent on threads created or imported before
+     * snapshots were captured: the text a mark covers cannot be recovered
+     * from the mark id alone.
+     */
+    marked_text?: string | null;
     type: 'markdown';
 } | {
     /**

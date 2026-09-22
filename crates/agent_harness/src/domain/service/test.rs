@@ -41,9 +41,10 @@ use super::AgentHarnessService;
 use super::into_session_error;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeclinedMention, DeliverAction,
-    HarnessCommand, HarnessDefaults, MentionOrigin, OpenSession, PriorMessage, SessionBlocker,
-    SessionDefaults, SessionRepository, SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, CommentAnchor,
+    ConversationContext, DeclinedMention, DeliverAction, HarnessCommand, HarnessDefaults,
+    MentionOrigin, OpenSession, PriorMessage, SessionBlocker, SessionDefaults, SessionRepository,
+    SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ContainerManager as _, MessagePromptContext, NoPeers,
@@ -120,7 +121,7 @@ fn forward_message(content: &str) -> DeliverAction {
 
 #[derive(Clone, Default)]
 struct PromptContextMock {
-    messages: Arc<Mutex<Vec<PriorMessage>>>,
+    context: Arc<Mutex<ConversationContext>>,
     failure: Arc<Mutex<Option<String>>>,
     unauthorized: Arc<Mutex<Option<String>>>,
     authorized: Arc<Mutex<Vec<(MacroUserIdStr<'static>, AnnounceOrigin)>>>,
@@ -128,8 +129,15 @@ struct PromptContextMock {
 
 impl PromptContextMock {
     fn with_messages(messages: Vec<PriorMessage>) -> Self {
+        Self::with_context(ConversationContext {
+            anchor: None,
+            messages,
+        })
+    }
+
+    fn with_context(context: ConversationContext) -> Self {
         Self {
-            messages: Arc::new(Mutex::new(messages)),
+            context: Arc::new(Mutex::new(context)),
             ..Self::default()
         }
     }
@@ -169,19 +177,19 @@ impl MessagePromptContext for PromptContextMock {
         Ok(())
     }
 
-    async fn preceding_messages(
+    async fn conversation_context(
         &self,
         _actor: &MacroUserIdStr<'static>,
         _origin: &AnnounceOrigin,
-    ) -> crate::domain::error::Result<Vec<PriorMessage>> {
+    ) -> crate::domain::error::Result<ConversationContext> {
         if let Some(message) = self.failure.lock().unwrap().clone() {
             return Err(HarnessError::PromptContext(rootcause::report!("{message}")));
         }
-        Ok(self.messages.lock().unwrap().clone())
+        Ok(self.context.lock().unwrap().clone())
     }
 }
 
-type PromptCompositionCall = (String, Option<Vec<PriorMessage>>);
+type PromptCompositionCall = (String, Option<ConversationContext>);
 
 #[derive(Clone, Default)]
 struct PromptComposerMock {
@@ -207,18 +215,18 @@ impl AgentPromptComposer for PromptComposerMock {
         &self,
         prompt_markdown: &str,
         _parent: Option<&MessageParent>,
-        messages: Option<&[PriorMessage]>,
+        context: Option<&ConversationContext>,
     ) -> crate::domain::error::Result<String> {
-        self.calls.lock().unwrap().push((
-            prompt_markdown.to_owned(),
-            messages.map(|messages| messages.to_vec()),
-        ));
+        self.calls
+            .lock()
+            .unwrap()
+            .push((prompt_markdown.to_owned(), context.cloned()));
         if let Some(message) = self.failure.lock().unwrap().clone() {
             return Err(HarnessError::PromptComposition(rootcause::report!(
                 "{message}"
             )));
         }
-        Ok(if messages.is_some() {
+        Ok(if context.is_some() {
             context_prompt(prompt_markdown)
         } else {
             prompt_markdown.to_owned()
@@ -797,7 +805,10 @@ async fn context_failure_still_calls_composer_with_empty_messages_and_delivers()
     assert_eq!(announcer.announced().len(), 1);
     assert_eq!(
         composer.calls(),
-        [("@claude fix the failing test".to_owned(), Some(Vec::new()))]
+        [(
+            "@claude fix the failing test".to_owned(),
+            Some(ConversationContext::default())
+        )]
     );
     assert_eq!(
         prompts(&container.agent()),
@@ -871,11 +882,59 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
     result.unwrap();
 
     assert_eq!(announcer.announced()[0].prompted_content, raw);
-    assert_eq!(composer.calls(), [(raw.clone(), Some(context))]);
+    assert_eq!(
+        composer.calls(),
+        [(
+            raw.clone(),
+            Some(ConversationContext {
+                anchor: None,
+                messages: context,
+            })
+        )]
+    );
     assert_eq!(
         prompts(&container.agent()),
         [vec![ContentBlock::from(context_prompt(&raw))]]
     );
+}
+
+/// A mention in a document comment: the agent is told which mark the comment
+/// sits on and what that mark covered, so it can find the words the comment is
+/// about instead of guessing from the comment body.
+#[tokio::test]
+async fn open_sends_the_comment_anchor_the_prompt_was_posted_on() {
+    let context = ConversationContext {
+        anchor: Some(CommentAnchor {
+            mark_id: "0199f3d4-0000-7000-8000-00000000000a".to_owned(),
+            marked_text: Some("the marked phrase".to_owned()),
+        }),
+        messages: vec![],
+    };
+    let composer = PromptComposerMock::default();
+    let (service, _repo, containers, _announcer, _runtimes) = harness_with_edges(
+        PromptContextMock::with_context(context.clone()),
+        composer.clone(),
+    );
+    let command = open_command();
+    let raw = command.origin.content.clone();
+    let id = AgentSessionId::new();
+
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(id).unwrap();
+        complete_handshake(&container).await;
+        container
+    };
+    let (result, _container) = tokio::join!(open, drive);
+    result.unwrap();
+
+    assert_eq!(composer.calls(), [(raw, Some(context))]);
 }
 
 /// A provider mention from someone missing account setup: the bot answers in
@@ -1050,7 +1109,10 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     assert_eq!(containers.resumed(), 0, "no resume for a live session");
     assert_eq!(
         composer.calls().last(),
-        Some(&("and add a regression test".to_owned(), Some(Vec::new())))
+        Some(&(
+            "and add a regression test".to_owned(),
+            Some(ConversationContext::default())
+        ))
     );
     assert_eq!(
         prompts(&container.agent())[1],
@@ -1102,7 +1164,10 @@ async fn composer_failure_stops_follow_up_announcement_and_delivery() {
     assert!(matches!(result, Err(HarnessError::PromptComposition(_))));
     assert_eq!(
         composer.calls().last(),
-        Some(&("do not deliver this".to_owned(), Some(Vec::new())))
+        Some(&(
+            "do not deliver this".to_owned(),
+            Some(ConversationContext::default())
+        ))
     );
     assert_eq!(prompts(&container.agent()).len(), prompts_before);
     assert_eq!(announcer.announced().len(), announcements_before);

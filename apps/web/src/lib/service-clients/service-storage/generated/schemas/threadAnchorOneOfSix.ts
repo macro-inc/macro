@@ -4,13 +4,13 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ThreadAnchorOneOfFiveType } from './threadAnchorOneOfFiveType';
+import type { ThreadAnchorOneOfSixType } from './threadAnchorOneOfSixType';
 
 /**
  * A comment-only placeable PDF annotation.
  */
-export type ThreadAnchorOneOfFive = {
+export type ThreadAnchorOneOfSix = {
   /** Placeable annotation UUID. */
   anchor_id: string;
-  type: ThreadAnchorOneOfFiveType;
+  type: ThreadAnchorOneOfSixType;
 };

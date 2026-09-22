@@ -4,13 +4,13 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ThreadAnchorOneOfThreeType } from './threadAnchorOneOfThreeType';
+import type { ThreadAnchorOneOfFourType } from './threadAnchorOneOfFourType';
 
 /**
  * An independently existing PDF highlight.
  */
-export type ThreadAnchorOneOfThree = {
+export type ThreadAnchorOneOfFour = {
   /** Highlight annotation UUID. */
   anchor_id: string;
-  type: ThreadAnchorOneOfThreeType;
+  type: ThreadAnchorOneOfFourType;
 };

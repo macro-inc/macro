@@ -24986,6 +24986,10 @@
                 "format": "uuid",
                 "description": "Serialized mark identifier."
               },
+              "marked_text": {
+                "type": ["string", "null"],
+                "description": "The document text the mark covers, captured by the editor as the\ncomment is written. Trimmed and bounded before it is stored, so an\noversized or whitespace-only claim cannot reach the thread row."
+              },
               "type": {
                 "type": "string",
                 "enum": ["markdown"]
@@ -29491,6 +29495,10 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "Mark UUID serialized in the document."
+              },
+              "marked_text": {
+                "type": ["string", "null"],
+                "description": "The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone."
               },
               "type": {
                 "type": "string",

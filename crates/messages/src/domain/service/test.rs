@@ -171,6 +171,7 @@ fn fixture() -> Repo {
             resolved: false,
             anchor: Some(ThreadAnchor::Markdown {
                 mark_id: Uuid::from_u128(2),
+                marked_text: None,
             }),
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -389,6 +390,7 @@ fn only_root_document_messages_can_have_anchors() {
         thread_id: None,
         anchor: Some(NewThreadAnchor::Markdown {
             mark_id: Uuid::from_u128(1),
+            marked_text: None,
         }),
         mentions: vec![],
         attachments: vec![],
@@ -1059,6 +1061,7 @@ async fn anchors_are_only_accepted_on_document_roots() {
     let mut anchored = post_input();
     anchored.anchor = Some(NewThreadAnchor::Markdown {
         mark_id: Uuid::from_u128(5),
+        marked_text: None,
     });
     assert!(matches!(
         service.post(channel_access(), anchored.clone()).await,
