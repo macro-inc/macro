@@ -48,6 +48,10 @@ vi.mock('@queries/channel/get-or-create-dm', () => ({
 
 vi.mock('@queries/crm/contacts', () => ({
   useCrmContactByEmailQuery: () => ({
+    // Pending lookups report no data yet, exactly as solid-query does.
+    get isSuccess() {
+      return mocks.contact !== undefined;
+    },
     get data() {
       return mocks.contact;
     },
@@ -56,9 +60,10 @@ vi.mock('@queries/crm/contacts', () => ({
 
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({
+    isSuccess: true,
     get data() {
       if (mocks.teamCrmEnabled === null) return null;
-      return { team: { crm_enabled: mocks.teamCrmEnabled } };
+      return { team: { id: 'team-1', crm_enabled: mocks.teamCrmEnabled } };
     },
   }),
 }));

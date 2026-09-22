@@ -51,6 +51,7 @@ import {
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
+import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { enableReminders } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
@@ -556,6 +557,7 @@ function LayoutInner(props: RouteSectionProps) {
         }
       >
         <FloatRegionHost />
+        <UserCardDrawer />
         <Show when={isMobile()}>
           <MobileSettings />
         </Show>

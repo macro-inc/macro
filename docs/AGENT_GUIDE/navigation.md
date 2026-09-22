@@ -278,6 +278,13 @@ rows; period, week start, time format, and month choices show trailing checkmark
 All popover splits open as bottom drawers on touch devices and dialogs
 on desktop, including task, calendar event, skill, and agent session composers.
 
+Hovering an `@user` mention or a profile picture on desktop opens the user card:
+the person's name and email above Copy email, Copy name, Open contact (CRM teams
+only), DM, and Assign task. Touch devices have no hover, so tapping the mention
+or the picture opens that same card as a bottom sheet; any action there runs and
+dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
+drops in favour of the card's DM action.
+
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
 Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task and Channel open dialogs.
