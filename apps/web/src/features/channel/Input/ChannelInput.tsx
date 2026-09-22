@@ -37,6 +37,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { useAgentMentionUsers } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
+import { useMessageParticipants } from '../use-message-participants';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 import { createCollapsedInputState } from './create-collapsed-input-state';
@@ -66,6 +67,11 @@ export type ChannelInputProps = InputCallbacks & {
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
+  /**
+   * People surfaced in the `@`-mention typeahead. Defaults to the `parent`'s
+   * own people: a channel's participants, or the workspace contacts a
+   * document's composers offer.
+   */
   participants?: Accessor<IUser[]>;
   /** Channel bots surfaced in the `@`-mention typeahead alongside users. */
   bots?: Accessor<IUser[]>;
@@ -229,10 +235,14 @@ export function ChannelInput(props: ChannelInputProps) {
     !props.bots && props.parent
       ? useMessageBotMentionUsers(() => props.parent!)
       : () => [];
+  const parentParticipants =
+    !props.participants && props.parent
+      ? useMessageParticipants(() => props.parent!)
+      : () => [];
   // Connection-prompt behavior for the built-in agents lives in
   // useAgentMentionUsers; participants and channel/document bots feed it here.
   const mentionUsers = useAgentMentionUsers(() => [
-    ...(props.participants?.() ?? []),
+    ...(props.participants?.() ?? parentParticipants()),
     ...(props.bots?.() ?? parentBots()),
   ]);
 

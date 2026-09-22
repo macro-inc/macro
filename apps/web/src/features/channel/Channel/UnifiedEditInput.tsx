@@ -1,7 +1,6 @@
 import { Show } from 'solid-js';
 import { InputFlag } from '../Input';
 import type { MessageData } from '../Message';
-import { useChannelParticipants } from '../use-channel-participants';
 import type { MessageEditor } from './create-message-editor';
 import { MessageEditorContent } from './InlineMessageEditor';
 
@@ -14,8 +13,6 @@ export function UnifiedEditInput(props: {
   messageEditor: MessageEditor;
   onNavigateToMessage: (message: MessageData) => void;
 }) {
-  const participants = useChannelParticipants(() => props.channelId);
-
   return (
     <Show when={props.messageEditor.state()?.message} keyed>
       {(message) => (
@@ -30,7 +27,6 @@ export function UnifiedEditInput(props: {
             parent={{ type: 'channel', id: props.channelId }}
             message={message}
             messageEditor={props.messageEditor}
-            participants={participants.users}
             collapsible
             autofocus={false}
             onReady={(handle) => {

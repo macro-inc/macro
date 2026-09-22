@@ -24,7 +24,6 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import { useContacts } from '@queries/contacts/contacts';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { Button, cn } from '@ui';
 import { $setSelection } from 'lexical';
@@ -107,8 +106,6 @@ function MessagePinnedReplyComposer(props: {
 }) {
   const context = useContext(CommentsContext);
   const typing = usePostTypingUpdateMutation();
-  // Workspace users for @-mentions, matching the legacy comment composer.
-  const participants = useContacts();
   const parent = () => ({ type: 'document' as const, id: context.documentId });
   return (
     <StaticMarkdownContext theme={drawerCommentTheme}>
@@ -118,7 +115,6 @@ function MessagePinnedReplyComposer(props: {
       >
         <ChannelInput
           parent={parent()}
-          participants={participants}
           input={{ mode: 'reply', placeholder: 'Reply...' }}
           autofocus={false}
           onStartTyping={() =>
