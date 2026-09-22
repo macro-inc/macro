@@ -293,7 +293,13 @@ describe('Quick Access source integration', () => {
           fileType: 'md',
           ownerId: 'owner',
         },
-        { id: 'chat-1', type: 'chat', name: 'Chat', ownerId: 'owner' },
+        {
+          id: 'chat-1',
+          type: 'chat',
+          name: 'Chat',
+          ownerId: 'owner',
+          isPersistent: true,
+        },
       ];
       const lists = setup((source) => [
         { list: source.useList(), ids: ['chat-1', 'note-1'] },
