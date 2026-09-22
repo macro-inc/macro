@@ -236,7 +236,8 @@ export function useChannelByIdQuery(
 ) {
   return useSoupAstItemsQuery(
     () => channelByIdQueryArgs(channelId() ?? ''),
-    // Opening a conversation needs complete thread-scoping and mark-read inputs.
-    () => ({ enabled: enabled(), staleTime: 30_000 })
+    // Every activation needs a fresh complete edge for thread scoping and marking
+    // read. GraphQL revalidates on activation; keep the REST fallback stale too.
+    () => ({ enabled: enabled(), staleTime: 0 })
   );
 }

@@ -365,9 +365,12 @@ per channel through an aliased, filtered `notifications` edge. An empty edge mea
 no unread messages; invites and call notifications do not light the dot. Recent
 cards still use the latest-message preview. Full notification edges load only for
 an opened unread conversation, so mark-read and message targeting retain their
-complete thread-scoped inputs. If loading that edge fails, retry rather than
-marking just the one unread witness. Repeated mobile taps must open the last
-selected conversation, not a slower earlier request.
+complete thread-scoped inputs. Reopening a conversation must refresh that full
+edge even within 30 seconds; mark-read waits for the refresh rather than using
+older cached notifications. Failed lookups and successful lookups with no matching
+channel show **Conversation unavailable** with **Retry**, never permanent loading.
+Retry rather than marking just the one unread witness. Repeated mobile taps must
+open the last selected conversation, not a slower earlier request.
 
 Check cached Home → Chat navigation, All/Recent/search, and unread state after a
 read, a new notification, deletion, and reconnect. Cache reads remain asynchronous:

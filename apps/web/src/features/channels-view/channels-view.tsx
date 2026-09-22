@@ -112,17 +112,25 @@ function ChannelsViewRoot() {
     }
   );
 
+  const selectionUnavailable = () =>
+    previewChannelId() !== undefined &&
+    (Boolean(selectedChannelQuery.error) ||
+      (selectedChannelQuery.isEnabled &&
+        !selectedChannelQuery.isLoading &&
+        !selectedChannelQuery.isFetching &&
+        selectedChannel() === undefined));
+
+  // Stabilize the identity: metadata updates must not repeat the selection action.
+  const readySelectionId = createMemo(() => selectedChannel()?.id);
+
   // The bounded unread witness is never passed to a bulk mark-read operation.
   // Send the complete, thread-scoped selection once the chosen preview is ready.
   createEffect(
-    on(
-      () => selectedChannel()?.id,
-      () => {
-        const channel = selectedChannel();
-        if (channel && channel.isParticipant !== false)
-          markChannelNotificationsSeenOnOpen(channel, notificationSource);
-      }
-    )
+    on(readySelectionId, () => {
+      const channel = selectedChannel();
+      if (channel && channel.isParticipant !== false)
+        markChannelNotificationsSeenOnOpen(channel, notificationSource);
+    })
   );
 
   const retrySelection = async () => {
@@ -171,20 +179,20 @@ function ChannelsViewRoot() {
                             <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
                               <div class="flex max-w-sm flex-col gap-2">
                                 <h2 class="text-base font-semibold text-ink">
-                                  {selectedChannelQuery.error
+                                  {selectionUnavailable()
                                     ? 'Conversation unavailable'
                                     : previewChannelId()
                                       ? 'Loading conversation'
                                       : 'Select a conversation'}
                                 </h2>
                                 <p class="text-sm leading-5 text-ink-muted">
-                                  {selectedChannelQuery.error
+                                  {selectionUnavailable()
                                     ? 'Could not load this conversation.'
                                     : previewChannelId()
                                       ? 'Preparing the conversation…'
                                       : 'Choose a channel or person from the sidebar to open the conversation here.'}
                                 </p>
-                                <Show when={selectedChannelQuery.error}>
+                                <Show when={selectionUnavailable()}>
                                   <button
                                     type="button"
                                     onClick={retrySelection}
