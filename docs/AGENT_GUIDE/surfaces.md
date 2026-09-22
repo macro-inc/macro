@@ -69,9 +69,13 @@ it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove r
 
 ## Home (desktop) / Notifications (mobile) — `/app/component/inbox`
 
-Touch devices render the legacy Notifications view without waiting for the new app
-views feature flag. Desktop waits for flag readiness before choosing the new Home
-view or its legacy fallback.
+Every form factor waits for new-app-views flag readiness before choosing the
+new view or its legacy fallback. With the flag enabled, touch devices render
+the new Inbox as **Notifications**: a floating Signal/Noise pill strip with a
+leading filter drawer (Status and Type), pull-to-refresh, and swipe-left to
+mark done. On touch, Signal is a pure notification feed — the viewer's own
+touched-by-me recents are not merged in; that merge is desktop Home's Signal
+only, so sent mail and AI chats without notifications appear only on desktop.
 
 On a cold launch, notification transport follows the GraphQL Soup flag reactively:
 if the flag arrives after REST starts, the GraphQL notification query must actually
