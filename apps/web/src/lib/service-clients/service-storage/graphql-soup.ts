@@ -57,8 +57,8 @@ import type { SoupPage } from './generated/schemas/soupPage';
 import type { SoupProperty } from './generated/schemas/soupProperty';
 import type { SoupReminderSchedule } from './generated/schemas/soupReminderSchedule';
 import {
+  type ChannelListItemFieldsFragment,
   type ChannelListNotificationFieldsFragment,
-  type ChannelListSoupQuery,
   type GraphqlEntityType,
   type GraphqlReminderScheduleType,
   type GroupedSoupInput,
@@ -551,7 +551,7 @@ export type GraphqlGroupedSoupPage = {
 
 export type GraphqlSoupItem =
   | SoupQuery['user']['soup']['items'][number]
-  | ChannelListSoupQuery['user']['soup']['items'][number];
+  | (ChannelListItemFieldsFragment & { notifications?: never });
 type GraphqlSoupEntity = GraphqlSoupItem;
 type GraphqlProperty = Extract<
   GraphqlSoupEntity,
@@ -713,8 +713,8 @@ type NotifEventMember<Tag extends NotifEvent['tag']> = Extract<
   content: { hasAttachments?: boolean };
 };
 
-// The channel-list projection omits only optional presentation fields. Keep
-// required per-event data typed, while allowing the full query to enrich it.
+// Accept legacy notification projections that omitted optional presentation
+// fields alongside full notification reads. Keep required event data typed.
 type GraphqlNotificationMetadata = {
   [Name in SoupNotificationNavigationMetadataFieldsFragment['__typename']]: Extract<
     SoupNotificationNavigationMetadataFieldsFragment,
@@ -1247,8 +1247,10 @@ export function mapGraphqlNotification(
   };
 }
 
-function mapGraphqlNotifications(notifications: GraphqlNotification[]) {
-  return notifications.map(mapGraphqlNotification);
+function mapGraphqlNotifications(
+  notifications: GraphqlNotification[] | undefined
+) {
+  return notifications?.map(mapGraphqlNotification);
 }
 
 /**
@@ -1479,6 +1481,14 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
               entity.latestNonThreadMessage
             ),
             notifications: mapGraphqlNotifications(entity.notifications),
+            unreadNotifications:
+              'unreadNotifications' in entity
+                ? entity.unreadNotifications.map((notification) => ({
+                    id: notification.id,
+                    state: notificationStateFromGraphql(notification.state),
+                    createdAt: notification.createdAt,
+                  }))
+                : undefined,
           },
         }) as SoupApiItem
     )

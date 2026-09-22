@@ -236,10 +236,7 @@ export function useChannelByIdQuery(
 ) {
   return useSoupAstItemsQuery(
     () => channelByIdQueryArgs(channelId() ?? ''),
-    () => ({
-      enabled: enabled(),
-      staleTime: 30_000,
-      graphqlProjection: 'channel-list',
-    })
+    // Opening a conversation needs complete thread-scoping and mark-read inputs.
+    () => ({ enabled: enabled(), staleTime: 30_000 })
   );
 }

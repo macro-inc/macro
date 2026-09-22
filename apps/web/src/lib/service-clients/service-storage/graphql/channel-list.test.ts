@@ -1,4 +1,4 @@
-import { print } from 'graphql';
+import { Kind, print, visit } from 'graphql';
 import { describe, expect, it } from 'vitest';
 import {
   ChannelListItemFieldsFragmentDoc,
@@ -6,39 +6,48 @@ import {
   SoupDocument,
 } from './generated/graphql';
 
-describe('channel list projection', () => {
+describe('bounded channel unread projection', () => {
   it.each([ChannelListSoupDocument, ChannelListItemFieldsFragmentDoc])(
-    'omits historical send presentation in both query and local reconciliation',
+    'keeps the limited edge aliased in both query and reconciliation',
     (document) => {
-      const query = print(document);
+      let count = 0;
+      visit(document, {
+        Field(field) {
+          if (field.name.value !== 'notifications') return;
+          count += 1;
+          expect(field.alias?.value).toBe('unreadNotifications');
+          expect(
+            field.arguments?.find((arg) => arg.name.value === 'limit')?.value
+          ).toMatchObject({ kind: Kind.INT, value: '1' });
+          expect(print(field)).toContain('states: [UNSEEN]');
+          expect(print(field)).toContain('channel_message_reply');
+          expect(print(field)).not.toContain('metadata');
+        },
+      });
+      expect(count).toBe(1);
+      expect(print(document)).not.toContain('ChannelListNotificationFields');
+      expect(print(document)).not.toContain(
+        'SoupNotificationNavigationMetadataFields'
+      );
       for (const field of [
-        'channelMessageSendMessageContent',
-        'channelMessageSendSenderDisplayName',
-        'channelMessageSendSenderProfilePictureUrl',
-        'channelMessageSendChannelName',
-      ]) {
-        expect(query).not.toContain(field);
-        expect(print(SoupDocument)).toContain(field);
-      }
-      for (const field of [
-        'notifications',
-        'state',
-        'createdAt',
-        'viewedAt',
-        'updatedAt',
-        'senderId',
-        'channelMessageSendMessageId',
-        'channelMentionMessageId',
-        'channelMentionThreadId',
-        'channelReplyMessageId',
-        'channelReplyThreadId',
         'latestMessage',
         'latestNonThreadMessage',
         'mentions',
         'content',
       ]) {
-        expect(query).toContain(field);
+        expect(print(document)).toContain(field);
       }
     }
   );
+
+  it('leaves full notification reads unbounded and unfiltered', () => {
+    visit(SoupDocument, {
+      Field(field) {
+        if (field.name.value !== 'notifications') return;
+        expect(field.alias).toBeUndefined();
+        expect(field.arguments ?? []).toHaveLength(0);
+      },
+    });
+    expect(print(SoupDocument)).toContain('SoupNotificationFields');
+  });
 });

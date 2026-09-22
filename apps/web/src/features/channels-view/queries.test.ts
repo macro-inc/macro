@@ -23,7 +23,7 @@ vi.mock('@entity', () => ({
 import { useChannelByIdQuery, useChannelsSources } from './queries';
 
 describe('channel list query selection', () => {
-  it('uses the narrower projection for every list and restored selection', () => {
+  it('bounds every list but keeps the selected conversation notification edge complete', () => {
     useSoupAstItemsQuery.mockClear();
     const dispose = createRoot((dispose) => {
       useChannelsSources(
@@ -38,9 +38,11 @@ describe('channel list query selection', () => {
     });
     try {
       expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(5);
-      for (const [, options] of useSoupAstItemsQuery.mock.calls) {
+      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 4)) {
         expect(options?.().graphqlProjection).toBe('channel-list');
       }
+      const [, selectionOptions] = useSoupAstItemsQuery.mock.calls[4];
+      expect(selectionOptions?.().graphqlProjection).toBeUndefined();
     } finally {
       dispose();
     }

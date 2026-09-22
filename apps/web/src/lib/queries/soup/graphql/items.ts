@@ -354,7 +354,7 @@ export function createGraphqlSoupAstItemsQuery(
             offset += 500
           ) {
             chunks.push(
-              await readRecordsByKeys(
+              await readRecordsByKeys<GraphqlSoupItem>(
                 host,
                 result.kind === 'mail-page'
                   ? mailItemSelection
@@ -496,7 +496,9 @@ export function createGraphqlSoupAstItemsQuery(
           showSupportedForeignEntities,
         })
       );
-      const records = pages.flatMap((page) => page.user.soup.items);
+      const records = pages.flatMap<GraphqlSoupItem>(
+        (page) => page.user.soup.items
+      );
       return {
         // Raw wire records are reconciliation evidence, not reactive UI state.
         // Publish them atomically without walking their entire notification

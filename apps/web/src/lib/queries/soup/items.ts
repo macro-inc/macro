@@ -68,7 +68,7 @@ export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 interface SoupItemsQueryOptions {
   enabled?: boolean;
   staleTime?: StaleTime;
-  /** Channels use latest-message previews, not historical notification content. */
+  /** Channel navigation reads bounded unread evidence, not notification history. */
   graphqlProjection?: 'channel-list';
   meta?: {
     groupBy?: GroupByField;
