@@ -279,7 +279,8 @@ impl BillingSettings {
 pub struct PeriodLedger {
     /// Credits applied to this period's usage, in cents (positive).
     pub credits_consumed_cents: i64,
-    /// Overage charged (pending or paid) for this period, in cents.
+    /// Overage charged for this period, in cents. Includes pending and paid
+    /// charges, plus failed charges whose Stripe invoice may still collect.
     pub overage_charged_cents: i64,
 }
 
@@ -307,7 +308,8 @@ pub enum OverageChargeStatus {
     Pending,
     /// Collected.
     Paid,
-    /// Collection failed; does not cover usage and suspends overage.
+    /// Collection failed and overage is suspended. The charge stops covering
+    /// usage only when no Stripe invoice was opened for it.
     Failed,
 }
 

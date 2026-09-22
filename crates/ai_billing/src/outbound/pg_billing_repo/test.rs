@@ -191,7 +191,9 @@ async fn invoice_webhooks_apply_out_of_order_without_unpaying(pool: PgPool) {
         .unwrap();
     assert_eq!(who.unwrap().as_ref(), payer().as_ref());
     let ledger = repo.period_ledger(&payer(), period_start).await.unwrap();
-    assert_eq!(ledger.overage_charged_cents, 0);
+    // Payment failure is not terminal in Stripe: the open invoice may retry,
+    // so it continues covering the usage.
+    assert_eq!(ledger.overage_charged_cents, 1_300);
     // Re-reporting the same status is a no-op.
     assert!(
         repo.resolve_overage_invoice("in_1", OverageChargeStatus::Failed)
@@ -246,11 +248,11 @@ async fn settlement_retries_a_failed_charge_instead_of_reserving_a_new_one(pool:
             .await
             .unwrap()
             .overage_charged_cents,
-        0
+        1_300
     );
 
-    // The next settlement hands the same charge back, with its invoice, and
-    // reserves nothing new.
+    // The next settlement hands the same charge back, with its invoice, even
+    // though its continued ledger coverage leaves no new amount to plan.
     let retry = repo
         .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
         .await
@@ -268,9 +270,21 @@ async fn settlement_retries_a_failed_charge_instead_of_reserving_a_new_one(pool:
             .overage_charged_cents,
         1_300
     );
+}
 
-    // It fails again; then credits arrive and cover the usage. The stale
-    // failed charge must not be retried after that.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn credits_can_replace_a_failed_charge_that_was_never_invoiced(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone());
+    let period_start = Utc::now() - chrono::Duration::days(10);
+    repo.update_overage(&payer(), true, 10_000).await.unwrap();
+
+    let first = repo
+        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("charge reserved");
+    assert!(first.stripe_invoice_id.is_none());
     repo.finish_overage_charge(first.id, None, OverageChargeStatus::Failed)
         .await
         .unwrap();
@@ -292,6 +306,56 @@ async fn settlement_retries_a_failed_charge_instead_of_reserving_a_new_one(pool:
         repo.latest_charge_status(&payer()).await.unwrap(),
         Some(OverageChargeStatus::Failed)
     );
+    assert_eq!(charge_rows(&pool).await, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn credits_do_not_replace_a_failed_charge_with_a_collectible_invoice(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone());
+    let period_start = Utc::now() - chrono::Duration::days(10);
+    repo.update_overage(&payer(), true, 10_000).await.unwrap();
+
+    let first = repo
+        .apply_settlement(&payer(), period_start, 7_000, 4_000, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("charge reserved");
+    assert_eq!(first.amount_cents, 3_000);
+    repo.finish_overage_charge(first.id, Some("in_open"), OverageChargeStatus::Failed)
+        .await
+        .unwrap();
+    repo.suspend_overage(&payer()).await.unwrap();
+    repo.record_credit_purchase(&payer(), 1_000, "cs_shrink")
+        .await
+        .unwrap();
+
+    let suspended = repo
+        .apply_settlement(&payer(), period_start, 7_000, 4_000, policy(false))
+        .await
+        .unwrap();
+    assert_eq!(suspended.consumed_credits_cents, 0);
+    assert!(suspended.pending_charge.is_none());
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 1_000);
+    assert_eq!(
+        repo.period_ledger(&payer(), period_start)
+            .await
+            .unwrap()
+            .overage_charged_cents,
+        3_000
+    );
+
+    repo.update_overage(&payer(), true, 10_000).await.unwrap();
+    let retry = repo
+        .apply_settlement(&payer(), period_start, 7_000, 4_000, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("existing invoice retried");
+    assert_eq!(retry.id, first.id);
+    assert_eq!(retry.amount_cents, 3_000);
+    assert_eq!(retry.stripe_invoice_id.as_deref(), Some("in_open"));
+    assert_eq!(charge_rows(&pool).await, 1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

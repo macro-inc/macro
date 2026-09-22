@@ -147,10 +147,12 @@ pub trait BillingRepo: Send + Sync + 'static {
     ///
     /// - a `pending` charge with no invoice whose collection never finished
     ///   (the process died between reserving and opening the invoice);
-    /// - a `failed` charge, once overage is active again and the plan would
-    ///   charge at least its amount anyway. It flips back to `pending`. A
-    ///   failed charge whose usage has since been covered another way (say
-    ///   by a credit purchase) stays failed and is never retried.
+    /// - a `failed` charge with a Stripe invoice, once overage is active
+    ///   again. It remains ledger coverage because Stripe may still collect
+    ///   it, so later credits do not replace it with a smaller charge;
+    /// - a `failed` charge without a Stripe invoice, once overage is active
+    ///   and the plan would charge at least its amount anyway. A charge whose
+    ///   usage has since been covered another way stays failed.
     fn apply_settlement(
         &self,
         payer: &MacroUserIdStr<'_>,

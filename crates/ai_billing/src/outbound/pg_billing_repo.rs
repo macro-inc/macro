@@ -298,6 +298,9 @@ impl BillingRepo for PgBillingRepo {
         .await
         .map_err(storage)?;
         let ledger = read_period_ledger(&mut tx, payer, period_start).await?;
+        let overage_active = account.overage_enabled
+            && account.overage_suspended_at.is_none()
+            && account.overage_limit_cents > 0;
 
         let plan = plan_settlement(
             SettlementState {
@@ -308,9 +311,7 @@ impl BillingRepo for PgBillingRepo {
                 credit_balance_cents: balance,
             },
             SettlementPolicy {
-                overage_active: account.overage_enabled
-                    && account.overage_suspended_at.is_none()
-                    && account.overage_limit_cents > 0,
+                overage_active,
                 overage_limit_cents: account.overage_limit_cents,
                 charge_threshold_cents: policy.charge_threshold_cents,
                 period_ended: policy.period_ended,
@@ -335,11 +336,11 @@ impl BillingRepo for PgBillingRepo {
 
         // A charge still owed from an earlier pass comes first, so a retry
         // reuses its id (and with it its Stripe idempotency keys and invoice)
-        // instead of reserving a second charge for the same usage. Failed
-        // charges are excluded from the ledger above, so `plan` already
-        // treats their usage as uncovered; only take one back when the plan
-        // would charge at least that much anyway (credits and the cap have
-        // had their say), otherwise it is stale and stays failed.
+        // instead of reserving a second charge for the same usage. A failed
+        // charge with an invoice remains in the ledger because Stripe may
+        // still collect it, and is retried whenever overage is active. A
+        // failed charge without an invoice is excluded from the ledger and is
+        // retried only when the new plan still covers its full amount.
         let owed = sqlx::query!(
             r#"
             SELECT id, amount_cents, stripe_invoice_id, status::text AS "status!"
@@ -364,9 +365,12 @@ impl BillingRepo for PgBillingRepo {
         .await
         .map_err(storage)?;
         let orphaned = owed.iter().find(|row| row.status == "pending");
-        let retryable = owed
-            .iter()
-            .find(|row| row.status == "failed" && row.amount_cents <= plan.charge_overage_cents);
+        let retryable = owed.iter().find(|row| {
+            row.status == "failed"
+                && overage_active
+                && (row.stripe_invoice_id.is_some()
+                    || row.amount_cents <= plan.charge_overage_cents)
+        });
 
         let pending_charge = if let Some(row) = orphaned {
             // Reserved but never collected (the collector died before it
@@ -505,8 +509,8 @@ impl BillingRepo for PgBillingRepo {
     }
 }
 
-/// Sum consumption and non-failed charges for a period, on any connection so
-/// the settlement transaction can reuse it under its lock.
+/// Sum consumption and charges that can still collect for a period, on any
+/// connection so the settlement transaction can reuse it under its lock.
 async fn read_period_ledger(
     conn: &mut sqlx::PgConnection,
     payer: &str,
@@ -528,7 +532,9 @@ async fn read_period_ledger(
         r#"
         SELECT COALESCE(SUM(amount_cents), 0)::bigint AS "charged!"
         FROM ai_overage_charge
-        WHERE user_id = $1 AND period_start = $2 AND status <> 'failed'
+        WHERE user_id = $1
+          AND period_start = $2
+          AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)
         "#,
         payer,
         period_start,

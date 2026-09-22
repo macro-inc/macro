@@ -126,12 +126,13 @@ impl RepoState {
     fn ledger(&self, period_start: DateTime<Utc>) -> PeriodLedger {
         PeriodLedger {
             credits_consumed_cents: self.consumed.get(&period_start).copied().unwrap_or(0),
-            // Failed charges stop covering usage.
+            // An invoiced charge can still collect even after a failure.
             overage_charged_cents: self
                 .charges
                 .iter()
                 .filter(|c| {
-                    c.period_start == period_start && c.status != OverageChargeStatus::Failed
+                    c.period_start == period_start
+                        && (c.status != OverageChargeStatus::Failed || c.invoice.is_some())
                 })
                 .map(|c| c.amount_cents)
                 .sum(),
@@ -255,8 +256,9 @@ impl BillingRepo for FakeRepo {
         Ok(true)
     }
     /// Mirrors the Postgres adapter: credits first, then hand back a charge
-    /// still owed (an uncollected `pending` one, or a `failed` one the plan
-    /// would charge anyway) before reserving a new one.
+    /// still owed. A failed invoiced charge remains coverage and is always
+    /// retried once overage is active; an uninvoiced one must still fit the
+    /// new charge plan.
     async fn apply_settlement(
         &self,
         _payer: &MacroUserIdStr<'_>,
@@ -290,7 +292,8 @@ impl BillingRepo for FakeRepo {
             c.period_start == period_start
                 && ((c.status == OverageChargeStatus::Pending && c.invoice.is_none())
                     || (c.status == OverageChargeStatus::Failed
-                        && c.amount_cents <= plan.charge_overage_cents))
+                        && overage_active
+                        && (c.invoice.is_some() || c.amount_cents <= plan.charge_overage_cents)))
         });
         let pending_charge = if let Some(i) = owed {
             s.charges[i].status = OverageChargeStatus::Pending;
@@ -595,15 +598,16 @@ async fn opening_the_invoice_failing_marks_the_charge_failed() {
 }
 
 #[tokio::test]
-async fn a_failed_charge_whose_usage_credits_covered_is_not_retried() {
+async fn a_failed_uninvoiced_charge_whose_usage_credits_covered_is_not_retried() {
     let (svc, repo, payments, _) = premium_service(5_800);
     let payer = user("payer@x.com");
-    payments.set_pay(PayOutcome::Error);
+    *payments.fail_open.lock().unwrap() = true;
     svc.update_overage(&payer, true, 10_000).await.unwrap();
     assert_eq!(repo.charges()[0].status, OverageChargeStatus::Failed);
+    assert!(repo.charges()[0].invoice.is_none());
 
-    // Credits arrive and cover the 1_800 the failed charge was for.
-    payments.set_pay(PayOutcome::Paid);
+    // Credits arrive and cover the 1_800 that was never invoiced.
+    *payments.fail_open.lock().unwrap() = false;
     svc.apply_credit_purchase(&payer, 2_500, "cs_1")
         .await
         .unwrap();
@@ -617,7 +621,40 @@ async fn a_failed_charge_whose_usage_credits_covered_is_not_retried() {
     let charges = repo.charges();
     assert_eq!(charges.len(), 1);
     assert_eq!(charges[0].status, OverageChargeStatus::Failed);
-    assert_eq!(payments.payments().len(), 1);
+    assert!(payments.opened().is_empty());
+    assert!(payments.payments().is_empty());
+}
+
+#[tokio::test]
+async fn failed_invoiced_charge_keeps_coverage_when_credits_are_bought() {
+    let (svc, repo, payments, _) = premium_service(7_000);
+    let payer = user("payer@x.com");
+    payments.set_pay(PayOutcome::Error);
+
+    svc.update_overage(&payer, true, 10_000).await.unwrap();
+    let first = repo.charges().into_iter().next().unwrap();
+    assert_eq!(first.amount_cents, 3_000);
+    assert_eq!(first.status, OverageChargeStatus::Failed);
+    assert!(first.invoice.is_some());
+
+    payments.set_pay(PayOutcome::Declined);
+    svc.apply_credit_purchase(&payer, 1_000, "cs_shrink")
+        .await
+        .unwrap();
+    let snap = svc.snapshot(&payer).await.unwrap();
+    assert_eq!(snap.credits_consumed_cents, 0);
+    assert_eq!(snap.credit_balance_cents, 1_000);
+    assert_eq!(snap.overage_charged_cents, 3_000);
+
+    svc.update_overage(&payer, true, 10_000).await.unwrap();
+    let charges = repo.charges();
+    assert_eq!(charges.len(), 1);
+    assert_eq!(charges[0].id, first.id);
+    assert_eq!(charges[0].status, OverageChargeStatus::Pending);
+    assert_eq!(charges[0].amount_cents, 3_000);
+    assert_eq!(charges[0].invoice, first.invoice);
+    assert_eq!(payments.opened().len(), 1);
+    assert_eq!(payments.payments().len(), 2);
 }
 
 #[tokio::test]
@@ -637,7 +674,8 @@ async fn a_declined_card_leaves_the_invoice_open_for_the_webhook() {
     svc.mark_overage_invoice(&invoice, false).await.unwrap();
     let snap = svc.snapshot(&payer).await.unwrap();
     assert!(snap.overage_suspended);
-    assert_eq!(snap.overage_charged_cents, 0);
+    // Stripe may still retry the open invoice, so it remains coverage.
+    assert_eq!(snap.overage_charged_cents, 1_500);
 }
 
 #[tokio::test]
@@ -755,7 +793,7 @@ async fn out_of_order_invoice_webhooks_follow_the_newest_charge() {
     svc.mark_overage_invoice(&a, true).await.unwrap();
     let snap = svc.snapshot(&payer).await.unwrap();
     assert!(snap.overage_suspended);
-    assert_eq!(snap.overage_charged_cents, 2_000);
+    assert_eq!(snap.overage_charged_cents, 3_500);
     // B eventually collects: cleared, everything covered.
     svc.mark_overage_invoice(&b, true).await.unwrap();
     let snap = svc.snapshot(&payer).await.unwrap();
@@ -778,8 +816,9 @@ async fn out_of_order_invoice_webhooks_follow_the_newest_charge() {
     svc.mark_overage_invoice(&a, false).await.unwrap();
     let snap = svc.snapshot(&payer).await.unwrap();
     assert!(!snap.overage_suspended);
-    // A stopped covering its usage; the next settlement retries it.
-    assert_eq!(snap.overage_charged_cents, 1_500);
+    // A remains coverage because its invoice can still collect. Settlement
+    // retries that same invoice rather than replacing it.
+    assert_eq!(snap.overage_charged_cents, 3_500);
     assert_eq!(repo.charges()[0].status, OverageChargeStatus::Failed);
 }
 

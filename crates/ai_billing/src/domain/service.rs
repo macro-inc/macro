@@ -200,8 +200,9 @@ where
 
     /// Collect a reserved overage charge: open its invoice (or pick up the
     /// one an earlier attempt opened) and try to pay it. A provider failure
-    /// marks the charge failed, which stops it covering usage, and suspends
-    /// overage until the payer re-enables it; that retries the same charge.
+    /// marks the charge failed and suspends overage until the payer re-enables
+    /// it. A recorded invoice continues covering usage because Stripe may
+    /// still collect it; re-enabling retries that same invoice.
     async fn collect(
         &self,
         entitlement: &Entitlement,
@@ -300,8 +301,8 @@ where
         }
     }
 
-    /// A charge that could not be collected: it stops covering usage, and
-    /// overage pauses until the payer re-enables it (which retries it).
+    /// A charge that could not be collected: overage pauses until the payer
+    /// re-enables it. A recorded Stripe invoice continues covering usage.
     async fn fail_charge(&self, payer: &MacroUserIdStr<'_>, charge_id: Uuid) -> Result<()> {
         self.repo
             .finish_overage_charge(charge_id, None, OverageChargeStatus::Failed)
