@@ -11,6 +11,8 @@ mod test;
 
 mod pull_request;
 mod sharing;
+mod turn_state;
+mod working_branch;
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
@@ -724,6 +726,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             UPDATE agent_session
             SET repo_url = $2,
+                working_branch = NULL,
                 modified_at = NOW()
             WHERE id = $1
               AND repo_url IS DISTINCT FROM $2
@@ -1058,64 +1061,7 @@ impl ExternalSessionRepo for PgAgentSessionRepo {
 
 impl AgentSessionLogRepo for PgAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
-        let event_status = match &log.content {
-            Message::ToServer(ToServerMessage::Event { event }) => {
-                Some(SessionStatus::Event(event.clone()))
-            }
-            _ => None,
-        };
-        let (direction, content) = message_columns(&log.content)?;
-        let mut transaction = self
-            .pool
-            .begin()
-            .await
-            .context("begin agent session log create")?;
-        let id = macro_uuid::generate_uuid_v7();
-        let created_at = sqlx::query_scalar!(
-            r#"
-            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING created_at
-            "#,
-            id,
-            log.agent_session_id.as_uuid(),
-            log.user_id.as_ref().map(|user_id| user_id.as_ref()),
-            direction,
-            content,
-        )
-        .fetch_one(&mut *transaction)
-        .await
-        .context("failed to create agent session log entry")?;
-
-        if let Some(status) = event_status {
-            let (status, status_event_name) = status_columns(&status);
-            sqlx::query!(
-                r#"
-                UPDATE agent_session
-                SET status = $2,
-                    status_event_name = $3,
-                    modified_at = now()
-                WHERE id = $1
-                "#,
-                log.agent_session_id.as_uuid(),
-                status,
-                status_event_name,
-            )
-            .execute(&mut *transaction)
-            .await
-            .context("failed to update agent session status from log entry")?;
-        }
-
-        transaction
-            .commit()
-            .await
-            .context("commit agent session log create")?;
-
-        Ok(StoredAgentSessionLog {
-            id,
-            created_at,
-            entry: log,
-        })
+        self.create_projected(log, None, None, None).await
     }
 
     async fn create_fenced(
@@ -1238,7 +1184,20 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         claim: &SessionClaim,
         boundary: Option<crate::domain::model::HistoryBoundary>,
     ) -> Result<StoredAgentSessionLog> {
-        if claim.session != log.agent_session_id {
+        self.create_projected(log, Some(claim), boundary, None)
+            .await
+    }
+
+    async fn create_projected(
+        &self,
+        log: AgentSessionLog,
+        claim: Option<&SessionClaim>,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+        turn_state: Option<agent_fold::domain::model::TurnState>,
+    ) -> Result<StoredAgentSessionLog> {
+        if claim.is_some_and(|claim| claim.session != log.agent_session_id)
+            || (boundary.is_some() && claim.is_none())
+        {
             return Err(AgentSessionError::FencedOut(log.agent_session_id));
         }
         let event_status = match &log.content {
@@ -1255,24 +1214,26 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .await
             .context("begin fenced agent session log create")?;
 
-        // Hold the session row through commit. A takeover updates this same
-        // row, so it cannot supersede the claim between our check and append.
-        let locked_session = sqlx::query_scalar!(
-            r#"
+        if let Some(claim) = claim {
+            // Hold the session row through commit. A takeover updates this same
+            // row, so it cannot supersede the claim between our check and append.
+            let locked_session = sqlx::query_scalar!(
+                r#"
             SELECT id
             FROM agent_session
             WHERE id = $1 AND manager_replica_id = $2 AND manager_fence = $3
             FOR UPDATE
             "#,
-            log.agent_session_id.as_uuid(),
-            claim.replica.as_uuid(),
-            claim.fence.0,
-        )
-        .fetch_optional(&mut *transaction)
-        .await
-        .context("lock fenced agent session")?;
-        if locked_session.is_none() {
-            return Err(AgentSessionError::FencedOut(log.agent_session_id));
+                log.agent_session_id.as_uuid(),
+                claim.replica.as_uuid(),
+                claim.fence.0,
+            )
+            .fetch_optional(&mut *transaction)
+            .await
+            .context("lock fenced agent session")?;
+            if locked_session.is_none() {
+                return Err(AgentSessionError::FencedOut(log.agent_session_id));
+            }
         }
 
         let id = macro_uuid::generate_uuid_v7();
@@ -1292,7 +1253,7 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         .await
         .context("failed to create fenced agent session log entry")?;
 
-        if let Some(boundary) = boundary {
+        if let (Some(boundary), Some(claim)) = (boundary, claim) {
             let updated = sqlx::query!(
                 r#"
                 UPDATE agent_session AS session
@@ -1320,7 +1281,7 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             }
         }
 
-        if let Some(run_id) = checkpoint {
+        if let (Some(run_id), Some(claim)) = (checkpoint, claim) {
             let updated = sqlx::query!(
                 r#"
                 UPDATE external_agent_session AS external
@@ -1363,6 +1324,21 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .execute(&mut *transaction)
             .await
             .context("failed to update agent session status from fenced log entry")?;
+        }
+
+        if let Some(turn_state) = turn_state {
+            sqlx::query!(
+                r#"
+                UPDATE agent_session
+                SET turn_state = $2
+                WHERE id = $1 AND turn_state IS DISTINCT FROM $2
+                "#,
+                log.agent_session_id.as_uuid(),
+                turn_state.as_ref(),
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("project agent session turn state with log entry")?;
         }
 
         transaction

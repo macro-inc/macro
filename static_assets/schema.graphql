@@ -585,6 +585,28 @@ type GraphqlActivityUnknownAction {
 }
 
 """
+Last synchronized state of a session's linked GitHub pull request.
+"""
+enum GraphqlAgentPullRequestState {
+	"""
+	The pull request accepts changes.
+	"""
+	OPEN
+	"""
+	The pull request is still a draft.
+	"""
+	DRAFT
+	"""
+	The pull request was closed without merging.
+	"""
+	CLOSED
+	"""
+	The pull request was merged.
+	"""
+	MERGED
+}
+
+"""
 The two operands of a recursive `AgentSessionFilterExpr` binary expression.
 """
 input GraphqlAgentSessionBinaryExpr {
@@ -4016,6 +4038,38 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	The bot running this session, when its profile still exists.
 	"""
 	bot: GraphqlSessionBot
+	"""
+	The runtime snapshotted when the session was created.
+	"""
+	harness: String!
+	"""
+	The repository the session works with, when one was selected.
+	"""
+	repoUrl: String
+	"""
+	The starting branch selected for this session, not its current branch.
+	"""
+	repoBranch: String
+	"""
+	The persisted pull request associated with the session.
+	"""
+	pullRequestUrl: String
+	"""
+	Last captured working branch, when the runtime has reported one.
+	"""
+	workingBranch: String
+	"""
+	Last synchronized state of the linked pull request, when visible.
+	"""
+	pullRequestState: GraphqlAgentPullRequestState
+	"""
+	The linked pull request's Macro entity, when visible to the viewer.
+	"""
+	pullRequestId: ID
+	"""
+	Last persisted fold turn state. Absent until an older session next runs.
+	"""
+	turnState: String
 	"""
 	The channel thread the session was opened from, when any.
 	"""

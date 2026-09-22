@@ -16,6 +16,7 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { unreadFilterFn } from '@entity/utils/filter';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlugIcon from '@phosphor/plugs-connected.svg';
@@ -114,6 +115,8 @@ function Row(props: {
       {(session) => (
         <AgentSessionListItem
           entity={session()}
+          surface="agents"
+          unread={unreadFilterFn(session())}
           mode={props.mode}
           active={props.active}
           onOpen={props.onOpen}

@@ -100,6 +100,51 @@ async fn a_session_without_captures_reads_as_empty(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn working_branches_are_batched_without_base_fallback(pool: PgPool) {
+    let repo = PgChangesetRepo::new(pool.clone());
+    let captured = seed_session(&pool).await;
+    let uncaptured = seed_session(&pool).await;
+    let changes = changeset(captured);
+    repo.record_changeset(&changes, None, Utc::now())
+        .await
+        .unwrap();
+
+    let result = repo
+        .working_branches(&[captured, uncaptured])
+        .await
+        .unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        result
+            .get(&captured)
+            .and_then(|fact| fact.for_repository("https://github.com/example/example")),
+        Some("agent/work")
+    );
+    assert_eq!(
+        result
+            .get(&captured)
+            .and_then(|fact| fact.for_repository("https://github.com/example/replaced")),
+        None
+    );
+    assert!(!result.contains_key(&uncaptured));
+    assert!(repo.working_branches(&[]).await.unwrap().is_empty());
+
+    let mut detached = changes;
+    detached.range.head.name = None;
+    repo.record_changeset(&detached, None, Utc::now())
+        .await
+        .unwrap();
+    assert!(repo.working_branches(&[captured]).await.unwrap().is_empty());
+
+    detached.range.head.name = Some("agent/work".to_owned());
+    detached.range.repository = None;
+    repo.record_changeset(&detached, None, Utc::now())
+        .await
+        .unwrap();
+    assert!(repo.working_branches(&[captured]).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_attempt_is_visible_while_it_runs_and_when_it_ends(pool: PgPool) {
     let repo = PgChangesetRepo::new(pool.clone());
     let session = seed_session(&pool).await;

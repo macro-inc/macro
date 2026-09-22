@@ -2263,9 +2263,10 @@ where
                 state.ready_for_sync = false;
                 SessionError::Journal(error)
             })?;
-        let (updates, completion, pull_request) = {
+        let (updates, completion, pull_request, working_branches) = {
             let mut state = session.state.lock().expect("session state poisoned");
             let previous_pr = state.machine.pull_request_url().map(str::to_owned);
+            let previous_branches = state.machine.working_branches().clone();
             let before = run.and_then(|run| state.machine.terminal_status(run));
             state.journal_entries.push(entry.clone());
             let SessionState {
@@ -2294,9 +2295,27 @@ where
                 .pull_request_url()
                 .filter(|url| Some(*url) != previous_pr.as_deref())
                 .map(str::to_owned);
-            (updates, completion, pull_request)
+            let working_branches: Vec<_> = state
+                .machine
+                .working_branches()
+                .iter()
+                .filter(|(repository, branch)| previous_branches.get(*repository) != Some(*branch))
+                .map(|(repository, branch)| (repository.clone(), branch.clone()))
+                .collect();
+            (updates, completion, pull_request, working_branches)
         };
         if emit {
+            for (repository, branch) in working_branches {
+                self.notifier
+                    .set_working_branch(id, &repository, &branch)
+                    .await
+                    .map_err(|error| {
+                        let mut state = session.state.lock().expect("session state poisoned");
+                        state.capture_failed = true;
+                        state.ready_for_sync = false;
+                        SessionError::Journal(error)
+                    })?;
+            }
             if let Some(url) = pull_request {
                 self.notifier
                     .set_pull_request(id, &url)
@@ -2509,6 +2528,11 @@ where
         // to a disconnected session by loading it, so a load that refuses is
         // also every future prompt refused as disconnected, with no way back.
         let (machine, updates) = history_projection(&entries, HistoryGap::IsServedAnyway)?;
+        for (repository, branch) in machine.working_branches() {
+            self.notifier
+                .set_working_branch(id, repository, branch)
+                .await?;
+        }
         if let Some(url) = machine.pull_request_url() {
             self.notifier.set_pull_request(id, url).await?;
         }

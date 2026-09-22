@@ -32,6 +32,7 @@ use crate::domain::model::{McpHeader, McpServer, McpTransport};
 use crate::domain::model_options::{MODEL_CONFIG_ID, cursor_model_config_options};
 use crate::domain::ports::{
     ArtifactStore, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream, SessionNotifier,
+    WorkingBranchReporter,
 };
 use crate::domain::service::CursorSessionService;
 use crate::domain::slash_commands::cursor_slash_commands;
@@ -71,6 +72,7 @@ pub struct AcpNotifier {
     /// connection, exactly as one service does.
     connection: Arc<OnceLock<ConnectionTo<Client>>>,
     pull_request: Option<Arc<dyn PullRequestReporter>>,
+    working_branch: Option<Arc<dyn WorkingBranchReporter>>,
     bound: Arc<tokio::sync::Notify>,
     reload: Option<tokio::sync::mpsc::UnboundedSender<SessionId>>,
 }
@@ -103,6 +105,12 @@ impl AcpNotifier {
         self
     }
 
+    /// Use the embedding host's session operation for repository branch facts.
+    pub fn with_working_branches(mut self, reporter: Arc<dyn WorkingBranchReporter>) -> Self {
+        self.working_branch = Some(reporter);
+        self
+    }
+
     /// Attach the connection updates will travel over.
     fn bind(&self, connection: ConnectionTo<Client>) {
         // A second bind can only be a bug in `serve`; the first connection
@@ -113,6 +121,18 @@ impl AcpNotifier {
 }
 
 impl SessionNotifier for AcpNotifier {
+    async fn set_working_branch(
+        &self,
+        _session: &SessionId,
+        repository_url: &str,
+        branch: &str,
+    ) -> Result<(), rootcause::Report> {
+        if let Some(reporter) = &self.working_branch {
+            reporter.set_working_branch(repository_url, branch).await?;
+        }
+        Ok(())
+    }
+
     async fn set_pull_request(
         &self,
         _session: &SessionId,

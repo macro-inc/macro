@@ -1193,16 +1193,21 @@ async fn run() -> anyhow::Result<()> {
         config.document_permission_jwt.as_ref().to_string(),
     );
 
-    let soup_service = Arc::new(SoupImpl::new(
-        PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-        frecency_service,
-        readonly_email_service,
-        channel_service_for_soup,
-        call_record_query_service,
-        crm_service.clone(),
-        foreign_entity_service_for_soup,
-        reminders_service.clone(),
-    ));
+    let soup_service = Arc::new(
+        SoupImpl::new(
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+            frecency_service,
+            readonly_email_service,
+            channel_service_for_soup,
+            call_record_query_service,
+            crm_service.clone(),
+            foreign_entity_service_for_soup,
+            reminders_service.clone(),
+        )
+        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
+            readonly_db.clone(),
+        )),
+    );
 
     let websocket_notification_consumer_service =
         Arc::new(WebSocketNotificationConsumerService::new(

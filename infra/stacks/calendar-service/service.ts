@@ -16,7 +16,6 @@ import {
   DopplerEcsEnvironment,
   getGatewayAlb,
   getKafkaClusterPolicy,
-  GATEWAY_PRIORITIES,
   GatewayService,
   stack,
 } from '../../packages/shared';
@@ -185,16 +184,8 @@ export class CalendarService extends pulumi.ComponentResource {
         containerPort: serviceContainerPort,
         service: GatewayService.CALENDAR_SERVICE,
         healthCheckPath,
-        // calendar-service claims `/calendar` here ahead of cutover, but this
-        // rule receives no `/calendar` traffic yet: email-service's rule
-        // (GatewayService.EMAIL_SERVICE, priority 110) sits below
-        // calendar-service's (CALENDAR_SERVICE, priority 140) on the shared
-        // gateway listener, and the ALB evaluates lower priority numbers first
-        // — see infra/packages/shared/src/gateway_priorities.ts. Email keeps
-        // serving existing calendar endpoints until the cutover PR drops those
-        // patterns; invitation resolution has its own rule below.
-        // The `/calendar-service` prefixes stay
-        // for now so the service remains reachable in the meantime.
+        // Calendar owns public mutations and internal invitation resolution.
+        // Keep the legacy service prefix reachable during the transition.
         pathPatterns: [
           '/calendar',
           '/calendar/*',
@@ -208,25 +199,6 @@ export class CalendarService extends pulumi.ComponentResource {
     );
 
     this.targetGroup = gatewayTargetGroup.target_group;
-
-    // This new internal endpoint exists only in calendar_service. Route it
-    // ahead of email's transitional /calendar/* rule without moving existing
-    // calendar traffic before the full service cutover.
-    new aws.lb.ListenerRule(
-      `${stack}-${BASE_NAME}-invitation-resolution`,
-      {
-        listenerArn: gatewayLoadBalancer.httpsListenerArn,
-        priority: GATEWAY_PRIORITIES[GatewayService.CALENDAR_INVITATIONS],
-        conditions: [
-          {
-            pathPattern: { values: ['/calendar/internal/invitations/resolve'] },
-          },
-        ],
-        actions: [{ type: 'forward', targetGroupArn: this.targetGroup.arn }],
-        tags: this.tags,
-      },
-      { parent: this }
-    );
 
     const dopplerEcsEnvironment = new DopplerEcsEnvironment(
       BASE_NAME,

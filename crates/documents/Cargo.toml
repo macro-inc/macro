@@ -151,7 +151,6 @@ hex = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 sync_service_client = { path = "../sync_service_client" }
 task_dedup = { path = "../task_dedup", optional = true }
-urlencoding = { workspace = true }
 
 # AI Tool dependencies
 ai_toolset = { path = "../ai_toolset", optional = true }

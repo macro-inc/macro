@@ -5,6 +5,7 @@ pub mod manager;
 pub use crate::outbound::acp_pipe as pipe;
 mod pull_request;
 pub mod repository_chooser;
+mod working_branch;
 
 pub use keys::{CursorApiKeys, PgCursorApiKeys};
 pub use manager::{CURSOR_PROVIDER, CursorContainerManager, PostgresJournal};

@@ -1,3 +1,4 @@
+import { refreshAgentSessionLists } from '@queries/agent-session/list-sync';
 import { queryClient } from '@queries/client';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { getForeignEntityResponse } from '@service-storage/generated/zod';
@@ -31,6 +32,7 @@ export async function handlePullRequestUpdated(
         : entity
     );
   }
+  await refreshAgentSessionLists();
 }
 
 export function invalidatePullRequestMentions(): void {

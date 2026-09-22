@@ -2494,6 +2494,7 @@ async fn model_resolution_precedes_intent_and_definite_rejection_aborts_it() {
 
 mod artifacts;
 mod fold;
+mod working_branches;
 
 #[tokio::test]
 async fn cancellation_during_pre_prompt_recovery_never_executes_the_pending_prompt() {

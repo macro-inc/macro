@@ -47,6 +47,8 @@ use uuid::Uuid;
 
 use super::*;
 
+mod agent_metadata;
+
 struct NoopEmailPreviewService;
 
 impl EmailPreviewServiceReadOnly for NoopEmailPreviewService {

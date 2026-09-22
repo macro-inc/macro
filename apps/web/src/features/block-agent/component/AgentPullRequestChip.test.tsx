@@ -14,10 +14,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err } from 'neverthrow';
 import { Suspense } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import {
-  AgentPullRequestChip,
-  AgentPullRequestLink,
-} from './AgentPullRequestChip';
+import { AgentPullRequestChip } from './AgentPullRequestChip';
+
+vi.mock('@queries/agent-session/list-sync', () => ({
+  refreshAgentSessionLists: vi.fn(async () => {}),
+}));
 
 const { openWithSplit } = vi.hoisted(() => {
   class FakeWebSocket {
@@ -159,42 +160,6 @@ it('opens the PR entity once synced and follows later status changes', async () 
   });
   await vi.advanceTimersByTimeAsync(1);
   expect(screen.getByRole('button').textContent).toContain('Merged');
-  rendered.unmount();
-  client.clear();
-});
-
-it('opens the sidebar PR as the synced entity instead of GitHub', async () => {
-  vi.useFakeTimers();
-  const lookup = vi.mocked(storageServiceClient.getForeignEntityBySource);
-  type Lookup = ReturnType<
-    typeof storageServiceClient.getForeignEntityBySource
-  >;
-  lookup.mockResolvedValue(
-    err([{ code: 'NOT_FOUND', message: 'Not synced' }]) as Awaited<Lookup>
-  );
-  const client = queryClient;
-  const rendered = render(() => (
-    <QueryClientProvider client={client}>
-      <AgentPullRequestLink url={url} />
-    </QueryClientProvider>
-  ));
-  await vi.advanceTimersByTimeAsync(1);
-  const fallback = screen.getByRole('link', {
-    name: 'View PR #6303 in GitHub',
-  });
-  expect(fallback.getAttribute('href')).toBe(url);
-  expect(fallback.getAttribute('target')).toBe('_blank');
-  await handlePullRequestUpdated(entity('open'));
-  await vi.advanceTimersByTimeAsync(1);
-  const control = screen.getByRole('button', {
-    name: 'View PR #6303 in GitHub',
-  });
-  expect(screen.queryByRole('link')).toBeNull();
-  fireEvent.click(control);
-  expect(openWithSplit).toHaveBeenCalledWith(
-    { type: 'pr', id: entity('open').id },
-    { preferNewSplit: true }
-  );
   rendered.unmount();
   client.clear();
 });

@@ -5488,6 +5488,7 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_changes",
  "agent_session",
  "ai_tools",
  "ai_usage",
@@ -5791,7 +5792,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "unicode-segmentation",
- "urlencoding",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -5820,6 +5820,7 @@ dependencies = [
  "macro_sha_count_client",
  "macro_uuid",
  "model",
+ "model_owner",
  "redis",
  "s3_client",
  "s3_key",
@@ -14710,6 +14711,7 @@ name = "s3_key"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "model_owner",
  "urlencoding",
  "workspace-hack",
 ]
@@ -15942,6 +15944,7 @@ name = "soup"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_changes",
  "ai_toolset",
  "anyhow",
  "async-trait",

@@ -11,7 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
-    agent_session::SoupAgentSession,
+    agent_session::{AgentPullRequestState, SoupAgentSession},
     calendar_event::SoupCalendarEvent,
     call_record::{SoupCallRecord, SoupCallRecordParticipant},
     chat::SoupChat,
@@ -947,6 +947,30 @@ where
 /// GraphQL agent session entity.
 pub struct GraphqlSoupAgentSession<E: SoupEntityEdges>(SoupAgentSession<()>, E, Option<f64>);
 
+/// Last synchronized state of a session's linked GitHub pull request.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlAgentPullRequestState {
+    /// The pull request accepts changes.
+    Open,
+    /// The pull request is still a draft.
+    Draft,
+    /// The pull request was closed without merging.
+    Closed,
+    /// The pull request was merged.
+    Merged,
+}
+
+impl From<AgentPullRequestState> for GraphqlAgentPullRequestState {
+    fn from(state: AgentPullRequestState) -> Self {
+        match state {
+            AgentPullRequestState::Open => Self::Open,
+            AgentPullRequestState::Draft => Self::Draft,
+            AgentPullRequestState::Closed => Self::Closed,
+            AgentPullRequestState::Merged => Self::Merged,
+        }
+    }
+}
+
 /// GraphQL representation of the soup agent session.
 #[Object(name = "GraphqlSoupAgentSession")]
 impl<E> GraphqlSoupAgentSession<E>
@@ -1014,6 +1038,46 @@ where
     /// Fields hydrated through the bot domain.
     async fn agent_session_edges(&self) -> E::AgentSessionEdges {
         E::agent_session_edges(self.0.bot_id)
+    }
+
+    /// The runtime snapshotted when the session was created.
+    async fn harness(&self) -> &str {
+        &self.0.harness
+    }
+
+    /// The repository the session works with, when one was selected.
+    async fn repo_url(&self) -> Option<&str> {
+        self.0.repo_url.as_deref()
+    }
+
+    /// The starting branch selected for this session, not its current branch.
+    async fn repo_branch(&self) -> Option<&str> {
+        self.0.repo_branch.as_deref()
+    }
+
+    /// The persisted pull request associated with the session.
+    async fn pull_request_url(&self) -> Option<&str> {
+        self.0.pull_request_url.as_deref()
+    }
+
+    /// Last captured working branch, when the runtime has reported one.
+    async fn working_branch(&self) -> Option<&str> {
+        self.0.working_branch.as_deref()
+    }
+
+    /// Last synchronized state of the linked pull request, when visible.
+    async fn pull_request_state(&self) -> Option<GraphqlAgentPullRequestState> {
+        self.0.pull_request_state.map(Into::into)
+    }
+
+    /// The linked pull request's Macro entity, when visible to the viewer.
+    async fn pull_request_id(&self) -> Option<ID> {
+        self.0.pull_request_id.map(|id| ID(id.to_string()))
+    }
+
+    /// Last persisted fold turn state. Absent until an older session next runs.
+    async fn turn_state(&self) -> Option<&str> {
+        self.0.turn_state.as_deref()
     }
 
     /// The channel thread the session was opened from, when any.

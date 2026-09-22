@@ -10,6 +10,57 @@ const STRANGER: &str = "macro|agent-stranger@test.com";
 const BOT_ID: Uuid = Uuid::from_u128(0xa9e7);
 const CHANNEL_ID: Uuid = Uuid::from_u128(0xc05);
 
+#[test]
+fn persisted_row_metadata_survives_property_enrichment() {
+    let created_at = "2026-01-01T00:00:00Z".parse().unwrap();
+    let item = row_to_item(AgentSessionRow {
+        id: Uuid::now_v7(),
+        name: "Fix agent rows".to_owned(),
+        owner_id: OWNER.to_owned(),
+        bot_id: BOT_ID,
+        harness: "cursor".to_owned(),
+        repo_url: Some("https://github.com/macro/macro".to_owned()),
+        repo_branch: Some("main".to_owned()),
+        working_branch: Some("cursor/fix-rows".to_owned()),
+        pull_request_url: Some("https://github.com/macro/macro/pull/6712".to_owned()),
+        turn_state: Some("running".to_owned()),
+        thread_id: None,
+        status: "event".to_owned(),
+        status_event_name: Some("acp_ready".to_owned()),
+        created_at,
+        modified_at: created_at,
+        viewed_at: None,
+    })
+    .expect("valid persisted session")
+    .map_extra(|()| "properties");
+
+    let SoupItem::AgentSession(session) = item else {
+        panic!("expected an agent session");
+    };
+    assert_eq!(session.harness, "cursor");
+    assert_eq!(
+        session.repo_url.as_deref(),
+        Some("https://github.com/macro/macro")
+    );
+    assert_eq!(session.repo_branch.as_deref(), Some("main"));
+    assert_eq!(
+        session.pull_request_url.as_deref(),
+        Some("https://github.com/macro/macro/pull/6712")
+    );
+    assert_eq!(session.turn_state.as_deref(), Some("running"));
+    assert_eq!(session.status, "acp_ready");
+    assert_eq!(
+        session.working_branch.as_deref(),
+        Some("cursor/fix-rows"),
+        "runtime working branch survives list mapping"
+    );
+    assert_eq!(
+        session.pull_request_state, None,
+        "unknown PR state stays unknown"
+    );
+    assert_eq!(session.extra, "properties");
+}
+
 struct Fixture {
     /// Owned by `OWNER`, granted to `CHANNEL_ID` (where `MEMBER` participates).
     shared: Uuid,
@@ -134,6 +185,37 @@ fn ids(items: &[SoupItem<()>]) -> Vec<Uuid> {
             other => panic!("unexpected soup item {other:?}"),
         })
         .collect()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn runtime_branch_without_a_pr_is_listed_only_for_authorized_viewers(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    sqlx::query!(
+        "UPDATE agent_session SET working_branch = 'cursor/no-pr', repo_url = 'https://github.com/example/example' WHERE id = $1",
+        fixture.shared,
+    ).execute(&pool).await?;
+    let items = cursor_soup(
+        &pool,
+        request(MEMBER, Some(Expr::val(AgentSessionLiteral::Include))),
+    )
+    .await?;
+    let SoupItem::AgentSession(session) = &items[0] else {
+        unreachable!()
+    };
+    assert_eq!(session.id, fixture.shared);
+    assert_eq!(session.working_branch.as_deref(), Some("cursor/no-pr"));
+    assert_eq!(session.pull_request_url, None);
+    assert!(
+        cursor_soup(
+            &pool,
+            request(STRANGER, Some(Expr::val(AgentSessionLiteral::Include)))
+        )
+        .await?
+        .is_empty()
+    );
+    Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

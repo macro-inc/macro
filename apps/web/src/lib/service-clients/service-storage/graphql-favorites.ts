@@ -100,6 +100,12 @@ export type SetFavoriteArgs = {
   entityId: string;
 };
 
+/** Explicit null keeps unfiltered reads, link patches, and revalidations on the
+ * same cache field; the cache cannot resolve an omitted optional variable. */
+export const UNFILTERED_FAVORITES_VARIABLES = {
+  filter: null,
+} satisfies FavoritesQueryVariables;
+
 export type FavoritesCacheTarget = {
   variables: FavoritesQueryVariables;
   updateCachedList: boolean;
@@ -112,7 +118,7 @@ export function executeGraphqlSetFavoriteMutation(
   favorite: boolean,
   optimisticSortOrder: number,
   cacheTargets: readonly FavoritesCacheTarget[] = [
-    { variables: {}, updateCachedList: true },
+    { variables: UNFILTERED_FAVORITES_VARIABLES, updateCachedList: true },
   ]
 ): Promise<OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables>> {
   const entityType = toGraphqlFavoriteEntityType(args.entityType);
@@ -211,7 +217,9 @@ export type ReorderFavoritesResult =
 export function executeGraphqlReorderFavoritesMutation(
   client: Client,
   args: ReorderFavoritesRequest,
-  revalidationVariables: readonly FavoritesQueryVariables[] = [{}]
+  revalidationVariables: readonly FavoritesQueryVariables[] = [
+    UNFILTERED_FAVORITES_VARIABLES,
+  ]
 ): Promise<
   OperationResult<ReorderFavoritesMutation, ReorderFavoritesMutationVariables>
 > {

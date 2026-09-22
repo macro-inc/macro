@@ -512,6 +512,18 @@ pub trait SessionOwnership: Send + Sync + 'static {
 
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionLogRepo: Send + Sync + 'static {
+    /// Append a frame and its authoritative fold projection atomically. A
+    /// supplied claim fences both writes; history boundaries require a claim.
+    /// `turn_state` is supplied only when the fold's state changes, avoiding
+    /// a session-row write for every streamed token.
+    fn create_projected<'a>(
+        &'a self,
+        log: AgentSessionLog,
+        claim: Option<&'a SessionClaim>,
+        boundary: Option<HistoryBoundary>,
+        turn_state: Option<agent_fold::domain::model::TurnState>,
+    ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
+
     /// Append a log entry and project any system event onto the session status.
     fn create(
         &self,

@@ -111,3 +111,8 @@ tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "net", "rt-multi-thread", "time"] }
 tokio-tungstenite = { workspace = true }
 tower = { workspace = true, features = ["util"] }
+
+[[bin]]
+name = "backfill_turn_states"
+path = "src/bin/backfill_turn_states.rs"
+required-features = ["cli"]

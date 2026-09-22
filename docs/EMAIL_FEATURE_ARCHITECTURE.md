@@ -492,9 +492,8 @@ calendar-sync flag can stay disabled after the service cutover without disabling
 on invitation cards. The batch endpoint remains available when calendar writes are off,
 returning read-only capabilities. Calendar service failures leave the saved card useful
 and are retried through the existing frontend resolution query.
-Deploy the calendar endpoint and its dedicated gateway listener rule before the email
-client: the rule routes `/calendar/internal/invitations/resolve` to calendar service
-ahead of email's transitional `/calendar/*` rule, without moving other endpoints.
+Deploy the calendar endpoint before the email client. The shared gateway's `/calendar/*`
+route and the local service URL both target calendar service after the main cutover.
 
 RSVP uses the existing provider write-through mutation. Its writer revisions cover both
 occurrence and invitation caches, including email-only views. Failed older requests

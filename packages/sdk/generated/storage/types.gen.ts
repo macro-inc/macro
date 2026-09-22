@@ -181,6 +181,11 @@ export type AgentMcpServers = {
 };
 
 /**
+ * Last synchronized state of a session's linked GitHub pull request.
+ */
+export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
+
+/**
  * Filters for agent sessions.
  */
 export type AgentSessionFilters = {
@@ -8437,9 +8442,8 @@ export type SimpleMention = {
 /**
  * An agent session as displayed in Soup.
  *
- * Mirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent
- * counterpart of a chat, so it carries the same identity, ownership, and
- * recency fields plus the session's last known status.
+ * Includes the persisted runtime and repository metadata needed to render
+ * coding and non-coding sessions without fetching each session separately.
  */
 export type SoupAgentSessionSoupPropertiesField = {
     /**
@@ -8456,6 +8460,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      */
     createdAt: string;
     /**
+     * The runtime snapshotted when the session was created.
+     */
+    harness: string;
+    /**
      * The agent session uuid
      */
     id: string;
@@ -8467,6 +8475,23 @@ export type SoupAgentSessionSoupPropertiesField = {
      * Who the session belongs to
      */
     ownerId: string;
+    /**
+     * The linked pull request's Macro entity, when visible to the viewer.
+     */
+    pullRequestId?: string | null;
+    pullRequestState?: null | AgentPullRequestState;
+    /**
+     * The persisted pull request associated with the session.
+     */
+    pullRequestUrl?: string | null;
+    /**
+     * The starting branch selected for this session, not its current branch.
+     */
+    repoBranch?: string | null;
+    /**
+     * The repository the session works with, when one was selected.
+     */
+    repoUrl?: string | null;
     /**
      * The session's last known status.
      *
@@ -8480,6 +8505,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      */
     threadId?: string | null;
     /**
+     * Last persisted fold turn state. Absent until an older session next runs.
+     */
+    turnState?: string | null;
+    /**
      * The time the session was last modified
      */
     updatedAt: string;
@@ -8487,6 +8516,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The time the session was last viewed by the requesting user
      */
     viewedAt?: string | null;
+    /**
+     * Last captured working branch, when the runtime has reported one.
+     */
+    workingBranch?: string | null;
 };
 
 /**

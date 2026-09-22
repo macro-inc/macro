@@ -201,6 +201,11 @@ The area behind the composer is transparent, without a bottom gradient overlay.
 The composer has one editable field. Its placeholder appears only while empty;
 placeholder updates and disabled-state changes preserve the editor and draft.
 
+The **Ask AI** button beside the mobile search field sends the typed query.
+With `enable-chat-v3-agents` on, it opens an agent session (`/app/agent/<id>`)
+and delivers the query as the first prompt. With the flag off, it opens a
+cognition chat (`/app/chat/<uuid>`) and sends the query.
+
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively,

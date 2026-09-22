@@ -19,7 +19,7 @@
 //! every entry point resolves the owner's key and mints a client for that one
 //! session. The manager holds only what a client is built from.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession, ReplicaId};
@@ -129,6 +129,8 @@ pub struct CursorContainerManager<Sessions, Keys, Repositories, Store> {
     repositories: Arc<Repositories>,
     usage: Arc<dyn ai_usage::UsageRecorder>,
     pull_requests: Option<Arc<dyn agent_session::domain::pull_request::SessionPullRequests>>,
+    working_branches:
+        Option<Arc<dyn agent_session::domain::working_branch::SessionWorkingBranches>>,
     journal_storage: JournalStorage,
     /// Sessions the harness has a command in flight for right now, shared
     /// with `AgentHarnessService` so the idle reaper below never closes a
@@ -202,6 +204,7 @@ where
             repositories,
             usage,
             pull_requests: None,
+            working_branches: None,
             journal_storage: JournalStorage::Postgres {
                 pool: journal.pool,
                 replica: journal.replica,
@@ -228,6 +231,7 @@ where
             repositories: self.repositories,
             usage: self.usage,
             pull_requests: self.pull_requests,
+            working_branches: self.working_branches,
             journal_storage: self.journal_storage,
             pending: self.pending,
         }
@@ -258,6 +262,7 @@ where
             repositories,
             usage: Arc::new(ai_usage::NoOpUsageRecorder),
             pull_requests: None,
+            working_branches: None,
             journal_storage: JournalStorage::Memory,
             pending: PendingCommands::new(),
         }
@@ -269,6 +274,15 @@ where
         service: Arc<dyn agent_session::domain::pull_request::SessionPullRequests>,
     ) -> Self {
         self.pull_requests = Some(service);
+        self
+    }
+
+    /// Persist Cursor's repository branch facts through the owning session service.
+    pub fn with_working_branches(
+        mut self,
+        service: Arc<dyn agent_session::domain::working_branch::SessionWorkingBranches>,
+    ) -> Self {
+        self.working_branches = Some(service);
         self
     }
 
@@ -357,6 +371,20 @@ where
                 Arc::new(cursor_cloud_agents::outbound::memory_journal::MemoryJournal::default())
             }
         };
+        let claim = Arc::new(OnceLock::new());
+        let activated_claim = claim.clone();
+        let owner_binding: agent_session::domain::connection::AttachmentActivation =
+            Box::new(move |ownership| {
+                if let Some(activate) = owner_binding {
+                    activate(ownership)?;
+                }
+                activated_claim.set(ownership).map_err(|_| {
+                    agent_runtime_protocol::domain::ports::TransportError::Client(
+                        "Cursor attachment already activated".into(),
+                    )
+                    .into()
+                })
+            });
         let (ours, theirs) = tokio::io::duplex(PIPE_CAPACITY);
         let (agent_reader, agent_writer) = tokio::io::split(theirs);
         let cursor = RecordingCursor {
@@ -372,6 +400,16 @@ where
                     service: service.clone(),
                     session: session_id,
                     owner: owner.clone(),
+                },
+            ));
+        }
+        if let Some(service) = &self.working_branches {
+            notifier = notifier.with_working_branches(Arc::new(
+                super::working_branch::CursorWorkingBranchReporter {
+                    service: service.clone(),
+                    session: session_id,
+                    owner: owner.clone(),
+                    claim,
                 },
             ));
         }
@@ -509,12 +547,11 @@ where
             shutdown,
             Some(reload_rx),
         );
-        let mut attachment = agent_session::domain::connection::RuntimeAttachment::solo(transport)
-            .with_closed(attachment_closed);
-        if let Some(binding) = owner_binding {
-            attachment = attachment.on_activate(binding);
-        }
-        Ok(attachment)
+        Ok(
+            agent_session::domain::connection::RuntimeAttachment::solo(transport)
+                .with_closed(attachment_closed)
+                .on_activate(owner_binding),
+        )
     }
 }
 
