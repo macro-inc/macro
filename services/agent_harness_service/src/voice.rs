@@ -6,7 +6,7 @@ use agent_session::domain::{model::AgentSessionId, service::AgentSessionService}
 use agent_voice::{
     domain::{
         model::{Result, VoiceError},
-        ports::AgentVoiceDirectory,
+        ports::{AgentVoiceDirectory, VoiceRuntime},
         service::AgentVoiceService,
     },
     outbound::{livekit::LivekitVoiceMedia, redis::RedisVoiceLeaseStore},
@@ -33,15 +33,18 @@ pub fn service<Sessions: AgentSessionService>(
     sessions: Sessions,
     redis: redis::Client,
     config: &Config,
+    runtime: Arc<dyn VoiceRuntime>,
 ) -> anyhow::Result<AgentVoiceService> {
     let media = Arc::new(LivekitVoiceMedia::new(
         &config.livekit_server_url,
         config.livekit_api_key.clone(),
         config.livekit_api_secret.clone(),
+        &macro_service_urls::AgentHarnessServiceUrl::new()?.to_string(),
     )?);
     Ok(AgentVoiceService::new(
         Arc::new(SessionDirectory(sessions)),
         Arc::new(RedisVoiceLeaseStore::new(redis)),
         media,
+        runtime,
     ))
 }

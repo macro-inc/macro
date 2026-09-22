@@ -9,6 +9,7 @@ fn browser_token_is_room_scoped_and_microphone_only() {
         "https://voice.example",
         "test-key".into(),
         "test-secret".into(),
+        "https://agent.example/agent-harness",
     )
     .unwrap();
     let lease = VoiceLease {
@@ -44,8 +45,55 @@ fn invalid_media_configuration_fails_before_serving_requests() {
         "https://voice.example/#fragment",
         "",
     ] {
-        assert!(LivekitVoiceMedia::new(url, "key".into(), "secret".into()).is_err());
+        assert!(
+            LivekitVoiceMedia::new(url, "key".into(), "secret".into(), "https://agent.example")
+                .is_err()
+        );
     }
-    assert!(LivekitVoiceMedia::new("https://voice.example", "".into(), "secret".into()).is_err());
-    assert!(LivekitVoiceMedia::new("https://voice.example", "key".into(), "  ".into()).is_err());
+    assert!(
+        LivekitVoiceMedia::new(
+            "https://voice.example",
+            "".into(),
+            "secret".into(),
+            "https://agent.example"
+        )
+        .is_err()
+    );
+    assert!(
+        LivekitVoiceMedia::new(
+            "https://voice.example",
+            "key".into(),
+            "  ".into(),
+            "https://agent.example"
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn worker_identity_requires_a_valid_signed_room_grant() {
+    let media = LivekitVoiceMedia::new(
+        "https://voice.example",
+        "test-key".into(),
+        "test-secret".into(),
+        "https://agent.example",
+    )
+    .unwrap();
+    let token = |secret: &str, join: bool| {
+        AccessToken::with_api_key("test-key", secret)
+            .with_identity("voice-agent-test")
+            .with_ttl(Duration::from_secs(60))
+            .with_grants(VideoGrants {
+                room_join: join,
+                room: "private-room".to_owned(),
+                ..Default::default()
+            })
+            .to_jwt()
+            .unwrap()
+    };
+    assert!(media.verify_worker(&token("wrong-secret", true)).is_err());
+    assert!(media.verify_worker(&token("test-secret", false)).is_err());
+    let identity = media.verify_worker(&token("test-secret", true)).unwrap();
+    assert_eq!(identity.identity, "voice-agent-test");
+    assert_eq!(identity.room_name, "private-room");
 }

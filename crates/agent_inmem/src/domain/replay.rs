@@ -91,6 +91,30 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
                 else {
                     continue;
                 };
+                if let SessionUpdate::ToolCallUpdate(update) = &notification.update {
+                    let id = update.tool_call_id.0.to_string();
+                    if !open
+                        .as_ref()
+                        .is_some_and(|(_, parts)| unanswered_call_name(parts, &id).is_some())
+                    {
+                        // A realtime turn may be interrupted while a product
+                        // action continues. Its eventual result belongs to the
+                        // original call, even after the next prompt was logged.
+                        if let Some(parts) =
+                            history.iter_mut().rev().find_map(|entry| match entry {
+                                HistoryEntry::Assistant(parts)
+                                    if unanswered_call_name(parts, &id).is_some() =>
+                                {
+                                    Some(parts)
+                                }
+                                _ => None,
+                            })
+                        {
+                            apply_update(parts, notification.update);
+                        }
+                        continue;
+                    }
+                }
                 // An update outside any turn (the compact acknowledgement,
                 // status chatter) is presentation, not conversation.
                 if let Some((_, parts)) = open.as_mut() {
@@ -101,6 +125,13 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
         }
     }
     close_turn(&mut history, &mut open);
+    // Only synthesize missing results after all late completions have been
+    // reconciled. Filling them on each prompt would hide committed effects.
+    for entry in &mut history {
+        if let HistoryEntry::Assistant(parts) = entry {
+            let _ = close_dangling_tool_calls(parts);
+        }
+    }
     history
 }
 
@@ -190,15 +221,14 @@ fn unanswered_call_name(parts: &[AssistantMessagePart], id: &str) -> Option<Stri
     })
 }
 
-/// Push the open turn into the history, closing whatever it left dangling.
+/// Push the open turn into history, leaving late tool results reconcilable.
 fn close_turn(
     history: &mut Vec<HistoryEntry>,
     open: &mut Option<(UserPrompt, Vec<AssistantMessagePart>)>,
 ) {
-    let Some((prompt, mut parts)) = open.take() else {
+    let Some((prompt, parts)) = open.take() else {
         return;
     };
-    let _ = close_dangling_tool_calls(&mut parts);
     history.push(HistoryEntry::User(prompt));
     if !parts.is_empty() {
         history.push(HistoryEntry::Assistant(parts));

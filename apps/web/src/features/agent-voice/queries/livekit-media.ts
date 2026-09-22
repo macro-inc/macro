@@ -1,12 +1,6 @@
-import type { RemoteAudioTrack, Room, RpcInvocationData } from 'livekit-client';
-import {
-  parseAgentCancel,
-  parseAgentRequest,
-  parseWorkerEvent,
-  serializeVoicePayload,
-} from '../core/protocol';
+import type { RemoteAudioTrack, Room } from 'livekit-client';
+import { parseWorkerEvent } from '../core/protocol';
 import type {
-  VoiceBridge,
   VoiceCredentials,
   VoiceMedia,
   VoiceMediaEvents,
@@ -17,7 +11,6 @@ import type {
 export async function createLivekitVoiceMedia(
   credentials: VoiceCredentials,
   events: VoiceMediaEvents,
-  bridge: VoiceBridge,
   microphone: VoiceMicrophone
 ): Promise<VoiceMedia> {
   let livekit: typeof import('livekit-client');
@@ -27,7 +20,7 @@ export async function createLivekitVoiceMedia(
     microphone.stop();
     throw error;
   }
-  const { Room, RoomEvent, Track, RpcError } = livekit;
+  const { Room, RoomEvent, Track } = livekit;
   const room: Room = new Room({
     audioCaptureDefaults: {
       echoCancellation: true,
@@ -40,13 +33,11 @@ export async function createLivekitVoiceMedia(
   let workerReady = false;
   let connectedOnce = false;
   let recovering = false;
-  let recoveryVersion = 0;
   let networkReconnecting = false;
   let workerFailure: string | undefined;
   let resolveReady: (() => void) | undefined;
   let cancelStartup: (() => void) | undefined;
   let rejectStartup: ((error: Error) => void) | undefined;
-  let sequence = 0;
   let interval: ReturnType<typeof setInterval> | undefined;
   let participantInterval: ReturnType<typeof setInterval> | undefined;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -55,7 +46,7 @@ export async function createLivekitVoiceMedia(
   let startupTimer: ReturnType<typeof setTimeout> | undefined;
   const audioElements = new Map<RemoteAudioTrack, HTMLMediaElement>();
   const streams = new Set<AbortController>();
-  const waitingPublishes = new Set<{
+  const recoveryWaiters = new Set<{
     resolve: () => void;
     reject: (error: Error) => void;
   }>();
@@ -70,8 +61,8 @@ export async function createLivekitVoiceMedia(
     if (disposed || workerFailure) return;
     microphone.stop();
     workerFailure = message;
-    for (const waiting of waitingPublishes) waiting.reject(new Error(message));
-    waitingPublishes.clear();
+    for (const waiting of recoveryWaiters) waiting.reject(new Error(message));
+    recoveryWaiters.clear();
     rejectStartup?.(new Error(message));
     resolveReady?.();
     events.failure(message);
@@ -137,7 +128,6 @@ export async function createLivekitVoiceMedia(
   const beginRecovery = () => {
     if (recovering) return;
     recovering = true;
-    recoveryVersion++;
     for (const element of audioElements.values()) element.muted = true;
     events.levels(0, 0);
     events.connection('reconnecting');
@@ -154,8 +144,8 @@ export async function createLivekitVoiceMedia(
       return;
     recovering = false;
     for (const element of audioElements.values()) element.muted = false;
-    for (const waiting of waitingPublishes) waiting.resolve();
-    waitingPublishes.clear();
+    for (const waiting of recoveryWaiters) waiting.resolve();
+    recoveryWaiters.clear();
     void startPlayback();
     events.connection('connected');
   };
@@ -171,19 +161,6 @@ export async function createLivekitVoiceMedia(
       ) * 4
     );
   };
-  const authorized = (request: RpcInvocationData) => {
-    if (disposed || request.callerIdentity !== credentials.agentIdentity)
-      throw new RpcError(1500, 'Unauthorized voice participant');
-  };
-  room.localParticipant.registerRpcMethod(
-    'macro.agent.request',
-    async (request) => {
-      authorized(request);
-      return serializeVoicePayload(
-        await bridge.request(parseAgentRequest(request.payload))
-      );
-    }
-  );
   room.registerTextStreamHandler('lk.transcription', (reader, participant) => {
     if (
       disposed ||
@@ -219,22 +196,6 @@ export async function createLivekitVoiceMedia(
       }
     })();
   });
-  room.localParticipant.registerRpcMethod(
-    'macro.agent.cancel',
-    async (request) => {
-      authorized(request);
-      return serializeVoicePayload(
-        await bridge.cancel(parseAgentCancel(request.payload))
-      );
-    }
-  );
-  room.localParticipant.registerRpcMethod(
-    'macro.voice.context',
-    async (request) => {
-      authorized(request);
-      return serializeVoicePayload(await bridge.context());
-    }
-  );
   room.on(RoomEvent.Reconnecting, () => {
     if (disposed || networkReconnecting) return;
     networkReconnecting = true;
@@ -427,7 +388,7 @@ export async function createLivekitVoiceMedia(
       finishRecovery();
       if (recovering)
         await new Promise<void>((resolve, reject) =>
-          waitingPublishes.add({ resolve, reject })
+          recoveryWaiters.add({ resolve, reject })
         );
     } else events.connection('connected');
   };
@@ -442,12 +403,9 @@ export async function createLivekitVoiceMedia(
     clearTimeout(workerLeaveTimer);
     clearTimeout(workerTimer);
     clearTimeout(startupTimer);
-    for (const waiting of waitingPublishes)
+    for (const waiting of recoveryWaiters)
       waiting.reject(new Error('Voice has ended.'));
-    waitingPublishes.clear();
-    room.localParticipant.unregisterRpcMethod('macro.agent.request');
-    room.localParticipant.unregisterRpcMethod('macro.agent.cancel');
-    room.localParticipant.unregisterRpcMethod('macro.voice.context');
+    recoveryWaiters.clear();
     room.unregisterTextStreamHandler('lk.transcription');
     for (const stream of streams) stream.abort();
     streams.clear();
@@ -514,46 +472,6 @@ export async function createLivekitVoiceMedia(
       await audioContext?.resume();
       await room.startAudio();
       events.playbackBlocked(!room.canPlaybackAudio);
-    },
-    publish: async (event) => {
-      const payload = new TextEncoder().encode(
-        serializeVoicePayload({
-          ...event,
-          voiceSessionId: credentials.voiceSessionId,
-          seq: ++sequence,
-        })
-      );
-      while (true) {
-        if (disposed || workerFailure)
-          throw new Error(workerFailure ?? 'Voice has ended.');
-        if (recovering) {
-          if (waitingPublishes.size >= 128)
-            throw new Error('Voice could not keep up while reconnecting.');
-          await new Promise<void>((resolve, reject) =>
-            waitingPublishes.add({ resolve, reject })
-          );
-        }
-        if (disposed || workerFailure)
-          throw new Error(workerFailure ?? 'Voice has ended.');
-        const sendingVersion = recoveryVersion;
-        try {
-          await room.localParticipant.publishData(payload, {
-            reliable: true,
-            topic: 'macro.agent.event',
-            destinationIdentities: [credentials.agentIdentity],
-          });
-          return;
-        } catch (error) {
-          // Replaying the same sequence is safe: the worker deduplicates it.
-          // Only retry a send interrupted by an actual SDK recovery cycle.
-          if (
-            disposed ||
-            workerFailure ||
-            (!recovering && sendingVersion === recoveryVersion)
-          )
-            throw error;
-        }
-      }
     },
   };
 }

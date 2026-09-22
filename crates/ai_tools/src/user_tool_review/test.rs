@@ -232,6 +232,33 @@ fn pending(args: Value) -> PendingUserTool {
     }
 }
 
+struct CancelOnApproval(CancellationToken);
+
+#[async_trait]
+impl UserToolReviewer for CancelOnApproval {
+    async fn review(&self, _: ReviewRequest) -> Result<ReviewOutcome, ReviewError> {
+        self.0.cancel();
+        Ok(ReviewOutcome::Accepted(BTreeMap::new()))
+    }
+}
+
+#[tokio::test]
+async fn cancellation_racing_approval_never_executes_the_reviewed_tool() {
+    let tools = Arc::new(AsyncToolCollection::<Ran>::new().add_user_tool::<Greet, Ran>());
+    let ran = Ran::default();
+    let cancel = CancellationToken::new();
+    let finisher = user_tool_finisher(
+        tools,
+        ran.clone(),
+        owner(),
+        Arc::new(CancelOnApproval(cancel.clone())),
+        cancel,
+    );
+    let result = finisher(pending(json!({"name":"Alice"}))).await;
+    assert!(matches!(result, Some(FinishedUserTool::Error(_))));
+    assert!(ran.0.lock().unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn an_accepted_review_runs_the_tool_with_the_edited_arguments() {
     let (finisher, reviewer, ran) = finisher_over_greet(Ok(ReviewOutcome::Accepted(

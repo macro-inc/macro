@@ -58,6 +58,15 @@ where
             announce: _,
         } = command;
 
+        if self
+            .voice
+            .binding(session_id)
+            .await?
+            .is_some_and(|binding| !binding.accepts_input)
+        {
+            return Err(HarnessError::Disconnected(session_id));
+        }
+
         match self
             .sessions
             .send_action(session_id, actor.clone(), action.clone(), id)
@@ -73,6 +82,11 @@ where
                 return Err(error.into());
             }
             Err(AgentSessionError::Disconnected(_)) => {
+                // A native voice runtime is the session's only model while its
+                // lease exists. Losing that transport must never start InMem beside it.
+                if self.voice.binding(session_id).await?.is_some() {
+                    return Err(HarnessError::Disconnected(session_id));
+                }
                 let session = self.sessions.get_session(session_id).await?;
                 let permission_policy = self.permission_policy_for(session.bot_id).await;
                 if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {

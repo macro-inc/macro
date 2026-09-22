@@ -19,6 +19,8 @@ mod permission_policy;
 mod runtime_commands;
 mod trigger;
 mod voice;
+mod voice_runtime;
+mod voice_tools;
 
 #[cfg(test)]
 mod test;
@@ -431,20 +433,22 @@ async fn run() -> anyhow::Result<()> {
             .await
             .context("failed to build the in-memory agent tool context")?;
     let inmem_model_engine: Arc<dyn TurnEngine> =
-        Arc::new(RigTurnEngine::new(pool.clone(), tool_context));
+        Arc::new(RigTurnEngine::new(pool.clone(), tool_context.clone()));
     // Cold attaches (fresh spawns and post-restart resumes) rebuild
     // their model context from the same log every frame lands in.
     let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
     let inmem = InMemRuntime {
-        manager: InMemAgentManager::new(
-            Arc::clone(&inmem_model_engine),
-            frames,
-            Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
-                Arc::clone(&egress),
-                &egress_base_url,
-            ))),
-        )
-        .with_dev_commands(enable_dev_commands),
+        manager: Arc::new(
+            InMemAgentManager::new(
+                Arc::clone(&inmem_model_engine),
+                frames,
+                Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
+                    Arc::clone(&egress),
+                    &egress_base_url,
+                ))),
+            )
+            .with_dev_commands(enable_dev_commands),
+        ),
     };
     // The sandbox provider serves every bot but the in-memory one, which the
     // router pulls out by bot id before the provider ever sees it.
@@ -458,6 +462,7 @@ async fn run() -> anyhow::Result<()> {
         replica,
     )
     .with_tool_catalog(tool_catalog);
+    let voice_inmem_manager = Arc::clone(&inmem.manager);
     let sandbox_and_inmem = RoutedContainers::new(sandbox, Some(inmem), inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
@@ -754,7 +759,27 @@ async fn run() -> anyhow::Result<()> {
     let runtimes = RuntimeRegistry::with_presence(Arc::new(PgHarnessPresence::new(pool.clone())));
     let redis = redis::Client::open(config.redis_uri.as_ref())
         .context("failed to create the runtime command Redis client")?;
-    let voice_service = voice::service(sessions.clone(), redis.clone(), &config)?;
+    let voice_sessions = sessions.clone();
+    let voice_runtime = Arc::new(voice_runtime::VoiceRuntimeRegistry::new(
+        sessions.clone(),
+        EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url.clone()),
+        voice_inmem_manager,
+    ));
+    let voice_service = voice::service(
+        sessions.clone(),
+        redis.clone(),
+        &config,
+        voice_runtime.clone(),
+    )?;
+    voice_runtime.bind_service(voice_service.clone());
+    let voice_tools = Arc::new(voice_tools::ServiceVoiceToolFactory::new(
+        voice_sessions,
+        agent_inmem::voice_tools::VoiceToolFactory::new(pool.clone(), tool_context),
+        Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
+            Arc::clone(&egress),
+            &egress_base_url,
+        ))),
+    ));
     // Read once, here, rather than at every session this deployment opens: a
     // URL that names no repository is a misconfiguration of the deployment,
     // and refusing it at startup is the difference between one loud failure
@@ -836,8 +861,10 @@ async fn run() -> anyhow::Result<()> {
             // notification ingress channel messages use.
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
         )
+        .with_voice_runtime(voice_runtime.clone())
         .with_repositories(open_repositories),
     );
+    voice_runtime.bind_harness(harness.clone(), voice_tools);
     let model_probe_timeout = std::time::Duration::from_secs(10);
     let macrod_models =
         MacrodModels::new(Arc::clone(&runtimes), redis.clone(), model_probe_timeout);
@@ -1003,6 +1030,7 @@ async fn run() -> anyhow::Result<()> {
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
     );
+    let voice_router = voice_router.merge(voice_runtime::worker_router(voice_runtime));
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
             api::ApiStates::new(
@@ -1160,6 +1188,10 @@ async fn run() -> anyhow::Result<()> {
                                 HarnessCommand::EditQueued { .. }
                                 | HarnessCommand::RemoveQueued { .. }
                                 | HarnessCommand::CancelTurn { .. }
+                                | HarnessCommand::PrepareVoice { .. }
+                                | HarnessCommand::AttachVoice { .. }
+                                | HarnessCommand::EndVoice { .. }
+                                | HarnessCommand::NativeVoiceTurn { .. }
                                 | HarnessCommand::Turn(_)
                                 | HarnessCommand::SessionStopped { .. } => "agent_trigger.unexpected",
                             };

@@ -55,6 +55,8 @@ pub(crate) struct SessionCommand {
     pub(crate) action: AgentAction,
     pub(crate) action_id: AgentActionId,
     pub(crate) expected_action_id: Option<AgentActionId>,
+    pub(crate) native_generation: Option<macro_uuid::Uuid>,
+    pub(crate) runtime_frame: Option<(macro_uuid::Uuid, ToServerMessage)>,
     pub(crate) completed: oneshot::Sender<Result<()>>,
     pub(crate) span: tracing::Span,
     pub(crate) enqueued_at: Instant,
@@ -185,6 +187,11 @@ where
         self
     }
 
+    pub(crate) fn with_generation(mut self, generation: Option<macro_uuid::Uuid>) -> Self {
+        self.machine = self.machine.with_generation(generation);
+        self
+    }
+
     /// The session this actor's connection belongs to.
     pub(crate) fn id(&self) -> AgentSessionId {
         self.machine.id()
@@ -236,7 +243,7 @@ where
                 }
             },
             command = self.commands.recv() => match command {
-                Some(SessionCommand { user_id, action, action_id, expected_action_id, completed, span, enqueued_at }) => {
+                Some(SessionCommand { user_id, action, action_id, expected_action_id, native_generation, runtime_frame, completed, span, enqueued_at }) => {
                     span.record(
                         "agent.command.queue_wait_ms",
                         enqueued_at.elapsed().as_millis() as u64,
@@ -245,7 +252,21 @@ where
                         "agent.session.runtime_phase_at_dequeue",
                         self.machine.status().as_ref(),
                     );
-                    if let Some(expected_action_id) = expected_action_id {
+                    if let Some((generation, message)) = runtime_frame {
+                        Input::RecordRuntimeFrame { generation, message, token: SessionCompletion { completed, span } }
+                    } else if let Some(generation) = native_generation {
+                        let (Some(from), AgentAction::Prompt(prompt)) = (user_id, action) else {
+                            let _ = completed.send(Err(AgentSessionError::Forbidden));
+                            continue;
+                        };
+                        Input::NativeTurn {
+                            from,
+                            generation,
+                            action_id,
+                            text: prompt.prompt,
+                            token: SessionCompletion { completed, span },
+                        }
+                    } else if let Some(expected_action_id) = expected_action_id {
                         Input::CancelTurn {
                             from: user_id,
                             expected_action_id,
@@ -309,6 +330,30 @@ where
 
         while let Some(effect) = effects.pop_front() {
             match effect {
+                Effect::RecordNativePrompt { from, mut message } => {
+                    let command_span = effects.front().and_then(|effect| match effect {
+                        Effect::Complete { token, .. } => Some(token.span.clone()),
+                        _ => None,
+                    });
+                    self.telemetry
+                        .on_outbound(&mut message, command_span.as_ref());
+                    let append = self.logs.append(AgentSessionLog {
+                        agent_session_id: self.machine.id(),
+                        user_id: Some(from),
+                        content: Message::ToRuntime(message),
+                    });
+                    let result = tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, append)
+                        .await
+                        .unwrap_or(Err(AgentSessionError::LogTimedOut(self.machine.id())));
+                    match result {
+                        Ok(appended) => self.forward_signals(appended.signals),
+                        Err(error) => {
+                            self.fail_remaining_completions(&mut effects, error);
+                            effects
+                                .extend(self.machine.handle(Input::Closed(CloseReason::LogFailed)));
+                        }
+                    }
+                }
                 Effect::Send { from, mut message } => {
                     let command_span = effects.front().and_then(|effect| match effect {
                         Effect::Complete { token, .. } => Some(token.span.clone()),
@@ -730,6 +775,7 @@ where
                 }
                 effect @ Effect::Stop { .. } => stop = Some(effect),
                 Effect::Send { .. }
+                | Effect::RecordNativePrompt { .. }
                 | Effect::Log { .. }
                 | Effect::EstablishInitialization { .. }
                 | Effect::PersistAcpSession { .. }

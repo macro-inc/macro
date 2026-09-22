@@ -1,11 +1,11 @@
 # Macro agent voice worker
 
-This worker provides a private LiveKit audio conversation for an existing Macro
-in-memory agent session. OpenAI Realtime handles speech and semantic turn detection;
-the existing Macro harness executes tasks with its selected model, persona and tools.
-The browser bridges authenticated agent controls and public task results over
-identity-checked LiveKit RPC/data messages. The worker never receives a Macro user
-token or its own set of product tools.
+This worker is the native voice runtime for an existing Macro agent session.
+OpenAI Realtime owns the conversation, semantic turn detection, interruptions,
+and tool selection. Its function calls execute directly through Macro's shared
+toolset and review flow. The ordinary text model is suspended while voice owns
+the session; typed prompts go to the same realtime model. The browser carries
+audio and observes canonical history, with no task delegation RPCs.
 
 ## Run
 
@@ -70,40 +70,43 @@ error instead of remaining on Connecting.
 - Six voices: Marin, Cedar, Alloy, Coral, Sage and Verse. Select before connecting.
 - Realtime semantic VAD owns endpointing and interruptions. LiveKit reconciles
   playback with the Realtime session when speech is interrupted.
-- Interrupting speech keeps accepted work running. Explicit cancellation names a
-  task ID and goes through the harness's conditional cancel/replace endpoint.
-- A correction can reserve replacement ordering while the old turn stops. Stale
-  targets fail without cancelling newer work. Completed effects cannot be undone.
+- Interrupting speech dismisses pending reviews without cancelling product
+  actions already executing. Explicit Stop cancels work through ACP. Completed
+  effects cannot be undone.
 - Permission requests and structured questions use the existing on-screen controls.
-- No raw audio recording. Live captions and conversational filler are ephemeral;
-  delegated requests and task results remain in the canonical agent transcript.
+- No raw audio recording. Final user speech, heard assistant text, and tool
+  calls/results are recorded in the canonical agent transcript.
 - The worker stops at 30 minutes or after a 120-second
-  caller disconnect grace. Ending media never cancels durable harness work.
+  caller disconnect grace. Ending voice restores text-mode eligibility; text
+  resumes from the canonical log, including late tool results.
 
 ## Protocol and failure handling
 
 Backend dispatch metadata is schema version 1 and identifies the agent session,
-voice session, caller, expected worker, voice and absolute expiry. The browser
-accepts RPC and audio only from that worker; the worker accepts task events only
-from that caller. RPCs and events are bounded to 15,000 UTF-8 bytes.
+voice session, caller, expected worker, voice, absolute expiry, and backend runtime
+URL. The worker opens that authenticated WebSocket using a short-lived signed
+LiveKit credential for its exact identity and room. The backend checks the active
+voice generation. Browser room credentials cannot attach a runtime. There are no
+Macro user tokens in media metadata or in the browser voice transport.
 
-`macro.voice.context` supplies a bounded public transcript. `macro.agent.request`
-uses a stable UUID derived from the provider tool-call ID as the Macro action ID.
-`macro.agent.cancel` conditionally cancels that action and optionally supplies a
-replacement. Reliable `macro.agent.event` messages carry public progress,
-completion and review notices with task IDs and increasing sequence numbers.
-`macro.voice.event` reports readiness, errors and termination.
+The backend supplies persona instructions, canonical context, and native tool
+schemas. Standard ACP carries initialization, typed prompts, cancellation,
+questions, and conversation updates. Native audio turns are admitted through the
+same serialized session actor without sending their transcript to the model a
+second time. Tools wait for durable admission and use a deduplicated call ledger.
+The backend owns the canonical tool frames and visual approval requests.
+`macro.voice.event` and persistent participant attributes report readiness and
+terminal reasons to the browser.
 
-Submission and cancellation waiters survive speech interruption. An ambiguous
-delivery is never retried automatically or presented as successful. On media or
-provider failure, users continue with the written agent session. Reopening voice
-loads public history; it does not replay speech or resubmit work. Existing viewer
-event batching can add latency to spoken task results. There is no durable voice
-dialogue/replay log or automatic speech-provider failover in this version.
+LiveKit media reconnects resume the same model and never replay tool calls. A
+failed backend runtime connection ends visibly rather than blindly retrying
+side effects. Reopening hydrates canonical history. Automatic speech-provider
+failover and native/mobile audio-session integration are not included.
 
-Usage events include the voice session ID and per-model token usage in worker
-logs, separately from harness task metering. Session time limits bound consumption;
-account billing aggregation is a deployment follow-up.
+Cumulative provider token counts are forwarded to the backend, deduplicated into
+deltas, and attributed to the session owner and canonical session through the
+normal usage recorder. Pricing remains owned by that service; unknown model
+prices remain unset rather than being guessed.
 
 ## Verification
 

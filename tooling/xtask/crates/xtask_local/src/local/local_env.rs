@@ -398,6 +398,12 @@ impl AgentHarnessEnv {
             "OVERRIDE_AGENT_HARNESS_EGRESS_URL".into(),
             self.egress_url.clone(),
         );
+        // The voice worker runs in this Compose network. Its authenticated
+        // runtime connection must reach the harness, not its own localhost.
+        env.insert(
+            "OVERRIDE_AGENT_HARNESS_SERVICE_URL".into(),
+            "http://agent-harness-service:8101".into(),
+        );
         env.insert(
             "OVERRIDE_MCP_SERVICE_URL".into(),
             self.mcp_service_url.into(),

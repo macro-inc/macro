@@ -1,10 +1,10 @@
 import { createSignal } from 'solid-js';
 import type {
-  VoiceBridge,
   VoiceCredentials,
   VoiceDependencies,
   VoiceMedia,
   VoiceMicrophone,
+  VoiceSessionObserver,
   VoiceState,
   VoiceTarget,
 } from '../core/types';
@@ -123,15 +123,14 @@ export function createVoiceSession(deps: VoiceDependencies) {
     let release: (() => void) | undefined;
     let microphone: VoiceMicrophone | undefined;
     let credentials: VoiceCredentials | undefined;
-    let bridge: VoiceBridge | undefined;
+    let observer: VoiceSessionObserver | undefined;
     let ownMedia: VoiceMedia | undefined;
-    const reviews = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const close = async () => {
       clearTimeout(timer);
       timer = undefined;
-      const closingBridge = bridge;
-      bridge = undefined;
+      const closingObserver = observer;
+      observer = undefined;
       const closingMedia = ownMedia;
       ownMedia = undefined;
       const releasing = release;
@@ -140,7 +139,7 @@ export function createVoiceSession(deps: VoiceDependencies) {
       credentials = undefined;
       microphone?.stop();
       microphone = undefined;
-      closingBridge?.close();
+      closingObserver?.close();
       try {
         await closingMedia?.disconnect();
       } catch {
@@ -201,23 +200,13 @@ export function createVoiceSession(deps: VoiceDependencies) {
         await close();
         return;
       }
-      bridge = await deps.bridge(target.sessionId, (event) => {
-        if (stale()) return;
-        if (event.type === 'interaction') reviews.add(event.taskId);
-        else reviews.delete(event.taskId);
-        patch({ reviewRequired: reviews.size > 0 });
-        async function publish() {
-          try {
-            await ownMedia?.publish(event);
-          } catch {
-            if (!stale())
-              await end(
-                'The connection to your agent was lost. Reconnect to continue.'
-              );
-          }
+      observer = await deps.observeSession(
+        target.sessionId,
+        (reviewRequired) => {
+          if (stale()) return;
+          patch({ reviewRequired });
         }
-        void publish();
-      });
+      );
       if (stale()) {
         await close();
         return;
@@ -228,7 +217,7 @@ export function createVoiceSession(deps: VoiceDependencies) {
           connection: (connection) => {
             if (stale()) return;
             if (connection === 'disconnected')
-              void end('Voice disconnected. Your agent work can continue.');
+              void end('Voice disconnected. Start again to continue.');
             else patch({ phase: connection });
           },
           levels: (inputLevel, outputLevel) => {
@@ -250,24 +239,6 @@ export function createVoiceSession(deps: VoiceDependencies) {
           failure: (message) => {
             if (!stale()) void end(message);
           },
-        },
-        {
-          request: (request) => {
-            if (stale() || !bridge)
-              return Promise.reject(new Error('This voice session has ended.'));
-            return bridge.request(request);
-          },
-          cancel: (request) => {
-            if (stale() || !bridge)
-              return Promise.reject(new Error('This voice session has ended.'));
-            return bridge.cancel(request);
-          },
-          context: () => {
-            if (stale() || !bridge)
-              return Promise.reject(new Error('This voice session has ended.'));
-            return bridge.context();
-          },
-          close: () => {},
         },
         microphone
       );

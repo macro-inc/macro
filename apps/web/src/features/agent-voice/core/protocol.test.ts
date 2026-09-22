@@ -1,76 +1,43 @@
 import { describe, expect, it } from 'vitest';
-import {
-  boundedText,
-  parseAgentCancel,
-  parseAgentRequest,
-  parseWorkerEvent,
-  serializeVoicePayload,
-} from './protocol';
+import { parseWorkerEvent } from './protocol';
 
-const requestId = '0195a574-e470-7a43-b74c-d06a7f374836';
-describe('voice protocol boundary', () => {
-  it('accepts versioned bounded requests with stable UUIDs', () => {
+const encode = (value: unknown) =>
+  new TextEncoder().encode(JSON.stringify(value));
+describe('voice worker status boundary', () => {
+  it('accepts only supported versioned media status events', () => {
+    expect(parseWorkerEvent(encode({ version: 1, type: 'ready' }))).toEqual({
+      type: 'ready',
+    });
     expect(
-      parseAgentRequest(
-        JSON.stringify({ version: 1, requestId, prompt: ' Find my draft ' })
+      parseWorkerEvent(
+        encode({ version: 1, type: 'error', message: 'Connection failed' })
       )
-    ).toEqual({ version: 1, requestId, prompt: 'Find my draft' });
-    expect(() =>
-      parseAgentRequest(
-        JSON.stringify({ version: 1, requestId: 'untrusted', prompt: 'hello' })
-      )
-    ).toThrow();
-    expect(() =>
-      parseAgentRequest(
-        JSON.stringify({ version: 2, requestId, prompt: 'hello' })
-      )
-    ).toThrow();
-    expect(() =>
-      parseAgentRequest(
-        JSON.stringify({ version: 1, requestId, prompt: 'x'.repeat(24_001) })
-      )
-    ).toThrow();
-  });
-  it('rejects a targetless cancellation or empty replacement', () => {
-    expect(() =>
-      parseAgentCancel(JSON.stringify({ version: 1, requestId }))
-    ).toThrow();
-    expect(() =>
-      parseAgentCancel(
-        JSON.stringify({
-          version: 1,
-          requestId,
-          taskId: requestId,
-          replacementPrompt: ' ',
-        })
-      )
-    ).toThrow();
-  });
-  it('ignores malformed and future worker packets', () => {
-    expect(parseWorkerEvent(new TextEncoder().encode('{'))).toBeUndefined();
+    ).toEqual({ type: 'error', message: 'Connection failed' });
+    expect(parseWorkerEvent(encode({ version: 1, type: 'ended' }))).toEqual({
+      type: 'ended',
+    });
     expect(
-      parseWorkerEvent(new TextEncoder().encode('{"version":2,"type":"error"}'))
+      parseWorkerEvent(encode({ version: 2, type: 'ready' }))
+    ).toBeUndefined();
+    expect(
+      parseWorkerEvent(encode({ version: 1, type: 'ask_macro' }))
     ).toBeUndefined();
   });
-  it('enforces the serialized UTF-8 budget for multilingual requests', () => {
-    expect(() =>
-      parseAgentRequest(
-        JSON.stringify({ version: 1, requestId, prompt: '界'.repeat(6000) })
+  it('ignores malformed, primitive and oversized UTF-8 packets', () => {
+    expect(parseWorkerEvent(new TextEncoder().encode('{'))).toBeUndefined();
+    expect(parseWorkerEvent(encode(null))).toBeUndefined();
+    expect(parseWorkerEvent(encode('ready'))).toBeUndefined();
+    expect(
+      parseWorkerEvent(
+        encode({ version: 1, type: 'error', message: '界'.repeat(6000) })
       )
-    ).toThrow('too large');
-    const text = boundedText('🗣️界'.repeat(6000), 8000);
-    expect(text).not.toContain('�');
-    expect(
-      new TextEncoder().encode(serializeVoicePayload({ text })).byteLength
-    ).toBeLessThan(8100);
+    ).toBeUndefined();
   });
-  it('budgets JSON escape bytes as well as Unicode text', () => {
-    const text = boundedText('\u0000\n"'.repeat(5000), 8000);
+  it('bounds human-readable errors', () => {
     expect(
-      new TextEncoder().encode(JSON.stringify(text)).byteLength
-    ).toBeLessThanOrEqual(8002);
-    expect(() => serializeVoicePayload({ text: '界'.repeat(6000) })).toThrow(
-      'too large'
-    );
+      parseWorkerEvent(
+        encode({ version: 1, type: 'error', message: 'x'.repeat(1000) })
+      )?.message
+    ).toHaveLength(500);
   });
 });

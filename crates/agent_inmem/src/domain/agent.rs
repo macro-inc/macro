@@ -344,7 +344,7 @@ impl UserToolReviewer for AcpUserInputRequester {
 /// A review form as ACP's restricted schema. Fields are the draft's flat
 /// arguments with their current values as defaults; the draft field is the
 /// `_macro/json` extension a Macro client fills from its own composer.
-fn review_form_schema(form: &ReviewForm) -> ElicitationSchema {
+pub fn review_form_schema(form: &ReviewForm) -> ElicitationSchema {
     let mut schema = ElicitationSchema::new().title(form.title.clone());
     for field in &form.fields {
         let required = form.required.contains(&field.name);

@@ -318,6 +318,10 @@ where
                 }
             }
             HarnessCommand::Open(_)
+            | HarnessCommand::PrepareVoice { .. }
+            | HarnessCommand::AttachVoice { .. }
+            | HarnessCommand::EndVoice { .. }
+            | HarnessCommand::NativeVoiceTurn { .. }
             | HarnessCommand::Turn(_)
             | HarnessCommand::SessionStopped { .. }
             | HarnessCommand::SetSandboxSize(_)
@@ -325,6 +329,90 @@ where
         }
 
         match command {
+            HarnessCommand::PrepareVoice { generation } => {
+                let binding = self
+                    .voice
+                    .binding(session_id)
+                    .await?
+                    .filter(|binding| binding.generation == generation && binding.accepts_input)
+                    .ok_or(AgentSessionError::Forbidden)?;
+                let session = self.sessions.get_session(session_id).await?;
+                if AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::InMemory {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+                if self.busy.is_pending(session_id) || !self.queues.list(session_id).is_empty() {
+                    return Err(AgentSessionError::TurnConflict.into());
+                }
+                // Both actor and model cache must be gone: restoring a cached
+                // InMem conversation later would omit every intervening voice turn.
+                self.sessions.close_session(session_id).await?;
+                self.voice.suspend_text_runtime(session_id).await?;
+                tracing::info!(%session_id, generation = %binding.generation, "prepared voice runtime");
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::AttachVoice { generation } => {
+                self.voice
+                    .binding(session_id)
+                    .await?
+                    .filter(|binding| binding.generation == generation && binding.accepts_input)
+                    .ok_or(AgentSessionError::Forbidden)?;
+                let attachment = self.voice.take_attachment(session_id, generation).await?;
+                let session = self.sessions.get_session(session_id).await?;
+                let policy = self.permission_policy_for(session.bot_id).await;
+                self.sessions
+                    .attach_session(
+                        session_id,
+                        attachment.generation(generation).permission_policy(policy),
+                    )
+                    .await?;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::EndVoice { generation } => {
+                self.voice
+                    .drain_voice_runtime(session_id, generation)
+                    .await?;
+                self.sessions.close_runtime(session_id, generation).await?;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::NativeVoiceTurn {
+                generation,
+                action_id,
+                text,
+            } => {
+                let binding = self
+                    .voice
+                    .binding(session_id)
+                    .await?
+                    .filter(|binding| binding.generation == generation && binding.accepts_input)
+                    .ok_or(AgentSessionError::Forbidden)?;
+                if let Some(turn) = self.busy.turn(session_id) {
+                    return if turn.action_id == action_id {
+                        Ok(CommandOutcome::Completed)
+                    } else {
+                        Err(AgentSessionError::TurnConflict.into())
+                    };
+                }
+                let prompt = self.sessions.next_prompt_message_id(session_id).await?;
+                self.sessions
+                    .record_native_turn(
+                        session_id,
+                        generation,
+                        binding.speaker.clone(),
+                        action_id,
+                        text,
+                    )
+                    .await?;
+                self.busy.mark_turn(
+                    session_id,
+                    InFlightTurn {
+                        action_id,
+                        turn: prompt.turn,
+                        actor: Some(binding.speaker),
+                        announcement_message_id: None,
+                    },
+                );
+                Ok(CommandOutcome::Completed)
+            }
             HarnessCommand::CancelTurn { request, actor } => self
                 .cancel_turn(session_id, request, actor)
                 .await

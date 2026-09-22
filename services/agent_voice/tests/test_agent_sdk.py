@@ -12,38 +12,9 @@ from livekit import rtc
 from livekit.agents import AgentSession, room_io
 
 from agent import MacroVoiceAgent
-from bridge import MacroBridge
-from protocol import TaskEvent, VoiceJob
 from test_protocol import job_data
 from test_config import configured_environment
 from worker import create_model, entrypoint, worker_options
-
-
-class FakeSpeech:
-    async def wait_for_playout(self):
-        return None
-
-
-class FakeSession:
-    user_state = "listening"
-    agent_state = "listening"
-
-    def __init__(self):
-        self.replies = []
-
-    def generate_reply(self, **options):
-        self.replies.append(options)
-        return FakeSpeech()
-
-
-class PresentationAgent(MacroVoiceAgent):
-    def __init__(self, bridge):
-        super().__init__(bridge, [])
-        self.fake_session = FakeSession()
-
-    @property
-    def session(self):
-        return self.fake_session
 
 
 class SdkTests(unittest.IsolatedAsyncioTestCase):
@@ -97,6 +68,8 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
 
         async def publish(payload, **_options):
             calls.append(("data", json.loads(payload)))
+            if json.loads(payload)["type"] == "ready":
+                reply()
             if json.loads(payload)["type"] != "ready" and data_error:
                 raise data_error
 
@@ -108,6 +81,7 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
             })),
         )
         room = SimpleNamespace(
+            name="voice-room-1",
             local_participant=participant,
             remote_participants={metadata["participantIdentity"]: object()},
             connection_state=rtc.ConnectionState.CONN_CONNECTED,
@@ -151,8 +125,16 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
             on=subscribe, start=AsyncMock(side_effect=start), aclose=AsyncMock(),
             generate_reply=reply,
         )
+        initialized = asyncio.Event()
+        initialized.set()
+        runtime = SimpleNamespace(
+            bind=Mock(), provider_event=Mock(), started=Mock(),
+            initialized=initialized, close=AsyncMock(),
+        )
         with patch.dict("os.environ", configured_environment(), clear=True), \
              patch("worker.AgentSession", return_value=session), \
+             patch("worker.NativeRuntime.connect", new=AsyncMock(return_value=runtime)), \
+             patch("worker.MacroVoiceAgent", return_value=object()), \
              patch("worker.create_model", return_value=object()), \
              patch("worker.monotonic", side_effect=tick), \
              patch("worker.datetime") as clock:
@@ -271,80 +253,6 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
     async def test_absolute_session_expiry_still_ends_connected_voice(self):
         _metadata, calls, _logs = await self.exercise_startup(expired=True)
         self.assertIn("time limit", self.terminal_status(calls)["message"])
-
-
-class PresentationTests(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        async def rpc(_method, _payload):
-            self.fail("Presentation never calls the harness")
-
-        job = VoiceJob.parse(json.dumps(job_data()))
-        self.bridge = MacroBridge(job, rpc)
-        self.agent = PresentationAgent(self.bridge)
-        self.delivery = asyncio.create_task(self.agent.deliver_results())
-        self.task = job.request_id("task")
-        self.bridge.ledger.register(self.task)
-
-    async def asyncTearDown(self):
-        self.delivery.cancel()
-        await asyncio.gather(self.delivery, return_exceptions=True)
-        await self.bridge.close()
-
-    def enqueue(self, kind, sequence, text="", task_id=None):
-        event = TaskEvent(task_id or self.task, sequence, kind, text)
-        self.assertTrue(self.bridge.ledger.accept(event))
-        self.agent.events.put_nowait(event)
-
-    async def drain(self):
-        await asyncio.wait_for(self.agent.events.join(), timeout=1)
-
-    async def test_context_and_reply_wait_until_user_finishes_speaking(self):
-        self.agent.fake_session.user_state = "speaking"
-        self.enqueue("completed", 1, "The draft is ready.")
-        await asyncio.sleep(0.01)
-        self.assertFalse(self.agent.chat_ctx.items)
-        self.assertFalse(self.agent.fake_session.replies)
-        self.agent.fake_session.user_state = "listening"
-        await self.drain()
-        self.assertEqual(len(self.agent.chat_ctx.items), 1)
-        self.assertEqual(len(self.agent.fake_session.replies), 1)
-        self.assertEqual(self.agent.fake_session.replies[0]["tool_choice"], "none")
-        self.assertTrue(self.agent.fake_session.replies[0]["allow_interruptions"])
-
-    async def test_superseded_result_waiting_for_a_gap_never_speaks(self):
-        self.agent.fake_session.user_state = "speaking"
-        self.enqueue("completed", 1, "Old result")
-        await asyncio.sleep(0.01)
-        self.bridge.ledger.supersede(self.task)
-        await self.drain()
-        self.assertFalse(self.agent.chat_ctx.items)
-        self.assertFalse(self.agent.fake_session.replies)
-
-    async def test_queued_interaction_superseded_by_completion_is_not_presented(self):
-        self.enqueue("interaction", 1, "Permission needed")
-        self.enqueue("completed", 2, "Finished after permission was answered")
-        await self.drain()
-        self.assertEqual(len(self.agent.fake_session.replies), 1)
-        self.assertIn("completed", self.agent.fake_session.replies[0]["instructions"])
-        self.assertNotIn("Permission needed", self.agent.chat_ctx.items[0].text_content)
-
-    async def test_progress_is_silent_and_replaced_by_terminal_status(self):
-        self.enqueue("progress", 1, "Reading files")
-        await self.drain()
-        self.assertFalse(self.agent.fake_session.replies)
-        self.enqueue("completed", 2)
-        await self.drain()
-        self.assertEqual(len(self.agent.chat_ctx.items), 1)
-        self.assertNotIn("Reading files", self.agent.chat_ctx.items[0].text_content)
-        self.assertEqual(len(self.agent.fake_session.replies), 1)
-
-    async def test_presentation_notes_are_bounded_across_many_tasks(self):
-        for index in range(10):
-            task = self.bridge.job.request_id(str(index))
-            self.bridge.ledger.register(task)
-            self.enqueue("completed", 1, "Done", task_id=task)
-            await self.drain()
-        self.assertEqual(len(self.agent.chat_ctx.items), 8)
 
 
 if __name__ == "__main__":

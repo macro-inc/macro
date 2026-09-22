@@ -332,6 +332,30 @@ pub struct DeliverAction {
 /// it.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum HarnessCommand {
+    /// Suspend the text runtime before provisioning this voice generation.
+    PrepareVoice {
+        /// Voice lease authorizing the transition.
+        generation: Uuid,
+    },
+    /// Attach the authenticated worker registered on the accepting replica.
+    AttachVoice {
+        /// Voice lease whose socket was authenticated.
+        generation: Uuid,
+    },
+    /// Release only this voice generation; delayed cleanup cannot end a successor.
+    EndVoice {
+        /// Only this attachment may be closed.
+        generation: Uuid,
+    },
+    /// Record a native audio turn already consumed by the voice provider.
+    NativeVoiceTurn {
+        /// Voice attachment owning this input.
+        generation: Uuid,
+        /// Stable provider-correlated action identity.
+        action_id: AgentActionId,
+        /// Final user transcript.
+        text: String,
+    },
     /// Open a new session.
     Open(OpenSession),
     /// Act on a session that already exists.

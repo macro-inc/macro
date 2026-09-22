@@ -233,7 +233,7 @@ export function VoicePanel(props: {
           {unavailable()
             ? 'Microphone access has not been requested.'
             : active()
-              ? 'Ending voice keeps your agent’s work running.'
+              ? 'Your conversation stays in this agent’s history.'
               : 'Your microphone turns on when you start.\nNo audio recording.'}
         </p>
       </div>

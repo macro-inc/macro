@@ -114,6 +114,7 @@ struct AgentHarnessInner<
     egress: Egress,
     forwarder: Box<dyn ErasedForwarder>,
     permission_policies: Box<dyn ErasedPermissionPolicySource>,
+    voice: Arc<dyn crate::domain::voice::VoiceRuntimeConnections>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory beside the live actors this replica manages.
@@ -304,6 +305,7 @@ where
                 egress,
                 forwarder: Box::new(forwarder),
                 permission_policies: Box::new(permission_policies),
+                voice: Arc::new(crate::domain::voice::NoVoiceRuntime),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 cancellations: DashMap::new(),
@@ -315,6 +317,17 @@ where
             workers: Arc::new(DashMap::new()),
             repositories: None,
         }
+    }
+
+    /// Wire temporary native voice attachments before sharing this harness.
+    pub fn with_voice_runtime(
+        mut self,
+        voice: Arc<dyn crate::domain::voice::VoiceRuntimeConnections>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("wire voice before cloning the harness")
+            .voice = voice;
+        self
     }
 
     /// Enable explicit repository choices, authorized against the owner's reachable repositories.
@@ -405,6 +418,58 @@ where
             .await
             // The external runtime drives this turn itself; there is no
             // in-flight record here to remember the chip in.
+            .map(drop)
+    }
+}
+
+#[async_trait::async_trait]
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> crate::domain::voice::VoiceHarnessCommands
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    async fn voice_command(&self, session: AgentSessionId, command: HarnessCommand) -> Result<()> {
+        self.execute(session, command).await.map(drop)
+    }
+
+    async fn attach_voice_here(
+        &self,
+        session: AgentSessionId,
+        generation: macro_uuid::Uuid,
+    ) -> Result<()> {
+        self.execute_here(session, HarnessCommand::AttachVoice { generation })
+            .await
             .map(drop)
     }
 }

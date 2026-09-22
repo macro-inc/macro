@@ -65,6 +65,7 @@ pub struct SessionMachine<Token> {
     permission_policy: PermissionPolicy,
     /// Only for a newly created ACP session; restored sessions retain their model.
     initial_model: Option<String>,
+    generation: Option<macro_uuid::Uuid>,
     /// Permission requests the agent is waiting on, keyed by the agent's own
     /// request id - the id an answer has to echo. Only ever populated under
     /// [`PermissionPolicy::Prompt`]; auto-accept answers on arrival.
@@ -93,6 +94,7 @@ impl<Token> SessionMachine<Token> {
             mcp_servers,
             permission_policy,
             initial_model: None,
+            generation: None,
             outstanding_permissions: HashMap::new(),
         }
     }
@@ -119,6 +121,7 @@ impl<Token> SessionMachine<Token> {
             mcp_servers,
             permission_policy,
             initial_model: None,
+            generation: None,
             outstanding_permissions: HashMap::new(),
         }
     }
@@ -127,6 +130,12 @@ impl<Token> SessionMachine<Token> {
     #[must_use]
     pub fn with_initial_model(mut self, model: Option<String>) -> Self {
         self.initial_model = model;
+        self
+    }
+
+    /// Permit native input only from this attachment's generation.
+    pub fn with_generation(mut self, generation: Option<macro_uuid::Uuid>) -> Self {
+        self.generation = generation;
         self
     }
 
@@ -182,6 +191,77 @@ impl<Token> SessionMachine<Token> {
     /// Advance the machine by one input, returning the effects it implies.
     pub fn handle(&mut self, input: Input<Token>) -> Vec<Effect<Token>> {
         match input {
+            Input::RecordRuntimeFrame {
+                generation,
+                message,
+                token,
+            } => {
+                if self.generation != Some(generation) {
+                    return vec![Effect::Complete {
+                        token,
+                        result: Err(AgentSessionError::Forbidden),
+                    }];
+                }
+                if !matches!(self.phase, SessionPhase::Live { .. }) {
+                    return vec![Effect::Complete {
+                        token,
+                        result: Err(AgentSessionError::Disconnected(self.id)),
+                    }];
+                }
+                let mut effects = self.on_inbound(message);
+                effects.push(Effect::Complete {
+                    token,
+                    result: Ok(()),
+                });
+                effects
+            }
+            Input::NativeTurn {
+                from,
+                generation,
+                action_id,
+                text,
+                token,
+            } => {
+                if self.generation != Some(generation) || text.trim().is_empty() {
+                    return vec![Effect::Complete {
+                        token,
+                        result: Err(AgentSessionError::Forbidden),
+                    }];
+                }
+                let SessionPhase::Live { session_id, .. } = &self.phase else {
+                    return vec![Effect::Complete {
+                        token,
+                        result: Err(AgentSessionError::Disconnected(self.id)),
+                    }];
+                };
+                if let Some((_, active)) = self.in_flight_turn {
+                    return vec![Effect::Complete {
+                        token,
+                        result: if active == action_id {
+                            Ok(())
+                        } else {
+                            Err(AgentSessionError::TurnConflict)
+                        },
+                    }];
+                }
+                let request_id = action_id.to_request_id();
+                match AgentAction::prompt(text).to_runtime(session_id, request_id.clone()) {
+                    Ok(message) => {
+                        self.in_flight_turn = Some((request_id, action_id));
+                        vec![
+                            Effect::RecordNativePrompt { from, message },
+                            Effect::Complete {
+                                token,
+                                result: Ok(()),
+                            },
+                        ]
+                    }
+                    Err(error) => vec![Effect::Complete {
+                        token,
+                        result: Err(error.into()),
+                    }],
+                }
+            }
             Input::CancelTurn {
                 from,
                 expected_action_id,
@@ -413,6 +493,7 @@ impl<Token> SessionMachine<Token> {
             {
                 self.in_flight_turn = None;
                 self.cancel_outstanding_permissions(effects);
+                self.cancel_pending_elicitation(None, effects);
                 if self.reload_required {
                     self.begin_reload(effects);
                 }

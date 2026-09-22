@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
-  VoiceBridge,
   VoiceCredentials,
   VoiceMediaEvents,
   VoiceMicrophone,
@@ -92,14 +91,6 @@ const credentials: VoiceCredentials = {
   expiresAt: '2026-09-23T00:00:00Z',
   voice: 'marin',
 };
-const taskId = '0195a574-e470-7a43-b74c-d06a7f374836';
-const bridges = () =>
-  ({
-    request: vi.fn(),
-    cancel: vi.fn(),
-    context: vi.fn(),
-    close: vi.fn(),
-  }) satisfies VoiceBridge;
 const events = () =>
   ({
     connection: vi.fn(),
@@ -158,38 +149,23 @@ function mockMeter(resume: () => Promise<void> = async () => {}) {
 }
 
 describe('LiveKit voice boundary', () => {
-  it('accepts agent RPCs only from the dispatched worker identity', async () => {
-    const bridge = bridges();
-    bridge.request.mockResolvedValue({ taskId, status: 'accepted' });
+  it('connects media without exposing a browser task delegation endpoint', async () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       events(),
-      bridge,
       microphone()
     );
-    const request = fake.rpc.get('macro.agent.request')!;
-    const payload = JSON.stringify({
-      version: 1,
-      requestId: taskId,
-      prompt: 'Find my draft',
-    });
-    await expect(
-      request({ callerIdentity: 'untrusted', payload })
-    ).rejects.toThrow('Unauthorized');
-    expect(bridge.request).not.toHaveBeenCalled();
-    await request({ callerIdentity: credentials.agentIdentity, payload });
-    expect(bridge.request).toHaveBeenCalledOnce();
+    workerEvent(credentials.agentIdentity, 'ready');
+    await media.connect();
+    expect(fake.rpc.size).toBe(0);
+    expect(fake.publish).not.toHaveBeenCalled();
     await media.disconnect();
-    await expect(
-      request({ callerIdentity: credentials.agentIdentity, payload })
-    ).rejects.toThrow('Unauthorized');
   });
   it('does not announce listening until the correct worker is ready', async () => {
     const callbacks = events();
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       microphone()
     );
     const connected = media.connect();
@@ -214,7 +190,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       capture
     );
     const connected = media.connect();
@@ -226,49 +201,9 @@ describe('LiveKit voice boundary', () => {
     expect(capture.stop).toHaveBeenCalled();
     expect(callbacks.connection).not.toHaveBeenCalled();
   });
-  it('publishes ordered, bounded events to only the expected worker', async () => {
-    const media = await createLivekitVoiceMedia(
-      credentials,
-      events(),
-      bridges(),
-      microphone()
-    );
-    await media.publish({
-      version: 1,
-      taskId,
-      type: 'completed',
-      text: 'Done',
-    });
-    const [bytes, destination] = fake.publish.mock.calls[0] as unknown as [
-      Uint8Array,
-      { destinationIdentities: string[] },
-    ];
-    expect(JSON.parse(new TextDecoder().decode(bytes))).toMatchObject({
-      seq: 1,
-      voiceSessionId: credentials.voiceSessionId,
-    });
-    expect(destination.destinationIdentities).toEqual([
-      credentials.agentIdentity,
-    ]);
-    await expect(
-      media.publish({
-        version: 1,
-        taskId,
-        type: 'progress',
-        text: '界'.repeat(6000),
-      })
-    ).rejects.toThrow('too large');
-    expect(fake.publish).toHaveBeenCalledOnce();
-    await media.disconnect();
-  });
   it('publishes the granted track without opening a second microphone', async () => {
     const capture = microphone();
-    const media = await createLivekitVoiceMedia(
-      credentials,
-      events(),
-      bridges(),
-      capture
-    );
+    const media = await createLivekitVoiceMedia(credentials, events(), capture);
     const connected = media.connect();
     await vi.waitFor(() => expect(fake.publishTrack).toHaveBeenCalled());
     expect(fake.publishTrack).toHaveBeenCalledExactlyOnceWith(capture.track, {
@@ -287,12 +222,7 @@ describe('LiveKit voice boundary', () => {
   it('releases microphone capture when room connection fails', async () => {
     fake.connect.mockRejectedValueOnce(new Error('Network failed'));
     const capture = microphone();
-    const media = await createLivekitVoiceMedia(
-      credentials,
-      events(),
-      bridges(),
-      capture
-    );
+    const media = await createLivekitVoiceMedia(credentials, events(), capture);
     await expect(media.connect()).rejects.toThrow('Network failed');
     expect(capture.stop).toHaveBeenCalled();
     expect(fake.publishTrack).not.toHaveBeenCalled();
@@ -301,12 +231,7 @@ describe('LiveKit voice boundary', () => {
   it('releases microphone capture when track publication fails', async () => {
     fake.publishTrack.mockRejectedValueOnce(new Error('Publish failed'));
     const capture = microphone();
-    const media = await createLivekitVoiceMedia(
-      credentials,
-      events(),
-      bridges(),
-      capture
-    );
+    const media = await createLivekitVoiceMedia(credentials, events(), capture);
     await expect(media.connect()).rejects.toThrow('Publish failed');
     expect(capture.stop).toHaveBeenCalled();
     expect(fake.disconnect).toHaveBeenCalled();
@@ -324,7 +249,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       capture
     );
     const connected = media.connect();
@@ -342,7 +266,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       microphone()
     );
     const connected = media.connect();
@@ -361,7 +284,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       capture
     );
     const connected = media.connect();
@@ -393,7 +315,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       capture
     );
     const connected = media.connect();
@@ -415,7 +336,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       microphone()
     );
     await media.connect();
@@ -427,7 +347,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       microphone()
     );
     const connected = media.connect();
@@ -460,7 +379,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       microphone()
     );
     const connected = media.connect();
@@ -480,7 +398,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       capture
     );
     workerEvent(credentials.agentIdentity, 'ready');
@@ -507,7 +424,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       capture
     );
     workerEvent(credentials.agentIdentity, 'ready');
@@ -540,7 +456,6 @@ describe('LiveKit voice boundary', () => {
       const media = await createLivekitVoiceMedia(
         credentials,
         callbacks,
-        bridges(),
         capture
       );
       workerEvent(credentials.agentIdentity, 'ready');
@@ -554,89 +469,6 @@ describe('LiveKit voice boundary', () => {
       await media.disconnect();
     }
   );
-  it('holds task results during reconnect and sends them after recovery', async () => {
-    const media = await createLivekitVoiceMedia(
-      credentials,
-      events(),
-      bridges(),
-      microphone()
-    );
-    workerEvent(credentials.agentIdentity, 'ready');
-    await media.connect();
-    fake.handlers.get('reconnecting')?.();
-    const result = media.publish({
-      version: 1,
-      taskId,
-      type: 'completed',
-      text: 'Done',
-    });
-    expect(fake.publish).not.toHaveBeenCalled();
-    fake.handlers.get('reconnected')?.();
-    await result;
-    expect(fake.publish).toHaveBeenCalledOnce();
-    await media.disconnect();
-  });
-  it('retries an interrupted result with its original deduplication sequence', async () => {
-    let reject!: (error: Error) => void;
-    fake.publish.mockImplementationOnce(
-      () =>
-        new Promise<void>((_resolve, fail) => {
-          reject = fail;
-        })
-    );
-    const media = await createLivekitVoiceMedia(
-      credentials,
-      events(),
-      bridges(),
-      microphone()
-    );
-    workerEvent(credentials.agentIdentity, 'ready');
-    await media.connect();
-    const result = media.publish({
-      version: 1,
-      taskId,
-      type: 'completed',
-      text: 'Done',
-    });
-    fake.handlers.get('reconnecting')?.();
-    reject(new Error('Data channel interrupted'));
-    await Promise.resolve();
-    fake.handlers.get('reconnected')?.();
-    await result;
-    expect(fake.publish).toHaveBeenCalledTimes(2);
-    expect(fake.publish.mock.calls[0]).toEqual(fake.publish.mock.calls[1]);
-    await media.disconnect();
-  });
-  it('recovers a send failure reported after the connection has already resumed', async () => {
-    let reject!: (error: Error) => void;
-    fake.publish.mockImplementationOnce(
-      () =>
-        new Promise<void>((_resolve, fail) => {
-          reject = fail;
-        })
-    );
-    const media = await createLivekitVoiceMedia(
-      credentials,
-      events(),
-      bridges(),
-      microphone()
-    );
-    workerEvent(credentials.agentIdentity, 'ready');
-    await media.connect();
-    const result = media.publish({
-      version: 1,
-      taskId,
-      type: 'completed',
-      text: 'Done',
-    });
-    fake.handlers.get('reconnecting')?.();
-    fake.handlers.get('reconnected')?.();
-    reject(new Error('Old data channel closed'));
-    await result;
-    expect(fake.publish).toHaveBeenCalledTimes(2);
-    expect(fake.publish.mock.calls[0]).toEqual(fake.publish.mock.calls[1]);
-    await media.disconnect();
-  });
   it('surfaces a durable terminal reason from the initial room snapshot', async () => {
     fake.participants.set(credentials.agentIdentity, {
       identity: credentials.agentIdentity,
@@ -653,7 +485,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       microphone()
     );
     await expect(media.connect()).rejects.toThrow('Provider session expired.');
@@ -669,7 +500,6 @@ describe('LiveKit voice boundary', () => {
       const media = await createLivekitVoiceMedia(
         credentials,
         callbacks,
-        bridges(),
         microphone()
       );
       workerEvent(credentials.agentIdentity, 'ready');
@@ -699,7 +529,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       microphone()
     );
     workerEvent(credentials.agentIdentity, 'ready');
@@ -730,7 +559,6 @@ describe('LiveKit voice boundary', () => {
     const media = await createLivekitVoiceMedia(
       credentials,
       callbacks,
-      bridges(),
       microphone()
     );
     workerEvent(credentials.agentIdentity, 'ready');

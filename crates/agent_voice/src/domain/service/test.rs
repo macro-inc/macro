@@ -11,6 +11,32 @@ use std::{
 };
 
 struct Directory(bool);
+
+#[derive(Default)]
+struct Runtime {
+    prepares: AtomicUsize,
+    ends: AtomicUsize,
+    fail_prepare: AtomicBool,
+    fail_end: AtomicBool,
+}
+
+#[async_trait]
+impl VoiceRuntime for Runtime {
+    async fn prepare(&self, _: &VoiceLease) -> Result<()> {
+        self.prepares.fetch_add(1, Ordering::SeqCst);
+        if self.fail_prepare.load(Ordering::SeqCst) {
+            return Err(VoiceError::Conflict);
+        }
+        Ok(())
+    }
+    async fn end(&self, _: &VoiceLease) -> Result<()> {
+        self.ends.fetch_add(1, Ordering::SeqCst);
+        if self.fail_end.load(Ordering::SeqCst) {
+            return Err(VoiceError::Conflict);
+        }
+        Ok(())
+    }
+}
 #[async_trait]
 impl AgentVoiceDirectory for Directory {
     async fn is_macro_session(&self, _: Uuid) -> Result<bool> {
@@ -110,6 +136,14 @@ impl VoiceMedia for Media {
     fn url(&self) -> &str {
         "wss://voice.example"
     }
+    fn verify_worker(&self, token: &str) -> Result<WorkerIdentity> {
+        let (identity, room_name): (String, String) =
+            serde_json::from_str(token).map_err(|_| VoiceError::Forbidden)?;
+        Ok(WorkerIdentity {
+            identity,
+            room_name,
+        })
+    }
 }
 
 fn receipt(user: &str) -> EntityAccessReceipt<EditAccessLevel> {
@@ -138,10 +172,144 @@ fn fixture(eligible: bool) -> (AgentVoiceService, Arc<Store>, Arc<Media>) {
     let store = Arc::new(Store::default());
     let media = Arc::new(Media::default());
     (
-        AgentVoiceService::new(Arc::new(Directory(eligible)), store.clone(), media.clone()),
+        AgentVoiceService::new(
+            Arc::new(Directory(eligible)),
+            store.clone(),
+            media.clone(),
+            Arc::new(Runtime::default()),
+        ),
         store,
         media,
     )
+}
+
+#[tokio::test]
+async fn runtime_handoff_is_once_and_failure_never_dispatches_a_worker() {
+    let (mut service, store, media) = fixture(true);
+    let runtime = Arc::new(Runtime::default());
+    service.runtime = runtime.clone();
+    runtime.fail_prepare.store(true, Ordering::SeqCst);
+    assert!(
+        service
+            .start(receipt("macro|alice@example.com"), request())
+            .await
+            .is_err()
+    );
+    assert_eq!(media.provisions.load(Ordering::SeqCst), 0);
+    assert!(store.0.lock().unwrap().is_none());
+    runtime.fail_prepare.store(false, Ordering::SeqCst);
+    let request = request();
+    let first = service
+        .start(receipt("macro|alice@example.com"), request.clone())
+        .await
+        .unwrap();
+    service
+        .start(receipt("macro|alice@example.com"), request)
+        .await
+        .unwrap();
+    assert_eq!(runtime.prepares.load(Ordering::SeqCst), 2);
+    assert_eq!(media.provisions.load(Ordering::SeqCst), 1);
+    runtime.fail_end.store(true, Ordering::SeqCst);
+    assert!(
+        service
+            .end(receipt("macro|alice@example.com"), first.voice_session_id)
+            .await
+            .is_err()
+    );
+    assert!(store.0.lock().unwrap().is_some());
+    runtime.fail_end.store(false, Ordering::SeqCst);
+    service
+        .end(receipt("macro|alice@example.com"), first.voice_session_id)
+        .await
+        .unwrap();
+    assert!(store.0.lock().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn only_the_current_signed_worker_can_attach_a_runtime() {
+    let (service, store, _) = fixture(true);
+    let connection = service
+        .start(receipt("macro|alice@example.com"), request())
+        .await
+        .unwrap();
+    let lease = store.0.lock().unwrap().clone().unwrap();
+    let token = |identity: String, room: String| serde_json::to_string(&(identity, room)).unwrap();
+    for invalid in [
+        "invalid signature".to_owned(),
+        token(lease.participant_identity(), lease.room_name()),
+        token(lease.agent_identity(), "another-room".to_owned()),
+    ] {
+        assert!(matches!(
+            service
+                .authorize_worker(lease.session_id, connection.voice_session_id, &invalid)
+                .await,
+            Err(VoiceError::Forbidden)
+        ));
+    }
+    let valid = token(lease.agent_identity(), lease.room_name());
+    assert!(
+        service
+            .authorize_worker(lease.session_id, connection.voice_session_id, &valid)
+            .await
+            .is_ok()
+    );
+    assert!(matches!(
+        service
+            .authorize_worker(
+                lease.session_id,
+                VoiceSessionId(macro_uuid::generate_uuid_v7()),
+                &valid
+            )
+            .await,
+        Err(VoiceError::Forbidden)
+    ));
+    service
+        .end(
+            receipt("macro|alice@example.com"),
+            connection.voice_session_id,
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        service
+            .authorize_worker(lease.session_id, connection.voice_session_id, &valid)
+            .await,
+        Err(VoiceError::Ended)
+    ));
+}
+
+#[tokio::test]
+async fn worker_failure_releases_text_routing_without_closing_a_replacement() {
+    let (service, store, media) = fixture(true);
+    service
+        .start(receipt("macro|alice@example.com"), request())
+        .await
+        .unwrap();
+    let old = store.0.lock().unwrap().clone().unwrap();
+    service.worker_stopped(&old).await.unwrap();
+    assert!(
+        service
+            .runtime_lease(old.session_id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let replacement = service
+        .start(receipt("macro|alice@example.com"), request())
+        .await
+        .unwrap();
+    let closes = media.closes.load(Ordering::SeqCst);
+    service.worker_stopped(&old).await.unwrap();
+    assert_eq!(media.closes.load(Ordering::SeqCst), closes);
+    assert_eq!(
+        service
+            .runtime_lease(old.session_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .voice_session_id,
+        replacement.voice_session_id
+    );
 }
 
 #[tokio::test]

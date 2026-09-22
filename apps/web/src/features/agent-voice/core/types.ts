@@ -57,37 +57,6 @@ export type VoiceState = {
   reviewRequired: boolean;
 };
 
-export type AgentRequest = { version: 1; requestId: string; prompt: string };
-export type AgentTaskEvent = {
-  version: 1;
-  taskId: string;
-  type: 'progress' | 'interaction' | 'completed' | 'cancelled' | 'failed';
-  text: string;
-};
-export type AgentTaskAccepted = {
-  taskId: string;
-  status: 'accepted' | 'queued' | 'running' | 'failed' | 'conflict';
-  message?: string;
-};
-export type AgentCancel = {
-  version: 1;
-  requestId: string;
-  taskId: string;
-  replacementPrompt?: string;
-};
-export type AgentCancelled = {
-  status: 'stopping' | 'replaced' | 'already_completed' | 'conflict' | 'failed';
-  replacementTaskId?: string;
-  message?: string;
-};
-export type VoiceContext = {
-  version: 1;
-  sessionId: string;
-  messages: { role: 'user' | 'assistant'; text: string }[];
-  activeTaskId?: string;
-  pendingInteraction?: string;
-};
-
 export type VoiceMediaEvents = {
   connection: (state: 'connected' | 'reconnecting' | 'disconnected') => void;
   levels: (input: number, output: number) => void;
@@ -101,17 +70,13 @@ export type VoiceMedia = {
   disconnect: () => Promise<void>;
   mute: (muted: boolean) => Promise<void>;
   enablePlayback: () => Promise<void>;
-  publish: (event: AgentTaskEvent) => Promise<void>;
 };
 /** Local capture acquired before opening a remote voice session. */
 export type VoiceMicrophone = {
   track: MediaStreamTrack;
   stop: () => void;
 };
-export type VoiceBridge = {
-  request: (request: AgentRequest) => Promise<AgentTaskAccepted>;
-  cancel: (request: AgentCancel) => Promise<AgentCancelled>;
-  context: () => Promise<VoiceContext>;
+export type VoiceSessionObserver = {
   close: () => void;
 };
 export type VoiceDependencies = {
@@ -128,12 +93,11 @@ export type VoiceDependencies = {
   media: (
     credentials: VoiceCredentials,
     events: VoiceMediaEvents,
-    bridge: VoiceBridge,
     microphone: VoiceMicrophone
   ) => Promise<VoiceMedia>;
-  bridge: (
+  observeSession: (
     sessionId: string,
-    publish: (event: AgentTaskEvent) => void
-  ) => Promise<VoiceBridge>;
+    reviewRequired: (required: boolean) => void
+  ) => Promise<VoiceSessionObserver>;
   uuid: () => string;
 };

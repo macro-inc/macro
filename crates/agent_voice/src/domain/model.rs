@@ -16,6 +16,14 @@ pub const JOIN_TOKEN_SECONDS: u32 = 5 * 60;
 #[serde(transparent)]
 pub struct VoiceSessionId(pub Uuid);
 
+/// Verified media principal presented by a worker's server connection.
+pub struct WorkerIdentity {
+    /// Signed participant identity.
+    pub identity: String,
+    /// Signed room grant.
+    pub room_name: String,
+}
+
 /// The catalog supported by the first speech adapter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
@@ -160,13 +168,13 @@ impl VoiceLease {
 pub struct DispatchMetadata {
     /// Wire schema version.
     pub schema_version: u8,
-    /// Canonical agent session, for browser delegation correlation.
+    /// Canonical agent session owned by the realtime runtime.
     pub session_id: Uuid,
     /// Private media session.
     pub voice_session_id: VoiceSessionId,
     /// Speech voice.
     pub voice: Voice,
-    /// The only participant to which work may be delegated.
+    /// The only participant whose microphone the worker consumes.
     pub participant_identity: String,
     /// Worker must join with this identity.
     pub agent_identity: String,
@@ -174,6 +182,8 @@ pub struct DispatchMetadata {
     pub expires_at: DateTime<Utc>,
     /// Additional bound on worker lifetime.
     pub max_duration_seconds: u32,
+    /// Backend runtime endpoint. Contains no credentials.
+    pub runtime_url: String,
 }
 
 impl From<&VoiceLease> for DispatchMetadata {
@@ -187,6 +197,7 @@ impl From<&VoiceLease> for DispatchMetadata {
             agent_identity: lease.agent_identity(),
             expires_at: lease.expires_at,
             max_duration_seconds: MAX_DURATION_SECONDS,
+            runtime_url: String::new(),
         }
     }
 }

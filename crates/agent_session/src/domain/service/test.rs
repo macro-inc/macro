@@ -961,6 +961,8 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
     commands
         .send(SessionCommand {
             expected_action_id: None,
+            native_generation: None,
+            runtime_frame: None,
             user_id: None,
             action: AgentAction::prompt("keep dispatching"),
             action_id: AgentActionId::mint(),
@@ -1046,6 +1048,8 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
     commands
         .send(SessionCommand {
             expected_action_id: None,
+            native_generation: None,
+            runtime_frame: None,
             user_id: None,
             action: AgentAction::prompt("keep working"),
             action_id: AgentActionId::mint(),
@@ -1662,6 +1666,8 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
     commands
         .send(SessionCommand {
             expected_action_id: None,
+            native_generation: None,
+            runtime_frame: None,
             user_id: None,
             action: AgentAction::prompt("must remain unsent"),
             action_id: AgentActionId::mint(),
@@ -1842,6 +1848,8 @@ async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
     commands
         .send(SessionCommand {
             expected_action_id: None,
+            native_generation: None,
+            runtime_frame: None,
             user_id: None,
             action: AgentAction::prompt("what time is it?"),
             action_id,

@@ -160,14 +160,42 @@ pub fn user_tool_finisher<Context>(
 where
     Context: Clone + Send + Sync + 'static,
 {
+    user_tool_finisher_with_review_cancel(tools, context, user, reviewer, cancel.clone(), cancel)
+}
+
+/// Finish reviewed tools while allowing a host to dismiss an unapproved draft
+/// independently of work already executing. Audio interruption cancels
+/// `review_cancel`; explicit work cancellation cancels `cancel` as well.
+pub fn user_tool_finisher_with_review_cancel<Context>(
+    tools: Arc<AsyncToolCollection<Context>>,
+    context: Context,
+    user: MacroUserIdStr<'static>,
+    reviewer: Arc<dyn UserToolReviewer>,
+    cancel: CancellationToken,
+    review_cancel: CancellationToken,
+) -> UserToolFinisher
+where
+    Context: Clone + Send + Sync + 'static,
+{
     Arc::new(move |call: PendingUserTool| {
         let tools = Arc::clone(&tools);
         let context = context.clone();
         let user = user.clone();
         let reviewer = Arc::clone(&reviewer);
         let cancel = cancel.clone();
-        Box::pin(async move { finish(&tools, context, user, &*reviewer, cancel, call).await })
-            as Pin<Box<dyn Future<Output = Option<FinishedUserTool>> + Send>>
+        let review_cancel = review_cancel.clone();
+        Box::pin(async move {
+            finish(
+                &tools,
+                context,
+                user,
+                &*reviewer,
+                cancel,
+                review_cancel,
+                call,
+            )
+            .await
+        }) as Pin<Box<dyn Future<Output = Option<FinishedUserTool>> + Send>>
     })
 }
 
@@ -177,6 +205,7 @@ async fn finish<Context>(
     user: MacroUserIdStr<'static>,
     reviewer: &dyn UserToolReviewer,
     cancel: CancellationToken,
+    review_cancel: CancellationToken,
     call: PendingUserTool,
 ) -> Option<FinishedUserTool>
 where
@@ -195,7 +224,13 @@ where
         ),
     };
 
-    let outcome = match reviewer.review(request).await {
+    let review = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => Ok(ReviewOutcome::Cancelled),
+        _ = review_cancel.cancelled() => Ok(ReviewOutcome::Cancelled),
+        review = reviewer.review(request) => review,
+    };
+    let outcome = match review {
         Ok(outcome) => outcome,
         Err(error) => return Some(FinishedUserTool::Error(error.to_string())),
     };
@@ -212,6 +247,11 @@ where
     };
 
     let args = apply_review(&call.args, &content);
+    if cancel.is_cancelled() || review_cancel.is_cancelled() {
+        return Some(FinishedUserTool::Error(
+            "the call was cancelled before execution; nothing was done".to_owned(),
+        ));
+    }
     if !tools.is_valid_tool(&call.tool_name, &args) {
         return Some(FinishedUserTool::Error(format!(
             "the reviewed arguments are not valid for {}; nothing was done",

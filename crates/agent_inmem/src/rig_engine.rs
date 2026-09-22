@@ -66,9 +66,9 @@ impl RigTurnEngine {
 }
 
 #[derive(Clone)]
-struct InMemToolContext {
-    base: ToolServiceContext,
-    ask_user: AskUserContext,
+pub(crate) struct InMemToolContext {
+    pub(crate) base: ToolServiceContext,
+    pub(crate) ask_user: AskUserContext,
 }
 
 impl FromRef<InMemToolContext> for ToolServiceContext {
@@ -83,7 +83,7 @@ impl FromRef<InMemToolContext> for AskUserContext {
     }
 }
 
-fn tools_for_turn(
+pub(crate) fn tools_for_turn(
     base_tools: ai_tools::AiToolSet,
     supports_user_input: bool,
 ) -> AsyncToolCollection<InMemToolContext> {
@@ -245,7 +245,7 @@ async fn drive_turn(
 /// the model reads as it takes in the caller's word — the same reason DCS
 /// puts `additional_instructions` after the standing prompt. Memory stays
 /// last so a remembered fact is never read as an instruction.
-fn system_prompt(
+pub(crate) fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
     identity: Option<&AgentIdentity>,
     instructions: Option<&str>,
@@ -279,7 +279,7 @@ fn system_prompt(
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.
-async fn fetch_user_memory(
+pub(crate) async fn fetch_user_memory(
     db: &PgPool,
     tool_context: &ToolServiceContext,
     owner: &MacroUserIdStr<'static>,

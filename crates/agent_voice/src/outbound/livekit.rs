@@ -1,12 +1,12 @@
 //! Private LiveKit rooms, explicit worker dispatch and least-privilege join tokens.
 
 use crate::domain::{
-    model::{DispatchMetadata, Result, VoiceError, VoiceLease},
+    model::{DispatchMetadata, Result, VoiceError, VoiceLease, WorkerIdentity},
     ports::VoiceMedia,
 };
 use async_trait::async_trait;
 use livekit_api::{
-    access_token::{AccessToken, VideoGrants},
+    access_token::{AccessToken, TokenVerifier, VideoGrants},
     services::{
         ServiceError, TwirpError, TwirpErrorCode,
         agent_dispatch::AgentDispatchClient,
@@ -30,11 +30,30 @@ pub struct LivekitVoiceMedia {
     api_key: String,
     api_secret: String,
     websocket_url: String,
+    runtime_url: String,
 }
 
 impl LivekitVoiceMedia {
     /// Validate configured URLs and credentials before serving requests.
-    pub fn new(server_url: &str, api_key: String, api_secret: String) -> Result<Self> {
+    pub fn new(
+        server_url: &str,
+        api_key: String,
+        api_secret: String,
+        runtime_url: &str,
+    ) -> Result<Self> {
+        let runtime = url::Url::parse(runtime_url)
+            .map_err(|error| VoiceError::Infrastructure(rootcause::report!(error).into()))?;
+        if !matches!(runtime.scheme(), "https" | "http")
+            || runtime.host_str().is_none()
+            || !runtime.username().is_empty()
+            || runtime.password().is_some()
+            || runtime.query().is_some()
+            || runtime.fragment().is_some()
+        {
+            return Err(VoiceError::Infrastructure(rootcause::report!(
+                "Invalid voice runtime URL"
+            )));
+        }
         let mut url = url::Url::parse(server_url)
             .map_err(|error| VoiceError::Infrastructure(rootcause::report!(error).into()))?;
         if url.host_str().is_none()
@@ -67,6 +86,7 @@ impl LivekitVoiceMedia {
             api_key,
             api_secret,
             websocket_url: url.to_string(),
+            runtime_url: runtime_url.trim_end_matches('/').to_owned(),
         })
     }
 }
@@ -74,7 +94,12 @@ impl LivekitVoiceMedia {
 #[async_trait]
 impl VoiceMedia for LivekitVoiceMedia {
     async fn provision(&self, lease: &VoiceLease) -> Result<()> {
-        let metadata = serde_json::to_string(&DispatchMetadata::from(lease))
+        let mut dispatch = DispatchMetadata::from(lease);
+        dispatch.runtime_url = format!(
+            "{}/agent-sessions/{}/voice/{}/runtime",
+            self.runtime_url, lease.session_id, lease.voice_session_id.0,
+        );
+        let metadata = serde_json::to_string(&dispatch)
             .map_err(|error| VoiceError::Infrastructure(rootcause::report!(error).into()))?;
         tokio::time::timeout(MEDIA_TIMEOUT, async {
             self.rooms
@@ -151,6 +176,19 @@ impl VoiceMedia for LivekitVoiceMedia {
 
     fn url(&self) -> &str {
         &self.websocket_url
+    }
+
+    fn verify_worker(&self, token: &str) -> Result<WorkerIdentity> {
+        let claims = TokenVerifier::with_api_key(&self.api_key, &self.api_secret)
+            .verify(token)
+            .map_err(|_| VoiceError::Forbidden)?;
+        if !claims.video.room_join {
+            return Err(VoiceError::Forbidden);
+        }
+        Ok(WorkerIdentity {
+            identity: claims.sub,
+            room_name: claims.video.room,
+        })
     }
 }
 

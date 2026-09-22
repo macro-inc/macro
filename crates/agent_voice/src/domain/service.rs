@@ -7,7 +7,7 @@ use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, Entity
 use macro_uuid::Uuid;
 
 use super::model::*;
-use super::ports::{AgentVoiceDirectory, VoiceLeaseStore, VoiceMedia};
+use super::ports::{AgentVoiceDirectory, VoiceLeaseStore, VoiceMedia, VoiceRuntime};
 
 #[cfg(test)]
 mod test;
@@ -18,6 +18,7 @@ pub struct AgentVoiceService {
     directory: Arc<dyn AgentVoiceDirectory>,
     store: Arc<dyn VoiceLeaseStore>,
     media: Arc<dyn VoiceMedia>,
+    runtime: Arc<dyn VoiceRuntime>,
 }
 
 impl AgentVoiceService {
@@ -26,11 +27,13 @@ impl AgentVoiceService {
         directory: Arc<dyn AgentVoiceDirectory>,
         store: Arc<dyn VoiceLeaseStore>,
         media: Arc<dyn VoiceMedia>,
+        runtime: Arc<dyn VoiceRuntime>,
     ) -> Self {
         Self {
             directory,
             store,
             media,
+            runtime,
         }
     }
 
@@ -91,6 +94,7 @@ impl AgentVoiceService {
                 || (existing.state != LeaseState::Starting && !media.is_open(&existing).await?);
             if gone {
                 media.close(&existing).await?;
+                self.runtime.end(&existing).await?;
                 self.store
                     .release(existing.session_id, existing.voice_session_id)
                     .await?;
@@ -129,9 +133,14 @@ impl AgentVoiceService {
                 tracing::error!(error = ?error, voice_session_id = %deadline.voice_session_id.0, "voice deadline cleanup failed");
             }
         });
-        if let Err(error) = media.provision(&lease).await {
+        let provision = async {
+            self.runtime.prepare(&lease).await?;
+            media.provision(&lease).await
+        };
+        if let Err(error) = provision.await {
             // Keep the claim when cleanup cannot establish the room is gone.
             if media.close(&lease).await.is_ok() {
+                self.runtime.end(&lease).await?;
                 self.store
                     .release(lease.session_id, lease.voice_session_id)
                     .await?;
@@ -158,6 +167,7 @@ impl AgentVoiceService {
             .await?
         {
             media.close(&lease).await?;
+            self.runtime.end(&lease).await?;
             return Err(VoiceError::Conflict);
         }
         self.connection(&lease)
@@ -219,9 +229,69 @@ impl AgentVoiceService {
 
     async fn close_lease(&self, lease: &VoiceLease) -> Result<()> {
         self.media.close(lease).await?;
+        self.runtime.end(lease).await?;
         self.store
             .release(lease.session_id, lease.voice_session_id)
             .await
+    }
+
+    /// The current temporary runtime binding, including a dispatch in progress.
+    /// Runtime routing uses this to prevent a competing text agent from starting.
+    pub async fn active_lease(&self, session: Uuid) -> Result<Option<VoiceLease>> {
+        Ok(self
+            .store
+            .get(session)
+            .await?
+            .filter(|lease| lease.expires_at > Utc::now() && lease.state != LeaseState::Ending))
+    }
+
+    /// A claimed runtime slot, including one whose cleanup is in progress.
+    /// Text must not start a replacement until cleanup releases the claim.
+    pub async fn runtime_lease(&self, session: Uuid) -> Result<Option<VoiceLease>> {
+        self.store.get(session).await
+    }
+
+    /// Release a failed or completed worker's runtime claim. The composition
+    /// adapter calls this with the lease authenticated for that connection;
+    /// an old connection can never close its replacement.
+    pub async fn worker_stopped(&self, worker: &VoiceLease) -> Result<()> {
+        let Some(lease) = self.store.get(worker.session_id).await? else {
+            return Ok(());
+        };
+        if lease.voice_session_id != worker.voice_session_id {
+            return Ok(());
+        }
+        if lease.state != LeaseState::Ending {
+            self.store
+                .transition(
+                    lease.session_id,
+                    lease.voice_session_id,
+                    lease.state,
+                    LeaseState::Ending,
+                )
+                .await?;
+        }
+        self.close_lease(&lease).await
+    }
+
+    /// Authenticate a server worker against the current voice generation.
+    /// Browser media tokens are valid LiveKit credentials but never carry the
+    /// expected worker identity, so they cannot drive the canonical runtime.
+    pub async fn authorize_worker(
+        &self,
+        session: Uuid,
+        voice: VoiceSessionId,
+        token: &str,
+    ) -> Result<VoiceLease> {
+        let principal = self.media.verify_worker(token)?;
+        let lease = self.active_lease(session).await?.ok_or(VoiceError::Ended)?;
+        if lease.voice_session_id != voice
+            || principal.identity != lease.agent_identity()
+            || principal.room_name != lease.room_name()
+        {
+            return Err(VoiceError::Forbidden);
+        }
+        Ok(lease)
     }
 }
 

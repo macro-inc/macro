@@ -70,7 +70,7 @@ impl TransportSender<ToRuntimeMessage> for RoutedSender {
 /// The shared in-memory runtime used by every in-memory agent session.
 pub struct InMemRuntime {
     /// In-memory session provisioner.
-    pub manager: InMemAgentManager,
+    pub manager: std::sync::Arc<InMemAgentManager>,
 }
 
 /// The deployment's [`ContainerManager`]: the sandbox provider for the

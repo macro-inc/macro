@@ -187,8 +187,14 @@ impl InMemAgentManager {
     /// End the session for good: kill its agent task and drop its
     /// conversation.
     pub fn teardown(&self, session: AgentSessionId) {
+        self.suspend(session);
+        self.tokens.remove(&session);
+    }
+
+    /// Release the cached conversation before another runtime owns its history.
+    /// The composition root refreshes egress credentials when text resumes.
+    pub fn suspend(&self, session: AgentSessionId) {
         self.live.remove(&session);
         self.store.remove(&session);
-        self.tokens.remove(&session);
     }
 }

@@ -1,6 +1,6 @@
 //! Capabilities implemented by composition-root and infrastructure adapters.
 
-use super::model::{LeaseState, Result, VoiceLease, VoiceSessionId};
+use super::model::{LeaseState, Result, VoiceLease, VoiceSessionId, WorkerIdentity};
 use async_trait::async_trait;
 use macro_uuid::Uuid;
 
@@ -9,6 +9,15 @@ use macro_uuid::Uuid;
 pub trait AgentVoiceDirectory: Send + Sync + 'static {
     /// Whether this is served by Macro's in-memory harness.
     async fn is_macro_session(&self, session: Uuid) -> Result<bool>;
+}
+
+/// Exclusive ownership of the agent runtime while a voice lease is active.
+#[async_trait]
+pub trait VoiceRuntime: Send + Sync + 'static {
+    /// Suspend the current runtime before dispatching its realtime replacement.
+    async fn prepare(&self, lease: &VoiceLease) -> Result<()>;
+    /// Stop only this generation and allow normal text runtime restoration.
+    async fn end(&self, lease: &VoiceLease) -> Result<()>;
 }
 
 /// Shared, atomic controller claims; records contain no media credentials.
@@ -41,6 +50,8 @@ pub trait VoiceMedia: Send + Sync + 'static {
     async fn is_open(&self, lease: &VoiceLease) -> Result<bool>;
     /// Mint browser join credentials, bounded by the remaining session lifetime.
     fn token(&self, lease: &VoiceLease, ttl_seconds: u32) -> Result<String>;
+    /// Verify a worker's signed credential, without deciding session access.
+    fn verify_worker(&self, token: &str) -> Result<WorkerIdentity>;
     /// Public media endpoint.
     fn url(&self) -> &str;
 }

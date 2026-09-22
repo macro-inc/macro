@@ -99,6 +99,7 @@ struct ActiveSession {
     /// transport is already known to be gone fails immediately instead of
     /// waiting out the full command timeout for nothing.
     transport_closed: Option<CancellationToken>,
+    generation: Option<Uuid>,
 }
 
 type ActiveSessions = DashMap<AgentSessionId, ActiveSession>;
@@ -182,6 +183,31 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// it does not touch anything durable. A session with no active transport
     /// is already in the state this asks for, so it succeeds.
     fn close_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// Close only the matching temporary runtime; a delayed End cannot close its successor.
+    fn close_runtime(
+        &self,
+        id: AgentSessionId,
+        generation: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist a native input turn that the attached runtime already consumed.
+    fn record_native_turn(
+        &self,
+        id: AgentSessionId,
+        generation: Uuid,
+        speaker: MacroUserIdStr<'static>,
+        action_id: AgentActionId,
+        text: String,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist a backend-native runtime frame through the generation's actor.
+    fn record_runtime_frame(
+        &self,
+        id: AgentSessionId,
+        generation: Uuid,
+        message: ToServerMessage,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Persist that a session disconnected before a live actor could report it.
     fn mark_disconnected(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
@@ -428,6 +454,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     deleting: false,
                     stopping: false,
                     transport_closed: None,
+                    generation: None,
                 });
                 Ok(AttachReservation {
                     active: self.active.clone(),
@@ -469,6 +496,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         }
         active.commands = Some(commands.clone());
         active.transport_closed = attachment.closed.clone();
+        active.generation = attachment.generation;
         drop(active);
         let (marker, stopped_tx) = reservation.commit();
 
@@ -497,7 +525,8 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             Arc::clone(&self.turn_observer),
             Arc::clone(&self.tool_catalog),
         )
-        .with_initial_model(initial_model);
+        .with_initial_model(initial_model)
+        .with_generation(attachment.generation);
         self.tasks.spawn(
             run_session(
                 actor,
@@ -514,6 +543,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn deliver_action(
         &self,
         id: AgentSessionId,
@@ -521,6 +551,8 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         action: AgentAction,
         action_id: AgentActionId,
         expected_action_id: Option<AgentActionId>,
+        native_generation: Option<Uuid>,
+        runtime_frame: Option<(Uuid, ToServerMessage)>,
     ) -> Result<()> {
         let (commands, transport_closed) = self
             .active
@@ -544,6 +576,8 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                 action,
                 action_id,
                 expected_action_id,
+                native_generation,
+                runtime_frame,
                 completed,
                 span,
                 enqueued_at: tokio::time::Instant::now(),
@@ -633,6 +667,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     deleting,
                     stopping: true,
                     transport_closed: None,
+                    generation: None,
                 });
                 (stopped, marker)
             }
@@ -785,6 +820,63 @@ where
         Ok(())
     }
 
+    async fn close_runtime(&self, id: AgentSessionId, generation: Uuid) -> Result<()> {
+        let stopped = {
+            let Some(mut active) = self.active.get_mut(&id) else {
+                return Ok(());
+            };
+            if active.generation != Some(generation) {
+                return Ok(());
+            }
+            active.commands.take();
+            active.stopping = true;
+            (active.stopped.clone(), active.marker.clone())
+        };
+        Self::wait_stopped(stopped.0).await;
+        self.active.remove_if(&id, |_, active| {
+            Arc::ptr_eq(&active.marker, &stopped.1) && !active.deleting
+        });
+        Ok(())
+    }
+
+    async fn record_runtime_frame(
+        &self,
+        id: AgentSessionId,
+        generation: Uuid,
+        message: ToServerMessage,
+    ) -> Result<()> {
+        self.deliver_action(
+            id,
+            None,
+            AgentAction::Stop,
+            AgentActionId::mint(),
+            None,
+            None,
+            Some((generation, message)),
+        )
+        .await
+    }
+
+    async fn record_native_turn(
+        &self,
+        id: AgentSessionId,
+        generation: Uuid,
+        speaker: MacroUserIdStr<'static>,
+        action_id: AgentActionId,
+        text: String,
+    ) -> Result<()> {
+        self.deliver_action(
+            id,
+            Some(speaker),
+            AgentAction::prompt(text),
+            action_id,
+            None,
+            Some(generation),
+            None,
+        )
+        .await
+    }
+
     async fn management(&self, id: AgentSessionId) -> Result<SessionManagement> {
         Ok(match self.repo.manager_of(id).await? {
             None => SessionManagement::Unmanaged,
@@ -876,7 +968,7 @@ where
     ) -> Result<()> {
         let initial_prompt = initial_prompt_for_rename(&self.folds, id, &action).await;
 
-        self.deliver_action(id, user_id, action, action_id, None)
+        self.deliver_action(id, user_id, action, action_id, None, None, None)
             .await?;
         if let Some(initial_prompt) = initial_prompt {
             spawn_initial_agent_session_rename(
@@ -904,6 +996,8 @@ where
             AgentAction::Stop,
             action_id,
             Some(expected_action_id),
+            None,
+            None,
         )
         .await
     }

@@ -11,7 +11,7 @@ import { createVoiceSession } from './primitives/create-voice-session';
 import { createLivekitVoiceMedia } from './queries/livekit-media';
 import { requestVoiceMicrophone } from './queries/microphone';
 import { acquireVoiceMicrophone } from './queries/microphone-lease';
-import { createAgentVoiceBridge } from './queries/session-bridge';
+import { observeVoiceSession } from './queries/session-observer';
 import { voiceSource } from './queries/voice-source';
 
 /** Production composition. Mounted once above routes so navigation keeps audio. */
@@ -25,14 +25,22 @@ export function AgentVoiceProvider(props: ParentProps) {
     requestMicrophone: requestVoiceMicrophone,
     callActive,
     media: createLivekitVoiceMedia,
-    bridge: (sessionId, publish) => {
-      const user = userId();
-      if (!user)
-        return Promise.reject(new Error('Sign in again to start voice.'));
-      return createAgentVoiceBridge(sessionId, user, publish);
-    },
+    observeSession: observeVoiceSession,
     uuid: () => crypto.randomUUID(),
   });
+  const voiceStatus = () => {
+    const state = controller.state();
+    if (state.phase === 'requesting-microphone')
+      return 'Microphone permission needed';
+    if (state.phase === 'connecting') return 'Connecting voice';
+    if (state.phase === 'reconnecting') return 'Reconnecting voice';
+    if (state.phase === 'ending') return 'Ending voice';
+    if (state.muted) return 'Microphone muted';
+    if (state.reviewRequired) return 'Review needed';
+    if (state.agentState === 'speaking') return 'Macro is speaking';
+    if (state.agentState === 'thinking') return 'Macro is thinking';
+    return 'Listening';
+  };
   // Synchronize the independent RTC systems; a human call always releases voice.
   createEffect(() => {
     if (
@@ -78,8 +86,18 @@ export function AgentVoiceProvider(props: ParentProps) {
             onClick={controller.show}
           >
             <Waveform class="size-4 text-accent" />
-            <span>Voice is on</span>
-            <span class="size-1.5 rounded-full bg-success" />
+            <span role="status">{voiceStatus()}</span>
+            <span
+              class="size-1.5 rounded-full"
+              classList={{
+                'bg-success':
+                  controller.state().phase === 'connected' &&
+                  !controller.state().muted,
+                'bg-ink-muted':
+                  controller.state().phase !== 'connected' ||
+                  controller.state().muted,
+              }}
+            />
           </Button>
         </div>
       </Show>

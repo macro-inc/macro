@@ -43,12 +43,8 @@ function setup(overrides: Partial<VoiceDependencies> = {}) {
     disconnect: vi.fn(async () => {}),
     mute: vi.fn(async () => {}),
     enablePlayback: vi.fn(async () => {}),
-    publish: vi.fn(async () => {}),
   };
-  const bridge = {
-    request: vi.fn(),
-    cancel: vi.fn(),
-    context: vi.fn(),
+  const observer = {
     close: vi.fn(),
   };
   const deps: VoiceDependencies = {
@@ -69,7 +65,7 @@ function setup(overrides: Partial<VoiceDependencies> = {}) {
       events = callbacks;
       return media;
     }),
-    bridge: vi.fn(async () => bridge),
+    observeSession: vi.fn(async () => observer),
     uuid: () => 'client-id',
     ...overrides,
   };
@@ -83,7 +79,7 @@ function setup(overrides: Partial<VoiceDependencies> = {}) {
     deps,
     media,
     microphone,
-    bridge,
+    observer,
     release,
     events: () => events,
   };
@@ -107,7 +103,6 @@ describe('agent voice lifetime', () => {
     await starting;
     expect(deps.media).toHaveBeenCalledWith(
       credentials,
-      expect.any(Object),
       expect.any(Object),
       microphone
     );
@@ -210,7 +205,8 @@ describe('agent voice lifetime', () => {
     expect(controller.state().phase).toBe('ready');
   });
   it('ignores stale media callbacks after ending and releases every resource', async () => {
-    const { controller, media, microphone, bridge, release, events } = setup();
+    const { controller, media, microphone, observer, release, events } =
+      setup();
     await controller.open({ sessionId: 'a', title: 'A' });
     await controller.start();
     const old = events();
@@ -220,7 +216,7 @@ describe('agent voice lifetime', () => {
     expect(controller.state().phase).toBe('ready');
     expect(controller.state().captions).toEqual([]);
     expect(media.disconnect).toHaveBeenCalledOnce();
-    expect(bridge.close).toHaveBeenCalledOnce();
+    expect(observer.close).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledOnce();
     expect(microphone.stop).toHaveBeenCalledOnce();
   });
@@ -277,20 +273,20 @@ describe('agent voice lifetime', () => {
     expect(controller.state().captions).toHaveLength(1);
     expect(controller.state().captions[0].text).toBe('Hello there');
   });
-  it('uses a hard duration limit without stopping underlying agent work', async () => {
+  it('releases the session observer at the hard duration limit', async () => {
     vi.useFakeTimers();
-    const { controller, bridge } = setup();
+    const { controller, observer } = setup();
     await controller.open({ sessionId: 'a', title: 'A' });
     await controller.start();
     await vi.advanceTimersByTimeAsync(1_800_000);
     expect(controller.state().phase).toBe('error');
     expect(controller.state().error).toContain('time limit');
-    expect(bridge.cancel).not.toHaveBeenCalled();
+    expect(observer.close).toHaveBeenCalledOnce();
   });
   it('disposes a media adapter that arrives after End', async () => {
     const pending = deferred<Awaited<ReturnType<VoiceDependencies['media']>>>();
     let creatingMedia = false;
-    const { controller, media, bridge, release } = setup({
+    const { controller, media, observer, release } = setup({
       media: () => {
         creatingMedia = true;
         return pending.promise;
@@ -304,8 +300,33 @@ describe('agent voice lifetime', () => {
     await starting;
     expect(media.connect).not.toHaveBeenCalled();
     expect(media.disconnect).toHaveBeenCalledOnce();
-    expect(bridge.close).toHaveBeenCalledOnce();
+    expect(observer.close).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledOnce();
+  });
+  it('closes a session observer that finishes opening after End', async () => {
+    const pending =
+      deferred<Awaited<ReturnType<VoiceDependencies['observeSession']>>>();
+    const observeSession = vi.fn(() => pending.promise);
+    const { controller, observer, deps } = setup({ observeSession });
+    await controller.open({ sessionId: 'a', title: 'A' });
+    const starting = controller.start();
+    await vi.waitFor(() => expect(observeSession).toHaveBeenCalledOnce());
+    await controller.end();
+    pending.resolve(observer);
+    await starting;
+    expect(observer.close).toHaveBeenCalledOnce();
+    expect(deps.media).not.toHaveBeenCalled();
+  });
+  it('reflects canonical review metadata and ignores it after End', async () => {
+    const { controller, deps } = setup();
+    await controller.open({ sessionId: 'a', title: 'A' });
+    await controller.start();
+    const reviewRequired = vi.mocked(deps.observeSession).mock.calls[0][1];
+    reviewRequired(true);
+    expect(controller.state().reviewRequired).toBe(true);
+    await controller.end();
+    reviewRequired(true);
+    expect(controller.state().reviewRequired).toBe(false);
   });
   it('reuses the same start identity after an ambiguous network failure', async () => {
     const uuid = vi

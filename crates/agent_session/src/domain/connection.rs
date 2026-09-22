@@ -162,6 +162,8 @@ pub struct RuntimeAttachment<Connector> {
     pub(crate) permission_policy: PermissionPolicy,
     /// Model to select after creating a fresh ACP session, before any prompt.
     pub(crate) initial_model: Option<String>,
+    /// A temporary runtime's generation; scopes native input and teardown.
+    pub(crate) generation: Option<macro_uuid::Uuid>,
 }
 
 /// Activate attachment-owned resources with the exact acquired ownership claim.
@@ -183,6 +185,7 @@ impl<Connector> RuntimeAttachment<Connector> {
             closed: None,
             permission_policy: PermissionPolicy::default(),
             initial_model: None,
+            generation: None,
         }
     }
 
@@ -214,6 +217,7 @@ impl<Connector> RuntimeAttachment<Connector> {
             closed: self.closed,
             permission_policy: self.permission_policy,
             initial_model: self.initial_model,
+            generation: self.generation,
         }
     }
 
@@ -230,6 +234,13 @@ impl<Connector> RuntimeAttachment<Connector> {
     #[must_use]
     pub fn initial_model(mut self, model: String) -> Self {
         self.initial_model = (!model.trim().is_empty() && model != "default").then_some(model);
+        self
+    }
+
+    /// Bind this attachment to one temporary runtime generation.
+    #[must_use]
+    pub fn generation(mut self, generation: macro_uuid::Uuid) -> Self {
+        self.generation = Some(generation);
         self
     }
 
@@ -411,6 +422,7 @@ where
             // The caller knows whose agent this is; the connection does not.
             permission_policy: PermissionPolicy::default(),
             initial_model: None,
+            generation: None,
         }
     }
 

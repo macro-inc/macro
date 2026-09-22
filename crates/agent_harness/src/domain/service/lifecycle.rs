@@ -278,6 +278,16 @@ where
         owner: &MacroUserIdStr<'static>,
         selection: &AgentMcpServers,
     ) -> Result<Vec<agent_client_protocol::schema::v1::McpServer>> {
+        let session = self.sessions.get_session(session_id).await?;
+        if AgentKind::for_session(session.bot_id, &session.harness) == AgentKind::InMemory {
+            // Native voice may have rotated the credential on another replica.
+            // Restore Macro tools from a fresh capability, never a stale cache.
+            let provisioned = self.egress.provision(session_id, owner, selection).await?;
+            self.sessions
+                .set_egress_token_hash(session_id, &provisioned.session_token_hash)
+                .await?;
+            return Ok(provisioned.sandbox.acp_servers());
+        }
         let Some(session_token) = self.containers.session_token(session_id).await? else {
             tracing::debug!("container holds no egress token; restoring no MCP servers");
             return Ok(Vec::new());

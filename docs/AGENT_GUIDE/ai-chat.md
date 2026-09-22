@@ -4,7 +4,7 @@
 
 On desktop web, choose a Macro agent in **New conversation** and use **Talk to
 Macro** with an empty composer. This creates its normal session with the selected
-persona/model, then opens voice setup without sending a text prompt. In an
+persona and text-model preference, then opens voice setup without sending a text prompt. In an
 existing Macro conversation, choose **Talk to Macro** (the waveform button in the
 composer). The button is
 available to editors of that session. It does not appear for external coding
@@ -17,7 +17,7 @@ permission prompt is pending; choose Allow there. Permission denial, a missing
 microphone, and an insecure URL each show their own recovery message. End during
 the prompt cancels startup and releases any microphone granted afterward.
 Connecting remains visible until the worker is ready; listening, thinking and
-speaking are separate from the agent's background work. The waveform responds to
+speaking describe the native voice runtime. The waveform responds to
 microphone and playback levels. Recent live captions identify **You** and **Macro**.
 Microphone activity while connecting only shows local audio capture. A missing
 voice worker must produce a connection error within 45 seconds and release the
@@ -27,28 +27,32 @@ Voice is always available for supported Macro agents; there is no deployment
 enable switch. An unsupported agent shows **Voice unavailable** and directs you
 to choose a Macro agent. Connection failures show an error with **Try again**.
 
-- Speak naturally and interrupt Macro's speech to take a turn. Interrupting audio
-  does not cancel a task. Ask explicitly to stop or correct a task when needed.
+- Speak naturally and interrupt Macro's speech to take a turn. The realtime
+  model directly owns the conversation and Macro tool calls. Interrupting speech
+  dismisses pending approvals but does not undo a tool action already underway.
 - **Mute microphone** stops sending your audio; **Unmute microphone** resumes. If the browser
   blocks playback, use **Enable audio playback**.
-- **Minimize voice** leaves the conversation running. **Voice is on** reopens it,
-  including after navigating elsewhere. **End conversation** releases media and
-  leaves already accepted agent work running.
+- **Minimize voice** leaves the conversation running. The compact control shows
+  Listening, Speaking, Muted, or Reconnecting and reopens the panel, including
+  after navigating elsewhere. **End conversation** releases media and the voice
+  runtime. The next text turn uses the normal Macro runtime with the saved history.
 - A human call and agent voice cannot share the microphone, including across tabs.
   End the other conversation before starting voice. Starting a call in the same
   tab releases voice.
 - Questions and permission requests still use the conversation's visual review
-  controls. A spoken “yes” does not grant permission.
+  controls. A spoken “yes” does not grant permission. Typed messages while voice
+  is active go to that same realtime model.
 - A brief media interruption shows **Reconnecting** and keeps the microphone
   session open for up to two minutes. A recovered connection resumes the same
-  conversation. Reconnecting media does not replay task submissions. If delivery is uncertain,
+  conversation. Reconnecting media does not replay tool calls. If delivery is uncertain,
   inspect the written transcript before asking again. Reopen voice after a failed
-  connection; existing agent work remains available.
+  connection; the conversation and recorded tool results remain available.
 
 Voice closes after 30 minutes or a disconnect lasting two minutes. Silence,
-listening, and muting do not end a connected call. Audio is not recorded. Live voice captions and conversational filler
-are ephemeral; delegated requests and agent responses remain in the normal agent
-transcript. Closing/reloading the tab ends voice rather than resuming microphone
+listening, and muting do not end a connected call. Audio is not recorded. Final
+spoken user messages, assistant speech that was played, and tool calls/results
+join the normal agent transcript. Partial live captions remain temporary.
+Closing/reloading the tab ends voice rather than resuming microphone
 capture automatically.
 
 Browser regression checks: open the panel, choose another voice, dismiss/reopen,

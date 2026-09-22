@@ -25,3 +25,4 @@ pub mod outbound;
 pub mod rig_engine;
 #[cfg(test)]
 pub(crate) mod testing;
+pub mod voice_tools;

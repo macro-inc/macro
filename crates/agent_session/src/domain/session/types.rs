@@ -191,6 +191,28 @@ impl std::fmt::Display for CloseReason {
 /// One thing that happened to this connection.
 #[derive(Debug)]
 pub enum Input<Token> {
+    /// Persist a runtime frame and acknowledge it before a host-side tool runs.
+    RecordRuntimeFrame {
+        /// Runtime generation authorized to write the frame.
+        generation: macro_uuid::Uuid,
+        /// Canonical ACP update produced by the native tool executor.
+        message: ToServerMessage,
+        /// Completed after the actor has persisted and applied the frame.
+        token: Token,
+    },
+    /// Record input already consumed by a native audio runtime, without echoing it.
+    NativeTurn {
+        /// Authenticated speaker, resolved by the voice lease.
+        from: MacroUserIdStr<'static>,
+        /// The attachment authorized to originate this turn.
+        generation: macro_uuid::Uuid,
+        /// Provider-correlated turn identity.
+        action_id: AgentActionId,
+        /// Final user transcript.
+        text: String,
+        /// Completed only after the canonical prompt is durable.
+        token: Token,
+    },
     /// Interrupt only if the named action still owns the active turn.
     CancelTurn {
         /// The user responsible for this request.
@@ -237,6 +259,13 @@ pub enum Input<Token> {
 
 #[derive(Debug)]
 pub enum Effect<Token> {
+    /// Record a prompt the native runtime already received over its audio input.
+    RecordNativePrompt {
+        /// Authenticated speaker.
+        from: MacroUserIdStr<'static>,
+        /// Canonical prompt frame, never echoed to the provider.
+        message: ToRuntimeMessage,
+    },
     /// Log then send on the transport.
     Send {
         /// The user whose request this is, for the log entry.
