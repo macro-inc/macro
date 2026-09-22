@@ -8,6 +8,7 @@ import {
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button, Checkbox } from '@ui';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
+import { RuntimeSetupSteps } from './components/runtime-setup-steps';
 import { ChoiceRow, SettingsPage } from './primitives';
 
 const PAIRING_ERROR_FALLBACK =
@@ -284,35 +285,40 @@ export function RuntimePairingPage(props: {
           </Match>
 
           <Match when>
-            <div class="flex flex-col gap-1.5">
-              <label
-                for="harness-pairing-code"
-                class="text-xs font-medium text-ink"
-              >
-                Pairing code
-              </label>
-              <div class="flex min-w-0 items-center gap-2 rounded-lg border border-edge-muted bg-ink/[0.025] px-3 py-2">
-                <input
-                  id="harness-pairing-code"
-                  autofocus
-                  autocomplete="off"
-                  spellcheck={false}
-                  class="min-w-0 flex-1 bg-transparent font-mono text-sm uppercase tracking-widest text-ink outline-none"
-                  placeholder="KX7M-4QHD"
-                  value={codeInput()}
-                  onInput={(event) =>
-                    setCodeInput(event.currentTarget.value.toUpperCase())
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') lookUp();
-                  }}
-                />
+            <RuntimeSetupSteps>
+              <div class="flex flex-col gap-1.5">
+                <label
+                  for="harness-pairing-code"
+                  class="text-xs font-medium text-ink"
+                >
+                  Pairing code
+                </label>
+                <div class="flex min-w-0 items-center gap-2 rounded-lg border border-edge-muted bg-ink/[0.025] px-3 py-2">
+                  <input
+                    id="harness-pairing-code"
+                    autocomplete="off"
+                    aria-describedby="harness-pairing-code-help"
+                    spellcheck={false}
+                    class="min-w-0 flex-1 bg-transparent font-mono text-sm uppercase tracking-widest text-ink outline-none"
+                    placeholder="KX7M-4QHD"
+                    value={codeInput()}
+                    onInput={(event) =>
+                      setCodeInput(event.currentTarget.value.toUpperCase())
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') lookUp();
+                    }}
+                  />
+                </div>
+                <p
+                  id="harness-pairing-code-help"
+                  class="text-xs text-ink-extra-muted"
+                >
+                  Already configured? Press <kbd>p</kbd> in macrod to get a new
+                  code.
+                </p>
               </div>
-              <p class="text-xs text-ink-extra-muted">
-                Run macrod on your computer, press p to pair, and enter your
-                device code.
-              </p>
-            </div>
+            </RuntimeSetupSteps>
           </Match>
         </Switch>
         <div class="mt-6 flex justify-end gap-2 border-t border-edge-muted pt-4">

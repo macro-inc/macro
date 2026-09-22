@@ -31,29 +31,37 @@ You need a macOS or Linux computer that can stay online and an installed, authen
 ## Connect your runtime
 
 <Steps>
-  <Step title="Download and start macrod">
-    Download the `macrod` archive for your operating system and architecture from the [latest Macro release](https://github.com/macro-inc/macro/releases/latest), then extract it.
+  <Step title="Install macrod">
+    Download the `macrod` archive for your operating system and architecture from [Macro release v2026.9.21.0](https://github.com/macro-inc/macro/releases/tag/v2026.9.21.0), then extract it.
 
-    Run the extracted binary from your terminal:
+    Open **Settings → General → Agents → Runtimes → New runtime** in Macro. The page walks you through installation, configuration, and pairing.
+  </Step>
+
+  <Step title="Run macrod">
+    Open a terminal in the extracted folder and run:
 
     ```bash
     ./macrod
     ```
 
     Keep the terminal open while you use your runtime.
-  </Step>
 
-  <Step title="Choose your agent and workspace">
     On first launch, **Quickstart** lists the agents available on your machine. Select one, or choose **Custom command** to enter an ACP launch command.
 
-    Set **Workspace** to the directory your agent should work in. Choose **Private** for your own runtime or **Team** to let teammates use it. Select **Create and pair** to continue.
+    Set **Workspace** to the directory your agent should work in. Choose **Private** for your own runtime or **Team** to let teammates use it. Leave **Full Access** off to require approval for actions.
+
+    <Frame caption="Configure your agent, workspace, and access before generating a pairing code.">
+      ![The macrod Quickstart configuration screen showing discovered agents, workspace, access, Full Access off, and the Create and pair button](/images/macrod-quickstart-example.png)
+    </Frame>
+
+    Select **Create and pair** to generate your device code.
 
     <Note>
       Claude Code and Codex use ACP adapters. Their presets require the agent's command, `npm`, and `npx` to be available in the shell where you start `macrod`.
     </Note>
   </Step>
 
-  <Step title="Enter your device code in Macro">
+  <Step title="Enter your pairing code">
     The **Pair macrod** panel shows a device code and a link to Macro. If you are already in the terminal overview, press <kbd>p</kbd> to open pairing. Press <kbd>c</kbd> to copy the code.
 
     Open the pairing link, or go to **Settings → General → Agents → Runtimes → New runtime**. Enter your code and click **Look up**.
@@ -66,13 +74,13 @@ You need a macOS or Linux computer that can stay online and an installed, authen
 
     `macrod` connects automatically after approval. It saves your configuration and credential in `macrod.toml` in the directory where you started it. Keep this file private; do not commit it to a repository.
   </Step>
-
-  <Step title="Create an agent that uses your runtime">
-    Return to the **Agents** tab and click **New agent**. Give your agent a name and instructions, choose your connected machine under **Runtime**, and select a default model.
-
-    Review sharing and channel access, then save the agent. @mention it in a channel it can access to start a session on your machine.
-  </Step>
 </Steps>
+
+## Create an agent that uses your runtime
+
+Return to the **Agents** tab and click **New agent**. Give your agent a name and instructions, choose your connected machine under **Runtime**, and select a default model.
+
+Review sharing and channel access, then save the agent. @mention it in a channel it can access to start a session on your machine.
 
 ## Keep your runtime connected
 

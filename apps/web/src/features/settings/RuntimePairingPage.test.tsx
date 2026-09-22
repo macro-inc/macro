@@ -76,6 +76,32 @@ beforeEach(() => {
 });
 
 describe('RuntimePairingPage', () => {
+  it('guides installation, configuration, and code entry in order', () => {
+    render(() => <RuntimePairingPage onClose={() => {}} />);
+
+    const steps = screen.getByRole('list', { name: 'Runtime setup steps' });
+    expect(
+      within(steps)
+        .getAllByRole('heading')
+        .map((heading) => heading.textContent)
+    ).toEqual(['Install macrod', 'Run macrod', 'Enter your pairing code']);
+    const download = within(steps).getByRole('link', {
+      name: 'Download macrod',
+    });
+    expect(download.getAttribute('href')).toBe(
+      'https://github.com/macro-inc/macro/releases/tag/v2026.9.21.0'
+    );
+    expect(download.getAttribute('target')).toBe('_blank');
+    expect(download.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(within(steps).getByText('./macrod')).toBeTruthy();
+    expect(within(steps).getByText('Create and pair')).toBeTruthy();
+    expect(within(steps).getByLabelText('Pairing code')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Look up' })).toHaveProperty(
+      'disabled',
+      true
+    );
+  });
+
   it('looks up a typed code and shows the pairing request', () => {
     render(() => <RuntimePairingPage onClose={() => {}} />);
 
@@ -89,6 +115,9 @@ describe('RuntimePairingPage', () => {
     expect(codeInput).toHaveProperty('value', 'KX7M-4QHD');
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Look up' }));
+    expect(
+      screen.queryByRole('list', { name: 'Runtime setup steps' })
+    ).toBeNull();
     expect(within(dialog).getByText('KX7M-4QHD')).toBeTruthy();
     expect(
       within(dialog).getByText(/Confirm this matches the code macrod printed/)
