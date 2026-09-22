@@ -354,6 +354,9 @@ used in chat and channels; they serialize as mention-chip tags in the prompt
 the agent sees (`<m-document-mention>` for docs/channels/chats/tasks/emails/calendar
 events/skills, `<m-date-mention>` for a day or time, `<m-agent-session-mention>`
 for an agent session, `<m-user-mention>` for a person, and the other chip tags).
+Clicking a chip while it still sits in the composer (Home, the Agents page, or
+an agent session) opens the mentioned item in a new split and leaves the draft
+and caret untouched; it does not send anything.
 Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread). An agent-session chip with
 `"expanded":true` renders as the Magic Chip card that follows the session's
