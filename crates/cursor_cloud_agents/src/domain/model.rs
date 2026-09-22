@@ -93,6 +93,35 @@ impl RepoUrl {
             .then(|| Self(normalized.to_owned()))
     }
 
+    /// Canonical identity for a GitHub repository in native result metadata.
+    /// Cursor reports both scheme-less and HTTPS URLs across result records.
+    pub(crate) fn from_git_state(remote: &str) -> Option<Self> {
+        if remote.trim() != remote {
+            return None;
+        }
+        let (scheme, address) = remote.split_once("://").unwrap_or(("https", remote));
+        if !scheme.eq_ignore_ascii_case("https") {
+            return None;
+        }
+        let (host, path) = address.split_once('/')?;
+        if !host.eq_ignore_ascii_case("github.com") {
+            return None;
+        }
+        let path = path.strip_suffix('/').unwrap_or(path);
+        let repository = Self::parse(&format!("https://github.com/{path}"))?;
+        let slug = repository.github_owner_and_name()?;
+        if slug.split('/').any(|part| {
+            part == "."
+                || part == ".."
+                || !part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+        }) {
+            return None;
+        }
+        Some(Self(repository.as_str().to_ascii_lowercase()))
+    }
+
     /// The url as the API wants it.
     #[must_use]
     pub fn as_str(&self) -> &str {

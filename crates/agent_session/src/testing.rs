@@ -26,6 +26,8 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod working_branch;
+
 /// One session's lease state: the holding replica (if any) and the fence,
 /// which outlives the holder as in the real schema.
 type Lease = (Option<ReplicaId>, i64);
@@ -48,6 +50,7 @@ pub struct InMemoryAgentSessionRepo {
     log_transaction: Arc<Mutex<()>>,
     history_boundaries: Arc<Mutex<HashMap<AgentSessionId, macro_uuid::Uuid>>>,
     turn_states: Arc<Mutex<HashMap<AgentSessionId, agent_fold::domain::model::TurnState>>>,
+    working_branches: Arc<Mutex<HashMap<AgentSessionId, String>>>,
     user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
     log_reads: Arc<AtomicUsize>,
     session_reads: Arc<AtomicUsize>,
@@ -81,6 +84,12 @@ impl InMemoryAgentSessionRepo {
         session: AgentSessionId,
     ) -> Option<agent_fold::domain::model::TurnState> {
         self.turn_states.lock().unwrap().get(&session).copied()
+    }
+
+    /// The last runtime branch accepted for the session's repository.
+    #[must_use]
+    pub fn working_branch(&self, session: AgentSessionId) -> Option<String> {
+        self.working_branches.lock().unwrap().get(&session).cloned()
     }
 
     /// How many times a session's whole log has been read back.
@@ -335,8 +344,11 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = sessions.get_mut(&id).ok_or_else(|| {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
-        session.repo_url = repo_url;
-        session.modified_at = chrono::Utc::now();
+        if session.repo_url != repo_url {
+            session.repo_url = repo_url;
+            self.working_branches.lock().unwrap().remove(&id);
+            session.modified_at = chrono::Utc::now();
+        }
         Ok(())
     }
 

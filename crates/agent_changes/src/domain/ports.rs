@@ -7,13 +7,17 @@ use std::pin::Pin;
 use agent_session::domain::model::AgentSession;
 
 use super::error::ExtractError;
-use super::model::{AgentSessionId, AttemptOutcome, Changeset, ExtractedChangeset, SessionChanges};
+use super::model::{
+    AgentSessionId, AttemptOutcome, CapturedBranch, Changeset, ExtractedChangeset, SessionChanges,
+};
 use chrono::{DateTime, Utc};
 
 /// Pending batched branch facts for optional domain composition.
 pub type SessionBranchesFuture<'a> = Pin<
     Box<
-        dyn Future<Output = Result<HashMap<AgentSessionId, String>, rootcause::Report>> + Send + 'a,
+        dyn Future<Output = Result<HashMap<AgentSessionId, CapturedBranch>, rootcause::Report>>
+            + Send
+            + 'a,
     >,
 >;
 
@@ -23,7 +27,7 @@ pub type SessionBranchesFuture<'a> = Pin<
 /// Missing captures and detached heads have no branch; a session's starting
 /// branch is never substituted for its captured working branch.
 pub trait SessionBranchReader: Send + Sync + 'static {
-    /// Fetch branch names in one batch without loading patches or file lists.
+    /// Fetch repository and branch facts in one batch without loading patches or file lists.
     fn working_branches<'a>(&'a self, sessions: &'a [AgentSessionId]) -> SessionBranchesFuture<'a>;
 }
 

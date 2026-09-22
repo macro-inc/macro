@@ -12,6 +12,7 @@ mod test;
 mod pull_request;
 mod sharing;
 mod turn_state;
+mod working_branch;
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
@@ -725,6 +726,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             UPDATE agent_session
             SET repo_url = $2,
+                working_branch = NULL,
                 modified_at = NOW()
             WHERE id = $1
               AND repo_url IS DISTINCT FROM $2

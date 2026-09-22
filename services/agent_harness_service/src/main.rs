@@ -502,6 +502,17 @@ async fn run() -> anyhow::Result<()> {
                 ),
             ),
         );
+    let session_working_branches: Arc<
+        dyn agent_session::domain::working_branch::SessionWorkingBranches,
+    > = Arc::new(
+        agent_session::domain::working_branch::SessionWorkingBranchService::new(
+            session_repo.clone(),
+            ConnectionGatewayAgentSessionRealtime::new(
+                connection_gateway.clone(),
+                session_audience.clone(),
+            ),
+        ),
+    );
     let internal_mcp = internal_mcp::router(
         Arc::new(session_repo.clone()),
         session_pull_requests.clone(),
@@ -533,7 +544,8 @@ async fn run() -> anyhow::Result<()> {
             ),
         ),
     )
-    .with_pull_requests(session_pull_requests.clone());
+    .with_pull_requests(session_pull_requests.clone())
+    .with_working_branches(session_working_branches);
     let codex_connections: Option<Arc<dyn codex_connection::domain::ConnectionService>> = config
         .codex_oauth_kms_key_id()
         .map(|key| {

@@ -115,14 +115,29 @@ async fn working_branches_are_batched_without_base_fallback(pool: PgPool) {
         .unwrap();
     assert_eq!(result.len(), 1);
     assert_eq!(
-        result.get(&captured).map(String::as_str),
+        result
+            .get(&captured)
+            .and_then(|fact| fact.for_repository("https://github.com/example/example")),
         Some("agent/work")
+    );
+    assert_eq!(
+        result
+            .get(&captured)
+            .and_then(|fact| fact.for_repository("https://github.com/example/replaced")),
+        None
     );
     assert!(!result.contains_key(&uncaptured));
     assert!(repo.working_branches(&[]).await.unwrap().is_empty());
 
     let mut detached = changes;
     detached.range.head.name = None;
+    repo.record_changeset(&detached, None, Utc::now())
+        .await
+        .unwrap();
+    assert!(repo.working_branches(&[captured]).await.unwrap().is_empty());
+
+    detached.range.head.name = Some("agent/work".to_owned());
+    detached.range.repository = None;
     repo.record_changeset(&detached, None, Utc::now())
         .await
         .unwrap();

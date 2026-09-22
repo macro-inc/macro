@@ -32,11 +32,16 @@ pub(super) async fn enrich<F: ForeignEntityService>(
     let sessions: Vec<_> = items
         .iter()
         .filter_map(|candidate| match &candidate.item {
-            SoupItem::AgentSession(session) => Some(AgentSessionId::new_from_uuid(session.id)),
+            SoupItem::AgentSession(session) if session.working_branch.is_none() => {
+                Some(AgentSessionId::new_from_uuid(session.id))
+            }
             _ => None,
         })
         .collect();
-    if sessions.is_empty() {
+    if !items
+        .iter()
+        .any(|candidate| matches!(candidate.item, SoupItem::AgentSession(_)))
+    {
         return Ok(());
     }
 
@@ -53,11 +58,11 @@ pub(super) async fn enrich<F: ForeignEntityService>(
 
     let branch_facts = async {
         match branches {
-            Some(reader) => reader
+            Some(reader) if !sessions.is_empty() => reader
                 .working_branches(&sessions)
                 .await
                 .map_err(|error| anyhow::anyhow!("reading agent working branches: {error}")),
-            None => Ok(HashMap::new()),
+            _ => Ok(HashMap::new()),
         }
     };
     let pr_facts = async {
@@ -102,9 +107,12 @@ pub(super) async fn enrich<F: ForeignEntityService>(
         let SoupItem::AgentSession(session) = &mut candidate.item else {
             continue;
         };
-        session.working_branch = branch_facts
-            .get(&AgentSessionId::new_from_uuid(session.id))
-            .cloned();
+        if session.working_branch.is_none() {
+            session.working_branch = branch_facts
+                .get(&AgentSessionId::new_from_uuid(session.id))
+                .and_then(|fact| fact.for_repository(session.repo_url.as_deref()?))
+                .map(str::to_owned);
+        }
         let pull_request = session
             .pull_request_url
             .as_deref()

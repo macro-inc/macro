@@ -1,6 +1,6 @@
 use super::*;
 use agent_changes::domain::{
-    model::AgentSessionId,
+    model::{AgentSessionId, CapturedBranch},
     ports::{SessionBranchReader, SessionBranchesFuture},
 };
 use models_soup::agent_session::{AgentPullRequestState, SoupAgentSession};
@@ -8,7 +8,7 @@ use models_soup::agent_session::{AgentPullRequestState, SoupAgentSession};
 #[derive(Default)]
 struct Branches {
     calls: Mutex<Vec<Vec<AgentSessionId>>>,
-    branches: HashMap<AgentSessionId, String>,
+    branches: HashMap<AgentSessionId, CapturedBranch>,
 }
 
 impl SessionBranchReader for Branches {
@@ -61,7 +61,13 @@ async fn metadata_is_batched_and_only_uses_visible_prs_and_captured_branches() {
     let second = AgentSessionId::new();
     let third = AgentSessionId::new();
     let branches = Branches {
-        branches: HashMap::from([(first, "agent/fix-icons".to_owned())]),
+        branches: HashMap::from([(
+            first,
+            CapturedBranch {
+                repository_url: "https://github.com/macro/macro".to_owned(),
+                branch: "agent/fix-icons".to_owned(),
+            },
+        )]),
         ..Default::default()
     };
     let foreign = RecordingForeignEntityService::new(vec![
@@ -137,4 +143,79 @@ async fn no_pr_links_skip_foreign_entity_lookup() {
     .unwrap();
     assert!(foreign.calls().is_empty());
     assert_eq!(branches.calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn runtime_branch_without_pr_survives_enrichment_and_takes_precedence() {
+    let session = AgentSessionId::new();
+    let branches = Branches {
+        branches: HashMap::from([(
+            session,
+            CapturedBranch {
+                repository_url: "https://github.com/macro/macro".to_owned(),
+                branch: "old-pr-branch".to_owned(),
+            },
+        )]),
+        ..Default::default()
+    };
+    let foreign = RecordingForeignEntityService::new(Vec::new());
+    let mut item = agent(session, None);
+    let SoupItem::AgentSession(row) = &mut item.item else {
+        unreachable!()
+    };
+    row.working_branch = Some("cursor/no-pr".to_owned());
+    let mut items = vec![item];
+    super::super::agent_metadata::enrich(
+        &foreign,
+        Some(&branches),
+        "macro|owner@example.com".to_owned(),
+        vec![SourceId::user("macro|owner@example.com")],
+        &mut items,
+    )
+    .await
+    .unwrap();
+    let SoupItem::AgentSession(row) = &items[0].item else {
+        unreachable!()
+    };
+    assert_eq!(row.working_branch.as_deref(), Some("cursor/no-pr"));
+    assert_eq!(row.pull_request_url, None);
+    assert!(branches.calls.lock().unwrap().is_empty());
+    assert!(foreign.calls().is_empty());
+}
+
+#[tokio::test]
+async fn changed_or_missing_repository_does_not_restore_an_old_captured_branch() {
+    for repository in [Some("https://github.com/macro/replacement"), None] {
+        let session = AgentSessionId::new();
+        let branches = Branches {
+            branches: HashMap::from([(
+                session,
+                CapturedBranch {
+                    repository_url: "https://github.com/macro/macro".to_owned(),
+                    branch: "old-pr-branch".to_owned(),
+                },
+            )]),
+            ..Default::default()
+        };
+        let foreign = RecordingForeignEntityService::new(Vec::new());
+        let mut item = agent(session, None);
+        let SoupItem::AgentSession(row) = &mut item.item else {
+            unreachable!()
+        };
+        row.repo_url = repository.map(str::to_owned);
+        let mut items = vec![item];
+        super::super::agent_metadata::enrich(
+            &foreign,
+            Some(&branches),
+            "macro|owner@example.com".to_owned(),
+            vec![SourceId::user("macro|owner@example.com")],
+            &mut items,
+        )
+        .await
+        .unwrap();
+        let SoupItem::AgentSession(row) = &items[0].item else {
+            unreachable!()
+        };
+        assert_eq!(row.working_branch, None);
+    }
 }

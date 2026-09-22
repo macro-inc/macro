@@ -6,8 +6,8 @@ use macro_uuid::Uuid;
 use sqlx::PgPool;
 
 use crate::domain::model::{
-    AttemptOutcome, CaptureAttempt, ChangedFile, Changeset, ChangesetId, ChangesetRange,
-    ChangesetSource, GitRef, SessionChanges,
+    AttemptOutcome, CaptureAttempt, CapturedBranch, ChangedFile, Changeset, ChangesetId,
+    ChangesetRange, ChangesetSource, GitRef, SessionChanges,
 };
 use crate::domain::ports::{
     ChangesetRepo, PatchBlobKey, SessionBranchReader, SessionBranchesFuture,
@@ -39,9 +39,9 @@ impl SessionBranchReader for PgChangesetRepo {
             let ids: Vec<_> = sessions.iter().map(AgentSessionId::as_uuid).collect();
             let rows = sqlx::query!(
                 r#"
-                SELECT agent_session_id, head_ref AS "head_ref!"
+                SELECT agent_session_id, head_ref AS "head_ref!", repository AS "repository!"
                 FROM agent_session_changes
-                WHERE agent_session_id = ANY($1) AND head_ref IS NOT NULL
+                WHERE agent_session_id = ANY($1) AND head_ref IS NOT NULL AND repository IS NOT NULL
                 "#,
                 &ids,
             )
@@ -53,7 +53,10 @@ impl SessionBranchReader for PgChangesetRepo {
                 .map(|row| {
                     (
                         AgentSessionId::new_from_uuid(row.agent_session_id),
-                        row.head_ref,
+                        CapturedBranch {
+                            repository_url: row.repository,
+                            branch: row.head_ref,
+                        },
                     )
                 })
                 .collect())
