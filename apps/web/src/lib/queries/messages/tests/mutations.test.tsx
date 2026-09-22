@@ -155,7 +155,7 @@ describe('root deletion', () => {
   });
 
   /** A discussion whose replies were written by somebody else. */
-  function seed(parent: MessageParent) {
+  function seed(parent: MessageParent, withThreadCache = true) {
     const replies = [
       { ...message(parent, 'reply', 'root'), sender_id: 'macro|b@example.com' },
     ];
@@ -172,10 +172,11 @@ describe('root deletion', () => {
         pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
       }
     );
-    testQueryClient.setQueryData<MessageThread>(
-      getThreadRepliesQueryKey(parent, 'root'),
-      { state, root, replies }
-    );
+    if (withThreadCache)
+      testQueryClient.setQueryData<MessageThread>(
+        getThreadRepliesQueryKey(parent, 'root'),
+        { state, root, replies }
+      );
     return { root, replies, state };
   }
 
@@ -220,6 +221,27 @@ describe('root deletion', () => {
     expect(thread.state.deleted_at).toBe(time);
     expect(thread.replies).toEqual([]);
     // The margin and the document mark clear off this notification.
+    expect(deletedThreads).toEqual(['root']);
+    stop();
+  });
+
+  it('tears down a root whose replies were never opened', async () => {
+    // The only copy of this thread's state is the timeline item the optimistic
+    // delete removes, so the teardown has to read it before that happens.
+    const parent: MessageParent = { type: 'document', id: 'doc' };
+    seed(parent, false);
+    mocks.delete.mockResolvedValue({
+      ...message(parent, 'root'),
+      content: '',
+      deleted_at: time,
+    });
+    const deletedThreads: string[] = [];
+    const stop = onThreadStateUpdated((_parent, state) => {
+      if (state.deleted_at) deletedThreads.push(state.root_id);
+    });
+
+    await mount().mutateAsync({ parent, messageID: 'root' });
+
     expect(deletedThreads).toEqual(['root']);
     stop();
   });

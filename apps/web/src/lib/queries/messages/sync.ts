@@ -102,14 +102,19 @@ export function applyMessage(
 
 /**
  * Deleting the root of a discussion deletes the discussion, and the response
- * carries only the root's own tombstone. Apply the committed teardown from the
- * thread state already cached so the margin and the document mark clear without
- * waiting on the live event; the refetch it triggers reconciles the rest.
+ * carries only the root's own tombstone. Apply the committed teardown so the
+ * margin and the document mark clear without waiting on the live event, using
+ * the thread state `cached` before the optimistic delete dropped the root from
+ * the caches; the refetch it triggers reconciles the rest. With no state to
+ * build on, only that refetch can report the teardown.
  */
-export function applyRootDeletion(message: Message) {
+export function applyRootDeletion(
+  message: Message,
+  cached?: MessageThread['state']
+) {
   const parent = message.parent;
   if (parent.type === 'channel' || message.thread_id) return;
-  const state = getCachedThreadState(parent, message.id);
+  const state = cached ?? getCachedThreadState(parent, message.id);
   if (!state) {
     void queryClient.invalidateQueries({
       queryKey: getMessageTimelineQueryKeyPrefix(parent),

@@ -15,7 +15,11 @@ import type { MessageAttachment } from '@service-storage/generated/schemas/messa
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import type { ThreadPatch } from '@service-storage/generated/schemas/threadPatch';
-import type { MessageListItem, MessageParent } from '@service-storage/messages';
+import type {
+  MessageListItem,
+  MessageParent,
+  MessageThread,
+} from '@service-storage/messages';
 import {
   type Message as EntityMessage,
   entityMessagesClient,
@@ -29,6 +33,7 @@ import { senderFromStorageId } from './message-sender';
 import {
   captureDeleteSnapshotForTarget,
   type DeleteTargetSnapshot,
+  getCachedThreadState,
   getTargetMessage,
   getTopLevelMessageDeletedAt,
   insertMessageIntoTargetCaches,
@@ -73,6 +78,12 @@ type DeleteMessageContext = {
    * captured so rollback can revert the optimistic mutation.
    */
   previousDeletedAt?: string | null;
+  /**
+   * Thread state of a discussion root, read before this delete removed the
+   * root from the caches that hold it, so the committed teardown can be
+   * applied on success.
+   */
+  threadState?: MessageThread['state'];
 };
 
 type UpdateMessageContext = {
@@ -266,6 +277,10 @@ export function optimisticDeleteMessage(
   const context: DeleteMessageContext = {
     target,
   };
+
+  if (target.kind === 'top_level' && vars.parent.type !== 'channel') {
+    context.threadState = getCachedThreadState(vars.parent, target.messageId);
+  }
 
   if (
     target.kind === 'top_level' &&
@@ -559,8 +574,8 @@ export function useDeleteMessageMutation(
             threadId: vars.threadID,
           });
         },
-        onSuccess(data) {
-          applyRootDeletion(data);
+        onSuccess(data, _vars, context) {
+          applyRootDeletion(data, context?.threadState);
         },
         onError(error, vars, context) {
           console.error('failed to delete message', error);

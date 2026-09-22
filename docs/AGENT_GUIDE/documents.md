@@ -471,7 +471,8 @@ thread opens in a drawer with a pinned reply composer; long-press any message
 for edit, delete, copy-link, and reaction actions.
 
 A document thread carries no thread-level controls above it. Deleting the root
-message leaves a tombstone and retains its replies. `Copy link` targets the
+message deletes the whole discussion, replies included, and answers with the
+root's tombstone. `Copy link` targets the
 specific comment with `comment_id=<message id>`. Previously copied numeric links
 still resolve under current document permissions. Deleting an anchored Markdown
 discussion removes its mark while preserving the document text and any
