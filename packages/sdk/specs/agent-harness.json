@@ -889,6 +889,136 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/permissions": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read sharing settings for a session the caller can view.",
+        "operationId": "get_agent_session_permissions",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharePermissionV2"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["agent-sessions"],
+        "summary": "Update link, channel, or team sharing after owner authorization.",
+        "operationId": "update_agent_session_permissions",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharePermissionV2"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/queue": {
       "get": {
         "tags": ["agent-sessions"],
@@ -1321,6 +1451,11 @@
   },
   "components": {
     "schemas": {
+      "AccessLevel": {
+        "type": "string",
+        "description": "Ordered from least to most access top -> bottom",
+        "enum": ["view", "comment", "edit", "owner"]
+      },
       "AgentAction": {
         "oneOf": [
           {
@@ -2076,6 +2211,21 @@
         "description": "The source of the captured diff, on the wire.",
         "enum": ["github_pull_request"]
       },
+      "ChannelSharePermission": {
+        "type": "object",
+        "description": "The channel share permission",
+        "required": ["channel_id", "access_level"],
+        "properties": {
+          "access_level": {
+            "$ref": "#/components/schemas/AccessLevel",
+            "description": "The access level for the channel"
+          },
+          "channel_id": {
+            "type": "string",
+            "description": "The channel id"
+          }
+        }
+      },
       "CompleteRequest": {
         "type": "object",
         "description": "One-time manual code. Deliberately does not implement Debug.",
@@ -2381,6 +2531,11 @@
             "description": "The commit, when known."
           }
         }
+      },
+      "LinkShare": {
+        "type": "string",
+        "description": "Defines who can access an item through its share link.",
+        "enum": ["PUBLIC", "TEAM"]
       },
       "LoadAgentModelsRequest": {
         "type": "object",
@@ -2692,6 +2847,60 @@
         ],
         "description": "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
       },
+      "SharePermissionV2": {
+        "type": "object",
+        "required": ["id", "owner"],
+        "properties": {
+          "channelSharePermissions": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ChannelSharePermission"
+            },
+            "description": "The channel share permissions for the item"
+          },
+          "id": {
+            "type": "string",
+            "description": "The share permission id"
+          },
+          "linkShare": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkShare",
+                "description": "Who can access the item through its share link"
+              }
+            ]
+          },
+          "linkShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The level of access granted through the share link"
+              }
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the item"
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The explicit access level granted to the owner's team, or `null` when disabled."
+              }
+            ]
+          }
+        }
+      },
       "StartResponse": {
         "type": "object",
         "description": "Public PKCE challenge and attempt handle; contains no verifier or provider tokens.",
@@ -2729,6 +2938,80 @@
           "ephemeral": {
             "type": "boolean",
             "description": "Whether reconnecting after service restart is required."
+          }
+        }
+      },
+      "UpdateChannelSharePermission": {
+        "type": "object",
+        "required": ["operation", "channelId"],
+        "properties": {
+          "accessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The access level for the channel\nThis is required if the operation is add or replace"
+              }
+            ]
+          },
+          "channelId": {
+            "type": "string",
+            "description": "The channel id"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/UpdateOperation",
+            "description": "The type of operation to be performed on the chanel share permission\nYou can add, remove or replace and existing permission"
+          }
+        }
+      },
+      "UpdateOperation": {
+        "type": "string",
+        "enum": ["add", "remove", "replace"]
+      },
+      "UpdateSharePermissionRequestV2": {
+        "type": "object",
+        "properties": {
+          "channelSharePermissions": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/UpdateChannelSharePermission"
+            },
+            "description": "Any channel share permissions to be created/updated/removed"
+          },
+          "linkShare": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkShare",
+                "description": "Who can access the item through its share link. Omit to leave unchanged or pass `null` to\ndisable link sharing."
+              }
+            ]
+          },
+          "linkShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The link access level. Omit to leave unchanged or pass `null` to reset it to the default\nlevel when a link share exists."
+              }
+            ]
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The explicit team access level. Omit to leave unchanged or pass `null` to disable team\nsharing. Only the actual owner may change this setting; `owner` is not an allowed level."
+              }
+            ]
           }
         }
       },

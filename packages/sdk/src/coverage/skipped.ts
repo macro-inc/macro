@@ -33,8 +33,10 @@ export const agentHarnessExcluded = [
   'previewAgentSessions',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
-export const agentHarnessBacklog =
-  [] as const satisfies readonly (keyof AgentHarnessSdk)[];
+export const agentHarnessBacklog = [
+  'getAgentSessionPermissions',
+  'updateAgentSessionPermissions',
+] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const authExcluded = [
   'appleLogin',
