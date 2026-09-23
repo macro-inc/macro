@@ -144,6 +144,7 @@ function page(start: number, count: number, more = false): SearchCachePage {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   mocks.history = [];
   mocks.companies = [];
   mocks.crmEnabled = () => true;
@@ -162,7 +163,12 @@ beforeEach(() => {
     }
   );
 });
-afterEach(() => dispose?.());
+afterEach(() => {
+  dispose?.();
+  dispose = undefined;
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 const cachedCompany = {
   __typename: 'GraphqlSoupCrmCompany',
@@ -416,6 +422,35 @@ describe('Quick Access source integration', () => {
     expect(mocks.channelRefetch).toHaveBeenCalledOnce();
     dispose?.();
     expect(mocks.unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('keeps hidden lists stable and refreshes their latest state once on visibility', async () => {
+    vi.useFakeTimers();
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    mocks.search.mockResolvedValue(page(0, 1));
+    const list = setup((source) => source.useList({ buckets: ['note'] }));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => item.id)).toEqual(['0']);
+    const initialCalls = mocks.search.mock.calls.length;
+
+    visibility.mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    mocks.search.mockResolvedValue(page(1, 1));
+    mocks.changed?.();
+    mocks.changed?.();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).toHaveBeenCalledTimes(initialCalls);
+    expect(mocks.channelRefetch).not.toHaveBeenCalled();
+    expect(list.items().map((item) => item.id)).toEqual(['0']);
+
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() =>
+      expect(list.items().map((item) => item.id)).toEqual(['1'])
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).toHaveBeenCalledTimes(initialCalls + 1);
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
   });
 
   it('uses one shared scan budget when hundreds of projected rows duplicate history', async () => {

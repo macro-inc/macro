@@ -99,6 +99,14 @@ it during that delay should not let the earlier save close the new picker.
 A failed save uses the mutation's rollback/error handling; it must not reopen
 the picker or trigger a success refresh.
 
+For multi-tab status checks, open the same channel/task in several browser tabs
+and change status repeatedly in the visible tab. Hidden tabs defer cache-change
+refreshes for Quick Access searches, its channel list, and history; switching
+back performs one catch-up refresh per reader against the latest cache state.
+Existing rows remain available while hidden. Initial loads, explicit requests,
+saves, and the shared cache worker still run. Verify mention search and history
+catch up after switching tabs, including when the cache-owning tab is hidden.
+
 ## Messages as tasks
 
 In any channel composer, toggle the `Task` switch before sending to create a task from the

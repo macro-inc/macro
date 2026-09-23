@@ -32,11 +32,11 @@ import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import { toDate } from 'date-fns';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { searchQuickAccessItems } from './entity-search';
@@ -324,24 +324,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const cacheHost = graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
   const [cacheRevision, setCacheRevision] = createSignal(0);
   const cachedChannelsQuery = useCachedGraphqlChannelsQuery(cacheHost);
-  const refreshCachedLists = leadingAndTrailing(
-    throttle,
-    () => {
-      setCacheRevision((revision) => revision + 1);
-      void cachedChannelsQuery.refetch();
-    },
-    250
-  );
-  const unsubscribeCacheChanges = cacheHost?.onCacheChanged(
-    refreshCachedLists,
-    {
-      includeHydration: true,
-    }
-  );
-  onCleanup(() => {
-    unsubscribeCacheChanges?.();
-    refreshCachedLists.clear();
-  });
+  if (cacheHost) {
+    onCleanup(
+      subscribeToVisibleCacheChanges(cacheHost, () => {
+        setCacheRevision((revision) => revision + 1);
+        void cachedChannelsQuery.refetch();
+      })
+    );
+  }
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const { query: crmCompaniesQuery, companies: crmCompaniesAccessor } =
     useQuickAccessCrmCompaniesQuery();
