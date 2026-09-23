@@ -12,6 +12,8 @@ import type { Layout, Root } from './commentType';
 import { MeasureContainer } from './MeasureContainer';
 import { CommentsContext, Thread } from './Thread';
 
+const PORTALED_LAYER = '[role="dialog"], [role="alertdialog"], [role="menu"]';
+
 export function MinimizedThread(props: {
   comment: Root;
   layout: Layout;
@@ -50,6 +52,10 @@ export function MinimizedThread(props: {
     if (!expanded()) return;
     function handleClick(e: MouseEvent) {
       const _expandedThreadRef = expandedThreadRef();
+      // Dialogs, menus and popovers opened from the card are portaled out of
+      // its DOM; collapsing on a press inside them would unmount the thread
+      // that owns them before the press lands.
+      if ((e.target as Element).closest?.(PORTALED_LAYER)) return;
       if (
         _expandedThreadRef &&
         !_expandedThreadRef.contains(e.target as Node)

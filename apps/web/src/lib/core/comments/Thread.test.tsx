@@ -161,6 +161,22 @@ describe('anchored comment links', () => {
     expect(view.getByRole('link')).toBeTruthy();
   });
 
+  it('keeps an expanded minimized comment open for presses in dialogs it portals out', () => {
+    const view = renderThreadBody('md', true);
+    fireEvent.click(view.getByText('1'));
+    // The delete confirmation renders into a portal outside the card.
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    const confirm = document.createElement('button');
+    dialog.append(confirm);
+    document.body.append(dialog);
+    fireEvent.mouseDown(confirm);
+    expect(view.getByRole('link')).toBeTruthy();
+    fireEvent.mouseDown(document.body);
+    expect(view.queryByRole('link')).toBeNull();
+    dialog.remove();
+  });
+
   it.each(['md', 'task', 'snippet', 'skill', 'pdf'] as const)(
     'copies legacy %s root and reply links without a block provider',
     async (documentType) => {
