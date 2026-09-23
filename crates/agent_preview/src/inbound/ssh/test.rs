@@ -158,3 +158,131 @@ async fn stock_openssh_forwards_http_and_websockets_and_stop_closes_them() {
     gateway.abort();
     upstream_task.abort();
 }
+
+/// The gateway must never be usable as anything but a reverse tunnel for its own
+/// previews. Shell/exec and `direct-tcpip` are refused only because `Connection`
+/// leaves those handlers unimplemented and russh drops the reply handle, which
+/// fails closed — a library default, not an explicit deny, so assert it here:
+/// were it ever to flip, this service would become an open TCP relay running
+/// inside the services network.
+#[tokio::test]
+async fn gateway_refuses_outbound_relay_and_shell() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let ssh_port = listener.local_addr().unwrap().port();
+    let (service, _, key) = fixture(ssh_port);
+    let shutdown = CancellationToken::new();
+    let server = tokio::spawn(serve(
+        listener,
+        key.clone(),
+        service.clone(),
+        Arc::new(|h| Arc::new(SshTunnel::new(h))),
+        shutdown.clone(),
+    ));
+    let share = service
+        .share(crate::testing::identity(), 3000)
+        .await
+        .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let known = dir.path().join("known_hosts");
+    std::fs::write(
+        &known,
+        format!(
+            "[localhost]:{ssh_port} {}\n",
+            crate::inbound::ssh::public_key(&key).unwrap()
+        ),
+    )
+    .unwrap();
+    let base = |token: &str| {
+        let mut c = tokio::process::Command::new("ssh");
+        c.args([
+            "-F",
+            "/dev/null",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "PubkeyAuthentication=no",
+            "-o",
+            "StrictHostKeyChecking=yes",
+            "-o",
+            "ConnectTimeout=10",
+        ])
+        .arg("-o")
+        .arg(format!("UserKnownHostsFile={}", known.display()))
+        .args(["-p", &ssh_port.to_string(), "-l", token, "localhost"]);
+        c.kill_on_drop(true);
+        c
+    };
+
+    // 1. A session channel (shell/exec) must be refused.
+    let exec = tokio::time::timeout(
+        Duration::from_secs(20),
+        base(&share.token).arg("echo pwned").output(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    println!(
+        "exec status={:?}\n  stderr: {}",
+        exec.status.code(),
+        String::from_utf8_lossy(&exec.stderr).trim()
+    );
+    assert!(
+        !exec.status.success(),
+        "the gateway granted a session channel"
+    );
+    assert!(!String::from_utf8_lossy(&exec.stdout).contains("pwned"));
+
+    // 2. direct-tcpip: an outbound relay to a third party must be refused.
+    //    The token is single-use, and a second share for the same owner would hit
+    //    the creation rate limit, so charge it to another account.
+    let other = crate::domain::AgentIdentity {
+        session: "00000000-0000-0000-0000-000000000002".into(),
+        owner: "macro|other@example.com".into(),
+    };
+    let share2 = service.share(other, 3000).await.unwrap();
+    let relay = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let relay_port = relay.local_addr().unwrap().port();
+    let hit = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let hit2 = hit.clone();
+    tokio::spawn(async move {
+        if relay.accept().await.is_ok() {
+            hit2.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    });
+    let local = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let local_port = local.local_addr().unwrap().port();
+    drop(local);
+    let mut forward = base(&share2.token)
+        .args([
+            "-N",
+            "-L",
+            &format!("127.0.0.1:{local_port}:127.0.0.1:{relay_port}"),
+        ])
+        .spawn()
+        .unwrap();
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    // Drive traffic through the forward: ssh only opens the direct-tcpip
+    // channel when something actually connects to the listening side.
+    let probe = tokio::net::TcpStream::connect(("127.0.0.1", local_port)).await;
+    println!("local forward accepted a client: {}", probe.is_ok());
+    if let Ok(mut probe) = probe {
+        use tokio::io::AsyncWriteExt;
+        let _ = probe.write_all(b"GET / HTTP/1.0\r\n\r\n").await;
+        let mut sink = Vec::new();
+        let _ = tokio::time::timeout(
+            Duration::from_secs(3),
+            tokio::io::AsyncReadExt::read_to_end(&mut probe, &mut sink),
+        )
+        .await;
+    }
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let _ = forward.kill().await;
+    assert!(
+        !hit.load(std::sync::atomic::Ordering::SeqCst),
+        "the gateway opened an outbound TCP connection on a client's behalf"
+    );
+    println!("direct-tcpip relay: refused");
+
+    shutdown.cancel();
+    let _ = server.await;
+}
