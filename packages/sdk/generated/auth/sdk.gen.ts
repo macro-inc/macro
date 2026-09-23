@@ -703,8 +703,8 @@ export class Sdk extends HeyApiClient {
      * Moves one team member's seat between paid plans.
      *
      * Team admins and owners only. The team's subscription is re-billed for
-     * the seat at once (prorated); the member's tier role and the team's pooled
-     * AI allowance follow immediately.
+     * the seat at once (prorated); the member's tier role and individual AI
+     * allowance follow immediately.
      */
     public patchTeamMemberPlan<ThrowOnError extends boolean = false>(options: Options<PatchTeamMemberPlanData, ThrowOnError>): RequestResult<PatchTeamMemberPlanResponses, PatchTeamMemberPlanErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchTeamMemberPlanResponses, PatchTeamMemberPlanErrors, ThrowOnError>({

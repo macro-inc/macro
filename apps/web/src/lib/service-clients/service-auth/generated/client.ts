@@ -4104,8 +4104,8 @@ export const rejectInvitation = async (
 
 /**
  * Team admins and owners only. The team's subscription is re-billed for
-the seat at once (prorated); the member's tier role and the team's pooled
-AI allowance follow immediately.
+the seat at once (prorated); the member's tier role and individual AI
+allowance follow immediately.
  * @summary Moves one team member's seat between paid plans.
  */
 export type patchTeamMemberPlanResponse200 = {

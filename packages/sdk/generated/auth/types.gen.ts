@@ -1400,19 +1400,19 @@ export type UsageSnapshot = {
      */
     can_manage_billing: boolean;
     /**
-     * Prepaid credit balance.
+     * Shared prepaid credit balance.
      */
     credit_balance_cents: number;
     /**
-     * Credits already applied to this period.
+     * Shared payer credits already applied to this period.
      */
     credits_consumed_cents: number;
     /**
-     * Included AI this period across all seats, list-rate cents.
+     * Included AI for this user's seat this period, in list-rate cents.
      */
     included_cents: number;
     /**
-     * Overage charged so far this period.
+     * Shared overage charged so far this period.
      */
     overage_charged_cents: number;
     /**
@@ -1440,11 +1440,12 @@ export type UsageSnapshot = {
      */
     period_start: string;
     /**
-     * Headroom before AI requests are refused; 0 when blocked.
+     * This seat's remaining allowance plus shared credit/overage headroom; 0
+     * when blocked.
      */
     remaining_cents: number;
     /**
-     * Seats pooled onto the payer.
+     * Seats billed to the payer.
      */
     seats: number;
     /**
@@ -1452,8 +1453,8 @@ export type UsageSnapshot = {
      */
     tier: PlanTier;
     /**
-     * Usage not yet covered by allowance, credits, or charges (awaiting
-     * settlement).
+     * Team-wide usage beyond per-seat allowances that is not yet covered by
+     * shared credits or charges (awaiting settlement).
      */
     uncovered_cents: number;
     /**
@@ -1461,7 +1462,7 @@ export type UsageSnapshot = {
      */
     unlimited: boolean;
     /**
-     * AI used this period across all seats, list-rate cents.
+     * AI used by this user this period, in list-rate cents.
      */
     used_cents: number;
 };
