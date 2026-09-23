@@ -381,6 +381,10 @@ export function AgentInput(props: AgentInputProps) {
                     />
                   </Show>
                   <div class="ml-auto flex shrink-0 items-center gap-[3.75px]">
+                    <DictationButton
+                      dictation={dictation}
+                      disabled={props.disabled || props.readOnly}
+                    />
                     <Show
                       when={canSendNext()}
                       fallback={
@@ -422,10 +426,6 @@ export function AgentInput(props: AgentInputProps) {
                         <EnterIcon />
                       </SendButton>
                     </Show>
-                    <DictationButton
-                      dictation={dictation}
-                      disabled={props.disabled || props.readOnly}
-                    />
                   </div>
                 </div>
               </div>

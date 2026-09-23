@@ -113,8 +113,8 @@ function WebDefaultActions(props: {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
-        <Input.SendAction />
         <DictationButton dictation={props.dictation} />
+        <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
   );
@@ -133,8 +133,8 @@ function IosDefaultActions(props: {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
-        <Input.SendAction />
         <DictationButton dictation={props.dictation} />
+        <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
   );
