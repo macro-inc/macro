@@ -14,6 +14,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ChatEmptyStateContext } from '@core/component/AI/component/message/EmptyChatState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
