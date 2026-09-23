@@ -96,6 +96,10 @@ pub fn plan_settlement(state: SettlementState, policy: SettlementPolicy) -> Sett
 }
 
 /// Assemble the API-facing snapshot from the resolved inputs.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "snapshot assembly keeps its resolved billing inputs explicit"
+)]
 pub fn build_snapshot(
     user: &MacroUserIdStr<'_>,
     entitlement: &Entitlement,
