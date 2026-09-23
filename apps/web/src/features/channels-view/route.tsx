@@ -87,7 +87,6 @@ export const channelDetailRoute = defineRoute({
 export const channelsSplitRoute = defineRoute({
   id: 'view-channels',
   path: 'channels',
-  params: z.object({}),
   component: ChannelsRouteView,
   search: '*' as const,
   children: [channelDetailRoute],

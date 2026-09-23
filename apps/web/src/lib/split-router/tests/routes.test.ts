@@ -114,6 +114,47 @@ function assertInvalidRouteDeclarations() {
     // @ts-expect-error Route parameter schemas must produce objects.
     definitions: [defineRoute({ id: 'bad', path: 'bad', params: z.string() })],
   });
+  // @ts-expect-error Schema keys must match the path parameter keys.
+  defineRoute({
+    id: 'mismatched-key',
+    path: 'issue/:issueId',
+    params: z.object({ id: z.string() }),
+  });
+  // @ts-expect-error Schema keys must cover every alias parameter key.
+  defineRoute({
+    id: 'mismatched-alias-key',
+    path: 'issue/:issueId',
+    aliases: ['issues/:legacyId'],
+    params: z.object({ issueId: z.string() }),
+  });
+  // @ts-expect-error Optional path parameters require optional schema input.
+  defineRoute({
+    id: 'mismatched-optionality',
+    path: 'issue/:issueId?',
+    params: z.object({ issueId: z.string() }),
+  });
+  // @ts-expect-error Schemas cannot require input that the path never provides.
+  defineRoute({
+    id: 'extra-required-input',
+    path: 'issue/:issueId',
+    params: z.object({ issueId: z.string(), revision: z.string() }),
+  });
+  // @ts-expect-error Nested declarations receive the same schema validation.
+  defineRoutes({
+    definitions: [
+      {
+        id: 'parent',
+        path: 'parent',
+        children: [
+          {
+            id: 'mismatched-child',
+            path: ':childId',
+            params: z.object({ id: z.string() }),
+          },
+        ],
+      },
+    ],
+  });
 }
 
 describe('typed route trees', () => {

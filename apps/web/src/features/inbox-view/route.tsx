@@ -11,7 +11,6 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazy, Show } from 'solid-js';
-import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { inboxPreviewLegacyTarget, inboxPreviewSearch } from './inbox-route';
 import {
@@ -93,7 +92,6 @@ export const inboxPreviewRoute = defineRoute({
 export const inboxSplitRoute = defineRoute({
   id: 'view-inbox',
   path: 'inbox',
-  params: z.object({}),
   component: InboxRouteView,
   search: '*' as const,
   children: [inboxPreviewRoute],

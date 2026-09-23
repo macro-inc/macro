@@ -152,7 +152,6 @@ export const driveSplitRoute = defineRoute({
   id: 'drive',
   path: 'drive',
   aliases: ['drive/owned', 'drive/tab/owned'],
-  params: z.object({}),
   component: DriveRouteView,
   search: ['drive'],
   externalSearch: (entry: Readonly<SplitRouterEntry>) => {

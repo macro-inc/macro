@@ -189,6 +189,14 @@ type PathParams<TPath extends string> = TPath extends unknown
       : PathSegmentParams<TPath>
   : never;
 
+/** Raw parameters produced by a route's canonical path and aliases. */
+export type InferSplitRoutePathParams<
+  TPath extends string,
+  TAliases extends readonly string[] | undefined = undefined,
+> = PathParams<
+  TPath | (TAliases extends readonly string[] ? TAliases[number] : never)
+>;
+
 type Simplify<T> = { [K in keyof T]: T[K] };
 type RequiredParamKeys<T> = {
   [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
@@ -233,11 +241,11 @@ export type InferSplitRouteParams<TRoute> = TRoute extends {
   : TRoute extends { path: infer TPath extends string }
     ? MergeRouteParams<
         {},
-        PathParams<
-          | TPath
-          | (TRoute extends { aliases: infer TAliases }
-              ? Extract<TAliases, readonly string[]>[number]
-              : never)
+        InferSplitRoutePathParams<
+          TPath,
+          TRoute extends { aliases: infer TAliases }
+            ? Extract<TAliases, readonly string[]>
+            : undefined
         >
       >
     : SplitRouteParams;

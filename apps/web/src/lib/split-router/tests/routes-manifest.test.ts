@@ -240,7 +240,17 @@ describe('split routes manifests', () => {
           id: 'item',
           path: 'item/:invalid',
           aliases: ['item/:value', ':prefix/:value'],
-          params: z.object({ value: z.string() }).transform(validate),
+          params: z
+            .union([
+              z.object({ invalid: z.string() }).refine(() => false),
+              z.object({ value: z.string() }),
+              z.object({ prefix: z.string(), value: z.string() }),
+            ])
+            .transform((params) =>
+              'value' in params
+                ? validate({ value: params.value })
+                : { value: params.invalid }
+            ),
         }),
       ],
     });

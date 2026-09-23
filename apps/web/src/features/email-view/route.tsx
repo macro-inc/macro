@@ -86,7 +86,6 @@ export const emailThreadRoute = defineRoute({
 export const emailSplitRoute = defineRoute({
   id: 'view-mail',
   path: 'mail',
-  params: z.object({}),
   component: MailRouteView,
   search: '*' as const,
   children: [emailThreadRoute],

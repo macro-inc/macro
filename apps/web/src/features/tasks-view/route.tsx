@@ -77,7 +77,6 @@ export const taskDetailRoute = defineRoute({
 export const tasksSplitRoute = defineRoute({
   id: 'view-tasks',
   path: 'tasks',
-  params: z.object({}),
   component: TasksRouteView,
   search: '*' as const,
   children: [taskDetailRoute],
