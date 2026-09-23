@@ -19,6 +19,9 @@ export type ResolvedSessionId = {
   /** The create failed, or the placeholder has no create behind it. */
   failed: Accessor<boolean>;
   error: Accessor<string | undefined>;
+  /** The first prompt of a create this block started, to show as sent while
+   *  the create is still on the wire. */
+  pendingPrompt: Accessor<string | undefined>;
 };
 
 export function resolveSessionId(blockId: Accessor<string>): ResolvedSessionId {
@@ -49,5 +52,6 @@ export function resolveSessionId(blockId: Accessor<string>): ResolvedSessionId {
       entry() === null
         ? 'This conversation was not created. Return to the composer to start a new one.'
         : entry()?.error(),
+    pendingPrompt: () => entry()?.prompt,
   };
 }

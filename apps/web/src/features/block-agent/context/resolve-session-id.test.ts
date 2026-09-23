@@ -37,6 +37,17 @@ vi.mock('@service-agent-harness/client', () => ({
   },
 }));
 
+// The first prompt goes through the shared session so it is folded
+// speculatively; here that is just the control POST under the session's id.
+vi.mock('@core/agent-session/AgentSession', () => ({
+  AgentSession: {
+    acquire: (id: string) => ({
+      issue: (action: unknown) => create.control(id, action),
+      release: () => {},
+    }),
+  },
+}));
+
 const { startPendingSession } = await import('./pending-session');
 const { agentHarnessServiceClient } = await import(
   '@service-agent-harness/client'
@@ -124,6 +135,34 @@ describe('a placeholder', () => {
         ['session-10', { type: 'prompt', prompt: 'Fix the tests' }],
       ]);
       expect(resolved.sessionId()).toBe('session-10');
+      dispose();
+    });
+  });
+
+  // The prompt shows as sent from the block's own speculation the moment the
+  // session exists; the block must not wait for the harness to accept it.
+  it('has the session as soon as the create lands, prompt still on the wire', async () => {
+    let deliver: ((result: unknown) => void) | undefined;
+    create.control.mockReturnValue(
+      new Promise((resolve) => {
+        deliver = resolve;
+      })
+    );
+    const placeholder = startPendingSession({ prompt: 'Hello' });
+    await createRoot(async (dispose) => {
+      const resolved = resolveSessionId(() => placeholder);
+      expect(resolved.pendingPrompt()).toBe('Hello');
+      create.resolve?.('session-11');
+      await flush();
+      expect(resolved.sessionId()).toBe('session-11');
+      expect(resolved.pending()).toBe(false);
+      expect(create.control).toHaveBeenCalledTimes(1);
+      deliver?.({
+        isErr: () => false,
+        value: { actionId: 'action-11', status: 'accepted' },
+      });
+      await flush();
+      expect(resolved.failed()).toBe(false);
       dispose();
     });
   });

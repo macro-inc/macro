@@ -16,7 +16,7 @@
  * they already handle while the GET is in flight.
  */
 
-import { markMessageSent } from '@core/util/message-send-motion';
+import { AgentSession } from '@core/agent-session/AgentSession';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   CreateAgentSessionRequest,
@@ -37,6 +37,11 @@ export type PendingSession = {
   failed: Accessor<boolean>;
   /** The startup error returned by the service. */
   error: Accessor<string | undefined>;
+  /**
+   * The first prompt, so the block can show it as sent from the moment it
+   * opens rather than once the create has answered.
+   */
+  prompt: string | undefined;
 };
 
 const pending = new Map<string, PendingSession>();
@@ -56,6 +61,8 @@ export type StartPendingSessionOptions = {
   prompt?: string;
   /** Uploaded SFS files delivered with the first prompt. */
   attachments?: PromptAttachment[];
+  /** The sender, so the first prompt is attributed as the log will. */
+  userId?: string;
   /** Model to run on instead of the persona's, set as the session is created. */
   modelOverride?: string;
   /**
@@ -80,6 +87,7 @@ export function startPendingSession(
     sessionId,
     failed: () => error() !== undefined,
     error,
+    prompt: options.prompt?.trim() || undefined,
   });
 
   void agentHarnessServiceClient
@@ -99,25 +107,36 @@ export function startPendingSession(
         return;
       }
       const id = result.value.session.id;
+      // The block adopts the session the moment it exists. The first prompt
+      // then goes through the shared session like any other, so it is folded
+      // speculatively - bubble and working line on screen at once - while
+      // the control POST waits out the runtime handshake. Delivering it
+      // first and adopting after left the transcript empty for that wait.
+      setSessionId(id);
       const prompt = options.prompt?.trim() ?? '';
       if (prompt || options.attachments?.length) {
-        const delivered = await agentHarnessServiceClient.control(id, {
-          type: 'prompt',
-          prompt,
-          ...(options.attachments?.length
-            ? { attachments: options.attachments }
-            : {}),
-        });
-        if (delivered.isErr()) {
-          setError(
-            delivered.error.map((error) => error.message).join(' ') ||
-              'The first message could not be sent.'
+        const session = AgentSession.acquire(id);
+        try {
+          const delivered = await session.issue(
+            {
+              type: 'prompt',
+              prompt,
+              ...(options.attachments?.length
+                ? { attachments: options.attachments }
+                : {}),
+            },
+            { userId: options.userId }
           );
-          return;
+          if (delivered.isErr()) {
+            setError(
+              delivered.error.map((error) => error.message).join(' ') ||
+                'The first message could not be sent.'
+            );
+          }
+        } finally {
+          session.release();
         }
-        markMessageSent(`agent:${id}:${delivered.value.actionId}`);
       }
-      setSessionId(id);
     })
     .catch(() =>
       setError(

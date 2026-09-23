@@ -239,6 +239,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const startConversation = (start: StartConversation) => {
     const id = startPendingSession({
       botId: start.botId,
+      userId: userId(),
       prompt: start.prompt,
       attachments: start.attachments,
       modelOverride: start.modelOverride,
