@@ -1766,6 +1766,22 @@ async fn watch_channels_round_trip_from_recording_to_targeted_rearm(pool: PgPool
         .unwrap()
         .id;
 
+    assert!(
+        repo.record_watch_unsupported(key, Uuid::new_v4(), account_id, calendar_id)
+            .await
+            .is_err(),
+        "a stale lease must not record push refusals"
+    );
+    repo.record_watch_unsupported(key, lease_token, account_id, calendar_id)
+        .await
+        .unwrap();
+    let refused = repo
+        .upsert_google_calendar(key, lease_token, account_id, provider_calendar.clone())
+        .await
+        .unwrap();
+    assert!(refused.watch_unsupported_at.is_some());
+    assert!(!refused.needs_watch_renewal(Utc::now()));
+
     let channel = GoogleWatchChannel {
         channel_id: Uuid::new_v4(),
         resource_id: "resource-1".to_string(),
@@ -1793,6 +1809,10 @@ async fn watch_channels_round_trip_from_recording_to_targeted_rearm(pool: PgPool
         .await
         .unwrap();
     assert_eq!(stored.watch_expires_at, Some(channel.expires_at));
+    assert_eq!(
+        stored.watch_unsupported_at, None,
+        "an opened channel clears an earlier push refusal"
+    );
 
     // Notifications resolve the channel to its inbox; unknown or mismatched
     // identifiers resolve to nothing.
