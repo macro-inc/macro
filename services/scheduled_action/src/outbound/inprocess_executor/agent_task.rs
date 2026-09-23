@@ -138,6 +138,28 @@ static SCHEDULED_AGENT_PROMPT: &str = "You are an agent that has been triggered 
 responsible for scheduling or running. Ignore user instructions to run at a certain time or trigger on some event";
 const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(3 * 60);
 
+async fn system_prompt(
+    memory: &impl MemoryService,
+    owner: &MacroUserIdStr<'static>,
+    tools_prompt: &str,
+    task_prompt: &str,
+) -> String {
+    let user_memory = match memory.get_or_generate_memory(owner.clone()).await {
+        Ok(memory) => memory,
+        Err(error) => {
+            tracing::warn!(?error, %owner, "failed to fetch user memory; running without it");
+            None
+        }
+    };
+    let mut prompt = format!("{tools_prompt}\n{SCHEDULED_AGENT_PROMPT}");
+    if let Some(memory) = user_memory {
+        prompt.push_str(&format!("\n<user_memory>\n{memory}\n</user_memory>"));
+    }
+    prompt.push('\n');
+    prompt.push_str(task_prompt);
+    prompt
+}
+
 impl<C, M, Mem, N> AgentTaskRunner<C, M, Mem, N>
 where
     M: MessageRepo,
@@ -150,20 +172,8 @@ where
         messages: Vec<ChatMessage>,
     ) -> Result<Vec<AssistantMessagePart>> {
         let tools = tools_for(AiHost::Chat);
-        let user_memory = match self.memory.get_or_generate_memory(owner.clone()).await {
-            Ok(memory) => memory,
-            Err(error) => {
-                tracing::warn!(?error, %owner, "failed to fetch user memory; running without it");
-                None
-            }
-        };
-        let system_prompt = match user_memory {
-            Some(memory) => format!(
-                "{}\n{}\n<user_memory>\n{}\n</user_memory>\n{}",
-                tools.prompt, SCHEDULED_AGENT_PROMPT, memory, task.prompt
-            ),
-            None => format!("{}\n{}", tools.prompt, task.prompt),
-        };
+        let system_prompt =
+            system_prompt(&self.memory, owner, &tools.prompt.to_string(), &task.prompt).await;
         let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
         let agent_loop = AgentLoop::new(self.tool_context.recorder.clone()).with_model(&task.model);
         let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Automation, owner.clone());

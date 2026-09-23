@@ -2,6 +2,41 @@ use super::*;
 use macro_uuid::generate_uuid_v7;
 use serde_json::json;
 
+struct Memory {
+    fail: bool,
+    value: Option<String>,
+}
+
+impl MemoryService for Memory {
+    async fn get_or_generate_memory(
+        &self,
+        _: MacroUserIdStr<'static>,
+    ) -> memory::domain::ports::Result<Option<String>> {
+        if self.fail {
+            return Err(memory::domain::ports::MemoryError::NoGeneration);
+        }
+        Ok(self.value.clone())
+    }
+}
+
+#[tokio::test]
+async fn automation_instructions_survive_absent_and_failed_memory() {
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@macro.com").unwrap();
+    for fail in [false, true] {
+        let memory = Memory { fail, value: None };
+        let prompt = system_prompt(&memory, &owner, "tools", "task").await;
+        assert_eq!(prompt, format!("tools\n{SCHEDULED_AGENT_PROMPT}\ntask"));
+    }
+    let memory = Memory {
+        fail: false,
+        value: Some("remember".into()),
+    };
+    assert_eq!(
+        system_prompt(&memory, &owner, "tools", "task").await,
+        format!("tools\n{SCHEDULED_AGENT_PROMPT}\n<user_memory>\nremember\n</user_memory>\ntask"),
+    );
+}
+
 #[tokio::test]
 async fn partial_stream_error_is_not_success() {
     let stream = futures::stream::iter(vec![
