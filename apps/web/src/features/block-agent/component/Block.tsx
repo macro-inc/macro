@@ -4,6 +4,7 @@ import {
   ChangesHandoff,
   ReviewNotesDock,
 } from '@app/features/agent-changes/agent-changes';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitPanelContext } from '@components/app/split-layout/context';
@@ -16,6 +17,7 @@ import { LinkedConversationDrawer } from '@core/linked-conversation';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
+import type { NotificationSource } from '@notifications/notification-source';
 import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
 import { createSignal, Show, useContext } from 'solid-js';
@@ -28,11 +30,15 @@ import {
 import { forgetPendingSession } from '../context/pending-session';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { AgentComposer } from './AgentComposer';
+import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { AgentSplitHeader } from './AgentSplitHeader';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
 
-function AgentBlockContent() {
+function AgentBlockContent(props: {
+  active: boolean;
+  notificationSource: NotificationSource;
+}) {
   const [params] = useSearchParams();
   const [searchTarget, setSearchTarget] = createSignal(
     parseAgentMessageTarget(params)
@@ -45,6 +51,7 @@ function AgentBlockContent() {
   });
   const {
     session,
+    sessionId,
     metadata,
     loadFailed,
     loadRetryable,
@@ -91,6 +98,11 @@ function AgentBlockContent() {
           one per part — the same scoping the channel does around its message
           tree. */}
       <StaticMarkdownContext>
+        <AgentSessionReadMarker
+          sessionId={session() ? sessionId() : undefined}
+          active={props.active}
+          notificationSource={props.notificationSource}
+        />
         <div class="size-full overflow-hidden flex">
           {/* Collapsed by default, like the other conversation-shaped blocks —
             the transcript wants the width; `]` or the header button opens it. */}
@@ -143,6 +155,7 @@ function AgentBlockContent() {
 export default function BlockAgent() {
   const blockId = useBlockId();
   const split = useContext(SplitPanelContext);
+  const notificationSource = useGlobalNotificationSource();
 
   // A block opened from the create menu mounts against a placeholder while
   // `POST /agent-sessions` provisions its sandbox — minutes, during which the
@@ -160,7 +173,10 @@ export default function BlockAgent() {
       {(id) => (
         <AgentSessionProvider blockId={id()} onSessionId={adoptSessionId}>
           <AgentChangesProvider>
-            <AgentBlockContent />
+            <AgentBlockContent
+              active={split?.isPanelActive() ?? false}
+              notificationSource={notificationSource}
+            />
           </AgentChangesProvider>
         </AgentSessionProvider>
       )}

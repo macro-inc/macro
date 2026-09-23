@@ -321,7 +321,7 @@ describe('Harness', () => {
   it('shows Claude with the Anthropic logo above Cursor in the harness list', () => {
     render(() => <Harness />);
 
-    expect(screen.getByRole('heading', { name: 'In-memory' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Macro Agent' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
     const claude = screen.getByRole('heading', { name: 'Claude Cloud' });
     const cursor = screen.getByRole('heading', { name: 'Cursor' });

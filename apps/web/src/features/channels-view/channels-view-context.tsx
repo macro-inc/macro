@@ -54,6 +54,8 @@ export type ChannelsViewContext = {
   setMobileTab: (tab: ChannelsQueryScope) => void;
   setSelectedChannel: (channel: ChannelPreviewSelection | undefined) => boolean;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
+  /** Per-user collapse state of a team channel label. */
+  setLabelOpen: (labelId: string, open: boolean) => void;
   setSortBy: (group: ChannelsGroup, sort: ChannelListSort) => void;
   setAsideWidth: (width: number) => void;
 };
@@ -67,9 +69,11 @@ function createInitialState(
       initial.mobileTab ?? (initial.tab === 'recents' ? 'recents' : 'channels'),
     expandedGroups: {
       favorites: initial.expandedGroups?.favorites ?? true,
+      unread: initial.expandedGroups?.unread ?? true,
       channels: initial.expandedGroups?.channels ?? true,
       direct_messages: initial.expandedGroups?.direct_messages ?? true,
     },
+    collapsedLabels: initial.collapsedLabels ?? [],
     sortBy: {
       channels: initial.sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
       direct_messages:
@@ -185,6 +189,14 @@ export const [ChannelsViewProvider, useChannelsView] =
         setMobileTab: (tab) => setState('mobileTab', tab),
         setSelectedChannel,
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),
+        setLabelOpen: (labelId, open) =>
+          setState('collapsedLabels', (collapsed) =>
+            open
+              ? collapsed.filter((id) => id !== labelId)
+              : collapsed.includes(labelId)
+                ? collapsed
+                : [...collapsed, labelId]
+          ),
         setSortBy: (group, sort) => setState('sortBy', group, sort),
         setAsideWidth: (width) =>
           setState('asideWidth', clampChannelsRailWidth(width)),

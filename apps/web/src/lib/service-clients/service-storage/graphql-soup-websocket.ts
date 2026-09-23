@@ -9,6 +9,7 @@ import {
   SoupUpdatesDocument,
 } from './graphql/generated/graphql';
 import { createActivityUpdatesHandler } from './graphql-activity-updates';
+import { createChannelListUpdatesHandler } from './graphql-channel-list-updates';
 
 const SOUP_GRAPHQL_WEBSOCKET_PATH = '/items/soup/graphql/ws';
 
@@ -132,12 +133,15 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
 } {
   let unsubscribes: Array<() => void> = [];
   let activity: ReturnType<typeof createActivityUpdatesHandler> | undefined;
+  let channels: ReturnType<typeof createChannelListUpdatesHandler> | undefined;
 
   const unsubscribeAll = () => {
     for (const unsubscribe of unsubscribes) unsubscribe();
     unsubscribes = [];
     activity?.dispose();
     activity = undefined;
+    channels?.dispose();
+    channels = undefined;
   };
 
   return {
@@ -145,7 +149,9 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
       unsubscribeAll();
       if (!client) return;
       activity = createActivityUpdatesHandler(client);
+      channels = createChannelListUpdatesHandler(client);
       const activityHandler = activity;
+      const channelHandler = channels;
 
       const subscriptions =
         host && !host.disabled
@@ -167,10 +173,10 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
               document === NotificationUpdatesDocument &&
               result.data != null
             ) {
-              publishNotificationPatch(
-                (result.data as NotificationUpdatesSubscription)
-                  .notificationUpdates
-              );
+              const patch = (result.data as NotificationUpdatesSubscription)
+                .notificationUpdates;
+              publishNotificationPatch(patch);
+              channelHandler.onPatch(patch);
             }
             if (result.error) {
               console.warn(errorMessage, result.error);
@@ -185,7 +191,10 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
         return () => subscription.unsubscribe();
       });
     },
-    connected: () => activity?.reconnect(),
+    connected: () => {
+      activity?.reconnect();
+      channels?.reconnect();
+    },
     dispose: unsubscribeAll,
   };
 }

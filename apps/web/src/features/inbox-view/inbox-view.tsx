@@ -91,7 +91,10 @@ function InboxViewRoot() {
   });
   const newChat = closePreview;
 
-  onMount(() => panel.handle.setDisplayName('Home'));
+  // The touch nav item and legacy touch view both call this "Notifications".
+  onMount(() =>
+    panel.handle.setDisplayName(isTouchDevice() ? 'Notifications' : 'Home')
+  );
 
   return (
     <ListEntityMetadataQueryProvider>

@@ -157,7 +157,7 @@ where
             return Ok(());
         };
         let raw_prompt = prompt.prompt.clone();
-        let prior_messages = if let Some(origin) = announce {
+        let context = if let Some(origin) = announce {
             Some(self.load_prompt_context(origin, actor).await?)
         } else {
             None
@@ -167,21 +167,21 @@ where
             .compose(
                 &raw_prompt,
                 announce.map(|origin| &origin.parent),
-                prior_messages.as_deref(),
+                context.as_ref(),
             )
             .await?;
         prompt.set_name_source(raw_prompt);
         Ok(())
     }
 
-    /// Recheck the actor's access to the origin, then read the history before
-    /// it. Authorization is not optional: a prompt that names an origin was
-    /// posted by a user, and one who may no longer write there sends nothing.
+    /// Recheck the actor's access to the origin, then read the conversation
+    /// around it. Authorization is not optional: a prompt that names an origin
+    /// was posted by a user, and one who may no longer write there sends nothing.
     pub(super) async fn load_prompt_context(
         &self,
         origin: &AnnounceOrigin,
         actor: Option<&MacroUserIdStr<'static>>,
-    ) -> Result<Vec<crate::domain::model::PriorMessage>> {
+    ) -> Result<crate::domain::model::ConversationContext> {
         let actor = actor.ok_or_else(|| {
             HarnessError::PromptContext(rootcause::report!(
                 "message prompts require an acting user"
@@ -190,7 +190,7 @@ where
         self.prompt_context.authorize_origin(actor, origin).await?;
         Ok(self
             .prompt_context
-            .preceding_messages(actor, origin)
+            .conversation_context(actor, origin)
             .await
             .inspect_err(|error| {
                 // Trigger events are admitted at-most-once. Context is useful,

@@ -430,6 +430,9 @@ pub fn cursor_run_checkpoint(message: &Message) -> Option<String> {
 /// session does not own a channel.
 #[derive(Debug, Clone)]
 pub struct LogAppended {
+    /// The durable turn projection after these frames, for list viewers that
+    /// have not loaded the conversation's history.
+    pub turn_state: Option<agent_fold::domain::model::TurnState>,
     /// The session the entries belong to. The fold keys its messages on this,
     /// so a client must pass it through unchanged.
     pub agent_session_id: AgentSessionId,

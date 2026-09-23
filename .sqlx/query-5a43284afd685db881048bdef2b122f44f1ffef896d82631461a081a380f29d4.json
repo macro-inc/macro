@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH entity AS (\n            SELECT d.owner, dp.\"sharePermissionId\" AS permission_id\n            FROM \"Document\" d LEFT JOIN \"DocumentPermission\" dp ON dp.\"documentId\" = d.id\n            WHERE $2 = 'document' AND d.id = $1\n            UNION ALL\n            SELECT p.\"userId\", pp.\"sharePermissionId\"\n            FROM \"Project\" p LEFT JOIN \"ProjectPermission\" pp ON pp.\"projectId\" = p.id\n            WHERE $2 = 'project' AND p.id = $1\n            UNION ALL\n            SELECT c.\"userId\", cp.\"sharePermissionId\"\n            FROM \"Chat\" c LEFT JOIN \"ChatPermission\" cp ON cp.\"chatId\" = c.id\n            WHERE $2 = 'chat' AND c.id = $1\n            UNION ALL\n            SELECT l.macro_id, tp.\"sharePermissionId\"\n            FROM email_threads t JOIN email_links l ON l.id = t.link_id\n            LEFT JOIN \"EmailThreadPermission\" tp ON tp.\"threadId\" = t.id::text\n            WHERE $2 = 'email_thread' AND t.id = $3\n            UNION ALL\n            SELECT c.created_by, c.share_permission_id FROM calls c\n            WHERE $2 = 'call' AND c.id = $3\n            UNION ALL\n            SELECT c.created_by, c.share_permission_id FROM call_records c\n            WHERE $2 = 'call' AND c.id = $3 AND NOT EXISTS (SELECT 1 FROM calls WHERE id = $3)\n            UNION ALL\n            SELECT i.owner_user_id, i.share_permission_id FROM initiative i\n            WHERE $2 = 'initiative' AND i.id = $3\n            UNION ALL\n            SELECT s.owner_id, s.share_permission_id FROM agent_session s\n            WHERE $2 = 'agent_session' AND s.id = $3\n        )\n        SELECT e.owner AS \"owner!\", e.permission_id,\n            sp.id AS \"stored_permission_id?\",\n            sp.team_share_access_level AS \"level: AccessLevel\",\n            sp.team_share_team_id AS team_id, sp.team_share_revision AS \"revision?\",\n            tu.team_id AS \"user_team?\", b.team_id AS \"bot_team?\", btu.team_id AS \"bot_user_team?\"\n        FROM entity e LEFT JOIN \"SharePermission\" sp ON sp.id = e.permission_id\n        LEFT JOIN team_user tu ON tu.user_id = e.owner\n        LEFT JOIN bots b ON b.id = CASE\n            WHEN e.owner ~ '^bot\\|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'\n            THEN substring(e.owner FROM 5)::uuid END\n        LEFT JOIN team_user btu ON btu.user_id = b.owner_user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "permission_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "stored_permission_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "revision?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "user_team?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "bot_team?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "bot_user_team?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "5a43284afd685db881048bdef2b122f44f1ffef896d82631461a081a380f29d4"
+}

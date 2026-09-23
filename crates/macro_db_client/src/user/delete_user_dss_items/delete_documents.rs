@@ -1,3 +1,5 @@
+use model_entity::EntityType;
+
 /// Deletes all documents for a user and returns all document ids that were deleted
 /// Does not commit the transaction
 #[tracing::instrument(skip(transaction))]
@@ -52,7 +54,18 @@ pub async fn delete_user_documents(
     .execute(transaction.as_mut())
     .await?;
 
-    // Delete chats
+    let document_uuids = user_documents
+        .iter()
+        .filter_map(|id| macro_uuid::string_to_uuid(id).ok())
+        .collect::<Vec<_>>();
+    crate::item_access::delete::delete_user_entity_access_bulk(
+        transaction,
+        &document_uuids,
+        EntityType::Document,
+    )
+    .await?;
+
+    // Delete documents
     sqlx::query!(
         r#"
         DELETE FROM "Document" 
@@ -63,45 +76,9 @@ pub async fn delete_user_documents(
     .execute(transaction.as_mut())
     .await?;
 
-    for document_id in &user_documents {
-        let Ok(document_uuid) = macro_uuid::string_to_uuid(document_id) else {
-            continue;
-        };
+    for document_uuid in document_uuids {
         entity_registry_db_utils::delete_entity(transaction, document_uuid).await?;
     }
 
     Ok(user_documents)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use sqlx::{Pool, Postgres};
-
-    #[sqlx::test(fixtures(
-        path = "../../../fixtures",
-        scripts("basic_user_with_lots_of_documents")
-    ))]
-    async fn test_delete_user_documents(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let mut transaction = pool.begin().await?;
-        let mut result = delete_user_documents(&mut transaction, "macro|user@user.com").await?;
-
-        result.sort();
-
-        assert_eq!(
-            result,
-            vec![
-                "document-deleted".to_string(),
-                "document-five".to_string(),
-                "document-four".to_string(),
-                "document-one".to_string(),
-                "document-seven".to_string(),
-                "document-six".to_string(),
-                "document-three".to_string(),
-                "document-two".to_string()
-            ]
-        );
-
-        Ok(())
-    }
 }

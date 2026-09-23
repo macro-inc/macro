@@ -57,6 +57,8 @@ import type { SoupPage } from './generated/schemas/soupPage';
 import type { SoupProperty } from './generated/schemas/soupProperty';
 import type { SoupReminderSchedule } from './generated/schemas/soupReminderSchedule';
 import {
+  type ChannelListItemFieldsFragment,
+  type ChannelListNotificationFieldsFragment,
   type GraphqlEntityType,
   type GraphqlReminderScheduleType,
   type GroupedSoupInput,
@@ -67,9 +69,11 @@ import {
   type SoupInitialInput,
   type SoupInput,
   type SoupNotificationFieldsFragment,
+  type SoupNotificationNavigationMetadataFieldsFragment,
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
+import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
   createGraphqlSoupWebSocketUrlResolver,
@@ -490,9 +494,9 @@ export function getGraphqlSoupClient(): Client {
             extractIdentity: (data) =>
               (data as Partial<SoupQuery | GroupSoupQuery> | undefined)?.user
                 ?.id,
-            // Transport failures remain queued with their optimistic layer;
-            // GraphQL application errors are permanent and roll back.
-            shouldRetryMutation: (error) => error.networkError != null,
+            // Preserve the optimistic layer on transport failures and on
+            // application failures the server explicitly allows us to retry.
+            shouldRetryMutation: shouldRetryGraphqlMutation,
           }),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           fetchExchange,
@@ -545,7 +549,9 @@ export type GraphqlGroupedSoupPage = {
   }>;
 };
 
-export type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
+export type GraphqlSoupItem =
+  | SoupQuery['user']['soup']['items'][number]
+  | (ChannelListItemFieldsFragment & { notifications?: never });
 type GraphqlSoupEntity = GraphqlSoupItem;
 type GraphqlProperty = Extract<
   GraphqlSoupEntity,
@@ -707,8 +713,24 @@ type NotifEventMember<Tag extends NotifEvent['tag']> = Extract<
   content: { hasAttachments?: boolean };
 };
 
+// Accept legacy notification projections that omitted optional presentation
+// fields alongside full notification reads. Keep required event data typed.
+type GraphqlNotificationMetadata = {
+  [Name in SoupNotificationNavigationMetadataFieldsFragment['__typename']]: Extract<
+    SoupNotificationNavigationMetadataFieldsFragment,
+    { __typename: Name }
+  > &
+    Partial<
+      Extract<SoupNotificationFieldsFragment['metadata'], { __typename: Name }>
+    >;
+}[SoupNotificationNavigationMetadataFieldsFragment['__typename']];
+
+type GraphqlNotification =
+  | SoupNotificationFieldsFragment
+  | ChannelListNotificationFieldsFragment;
+
 function mapGraphqlNotificationMetadata(
-  metadata: SoupNotificationFieldsFragment['metadata']
+  metadata: GraphqlNotificationMetadata
 ): NotifEvent {
   return match(metadata)
     .with(
@@ -1207,7 +1229,7 @@ function mapGraphqlNotificationMetadata(
  * notification must go through this mapper.
  */
 export function mapGraphqlNotification(
-  record: SoupNotificationFieldsFragment
+  record: GraphqlNotification
 ): Omit<ApiUserNotification, 'owner_id'> {
   return {
     id: record.id,
@@ -1226,9 +1248,9 @@ export function mapGraphqlNotification(
 }
 
 function mapGraphqlNotifications(
-  notifications: SoupNotificationFieldsFragment[]
+  notifications: GraphqlNotification[] | undefined
 ) {
-  return notifications.map(mapGraphqlNotification);
+  return notifications?.map(mapGraphqlNotification);
 }
 
 /**
@@ -1304,6 +1326,14 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             name: entity.sessionName,
             ownerId: entity.ownerId,
             botId: entity.botId,
+            harness: entity.harness,
+            repoUrl: entity.repoUrl,
+            repoBranch: entity.repoBranch,
+            pullRequestUrl: entity.pullRequestUrl,
+            workingBranch: entity.workingBranch,
+            pullRequestState: entity.pullRequestState?.toLowerCase() ?? null,
+            pullRequestId: entity.pullRequestId,
+            turnState: entity.turnState,
             bot: entity.bot,
             threadId: entity.threadId,
             status: entity.status,
@@ -1451,6 +1481,14 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
               entity.latestNonThreadMessage
             ),
             notifications: mapGraphqlNotifications(entity.notifications),
+            unreadNotifications:
+              'unreadNotifications' in entity
+                ? entity.unreadNotifications.map((notification) => ({
+                    id: notification.id,
+                    state: notificationStateFromGraphql(notification.state),
+                    createdAt: notification.createdAt,
+                  }))
+                : undefined,
           },
         }) as SoupApiItem
     )

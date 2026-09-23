@@ -7,13 +7,12 @@ import { DocumentConversation } from './DocumentConversation';
 const mocks = vi.hoisted(() => ({
   timeline: vi.fn(),
   linkResolved: true,
-  contacts: [{ id: 'user|a@example.com', name: 'Ann', email: 'a@example.com' }],
-  capturedParticipants: undefined as (() => Array<{ id: string }>) | undefined,
+  capturedParent: undefined as { type: string; id: string } | undefined,
 }));
 
 vi.mock('@channel/Input', () => ({
-  ChannelInput: (props: { participants?: () => Array<{ id: string }> }) => {
-    mocks.capturedParticipants = props.participants;
+  ChannelInput: (props: { parent?: { type: string; id: string } }) => {
+    mocks.capturedParent = props.parent;
     return <textarea aria-label="Leave a comment..." />;
   },
 }));
@@ -24,9 +23,6 @@ vi.mock('@channel/Thread/utils/message-actions', () => ({
 }));
 vi.mock('@channel/use-channel-bot-mention-users', () => ({
   useMessageBotMentionUsers: () => [],
-}));
-vi.mock('@queries/contacts/contacts', () => ({
-  useContacts: () => () => mocks.contacts,
 }));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
@@ -64,7 +60,7 @@ vi.mock('./MessageThread', () => ({
 
 afterEach(() => {
   mocks.linkResolved = true;
-  mocks.capturedParticipants = undefined;
+  mocks.capturedParent = undefined;
   cleanup();
 });
 
@@ -146,11 +142,9 @@ describe('DocumentConversation placement', () => {
     expect(view.getByRole('textbox')).toBeTruthy();
   });
 
-  it('offers workspace contacts as @-mention participants', () => {
+  it('names the document as the composer parent so it resolves the same mentions as a reply', () => {
     discussion([[]], undefined, { canWrite: true });
-    // Without participants the composer would suggest only agents and bots,
-    // losing the user mentions the legacy comment input offered.
-    expect(mocks.capturedParticipants?.()).toEqual(mocks.contacts);
+    expect(mocks.capturedParent).toEqual({ type: 'document', id: 'document' });
   });
 
   it('shows nothing from the shared latest page while a link is still resolving', () => {

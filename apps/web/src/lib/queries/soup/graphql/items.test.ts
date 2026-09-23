@@ -6,6 +6,7 @@ import type {
   OperationResult,
 } from '@urql/core';
 import { CombinedError } from '@urql/core';
+import { type DocumentNode, print } from 'graphql';
 import { createComputed, createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
@@ -45,7 +46,7 @@ vi.mock('@queries/storage/instructions-md', () => ({
 }));
 
 vi.mock('@app/lib/graphql-cache', () => ({
-  selectRecords: vi.fn(() => ({})),
+  selectRecords: vi.fn((document) => ({ document })),
   readRecordsByKeys: readRecordsByKeysMock,
   normalizedCacheResultMetadata: (result: OperationResult) =>
     result.extensions?.__macroNormalizedCache,
@@ -82,6 +83,7 @@ import {
 } from './optimistic-deletions';
 
 type FakeExecution = {
+  document: DocumentNode;
   variables: Record<string, unknown>;
   fail(error: CombinedError): void;
   next(
@@ -130,6 +132,7 @@ function makeFakeClient(): {
       context,
     } as Operation<unknown, Record<string, unknown>>;
     executions.push({
+      document: _request.query,
       variables: _request.variables,
       fail: (error) =>
         subject.next({ operation, error, stale: false, hasNext: false }),
@@ -166,6 +169,84 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     makeGraphqlSoupInputMock.mockReturnValue({
       initial: { limit: 50, sortMethod: 'UPDATED_AT' },
     });
+  });
+
+  it('uses the channel list projection for initial pages, pagination, refresh and reconciliation', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+      cursor
+        ? { continuation: { cursor } }
+        : { initial: { limit: 50, sortMethod: 'UPDATED_AT' } }
+    );
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => REVISION_0,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    entityFilterMock.mockResolvedValue({
+      kind: 'reconciled',
+      revision: REVISION_0,
+      keys: [],
+      retainedKeys: [],
+      optimistic: false,
+    });
+    readRecordsByKeysMock.mockResolvedValue({
+      revision: REVISION_0,
+      records: [],
+    });
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true, projection: 'channel-list' })
+      ),
+    }));
+    try {
+      expect(print(fake.executions[0].document)).toContain(
+        'query ChannelListSoup'
+      );
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'next' }),
+        {
+          source: 'normalized-cache-hit',
+          revision: REVISION_0,
+        }
+      );
+      await vi.waitFor(() => expect(readRecordsByKeysMock).toHaveBeenCalled());
+      const selection = readRecordsByKeysMock.mock.calls[0][1];
+      expect(print(selection.document)).toContain(
+        'fragment ChannelListItemFields'
+      );
+      expect(print(selection.document)).not.toContain(
+        'channelMessageSendMessageContent'
+      );
+      const more = query.fetchNextPage();
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await more;
+      expect(fake.executions[1].variables).toEqual({
+        input: { continuation: { cursor: 'next' } },
+      });
+      for (const entry of getActiveGraphqlSoupRevalidations()) {
+        expect(print(entry.document)).toContain('query ChannelListSoup');
+      }
+      const refresh = query.refresh();
+      fake.executions[2].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await refresh;
+      for (const execution of fake.executions) {
+        expect(print(execution.document)).toContain('query ChannelListSoup');
+        expect(print(execution.document)).not.toContain(
+          'channelMessageSendMessageContent'
+        );
+      }
+    } finally {
+      dispose();
+    }
   });
 
   it('registers enabled flat pages for durable replay and drops reset or unmounted pages', async () => {

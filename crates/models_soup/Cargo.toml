@@ -21,6 +21,7 @@ item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
+model_owner = { path = "../model_owner" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 reminders = { path = "../reminders", default-features = false }

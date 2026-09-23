@@ -66,7 +66,7 @@ pub async fn get_chat_access(
                       AND EXISTS (
                           SELECT 1
                           FROM "Chat" c
-                          JOIN team_user owner_tu ON owner_tu.user_id = c."userId"
+                          CROSS JOIN owner_team(c."userId") owner_tu
                           WHERE c.id = $3
                             AND owner_tu.team_id::text = ANY($2)
                       )
@@ -131,9 +131,8 @@ pub async fn explain_chat_access(
         FROM "SharePermission" sp
         JOIN "ChatPermission" cp ON cp."sharePermissionId" = sp.id
         JOIN "Chat" c ON c.id = cp."chatId"
-        JOIN team_user owner_tu
-          ON owner_tu.user_id = c."userId"
-         AND owner_tu.team_id::text = ANY($2)
+        JOIN owner_team(c."userId") owner_tu
+          ON owner_tu.team_id::text = ANY($2)
         WHERE cp."chatId" = $1
           AND sp."linkShare" = 'TEAM'
           AND sp."linkShareAccessLevel" IS NOT NULL

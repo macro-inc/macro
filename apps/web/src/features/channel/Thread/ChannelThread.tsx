@@ -315,7 +315,6 @@ export function ChannelThread(props: ThreadProps) {
                   listMeta={props.listMeta}
                   inputMode={props.inputMode}
                   messageEditor={props.messageEditor}
-                  participants={props.participants}
                   onClick={selectThreadMessage}
                   selected={isSelected() && !isThreadFocused()}
                   targeted={
@@ -353,7 +352,6 @@ export function ChannelThread(props: ThreadProps) {
                       getMessageActions={props.getMessageActions}
                       inputMode={props.inputMode}
                       messageEditor={props.messageEditor}
-                      participants={props.participants}
                       isNewMessage={props.isNewMessage}
                       onReady={setReplyListHandle}
                       positionTarget={props.targetNavigation?.positionTarget}

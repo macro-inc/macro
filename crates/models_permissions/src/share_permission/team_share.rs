@@ -7,6 +7,7 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use model_owner::Owner;
 use uuid::Uuid;
 
 use super::access_level::AccessLevel;
@@ -63,8 +64,8 @@ pub struct TeamShareFacts {
     /// The entity whose ownership and sharing state were loaded.
     pub entity: Entity<'static>,
     /// Persisted actual owner, not an actor with an effective Owner grant.
-    pub owner: MacroUserIdStr<'static>,
-    /// The actual owner's current team membership, if any.
+    pub owner: Owner,
+    /// The actual owner's team-link audience, if any; not an ownership grant.
     pub owner_team_id: Option<Uuid>,
     /// Canonical explicit state; inherited or unexplained grants must not populate this.
     pub current: Option<TeamShareGrant>,
@@ -139,6 +140,8 @@ pub enum TeamSharePolicyError {
 /// The entity service supplies `acting_user` from its verified receipt's
 /// `acting_user_id()`; it must not substitute the persisted owner for a missing actor.
 /// Omission deliberately skips owner/team checks and causes no revision or grant writes.
+/// Supplied user edits require a matching `Owner::User`; resolving a bot/team audience
+/// does not authorize its creator, owning user, team member, or administrator to edit it.
 /// Document legacy enable uses Edit; call legacy enable uses View. When both inputs
 /// are supplied, the explicit level wins if their enabled/disabled states agree.
 pub fn authorize_team_share(
@@ -152,7 +155,7 @@ pub fn authorize_team_share(
     }
 
     let actor = acting_user.ok_or(TeamSharePolicyError::MissingActor)?;
-    if actor != &facts.owner {
+    if !facts.owner.is_user(actor) {
         return Err(TeamSharePolicyError::NotOwner);
     }
 

@@ -1,9 +1,11 @@
 use bebop::{Record, SubRecord};
+use macro_sync_service_jwt::session::{SessionIdentity, SessionKind};
 use tracing::{Instrument, error};
 use wasm_bindgen::JsValue;
 use worker::{Env, Error, Headers, Method, Request, RequestInit, Response, Result, Stub};
 
 use crate::{
+    auth::is_internal,
     constants::header_names::{AUTHORIZATION, MACRO_INTERNAL_AUTH_KEY_HEADER_KEY},
     durable_object::{CopyDocumentRequest, GetSnapshotRequest, response, status_codes},
     error::ResultExt,
@@ -20,6 +22,7 @@ mod markers {
     pub const SCHEMA: &str = "schema";
     pub const COPY: &str = "copy";
     pub const REST: &str = "rest";
+    pub const SURFACE: &str = "surface";
 }
 
 pub async fn router(env: Env, req: Request) -> Result<Response> {
@@ -31,6 +34,18 @@ pub async fn router(env: Env, req: Request) -> Result<Response> {
         markers::ROOT => Response::builder().ok("Hello Sync Service!"),
         markers::HEALTH => Response::builder().ok("healthy"),
         markers::SCHEMA => Response::builder().ok(include_str!("../bebop/schema.bop")),
+        markers::SURFACE => {
+            let Some(id) = matched.params.get("surface_id") else {
+                return Ok(response(status_codes::NOT_FOUND));
+            };
+            let Ok(identity) = SessionIdentity::new(SessionKind::Surface, id) else {
+                return Ok(response(400));
+            };
+            if matched.params.get("rest") == Some("activate") {
+                return activate_surface(&env, req, &identity).await;
+            }
+            pass_to_session(&env, req, &identity.storage_key()).await
+        }
         needs_document_id => {
             let document_id = matched.params.get("document_id").with_context(|| {
                 Error::from(format!(
@@ -45,6 +60,60 @@ pub async fn router(env: Env, req: Request) -> Result<Response> {
             }
         }
     }
+}
+
+/// Seal the verified original before enabling the imported target. A failed or
+/// ambiguous response is retried forward; the source can no longer be thawed.
+async fn activate_surface(
+    env: &Env,
+    mut req: Request,
+    identity: &SessionIdentity,
+) -> Result<Response> {
+    if !is_internal(&req, env)? {
+        return Ok(response(401));
+    }
+    if req.method() != Method::Post {
+        return Ok(response(405));
+    }
+    let bytes = req.bytes().await?;
+    let Ok(proof) =
+        serde_json::from_slice::<crate::durable_object::surface_migration::SnapshotProof>(&bytes)
+    else {
+        return Ok(response(400));
+    };
+    let Some(source_id) = proof.source_id else {
+        return Ok(response(409));
+    };
+    if identity.storage_key() != format!("surface:{source_id}") {
+        return Ok(response(409));
+    }
+    for (key, path) in [
+        (
+            identity.storage_key(),
+            format!("/surface/{source_id}/verify"),
+        ),
+        (
+            source_id.to_string(),
+            format!("/document/{source_id}/migration/seal"),
+        ),
+        (
+            identity.storage_key(),
+            format!("/surface/{source_id}/activate"),
+        ),
+    ] {
+        let mut url = req.url()?;
+        url.set_path(&path);
+        let mut init = RequestInit::new();
+        init.with_method(Method::Post)
+            .with_headers(req.headers().clone())
+            .with_body(Some(JsValue::from(bytes.clone())));
+        let request = Request::new_with_init(url.as_ref(), &init)?;
+        let result = pass_to_session(env, request, &key).await?;
+        if result.status_code() != status_codes::OK || path.ends_with("/activate") {
+            return Ok(result);
+        }
+    }
+    Ok(response(409))
 }
 
 /// Get the original snapshot then initialize a new document with it.
@@ -133,6 +202,9 @@ pub static ROUTER: LazyLock<matchit::Router<&str>> = LazyLock::new(|| {
         .insert("/document/{document_id}/{*rest}", markers::REST)
         .unwrap_context("Router.insert failed");
     router
+        .insert("/surface/{surface_id}/{*rest}", markers::SURFACE)
+        .unwrap_context("Router.insert failed");
+    router
 });
 
 pub async fn pass_to_durable_object(
@@ -140,6 +212,14 @@ pub async fn pass_to_durable_object(
     req: Request,
     document_id: &str,
 ) -> Result<Response> {
+    // Legacy document names remain valid, but cannot address the reserved namespace.
+    if document_id.starts_with("surface:") {
+        return Ok(response(400));
+    }
+    pass_to_session(env, req, document_id).await
+}
+
+async fn pass_to_session(env: &Env, req: Request, document_id: &str) -> Result<Response> {
     let stub = get_durable_object(env, document_id)?;
     let span = tracing::info_span!("do.fetch", document.id = %document_id);
     let req = match worker_rs_otel::traceparent_for_span(&span) {

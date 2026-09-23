@@ -404,10 +404,11 @@ export function MarkdownEditor(props: {
     const dragInsertPosition = getValidDragInsertPosition(editor, res.mousePos);
     if (!dragInsertPosition) return;
 
-    const mentionId =
-      res.item.type === 'agent_session'
-        ? undefined
-        : await trackMention(blockId, 'document', res.id);
+    const mentionId = await trackMention(
+      blockId,
+      res.item.type === 'agent_session' ? 'agent_session' : 'document',
+      res.id
+    );
 
     let blockParams: Record<string, string> | undefined;
     if (res.blockName === 'channel') {

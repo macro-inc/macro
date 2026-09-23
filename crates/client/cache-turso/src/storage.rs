@@ -564,7 +564,8 @@ impl TursoFileDatabase {
         Ok(Self { path, turso_path })
     }
 
-    /// Opens and initializes or validates this database for `scope`.
+    /// Opens this database, validating compatibility and queued writes for `scope`.
+    /// Full-file integrity scans are explicit via [`TursoStorage::check_integrity`].
     pub fn open(&self, scope: &str) -> Result<TursoStorage, TursoStorageError> {
         let fresh = !self.path.exists();
         let io: Arc<dyn IO> = Arc::new(PlatformIO::new().map_err(TursoStorageError::turso)?);
@@ -2816,7 +2817,8 @@ fn initialize(
         return Ok(());
     }
 
-    validate_quick_check(connection)?;
+    // Reopening must not scan every cached record/page. Keep compatibility and
+    // pending-write validation here; full scans belong to explicit diagnostics.
     validate_frozen_schema(connection)?;
     let metadata = driver::query(
         connection,
@@ -4225,23 +4227,6 @@ fn compatibility() -> TursoStorageError {
     TursoStorageError::reset(PhysicalResetReason::Compatibility)
 }
 
-fn validate_quick_check(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
-    let rows = driver::query(connection, "PRAGMA quick_check", Vec::new())
-        .map_err(TursoStorageError::initialization)?;
-    validate_quick_check_rows(&rows)
-}
-
-fn validate_quick_check_rows(rows: &[Vec<Value>]) -> Result<(), TursoStorageError> {
-    if rows.len() == 1
-        && rows[0].len() == 1
-        && required_text(&rows[0], 0).ok().as_deref() == Some("ok")
-    {
-        Ok(())
-    } else {
-        Err(TursoStorageError::reset(PhysicalResetReason::Integrity))
-    }
-}
-
 fn validate_queue_consistency(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
     let queue = driver::query(connection, QUEUE_SELECT, Vec::new())
         .map_err(TursoStorageError::initialization)?;
@@ -4794,6 +4779,7 @@ impl TursoStorage {
 }
 
 mod alternatives;
+mod integrity;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

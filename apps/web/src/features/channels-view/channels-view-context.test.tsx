@@ -137,6 +137,22 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ChannelsViewProvider route selection', () => {
+  it('persists collapsed labels per user and restores them', () => {
+    const storageKey = 'macro:channels:view-state:v1:alice';
+    const first = mountProvider();
+    first.context.setLabelOpen('enterprise', false);
+    first.context.setLabelOpen('smb', false);
+    first.context.setLabelOpen('enterprise', false);
+    expect(first.context.state.collapsedLabels).toEqual(['enterprise', 'smb']);
+    first.context.setLabelOpen('smb', true);
+    expect(first.context.state.collapsedLabels).toEqual(['enterprise']);
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({
+      collapsedLabels: ['enterprise'],
+    });
+    first.unmount();
+    const second = mountProvider();
+    expect(second.context.state.collapsedLabels).toEqual(['enterprise']);
+  });
   it('derives accepted selection from a direct detail route', () => {
     const { context } = mountProvider(
       '/channels/channel/c1?s0.channel-detail.messageId=m1&s0.channel-detail.threadId=t1'

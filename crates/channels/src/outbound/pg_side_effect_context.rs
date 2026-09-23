@@ -234,7 +234,9 @@ async fn get_channel_participants_for_thread_id(
             FROM comms_messages m
             JOIN comms_channel_participants cp
               ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
-            WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
+            WHERE (m.id = $1 OR m.thread_id = $1)
+              AND m.deleted_at IS NULL
+              AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
             FROM comms_entity_mentions em
@@ -242,6 +244,7 @@ async fn get_channel_participants_for_thread_id(
             JOIN comms_channel_participants cp
               ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
             WHERE (m.id = $1 OR m.thread_id = $1)
+              AND m.deleted_at IS NULL
               AND em.source_entity_type = 'message'
               AND em.entity_type = 'user'
               AND cp.left_at IS NULL

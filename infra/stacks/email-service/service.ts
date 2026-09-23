@@ -104,9 +104,15 @@ export class EmailService extends pulumi.ComponentResource {
         containerPort: serviceContainerPort,
         service: GatewayService.EMAIL_SERVICE,
         healthCheckPath,
-        // `/calendar` fronts the Google Calendar watch webhook so its public
-        // URL is independent of the `/email` prefix.
-        pathPatterns: ['/email', '/email/*', '/calendar', '/calendar/*'],
+        // calendar-service now owns `/calendar`; its rule at priority 140 takes
+        // over the moment this rule stops matching. Deploy this change only
+        // during cutover, and only after all of: (1) calendar-service's
+        // `/calendar` rule is deployed, (2) calendar-service has
+        // `CALENDAR_SYNC_ENABLED` on and the agent-tools client repoint is
+        // deployed, and (3) email-service has `CALENDAR_SYNC_ENABLED` off.
+        // Deploying earlier can leave `/calendar` requests and webhooks
+        // unroutable or run sync under the wrong owner.
+        pathPatterns: ['/email', '/email/*'],
         serviceSecurityGroupId: this.serviceSg.id,
         albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
       },

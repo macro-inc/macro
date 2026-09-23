@@ -207,7 +207,7 @@ export const InboxRouteView = withAuth(() => {
   return (
     <NewAppView
       id="inbox"
-      desktopOnly
+      composableOnTouch
       detailDesktopOnly
       detailRequested={detailRequested}
       detailFallback={<InboxLegacyRouteView />}
@@ -442,7 +442,7 @@ export const DriveRouteView = withAuth(
     return (
       <NewAppView
         id="documents"
-        desktopOnly
+        composableOnTouch
         fallback={
           <SoupView
             viewName="Files"

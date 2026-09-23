@@ -215,7 +215,7 @@ function answerText(value: AnsweredValue): string {
     .with({ kind: 'choices' }, (v) =>
       v.choices.map((choice) => choice.title ?? choice.value).join(', ')
     )
-    .with({ kind: 'unrecognized' }, (v) => JSON.stringify(v.raw))
+    .with({ kind: 'unrecognized' }, () => '')
     .exhaustive();
 }
 
@@ -227,8 +227,10 @@ function ResolvedQuestion(props: { part: ElicitationPartData }) {
   // The harness's own reading outranks what we sent: it is what the agent
   // actually acted on. Both arrive from the fold in the same shape.
   const shown = (): AnsweredField[] =>
-    props.part.reported ??
-    (props.part.outcome.kind === 'accepted' ? props.part.outcome.answers : []);
+    (
+      props.part.reported ??
+      (props.part.outcome.kind === 'accepted' ? props.part.outcome.answers : [])
+    ).filter((answer) => answer.value.kind !== 'unrecognized');
 
   return (
     <ToolCard

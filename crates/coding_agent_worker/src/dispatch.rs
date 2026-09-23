@@ -81,6 +81,9 @@ impl WorkExecutor for Dispatcher {
                     // whatever the binary in its config was built with, so
                     // there is nothing to state here.
                     instructions: None,
+                    // Likewise the model: an external session runs on
+                    // whatever this runtime is configured with.
+                    model: None,
                 };
                 let created = match self.api.create_session(&request, &sender).await {
                     Ok(created) => created,

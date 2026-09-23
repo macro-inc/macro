@@ -4,8 +4,10 @@ import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { describe, expect, it } from 'vitest';
 import {
   harnessDisplayName,
+  harnessTitle,
   sessionHarnessTitle,
   sessionRepositoryUrl,
+  showsSessionHarness,
 } from './compose-agent-session-options';
 
 describe('sessionRepositoryUrl', () => {
@@ -35,8 +37,9 @@ describe('sessionRepositoryUrl', () => {
 
 describe('harnessDisplayName', () => {
   it('names Macro runtimes after the product', () => {
-    expect(harnessDisplayName('in-memory')).toBe('Macro');
-    expect(harnessDisplayName('sandbox')).toBe('Macro');
+    expect(harnessDisplayName('in-memory')).toBe('Macro Agent');
+    expect(harnessDisplayName('macro-inmem')).toBe('Macro Agent');
+    expect(harnessDisplayName('sandbox')).toBe('Macro Agent');
   });
 
   it('names the Cursor runtime', () => {
@@ -45,6 +48,20 @@ describe('harnessDisplayName', () => {
 
   it('leaves registered harness names alone', () => {
     expect(harnessDisplayName('my-laptop')).toBe('my-laptop');
+  });
+});
+
+describe('harnessTitle', () => {
+  it('uses the product name for Macro slugs instead of title-casing them', () => {
+    expect(harnessTitle('macro-inmem')).toBe('Macro Agent');
+    expect(harnessTitle('in-memory')).toBe('Macro Agent');
+    expect(harnessTitle('sandbox')).toBe('Macro Agent');
+  });
+
+  it('title-cases other slugs', () => {
+    expect(harnessTitle('claude-code')).toBe('Claude Code');
+    expect(harnessTitle('codex-cloud')).toBe('Codex Cloud');
+    expect(harnessTitle(undefined)).toBe('Agent session');
   });
 });
 
@@ -64,5 +81,31 @@ describe('sessionHarnessTitle', () => {
     expect(sessionHarnessTitle({ harness: 'claude-cloud' })).toBe(
       'Claude Cloud'
     );
+  });
+
+  it('uses the product name for Macro slugs', () => {
+    expect(sessionHarnessTitle({ harness: 'macro-inmem' })).toBe('Macro Agent');
+    expect(sessionHarnessTitle({ harness: 'in-memory' })).toBe('Macro Agent');
+  });
+});
+
+describe('showsSessionHarness', () => {
+  it('hides the Details row for in-memory chat agents', () => {
+    expect(showsSessionHarness({ harness: 'in-memory' })).toBe(false);
+    expect(showsSessionHarness({ harness: 'macro-inmem' })).toBe(false);
+    expect(showsSessionHarness({})).toBe(false);
+  });
+
+  it('keeps the Details row for coding runtimes', () => {
+    expect(showsSessionHarness({ harness: 'cursor' })).toBe(true);
+    expect(showsSessionHarness({ harness: 'claude-cloud' })).toBe(true);
+    expect(showsSessionHarness({ harness: 'sandbox' })).toBe(true);
+    expect(showsSessionHarness({ harness: 'my-laptop' })).toBe(true);
+  });
+
+  it('keeps the Details row for first-party coding bots stamped opencode', () => {
+    expect(
+      showsSessionHarness({ harness: 'opencode', botId: CURSOR_BOT_ID })
+    ).toBe(true);
   });
 });

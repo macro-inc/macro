@@ -32,6 +32,38 @@ function entityDisplayName(item: EntityItem): string {
   return '';
 }
 
+/** Whether a mention inserted into this editor is recorded as a document reference. */
+function tracksMentions(dependencies: HandlerDependencies): boolean {
+  const { blockId, blockName, disableMentionTracking } = dependencies;
+  return Boolean(
+    blockId &&
+      blockName !== 'channel' &&
+      blockName !== 'chat' &&
+      !disableMentionTracking
+  );
+}
+
+/**
+ * Insert an agent session chip. It is a reference, not a bot invocation, so
+ * it skips the document/user attachment callbacks — but it is tracked like
+ * any other entity mention so the session's References panel lists the doc.
+ */
+async function handleAgentSessionMention(
+  session: { id: string; name?: string },
+  dependencies: HandlerDependencies
+): Promise<void> {
+  const { editor, blockId } = dependencies;
+  const mentionUuid =
+    blockId && tracksMentions(dependencies)
+      ? await trackMention(blockId, 'agent_session', session.id)
+      : undefined;
+  editor.dispatchCommand(INSERT_AGENT_SESSION_MENTION_COMMAND, {
+    id: session.id,
+    label: session.name,
+    ...(mentionUuid ? { mentionUuid } : {}),
+  });
+}
+
 /**
  * Handle entity mention (documents, channels, emails, etc.).
  */
@@ -39,34 +71,18 @@ async function handleEntityMention(
   item: EntityItem,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const {
-    editor,
-    blockName,
-    blockId,
-    onDocumentMention,
-    disableMentionTracking,
-    onEmailMention,
-  } = dependencies;
+  const { editor, blockId, onDocumentMention, onEmailMention } = dependencies;
 
   const entity = item.data;
   if (entity.type === 'agent_session') {
-    editor.dispatchCommand(INSERT_AGENT_SESSION_MENTION_COMMAND, {
-      id: entity.id,
-      label: entity.name,
-    });
-    return;
+    return await handleAgentSessionMention(entity, dependencies);
   }
 
   const blockNameForMention = getBlockNameFromEntity(item);
   const itemName = entityDisplayName(item);
 
   let mentionId: string | undefined;
-  if (
-    blockId &&
-    blockName !== 'channel' &&
-    blockName !== 'chat' &&
-    !disableMentionTracking
-  ) {
+  if (blockId && tracksMentions(dependencies)) {
     const trackType =
       item.bucket === 'channel' || item.bucket === 'dm'
         ? 'channel'
@@ -137,11 +153,10 @@ export function createItemHandler(dependencies: HandlerDependencies) {
       case 'group':
         return await handleGroupMentionItem(item.data, dependencies);
       case 'agentSession':
-        dependencies.editor.dispatchCommand(
-          INSERT_AGENT_SESSION_MENTION_COMMAND,
-          { id: item.id, label: item.data.name }
+        return await handleAgentSessionMention(
+          { id: item.id, name: item.data.name },
+          dependencies
         );
-        return;
       case 'entity':
         return await handleEntityMention(item, dependencies);
     }

@@ -1,4 +1,3 @@
-import type { IUser } from '@core/user/types';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import type {
   Message as EntityMessage,
@@ -28,7 +27,6 @@ export function ThreadReplyList(props: {
   replies: Array<EntityMessage>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
-  participants?: Accessor<IUser[]>;
   isNewMessage?: (message: NewMessageCheckable) => boolean;
   onReady?: (handle: ThreadReplyListHandle) => void;
   positionTarget?: (
@@ -94,7 +92,6 @@ export function ThreadReplyList(props: {
                 actions={props.getMessageActions?.(replyMessage())}
                 listMeta={listMetaByReplyId()[id]}
                 messageEditor={props.messageEditor}
-                participants={props.participants}
                 onClick={() => props.onSelectReply?.(id)}
                 selected={isReplySelected()}
                 targeted={props.targetedReplyId?.() === id}

@@ -21,8 +21,51 @@ export interface PersistedEmailIdentity {
   inboxId: string;
 }
 
+/**
+ * A draft save's identity plus how it landed. `queued`: the durable
+ * mutation queue accepted the write under the caller's client handles, which
+ * the server may not know yet; REST-only actions cannot use them until a
+ * later save commits. Absent means committed.
+ */
+export interface DraftSaveResult extends PersistedEmailIdentity {
+  persistence?: 'committed' | 'queued';
+}
+
+/** Server rejection codes for a draft save or delete. None is retried by autosave. */
+export type DraftPersistFailureCode =
+  | 'DRAFT_ALREADY_SENT'
+  | 'NOT_FOUND'
+  | 'INBOX_NOT_FOUND'
+  | 'UNAUTHORIZED'
+  | 'INVALID'
+  | 'INTERNAL';
+
+/**
+ * A deterministic server rejection of a draft save or delete. Transport
+ * failures reject with a plain error and may be retried; this one carries
+ * the code so a composer can interpret it (an already-sent draft resets the
+ * composer, anything else latches autosave).
+ */
+export class DraftPersistRejected extends Error {
+  constructor(readonly code: DraftPersistFailureCode) {
+    super(`Draft persistence rejected: ${code}`);
+    this.name = 'DraftPersistRejected';
+  }
+}
+
+/**
+ * Client-minted identity for a draft the server has not confirmed. Carried
+ * apart from `draft.db_id` (a server id) because only the durable queue can
+ * resolve handles; a REST save ignores them and mints server ids instead.
+ */
+export interface DraftClientHandles {
+  draftId: string;
+  threadId?: string;
+}
+
 export interface SaveEmailDraft {
   draft: EmailDraft;
+  clientHandles?: DraftClientHandles;
   sendTime?: Date | null;
   previousThreadId?: string;
   inboxId?: string;
@@ -53,7 +96,7 @@ export interface EmailAttachmentChange {
 }
 
 export interface EmailDraftStorage {
-  saveDraft(input: SaveEmailDraft): Promise<PersistedEmailIdentity>;
+  saveDraft(input: SaveEmailDraft): Promise<DraftSaveResult>;
   deleteDraft(input: DeleteEmailDraft): Promise<void>;
   restoreDraft(input: {
     draftId: string;
@@ -104,7 +147,14 @@ export interface EmailComposeFeedback {
     alert(message: string, options?: ComposeNoticeOptions): void;
     dismiss(id: number): void;
   };
+  /** A modal notice with a single acknowledgement; resolves when dismissed. */
+  blockingNotice(input: { title: string; body: string }): Promise<void>;
   reportError(error: unknown): void;
+}
+
+/** Best-effort device connectivity; a false negative surfaces as the guarded action's own failure. */
+export interface EmailConnectivity {
+  looksOffline(): boolean;
 }
 
 export interface EmailComposeAccounts {
@@ -145,6 +195,7 @@ export interface EmailComposeContext {
   delivery: EmailDelivery;
   notices: EmailComposeFeedback;
   accounts: EmailComposeAccounts;
+  connectivity: EmailConnectivity;
   presentation: EmailComposePresentation;
   editorFiles: EmailEditorFiles;
   viewerEmail: Accessor<string | undefined>;

@@ -12,10 +12,12 @@
 import { DiffCounts } from '@app/features/agent-changes/components/DiffCounts';
 import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
 import { SidePanel } from '@components/app/side-panel';
+import { References } from '@core/component/References';
 import { formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import GitBranch from '@phosphor/git-branch.svg';
-import { createMemo, For, Show } from 'solid-js';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
+import { createMemo, For, Show, Suspense } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';
 import { sessionStatus } from '../../state/session-status';
 import { activityCounts, latestPlan } from '../../state/session-summary';
@@ -24,10 +26,11 @@ import { AgentPullRequestChip } from '../AgentPullRequestChip';
 import {
   sessionHarnessTitle,
   sessionRepositoryUrl,
+  showsSessionHarness,
 } from '../compose-agent-session-options';
 
 export function AgentSidePanelSections() {
-  const { session, bot, metadata, messages } = useAgentSession();
+  const { sessionId, session, bot, metadata, messages } = useAgentSession();
 
   const plan = createMemo(() => latestPlan(messages()));
   const changes = useOptionalAgentChanges();
@@ -51,13 +54,15 @@ export function AgentSidePanelSections() {
               </SidePanel.Row>
             )}
           </Show>
-          <SidePanel.Row label="Harness">
-            <SidePanel.Pill>
-              <span class="truncate">
-                {sessionHarnessTitle(session() ?? {})}
-              </span>
-            </SidePanel.Pill>
-          </SidePanel.Row>
+          <Show when={showsSessionHarness(session() ?? {})}>
+            <SidePanel.Row label="Harness">
+              <SidePanel.Pill>
+                <span class="truncate">
+                  {sessionHarnessTitle(session() ?? {})}
+                </span>
+              </SidePanel.Pill>
+            </SidePanel.Row>
+          </Show>
           <Show when={metadata()?.model ?? session()?.model}>
             {(model) => (
               <SidePanel.Row label="Model">
@@ -171,7 +176,43 @@ export function AgentSidePanelSections() {
           </div>
         </SidePanel.Section>
       </Show>
+
+      <ReferencesSectionConditional sessionId={sessionId()} />
     </>
+  );
+}
+
+/**
+ * Where this session is referenced: channel messages that mention or attach
+ * it, and documents that mention it. Same section the markdown, email, and
+ * call blocks show; hidden until at least one reference exists.
+ */
+function ReferencesSectionConditional(props: { sessionId?: string }) {
+  const references = useAttachmentReferencesQuery(
+    () => props.sessionId,
+    () => 'agent_session'
+  );
+
+  // Gate the resource read on status so a pending query never suspends the
+  // enclosing block while the section is hidden anyway.
+  const count = () => (references.isSuccess ? references.data.length : 0);
+
+  return (
+    <Show when={count() > 0 ? props.sessionId : undefined}>
+      {(sessionId) => (
+        <SidePanel.Section
+          id="references"
+          title={<SidePanel.CountTitle label="References" count={count()} />}
+          order={40}
+        >
+          <Suspense fallback={<SidePanel.Loading />}>
+            <div class="text-xs">
+              <References documentId={sessionId()} entityType="agent_session" />
+            </div>
+          </Suspense>
+        </SidePanel.Section>
+      )}
+    </Show>
   );
 }
 

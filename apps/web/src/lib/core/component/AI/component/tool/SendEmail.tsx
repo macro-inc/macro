@@ -143,12 +143,7 @@ function SentEmailResponse(props: {
               </Suspense>
             </div>
             <span class="shrink-0 text-ink-muted">
-              <CaretRight
-                class={cn(
-                  'size-4 transition-transform',
-                  'group-open:rotate-90'
-                )}
-              />
+              <CaretRight class={cn('size-4', 'group-open:rotate-90')} />
             </span>
           </div>
         </BaseTool>

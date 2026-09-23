@@ -42,6 +42,7 @@ type ReplyInputViewProps = Omit<
   | 'delivery'
   | 'notices'
   | 'accounts'
+  | 'connectivity'
   | 'viewerEmail'
   | 'hasPaidAccess'
   | 'recordMention'
@@ -66,6 +67,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       delivery: composeContext.delivery,
       notices: composeContext.notices,
       accounts: composeContext.accounts,
+      connectivity: composeContext.connectivity,
       viewerEmail: composeContext.viewerEmail,
       hasPaidAccess: composeContext.hasPaidAccess,
       recordMention: composeContext.recordMention,

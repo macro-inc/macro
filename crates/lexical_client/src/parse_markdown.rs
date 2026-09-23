@@ -219,12 +219,25 @@ pub struct AgentContextMessage<'a> {
     pub content: &'a str,
 }
 
+/// The document location of the comment thread an agent prompt was posted in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentContextAnchor<'a> {
+    /// Lexical mark the comment is attached to.
+    pub mark_id: &'a str,
+    /// The marked text when the comment was posted, when it was captured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub marked_text: Option<&'a str>,
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentContextRequest<'a> {
     prompt_markdown: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     parent: Option<&'a MessageParent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    anchor: Option<&'a AgentContextAnchor<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     messages: Option<&'a [AgentContextMessage<'a>]>,
 }
@@ -482,14 +495,15 @@ impl LexicalClient {
         Ok(data.markdown)
     }
 
-    /// Sanitizes an agent prompt and optionally composes it with prior-message
-    /// context via the lexical service, so internal nodes and escaping are
-    /// handled by Lexical rather than assembled manually by the caller.
-    #[tracing::instrument(skip(self, prompt_markdown, messages), err)]
+    /// Sanitizes an agent prompt and optionally composes it with the comment
+    /// anchor and prior-message context via the lexical service, so internal
+    /// nodes and escaping are handled by Lexical rather than by the caller.
+    #[tracing::instrument(skip(self, prompt_markdown, anchor, messages), err)]
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
         parent: Option<&MessageParent>,
+        anchor: Option<&AgentContextAnchor<'_>>,
         messages: Option<&[AgentContextMessage<'_>]>,
     ) -> Result<String> {
         let url = format!("{}/agent-context", self.url);
@@ -499,6 +513,7 @@ impl LexicalClient {
                 .json(&AgentContextRequest {
                     prompt_markdown,
                     parent,
+                    anchor,
                     messages,
                 })
                 .send()

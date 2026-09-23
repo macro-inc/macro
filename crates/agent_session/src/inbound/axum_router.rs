@@ -6,9 +6,9 @@
 //! it - sending, and editing or removing what is queued - needs `Edit`, which
 //! the mention's channel holds, so whoever can prompt the bot through the
 //! thread can prompt it here too; renaming, resizing, or deleting the session
-//! needs `Owner`. Permission comes from the session's own `entity_access`
-//! rows - the owner with owner access, the mention's channel as editor - never
-//! from any channel the session was once rendered in. Handlers only map
+//! needs `Owner`. Permission comes from the session's grants, sharing settings,
+//! or originating document. Sharing changes also require actual session ownership.
+//! Handlers only map
 //! transport DTOs to domain types and call the [`AgentSessionService`]; they
 //! make no authorization or business decisions of their own.
 //!
@@ -59,6 +59,9 @@ use bots::domain::models::BotId;
 
 #[cfg(test)]
 mod test;
+
+/// Link, channel, and team sharing routes.
+pub mod sharing;
 
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
@@ -294,6 +297,25 @@ impl IntoResponse for AgentSessionApiError {
             }
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
+            }
+            Self::Domain(AgentSessionError::InvalidSharing(message)) => {
+                (StatusCode::BAD_REQUEST, message).into_response()
+            }
+            Self::Domain(AgentSessionError::SharingChanged) => (
+                StatusCode::CONFLICT,
+                "sharing changed; reload and try again",
+            )
+                .into_response(),
+            Self::Domain(AgentSessionError::TeamSharing(error)) => {
+                use models_permissions::share_permission::team_share::TeamSharePolicyError;
+                let status = match error {
+                    TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                        StatusCode::FORBIDDEN
+                    }
+                    TeamSharePolicyError::InvalidRevision => StatusCode::CONFLICT,
+                    _ => StatusCode::BAD_REQUEST,
+                };
+                (status, error.to_string()).into_response()
             }
             // Already dispatched, removed, or never queued: the caller's
             // entry is not waiting anymore, and there is no un-sending it.
@@ -1461,6 +1483,14 @@ pub struct CreateAgentSessionRequest {
     /// in-process one acts on them today; `agent_harness`'s `AgentKind`
     /// records what each of the others will need to.
     pub instructions: Option<String>,
+    /// Model the managed session runs on, overriding the persona's. Managed
+    /// sessions only: an external runtime picks its own.
+    ///
+    /// The session's model from the moment it exists, which is what a caller
+    /// choosing one before the first prompt means. Selecting a model *during*
+    /// a session is a control action instead, and reads as one in its
+    /// transcript.
+    pub model: Option<String>,
 }
 
 /// The triggering mention on a create request.
@@ -1788,6 +1818,7 @@ pub async fn create_agent_session_handler<
                 prompt: request.prompt,
                 profile,
                 instructions,
+                model: request.model.filter(|model| !model.trim().is_empty()),
             })
             .await?;
         return Ok((
@@ -1799,8 +1830,9 @@ pub async fn create_agent_session_handler<
     };
 
     // An external runtime sends its own first prompt through the control
-    // endpoint, so accepting one here would silently drop it.
-    if request.prompt.is_some() || request.repo_branch.is_some() {
+    // endpoint, so accepting one here would silently drop it, and it runs on
+    // whatever model its operator configured, which is not ours to set.
+    if request.prompt.is_some() || request.repo_branch.is_some() || request.model.is_some() {
         return Err(CreateSessionApiError::MixedSessionShape);
     }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;
