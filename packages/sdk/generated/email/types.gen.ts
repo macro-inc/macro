@@ -302,7 +302,7 @@ export type ApiMessage = {
     body_macro?: string | null;
     body_replyless?: string | null;
     body_text?: string | null;
-    calendar_invitations?: MessageCalendarInvitations;
+    calendar_invitations?: Array<CalendarInvitation>;
     cc: Array<ApiContactInfo>;
     created_at: string;
     db_id: string;
@@ -770,10 +770,6 @@ export type CalendarEventSourceContent = {
  */
 export type CalendarInvitation = {
     /**
-     * Attachment to download when the original invitation is needed.
-     */
-    attachment_id?: string | null;
-    /**
      * Historical attendee identities and participation metadata.
      */
     attendees: Array<InvitationParticipant>;
@@ -786,10 +782,6 @@ export type CalendarInvitation = {
      */
     conference_url?: string | null;
     /**
-     * SHA-256 of the decoded calendar part.
-     */
-    content_hash: string;
-    /**
      * Plaintext description, retaining passwords and dial-in instructions.
      */
     description?: string | null;
@@ -797,19 +789,7 @@ export type CalendarInvitation = {
      * Scheduling timestamp in its original spelling.
      */
     dtstamp?: string | null;
-    /**
-     * Original DURATION when no explicit end was supplied.
-     */
-    duration?: string | null;
     end?: null | InvitationDateTime;
-    /**
-     * Validated HTTP(S) event URL.
-     */
-    event_url?: string | null;
-    /**
-     * External file references; never fetched during rendering.
-     */
-    files: Array<string>;
     /**
      * Content-derived component identity, stable across repeated extraction.
      */
@@ -819,10 +799,6 @@ export type CalendarInvitation = {
      */
     last_modified?: string | null;
     /**
-     * Bounded, non-content reason codes describing incomplete interpretation.
-     */
-    limitations: Array<string>;
-    /**
      * Plaintext event location.
      */
     location?: string | null;
@@ -831,18 +807,6 @@ export type CalendarInvitation = {
      */
     method: InvitationMethod;
     organizer?: null | InvitationParticipant;
-    /**
-     * Version of the parser and policy producing this snapshot.
-     */
-    parser_version: number;
-    /**
-     * Producer identifier; format recognition grants no permission.
-     */
-    prodid?: string | null;
-    /**
-     * Unexpanded RRULE/RDATE/EXDATE properties and parameters.
-     */
-    recurrence: Array<string>;
     recurrence_id?: null | InvitationDateTime;
     /**
      * Original recurrence identifier spelling and parameters.
@@ -852,19 +816,11 @@ export type CalendarInvitation = {
      * Scheduling revision, distinct from delivery order.
      */
     sequence: number;
-    /**
-     * Original provider MIME part identifier.
-     */
-    source_part: string;
     start?: null | InvitationDateTime;
     /**
      * Original event status.
      */
     status?: string | null;
-    /**
-     * Preserved VTIMEZONE definitions for unresolved timezone interpretation.
-     */
-    timezones: Array<string>;
     /**
      * Event summary.
      */
@@ -1297,11 +1253,6 @@ export type InvitationDateTime = {
 };
 
 /**
- * Extraction lifecycle, independent from calendar connectivity.
- */
-export type InvitationExtractionStatus = 'unprocessed' | 'pending' | 'ready' | 'absent' | 'unsupported';
-
-/**
  * Original scheduling method, including methods unsupported for actions.
  */
 export type InvitationMethod = 'request' | 'reply' | 'cancel' | 'counter' | 'publish' | 'unknown';
@@ -1315,10 +1266,6 @@ export type InvitationParticipant = {
      */
     email: string;
     /**
-     * Original CUTYPE, including resources and rooms.
-     */
-    kind?: string | null;
-    /**
      * Sender-supplied display name.
      */
     name?: string | null;
@@ -1326,10 +1273,6 @@ export type InvitationParticipant = {
      * Original PARTSTAT, retaining extensions.
      */
     participation_status?: string | null;
-    /**
-     * Original ROLE, including optional and non-participants.
-     */
-    role?: string | null;
 };
 
 /**
@@ -1544,20 +1487,6 @@ export type Message = {
     thread_db_id: string;
     to: Array<ContactInfo>;
     updated_at: string;
-};
-
-/**
- * Saved invitation data accompanying an email through every transport.
- */
-export type MessageCalendarInvitations = {
-    /**
-     * Distinct scheduling components, including recurrence overrides.
-     */
-    invitations: Array<CalendarInvitation>;
-    /**
-     * Whether extraction ran and whether it needs retrying.
-     */
-    status: InvitationExtractionStatus;
 };
 
 export type MessageListVisibility = 'Show' | 'Hide';
@@ -3337,10 +3266,7 @@ export type GetThreadCalendarInvitationsData = {
          */
         thread_id: string;
     };
-    query?: {
-        offset?: number | null;
-        limit?: number | null;
-    };
+    query?: never;
     url: '/email/threads/{thread_id}/calendar-invitations';
 };
 

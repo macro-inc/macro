@@ -4,9 +4,6 @@ import type { CalendarInvitation } from './calendar-invitation';
 export const invitationFixture: CalendarInvitation = {
   id: 'product-review',
   uid: 'product-review@example.com',
-  source_part: '1',
-  content_hash: 'fixture',
-  parser_version: 1,
   method: 'request',
   sequence: 0,
   title: 'Product review',
@@ -35,10 +32,6 @@ export const invitationFixture: CalendarInvitation = {
   conference_url: 'https://meet.google.com/abc-defg-hij',
   description:
     'Review the new calendar experience and open questions.\nBring your notes on the updated invitation cards, timezone handling, and the mobile RSVP experience.\nMeeting password: 123456. Dial-in instructions stay available here.',
-  recurrence: [],
-  files: [],
-  timezones: [],
-  limitations: [],
 };
 export const invitationFixtures = {
   new: invitationFixture,

@@ -1,14 +1,10 @@
 use super::*;
 
-fn parse(event: &str, method: &str) -> MessageCalendarInvitations {
+fn parse(event: &str, method: &str) -> ParsedInvitations {
     let bytes = format!(
         "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:{method}\r\nBEGIN:VEVENT\r\nUID:test@example.com\r\n{event}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
     );
-    parse_invitation_parts(&[InvitationPart {
-        part_id: "0.1",
-        attachment_id: None,
-        bytes: bytes.as_bytes(),
-    }])
+    parse_invitation_parts(&[bytes.as_bytes()])
 }
 
 #[test]
@@ -23,7 +19,7 @@ fn folded_escaped_text_and_attendee_parameters() {
         invite.description.as_deref(),
         Some("Line one\nLine two; password 123")
     );
-    assert_eq!(invite.attendees[0].role.as_deref(), Some("OPT-PARTICIPANT"));
+    assert_eq!(invite.attendees[0].name.as_deref(), Some("Alex Chen"));
     assert_eq!(invite.method, InvitationMethod::Reply);
 }
 
@@ -83,18 +79,7 @@ fn cancellation_preserves_original_occurrence_and_partial_metadata() {
 #[test]
 fn duplicates_collapse_but_overrides_remain() {
     let bytes = b"BEGIN:VCALENDAR\nMETHOD:REQUEST\nBEGIN:VEVENT\nUID:series\nDTSTART:20260924T170000Z\nEND:VEVENT\nBEGIN:VEVENT\nUID:series\nRECURRENCE-ID:20261001T170000Z\nDTSTART:20261001T180000Z\nEND:VEVENT\nEND:VCALENDAR\n";
-    let parsed = parse_invitation_parts(&[
-        InvitationPart {
-            part_id: "inline",
-            attachment_id: None,
-            bytes,
-        },
-        InvitationPart {
-            part_id: "attachment",
-            attachment_id: Some("att"),
-            bytes,
-        },
-    ]);
+    let parsed = parse_invitation_parts(&[bytes, bytes]);
     assert_eq!(parsed.invitations.len(), 2);
     assert!(parsed.invitations[1].recurrence_id.is_some());
 }
@@ -111,22 +96,15 @@ fn malformed_oversized_and_unsafe_input() {
         vec![255],
     ] {
         assert_eq!(
-            parse_invitation_parts(&[InvitationPart {
-                part_id: "0",
-                attachment_id: None,
-                bytes: &bytes
-            }])
-            .status,
+            parse_invitation_parts(&[&bytes]).status,
             InvitationExtractionStatus::Unsupported
         );
     }
     let parsed = parse(
-        "URL:javascript:alert(1)\r\nATTACH:data:text/html,bad\r\nX-GOOGLE-CONFERENCE:https://evil:password@example.com",
+        "X-GOOGLE-CONFERENCE:https://evil:password@example.com\r\nLOCATION:javascript:alert(1)",
         "REQUEST",
     );
-    assert!(parsed.invitations[0].event_url.is_none());
     assert!(parsed.invitations[0].conference_url.is_none());
-    assert!(parsed.invitations[0].files.is_empty());
 }
 
 #[test]
@@ -137,7 +115,6 @@ fn mixed_case_tokens_and_duration() {
         invite.attendees[0].participation_status.as_deref(),
         Some("ACCEPTED")
     );
-    assert_eq!(invite.recurrence.len(), 1);
     assert_eq!(
         invite.end,
         Some(InvitationDateTime::Date {
@@ -155,7 +132,7 @@ fn mixed_case_tokens_and_duration() {
 }
 
 #[test]
-fn provider_compatibility_preserves_embedded_timezones() {
+fn provider_compatibility_resolves_only_unambiguous_zones() {
     for (bytes, resolved) in [
         (
             include_bytes!("../../../fixtures/calendar/google.ics").as_slice(),
@@ -170,14 +147,9 @@ fn provider_compatibility_preserves_embedded_timezones() {
             false,
         ),
     ] {
-        let parsed = parse_invitation_parts(&[InvitationPart {
-            part_id: "invite",
-            attachment_id: None,
-            bytes,
-        }]);
+        let parsed = parse_invitation_parts(&[bytes]);
         assert_eq!(parsed.status, InvitationExtractionStatus::Ready);
         assert_eq!(parsed.invitations.len(), 1);
-        assert_eq!(parsed.invitations[0].timezones.len(), 1);
         assert_eq!(
             matches!(
                 parsed.invitations[0].start,

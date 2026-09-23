@@ -11,27 +11,16 @@ pub const MAX_INVITATION_BYTES: usize = 512 * 1024;
 /// Largest number of scheduling components retained for a message.
 pub const MAX_INVITATION_COMPONENTS: usize = 32;
 
-/// Decoded calendar MIME part, obtained during provider ingestion.
-pub struct InvitationPart<'a> {
-    /// Stable provider part identity.
-    pub part_id: &'a str,
-    /// Provider attachment identifier if applicable.
-    pub attachment_id: Option<&'a str>,
-    /// Decoded, bounded MIME body.
-    pub bytes: &'a [u8],
-}
-
-/// Normalize independently parsed parts and collapse inline/attachment duplicates.
-/// A malformed part never discards valid components from another part.
-pub fn parse_invitation_parts(parts: &[InvitationPart<'_>]) -> MessageCalendarInvitations {
-    let mut result = MessageCalendarInvitations::default();
+/// Normalize independently parsed decoded MIME parts and collapse inline/attachment
+/// duplicates. A malformed part never discards valid components from another part.
+pub fn parse_invitation_parts(parts: &[&[u8]]) -> ParsedInvitations {
+    let mut result = ParsedInvitations::default();
     let mut seen = HashSet::new();
-    for part in parts.iter().take(MAX_INVITATION_COMPONENTS) {
-        if part.bytes.len() > MAX_INVITATION_BYTES || std::str::from_utf8(part.bytes).is_err() {
+    for &bytes in parts.iter().take(MAX_INVITATION_COMPONENTS) {
+        if bytes.len() > MAX_INVITATION_BYTES || std::str::from_utf8(bytes).is_err() {
             continue;
         }
-        let content_hash = format!("{:x}", Sha256::digest(part.bytes));
-        for calendar in ical::IcalParser::new(Cursor::new(part.bytes))
+        for calendar in ical::IcalParser::new(Cursor::new(bytes))
             .take(MAX_INVITATION_COMPONENTS)
             .flatten()
         {
@@ -46,11 +35,6 @@ pub fn parse_invitation_parts(parts: &[InvitationPart<'_>]) -> MessageCalendarIn
                 Some("PUBLISH") => InvitationMethod::Publish,
                 _ => InvitationMethod::Unknown,
             };
-            let timezones = calendar
-                .timezones
-                .iter()
-                .filter_map(|tz| serde_json::to_string(tz).ok())
-                .collect::<Vec<_>>();
             for event in calendar.events {
                 if result.invitations.len() >= MAX_INVITATION_COMPONENTS {
                     break;
@@ -74,17 +58,6 @@ pub fn parse_invitation_parts(parts: &[InvitationPart<'_>]) -> MessageCalendarIn
                 let end = property(props, "DTEND").and_then(parse_date).or_else(|| {
                     end_from_duration(start.as_ref()?, value(props, "DURATION")?.as_str())
                 });
-                let recurrence_id = property(props, "RECURRENCE-ID").and_then(parse_date);
-                let mut limitations = Vec::new();
-                if [&start, &end, &recurrence_id]
-                    .iter()
-                    .any(|dt| matches!(dt, Some(InvitationDateTime::Unresolved { .. })))
-                {
-                    limitations.push("unresolved_time_zone".to_owned());
-                }
-                if start.is_none() {
-                    limitations.push("missing_start".to_owned());
-                }
                 let location = text_value(props, "LOCATION");
                 let description = text_value(props, "DESCRIPTION");
                 let conference_url = value(props, "X-GOOGLE-CONFERENCE")
@@ -94,10 +67,6 @@ pub fn parse_invitation_parts(parts: &[InvitationPart<'_>]) -> MessageCalendarIn
                     .or_else(|| description.as_deref().and_then(conference_url));
                 result.invitations.push(CalendarInvitation {
                     id,
-                    source_part: part.part_id.to_owned(),
-                    attachment_id: part.attachment_id.map(str::to_owned),
-                    content_hash: content_hash.clone(),
-                    parser_version: INVITATION_PARSER_VERSION,
                     uid,
                     method,
                     sequence: value(props, "SEQUENCE")
@@ -106,8 +75,7 @@ pub fn parse_invitation_parts(parts: &[InvitationPart<'_>]) -> MessageCalendarIn
                     dtstamp: value(props, "DTSTAMP"),
                     last_modified: value(props, "LAST-MODIFIED"),
                     status: value(props, "STATUS").map(|s| s.to_ascii_uppercase()),
-                    prodid: value(&calendar.properties, "PRODID"),
-                    recurrence_id,
+                    recurrence_id: property(props, "RECURRENCE-ID").and_then(parse_date),
                     recurrence_id_raw: property(props, "RECURRENCE-ID").map(raw_property),
                     title: text_value(props, "SUMMARY"),
                     organizer: property(props, "ORGANIZER").and_then(participant),
@@ -121,25 +89,7 @@ pub fn parse_invitation_parts(parts: &[InvitationPart<'_>]) -> MessageCalendarIn
                     description,
                     start,
                     end,
-                    duration: value(props, "DURATION"),
-                    recurrence: props
-                        .iter()
-                        .filter(|p| {
-                            ["RRULE", "RDATE", "EXDATE"]
-                                .iter()
-                                .any(|name| p.name.eq_ignore_ascii_case(name))
-                        })
-                        .map(raw_property)
-                        .collect(),
                     conference_url,
-                    event_url: value(props, "URL").and_then(|v| safe_url(&v)),
-                    files: props
-                        .iter()
-                        .filter(|p| p.name.eq_ignore_ascii_case("ATTACH"))
-                        .filter_map(|p| p.value.as_deref().and_then(safe_url))
-                        .collect(),
-                    timezones: timezones.clone(),
-                    limitations,
                 });
             }
         }
@@ -182,8 +132,6 @@ fn participant(p: &Property) -> Option<InvitationParticipant> {
         email: email.to_owned(),
         name: parameter(p, "CN").map(unescape_text),
         participation_status: parameter(p, "PARTSTAT").map(str::to_ascii_uppercase),
-        role: parameter(p, "ROLE").map(str::to_ascii_uppercase),
-        kind: parameter(p, "CUTYPE").map(str::to_ascii_uppercase),
     })
 }
 fn parse_date(p: &Property) -> Option<InvitationDateTime> {

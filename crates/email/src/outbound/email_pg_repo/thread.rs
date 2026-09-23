@@ -171,7 +171,7 @@ pub(super) async fn messages_by_thread_id_paginated(
     .fetch_all(pool)
     .await?;
 
-    hydrate_invitations(pool, rows).await
+    Ok(rows.into_iter().map(MessageRow::from).collect())
 }
 
 /// Fetch the newest non-draft content message in each thread using an
@@ -218,7 +218,7 @@ pub(super) async fn latest_content_message_rows(
     .fetch_all(pool)
     .await?;
 
-    hydrate_invitations(pool, rows).await
+    Ok(rows.into_iter().map(MessageRow::from).collect())
 }
 
 /// Find macro drafts that reply to any of the given messages but live in a
@@ -254,7 +254,7 @@ pub(super) async fn cross_inbox_reply_drafts(
     .fetch_all(pool)
     .await?;
 
-    hydrate_invitations(pool, rows).await
+    Ok(rows.into_iter().map(MessageRow::from).collect())
 }
 
 /// Insert a new thread record within a transaction.
@@ -782,20 +782,4 @@ pub(super) async fn upsert_user_history(
     .await?;
 
     Ok(())
-}
-
-async fn hydrate_invitations(
-    pool: &PgPool,
-    rows: Vec<DbMessageRow>,
-) -> Result<Vec<MessageRow>, sqlx::Error> {
-    let ids = rows.iter().map(|r| r.id).collect::<Vec<_>>();
-    let mut invitations = crate::outbound::invitation_pg::load(pool, &ids).await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| {
-            let mut message = MessageRow::from(row);
-            message.calendar_invitations = invitations.remove(&message.db_id).unwrap_or_default();
-            message
-        })
-        .collect())
 }

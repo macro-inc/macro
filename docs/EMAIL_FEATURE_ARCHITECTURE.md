@@ -438,14 +438,17 @@ remaining difference before accepting it.
 
 Calendar MIME extraction belongs to the email domain. `email_message_calendar_invites`
 stores immutable components; `email_message_calendar_extraction` stores parser version,
-status, leased retries, and refresh delivery. Email insertion schedules recovery in the
-same transaction. Live sync consumes already fetched inline bytes and saves attachment
-IDs for the worker. The worker also resumes recent (90-day) calendar-flagged history in
-batches of 16. Historical inline-only mail needs an explicit MIME reinspection backfill;
-opening a message never fetches provider MIME or parses ICS.
-Extraction completion emits `refresh_email/calendar_invitations_updated`. Mounted
-REST and GraphQL thread hosts refresh their messages; inactive REST caches become
-stale. A completion received during the initial read triggers a follow-up read.
+status, leased retries, and refresh delivery. Only messages with calendar parts get
+extraction state: live sync consumes already fetched inline bytes and saves attachment
+IDs for the worker, and skips mail without calendar parts. The worker also resumes
+recent (90-day) calendar-flagged history in batches of 16, which also recovers
+attachment invitations whose inline extraction failed. Historical inline-only mail
+needs an explicit MIME reinspection backfill; opening a message never fetches provider
+MIME or parses ICS.
+Extraction emits `refresh_email/calendar_invitations_updated` only when saved snapshots
+change. Mounted REST and GraphQL thread hosts refresh their messages; inactive REST
+caches become stale. A completion received during the initial read triggers a follow-up
+read. Ordinary new mail never revalidates invitation cards.
 Snapshot changes invalidate calendar resolutions, immediately withdrawing stale
 actions. During RSVP, revalidation waits until all responses settle so an email
 refresh cannot overwrite the optimistic attendee response.
@@ -460,12 +463,13 @@ Google. Optimistic responses and rollback ownership are scoped to that attendee.
 The parser compatibility corpus is in `crates/email/fixtures/calendar`. `ical` 0.11
 handles folded properties, parameters, and embedded VTIMEZONE syntax. `chrono-tz`
 resolves unambiguous IANA times. Windows/custom zones, floating times, and DST gaps or
-ambiguities remain explicitly unresolved, with their original timezone definitions
-retained. Limits are 512 KiB per part and 32 components/parts per message. Date-only
+ambiguities remain explicitly unresolved. Snapshots keep only fields that reads use.
+Limits are 512 KiB per part and 32 components/parts per message. Date-only
 ends remain exclusive; recurrence IDs retain the original occurrence identity.
 
-Thread reads batch-load snapshots, expose them through REST and GraphQL, and preserve
-them in the cached message projection. GraphQL JSON is validated at its transport
+Fully hydrated message reads batch-load snapshots, expose them through REST and GraphQL
+as a plain component list, and preserve them in the cached message projection. Parsed
+list previews never load them. GraphQL JSON is validated at its transport
 adapter. `email-message` owns the typed card and groups recurrence components by UID.
 Original bodies and attachments remain accessible. The original-body disclosure starts
 open: unverified provider templates, forwarding, and organizer commentary must not be
@@ -478,7 +482,7 @@ small presentation values. The body renderer has no calendar dependencies.
 occurrence time, including when an instance has moved to another day.
 
 The email resolution endpoint first authorizes the thread, then derives identities from
-stored snapshots. It calls the `CalendarInvitationService` port through the
+the thread's newest 100 stored components in one batch, without loading its messages. It calls the `CalendarInvitationService` port through the
 `CalendarServiceInvitations` HTTP adapter. `calendar_service` hosts the internal-only
 batch endpoint and constructs the PostgreSQL resolver; email does not read calendar
 tables for this operation. The internal call carries the verified viewer identity,

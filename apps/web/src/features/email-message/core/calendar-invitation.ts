@@ -1,6 +1,5 @@
 import type { z } from 'zod';
 import type {
-  invitationEnvelopeSchema,
   invitationParticipantSchema,
   invitationSnapshotSchema,
   invitationTimeSchema,
@@ -9,9 +8,6 @@ import type {
 export type InvitationDateTime = z.infer<typeof invitationTimeSchema>;
 export type InvitationParticipant = z.infer<typeof invitationParticipantSchema>;
 export type CalendarInvitation = z.infer<typeof invitationSnapshotSchema>;
-export type MessageCalendarInvitations = z.infer<
-  typeof invitationEnvelopeSchema
->;
 
 export type InvitationResponse = 'accepted' | 'tentative' | 'declined';
 export type InvitationResolution =

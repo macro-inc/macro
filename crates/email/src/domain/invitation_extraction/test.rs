@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Default)]
 struct State {
     jobs: Vec<InvitationExtractionJob>,
-    saves: Vec<(MessageCalendarInvitations, Vec<PendingInvitationPart>)>,
+    saves: Vec<(ParsedInvitations, Vec<PendingInvitationPart>)>,
     notified: usize,
 }
 #[derive(Clone, Default)]
@@ -16,7 +16,7 @@ impl InvitationExtractionRepository for Repository {
     async fn save(
         &self,
         _: Uuid,
-        parsed: &MessageCalendarInvitations,
+        parsed: &ParsedInvitations,
         pending: &[PendingInvitationPart],
         _: Option<i64>,
     ) -> Result<bool, Report> {
@@ -87,7 +87,6 @@ async fn unavailable_attachment_keeps_durable_work_without_losing_valid_parts() 
     let mut work = job(false);
     work.parts = ["available", "unavailable"]
         .map(|id| PendingInvitationPart {
-            part_id: id.into(),
             attachment_id: id.into(),
         })
         .to_vec();
@@ -104,6 +103,20 @@ async fn unavailable_attachment_keeps_durable_work_without_losing_valid_parts() 
     assert_eq!(state.saves[0].0.invitations.len(), 1);
     assert_eq!(state.saves[0].1.len(), 1);
     assert_eq!(state.saves[0].1[0].attachment_id, "unavailable");
+}
+
+#[tokio::test]
+async fn messages_without_calendar_parts_keep_no_extraction_state() {
+    let repository = Repository::default();
+    InvitationExtractionService {
+        repository: repository.clone(),
+        provider: Provider,
+        notifier: Notifier,
+    }
+    .ingest(Uuid::now_v7(), &[], &[])
+    .await
+    .unwrap();
+    assert!(repository.0.lock().unwrap().saves.is_empty());
 }
 
 struct UnavailableProvider;

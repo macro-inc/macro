@@ -102,7 +102,7 @@ export function createEmailThreadSource(
   const scheduling = createMemo(() =>
     JSON.stringify(
       (thread()?.messages ?? [])
-        .filter((message) => message.calendar_invitations?.invitations.length)
+        .filter((message) => message.calendar_invitations?.length)
         .map((message) => [message.db_id, message.calendar_invitations])
     )
   );

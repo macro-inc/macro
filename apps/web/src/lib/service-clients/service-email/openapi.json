@@ -3240,24 +3240,6 @@
               "type": "string",
               "format": "uuid"
             }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": ["integer", "null"],
-              "format": "int64"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": ["integer", "null"],
-              "format": "int64"
-            }
           }
         ],
         "responses": {
@@ -3923,7 +3905,10 @@
             "type": ["string", "null"]
           },
           "calendar_invitations": {
-            "$ref": "#/components/schemas/MessageCalendarInvitations"
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarInvitation"
+            }
           },
           "cc": {
             "type": "array",
@@ -4787,25 +4772,8 @@
       "CalendarInvitation": {
         "type": "object",
         "description": "Display snapshot of one meaningful VEVENT, owned by the email domain.",
-        "required": [
-          "id",
-          "source_part",
-          "content_hash",
-          "parser_version",
-          "uid",
-          "method",
-          "sequence",
-          "attendees",
-          "recurrence",
-          "files",
-          "timezones",
-          "limitations"
-        ],
+        "required": ["id", "uid", "method", "sequence", "attendees"],
         "properties": {
-          "attachment_id": {
-            "type": ["string", "null"],
-            "description": "Attachment to download when the original invitation is needed."
-          },
           "attendees": {
             "type": "array",
             "items": {
@@ -4821,10 +4789,6 @@
             "type": ["string", "null"],
             "description": "Validated HTTP(S) conferencing URL; never fetched during rendering."
           },
-          "content_hash": {
-            "type": "string",
-            "description": "SHA-256 of the decoded calendar part."
-          },
           "description": {
             "type": ["string", "null"],
             "description": "Plaintext description, retaining passwords and dial-in instructions."
@@ -4833,10 +4797,6 @@
             "type": ["string", "null"],
             "description": "Scheduling timestamp in its original spelling."
           },
-          "duration": {
-            "type": ["string", "null"],
-            "description": "Original DURATION when no explicit end was supplied."
-          },
           "end": {
             "oneOf": [
               {
@@ -4844,20 +4804,9 @@
               },
               {
                 "$ref": "#/components/schemas/InvitationDateTime",
-                "description": "Exclusive typed end, if supplied."
+                "description": "Exclusive typed end, derived from DURATION when DTEND is absent."
               }
             ]
-          },
-          "event_url": {
-            "type": ["string", "null"],
-            "description": "Validated HTTP(S) event URL."
-          },
-          "files": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "External file references; never fetched during rendering."
           },
           "id": {
             "type": "string",
@@ -4866,13 +4815,6 @@
           "last_modified": {
             "type": ["string", "null"],
             "description": "Last modification timestamp in its original spelling."
-          },
-          "limitations": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Bounded, non-content reason codes describing incomplete interpretation."
           },
           "location": {
             "type": ["string", "null"],
@@ -4892,23 +4834,6 @@
                 "description": "Organizer identity from the scheduling component."
               }
             ]
-          },
-          "parser_version": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Version of the parser and policy producing this snapshot.",
-            "minimum": 0
-          },
-          "prodid": {
-            "type": ["string", "null"],
-            "description": "Producer identifier; format recognition grants no permission."
-          },
-          "recurrence": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Unexpanded RRULE/RDATE/EXDATE properties and parameters."
           },
           "recurrence_id": {
             "oneOf": [
@@ -4931,10 +4856,6 @@
             "description": "Scheduling revision, distinct from delivery order.",
             "minimum": 0
           },
-          "source_part": {
-            "type": "string",
-            "description": "Original provider MIME part identifier."
-          },
           "start": {
             "oneOf": [
               {
@@ -4949,13 +4870,6 @@
           "status": {
             "type": ["string", "null"],
             "description": "Original event status."
-          },
-          "timezones": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Preserved VTIMEZONE definitions for unresolved timezone interpretation."
           },
           "title": {
             "type": ["string", "null"],
@@ -5591,11 +5505,6 @@
         ],
         "description": "Preserve date-only and unresolved times without manufacturing UTC instants."
       },
-      "InvitationExtractionStatus": {
-        "type": "string",
-        "description": "Extraction lifecycle, independent from calendar connectivity.",
-        "enum": ["unprocessed", "pending", "ready", "absent", "unsupported"]
-      },
       "InvitationMethod": {
         "type": "string",
         "description": "Original scheduling method, including methods unsupported for actions.",
@@ -5610,10 +5519,6 @@
             "type": "string",
             "description": "Participant calendar address."
           },
-          "kind": {
-            "type": ["string", "null"],
-            "description": "Original CUTYPE, including resources and rooms."
-          },
           "name": {
             "type": ["string", "null"],
             "description": "Sender-supplied display name."
@@ -5621,10 +5526,6 @@
           "participation_status": {
             "type": ["string", "null"],
             "description": "Original PARTSTAT, retaining extensions."
-          },
-          "role": {
-            "type": ["string", "null"],
-            "description": "Original ROLE, including optional and non-participants."
           }
         }
       },
@@ -6163,24 +6064,6 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
-          }
-        }
-      },
-      "MessageCalendarInvitations": {
-        "type": "object",
-        "description": "Saved invitation data accompanying an email through every transport.",
-        "required": ["status", "invitations"],
-        "properties": {
-          "invitations": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CalendarInvitation"
-            },
-            "description": "Distinct scheduling components, including recurrence overrides."
-          },
-          "status": {
-            "$ref": "#/components/schemas/InvitationExtractionStatus",
-            "description": "Whether extraction ran and whether it needs retrying."
           }
         }
       },

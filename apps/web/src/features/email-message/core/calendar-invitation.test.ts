@@ -47,15 +47,11 @@ describe('saved invitation presentation', () => {
     expect(groups[0].related).toEqual([override]);
   });
   it('drops unsupported cache payloads and unsafe action URLs', () => {
+    expect(decodeCalendarInvitations([{}])).toBeUndefined();
     expect(
-      decodeCalendarInvitations({ status: 'ready', invitations: [{}] })
+      decodeCalendarInvitations({ status: 'ready', invitations: [] })
     ).toBeUndefined();
-    expect(
-      decodeCalendarInvitations({
-        status: 'ready',
-        invitations: [invitationFixture],
-      })?.invitations
-    ).toHaveLength(1);
+    expect(decodeCalendarInvitations([invitationFixture])).toHaveLength(1);
     for (const url of [
       'javascript:alert(1)',
       'data:text/html,bad',

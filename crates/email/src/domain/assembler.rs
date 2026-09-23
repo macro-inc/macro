@@ -1,6 +1,6 @@
 use crate::domain::models::{
     AttachmentDraft, AttachmentForwarded, ContactInfo, Message, MessageAttachment, MessageLabel,
-    MessageRow, RecipientType, Thread, ThreadRow,
+    MessageRow, RecipientType, Thread, ThreadRow, calendar_invitation::CalendarInvitation,
 };
 
 pub fn split_recipients(
@@ -32,9 +32,10 @@ pub fn message_from_row(
     attachments_forwarded: Vec<AttachmentForwarded>,
     scheduled_send_time: Option<chrono::DateTime<chrono::Utc>>,
     body_replyless: Option<String>,
+    calendar_invitations: Vec<CalendarInvitation>,
 ) -> Message {
     Message {
-        calendar_invitations: row.calendar_invitations,
+        calendar_invitations,
         db_id: row.db_id,
         provider_id: row.provider_id,
         thread_db_id: row.thread_db_id,

@@ -39,10 +39,10 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
  * Handles `refresh_email` websocket events. Steady-state mutations
  * (`upsert_message`, `update_labels`, `delete_message`) already invalidate soup
  * through the notification-driven path, and reacting to them again would
- * double-refetch soup. `upsert_message` still invalidates calendar resolutions;
- * extraction's `calendar_invitations_updated` also refreshes saved message data.
- * `backfill_progress`, `backfill`, `link_removed`, and `photo_synced` handle
- * inbox-wide state.
+ * double-refetch, so only `calendar_invitations_updated`, `backfill_progress`,
+ * `backfill`, `link_removed`, and `photo_synced` act here. Extraction sends
+ * `calendar_invitations_updated` only when saved snapshots change; it refreshes
+ * message data and revalidates cards in every thread sharing the UID.
  *
  * Backfill produces no notifications, so these are its only refresh signals.
  * `backfill_progress` carries live progress: it refetches soup (throttled,
@@ -61,11 +61,6 @@ export function handleRefreshEmail(payload: unknown): void {
     typeof event.link_id === 'string'
   ) {
     refreshEmailThreads(event.link_id);
-    void invalidateInvitationScheduling();
-    return;
-  }
-  // A scheduling update can affect cards in other threads with the same UID.
-  if (event.event === 'upsert_message' && typeof event.link_id === 'string') {
     void invalidateInvitationScheduling();
     return;
   }

@@ -93,7 +93,7 @@ impl GraphqlSoupEmailMessage {
     async fn calendar_invitations(
         &self,
     ) -> async_graphql::Result<
-        async_graphql::Json<email::domain::models::calendar_invitation::MessageCalendarInvitations>,
+        async_graphql::Json<Vec<email::domain::models::calendar_invitation::CalendarInvitation>>,
     > {
         Ok(async_graphql::Json(
             self.full()?.calendar_invitations.clone(),

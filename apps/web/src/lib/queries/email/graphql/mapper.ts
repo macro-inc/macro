@@ -102,9 +102,8 @@ function mapMessage(
     body_html_sanitized: message.bodyHtmlSanitized,
     body_macro: message.bodyMacro,
     body_replyless: message.bodyReplyless,
-    calendar_invitations: decodeCalendarInvitations(
-      message.calendarInvitations
-    ) ?? { status: 'unprocessed', invitations: [] },
+    calendar_invitations:
+      decodeCalendarInvitations(message.calendarInvitations) ?? [],
     body_text: message.bodyText,
     cc: message.cc.map(mapContact),
     created_at: message.createdAt,

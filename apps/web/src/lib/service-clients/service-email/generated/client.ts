@@ -30,7 +30,6 @@ import type {
   GetScheduledMessagesParams,
   GetScheduledResponse,
   GetThreadCalendarInvitations200,
-  GetThreadCalendarInvitationsParams,
   GetThreadMessagesHandlerParams,
   GetThreadParams,
   GetThreadResponse,
@@ -3394,37 +3393,18 @@ export type getThreadCalendarInvitationsResponse =
   | getThreadCalendarInvitationsResponseSuccess
   | getThreadCalendarInvitationsResponseError;
 
-export const getGetThreadCalendarInvitationsUrl = (
-  threadId: string,
-  params?: GetThreadCalendarInvitationsParams
-) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/email/threads/${threadId}/calendar-invitations?${stringifiedParams}`
-    : `/email/threads/${threadId}/calendar-invitations`;
+export const getGetThreadCalendarInvitationsUrl = (threadId: string) => {
+  return `/email/threads/${threadId}/calendar-invitations`;
 };
 
 export const getThreadCalendarInvitations = async (
   threadId: string,
-  params?: GetThreadCalendarInvitationsParams,
   options?: RequestInit
 ): Promise<getThreadCalendarInvitationsResponse> => {
-  const res = await fetch(
-    getGetThreadCalendarInvitationsUrl(threadId, params),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getGetThreadCalendarInvitationsUrl(threadId), {
+    ...options,
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 

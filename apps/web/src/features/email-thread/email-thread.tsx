@@ -78,16 +78,6 @@ export function EmailThread(props: EmailThreadProps) {
         <EmailCalendarInvitation
           threadId={props.threadId()}
           messageId={message.db_id}
-          offset={
-            Math.floor(
-              Math.max(
-                0,
-                source
-                  .thread()
-                  ?.messages.findIndex((m) => m.db_id === message.db_id) ?? 0
-              ) / 100
-            ) * 100
-          }
           invitation={invitation}
           hour12={calendarPreferences.timeFormat !== '24-hour'}
           openCalendar={props.openCalendar}

@@ -48,10 +48,7 @@ import { createEmailThreadSource, toEmailThread } from './thread-source';
 
 describe('thread query adaptation', () => {
   it('preserves saved invitations through the explicit cached message projection', () => {
-    const invitations = {
-      status: 'ready' as const,
-      invitations: [invitationFixture],
-    };
+    const invitations = [invitationFixture];
     expect(
       toEmailThread(
         thread([message('invite', { calendar_invitations: invitations })])
@@ -256,10 +253,7 @@ it('revalidates capabilities when newer scheduling snapshots arrive in a fresh t
     const [data, setData] = createSignal<ThreadQueryData>({
       thread: thread([
         message('old', {
-          calendar_invitations: {
-            status: 'ready',
-            invitations: [invitationFixture],
-          },
+          calendar_invitations: [invitationFixture],
         }),
       ]),
       hasMore: false,
@@ -278,18 +272,12 @@ it('revalidates capabilities when newer scheduling snapshots arrive in a fresh t
     setData({
       thread: thread([
         message('old', {
-          calendar_invitations: {
-            status: 'ready',
-            invitations: [invitationFixture],
-          },
+          calendar_invitations: [invitationFixture],
         }),
         message('cancel', {
-          calendar_invitations: {
-            status: 'ready',
-            invitations: [
-              { ...invitationFixture, method: 'cancel', sequence: 2 },
-            ],
-          },
+          calendar_invitations: [
+            { ...invitationFixture, method: 'cancel', sequence: 2 },
+          ],
         }),
       ]),
       hasMore: false,
@@ -351,10 +339,7 @@ it('does not revalidate capabilities for unchanged snapshots or ordinary email c
     });
     await Promise.resolve();
     expect(invalidateInvitations).not.toHaveBeenCalled();
-    const calendar_invitations = {
-      status: 'ready' as const,
-      invitations: [invitationFixture],
-    };
+    const calendar_invitations = [invitationFixture];
     setData({
       thread: thread([message('invite', { calendar_invitations })]),
       hasMore: false,

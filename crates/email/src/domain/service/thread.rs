@@ -156,8 +156,20 @@ where
             .filter(|message| message.provider_id.is_none())
             .map(|message| message.db_id)
             .collect();
+        // Invitations are only extracted from delivered mail.
+        let delivered_message_ids: Vec<Uuid> = message_rows
+            .iter()
+            .filter(|message| !message.is_draft)
+            .map(|message| message.db_id)
+            .collect();
 
-        let (mut scheduled, mut attachments, mut draft_attachments, mut forwarded_attachments) = tokio::try_join!(
+        let (
+            mut scheduled,
+            mut attachments,
+            mut draft_attachments,
+            mut forwarded_attachments,
+            mut calendar_invitations,
+        ) = tokio::try_join!(
             async {
                 self.email_repo
                     .scheduled_send_times_by_message_ids(&message_ids)
@@ -182,6 +194,12 @@ where
                     .await
                     .map_err(anyhow::Error::from)
             },
+            async {
+                self.email_repo
+                    .calendar_invitations_by_message_ids(&delivered_message_ids)
+                    .await
+                    .map_err(anyhow::Error::from)
+            },
         )?;
 
         Ok(message_rows
@@ -196,6 +214,8 @@ where
                     draft_attachments.remove(&row.db_id).unwrap_or_default();
                 let message_forwarded_attachments =
                     forwarded_attachments.remove(&row.db_id).unwrap_or_default();
+                let message_calendar_invitations =
+                    calendar_invitations.remove(&row.db_id).unwrap_or_default();
 
                 let (to, cc, bcc) = split_recipients(recipient_list);
                 let body_replyless = email_utils::body_replyless::compute_body_replyless(
@@ -216,6 +236,7 @@ where
                     message_forwarded_attachments,
                     scheduled_send_time,
                     body_replyless,
+                    message_calendar_invitations,
                 )
             })
             .collect())

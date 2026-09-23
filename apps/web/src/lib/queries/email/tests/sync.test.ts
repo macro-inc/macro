@@ -50,12 +50,12 @@ describe('invitation extraction refresh', () => {
     });
     expect(refresh).toHaveBeenCalledOnce();
   });
-  it('invalidates capabilities for scheduling messages without double-refreshing threads', () => {
+  it('leaves ordinary new mail to the notification-driven refresh', () => {
     const refresh = vi.fn();
     const unsubscribe = onEmailThreadRefresh(refresh);
     try {
       handleRefreshEmail({ event: 'upsert_message', link_id: 'inbox' });
-      expect(invalidateInvitations).toHaveBeenCalledOnce();
+      expect(invalidateInvitations).not.toHaveBeenCalled();
       expect(refresh).not.toHaveBeenCalled();
     } finally {
       unsubscribe();

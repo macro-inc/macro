@@ -1,7 +1,7 @@
 //! Email-owned display snapshots and leased attachment extraction work.
-use crate::domain::models::calendar_invitation::{
-    CalendarInvitation, InvitationExtractionStatus, MessageCalendarInvitations,
-};
+use crate::domain::models::calendar_invitation::CalendarInvitation;
+#[cfg(feature = "calendar_parser")]
+use crate::domain::models::calendar_invitation::{InvitationExtractionStatus, ParsedInvitations};
 use rootcause::Report;
 use sqlx::{PgPool, types::Json};
 use std::collections::HashMap;
@@ -11,38 +11,28 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct InvitationPgRepository(pub PgPool);
 
-/// Load an entire thread page in one query; absence means unprocessed.
-pub async fn load(
+/// Load saved components for fully hydrated messages in one query.
+pub(crate) async fn load(
     pool: &PgPool,
     ids: &[Uuid],
-) -> Result<HashMap<Uuid, MessageCalendarInvitations>, sqlx::Error> {
-    let rows = sqlx::query!(r#"
-        SELECT e.message_id, e.status,
-            COALESCE(jsonb_agg(i.snapshot ORDER BY i.component_id) FILTER (WHERE i.component_id IS NOT NULL), '[]'::jsonb)
-                AS "snapshots!: Json<Vec<CalendarInvitation>>"
-        FROM email_message_calendar_extraction e
-        LEFT JOIN email_message_calendar_invites i ON i.message_id = e.message_id
-        WHERE e.message_id = ANY($1)
-        GROUP BY e.message_id
-    "#, ids).fetch_all(pool).await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| {
-            (
-                r.message_id,
-                MessageCalendarInvitations {
-                    status: match r.status.as_str() {
-                        "unprocessed" => InvitationExtractionStatus::Unprocessed,
-                        "ready" => InvitationExtractionStatus::Ready,
-                        "pending" => InvitationExtractionStatus::Pending,
-                        "absent" => InvitationExtractionStatus::Absent,
-                        _ => InvitationExtractionStatus::Unsupported,
-                    },
-                    invitations: r.snapshots.0,
-                },
-            )
-        })
-        .collect())
+) -> Result<HashMap<Uuid, Vec<CalendarInvitation>>, sqlx::Error> {
+    let rows = sqlx::query!(
+        r#"SELECT message_id, snapshot AS "snapshot: Json<CalendarInvitation>"
+        FROM email_message_calendar_invites
+        WHERE message_id = ANY($1)
+        ORDER BY message_id, component_id"#,
+        ids
+    )
+    .fetch_all(pool)
+    .await?;
+    let mut loaded = HashMap::<Uuid, Vec<CalendarInvitation>>::new();
+    for row in rows {
+        loaded
+            .entry(row.message_id)
+            .or_default()
+            .push(row.snapshot.0);
+    }
+    Ok(loaded)
 }
 
 #[cfg(feature = "calendar_parser")]
@@ -55,7 +45,7 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
     async fn save(
         &self,
         message_id: Uuid,
-        parsed: &MessageCalendarInvitations,
+        parsed: &ParsedInvitations,
         pending: &[crate::domain::invitation_extraction::PendingInvitationPart],
         generation: Option<i64>,
     ) -> Result<bool, Report> {
@@ -91,23 +81,25 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
                     && (!pending.is_empty() || parsed.status == InvitationExtractionStatus::Absent)
             })
             .map(|row| row.parser_version);
-        if deferred_version.is_none()
-            && current
+        let mut changed = false;
+        if deferred_version.is_none() {
+            if current
                 .as_ref()
                 .is_some_and(|row| row.parser_version < parser_version)
-        {
-            // Reinspection starts a new component set; retries within it still append.
-            sqlx::query!(
-                "DELETE FROM email_message_calendar_invites WHERE message_id = $1",
-                message_id
-            )
-            .execute(&mut *tx)
-            .await?;
-        }
-        if deferred_version.is_none() {
+            {
+                // Reinspection starts a new component set; retries within it still append.
+                changed |= sqlx::query!(
+                    "DELETE FROM email_message_calendar_invites WHERE message_id = $1",
+                    message_id
+                )
+                .execute(&mut *tx)
+                .await?
+                .rows_affected()
+                    > 0;
+            }
             for snapshot in &parsed.invitations {
                 let json = serde_json::to_value(snapshot)?;
-                sqlx::query!(
+                changed |= sqlx::query!(
                     r#"INSERT INTO email_message_calendar_invites(message_id, component_id, snapshot)
                     VALUES ($1, $2, $3) ON CONFLICT (message_id, component_id) DO NOTHING"#,
                     message_id,
@@ -115,21 +107,26 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
                     json
                 )
                 .execute(&mut *tx)
-                .await?;
+                .await?
+                .rows_affected()
+                    > 0;
             }
         }
         let has_pending = deferred_version.is_some() || !pending.is_empty();
         let stored_version = deferred_version.unwrap_or(parser_version);
         let unsupported = parsed.status == InvitationExtractionStatus::Unsupported;
         let pending_json = serde_json::to_value(pending)?;
-        sqlx::query!(r#"
+        // Only changed snapshots need a refresh; an undelivered one stays due.
+        let refresh_due = sqlx::query_scalar!(r#"
             INSERT INTO email_message_calendar_extraction(message_id, status, parser_version, pending_parts, retry_after, notification_pending)
-            VALUES ($1, CASE WHEN $2 THEN 'pending' WHEN EXISTS (SELECT 1 FROM email_message_calendar_invites WHERE message_id = $1) THEN 'ready' WHEN $3 THEN 'unsupported' ELSE 'absent' END, $4, $5, now() + interval '1 minute', true)
+            VALUES ($1, CASE WHEN $2 THEN 'pending' WHEN EXISTS (SELECT 1 FROM email_message_calendar_invites WHERE message_id = $1) THEN 'ready' WHEN $3 THEN 'unsupported' ELSE 'absent' END, $4, $5, now() + interval '1 minute', $7)
             ON CONFLICT (message_id) DO UPDATE SET status = EXCLUDED.status,
-                parser_version = EXCLUDED.parser_version, pending_parts = EXCLUDED.pending_parts, notification_pending = true,
+                parser_version = EXCLUDED.parser_version, pending_parts = EXCLUDED.pending_parts,
+                notification_pending = email_message_calendar_extraction.notification_pending OR EXCLUDED.notification_pending,
                 generation = email_message_calendar_extraction.generation + CASE WHEN $6::bigint IS NULL THEN 1 ELSE 0 END,
                 retry_after = now() + interval '1 minute' * LEAST(60, 1 + email_message_calendar_extraction.attempts), updated_at = now()
-        "#, message_id, has_pending, unsupported, stored_version, pending_json, generation).execute(&mut *tx).await?;
+            RETURNING notification_pending
+        "#, message_id, has_pending, unsupported, stored_version, pending_json, generation, changed).fetch_one(&mut *tx).await?;
         sqlx::query!(
             r#"UPDATE email_threads SET has_calendar_attachment = true
             WHERE id = (SELECT thread_id FROM email_messages WHERE id = $1)
@@ -140,7 +137,7 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
-        Ok(true)
+        Ok(refresh_due)
     }
     async fn claim(
         &self,
@@ -197,7 +194,32 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
 }
 
 #[cfg(feature = "calendar_resolution")]
-impl crate::domain::invitation_resolution::InvitationRevisionRepository for InvitationPgRepository {
+impl crate::domain::invitation_resolution::InvitationSnapshotRepository for InvitationPgRepository {
+    async fn thread_invitations(
+        &self,
+        thread_id: Uuid,
+        limit: i64,
+    ) -> Result<Vec<crate::domain::invitation_resolution::ThreadInvitation>, Report> {
+        let rows = sqlx::query!(
+            r#"SELECT m.id AS message_id, m.link_id, i.snapshot AS "snapshot!: Json<CalendarInvitation>"
+            FROM email_message_calendar_invites i JOIN email_messages m ON m.id = i.message_id
+            WHERE m.thread_id = $1
+            ORDER BY COALESCE(m.internal_date_ts, m.sent_at, m.created_at) DESC, m.id DESC, i.component_id
+            LIMIT $2"#,
+            thread_id,
+            limit
+        )
+        .fetch_all(&self.0)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| crate::domain::invitation_resolution::ThreadInvitation {
+                message_id: r.message_id,
+                link_id: r.link_id,
+                invitation: r.snapshot.0,
+            })
+            .collect())
+    }
     async fn revisions(
         &self,
         viewer: &str,

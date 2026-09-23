@@ -4,10 +4,8 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { InvitationParticipantKind } from './invitationParticipantKind';
 import type { InvitationParticipantName } from './invitationParticipantName';
 import type { InvitationParticipantParticipationStatus } from './invitationParticipantParticipationStatus';
-import type { InvitationParticipantRole } from './invitationParticipantRole';
 
 /**
  * Scheduling participant; saved responses are historical, not current RSVP.
@@ -15,12 +13,8 @@ import type { InvitationParticipantRole } from './invitationParticipantRole';
 export interface InvitationParticipant {
   /** Participant calendar address. */
   email: string;
-  /** Original CUTYPE, including resources and rooms. */
-  kind?: InvitationParticipantKind;
   /** Sender-supplied display name. */
   name?: InvitationParticipantName;
   /** Original PARTSTAT, retaining extensions. */
   participation_status?: InvitationParticipantParticipationStatus;
-  /** Original ROLE, including optional and non-participants. */
-  role?: InvitationParticipantRole;
 }

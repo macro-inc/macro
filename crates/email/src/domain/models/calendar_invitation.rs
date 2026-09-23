@@ -5,31 +5,22 @@ use serde::{Deserialize, Serialize};
 /// Version of the normalized snapshot format and extraction policy.
 pub const INVITATION_PARSER_VERSION: u16 = 1;
 
-/// Extraction lifecycle, independent from calendar connectivity.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+/// Parser outcome for one message's calendar parts; internal to extraction.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum InvitationExtractionStatus {
-    /// Historical message whose MIME has not been inspected.
-    #[default]
-    Unprocessed,
-    /// At least one attachment is awaiting a durable retry.
-    Pending,
-    /// One or more scheduling components were saved.
+    /// One or more scheduling components were found.
     Ready,
-    /// MIME was inspected and contained no scheduling components.
+    /// There were no calendar parts to inspect.
+    #[default]
     Absent,
     /// Calendar content could not be rendered safely.
     Unsupported,
 }
 
-/// Saved invitation data accompanying an email through every transport.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
-pub struct MessageCalendarInvitations {
-    /// Whether extraction ran and whether it needs retrying.
+/// Components parsed from one message's calendar parts.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ParsedInvitations {
+    /// Whether any usable component was found.
     pub status: InvitationExtractionStatus,
     /// Distinct scheduling components, including recurrence overrides.
     pub invitations: Vec<CalendarInvitation>,
@@ -95,10 +86,6 @@ pub struct InvitationParticipant {
     pub name: Option<String>,
     /// Original PARTSTAT, retaining extensions.
     pub participation_status: Option<String>,
-    /// Original ROLE, including optional and non-participants.
-    pub role: Option<String>,
-    /// Original CUTYPE, including resources and rooms.
-    pub kind: Option<String>,
 }
 
 /// Display snapshot of one meaningful VEVENT, owned by the email domain.
@@ -108,14 +95,6 @@ pub struct InvitationParticipant {
 pub struct CalendarInvitation {
     /// Content-derived component identity, stable across repeated extraction.
     pub id: String,
-    /// Original provider MIME part identifier.
-    pub source_part: String,
-    /// Attachment to download when the original invitation is needed.
-    pub attachment_id: Option<String>,
-    /// SHA-256 of the decoded calendar part.
-    pub content_hash: String,
-    /// Version of the parser and policy producing this snapshot.
-    pub parser_version: u16,
     /// iCalendar UID; never a Google provider event ID.
     pub uid: String,
     /// Original scheduling method.
@@ -128,8 +107,6 @@ pub struct CalendarInvitation {
     pub last_modified: Option<String>,
     /// Original event status.
     pub status: Option<String>,
-    /// Producer identifier; format recognition grants no permission.
-    pub prodid: Option<String>,
     /// Original occurrence start, even when the instance moved.
     pub recurrence_id: Option<InvitationDateTime>,
     /// Original recurrence identifier spelling and parameters.
@@ -148,20 +125,8 @@ pub struct CalendarInvitation {
     pub description: Option<String>,
     /// Original typed start, if supplied.
     pub start: Option<InvitationDateTime>,
-    /// Exclusive typed end, if supplied.
+    /// Exclusive typed end, derived from DURATION when DTEND is absent.
     pub end: Option<InvitationDateTime>,
-    /// Original DURATION when no explicit end was supplied.
-    pub duration: Option<String>,
-    /// Unexpanded RRULE/RDATE/EXDATE properties and parameters.
-    pub recurrence: Vec<String>,
     /// Validated HTTP(S) conferencing URL; never fetched during rendering.
     pub conference_url: Option<String>,
-    /// Validated HTTP(S) event URL.
-    pub event_url: Option<String>,
-    /// External file references; never fetched during rendering.
-    pub files: Vec<String>,
-    /// Preserved VTIMEZONE definitions for unresolved timezone interpretation.
-    pub timezones: Vec<String>,
-    /// Bounded, non-content reason codes describing incomplete interpretation.
-    pub limitations: Vec<String>,
 }

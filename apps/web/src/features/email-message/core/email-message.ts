@@ -1,4 +1,4 @@
-import type { MessageCalendarInvitations } from './calendar-invitation';
+import type { CalendarInvitation } from './calendar-invitation';
 /** Feature-owned values. Transport adaptation belongs to queries. */
 export interface EmailContact {
   email: string;
@@ -36,7 +36,7 @@ export interface EmailLabel {
 }
 
 export interface EmailMessage {
-  calendar_invitations?: MessageCalendarInvitations;
+  calendar_invitations?: CalendarInvitation[];
   attachments: EmailAttachment[];
   attachments_draft: EmailDraftAttachment[];
   attachments_forwarded: EmailForwardedAttachment[];

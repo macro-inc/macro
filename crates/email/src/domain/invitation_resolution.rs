@@ -1,7 +1,6 @@
 //! Authorize email reads before deriving calendar identities from saved snapshots.
-use super::{
-    models::calendar_invitation::{CalendarInvitation, InvitationDateTime, InvitationMethod},
-    ports::EmailService,
+use super::models::calendar_invitation::{
+    CalendarInvitation, InvitationDateTime, InvitationMethod,
 };
 use calendar_events::domain::invitations::{
     CalendarInvitationService, InvitationIdentity, InvitationResolution, InvitationRevision,
@@ -12,8 +11,25 @@ use rootcause::Report;
 use std::{collections::HashMap, future::Future};
 use uuid::Uuid;
 
-/// Email-owned access-aware lookup of newer scheduling messages.
-pub trait InvitationRevisionRepository: Send + Sync {
+/// A saved component with the message and inbox it arrived in.
+pub struct ThreadInvitation {
+    /// Message carrying the component.
+    pub message_id: Uuid,
+    /// Inbox the message arrived in.
+    pub link_id: Uuid,
+    /// Saved component.
+    pub invitation: CalendarInvitation,
+}
+
+/// Email-owned access-aware lookup of saved scheduling components.
+pub trait InvitationSnapshotRepository: Send + Sync {
+    /// Newest components of one already-authorized thread, at most `limit`.
+    fn thread_invitations(
+        &self,
+        thread_id: Uuid,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<ThreadInvitation>, Report>> + Send;
+    /// Newer scheduling messages for the same UIDs.
     /// Only the authorized thread and independently owned inboxes may contribute.
     fn revisions(
         &self,
@@ -131,63 +147,45 @@ fn cancelled(invite: &CalendarInvitation) -> bool {
             .is_some_and(|status| status.eq_ignore_ascii_case("CANCELLED"))
 }
 
-/// Batch resolution for one authorized thread page. Caller-supplied UIDs are never used.
-pub async fn resolve<
-    E: EmailService,
-    C: CalendarInvitationService,
-    S: InvitationRevisionRepository,
->(
-    email: &E,
+/// Resolve the newest saved components of one authorized thread in one calendar batch.
+/// Caller-supplied UIDs are never used.
+pub async fn resolve<C: CalendarInvitationService, S: InvitationSnapshotRepository>(
     calendar: &C,
     snapshots: &S,
     receipt: EntityAccessReceipt<ViewAccessLevel>,
-    offset: i64,
-    limit: i64,
 ) -> Result<HashMap<String, InvitationResolution>, Report> {
     let started = std::time::Instant::now();
-    if offset < 0 || !(1..=100).contains(&limit) {
-        return Err(rootcause::report!("invalid invitation page"));
-    }
     let viewer = receipt
         .get_authenticated_user()
         .map_err(|_| rootcause::report!("authentication required"))?
         .to_string();
-    let thread = email
-        .get_thread_with_messages(receipt, offset, limit)
-        .await
-        .map_err(|e| rootcause::report!(e.to_string()))?
-        .ok_or_else(|| rootcause::report!("thread not found"))?;
-    let uids = thread
-        .messages
-        .iter()
-        .flat_map(|m| {
-            m.calendar_invitations
-                .invitations
-                .iter()
-                .map(|i| i.uid.clone())
-        })
-        .collect::<Vec<_>>();
-    let revisions = snapshots
-        .revisions(&viewer, thread.row.db_id, &uids)
+    let thread_id = Uuid::parse_str(&receipt.entity().entity_id)
+        .map_err(|error| rootcause::report!("invalid thread id: {error}"))?;
+    let saved = snapshots
+        .thread_invitations(thread_id, MAX_INVITATION_BATCH as i64)
         .await?;
-    let identities = thread
-        .messages
+    let uids = saved
         .iter()
-        .flat_map(|message| {
-            message
-                .calendar_invitations
-                .invitations
-                .iter()
-                .map(|invite| {
-                    invitation_identity(message.db_id, message.link_id, invite, &revisions)
-                })
+        .map(|saved| saved.invitation.uid.clone())
+        .collect::<Vec<_>>();
+    let revisions = snapshots.revisions(&viewer, thread_id, &uids).await?;
+    let identities = saved
+        .iter()
+        .map(|saved| {
+            invitation_identity(
+                saved.message_id,
+                saved.link_id,
+                &saved.invitation,
+                &revisions,
+            )
         })
         .collect::<Vec<_>>();
-    let mut result = HashMap::new();
+    let resolved = calendar.resolve(&viewer, &identities).await?;
     let mut reasons = HashMap::<&str, usize>::new();
-    for batch in identities.chunks(MAX_INVITATION_BATCH) {
-        let resolved = calendar.resolve(&viewer, batch).await?;
-        for (identity, resolution) in batch.iter().zip(resolved) {
+    let result = identities
+        .into_iter()
+        .zip(resolved)
+        .map(|(identity, resolution)| {
             let reason = match &resolution {
                 InvitationResolution::Resolved { is_stale: true, .. } => "stale",
                 InvitationResolution::Resolved { .. } => "resolved",
@@ -199,9 +197,9 @@ pub async fn resolve<
                 InvitationResolution::Ambiguous => "ambiguous",
             };
             *reasons.entry(reason).or_default() += 1;
-            result.insert(identity.id.clone(), resolution);
-        }
-    }
+            (identity.id, resolution)
+        })
+        .collect::<HashMap<_, _>>();
     tracing::info!(
         count = result.len(),
         elapsed_ms = started.elapsed().as_millis(),

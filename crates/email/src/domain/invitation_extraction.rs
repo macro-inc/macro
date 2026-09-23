@@ -1,7 +1,7 @@
 //! Durable display extraction; errors in calendar content never reject mail.
 use super::{
-    calendar_invitation_parser::{InvitationPart, MAX_INVITATION_BYTES, parse_invitation_parts},
-    models::calendar_invitation::MessageCalendarInvitations,
+    calendar_invitation_parser::{MAX_INVITATION_BYTES, parse_invitation_parts},
+    models::calendar_invitation::{InvitationExtractionStatus, ParsedInvitations},
 };
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
@@ -11,15 +11,11 @@ use uuid::Uuid;
 /// Attachment content still required after inline extraction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingInvitationPart {
-    /// MIME part key.
-    pub part_id: String,
     /// Provider attachment key.
     pub attachment_id: String,
 }
 /// Calendar MIME content discovered during durable recovery/backfill.
 pub struct DiscoveredInvitationPart {
-    /// MIME identity.
-    pub part_id: String,
     /// Attachment identity, if content is not inline.
     pub attachment_id: Option<String>,
     /// Decoded inline bytes.
@@ -47,10 +43,11 @@ pub trait InvitationExtractionRepository: Send + Sync {
     /// Whether this immutable message already has work for this parser version.
     fn is_processed(&self, message_id: Uuid) -> impl Future<Output = Result<bool, Report>> + Send;
     /// Replace snapshots on parser upgrades, append retries, and fence expired leases.
+    /// Returns whether a refresh is due: snapshots changed now or earlier without delivery.
     fn save(
         &self,
         message_id: Uuid,
-        parsed: &MessageCalendarInvitations,
+        parsed: &ParsedInvitations,
         pending: &[PendingInvitationPart],
         generation: Option<i64>,
     ) -> impl Future<Output = Result<bool, Report>> + Send;
@@ -101,12 +98,16 @@ impl<
 > InvitationExtractionService<R, P, N>
 {
     /// Parse inline bytes once and save attachment work for the retry worker.
+    /// Messages without calendar parts keep no extraction state.
     pub async fn ingest(
         &self,
         message_id: Uuid,
-        inline: &[InvitationPart<'_>],
+        inline: &[&[u8]],
         pending: &[PendingInvitationPart],
     ) -> Result<(), Report> {
+        if inline.is_empty() && pending.is_empty() {
+            return Ok(());
+        }
         if self.repository.is_processed(message_id).await? {
             return Ok(());
         }
@@ -145,12 +146,9 @@ impl<
                 .await?
             {
                 if let Some(bytes) = part.bytes {
-                    downloaded.push((part.part_id, part.attachment_id, bytes));
+                    downloaded.push(bytes);
                 } else if let Some(attachment_id) = part.attachment_id {
-                    work.push(PendingInvitationPart {
-                        part_id: part.part_id,
-                        attachment_id,
-                    });
+                    work.push(PendingInvitationPart { attachment_id });
                 }
             }
         }
@@ -162,9 +160,7 @@ impl<
                 .download(job.link_id, &job.provider_id, &part.attachment_id)
                 .await
             {
-                Ok(bytes) if bytes.len() <= MAX_INVITATION_BYTES => {
-                    downloaded.push((part.part_id, Some(part.attachment_id), bytes))
-                }
+                Ok(bytes) if bytes.len() <= MAX_INVITATION_BYTES => downloaded.push(bytes),
                 Ok(_) => {
                     unsupported = true;
                     tracing::warn!(reason = "oversized", "invitation extraction skipped");
@@ -178,18 +174,10 @@ impl<
                 }
             }
         }
-        let parts = downloaded
-            .iter()
-            .map(|(id, attachment, bytes)| InvitationPart {
-                part_id: id,
-                attachment_id: attachment.as_deref(),
-                bytes,
-            })
-            .collect::<Vec<_>>();
+        let parts = downloaded.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let mut parsed = parse_invitation_parts(&parts);
         if unsupported && parsed.invitations.is_empty() {
-            parsed.status =
-                super::models::calendar_invitation::InvitationExtractionStatus::Unsupported;
+            parsed.status = InvitationExtractionStatus::Unsupported;
         }
         if self
             .repository

@@ -200,6 +200,17 @@ pub trait EmailRepo: Send + Sync + 'static {
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, Vec<MessageLabel>>, Self::Err>> + Send;
 
+    /// Fetch saved calendar invitation components, keyed by message ID.
+    fn calendar_invitations_by_message_ids(
+        &self,
+        message_ids: &[Uuid],
+    ) -> impl Future<
+        Output = Result<
+            HashMap<Uuid, Vec<crate::domain::models::calendar_invitation::CalendarInvitation>>,
+            Self::Err,
+        >,
+    > + Send;
+
     /// Fetch persisted message timestamps, scoped to the sending inbox.
     fn message_timestamps(
         &self,

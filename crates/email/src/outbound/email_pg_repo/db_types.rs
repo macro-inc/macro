@@ -233,7 +233,6 @@ pub struct DbMessageRow {
 impl From<DbMessageRow> for MessageRow {
     fn from(row: DbMessageRow) -> Self {
         Self {
-            calendar_invitations: Default::default(),
             db_id: row.id,
             provider_id: row.provider_id,
             thread_db_id: row.thread_id,

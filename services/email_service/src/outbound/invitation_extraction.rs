@@ -30,7 +30,6 @@ impl InvitationAttachmentProvider for InvitationProvider {
             .into_iter()
             .take(email::domain::calendar_invitation_parser::MAX_INVITATION_COMPONENTS)
             .map(|part| DiscoveredInvitationPart {
-                part_id: part.part_id.unwrap_or_else(|| "calendar".to_owned()),
                 attachment_id: part.provider_attachment_id,
                 bytes: part.inline_data,
             })

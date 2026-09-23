@@ -136,9 +136,9 @@ export const SIGNATURE_IMAGES_UNRESOLVED_CODE =
   'SIGNATURE_IMAGES_UNRESOLVED' as const;
 
 export const emailClient = {
-  async getCalendarInvitations(threadId: string, offset = 0) {
+  async getCalendarInvitations(threadId: string) {
     return emailFetch<Record<string, InvitationResolution>>(
-      `/email/threads/${threadId}/calendar-invitations?offset=${offset}&limit=100`
+      `/email/threads/${threadId}/calendar-invitations`
     );
   },
   async init(args?: { linkId?: string; forceShare?: boolean }) {

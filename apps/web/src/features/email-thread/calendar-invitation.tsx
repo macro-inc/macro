@@ -27,7 +27,6 @@ export type CalendarInvitationOpenTarget = {
 export function EmailCalendarInvitation(props: {
   threadId: string;
   messageId: string;
-  offset: number;
   invitation: CalendarInvitation;
   hour12: boolean;
   openCalendar?: (target: CalendarInvitationOpenTarget) => void;
@@ -52,8 +51,7 @@ function ConnectedInvitation(
   const startAddInbox = useAddInboxFlow();
   const query = useCalendarInvitationsQuery(
     () => props.threadId,
-    calendarEnabled,
-    () => props.offset
+    calendarEnabled
   );
   const [showDay, setShowDay] = createSignal(false);
   let dayTrigger: HTMLElement | undefined;
@@ -73,7 +71,7 @@ function ConnectedInvitation(
     if (query.isPending) return { kind: 'loading' };
     const wire = query.isSuccess
       ? query.data[`${props.messageId}:${props.invitation.id}`]
-      : getCachedCalendarInvitations(props.threadId, props.offset)?.[
+      : getCachedCalendarInvitations(props.threadId)?.[
           `${props.messageId}:${props.invitation.id}`
         ];
     if (!wire && query.isError) return { kind: 'unavailable' };

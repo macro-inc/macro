@@ -11,15 +11,12 @@ export type CalendarInvitationsData = Record<string, InvitationResolution>;
 /** One bounded batch per thread. Snapshot rendering never waits for this query. */
 export function useCalendarInvitationsQuery(
   threadId: Accessor<string>,
-  enabled: Accessor<boolean>,
-  offset: Accessor<number> = () => 0
+  enabled: Accessor<boolean>
 ) {
   return useQuery(() => ({
-    queryKey: calendarKeys.invitations(threadId(), offset()).queryKey,
+    queryKey: calendarKeys.invitations(threadId()).queryKey,
     queryFn: () =>
-      throwOnErr(() =>
-        emailClient.getCalendarInvitations(threadId(), offset())
-      ),
+      throwOnErr(() => emailClient.getCalendarInvitations(threadId())),
     enabled: enabled(),
     staleTime: 15_000,
     refetchOnReconnect: true,
@@ -71,8 +68,8 @@ export async function invalidateInvitationScheduling() {
 }
 
 /** Non-suspending fallback after a background refresh fails. */
-export function getCachedCalendarInvitations(threadId: string, offset: number) {
+export function getCachedCalendarInvitations(threadId: string) {
   return queryClient.getQueryData<CalendarInvitationsData>(
-    calendarKeys.invitations(threadId, offset).queryKey
+    calendarKeys.invitations(threadId).queryKey
   );
 }

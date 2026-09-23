@@ -113,7 +113,6 @@ describe('email invitation production host', () => {
       <EmailCalendarInvitation
         threadId="thread"
         messageId="message"
-        offset={0}
         invitation={invitationFixture}
         hour12
       />
@@ -161,7 +160,6 @@ describe('email invitation production host', () => {
         <EmailCalendarInvitation
           threadId="thread"
           messageId="message"
-          offset={0}
           invitation={proposal}
           hour12
         />

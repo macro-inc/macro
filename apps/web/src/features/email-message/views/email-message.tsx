@@ -41,9 +41,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
   const [expandedHeader, setExpandedHeader] = createSignal(false);
   const isBodyExpanded = () => props.isExpanded;
   const invitationGroups = createMemo(() =>
-    groupCalendarInvitations(
-      props.message.calendar_invitations?.invitations ?? []
-    )
+    groupCalendarInvitations(props.message.calendar_invitations ?? [])
   );
   const renderInvitation = (invitation: CalendarInvitation) =>
     props.renderInvitation ? (
