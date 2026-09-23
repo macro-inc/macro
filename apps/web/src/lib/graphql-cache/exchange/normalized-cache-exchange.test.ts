@@ -15,7 +15,7 @@ import {
   type OperationResult,
   stringifyDocument,
 } from '@urql/core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   makeSubject,
   map,
@@ -1562,6 +1562,228 @@ describe('normalizedCacheExchange', () => {
     expect(host.teardowns).toEqual([7]);
     host.pushAffected([7]);
     expect(vi.mocked(client.reexecuteOperation)).not.toHaveBeenCalled();
+  });
+
+  describe('hidden-page affected rereads', () => {
+    let visibility: DocumentVisibilityState;
+    const setVisibility = (value: DocumentVisibilityState) => {
+      visibility = value;
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    beforeEach(() => {
+      visibility = 'visible';
+      vi.spyOn(document, 'visibilityState', 'get').mockImplementation(
+        () => visibility
+      );
+    });
+    afterEach(() => {
+      setVisibility('visible');
+      vi.restoreAllMocks();
+    });
+
+    it('keeps previous results while hidden and catches up only mounted operations', async () => {
+      host.scriptRead({ kind: 'hit', data: { status: 'old' } });
+      const { ops, results, client } = controlledQueryHarness(host);
+      const first = makeOp(71);
+      const second = makeOp(72, 'cache-only');
+      ops.next(first);
+      ops.next(second);
+      await tick();
+      setVisibility('hidden');
+      host.scriptRead({ kind: 'hit', data: { status: 'latest' } });
+      host.pushAffected([71, 72, 999]);
+      host.pushAffected([71, 72]);
+      ops.next(teardownOf(second));
+      await tick();
+      expect(host.reads).toHaveLength(2);
+      expect(results.map((result) => result.data)).toEqual([
+        { status: 'old' },
+        { status: 'old' },
+      ]);
+      expect(client.reexecuteOperation).not.toHaveBeenCalled();
+
+      setVisibility('visible');
+      await tick();
+      expect(client.reexecuteOperation).toHaveBeenCalledOnce();
+      expect(host.reads).toHaveLength(3);
+      expect(host.reads.at(-1)).toMatchObject({
+        opKey: 71,
+        priority: 'user-visible',
+      });
+      expect(results.at(-1)?.data).toEqual({ status: 'latest' });
+      setVisibility('visible');
+      await tick();
+      expect(host.reads).toHaveLength(3);
+    });
+
+    it('allows initial queries, explicit refetches, saves, and subscription writes while hidden', async () => {
+      setVisibility('hidden');
+      host.scriptRead({ kind: 'hit', data: { status: 'old' } });
+      const { ops, results, forwarded, client } = harness(host);
+      ops.next(makeOp(71));
+      await tick();
+      host.pushAffected([71]);
+      ops.next(makeOp(71, 'network-only'));
+      ops.next(makeMutationOp(73, { setEntityProperty: { id: 'prop-1' } }));
+      ops.next(makeSubscriptionOp(74));
+      await tick();
+      expect(host.reads).toHaveLength(1);
+      expect(client.reexecuteOperation).not.toHaveBeenCalled();
+      expect(forwarded.map((op) => op.kind)).toContain('query');
+      expect(host.begins).toHaveLength(1);
+      expect(host.commits).toHaveLength(1);
+      expect(host.writes).toHaveLength(1);
+      expect(
+        results.find((result) => result.operation.kind === 'mutation')
+      ).toMatchObject({
+        extensions: {
+          normalizedCacheMutationDisposition: { kind: 'committed' },
+        },
+      });
+      // An actual subscription payload must also write through, not just pass
+      // its operation down the transport while hidden.
+      const subscription = harness(host, () => ({ data: { live: true } }));
+      subscription.ops.next(makeSubscriptionOp(75));
+      await tick();
+      expect(host.writes.at(-1)?.data).toEqual({ live: true });
+    });
+
+    it.each([false, true])(
+      'preserves an authoritative request across catch-up (already pending=%s)',
+      async (alreadyPending) => {
+        host.scriptRead({ kind: 'hit', data: { status: 'old' } });
+        const { ops, network, results, forwarded, client } =
+          controlledQueryHarness(host);
+        ops.next(
+          makeOp(71, alreadyPending ? 'cache-and-network' : 'cache-first')
+        );
+        await tick();
+        setVisibility('hidden');
+        host.scriptRead({ kind: 'hit', data: { status: 'optimistic' } });
+        host.pushAffected([71]);
+        host.pushAffected([71]);
+        if (!alreadyPending) ops.next(makeOp(71, 'network-only'));
+        await tick();
+        expect(host.reads).toHaveLength(1);
+        expect(results).toHaveLength(1);
+        expect(forwarded).toHaveLength(1);
+
+        setVisibility('visible');
+        await tick();
+        expect(host.reads).toHaveLength(2);
+        expect(results.at(-1)).toMatchObject({
+          data: { status: 'optimistic' },
+          stale: true,
+        });
+        expect(client.reexecuteOperation).not.toHaveBeenCalled();
+        expect(forwarded).toHaveLength(1);
+        network.next({
+          operation: forwarded[0]!,
+          data: { status: 'committed' },
+          stale: false,
+          hasNext: false,
+        });
+        await tick();
+        expect(results.at(-1)?.data).toEqual({ status: 'committed' });
+        expect(host.writes).toHaveLength(1);
+        expect(forwarded).toHaveLength(1);
+      }
+    );
+
+    it('keeps cache-only catch-up misses off the network', async () => {
+      const { ops, forwarded, client } = controlledQueryHarness(host);
+      ops.next(makeOp(71, 'cache-only'));
+      await tick();
+      setVisibility('hidden');
+      host.pushAffected([71]);
+      expect(host.reads).toHaveLength(1);
+      setVisibility('visible');
+      await tick();
+      expect(host.reads).toHaveLength(2);
+      expect(forwarded).toHaveLength(0);
+      expect(client.reexecuteOperation).toHaveBeenCalledOnce();
+      expect(
+        vi.mocked(client.reexecuteOperation).mock.calls[0]?.[0].context
+          .requestPolicy
+      ).toBe('cache-only');
+    });
+
+    it('defers a network-completion reread without losing its registration-only policy', async () => {
+      const read = host.readQuery.bind(host);
+      host.readQuery = async (args) => {
+        const result = await read(args);
+        if (host.reads.length === 1) {
+          throw Object.assign(new Error('old owner lost'), {
+            errorCode: 'owner-epoch-lost',
+          });
+        }
+        return result;
+      };
+      const { ops, network, forwarded, client } = controlledQueryHarness(host);
+      ops.next(makeOp(71));
+      await tick();
+      setVisibility('hidden');
+      host.pushAffected([71]);
+      network.next({
+        operation: forwarded[0]!,
+        data: undefined,
+        stale: false,
+        hasNext: false,
+      });
+      await tick();
+      expect(host.reads).toHaveLength(1);
+      expect(client.reexecuteOperation).not.toHaveBeenCalled();
+      setVisibility('visible');
+      await tick();
+      expect(host.reads).toHaveLength(2);
+      expect(forwarded).toHaveLength(1);
+      expect(
+        vi.mocked(client.reexecuteOperation).mock.calls[0]?.[0].context
+      ).toMatchObject({ normalizedCacheReplacementRegistrationOnly: true });
+
+      host.pushAffected([71]);
+      await tick();
+      expect(forwarded).toHaveLength(2);
+      expect(
+        vi.mocked(client.reexecuteOperation).mock.calls[1]?.[0].context
+      ).toMatchObject({ normalizedCacheReplacementRegistrationOnly: false });
+    });
+
+    it('continues restoring retained network data into a replacement worker while hidden', async () => {
+      const read = host.readQuery.bind(host);
+      host.readQuery = async (args) => {
+        await read(args);
+        throw Object.assign(new Error('old owner lost'), {
+          errorCode: 'owner-epoch-lost',
+        });
+      };
+      const write = host.writeQuery.bind(host);
+      host.writeQuery = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('replacement not ready'))
+        .mockImplementation(write);
+      const { ops, network, forwarded, client } = controlledQueryHarness(host);
+      ops.next(makeOp(71));
+      await tick();
+      setVisibility('hidden');
+      network.next({
+        operation: forwarded[0]!,
+        data: { status: 'committed' },
+        stale: false,
+        hasNext: false,
+      });
+      await tick();
+      host.pushAffected([71]);
+      await tick();
+      expect(host.writeQuery).toHaveBeenCalledTimes(2);
+      expect(host.writes.at(-1)).toMatchObject({
+        data: { status: 'committed' },
+        registerDependencies: true,
+      });
+      expect(host.reads).toHaveLength(1);
+      expect(forwarded).toHaveLength(1);
+      expect(client.reexecuteOperation).not.toHaveBeenCalled();
+    });
   });
 
   describe('mutations', () => {

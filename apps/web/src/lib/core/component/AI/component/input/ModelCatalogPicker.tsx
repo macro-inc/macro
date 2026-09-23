@@ -2,10 +2,9 @@ import CaretDown from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
 import { cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
-import { modelProvider, ProviderIcon } from '../ProviderIcon';
+import { ModelIcon } from '../ProviderIcon';
 import {
   buildModelCatalog,
   type CatalogModelOption,
@@ -31,17 +30,6 @@ type ModelCatalogPickerProps = {
   ariaLabel?: string;
   placement?: 'top-start' | 'top-end' | 'bottom-start' | 'bottom-end';
 };
-
-function ModelIcon(props: { model?: string | null }) {
-  return (
-    <Show
-      when={modelProvider(props.model)}
-      fallback={<SparkleIcon class="size-4 shrink-0" />}
-    >
-      <ProviderIcon model={props.model} class="size-4" />
-    </Show>
-  );
-}
 
 function ModelRow(props: {
   option: CatalogModelOption;

@@ -41,9 +41,6 @@ export function useChannelRailActivity(
 
   const notificationActivity = createMemo(() => {
     const unreadChannelIds = new Set<string>();
-    // Channels with unread activity, newest unread notification first; the
-    // notifications are already sorted newest-first so first sight wins.
-    const unreadChannelOrder: string[] = [];
     const unreadNotificationIds = new Set<string>();
     const unreadCounts: Record<ChannelsGroup, number> = {
       channels: 0,
@@ -92,8 +89,6 @@ export function useChannelRailActivity(
         notification.entity_id
       );
       unreadChannelIds.add(notification.entity_id);
-      if (isFirstUnreadForChannel)
-        unreadChannelOrder.push(notification.entity_id);
       unreadNotificationIds.add(notification.id);
 
       const channel = channelsById().get(notification.entity_id);
@@ -115,7 +110,6 @@ export function useChannelRailActivity(
     return {
       latestTargets,
       unreadChannelIds,
-      unreadChannelOrder,
       unreadNotificationIds,
       unreadCounts,
     };
@@ -247,8 +241,6 @@ export function useChannelRailActivity(
     targetChannelId,
     targetLabel,
     unreadChannelIds: () => notificationActivity().unreadChannelIds,
-    /** Channel ids with unread activity, newest unread notification first. */
-    unreadChannelOrder: () => notificationActivity().unreadChannelOrder,
     unreadCount: (group: ChannelsGroup) =>
       notificationActivity().unreadCounts[group],
   };

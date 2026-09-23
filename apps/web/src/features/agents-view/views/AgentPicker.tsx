@@ -1,18 +1,17 @@
 import { ModelCatalogMenu } from '@core/component/AI/component/input/ModelCatalogPicker';
 import {
-  modelProvider,
+  ModelIcon,
   ProviderIcon,
 } from '@core/component/AI/component/ProviderIcon';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CodeIcon from '@phosphor/code.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { AgentIcon } from '../components/AgentGlyph';
-import { modelLabel } from '../components/model-label';
 import {
   MACRO_PERSONA_ID,
   type RosterAgent,
@@ -111,12 +110,7 @@ export function AgentPicker(props: {
                         onSelect={() => choose(agent(), option.id)}
                       >
                         <span class="flex size-5 shrink-0 items-center justify-center">
-                          <Show
-                            when={modelProvider(option.id)}
-                            fallback={<SparkleIcon class="size-4 shrink-0" />}
-                          >
-                            <ProviderIcon model={option.id} class="size-4" />
-                          </Show>
+                          <ModelIcon model={option.id} />
                         </span>
                         <span class="min-w-0 flex-1 truncate">
                           {modelLabel(option.id, option.name)}

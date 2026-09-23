@@ -1,4 +1,5 @@
 import { toBaseRelative } from '@app/constants/routerBase';
+import { useParams, useNavigate as useSplitNavigate } from '@app/split-router';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -14,7 +15,11 @@ import {
   useSettingsState,
 } from '@core/constant/SettingsState';
 import { stripSettingsSplitFromUrl } from '@core/constant/settingsSplitUrl';
-import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
+import {
+  settingsSlugToTab,
+  settingsTabToSlug,
+  useSettingsTabs,
+} from '@core/constant/settingsTabsConfig';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
@@ -49,6 +54,8 @@ const NARROW_WIDTH = 820;
 
 export function SettingsPanelComponentWrapper() {
   const location = useLocation();
+  const params = useParams<{ tab?: string }>();
+
   // Sync the active page from the docked split's URL (`settings/<slug>`). Read
   // the live URL reactively — not static mount props — so browser back/forward
   // and direct navigation stay in sync: reconcile reuses this component on
@@ -58,9 +65,13 @@ export function SettingsPanelComponentWrapper() {
   // activeTabId read is untracked so a tab click (which sets it, then updates
   // the URL) isn't reverted by this effect firing before the URL catches up.
   createRenderEffect(() => {
-    const tab = settingsTabFromSplitPath(location.pathname);
+    const tab =
+      (params.tab && settingsSlugToTab(params.tab)) ??
+      settingsTabFromSplitPath(location.pathname);
+
     if (tab && untrack(activeTabId) !== tab) setActiveTabId(tab);
   });
+
   return (
     <Show when={!isMobile()} fallback={<MobileSettingsDeepLink />}>
       <SettingsPanel variant={isSoloSettings() ? 'fullscreen' : 'split'} />
@@ -73,8 +84,10 @@ function MobileSettingsDeepLink() {
   const location = useLocation();
   const navigate = useNavigate();
   const { openSettings } = useSettingsState();
+
   onMount(() => {
     const tab = settingsTabFromSplitPath(location.pathname) ?? activeTabId();
+
     openSettings(tab);
     navigate(
       stripSettingsSplitFromUrl(
@@ -83,6 +96,7 @@ function MobileSettingsDeepLink() {
       { replace: true }
     );
   });
+
   return null;
 }
 
@@ -100,6 +114,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     activeTabId,
     selectTab,
   } = useSettingsState();
+  const splitNavigate = useSplitNavigate();
   const { groups, flatTabs } = useSettingsTabs();
   const logout = useLogout();
 
@@ -145,13 +160,19 @@ export function SettingsPanel(props: SettingsPanelProps) {
     hotkey: 'escape',
   });
 
+  const selectRoutedTab = (tab: SettingsTab) => {
+    selectTab(tab, (next) => {
+      splitNavigate(`/settings/${settingsTabToSlug(next)}`);
+    });
+  };
+
   // Helper to navigate to a tab by index
   function navigateToTabIndex(index: number): boolean {
     const tabs = flatTabs();
     if (index >= 0 && index < tabs.length) {
       const tab = tabs[index];
       if (tab) {
-        selectTab(tab.tab);
+        selectRoutedTab(tab.tab);
         return true;
       }
     }
@@ -213,7 +234,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const handleTabChange = (value: string) => {
     if (flatTabs().some((tab) => tab.tab === value)) {
-      selectTab(value as SettingsTab);
+      selectRoutedTab(value as SettingsTab);
     }
   };
 

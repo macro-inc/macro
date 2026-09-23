@@ -45,18 +45,16 @@ const failedOf = (part: Control) => {
 };
 
 describe('a model change', () => {
+  // The control carries a slug; the line names the model the way the rest of
+  // the app does.
   it('reads as done the moment it is issued', () => {
-    expect(lineOf(setModel({ kind: 'pending' }))).toBe(
-      'Model set to openai/gpt-5'
-    );
-    expect(lineOf(setModel({ kind: 'accepted' }))).toBe(
-      'Model set to openai/gpt-5'
-    );
+    expect(lineOf(setModel({ kind: 'pending' }))).toBe('Model set to GPT-5');
+    expect(lineOf(setModel({ kind: 'accepted' }))).toBe('Model set to GPT-5');
   });
 
   it('says it did not happen when the runtime refuses', () => {
     const part = setModel({ kind: 'rejected', message: 'unknown model' });
-    expect(lineOf(part)).toContain("Couldn't switch to openai/gpt-5");
+    expect(lineOf(part)).toContain("Couldn't switch to GPT-5");
     expect(lineOf(part)).not.toContain('Model set to');
     expect(failedOf(part)).toBe('true');
     expect(failedOf(setModel({ kind: 'accepted' }))).toBe('false');

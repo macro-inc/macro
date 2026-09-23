@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO scheduled_action\n                (id, owner, name, kind, task, enabled, trigger_type, schedule, timezone,\n                 next_run_at, event_filters, event_activated_at, configuration_revision)\n            VALUES ($1, $2, 'invalid', 'Agent', '{}', true, $3, $4, $5, $6, $7, $8, $9)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Jsonb",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f19e1ae90e534281d96af475a3b60f5fd4e8ffd5d34dc3e5bc012784c68726f2"
+}

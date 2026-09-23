@@ -4,6 +4,7 @@ import { driveLocationLabel } from '@app/features/drive-view/core/location-label
 import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { useSplitRouter } from '@app/lib/split-router';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSidebarCollapse } from '@components/app/sidebarVisibility';
@@ -47,8 +48,11 @@ import { Portal } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
-import type { SplitContent } from '../layoutManager';
-import { shouldShowSplitCloseButton } from '../layoutUtils';
+import type { SplitContent, SplitId } from '../layoutManager';
+import {
+  closeSplitOrReturnToList,
+  shouldShowSplitCloseButton,
+} from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
 import {
@@ -200,20 +204,25 @@ function SplitCloseButton() {
   if (!context || !layout) return null;
 
   const label = createMemo(() => {
-    const isOnlySplit = layout.manager.splits().length === 1;
+    const isOnlySplit = !shouldShowSplitCloseButton(layout.manager);
     const isNotUnifiedList = !isListViewID(context.handle.content().id);
     return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
   });
 
   return (
-    <Show when={shouldShowSplitCloseButton(layout.manager)}>
+    <Show
+      when={
+        shouldShowSplitCloseButton(layout.manager) ||
+        !isListViewID(context.handle.content().id)
+      }
+    >
       <Button
         square
         size="icon-sm"
         class="rounded-lg"
         label={label()}
         hotkey={TOKENS.split.close}
-        onClick={context.handle.close}
+        onClick={() => closeSplitOrReturnToList(layout.manager, context.handle)}
       >
         <CloseIcon class="size-4" />
       </Button>
@@ -248,7 +257,9 @@ function SplitDriveReturnButton() {
   const sourceLabel = () => {
     const state = sourceList()?.state;
     const label = state?.['drive.returnLabel'];
+
     if (typeof label === 'string') return label;
+
     const driveState = state?.['drive.view.v2'] as DriveState | undefined;
     return driveState ? driveLocationLabel(driveState.location) : 'My Files';
   };
@@ -354,6 +365,7 @@ function SoupNavigationButtons() {
 function SplitHeaderContextMenu(props: ParentProps) {
   const panel = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
+  const router = useSplitRouter<SplitId>();
   if (!panel || !layout) return props.children;
 
   const splitIndex = createMemo(() =>
@@ -398,7 +410,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
             activeSplitId: layout.manager.activeSplitId(),
             currentSplitId: panel.handle.id,
             currentSplitIndex: splitIndex(),
-            currentSplitUrl: panel.handle.getUrl(),
+            currentSplitUrl: router.href(panel.handle.id),
             splits: splits.map((split, index) => ({
               index,
               id: split.id,

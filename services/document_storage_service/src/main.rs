@@ -1165,6 +1165,9 @@ async fn run() -> anyhow::Result<()> {
                 calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
             )),
         )),
+        Arc::new(channel_bots::outbound::LexicalCommentMarks::new(
+            (*lexical_client).clone(),
+        )),
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
 

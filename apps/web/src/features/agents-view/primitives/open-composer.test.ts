@@ -28,7 +28,9 @@ function layout(existing = false) {
   } as unknown as SplitHandle;
   const openWithSplit = vi.fn<SplitManager['openWithSplit']>((next) => {
     if (!existing) content = next;
-    return split;
+    return existing
+      ? { status: 'reused', owner: split.id, split }
+      : { status: 'opened', split };
   });
   return { openWithSplit, replace, content: () => content };
 }
@@ -94,8 +96,8 @@ describe('openAgentComposer', () => {
     expect(home.textContent).toBe('Keep this draft');
   });
 
-  it('does not steal focus when navigation is intercepted', () => {
-    openAgentComposer({ openWithSplit: () => undefined });
+  it('does not steal focus when navigation is unavailable', () => {
+    openAgentComposer({ openWithSplit: () => ({ status: 'unavailable' }) });
     expect(focus.target).toBeUndefined();
   });
 });

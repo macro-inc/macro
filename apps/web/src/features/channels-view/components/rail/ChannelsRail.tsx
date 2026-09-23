@@ -9,6 +9,7 @@ import {
   useViewTabHotkeys,
 } from '@app/components/view-shell';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { favoriteSplitContent } from '@app/util/favorites';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -64,7 +65,6 @@ import type {
   ChannelsRailSection,
   ChannelsTab,
 } from '../../types';
-import { isDirectMessage } from '../../utils';
 import {
   buildChannelRailRows,
   buildChannelSectionRows,
@@ -94,7 +94,6 @@ import { useChannelRailActivity } from './hooks/useChannelRailActivity';
 
 const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
   'favorites',
-  'unread',
   'channels',
   'direct_messages',
 ];
@@ -125,7 +124,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
     state,
     setGroupOpen,
     setLabelOpen,
-    setSelectedChannelId,
+    selectedChannel,
+    setSelectedChannel,
     setSortBy,
     setTab,
   } = useChannelsView();
@@ -157,7 +157,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   let searchInput: HTMLInputElement | undefined;
 
-  const previewAfterNavigation = debounce(setSelectedChannelId, 150);
+  const previewAfterNavigation = debounce(
+    (channel: ChannelPreviewSelection) => setSelectedChannel(channel),
+    150
+  );
   onCleanup(() => previewAfterNavigation.clear());
 
   const closeSearch = () => {
@@ -329,17 +332,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     })
   );
 
-  // The Unread section is channels only; DMs keep their own section.
-  const unreadChannels = createMemo(() =>
-    channelActivity
-      .unreadChannelOrder()
-      .map((id) => channelsById().get(id))
-      .filter(
-        (channel): channel is ChannelEntity =>
-          channel !== undefined && !isDirectMessage(channel)
-      )
-  );
-
   const labelUnreadCount = (label: ChannelLabel) => {
     const unread = channelActivity.unreadChannelIds();
     return filterChannelLabelMembers(label.channelIds, channelsById()).filter(
@@ -365,7 +357,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
       state.expandedGroups,
       {
         favorites: favorites(),
-        unread: unreadChannels(),
         channels: props.sources.channels.items(),
         direct_messages: props.sources.direct_messages.items(),
         recents: props.sources.recents.items(),
@@ -374,19 +365,17 @@ export function ChannelsRail(props: ChannelsRailProps) {
     );
   });
 
+  const initialSelectedChannelId = selectedChannel()?.id;
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
     createListController<ChannelRailRow, ChannelRailActivationMetadata>({
       items: visibleRows,
       getKey: (row) => row.id,
       isSelectable: () => false,
-      initialFocusKey:
-        state.selectedChannelId === undefined
-          ? undefined
-          : visibleRows().find(
-              (row) =>
-                row.kind === 'conversation' &&
-                row.channel.id === state.selectedChannelId
-            )?.id,
+      initialFocusKey: visibleRows().find(
+        (row) =>
+          row.kind === 'conversation' &&
+          row.channel.id === initialSelectedChannelId
+      )?.id,
       onActivate: ({ item, metadata }) => {
         previewAfterNavigation.clear();
         const openInNewSplit =
@@ -424,7 +413,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
           return;
         }
 
-        setSelectedChannelId(channelId);
+        setSelectedChannel(
+          item.kind === 'conversation'
+            ? item.channel
+            : { type: 'channel', id: channelId }
+        );
       },
     })
   );
@@ -448,13 +441,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
         ? listRoot()
         : row.kind === 'favorite'
           ? sectionScrollRoots().favorites
-          : row.kind === 'unread'
-            ? sectionScrollRoots().unread
-            : row.kind === 'conversation' && row.group
-              ? sectionScrollRoots()[row.group]
-              : state.tab === 'recents'
-                ? listRoot()
-                : undefined;
+          : row.kind === 'conversation' && row.group
+            ? sectionScrollRoots()[row.group]
+            : state.tab === 'recents'
+              ? listRoot()
+              : undefined;
       if (!element || !scrollRoot) return;
 
       const elementBounds = element.getBoundingClientRect();
@@ -477,7 +468,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           )
         : props.sources[scope].items().map((channel) => channel.id);
 
-    const selectedIndex = rendered.indexOf(state.selectedChannelId ?? '');
+    const selectedIndex = rendered.indexOf(selectedChannel()?.id ?? '');
 
     const targetIndex = selectedIndex >= 0 ? selectedIndex : 0;
     const virtualizer = virtualizers()[scope];
@@ -498,7 +489,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const items = searchResults();
 
     const selectedIndex = items.findIndex(
-      (channel) => channel.id === state.selectedChannelId
+      (channel) => channel.id === selectedChannel()?.id
     );
 
     const virtualizer = virtualizers().search;
@@ -517,8 +508,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
     const favorite = favorites().find(
       (item) =>
-        item.entityType === 'channel' &&
-        item.entityId === state.selectedChannelId
+        item.entityType === 'channel' && item.entityId === selectedChannel()?.id
     );
     if (!favorite) return;
 
@@ -642,13 +632,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
           previewAfterNavigation.clear();
 
           const row = event.result?.item;
-          if (row?.kind === 'conversation' || row?.kind === 'unread') {
-            previewAfterNavigation(row.channel.id);
+          if (row?.kind === 'conversation') {
+            previewAfterNavigation(row.channel);
           } else if (
             row?.kind === 'favorite' &&
             row.favorite.entityType === 'channel'
           ) {
-            previewAfterNavigation(row.favorite.entityId);
+            previewAfterNavigation({
+              type: 'channel',
+              id: row.favorite.entityId,
+            });
           }
         },
       },
@@ -685,11 +678,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const currentGroup = list.focus.item()?.group;
 
     const sections = CHANNEL_RAIL_SECTIONS.filter((section) =>
-      section === 'favorites'
-        ? favorites().length > 0
-        : section === 'unread'
-          ? unreadChannels().length > 0
-          : true
+      section === 'favorites' ? favorites().length > 0 : true
     );
 
     const currentIndex = currentGroup ? sections.indexOf(currentGroup) : -1;
@@ -1052,7 +1041,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     selectTab,
     sources: props.sources,
     favorites,
-    selectedChannelId: () => state.selectedChannelId,
+    selectedChannel,
     isGroupOpen: (group) => state.expandedGroups[group],
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
     channelTagsEnabled,
@@ -1062,7 +1051,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     isLabelOpen,
     toggleLabel: (labelId) => setLabelOpen(labelId, !isLabelOpen(labelId)),
     channelSectionRows,
-    unreadChannels,
     labelUnreadCount,
     createLabel,
     createSmartTag,

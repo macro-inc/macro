@@ -23,6 +23,7 @@ import { makePersistedState } from '@app/lib/persistence';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
+import type { PreviewPanelSelection } from '@components/app/previewTarget';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
@@ -88,8 +89,8 @@ type InboxListActivationMetadata = {
 };
 
 type InboxListProps = {
-  previewEntity: EntityData | undefined;
-  onPreviewEntityChange: (entity: EntityData | undefined) => void;
+  previewEntity: PreviewPanelSelection | undefined;
+  onPreviewEntityChange: (entity: PreviewPanelSelection | undefined) => void;
   onPreviewActivate?: () => void;
 };
 

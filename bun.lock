@@ -71,6 +71,7 @@
         "@solid-primitives/storage": "^4.3.3",
         "@solid-primitives/stream": "^0.7.4",
         "@solidjs/router": "^0.15.3",
+        "@standard-schema/spec": "^1.1.0",
         "@tailwindcss/vite": "^4.2.4",
         "@tanstack/pacer": "^0.17.3",
         "@tanstack/solid-query": "5.90.3",

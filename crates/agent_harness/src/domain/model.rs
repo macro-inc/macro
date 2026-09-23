@@ -331,6 +331,18 @@ pub struct CommentAnchor {
     /// The marked text as it read when the comment was posted. Absent on
     /// threads anchored before snapshots were captured.
     pub marked_text: Option<String>,
+    /// The mark as the document reads now. Absent when the document no longer
+    /// carries it or the lookup failed, leaving the snapshot as the fallback.
+    pub current: Option<MarkedPassage>,
+}
+
+/// A comment mark resolved against the live document, both fields bounded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarkedPassage {
+    /// The text the mark covers.
+    pub marked_text: String,
+    /// The block or blocks containing the mark, windowed around it.
+    pub surrounding_text: String,
 }
 
 /// What the conversation an agent was summoned from contributes to its prompt.

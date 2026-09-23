@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
+import { render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import type { JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   contact: { id: 'contact-1' } as { id: string } | null | undefined,
   openWithSplit: vi.fn(),
   onClose: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastFailure: vi.fn(),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -31,7 +33,7 @@ vi.mock('@components/app/split-layout/layout', () => ({
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { failure: vi.fn(), success: vi.fn() },
+  toast: { failure: mocks.toastFailure, success: mocks.toastSuccess },
 }));
 
 vi.mock('@core/context/user', () => ({
@@ -48,6 +50,10 @@ vi.mock('@queries/channel/get-or-create-dm', () => ({
 
 vi.mock('@queries/crm/contacts', () => ({
   useCrmContactByEmailQuery: () => ({
+    // Pending lookups report no data yet, exactly as solid-query does.
+    get isSuccess() {
+      return mocks.contact !== undefined;
+    },
     get data() {
       return mocks.contact;
     },
@@ -56,9 +62,10 @@ vi.mock('@queries/crm/contacts', () => ({
 
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({
+    isSuccess: true,
     get data() {
       if (mocks.teamCrmEnabled === null) return null;
-      return { team: { crm_enabled: mocks.teamCrmEnabled } };
+      return { team: { id: 'team-1', crm_enabled: mocks.teamCrmEnabled } };
     },
   }),
 }));
@@ -81,6 +88,58 @@ beforeEach(() => {
   mocks.contact = { id: 'contact-1' };
   mocks.openWithSplit.mockReset();
   mocks.onClose.mockReset();
+  mocks.toastSuccess.mockReset();
+  mocks.toastFailure.mockReset();
+});
+
+describe('UserTooltip clipboard action', () => {
+  it('shows the copied icon only after the clipboard resolves', async () => {
+    const user = userEvent.setup({ skipHover: true });
+    let finishCopy!: () => void;
+    vi.spyOn(navigator.clipboard, 'writeText').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCopy = resolve;
+        })
+    );
+    render(() => (
+      <UserTooltip displayName="Jane Doe" onClose={mocks.onClose} />
+    ));
+    const button = screen.getByRole('button', { name: 'Copy name' });
+    const copyIcon = button.querySelector('svg');
+
+    await user.click(button);
+    expect(button.querySelector('svg')).toBe(copyIcon);
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+
+    finishCopy();
+    await waitFor(() => {
+      expect(button.querySelector('svg')).not.toBe(copyIcon);
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Name copied');
+    });
+    expect(mocks.onClose).not.toHaveBeenCalled();
+  });
+
+  it('leaves the copy icon and card open after a clipboard rejection', async () => {
+    const user = userEvent.setup({ skipHover: true });
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(
+      new Error('Clipboard denied')
+    );
+    render(() => (
+      <UserTooltip displayName="Jane Doe" onClose={mocks.onClose} />
+    ));
+    const button = screen.getByRole('button', { name: 'Copy name' });
+    const copyIcon = button.querySelector('svg');
+
+    await user.click(button);
+
+    expect(button.querySelector('svg')).toBe(copyIcon);
+    expect(mocks.toastFailure).toHaveBeenCalledWith(
+      'Failed to copy to clipboard'
+    );
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    expect(mocks.onClose).not.toHaveBeenCalled();
+  });
 });
 
 describe('UserTooltip direct message action', () => {

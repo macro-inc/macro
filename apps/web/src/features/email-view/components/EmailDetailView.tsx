@@ -1,9 +1,9 @@
-import { useEntityDetailNavigationStack } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list-navigation-hotkeys';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { createSearchParams, useRouteParams } from '@app/lib/split-router';
 import { EmailThreadLoadGate } from '@block-email/component/EmailThreadLoadGate';
 import { EmailThreadHostView } from '@block-email/EmailThreadHostView';
 import { registerEmailHotkeys } from '@block-email/util/emailHotkeys';
@@ -13,6 +13,7 @@ import {
   useCanAutofocusSplitContent,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { emailThreadRoute } from '@components/app/split-layout/split-router/app-routes';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import {
@@ -27,6 +28,7 @@ import { buildEntityData } from '@entity';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { emailDetailSearch } from '../email-route';
 import { useEmailView } from '../email-view-context';
 import type { EmailThreadTarget } from '../types';
 import { useEmailDetailListNavigation } from '../use-email-detail-list-navigation';
@@ -60,9 +62,11 @@ function EmailThreadBreadcrumb(props: {
   );
 }
 
-export function EmailDetailView(props: { thread: EmailThreadTarget }) {
-  const { closeThread } = useEmailView();
-  const navigationStack = useEntityDetailNavigationStack();
+export function EmailDetailView(props: {
+  thread: EmailThreadTarget;
+  targetMessageId?: string;
+}) {
+  const { closeThread, selectedThread } = useEmailView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const canAutofocus = useCanAutofocusSplitContent();
@@ -120,6 +124,7 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
   const host: EmailThreadHost = {
     listNavigation,
     focusContainer,
+    targetMessageId: () => props.targetMessageId,
     isActive: panel.isPanelActive,
     registerKeyboard: (handlers) => {
       registerEmailHotkeys(hotkeyScope(), handlers);
@@ -139,17 +144,11 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
       });
     },
   };
-  const threadEntry = () =>
-    navigationStack.entries.find(
-      (entry) =>
-        entry.data.type === 'email' && entry.data.id === props.thread.id
-    );
-  const breadcrumbValue = () => threadEntry()?.value ?? 'email-view';
+  const breadcrumbValue = () => `email-thread:${props.thread.id}`;
   useListNavigationHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: () =>
-      panel.isPanelActive() &&
-      navigationStack.active()?.value === breadcrumbValue(),
+      panel.isPanelActive() && selectedThread()?.id === props.thread.id,
     navigation: listNavigation,
   });
   const loadResult = {
@@ -217,5 +216,17 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
         </div>
       </SidePanel.Root>
     </ShareDialogContext.Provider>
+  );
+}
+
+export function EmailDetailRouteView() {
+  const params = useRouteParams(emailThreadRoute);
+  const [search] = createSearchParams(emailDetailSearch);
+
+  return (
+    <EmailDetailView
+      thread={{ id: params.threadId }}
+      targetMessageId={search.messageId || undefined}
+    />
   );
 }

@@ -105,7 +105,6 @@ function ChannelCallsList(props: { channelId: string }) {
     entity: EntityData,
     options: {
       openInNewSplit?: boolean;
-      replacePreview?: boolean;
       mergeHistory?: boolean;
     } = {}
   ) {
@@ -132,7 +131,6 @@ function ChannelCallsList(props: { channelId: string }) {
 
     openEntity(item.entity, {
       openInNewSplit: newSplit,
-      replacePreview: metadata?.event?.altKey === true && !newSplit,
     });
   }
 

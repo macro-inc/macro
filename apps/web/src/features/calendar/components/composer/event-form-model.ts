@@ -4,9 +4,9 @@ import {
   type WithCustomUserInput,
 } from '@core/user/combinedRecipient';
 import { TZDateMini } from '@date-fns/tz';
-import type { ConferenceChange } from '@service-email/generated/schemas/conferenceChange';
-import type { EventTime } from '@service-email/generated/schemas/eventTime';
-import type { OutOfOfficeProperties } from '@service-email/generated/schemas/outOfOfficeProperties';
+import type { ConferenceChange } from '@service-calendar/generated/schemas/conferenceChange';
+import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
+import type { OutOfOfficeProperties } from '@service-calendar/generated/schemas/outOfOfficeProperties';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventType } from '@service-storage/generated/schemas/eventType';

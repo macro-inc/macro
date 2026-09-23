@@ -68,7 +68,7 @@ pub async fn get_project_access(
                     AND EXISTS (
                         SELECT 1
                         FROM "Project" p
-                        JOIN team_user owner_team ON owner_team.user_id = p."userId"
+                        CROSS JOIN owner_team(p."userId") owner_team
                         WHERE p.id = $3
                         AND owner_team.team_id::text = ANY($2)
                     )
@@ -135,9 +135,8 @@ pub async fn explain_project_access(
         FROM "SharePermission" sp
         JOIN "ProjectPermission" pp ON pp."sharePermissionId" = sp.id
         JOIN "Project" p ON p.id = pp."projectId"
-        JOIN team_user owner_team
-          ON owner_team.user_id = p."userId"
-         AND owner_team.team_id::text = ANY($2)
+        JOIN owner_team(p."userId") owner_team
+          ON owner_team.team_id::text = ANY($2)
         WHERE pp."projectId" = $1
           AND sp."linkShare" = 'TEAM'
           AND sp."linkShareAccessLevel" IS NOT NULL
