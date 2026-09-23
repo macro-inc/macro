@@ -110,7 +110,9 @@ export function AgentSessionProvider(
           // A create that failed leaves the block with nothing to load, which
           // is the same dead end for the reader as a load that failed.
           loadFailed: () => live.loadFailed() || failed(),
-          loadRetryable: live.loadFailed,
+          accessDenied: live.accessDenied,
+          // Retrying a 401 gets the same 401.
+          loadRetryable: () => live.loadFailed() && !live.accessDenied(),
           retryLoad: live.retry,
           turn,
           issue: live.issue,

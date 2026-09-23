@@ -39,6 +39,7 @@ vi.mock('../context/AgentSessionContext', () => ({
         : undefined,
     metadata: () => undefined,
     loadFailed: () => mocks.failed(),
+    accessDenied: () => false,
     loadRetryable: () => true,
     retryLoad: vi.fn(),
     pending: () => false,
