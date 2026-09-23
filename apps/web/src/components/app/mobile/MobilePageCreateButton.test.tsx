@@ -25,9 +25,12 @@ vi.mock('@app/features/command/Launcher', () => ({
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarUiFlag: () => sources.calendar,
 }));
-vi.mock('@block-calendar/components/use-open-event-composer', () => ({
-  useOpenEventComposer: () => sources.openEvent,
-}));
+vi.mock(
+  '@app/features/calendar-view/components/use-open-event-composer',
+  () => ({
+    useOpenEventComposer: () => sources.openEvent,
+  })
+);
 vi.mock('@app/features/companies/CreateCompanyModal', () => ({
   openCreateCompanyModal: sources.openCompany,
 }));

@@ -583,10 +583,12 @@ title and navigation goes through the hamburger overlay. Location, search,
 filters, expanded folders, list focus, and scroll position are restored when
 returning from an opened file.
 
-## Calendar — `/app/calendar/view`
+## Calendar — `/app/calendar/<month-or-week-or-day>`
 
-Calendars default to Day on phones and Week on desktop. The selected view is
-remembered locally on each device.
+The path selects the Month, Week, or Day period, and choosing another period updates
+that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
+recent choice is remembered locally for navigation that does not specify a period. An
+opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.

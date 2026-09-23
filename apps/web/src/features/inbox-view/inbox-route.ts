@@ -1,7 +1,9 @@
+import { calendarViewContent } from '@app/features/calendar-view/calendar-navigation';
 import { createSearchParamsCodec } from '@app/lib/split-router';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { PreviewPanelSelection } from '@components/app/previewTarget';
+import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import type { BlockName } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
@@ -326,11 +328,7 @@ export function inboxPreviewSelection(
 export function inboxPreviewLegacyTarget(
   params: InboxPreviewRouteParams,
   search: InboxPreviewSearchParams
-): {
-  type: BlockName | 'task' | 'snippet' | 'skill';
-  id: string;
-  params?: Record<string, unknown>;
-} {
+): SplitContent {
   const documentSubType =
     search.selectionType === 'document'
       ? search.subType
@@ -367,17 +365,11 @@ export function inboxPreviewLegacyTarget(
             endDate: search.endDate,
           }
         : undefined;
-    return {
-      type: 'calendar',
-      id: CALENDAR_BLOCK_ID,
-      params: {
-        ...(search.eventId ? { eventId: search.eventId } : {}),
-        ...(search.occurrenceKey
-          ? { occurrenceKey: search.occurrenceKey }
-          : {}),
-        ...(range ? { range } : {}),
-      },
-    };
+    return calendarViewContent({
+      eventId: search.eventId || undefined,
+      occurrenceKey: search.occurrenceKey || undefined,
+      range,
+    });
   }
   return { type: params.blockType, id: params.previewId };
 }

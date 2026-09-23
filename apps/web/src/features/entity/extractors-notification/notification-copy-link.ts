@@ -1,4 +1,4 @@
-import { copyCalendarEventMentionTarget } from '@block-calendar/copy-event-mention';
+import { copyCalendarEventMentionTarget } from '@app/features/calendar-view/copy-event-mention';
 import { toast } from '@core/component/Toast/Toast';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import {

@@ -1,5 +1,5 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
-import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   type BlockAlias,

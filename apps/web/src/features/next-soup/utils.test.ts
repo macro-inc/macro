@@ -343,14 +343,11 @@ describe('mark-done orchestration', () => {
   });
 });
 
-describe('calendar block navigation', () => {
-  it('opens and targets the singleton calendar block', async () => {
+describe('calendar view navigation', () => {
+  it('opens and targets the singleton Calendar route', async () => {
     const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
-    const goToLocationFromParams = vi.fn();
-    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
     setGlobalSplitManager({
       activeSplit: vi.fn(),
-      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
       getSplitByContent: vi.fn(),
       findOpenView: vi.fn(),
       openWithSplit,
@@ -378,8 +375,8 @@ describe('calendar block navigation', () => {
 
     expect(openWithSplit).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'calendar',
-        id: 'view',
+        type: 'component',
+        id: 'calendar',
         params: expect.objectContaining({
           eventId: 'event-1',
           occurrenceKey: 'instance-1',
@@ -388,12 +385,18 @@ describe('calendar block navigation', () => {
             endDate: '2026-01-28',
           }),
         }),
+        entryMetadata: expect.objectContaining({
+          route: {
+            matches: [
+              expect.objectContaining({
+                id: 'view-calendar',
+              }),
+            ],
+          },
+          search: { calendar: { eventId: ['event-1'] } },
+        }),
       }),
       expect.any(Object)
-    );
-    expect(getBlockHandle).toHaveBeenCalledWith('view', 'calendar');
-    expect(goToLocationFromParams).toHaveBeenCalledWith(
-      expect.objectContaining({ eventId: 'event-1' })
     );
   });
 });

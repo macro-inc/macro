@@ -1,11 +1,11 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { driveLocationLabel } from '@app/features/drive-view/core/location-label';
 import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useSplitRouter } from '@app/lib/split-router';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import { type BlockName, NonDocumentBlockTypes } from '@core/block';
@@ -90,8 +90,8 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
       .with({ type: P.union('foreign', 'reminder') }, () => undefined)
       // The full calendar opening path supplies the event range to focus.
       .with({ type: 'calendar_event' }, () => ({
-        type: 'calendar',
-        id: CALENDAR_BLOCK_ID,
+        type: 'component',
+        id: CALENDAR_VIEW_ID,
       }))
       .with({ type: 'crm_company' }, (entity) => ({
         type: 'company',
