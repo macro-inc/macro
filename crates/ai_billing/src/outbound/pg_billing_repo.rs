@@ -6,8 +6,8 @@ mod test;
 
 use crate::domain::{
     BillingError, BillingRepo, BillingSettings, OverageChargeStatus, PendingCharge,
-    PeriodAllowance, PeriodLedger, Result, SettlementOutcome, SettlementPolicy, SettlementState,
-    plan_settlement,
+    PeriodAllowance, PeriodLedger, Result, SeatAllowance, SettlementOutcome, SettlementPolicy,
+    SettlementState, plan_settlement,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -171,7 +171,8 @@ impl BillingRepo for PgBillingRepo {
     ) -> Result<Option<PeriodAllowance>> {
         let row = sqlx::query!(
             r#"
-            SELECT included_cents, billed_users as "billed_users!"
+            SELECT billed_users as "billed_users!",
+                   included_cents_by_user as "included_cents_by_user!"
             FROM ai_billing_period_allowance
             WHERE user_id = $1 AND period_start = $2
             "#,
@@ -183,8 +184,7 @@ impl BillingRepo for PgBillingRepo {
         .map_err(storage)?;
         row.map(|r| {
             Ok(PeriodAllowance {
-                included_cents: r.included_cents,
-                billed_users: parse_billed_users(r.billed_users)?,
+                seats: parse_seat_allowances(r.billed_users, r.included_cents_by_user)?,
             })
         })
         .transpose()
@@ -194,32 +194,33 @@ impl BillingRepo for PgBillingRepo {
         &self,
         payer: &MacroUserIdStr<'_>,
         period_start: DateTime<Utc>,
-        included_cents: i64,
-        billed_users: &[MacroUserIdStr<'static>],
+        seats: &[SeatAllowance],
     ) -> Result<()> {
-        let billed_users: Vec<String> = billed_users
+        let billed_users: Vec<String> = seats
             .iter()
-            .map(|u| u.as_ref().to_string())
+            .map(|seat| seat.user.as_ref().to_string())
             .collect();
+        let included_cents_by_user: Vec<i64> =
+            seats.iter().map(|seat| seat.included_cents).collect();
         sqlx::query!(
             r#"
             INSERT INTO ai_billing_period_allowance (
-                user_id, period_start, included_cents, billed_users
+                user_id, period_start, billed_users, included_cents_by_user
             )
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (user_id, period_start) DO UPDATE
-            SET included_cents = EXCLUDED.included_cents,
-                billed_users = EXCLUDED.billed_users,
+            SET billed_users = EXCLUDED.billed_users,
+                included_cents_by_user = EXCLUDED.included_cents_by_user,
                 updated_at = NOW()
-            WHERE ai_billing_period_allowance.included_cents
-                  IS DISTINCT FROM EXCLUDED.included_cents
-               OR ai_billing_period_allowance.billed_users
+            WHERE ai_billing_period_allowance.billed_users
                   IS DISTINCT FROM EXCLUDED.billed_users
+               OR ai_billing_period_allowance.included_cents_by_user
+                  IS DISTINCT FROM EXCLUDED.included_cents_by_user
             "#,
             payer.as_ref(),
             period_start,
-            included_cents,
             &billed_users,
+            &included_cents_by_user,
         )
         .execute(&self.pool)
         .await
@@ -255,8 +256,7 @@ impl BillingRepo for PgBillingRepo {
         &self,
         payer: &MacroUserIdStr<'_>,
         period_start: DateTime<Utc>,
-        used_cents: i64,
-        included_cents: i64,
+        chargeable_cents: i64,
         policy: SettlementPolicy,
     ) -> Result<SettlementOutcome> {
         let payer = payer.as_ref();
@@ -304,8 +304,7 @@ impl BillingRepo for PgBillingRepo {
 
         let plan = plan_settlement(
             SettlementState {
-                used_cents,
-                included_cents,
+                chargeable_cents,
                 credits_consumed_cents: ledger.credits_consumed_cents,
                 overage_charged_cents: ledger.overage_charged_cents,
                 credit_balance_cents: balance,
@@ -548,11 +547,26 @@ async fn read_period_ledger(
     })
 }
 
-fn parse_billed_users(raw: Vec<String>) -> Result<Vec<MacroUserIdStr<'static>>> {
-    raw.into_iter()
-        .map(|id| {
-            MacroUserIdStr::try_from(id)
-                .map_err(|e| BillingError::Storage(anyhow::anyhow!("invalid billed user id: {e}")))
+fn parse_seat_allowances(
+    billed_users: Vec<String>,
+    included_cents_by_user: Vec<i64>,
+) -> Result<Vec<SeatAllowance>> {
+    if billed_users.len() != included_cents_by_user.len() {
+        return Err(BillingError::Storage(anyhow::anyhow!(
+            "billed users and per-user allowances have different lengths"
+        )));
+    }
+    billed_users
+        .into_iter()
+        .zip(included_cents_by_user)
+        .map(|(id, included_cents)| {
+            let user = MacroUserIdStr::try_from(id).map_err(|e| {
+                BillingError::Storage(anyhow::anyhow!("invalid billed user id: {e}"))
+            })?;
+            Ok(SeatAllowance {
+                user,
+                included_cents,
+            })
         })
         .collect()
 }

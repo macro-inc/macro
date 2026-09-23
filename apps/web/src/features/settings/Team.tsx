@@ -1063,13 +1063,13 @@ function TeamManagement(props: {
   const isAdminOrOwner = () => isTeamAdminOrOwner(currentUserRole());
   const canManageMemberRemovals = () => isAdminOrOwner();
   // Seat plans only exist on teams billed per seat: enterprise teams, and
-  // paying teams, which pool every member's AI onto the owner. The team API
-  // does not expose its subscription, so a paying team is recognised from the
-  // viewer's billing position: a paid tier whose payer is the team owner and
-  // whose seat count spans more than one member (a free-team owner with a
-  // personal subscription is billed for exactly one seat). A paying team of
-  // one therefore shows no seat menu; its owner moves their own seat from
-  // Billing.
+  // paying teams, whose shared credits and overage are billed to the owner.
+  // The team API does not expose its subscription, so a paying team is
+  // recognised from the viewer's billing position: a paid tier whose payer is
+  // the team owner and whose seat count spans more than one member (a free-team
+  // owner with a personal subscription is billed for exactly one seat). A
+  // paying team of one therefore shows no seat menu; its owner moves their own
+  // seat from Billing.
   const billingSummary = useAiBillingSummaryQuery();
   const showSeatPlans = () => {
     const team = teamQuery.data?.team;

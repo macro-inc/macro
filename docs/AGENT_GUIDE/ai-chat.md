@@ -270,7 +270,8 @@ as Settings → Billing: credit-pack buttons, the `Usage billing` toggle, an
 `Open billing settings` button, and `Upgrade to Max` for Premium payers (on a
 team this moves only the payer's own seat). Team members who are not the payer
 see a note to ask the team owner, or a team admin to move their seat to Max.
-A team's pool is the sum of its seats' allowances, so Premium and Max seats mix.
+Each team seat has its own allowance; unused allowance never moves between
+members. The team owner's prepaid credits and usage-billing cap are shared.
 
 ## Start a doc-scoped chat
 

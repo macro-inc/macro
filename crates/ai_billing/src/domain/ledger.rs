@@ -1,12 +1,15 @@
 //! The settlement arithmetic, kept pure so the repository can run it inside
 //! its row lock and the service can run it for snapshots.
 //!
-//! For a payer and period, with everything in list-rate cents:
+//! For a payer and period, each seat first consumes only its own included
+//! allowance. The remaining usage is chargeable to the payer's shared credits
+//! and overage:
 //!
 //! ```text
-//! covered   = included + credits_consumed + overage_charged
-//! uncovered = max(0, used - covered)
-//! headroom  = (covered - used) + credit_balance + overage_room
+//! chargeable = sum(max(0, seat_used - seat_included))
+//! covered    = credits_consumed + overage_charged
+//! uncovered  = max(0, chargeable - covered)
+//! headroom   = (covered - chargeable) + credit_balance + overage_room
 //! ```
 //!
 //! Settlement moves `uncovered` into `credits_consumed` (from the balance) and
@@ -39,10 +42,8 @@ pub struct SettlementPolicy {
 /// The ledger position a settlement plans against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SettlementState {
-    /// Usage this period.
-    pub used_cents: i64,
-    /// Included this period.
-    pub included_cents: i64,
+    /// Sum of each seat's usage beyond its own allowance this period.
+    pub chargeable_cents: i64,
     /// Credits already applied this period.
     pub credits_consumed_cents: i64,
     /// Overage already charged this period (pending or paid).
@@ -52,11 +53,9 @@ pub struct SettlementState {
 }
 
 impl SettlementState {
-    /// Usage not yet covered by allowance, credits, or charges.
+    /// Chargeable usage not yet covered by credits or charges.
     pub fn uncovered_cents(&self) -> i64 {
-        (self.used_cents
-            - (self.included_cents + self.credits_consumed_cents + self.overage_charged_cents))
-            .max(0)
+        (self.chargeable_cents - (self.credits_consumed_cents + self.overage_charged_cents)).max(0)
     }
 }
 
@@ -103,12 +102,13 @@ pub fn build_snapshot(
     settings: &BillingSettings,
     period: BillingPeriod,
     used_cents: i64,
+    shared_chargeable_cents: i64,
     ledger: PeriodLedger,
     credit_balance_cents: i64,
 ) -> UsageSnapshot {
     let included_cents = entitlement.included_ai_cents();
-    let covered = included_cents + ledger.credits_consumed_cents + ledger.overage_charged_cents;
-    let uncovered_cents = (used_cents - covered).max(0);
+    let shared_covered = ledger.credits_consumed_cents + ledger.overage_charged_cents;
+    let uncovered_cents = (shared_chargeable_cents - shared_covered).max(0);
     let overage_room = if settings.overage_active() {
         (settings.overage_limit_cents - ledger.overage_charged_cents).max(0)
     } else {
@@ -117,7 +117,12 @@ pub fn build_snapshot(
     let remaining_cents = if entitlement.unlimited {
         i64::MAX
     } else {
-        ((covered - used_cents) + credit_balance_cents.max(0) + overage_room).max(0)
+        let seat_remaining = (included_cents - used_cents).max(0);
+        let shared_headroom = ((shared_covered - shared_chargeable_cents)
+            + credit_balance_cents.max(0)
+            + overage_room)
+            .max(0);
+        seat_remaining.saturating_add(shared_headroom)
     };
 
     let mut snapshot = UsageSnapshot {

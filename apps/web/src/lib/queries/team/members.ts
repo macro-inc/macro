@@ -88,7 +88,7 @@ type SetTeamMemberPlanCallbacks = MutationCallbacks<
 
 /**
  * Move one member's seat between Premium and Max. Team admins only; the
- * team's subscription is re-billed (prorated) and the pooled AI allowance
+ * team's subscription is re-billed (prorated) and that seat's AI allowance
  * changes at once, so the billing summary is refreshed too.
  */
 export function useSetTeamMemberPlanMutation(

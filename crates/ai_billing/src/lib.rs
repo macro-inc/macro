@@ -31,8 +31,8 @@
 //!
 //! The *payer* is the account that owns credits, overage settings, and the
 //! Stripe customer: the personal subscriber, or the team owner for members
-//! whose paid access comes through a team subscription. Team usage pools
-//! against `seats x included` on the owner.
+//! whose paid access comes through a team subscription. Each team seat uses
+//! only its own plan allowance; credits and overage are shared by the payer.
 
 pub mod domain;
 pub mod inbound;

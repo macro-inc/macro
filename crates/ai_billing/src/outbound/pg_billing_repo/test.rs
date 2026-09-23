@@ -107,9 +107,9 @@ async fn settlement_consumes_credits_then_reserves_overage(pool: PgPool) {
         .await
         .unwrap();
 
-    // 1_800 over allowance with 500 of credit and overage off: only credits.
+    // 1_800 beyond per-seat allowances with 500 of credit and overage off.
     let outcome = repo
-        .apply_settlement(&payer(), period_start, 5_800, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 1_800, policy(false))
         .await
         .unwrap();
     assert_eq!(outcome.consumed_credits_cents, 500);
@@ -120,7 +120,7 @@ async fn settlement_consumes_credits_then_reserves_overage(pool: PgPool) {
 
     // Same inputs again: nothing double-booked, remainder waits for overage.
     let again = repo
-        .apply_settlement(&payer(), period_start, 5_800, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 1_800, policy(false))
         .await
         .unwrap();
     assert_eq!(again, SettlementOutcome::default());
@@ -128,7 +128,7 @@ async fn settlement_consumes_credits_then_reserves_overage(pool: PgPool) {
     // Overage on: the 1_300 remainder is reserved as a pending charge.
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
     let charged = repo
-        .apply_settlement(&payer(), period_start, 5_800, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 1_800, policy(false))
         .await
         .unwrap();
     let pending = charged.pending_charge.expect("charge reserved");
@@ -168,7 +168,7 @@ async fn invoice_webhooks_apply_out_of_order_without_unpaying(pool: PgPool) {
     let period_start = Utc::now() - chrono::Duration::days(10);
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
     let pending = repo
-        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
         .await
         .unwrap()
         .pending_charge
@@ -234,7 +234,7 @@ async fn settlement_retries_a_failed_charge_instead_of_reserving_a_new_one(pool:
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
 
     let first = repo
-        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
         .await
         .unwrap()
         .pending_charge
@@ -254,7 +254,7 @@ async fn settlement_retries_a_failed_charge_instead_of_reserving_a_new_one(pool:
     // The next settlement hands the same charge back, with its invoice, even
     // though its continued ledger coverage leaves no new amount to plan.
     let retry = repo
-        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
         .await
         .unwrap()
         .pending_charge
@@ -279,7 +279,7 @@ async fn credits_can_replace_a_failed_charge_that_was_never_invoiced(pool: PgPoo
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
 
     let first = repo
-        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
         .await
         .unwrap()
         .pending_charge
@@ -292,13 +292,13 @@ async fn credits_can_replace_a_failed_charge_that_was_never_invoiced(pool: PgPoo
         .await
         .unwrap();
     let covered = repo
-        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
         .await
         .unwrap();
     assert_eq!(covered.consumed_credits_cents, 1_300);
     assert!(covered.pending_charge.is_none());
     let again = repo
-        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
         .await
         .unwrap();
     assert_eq!(again, SettlementOutcome::default());
@@ -316,7 +316,7 @@ async fn credits_do_not_replace_a_failed_charge_with_a_collectible_invoice(pool:
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
 
     let first = repo
-        .apply_settlement(&payer(), period_start, 7_000, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 3_000, policy(false))
         .await
         .unwrap()
         .pending_charge
@@ -331,7 +331,7 @@ async fn credits_do_not_replace_a_failed_charge_with_a_collectible_invoice(pool:
         .unwrap();
 
     let suspended = repo
-        .apply_settlement(&payer(), period_start, 7_000, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 3_000, policy(false))
         .await
         .unwrap();
     assert_eq!(suspended.consumed_credits_cents, 0);
@@ -347,7 +347,7 @@ async fn credits_do_not_replace_a_failed_charge_with_a_collectible_invoice(pool:
 
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
     let retry = repo
-        .apply_settlement(&payer(), period_start, 7_000, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 3_000, policy(false))
         .await
         .unwrap()
         .pending_charge
@@ -365,14 +365,14 @@ async fn settlement_collects_a_reservation_whose_collector_died(pool: PgPool) {
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
 
     let reserved = repo
-        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
         .await
         .unwrap()
         .pending_charge
         .expect("charge reserved");
     // Fresh reservations are left to their collector...
     assert!(
-        repo.apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        repo.apply_settlement(&payer(), period_start, 1_300, policy(false))
             .await
             .unwrap()
             .pending_charge
@@ -387,7 +387,7 @@ async fn settlement_collects_a_reservation_whose_collector_died(pool: PgPool) {
     .await
     .unwrap();
     let orphan = repo
-        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
         .await
         .unwrap()
         .pending_charge
@@ -405,14 +405,14 @@ async fn settlement_uses_stored_overage_policy_and_flushes_at_period_end(pool: P
 
     // 900 over, cap 600, mid-period: 600 chargeable but under the $10 chunk.
     let outcome = repo
-        .apply_settlement(&payer(), period_start, 4_900, 4_000, policy(false))
+        .apply_settlement(&payer(), period_start, 900, policy(false))
         .await
         .unwrap();
     assert!(outcome.pending_charge.is_none());
 
     // Period ended: the 600 is flushed.
     let outcome = repo
-        .apply_settlement(&payer(), period_start, 4_900, 4_000, policy(true))
+        .apply_settlement(&payer(), period_start, 900, policy(true))
         .await
         .unwrap();
     assert_eq!(outcome.pending_charge.unwrap().amount_cents, 600);
@@ -421,7 +421,7 @@ async fn settlement_uses_stored_overage_policy_and_flushes_at_period_end(pool: P
     repo.update_overage(&payer(), true, 5_000).await.unwrap();
     repo.suspend_overage(&payer()).await.unwrap();
     let outcome = repo
-        .apply_settlement(&payer(), period_start, 4_900, 4_000, policy(true))
+        .apply_settlement(&payer(), period_start, 900, policy(true))
         .await
         .unwrap();
     assert!(outcome.pending_charge.is_none());
@@ -435,7 +435,16 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
         .unwrap();
     let earlier = start - chrono::Duration::days(30);
     let member = MacroUserIdStr::try_from("macro|member@example.com".to_string()).unwrap();
-    let billed = vec![payer(), member.clone()];
+    let seats = vec![
+        SeatAllowance {
+            user: payer(),
+            included_cents: 4_000,
+        },
+        SeatAllowance {
+            user: member,
+            included_cents: 20_000,
+        },
+    ];
 
     assert!(
         repo.period_allowance(&payer(), start)
@@ -444,7 +453,7 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
             .is_none()
     );
 
-    repo.remember_period_allowance(&payer(), start, 4_000, &billed)
+    repo.remember_period_allowance(&payer(), start, &seats)
         .await
         .unwrap();
     let frozen = repo
@@ -452,11 +461,14 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(frozen.included_cents, 4_000);
-    assert_eq!(frozen.billed_users, billed);
+    assert_eq!(frozen.seats, seats);
 
     // A later observation of the same (open) period refreshes.
-    repo.remember_period_allowance(&payer(), start, 20_000, &[payer()])
+    let max_payer = vec![SeatAllowance {
+        user: payer(),
+        included_cents: 20_000,
+    }];
+    repo.remember_period_allowance(&payer(), start, &max_payer)
         .await
         .unwrap();
     let frozen = repo
@@ -464,11 +476,10 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(frozen.included_cents, 20_000);
-    assert_eq!(frozen.billed_users, vec![payer()]);
+    assert_eq!(frozen.seats, max_payer);
 
     // A different period is independent.
-    repo.remember_period_allowance(&payer(), earlier, 8_000, &billed)
+    repo.remember_period_allowance(&payer(), earlier, &seats)
         .await
         .unwrap();
     assert_eq!(
@@ -476,15 +487,15 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
             .await
             .unwrap()
             .unwrap()
-            .included_cents,
-        20_000
+            .seats,
+        max_payer
     );
     assert_eq!(
         repo.period_allowance(&payer(), earlier)
             .await
             .unwrap()
             .unwrap()
-            .included_cents,
-        8_000
+            .seats,
+        seats
     );
 }

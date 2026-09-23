@@ -67,12 +67,6 @@ export function AiUsageMeter(props: { snapshot: AiUsageSnapshot }) {
             {' '}
             of {formatCents(included())} included
           </span>
-          <Show when={props.snapshot.seats > 1}>
-            <span class="text-ink-extra-muted">
-              {' '}
-              across {props.snapshot.seats} seats
-            </span>
-          </Show>
         </span>
         <span class="text-xs text-ink-extra-muted">
           Resets {formatPeriodEnd(props.snapshot.period_end)}
@@ -98,14 +92,17 @@ export function AiUsageMeter(props: { snapshot: AiUsageSnapshot }) {
           <span>{formatCents(beyond())} beyond included</span>
         </Show>
         <span>
-          Credits:{' '}
+          {props.snapshot.seats > 1 ? 'Team credits' : 'Credits'}:{' '}
           <span class="text-ink">
             {formatCents(props.snapshot.credit_balance_cents)}
           </span>
         </span>
         <Show when={props.snapshot.overage_enabled}>
           <span>
-            Usage billing this period:{' '}
+            {props.snapshot.seats > 1
+              ? 'Team usage billing this period'
+              : 'Usage billing this period'}
+            :{' '}
             <span class="text-ink">
               {formatCents(props.snapshot.overage_charged_cents)}
             </span>{' '}
@@ -205,8 +202,8 @@ export function AiUsageControls(props: {
           <div class="flex flex-col">
             <span class="text-sm text-ink">Add credits</span>
             <span class="text-xs text-ink-extra-muted">
-              Prepaid AI usage that applies after your included amount, and
-              carries over between periods.
+              Prepaid AI usage that applies after included usage and carries
+              over between periods.
             </span>
           </div>
           <div class="flex flex-wrap gap-2">
@@ -232,7 +229,7 @@ export function AiUsageControls(props: {
             <div class="flex flex-col">
               <span class="text-sm text-ink">Usage billing</span>
               <span class="text-xs text-ink-extra-muted">
-                Bill AI beyond your included amount and credits to your card in{' '}
+                Bill AI beyond included usage and credits to your card in{' '}
                 {formatCents(1_000)} increments, up to a limit you set.
               </span>
             </div>

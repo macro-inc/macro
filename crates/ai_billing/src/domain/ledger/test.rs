@@ -17,8 +17,7 @@ fn policy(active: bool, limit: i64, ended: bool) -> SettlementPolicy {
 
 fn state(used: i64, included: i64, consumed: i64, charged: i64, balance: i64) -> SettlementState {
     SettlementState {
-        used_cents: used,
-        included_cents: included,
+        chargeable_cents: (used - included).max(0),
         credits_consumed_cents: consumed,
         overage_charged_cents: charged,
         credit_balance_cents: balance,
@@ -52,13 +51,18 @@ fn included_allowance_equals_plan_price_per_seat() {
         team_id: macro_uuid::generate_uuid_v7(),
     };
     assert_eq!(team.seats(), 3);
-    assert_eq!(team.included_ai_cents(), 12_000);
+    assert_eq!(team.included_ai_cents(), 4_000);
+    assert_eq!(
+        team.seat_allowances()
+            .into_iter()
+            .map(|seat| seat.included_cents)
+            .collect::<Vec<_>>(),
+        vec![4_000, 4_000, 4_000]
+    );
 }
 
 #[test]
-fn mixed_seat_plans_pool_each_seats_allowance() {
-    // A Premium owner with one Max teammate and one Premium teammate: the
-    // pool is $40 + $200 + $40, whatever plan the requesting user is on.
+fn mixed_seat_plans_keep_each_seats_allowance_separate() {
     let mut team = Entitlement::personal(user("owner@x.com"), PlanTier::Premium);
     team.billed_users.push(user("a@x.com"));
     team.seat_tiers.push(PlanTier::Max);
@@ -68,7 +72,14 @@ fn mixed_seat_plans_pool_each_seats_allowance() {
         team_id: macro_uuid::generate_uuid_v7(),
     };
     assert_eq!(team.seats(), 3);
-    assert_eq!(team.included_ai_cents(), 28_000);
+    assert_eq!(team.included_ai_cents(), 4_000);
+    assert_eq!(
+        team.seat_allowances()
+            .into_iter()
+            .map(|seat| seat.included_cents)
+            .collect::<Vec<_>>(),
+        vec![4_000, 20_000, 4_000]
+    );
     assert_eq!(team.tier, PlanTier::Premium);
 }
 
@@ -145,7 +156,10 @@ fn snapshot_for(
     let u = user("me@x.com");
     let ent = Entitlement::personal(u.clone(), tier);
     let period = BillingPeriod::calendar_month(Utc::now());
-    build_snapshot(&u, &ent, &settings, period, used, ledger, balance)
+    let chargeable = (used - ent.included_ai_cents()).max(0);
+    build_snapshot(
+        &u, &ent, &settings, period, used, chargeable, ledger, balance,
+    )
 }
 
 #[test]
@@ -284,6 +298,7 @@ fn free_and_unlimited_are_never_blocked() {
         &BillingSettings::default(),
         BillingPeriod::calendar_month(Utc::now()),
         99_999,
+        95_999,
         PeriodLedger::default(),
         0,
     );
@@ -311,12 +326,13 @@ fn team_member_is_not_the_payer() {
         &BillingSettings::default(),
         BillingPeriod::calendar_month(Utc::now()),
         0,
+        0,
         PeriodLedger::default(),
         0,
     );
     assert!(!s.can_manage_billing);
     assert_eq!(s.seats, 2);
-    assert_eq!(s.included_cents, 40_000);
+    assert_eq!(s.included_cents, 20_000);
 }
 
 #[test]

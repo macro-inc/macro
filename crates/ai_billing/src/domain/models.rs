@@ -186,7 +186,8 @@ impl BillingPeriod {
 pub enum PayerScope {
     /// A personal subscription (or no subscription).
     Personal,
-    /// The user owns a paying team; members' usage pools onto their account.
+    /// The user owns a paying team and pays for members' shared credits and
+    /// overage.
     TeamOwner {
         /// The team.
         team_id: Uuid,
@@ -198,21 +199,39 @@ pub enum PayerScope {
     },
 }
 
+/// The included AI assigned to one billed seat for a period.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeatAllowance {
+    /// The user occupying the seat.
+    pub user: MacroUserIdStr<'static>,
+    /// Included AI for this seat, in list-rate cents.
+    pub included_cents: i64,
+}
+
+/// AI usage attributed to one billed seat in a period.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeatUsage {
+    /// The user occupying the seat.
+    pub user: MacroUserIdStr<'static>,
+    /// Usage at Macro's list rate, in cents.
+    pub used_cents: i64,
+}
+
 /// A user's resolved plan and payer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entitlement {
     /// The plan the user's own seat is on.
     pub tier: PlanTier,
-    /// The plan of every billed seat, the user's included. A team may mix
-    /// Premium and Max seats; the pooled allowance is their sum.
+    /// The plan of every billed seat, in the same order as [`Self::billed_users`].
+    /// A team may mix Premium and Max seats.
     pub seat_tiers: Vec<PlanTier>,
     /// Enterprise teams are billed out of band and never metered.
     pub unlimited: bool,
     /// The account that owns credits, overage settings, and the Stripe
     /// customer. The user themself unless they are a team member.
     pub payer: MacroUserIdStr<'static>,
-    /// Every user whose usage counts against the payer's pooled allowance.
-    /// Contains at least the payer.
+    /// Every user whose usage can consume the payer's shared credits and
+    /// overage. Contains at least the payer.
     pub billed_users: Vec<MacroUserIdStr<'static>>,
     /// How the payer relates to the user.
     pub scope: PayerScope,
@@ -236,16 +255,25 @@ impl Entitlement {
         self.billed_users.len().max(1) as u32
     }
 
-    /// Included AI per period across all seats, in list-rate cents: each
-    /// seat contributes its own plan's allowance.
+    /// Included AI for this user's seat, in list-rate cents.
     pub fn included_ai_cents(&self) -> i64 {
-        if self.seat_tiers.is_empty() {
-            return self.tier.included_ai_cents_per_seat() * i64::from(self.seats());
-        }
-        self.seat_tiers
+        self.tier.included_ai_cents_per_seat()
+    }
+
+    /// Each billed seat with its own included AI. Unused allowance never moves
+    /// between seats; only credits and overage are shared by the payer.
+    pub fn seat_allowances(&self) -> Vec<SeatAllowance> {
+        self.billed_users
             .iter()
-            .map(|tier| tier.included_ai_cents_per_seat())
-            .sum()
+            .enumerate()
+            .map(|(index, user)| {
+                let tier = self.seat_tiers.get(index).copied().unwrap_or(self.tier);
+                SeatAllowance {
+                    user: user.clone(),
+                    included_cents: tier.included_ai_cents_per_seat(),
+                }
+            })
+            .collect()
     }
 
     /// Whether `user` is the payer (and may change billing settings).
@@ -291,10 +319,8 @@ pub struct PeriodLedger {
 /// charge usage that was included (downgrade).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PeriodAllowance {
-    /// Included AI for the period, in list-rate cents.
-    pub included_cents: i64,
-    /// Users whose usage pooled onto the payer during the period.
-    pub billed_users: Vec<MacroUserIdStr<'static>>,
+    /// Included AI frozen for each seat in the period.
+    pub seats: Vec<SeatAllowance>,
 }
 
 /// Lifecycle of an overage charge pushed to Stripe.
@@ -374,32 +400,33 @@ pub struct UsageSnapshot {
     pub payer: MacroUserIdStr<'static>,
     /// Whether the requesting user is the payer.
     pub can_manage_billing: bool,
-    /// Seats pooled onto the payer.
+    /// Seats billed to the payer.
     pub seats: u32,
     /// Period start.
     pub period_start: DateTime<Utc>,
     /// Period end (exclusive).
     pub period_end: DateTime<Utc>,
-    /// Included AI this period across all seats, list-rate cents.
+    /// Included AI for this user's seat this period, in list-rate cents.
     pub included_cents: i64,
-    /// AI used this period across all seats, list-rate cents.
+    /// AI used by this user this period, in list-rate cents.
     pub used_cents: i64,
-    /// Credits already applied to this period.
+    /// Shared payer credits already applied to this period.
     pub credits_consumed_cents: i64,
-    /// Prepaid credit balance.
+    /// Shared prepaid credit balance.
     pub credit_balance_cents: i64,
     /// Whether overage billing is on.
     pub overage_enabled: bool,
     /// Per-period overage cap.
     pub overage_limit_cents: i64,
-    /// Overage charged so far this period.
+    /// Shared overage charged so far this period.
     pub overage_charged_cents: i64,
     /// Whether overage is paused after a failed charge.
     pub overage_suspended: bool,
-    /// Usage not yet covered by allowance, credits, or charges (awaiting
-    /// settlement).
+    /// Team-wide usage beyond per-seat allowances that is not yet covered by
+    /// shared credits or charges (awaiting settlement).
     pub uncovered_cents: i64,
-    /// Headroom before AI requests are refused; 0 when blocked.
+    /// This seat's remaining allowance plus shared credit/overage headroom; 0
+    /// when blocked.
     pub remaining_cents: i64,
     /// Why requests are refused right now, if they are.
     #[serde(skip_serializing_if = "Option::is_none")]

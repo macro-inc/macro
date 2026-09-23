@@ -27,8 +27,8 @@ pub struct Param {
 /// Moves one team member's seat between paid plans.
 ///
 /// Team admins and owners only. The team's subscription is re-billed for
-/// the seat at once (prorated); the member's tier role and the team's pooled
-/// AI allowance follow immediately.
+/// the seat at once (prorated); the member's tier role and individual AI
+/// allowance follow immediately.
 #[utoipa::path(
     patch,
     path = "/team/members/{member_user_id}/plan",

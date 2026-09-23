@@ -4,7 +4,7 @@
 use super::ledger::SettlementPolicy;
 use super::models::{
     AllowanceDecision, BillingPeriod, BillingSettings, Entitlement, OverageChargeStatus,
-    PeriodAllowance, PeriodLedger, Result, UsageSnapshot,
+    PeriodAllowance, PeriodLedger, Result, SeatAllowance, SeatUsage, UsageSnapshot,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -12,7 +12,7 @@ use macro_uuid::Uuid;
 
 /// Resolves who a user is billed as.
 pub trait EntitlementSource: Send + Sync + 'static {
-    /// The user's plan, payer, and pooled seats.
+    /// The user's plan, payer, and billed seats.
     fn entitlement(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -27,12 +27,12 @@ pub trait EntitlementSource: Send + Sync + 'static {
 
 /// Reads recorded AI usage at Macro's list rate.
 pub trait UsageReader: Send + Sync + 'static {
-    /// Total list-rate cents used by `users` within `period`.
-    fn list_rate_usage_cents(
+    /// List-rate usage for each of `users` within `period`.
+    fn list_rate_usage_cents_by_user(
         &self,
         users: &[MacroUserIdStr<'static>],
         period: BillingPeriod,
-    ) -> impl Future<Output = Result<i64>> + Send;
+    ) -> impl Future<Output = Result<Vec<SeatUsage>>> + Send;
 }
 
 /// A charge reserved in the ledger that still has to be collected.
@@ -113,15 +113,14 @@ pub trait BillingRepo: Send + Sync + 'static {
         period_start: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<PeriodAllowance>>> + Send;
 
-    /// Record the live allowance against the open period. Upserts so a
-    /// mid-period plan or seat change is reflected until the period closes;
+    /// Record each seat's live allowance against the open period. Upserts so
+    /// a mid-period plan or seat change is reflected until the period closes;
     /// callers must only pass the current period's start.
     fn remember_period_allowance(
         &self,
         payer: &MacroUserIdStr<'_>,
         period_start: DateTime<Utc>,
-        included_cents: i64,
-        billed_users: &[MacroUserIdStr<'static>],
+        seats: &[SeatAllowance],
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Book a credit purchase. Returns `false` when `stripe_reference` was
@@ -136,8 +135,8 @@ pub trait BillingRepo: Send + Sync + 'static {
     /// Atomically settle a period: under the payer's row lock, re-read the
     /// ledger, run [`plan_settlement`](super::ledger::plan_settlement) with the
     /// stored overage settings, book credit consumption, and reserve a
-    /// pending overage charge. `used_cents`/`included_cents` come from the
-    /// caller; the overage policy is read inside the lock, with
+    /// pending overage charge. `chargeable_cents` is the sum of each seat's
+    /// usage beyond its own allowance. The overage policy is read inside the lock, with
     /// `charge_threshold_cents` and `period_ended` taken from `policy`.
     ///
     /// A charge that was reserved earlier but never collected is handed back
@@ -157,8 +156,7 @@ pub trait BillingRepo: Send + Sync + 'static {
         &self,
         payer: &MacroUserIdStr<'_>,
         period_start: DateTime<Utc>,
-        used_cents: i64,
-        included_cents: i64,
+        chargeable_cents: i64,
         policy: SettlementPolicy,
     ) -> impl Future<Output = Result<SettlementOutcome>> + Send;
 
@@ -283,10 +281,11 @@ pub trait BillingService: Send + Sync + 'static {
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<UsageSnapshot>> + Send;
 
-    /// Book uncovered usage for the payer of `user` (previous and current
-    /// period) from credits and then overage, collecting overage via the
-    /// payment gateway. The previous period is settled against the allowance
-    /// frozen while it was open, not the live plan or seat list.
+    /// Book each seat's usage beyond its own allowance for the payer of `user`
+    /// (previous and current period) from shared credits and then shared
+    /// overage, collecting overage via the payment gateway. The previous
+    /// period is settled against the per-seat allowances frozen while it was
+    /// open, not the live plan or seat list.
     fn settle(&self, user: &MacroUserIdStr<'_>) -> impl Future<Output = Result<()>> + Send;
 
     /// Turn overage on/off with a per-period cap. Payer only. Re-enabling

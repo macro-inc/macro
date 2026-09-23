@@ -9,9 +9,10 @@ use teams::domain::team_repo::TeamRepository;
 /// [`EntitlementSource`] over the roles service and the teams repository.
 ///
 /// - A member of a paying (or enterprise) team is billed through the team
-///   owner: usage pools on the owner and every seat adds its own plan's
-///   allowance (a team may mix Premium and Max seats). Each member's plan is
-///   the one recorded on their membership; enterprise teams are unlimited.
+///   owner: every seat keeps its own plan allowance, while credits and overage
+///   are shared by the owner (a team may mix Premium and Max seats). Each
+///   member's plan is the one recorded on their membership; enterprise teams
+///   are unlimited.
 /// - Everyone else is a personal account on whatever tier their roles say.
 #[derive(Clone)]
 pub struct RolesTeamsEntitlementSource<P, T> {

@@ -1,6 +1,6 @@
 //! Reads recorded AI usage from `ai_usage` at Macro's list rate.
 
-use crate::domain::{BillingError, BillingPeriod, Result, UsageReader, list_rate_cents};
+use crate::domain::{BillingError, BillingPeriod, Result, SeatUsage, UsageReader, list_rate_cents};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
@@ -28,18 +28,18 @@ impl PgUsageReader {
 }
 
 impl UsageReader for PgUsageReader {
-    async fn list_rate_usage_cents(
+    async fn list_rate_usage_cents_by_user(
         &self,
         users: &[MacroUserIdStr<'static>],
         period: BillingPeriod,
-    ) -> Result<i64> {
+    ) -> Result<Vec<SeatUsage>> {
         if users.is_empty() {
-            return Ok(0);
+            return Ok(Vec::new());
         }
         let ids: Vec<String> = users.iter().map(|u| u.as_ref().to_string()).collect();
-        let provider_usd = sqlx::query_scalar!(
+        let rows = sqlx::query!(
             r#"
-            SELECT COALESCE(SUM(
+            SELECT user_id, COALESCE(SUM(
                 COALESCE(
                     total::float8,
                     (input_tokens::float8 / 1000000.0) * $4
@@ -50,6 +50,7 @@ impl UsageReader for PgUsageReader {
             WHERE user_id = ANY($1)
               AND created_at >= $2
               AND created_at < $3
+            GROUP BY user_id
             "#,
             &ids,
             period.start,
@@ -57,9 +58,18 @@ impl UsageReader for PgUsageReader {
             FALLBACK_PRICE_PER_MILLION_IN,
             FALLBACK_PRICE_PER_MILLION_OUT,
         )
-        .fetch_one(&self.pool)
+        .fetch_all(&self.pool)
         .await
         .map_err(|e| BillingError::Storage(e.into()))?;
-        Ok(list_rate_cents(provider_usd))
+        rows.into_iter()
+            .map(|row| {
+                let user = MacroUserIdStr::try_from(row.user_id)
+                    .map_err(|error| BillingError::Storage(error.into()))?;
+                Ok(SeatUsage {
+                    user,
+                    used_cents: list_rate_cents(row.usd),
+                })
+            })
+            .collect()
     }
 }

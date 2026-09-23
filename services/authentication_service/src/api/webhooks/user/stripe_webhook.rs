@@ -432,7 +432,7 @@ struct TeamPlanSync {
     period: Option<(DateTime<Utc>, DateTime<Utc>)>,
 }
 
-/// Anchor the team's pooled AI allowance to the subscription's period. As
+/// Anchor the team's per-seat AI allowances to the subscription's period. As
 /// with [`sync_personal_billing_period`], a storage failure fails the webhook
 /// so Stripe redelivers it; a subscription with no `owner_id` metadata is
 /// not transient and is only logged.

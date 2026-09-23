@@ -8,7 +8,8 @@ use super::ledger::{SettlementPolicy, build_snapshot, decide};
 use super::models::{
     AllowanceDecision, BillingError, BillingPeriod, BillingSettings, CREDIT_PACKS_CENTS,
     Entitlement, OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS,
-    OverageChargeStatus, PeriodAllowance, PlanTier, Result, UsageSnapshot,
+    OverageChargeStatus, PeriodAllowance, PlanTier, Result, SeatAllowance, SeatUsage,
+    UsageSnapshot,
 };
 use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,
@@ -46,6 +47,21 @@ struct Position {
     period: BillingPeriod,
 }
 
+fn usage_for(user: &MacroUserIdStr<'_>, usage: &[SeatUsage]) -> i64 {
+    usage
+        .iter()
+        .find(|entry| entry.user.as_ref() == user.as_ref())
+        .map(|entry| entry.used_cents)
+        .unwrap_or(0)
+}
+
+fn chargeable_usage_cents(seats: &[SeatAllowance], usage: &[SeatUsage]) -> i64 {
+    seats
+        .iter()
+        .map(|seat| (usage_for(&seat.user, usage) - seat.included_cents).max(0))
+        .sum()
+}
+
 impl<E, U, R, P> BillingServiceImpl<E, U, R, P>
 where
     E: EntitlementSource,
@@ -65,8 +81,7 @@ where
                 .remember_period_allowance(
                     &entitlement.payer,
                     period.start,
-                    entitlement.included_ai_cents(),
-                    &entitlement.billed_users,
+                    &entitlement.seat_allowances(),
                 )
                 .await?;
         }
@@ -87,33 +102,39 @@ where
             settings,
             period,
         } = position;
-        let (used_cents, ledger, credit_balance_cents) = if entitlement.tier.is_paid() {
-            let used = self
-                .usage
-                .list_rate_usage_cents(&entitlement.billed_users, *period)
-                .await?;
-            let ledger = self
-                .repo
-                .period_ledger(&entitlement.payer, period.start)
-                .await?;
-            let balance = self.repo.credit_balance_cents(&entitlement.payer).await?;
-            (used, ledger, balance)
-        } else {
-            // Free users are not metered here; skip the ledger reads.
-            Default::default()
-        };
+        let (used_cents, chargeable_cents, ledger, credit_balance_cents) =
+            if entitlement.tier.is_paid() {
+                let seats = entitlement.seat_allowances();
+                let users: Vec<_> = seats.iter().map(|seat| seat.user.clone()).collect();
+                let usage = self
+                    .usage
+                    .list_rate_usage_cents_by_user(&users, *period)
+                    .await?;
+                let used = usage_for(user, &usage);
+                let chargeable = chargeable_usage_cents(&seats, &usage);
+                let ledger = self
+                    .repo
+                    .period_ledger(&entitlement.payer, period.start)
+                    .await?;
+                let balance = self.repo.credit_balance_cents(&entitlement.payer).await?;
+                (used, chargeable, ledger, balance)
+            } else {
+                // Free users are not metered here; skip the ledger reads.
+                Default::default()
+            };
         Ok(build_snapshot(
             user,
             entitlement,
             settings,
             *period,
             used_cents,
+            chargeable_cents,
             ledger,
             credit_balance_cents,
         ))
     }
 
-    /// Allowance and billed users to settle `period` with.
+    /// Per-seat allowances to settle `period` with.
     ///
     /// A closed period uses the freeze recorded while it was open. An open
     /// period (or a closed one that was never observed) uses the live
@@ -123,17 +144,14 @@ where
         entitlement: &Entitlement,
         period: BillingPeriod,
         now: DateTime<Utc>,
-    ) -> Result<(Vec<MacroUserIdStr<'static>>, i64)> {
+    ) -> Result<Vec<SeatAllowance>> {
         if period.has_ended(now) {
             match self
                 .repo
                 .period_allowance(&entitlement.payer, period.start)
                 .await?
             {
-                Some(PeriodAllowance {
-                    included_cents,
-                    billed_users,
-                }) => return Ok((billed_users, included_cents)),
+                Some(PeriodAllowance { seats }) => return Ok(seats),
                 None => {
                     tracing::warn!(
                         period_start = %period.start,
@@ -142,10 +160,7 @@ where
                 }
             }
         }
-        Ok((
-            entitlement.billed_users.clone(),
-            entitlement.included_ai_cents(),
-        ))
+        Ok(entitlement.seat_allowances())
     }
 
     /// Settle one period for a payer: book uncovered usage from credits, then
@@ -157,13 +172,14 @@ where
         period: BillingPeriod,
         now: DateTime<Utc>,
     ) -> Result<()> {
-        let (billed_users, included_cents) =
-            self.allowance_for_period(entitlement, period, now).await?;
-        let used_cents = self
+        let seats = self.allowance_for_period(entitlement, period, now).await?;
+        let users: Vec<_> = seats.iter().map(|seat| seat.user.clone()).collect();
+        let usage = self
             .usage
-            .list_rate_usage_cents(&billed_users, period)
+            .list_rate_usage_cents_by_user(&users, period)
             .await?;
-        if used_cents <= included_cents {
+        let chargeable_cents = chargeable_usage_cents(&seats, &usage);
+        if chargeable_cents == 0 {
             return Ok(());
         }
 
@@ -172,8 +188,7 @@ where
             .apply_settlement(
                 &entitlement.payer,
                 period.start,
-                used_cents,
-                included_cents,
+                chargeable_cents,
                 SettlementPolicy {
                     // The repo reads the live overage settings under its lock;
                     // these two are the caller's contribution.
