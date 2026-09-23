@@ -290,6 +290,9 @@ rmcp = "1.6.0"
 sse-stream = "0.2"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
+# Mirrors the ACP SDK's own declaration: `coding_agent_worker` ports its
+# process-group kill and makes the same call.
+rustix = { version = "1", default-features = false, features = ["process", "std"] }
 rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }

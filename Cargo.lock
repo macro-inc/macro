@@ -3915,6 +3915,7 @@ dependencies = [
  "ratatui",
  "reqwest 0.13.4",
  "rootcause",
+ "rustix 1.1.4",
  "rustls 0.23.45",
  "serde",
  "serde_json",
