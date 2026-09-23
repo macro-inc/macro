@@ -210,6 +210,10 @@ const deploymentConfig = {
   ENVIRONMENT: stack,
   PREVIEW_DOMAIN: domain,
   PREVIEW_SSH_HOST: sshHost,
+  // Local stacks reach their SSH listener through a Cloudflare quick tunnel;
+  // a deployed gateway is dialled directly and rejects a proxy host outright.
+  // Present-but-empty because MacroConfig does not merge missing JSON keys.
+  PREVIEW_SSH_PROXY_HOST: '',
   PREVIEW_APP_ORIGIN:
     stack === 'prod' ? 'https://macro.com' : 'https://dev.macro.com',
   PREVIEW_CONTROL_HOSTS:

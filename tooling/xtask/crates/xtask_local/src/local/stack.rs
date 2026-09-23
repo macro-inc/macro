@@ -18,6 +18,7 @@ use serde_json::json;
 
 use super::cli::{EnvArgs, InstanceArgs, RunArgs};
 use super::instance::{Instance, Port};
+use super::local_env::Tunnels;
 use super::stage::Stage;
 use super::{Mode, arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapshot, summary};
 
@@ -174,8 +175,8 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         infra_only,
         // Headless stacks serve agents on Cursor Cloud dev boxes, which have
         // no cloudflared and no @cursor sessions to feed; the egress stays
-        // in-network.
-        None,
+        // in-network and previews stay reachable on that box only.
+        Tunnels::default(),
     )?;
 
     // Build + stage the frontend bundle in the background: it's pure host-side
@@ -354,7 +355,7 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
         args.env.no_doppler,
         args.env.env_file.as_deref(),
         state.frontend == "static",
-        None,
+        Tunnels::default(),
         // `update` doesn't know the original `--traces` choice; keep the
         // running stack's wiring keyed on the port probe as before.
         true,

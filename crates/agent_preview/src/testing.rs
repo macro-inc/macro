@@ -56,6 +56,13 @@ pub fn receipt<T: RequiredPermission>(level: AccessLevel) -> EntityAccessReceipt
     .unwrap()
 }
 pub fn fixture(ssh_port: u16) -> (PreviewService, Arc<TestAuthority>, russh::keys::PrivateKey) {
+    fixture_with(ssh_port, |_| {})
+}
+/// Same fixture, with deployment settings adjusted before the service validates them.
+pub fn fixture_with(
+    ssh_port: u16,
+    adjust: impl FnOnce(&mut Settings),
+) -> (PreviewService, Arc<TestAuthority>, russh::keys::PrivateKey) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("host_key");
     assert!(
@@ -68,20 +75,18 @@ pub fn fixture(ssh_port: u16) -> (PreviewService, Arc<TestAuthority>, russh::key
     );
     let key = crate::inbound::ssh::host_key(&std::fs::read_to_string(path).unwrap()).unwrap();
     let authority = Arc::new(TestAuthority(AtomicBool::new(true)));
-    let service = PreviewService::new(
-        Settings {
-            domain: "preview.test".into(),
-            https_port: 443,
-            local_ssh_fallback: false,
-            ssh_host: "localhost".into(),
-            ssh_port,
-            host_key: crate::inbound::ssh::public_key(&key).unwrap(),
-            app_origin: "https://macro.test".into(),
-        },
-        authority.clone(),
-        Arc::new(TestEvents),
-    )
-    .unwrap();
+    let mut settings = Settings {
+        domain: "preview.test".into(),
+        https_port: 443,
+        local_ssh_fallback: false,
+        ssh_proxy_host: None,
+        ssh_host: "localhost".into(),
+        ssh_port,
+        host_key: crate::inbound::ssh::public_key(&key).unwrap(),
+        app_origin: "https://macro.test".into(),
+    };
+    adjust(&mut settings);
+    let service = PreviewService::new(settings, authority.clone(), Arc::new(TestEvents)).unwrap();
     (service, authority, key)
 }
 pub struct TcpTunnel(pub std::net::SocketAddr);

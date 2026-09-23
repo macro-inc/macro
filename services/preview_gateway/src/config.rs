@@ -13,6 +13,9 @@ pub struct Config {
     pub preview_ssh_host_key: String,
     pub preview_domain: String,
     pub preview_ssh_host: String,
+    /// Local stacks only: Cloudflare quick-tunnel hostname fronting the SSH listener,
+    /// so an agent running off this machine can still reach it.
+    pub preview_ssh_proxy_host: Option<String>,
     #[macro_config_default(22)]
     pub preview_ssh_public_port: u16,
     #[macro_config_default(443)]

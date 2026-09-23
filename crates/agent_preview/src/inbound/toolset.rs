@@ -22,6 +22,62 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use std::sync::Arc;
 
+/// Shell functions appended only for local stacks that published a quick tunnel.
+///
+/// Cloudflare's edge proxies HTTP ports only, so a raw SSH dial to the minted
+/// hostname is dropped: the stream has to be wrapped in a WebSocket, which is
+/// what `cloudflared access ssh` does as an OpenSSH `ProxyCommand`. That helper
+/// therefore has to exist on the agent's machine, so fetch it when missing. Its
+/// directory is deliberately not cleaned up: the backgrounded `ssh` keeps
+/// `cloudflared` as a child for the life of the tunnel.
+const PROXY_SUPPORT: &str = r#"preview_cloudflared() {
+if command -v cloudflared >/dev/null 2>&1; then return 0; fi
+preview_arch=$(uname -m)
+case "$preview_arch" in
+  x86_64|amd64) preview_arch=amd64 ;;
+  aarch64|arm64) preview_arch=arm64 ;;
+  *) printf '%s\n' "no cloudflared build for $preview_arch" >&2; return 1 ;;
+esac
+preview_os=$(uname -s | tr '[:upper:]' '[:lower:]')
+preview_bin=$(mktemp -d)
+curl -fsSL --max-time 120 -o "$preview_bin/cloudflared" \
+  "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-$preview_os-$preview_arch" || return 1
+chmod +x "$preview_bin/cloudflared"
+PATH="$preview_bin:$PATH"
+export PATH
+}
+preview_connect_proxy() {
+preview_cloudflared || return 1
+ssh -F /dev/null -fNT \
+  -o BatchMode=yes \
+  -o PubkeyAuthentication=no \
+  -o PasswordAuthentication=no \
+  -o KbdInteractiveAuthentication=no \
+  -o StrictHostKeyChecking=yes \
+  -o HostKeyAlgorithms=ssh-ed25519 \
+  -o UserKnownHostsFile="$preview_known_hosts" \
+  -o GlobalKnownHostsFile=/dev/null \
+  -o ControlMaster=no \
+  -o ControlPath=none \
+  -o ConnectTimeout=30 \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=15 \
+  -o ServerAliveCountMax=3 \
+  -o ProxyCommand="cloudflared access ssh --hostname $1" \
+  -R 127.0.0.1:1:127.0.0.1:PREVIEW_LOCAL_PORT \
+  -p 22 -l 'PREVIEW_TOKEN' "$1"
+}
+"#;
+
+/// The name `ssh` looks up in `known_hosts`: bracketed only on a non-default port.
+fn known_hosts_name(host: &str, port: u16) -> String {
+    if port == 22 {
+        host.to_owned()
+    } else {
+        format!("[{host}]:{port}")
+    }
+}
+
 /// Authenticated session context; constructed per request, never shared across agents.
 #[derive(Clone)]
 pub struct PreviewToolContext {
@@ -60,27 +116,46 @@ impl AsyncTool<PreviewToolContext> for SharePreview {
                 internal_error: rootcause::report!(e).into_anyhow(),
             })?;
         let settings = context.service.settings();
-        let known_host = format!("[{}]:{}", settings.ssh_host, settings.ssh_port);
-        let known_host = if settings.ssh_port == 22 {
-            settings.ssh_host.clone()
-        } else {
-            known_host
-        };
-        let known_host = if settings.local_ssh_fallback {
-            format!("{known_host} {}\n[preview-gateway]:2222", settings.host_key)
-        } else {
-            known_host
-        };
-        let connect = if settings.local_ssh_fallback {
-            format!(
-                "preview_connect '{}' {} || preview_connect preview-gateway 2222",
-                settings.ssh_host, settings.ssh_port
-            )
-        } else {
+        // Endpoints are tried in order until one connects: the agent may share this
+        // machine, the Docker network, or neither. Each contributes its own
+        // known_hosts name, because all of them reach the same pinned host key.
+        let mut endpoints = vec![(
+            known_hosts_name(&settings.ssh_host, settings.ssh_port),
             format!(
                 "preview_connect '{}' {}",
                 settings.ssh_host, settings.ssh_port
-            )
+            ),
+        )];
+        if settings.local_ssh_fallback {
+            endpoints.push((
+                known_hosts_name("preview-gateway", 2222),
+                "preview_connect preview-gateway 2222".to_owned(),
+            ));
+        }
+        if let Some(proxy) = &settings.ssh_proxy_host {
+            // Cloudflare's edge only proxies HTTP ports, so the quick tunnel is
+            // reached over a WebSocket ProxyCommand rather than a TCP dial.
+            endpoints.push((
+                known_hosts_name(proxy, 22),
+                format!("preview_connect_proxy '{proxy}'"),
+            ));
+        }
+        let known_host = endpoints
+            .iter()
+            .map(|(name, _)| format!("{name} {}", settings.host_key))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let connect = endpoints
+            .iter()
+            .map(|(_, call)| call.as_str())
+            .collect::<Vec<_>>()
+            .join(" || ");
+        let proxy_support = if settings.ssh_proxy_host.is_some() {
+            PROXY_SUPPORT
+                .replace("PREVIEW_LOCAL_PORT", &share.port.to_string())
+                .replace("PREVIEW_TOKEN", &share.token)
+        } else {
+            String::new()
         };
         // Every interpolated field is validated at startup or generated locally; no shell input from the model.
         let script = format!(
@@ -90,7 +165,7 @@ umask 077
 preview_known_hosts=$(mktemp)
 trap 'rm -f "$preview_known_hosts"' EXIT HUP INT TERM
 cat > "$preview_known_hosts" <<'MACRO_PREVIEW_HOST_KEY'
-{known_host} {key}
+{known_host}
 MACRO_PREVIEW_HOST_KEY
 preview_connect() {{
 ssh -F /dev/null -fNT \
@@ -111,10 +186,9 @@ ssh -F /dev/null -fNT \
   -R 127.0.0.1:1:127.0.0.1:{port} \
   -p "$2" -l '{token}' "$1"
 }}
-{connect}
+{proxy_support}{connect}
 printf '%s\n' 'Preview tunnel connected. Keep the local server running; Macro shows the preview once HTTP is reachable.'
 "#,
-            key = settings.host_key,
             port = share.port,
             token = share.token
         );
@@ -220,3 +294,6 @@ pub fn router(service: PreviewService, allowed_hosts: Vec<String>) -> Router {
     );
     Router::new().nest_service("/mcp", transport)
 }
+
+#[cfg(test)]
+mod test;

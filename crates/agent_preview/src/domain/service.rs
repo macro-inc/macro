@@ -92,6 +92,9 @@ pub struct Settings {
     pub ssh_port: u16,
     /// Optional local Docker endpoint when the host loopback address is unreachable.
     pub local_ssh_fallback: bool,
+    /// Local-only public ingress: a Cloudflare quick-tunnel hostname carrying this
+    /// SSH listener, for agents that run outside this machine entirely.
+    pub ssh_proxy_host: Option<String>,
     /// OpenSSH public host key, algorithm and base64 blob.
     pub host_key: String,
     /// Allowed Macro application origin for browser ticket handoff.
@@ -128,6 +131,10 @@ impl Settings {
             || app_host.ends_with(&format!(".{}", self.domain))
             || (app.scheme() != "https" && !local)
             || (self.local_ssh_fallback && !local)
+            || self
+                .ssh_proxy_host
+                .as_ref()
+                .is_some_and(|proxy| !local || !host(proxy))
             || app.origin().ascii_serialization() != self.app_origin
             || key.len() != 2
             || key[0] != "ssh-ed25519"

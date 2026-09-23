@@ -23,6 +23,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 
 use super::instance::Instance;
+use super::local_env::Tunnels;
 use super::{Mode, local_env};
 
 #[cfg(test)]
@@ -46,7 +47,7 @@ pub fn resolve(
     no_doppler: bool,
     env_file: Option<&Path>,
     static_frontend: bool,
-    egress_public_url: Option<&str>,
+    tunnels: Tunnels<'_>,
     wire_otel: bool,
 ) -> Result<ResolvedEnv> {
     // Base = Doppler (`lcl_personal`/`dev_personal`); it supplies the
@@ -56,9 +57,9 @@ pub fn resolve(
     // has — unlike the old defaults.env, which Doppler overrode). Dev keeps
     // Doppler as-is.
     let spec = mode.spec();
-    let local = spec.overlay_local_env.then(|| {
-        local_env::LocalEnv::for_instance(mode, instance, static_frontend, egress_public_url)
-    });
+    let local = spec
+        .overlay_local_env
+        .then(|| local_env::LocalEnv::for_instance(mode, instance, static_frontend, tunnels));
     let mut env = BTreeMap::new();
     // Boot stubs go in FIRST so Doppler overrides them: they only exist to keep
     // a `--no-doppler` stack's config loaders satisfied, never to replace a

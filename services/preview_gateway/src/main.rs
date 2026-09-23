@@ -74,6 +74,9 @@ async fn run() -> Result<(), rootcause::Report> {
             https_port: config.preview_https_port,
             ssh_host: config.preview_ssh_host,
             ssh_port: config.preview_ssh_public_port,
+            ssh_proxy_host: config
+                .preview_ssh_proxy_host
+                .filter(|host| !host.is_empty()),
             host_key: public_key,
             app_origin: config.preview_app_origin,
         },

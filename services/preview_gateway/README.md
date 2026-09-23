@@ -9,8 +9,9 @@ minutes, and continues editing. HTTP and WebSocket traffic use the same SSH
 connection, so HMR works without rebuilding or publishing the app.
 
 The script uses a single-use token as the SSH username, `auth_none`, and a pinned
-ed25519 server host key. It does not generate or install a client key, install a
-helper, or disable host verification. The remote forward is a logical
+ed25519 server host key. It does not generate or install a client key or disable
+host verification, and installs no helper — except on a local stack's quick-tunnel
+endpoint, which needs `cloudflared` as a `ProxyCommand` (see below). The remote forward is a logical
 `127.0.0.1:1` registration; the gateway opens `forwarded-tcpip` channels directly.
 There is no public TCP listener or allocated port per preview, shell access, or
 arbitrary direct forwarding.
@@ -116,13 +117,27 @@ internal CA; trust that instance's Caddy CA for browser use. Its data is stored 
 `preview-caddy-data` beside the generated Caddyfile. The root certificate is
 `preview-caddy-data/caddy/pki/authorities/local/root.crt`; import it into the
 host/browser trust store (container trust does not configure the host). The generated script tries
-host loopback first, then the pinned Docker `preview-gateway:2222` endpoint.
+host loopback first, then the pinned Docker `preview-gateway:2222` endpoint, and
+— with `--with-cf-tunnel` — a Cloudflare quick tunnel last.
 External host runtimes receive `EXTERNAL_EGRESS_BASE_URL` (the instance's
 localhost egress port, or its public egress tunnel when enabled); Docker agents
 keep their Docker-network endpoint and the same session credential.
-Localhost previews are only reachable on that machine; public previews use the
-deployed gateway. A remote Cursor agent needs that public gateway, not a local
-Docker/localhost endpoint.
+An agent that runs neither on this machine nor in the compose network — a
+`@cursor` session on cursor.com — can reach neither of those endpoints. Running
+`just run_local --with-cf-tunnel` publishes a third one: a quick tunnel whose
+origin is `tcp://localhost:<preview ssh port>`, minted per run and written to
+`PREVIEW_SSH_PROXY_HOST`. Cloudflare's edge proxies HTTP ports only, so the
+script reaches it through `cloudflared access ssh --hostname <host>` as an
+OpenSSH `ProxyCommand`, fetching `cloudflared` first when the agent's image
+lacks it. That is the one endpoint that is not pure stock OpenSSH; it still
+installs no client key, and the pinned host key, one-use token and every quota
+apply unchanged. The hostname itself grants nothing: it only reaches the SSH
+listener, which accepts a single unexpired token.
+
+Without the flag, `PREVIEW_SSH_PROXY_HOST` is empty and previews stay reachable
+from this machine and the compose network only. A deployed gateway rejects the
+setting outright — it is dialled directly, and must never depend on someone's
+laptop tunnel.
 
 For the repo frontend, `.cursor/frontend.sh` routes API and WebSocket calls
 through the same Vite origin, and Vite derives its HMR address from the browser.
