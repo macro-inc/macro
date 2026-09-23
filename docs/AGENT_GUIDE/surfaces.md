@@ -536,7 +536,15 @@ label's font weight matches the file title. The link
 restores the originating Drive view.
 The `Drive` folder row opens the folder overview. Click a folder name to browse
 its contents in the main pane; its separate expand/collapse button reveals child
-folders without navigating. The top bar keeps the full folder and file detail
+folders without navigating. With GraphQL caching enabled and membership metadata
+hydrated, a never-visited folder can immediately show cached documents, chats,
+and subfolders for supported created/modified sorts and filters. Email remains
+server-owned: the full mixed GraphQL query still refreshes in the background,
+keeps loaded email rows, and owns pagination. An empty non-email projection must
+not show `This folder is empty` while that initial request is pending or failed.
+Verify with a folder-specific GraphQL response delayed, then navigate to another
+folder before it completes; neither cached rows nor late results may leak across
+folders. The top bar keeps the full folder and file detail
 path in one breadcrumb trail. Folder containment uses `/` separators, while the
 transition to a file detail and nested detail navigation use the default `>`
 separator. Choosing a folder breadcrumb returns to that folder and clears newer
