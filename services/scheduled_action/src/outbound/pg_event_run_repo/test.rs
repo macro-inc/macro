@@ -631,6 +631,37 @@ async fn revision_disable_and_cancellation_rechecks(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rejected_claims_release_locks_for_immediate_retry(pool: PgPool) {
+    let (repo, id, event) = setup(&pool).await;
+    admit(&repo, id, &event).await;
+    let pending = repo.pending_runs(page(1)).await.unwrap().remove(0);
+
+    for _ in 0..16 {
+        // Reserve another connection first so checking the lock cannot implicitly
+        // flush a queued rollback by reusing the claim's connection.
+        let mut observer = pool.begin().await.unwrap();
+        let mut stale = pending.clone();
+        stale.event = new_event(event.entity_id());
+        assert!(claim(&repo, stale).await.is_none());
+        assert!(lock_action(&mut observer, id).await.unwrap());
+        observer.rollback().await.unwrap();
+    }
+
+    repo.cancel_pending(
+        pending.key(),
+        pending.revision,
+        CancellationReason::AccessDenied,
+    )
+    .await
+    .unwrap();
+    // The no-pending-head rejection must release the action lock as well.
+    let mut observer = pool.begin().await.unwrap();
+    assert!(claim(&repo, pending).await.is_none());
+    assert!(lock_action(&mut observer, id).await.unwrap());
+    observer.rollback().await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn locked_actions_do_not_block_independent_dispatch(pool: PgPool) {
     let (repo, id, event) = setup(&pool).await;
     admit(&repo, id, &event).await;

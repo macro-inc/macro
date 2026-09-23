@@ -298,6 +298,9 @@ impl EventRunRepository for PgEventRunRepo {
         .fetch_optional(&mut *tx)
         .await?;
         let Some(action) = action else {
+            // Drop only queues rollback. Release the action lock before returning
+            // so an immediate SKIP LOCKED reconciliation can observe this action.
+            tx.rollback().await?;
             return Ok(None);
         };
         let pending = sqlx::query_as!(
@@ -313,6 +316,7 @@ impl EventRunRepository for PgEventRunRepo {
         .fetch_optional(&mut *tx)
         .await?;
         let Some(pending) = pending else {
+            tx.rollback().await?;
             return Ok(None);
         };
         let pending = PendingEventRun::try_from(pending)?;
@@ -322,6 +326,7 @@ impl EventRunRepository for PgEventRunRepo {
             || pending.revision != run.pending.revision
             || pending.event != run.pending.event
         {
+            tx.rollback().await?;
             return Ok(None);
         }
         let action = ScheduledAction {
