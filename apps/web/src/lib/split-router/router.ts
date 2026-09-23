@@ -270,7 +270,10 @@ export function createSplitRouter<TSplitId>(
       preserveHash: false,
       preserveExternalSearch: false,
     });
-    notifyLayoutChanges(before, accepted);
+    const becameReady = !ready;
+    ready = true;
+    if (becameReady) notify();
+    else notifyLayoutChanges(before, accepted);
   };
 
   const onLayoutChange = (history: BrowserHistoryIntent) => {

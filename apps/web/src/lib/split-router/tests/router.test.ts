@@ -121,6 +121,49 @@ const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve));
 afterEach(() => vi.restoreAllMocks());
 
 describe('split router', () => {
+  it('becomes ready when a synchronous layout change supersedes async initialization', async () => {
+    const layout = createLayout();
+    let release!: () => void;
+    let initialSignal: AbortSignal | undefined;
+    const initial = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const router = createSplitRouter({
+      routes,
+      layout,
+      location: createMemorySplitRouterLocation('/drive'),
+      middleware: [
+        ({ cause, signal }) => {
+          if (cause === 'initial') {
+            initialSignal = signal;
+            return initial;
+          }
+        },
+      ],
+    });
+    expect(router.isReady()).toBe(false);
+    // Pending cancellation may also notify before the replacement commits.
+    const readiness: boolean[] = [];
+    router.subscribe(() => readiness.push(router.isReady()));
+    layout.open({
+      location: {
+        route: { matches: [{ id: 'legacy', params: { id: 'replacement' } }] },
+      },
+      target: 'new-split',
+      replace: false,
+    });
+    await settle();
+    expect(initialSignal?.aborted).toBe(true);
+    expect(router.isReady()).toBe(true);
+    expect(readiness.at(-1)).toBe(true);
+    release();
+    await router.settled();
+    expect(router.isReady()).toBe(true);
+    expect(layout.snapshot().entries[0].location.route.matches[0].id).toBe(
+      'legacy'
+    );
+    router.dispose();
+  });
   it('observes initial canonicalization echoes without swallowing browser Back', async () => {
     const layout = createLayout();
     const location = createMemorySplitRouterLocation(
