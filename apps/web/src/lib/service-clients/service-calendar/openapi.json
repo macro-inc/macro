@@ -9,7 +9,7 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/calendar/calendars": {
+    "/calendars": {
       "get": {
         "tags": ["calendar_events"],
         "summary": "List the requester's visible calendars for pickers and filters.",
@@ -41,7 +41,7 @@
         }
       }
     },
-    "/calendar/events": {
+    "/events": {
       "post": {
         "tags": ["calendar_events"],
         "summary": "Create a calendar event and return its synced entity.",
@@ -113,7 +113,7 @@
         }
       }
     },
-    "/calendar/events/{event_id}": {
+    "/events/{event_id}": {
       "delete": {
         "tags": ["calendar_events"],
         "summary": "Delete a calendar event at its provider.",
@@ -300,7 +300,7 @@
         }
       }
     },
-    "/calendar/events/{event_id}/rsvp": {
+    "/events/{event_id}/rsvp": {
       "put": {
         "tags": ["calendar_events"],
         "summary": "Set the requester's RSVP on a calendar event and return its synced entity.",

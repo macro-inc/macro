@@ -14,7 +14,7 @@ dispatch = ["dep:tokio", "dep:tokio-util"]
 # The worker plus the SQS adapter that backs it.
 dispatch-sqs = ["dep:aws-sdk-sqs", "dispatch"]
 google = ["dep:reqwest", "dep:urlencoding"]
-# The email-service HTTP adapter implementing the mutation port, for hosts
+# The calendar-service HTTP adapter implementing the mutation port, for hosts
 # that are not the calendar write authority.
 mutation-client = ["dep:reqwest"]
 inbound = [

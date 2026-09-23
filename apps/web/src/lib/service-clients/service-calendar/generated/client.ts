@@ -47,7 +47,7 @@ export type listCalendarsResponse =
   | listCalendarsResponseError;
 
 export const getListCalendarsUrl = () => {
-  return `/calendar/calendars`;
+  return `/calendars`;
 };
 
 export const listCalendars = async (
@@ -120,7 +120,7 @@ export type createCalendarEventResponse =
   | createCalendarEventResponseError;
 
 export const getCreateCalendarEventUrl = () => {
-  return `/calendar/events`;
+  return `/events`;
 };
 
 export const createCalendarEvent = async (
@@ -212,8 +212,8 @@ export const getDeleteCalendarEventUrl = (
   const stringifiedParams = normalizedParams.toString();
 
   return stringifiedParams.length > 0
-    ? `/calendar/events/${eventId}?${stringifiedParams}`
-    : `/calendar/events/${eventId}`;
+    ? `/events/${eventId}?${stringifiedParams}`
+    : `/events/${eventId}`;
 };
 
 export const deleteCalendarEvent = async (
@@ -296,7 +296,7 @@ export type updateCalendarEventResponse =
   | updateCalendarEventResponseError;
 
 export const getUpdateCalendarEventUrl = (eventId: string) => {
-  return `/calendar/events/${eventId}`;
+  return `/events/${eventId}`;
 };
 
 export const updateCalendarEvent = async (
@@ -374,7 +374,7 @@ export type rsvpCalendarEventResponse =
   | rsvpCalendarEventResponseError;
 
 export const getRsvpCalendarEventUrl = (eventId: string) => {
-  return `/calendar/events/${eventId}/rsvp`;
+  return `/events/${eventId}/rsvp`;
 };
 
 export const rsvpCalendarEvent = async (
