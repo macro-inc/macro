@@ -949,3 +949,23 @@ default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
 Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
+# Graphics playground (local development)
+
+The image variant is `/app/component/image-markup-playground`. It loads the bundled
+`teo.png` automatically. Drag over the image
+to create an annotation. Reverse drags work; ends are clipped to the image bounds.
+Scroll or use the zoom buttons to zoom around the image center. Panning is disabled;
+the image stays centered on zoom and viewport resize. **Fit image** fits it in view. Escape cancels a drawing. **Clear rectangles**
+removes annotations; **Replace image** starts a fresh scene after successful decode.
+Invalid files leave the previous image intact. Files and annotations stay local and
+are discarded on reload. There is no save/upload, selection or resize yet.
+
+Open `/app/component/graphics-playground` on a local frontend server. This
+registry-mounted experiment shows three seeded rectangles, an infinite grid,
+camera position and zoom. It has no persistence or document creation effects.
+
+- Scroll to pan; Ctrl/Meta-scroll zooms about the pointer.
+- Focus the canvas, then Space-drag, or use a middle-button drag, to pan.
+- Zoom buttons use the viewport center. Reset view returns to 100% at camera 0, 0.
+- Each split owns its own camera. Selection and drawing tools are not implemented
+  in checkpoint 1.

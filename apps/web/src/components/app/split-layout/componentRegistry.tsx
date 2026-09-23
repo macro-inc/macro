@@ -759,6 +759,17 @@ registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 
 if (LOCAL_ONLY) {
   registerComponent(
+    'image-markup-playground',
+    lazy(
+      () =>
+        import('@app/features/image-markup-playground/image-markup-playground')
+    )
+  );
+  registerComponent(
+    'graphics-playground',
+    lazy(() => import('@app/features/graphics-playground/graphics-playground'))
+  );
+  registerComponent(
     'theme-edit-3',
     lazy(() => import('@theme/components/ThemeEdit3'))
   );
