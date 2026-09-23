@@ -35,6 +35,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { v7 as uuidv7 } from 'uuid';
 import { SessionLoadTrace, traceAcquire } from './load-telemetry';
+import { observeSend, sendTraceFor } from './send-telemetry';
 import { publishSessionTurn } from './session-turn';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
@@ -146,7 +147,7 @@ export class AgentSession {
     this.unsubscribeSocket = subscribeSocketSessionStarted(() => {
       void this.resync();
     });
-    this.trace = new SessionLoadTrace(id);
+    this.trace = new SessionLoadTrace(id, sendTraceFor(id));
     this.loading = this.startLoad();
   }
 
@@ -158,7 +159,7 @@ export class AgentSession {
   load(): Promise<AgentSessionRecord> {
     if (this.loadFailed) {
       this.loadFailed = false;
-      this.trace = new SessionLoadTrace(this.id);
+      this.trace = new SessionLoadTrace(this.id, sendTraceFor(this.id));
       this.loading = this.startLoad();
     }
     return this.loading;
@@ -330,20 +331,22 @@ export class AgentSession {
   }
 
   private startLoad(): Promise<AgentSessionRecord> {
-    return this.fetchAndFold().then(
-      (record) => {
-        this.trace.end('loaded');
-        return record;
-      },
-      (error: unknown) => {
-        this.loadFailed = true;
-        this.trace.end(
-          error instanceof AgentSessionReleased ? 'released' : 'failed',
-          error
-        );
-        throw error;
-      }
-    );
+    return this.trace
+      .wrap(() => this.fetchAndFold())
+      .then(
+        (record) => {
+          this.trace.end('loaded');
+          return record;
+        },
+        (error: unknown) => {
+          this.loadFailed = true;
+          this.trace.end(
+            error instanceof AgentSessionReleased ? 'released' : 'failed',
+            error
+          );
+          throw error;
+        }
+      );
   }
 
   private async fetchAndFold(): Promise<AgentSessionRecord> {
@@ -407,6 +410,7 @@ export class AgentSession {
       if (this.closed || events.length === 0) return;
       const metadata = events.findLast((event) => event.kind === 'metadata');
       if (metadata) this.setTurn(metadata.metadata.turn);
+      observeSend(this.id, events);
       for (const listener of this.listeners) listener(events);
     });
     // A failed push must not poison the chain for every input after it.

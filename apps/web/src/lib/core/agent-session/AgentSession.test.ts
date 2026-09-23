@@ -41,6 +41,7 @@ vi.mock('@queries/agent-session/queue-sync', () => ({
 }));
 
 import { AgentSession, AgentSessionReleased } from './AgentSession';
+import { resetSendTraces, startSend } from './send-telemetry';
 import { resetSessionTurns, sessionTurn } from './session-turn';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
@@ -78,6 +79,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetSendTraces();
   resetSessionTurns();
   socket.listeners.clear();
   // Instances are shared and refcounted, so a test that fails before its
@@ -488,6 +490,34 @@ describe('AgentSession', () => {
     expect(harness.getLog).toHaveBeenCalledTimes(2);
     await live.load();
     expect(harness.getLog).toHaveBeenCalledTimes(2);
+    live.release();
+  });
+
+  it('feeds fold events to an open send so the first agent reply can close it', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    const send = startSend(SESSION, {
+      surface: 'session',
+      promptChars: 2,
+      attachmentCount: 0,
+    });
+    const observe = vi.spyOn(send, 'observe');
+    fold.pushSession.mockResolvedValueOnce([
+      {
+        kind: 'new',
+        message: { turn: 0, author: { kind: 'user' }, parts: [] },
+      },
+    ]);
+
+    await live.issue({ type: 'prompt', prompt: 'hi' });
+    await settle();
+
+    expect(observe).toHaveBeenCalledWith([
+      {
+        kind: 'new',
+        message: { turn: 0, author: { kind: 'user' }, parts: [] },
+      },
+    ]);
     live.release();
   });
 });

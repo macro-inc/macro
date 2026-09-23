@@ -65,8 +65,11 @@ trace context — timestamps + service are the only join for those.
   inter-service client spans), so a trace tells you the route and latency but not why.
 - Log lines from events outside spans (startup, pollers) have no trace_id; in-span events do
   (structured metadata), so prefer erroring *handlers* as log entry points.
-- Frontend spans stop at the fetch: no spans for user interactions or the websocket-delivered
-  results, so async flows (AI edits applying, message fan-out) have no trace at all.
+- Frontend spans still stop at the fetch for most surfaces. Agent send is the
+  exception: `agent.send` starts at the composer click and stays open until the
+  first agent message of that turn is folded, so create, the first prompt, the
+  session load, and websocket-delivered replies share one trace. Other async
+  flows (AI edits applying, channel fan-out) still have no user-action parent.
 
 ## Agent sessions
 
@@ -77,6 +80,9 @@ identifier spaces and must not be confused.
 
 | Span | Answers |
 | --- | --- |
+| `agent.send` | Browser: time from Send on New conversation / a session composer to the first agent message of that turn. `agent.send.surface` is `new_chat` or `session`; `agent.send.outcome` is `responded`, `failed`, `stalled`, or `superseded`. Phase timings (`create_ms`, `prompt_ms`, `user_message_ms`, `agent_message_ms`) and events (`session.created`, `prompt.accepted`, `user_message.visible`, `agent_message.visible`) mark the wait. Never carries prompt text — only `agent.send.prompt_chars` and `agent.send.attachment_count`. HTTP create/control children nest when the send is the active context; `agent.session.load` is a child when the send is still open. |
+| `agent.session.load` | Browser: one attempt to open a session. `agent.session.load.outcome` is `loaded`, `released`, `failed`, or `stalled`. |
+| `agent.session.acquire` | Browser: a surface took a reference. `agent.session.acquire.created` is true when this opened a new instance. |
 | `agent.turn` | Did a Cursor turn run, and how did it end? `agent.turn.stop_reason` / `agent.turn.outcome`, plus `cursor.agent.id` / `cursor.run.id`. |
 | `cursor.run.poll` | Is a turn still alive? One per poll, at DEBUG. |
 | `agent.session.turn_ended` | The connection's live fold closed the turn on a logged frame; carries `agent.turn.id`, `agent.turn.stop_reason`, and `agent.action.id` when a local prompt opened it. |

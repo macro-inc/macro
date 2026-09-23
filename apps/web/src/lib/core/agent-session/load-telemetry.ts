@@ -48,18 +48,28 @@ const STALL_THRESHOLD_MS = 15_000;
  * Held rather than run around an operation because the operation it measures
  * can be abandoned: `release` ends the span from outside the load.
  */
+/** A held parent that can open this load as a child. */
+export type LoadTraceParent = {
+  span(name: string): Span | undefined;
+};
+
 export class SessionLoadTrace {
   readonly #span: Span | undefined;
   readonly #startedAt = performance.now();
   #ended = false;
   #stallTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(sessionId: string) {
-    this.#span = start('agent.session.load', sessionId);
+  constructor(sessionId: string, parent?: LoadTraceParent) {
+    this.#span = start('agent.session.load', sessionId, parent);
     this.#stallTimer = setTimeout(
       () => this.end('stalled'),
       STALL_THRESHOLD_MS
     );
+  }
+
+  /** Run the load with this span as the active OpenTelemetry context. */
+  wrap<T>(operation: () => T): T {
+    return this.#span?.run(operation) ?? operation();
   }
 
   /** The log arrived; `rows` is what the fold is about to be given. */
@@ -132,9 +142,14 @@ export function traceAcquire(
   }
 }
 
-function start(name: string, sessionId: string): Span | undefined {
+function start(
+  name: string,
+  sessionId: string,
+  parent?: LoadTraceParent
+): Span | undefined {
   try {
-    const span = Telemetry.span(name);
+    const span = parent?.span(name) ?? Telemetry.span(name);
+    if (!span) return undefined;
     span.setAttr('agent.session.id', sessionId);
     return span;
   } catch {

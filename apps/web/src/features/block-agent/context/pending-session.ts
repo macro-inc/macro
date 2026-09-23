@@ -16,6 +16,7 @@
  * they already handle while the GET is in flight.
  */
 
+import { startSend } from '@core/agent-session/send-telemetry';
 import { markMessageSent } from '@core/util/message-send-motion';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
@@ -82,48 +83,63 @@ export function startPendingSession(
     error,
   });
 
-  void agentHarnessServiceClient
-    .create({
+  const prompt = options.prompt?.trim() ?? '';
+  const attachments = options.attachments ?? [];
+  const trace =
+    prompt || attachments.length > 0
+      ? startSend(placeholder, {
+          surface: 'new_chat',
+          promptChars: prompt.length,
+          attachmentCount: attachments.length,
+        })
+      : undefined;
+  const fail = (message: string, cause?: unknown) => {
+    trace?.end('failed', cause ?? message);
+    setError(message);
+  };
+
+  const start = async () => {
+    const result = await agentHarnessServiceClient.create({
       ...(options.botId ? { botId: options.botId } : {}),
       ...(options.modelOverride ? { model: options.modelOverride } : {}),
       ...(options.repoUrl
         ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
         : {}),
-    } satisfies CreateAgentSessionRequest)
-    .then(async (result) => {
-      if (result.isErr()) {
-        setError(
-          result.error.map((error) => error.message).join(' ') ||
-            'The agent session could not be created.'
+    } satisfies CreateAgentSessionRequest);
+    if (result.isErr()) {
+      fail(
+        result.error.map((error) => error.message).join(' ') ||
+          'The agent session could not be created.'
+      );
+      return;
+    }
+    const id = result.value.session.id;
+    trace?.adopt(id);
+    trace?.created();
+    if (prompt || attachments.length > 0) {
+      const delivered = await agentHarnessServiceClient.control(id, {
+        type: 'prompt',
+        prompt,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      });
+      if (delivered.isErr()) {
+        fail(
+          delivered.error.map((error) => error.message).join(' ') ||
+            'The first message could not be sent.'
         );
         return;
       }
-      const id = result.value.session.id;
-      const prompt = options.prompt?.trim() ?? '';
-      if (prompt || options.attachments?.length) {
-        const delivered = await agentHarnessServiceClient.control(id, {
-          type: 'prompt',
-          prompt,
-          ...(options.attachments?.length
-            ? { attachments: options.attachments }
-            : {}),
-        });
-        if (delivered.isErr()) {
-          setError(
-            delivered.error.map((error) => error.message).join(' ') ||
-              'The first message could not be sent.'
-          );
-          return;
-        }
-        markMessageSent(`agent:${id}:${delivered.value.actionId}`);
-      }
-      setSessionId(id);
-    })
-    .catch(() =>
-      setError(
-        'Could not reach the agent service. Check your connection and try again.'
-      )
-    );
+      trace?.prompted(delivered.value.actionId);
+      markMessageSent(`agent:${id}:${delivered.value.actionId}`);
+    }
+    setSessionId(id);
+  };
+
+  void (trace?.run(() => start()) ?? start()).catch(() =>
+    fail(
+      'Could not reach the agent service. Check your connection and try again.'
+    )
+  );
 
   return placeholder;
 }

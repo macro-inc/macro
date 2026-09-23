@@ -11,6 +11,10 @@ import {
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
+import {
+  type AgentSendTrace,
+  startSend,
+} from '@core/agent-session/send-telemetry';
 import { toast } from '@core/component/Toast/Toast';
 import { uploadFile } from '@core/util/upload';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
@@ -51,6 +55,7 @@ export function AgentComposer(props: {
     pending,
     queue,
     session,
+    sessionId,
     sendNext,
     turn,
     registerQuoteInsert,
@@ -122,11 +127,48 @@ export function AgentComposer(props: {
     const prompt = [markdown, notes]
       .filter((part) => part.length > 0)
       .join('\n\n');
-    void act(
-      promptActionOf(prompt, attachments),
-      'The message could not be sent'
+    const action = promptActionOf(prompt, attachments);
+    const id = sessionId();
+    const trace = id
+      ? startSend(id, {
+          surface: 'session',
+          promptChars: prompt.length,
+          attachmentCount: attachments.length,
+        })
+      : undefined;
+    void (
+      trace?.run(() => promptWithTrace(action, trace)) ??
+      act(action, 'The message could not be sent')
     );
     attachmentTracker.clearAttachments();
+  };
+
+  const promptWithTrace = async (
+    action: AgentAction,
+    trace: AgentSendTrace
+  ) => {
+    try {
+      const result = await issue(action);
+      if (!result) {
+        trace.end('failed', 'session is gone');
+        return;
+      }
+      if (result.isErr()) {
+        toast.failure('The message could not be sent');
+        trace.end(
+          'failed',
+          result.error.map((error) => error.message).join(' ')
+        );
+        return;
+      }
+      if (result) {
+        const actionId = result.value.actionId;
+        if (actionId) trace.prompted(actionId);
+      }
+    } catch (error) {
+      toast.failure('The message could not be sent');
+      trace.end('failed', error);
+    }
   };
 
   // Focus plumbing between the input and the queue list above it: Up at the

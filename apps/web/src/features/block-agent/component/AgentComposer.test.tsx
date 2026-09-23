@@ -8,6 +8,12 @@ import { AgentComposer } from './AgentComposer';
 
 const mocks = vi.hoisted(() => ({
   session: () => ({ canEdit: false as boolean | undefined }),
+  sessionId: () => 'session-1' as string | undefined,
+  startSend: vi.fn(() => ({
+    run: (operation: () => unknown) => operation(),
+    prompted: vi.fn(),
+    end: vi.fn(),
+  })),
   issue: vi.fn(),
   sendNext: vi.fn(),
   editQueued: vi.fn(),
@@ -30,11 +36,15 @@ vi.mock('@channel/Input', () => ({
   }),
   uploadInputAttachments: mocks.upload,
 }));
+vi.mock('@core/agent-session/send-telemetry', () => ({
+  startSend: mocks.startSend,
+}));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
 vi.mock('../context/AgentSessionContext', () => ({
   useAgentSession: () => ({
     session: () => mocks.session(),
+    sessionId: () => mocks.sessionId(),
     displayName: (id: string) => id,
     userId: () => 'viewer',
     interactions: { pending: () => [], canAnswer: () => false },
@@ -75,7 +85,16 @@ vi.mock('./PermissionRequest', () => ({ PermissionRequest: () => null }));
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.session = () => ({ canEdit: false });
-  mocks.issue.mockResolvedValue({ isErr: () => false });
+  mocks.sessionId = () => 'session-1';
+  mocks.startSend.mockImplementation(() => ({
+    run: (operation: () => unknown) => operation(),
+    prompted: vi.fn(),
+    end: vi.fn(),
+  }));
+  mocks.issue.mockResolvedValue({
+    isErr: () => false,
+    value: { actionId: 'action-1', status: 'sent' },
+  });
 });
 afterEach(cleanup);
 
@@ -133,6 +152,11 @@ describe('view-only session controls', () => {
       expect(mocks.input?.readOnly).toBe(false);
       expect(mocks.queued?.disabled).toBe(false);
       mocks.input?.onSend('A permitted prompt', []);
+      expect(mocks.startSend).toHaveBeenCalledWith('session-1', {
+        surface: 'session',
+        promptChars: 'A permitted prompt'.length,
+        attachmentCount: 0,
+      });
       expect(mocks.issue).toHaveBeenCalledWith({
         type: 'prompt',
         prompt: 'A permitted prompt',
