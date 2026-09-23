@@ -2,11 +2,17 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   rest: vi.fn<
-    (ids?: string[], options?: { throwOnError?: boolean }) => Promise<void>
+    (
+      ids?: string[],
+      options?: { throwOnError?: boolean; agentSessionListsOnly?: boolean }
+    ) => Promise<void>
   >(async () => {}),
-  graphql: vi.fn<(options?: { throwOnError?: boolean }) => Promise<void>>(
-    async () => {}
-  ),
+  graphql: vi.fn<
+    (options?: {
+      throwOnError?: boolean;
+      agentSessionListsOnly?: boolean;
+    }) => Promise<void>
+  >(async () => {}),
 }));
 
 vi.mock('@queries/soup/refresh', () => ({
@@ -28,9 +34,12 @@ it('coalesces a metadata burst and refreshes both list transports', async () => 
     refreshAgentSessionLists('second'),
   ]);
   expect(mocks.rest.mock.calls).toEqual([
-    [['first', 'second'], { throwOnError: true }],
+    [['first', 'second'], { throwOnError: true, agentSessionListsOnly: true }],
   ]);
-  expect(mocks.graphql).toHaveBeenCalledExactlyOnceWith({ throwOnError: true });
+  expect(mocks.graphql).toHaveBeenCalledExactlyOnceWith({
+    throwOnError: true,
+    agentSessionListsOnly: true,
+  });
 });
 
 it('reconnect refreshes all lists to recover missed events', async () => {
@@ -38,7 +47,9 @@ it('reconnect refreshes all lists to recover missed events', async () => {
     refreshAgentSessionLists('first'),
     refreshAgentSessionLists(),
   ]);
-  expect(mocks.rest.mock.calls).toEqual([[undefined, { throwOnError: true }]]);
+  expect(mocks.rest.mock.calls).toEqual([
+    [undefined, { throwOnError: true, agentSessionListsOnly: true }],
+  ]);
   expect(mocks.graphql).toHaveBeenCalledOnce();
 });
 
