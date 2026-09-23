@@ -1,6 +1,13 @@
 import { URL_PARAMS as markdownParams } from '@block-md/constants';
-import { cleanup, fireEvent, render, waitFor } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
+import { Dialog } from '@kobalte/core/dialog';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
+import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Root } from './commentType';
 import { MinimizedThread } from './MinimizedThreads';
@@ -11,7 +18,10 @@ import {
   ThreadBody,
 } from './Thread';
 
-const mocks = vi.hoisted(() => ({ unifiedDiscussions: true }));
+const mocks = vi.hoisted(() => ({
+  unifiedDiscussions: true,
+  confirmed: vi.fn(),
+}));
 vi.mock('@core/util/url', () => ({
   buildSimpleEntityUrl: (
     entity: { type: string; id: string },
@@ -43,7 +53,24 @@ vi.mock('@channel/Input/message-payload', () => ({
 vi.mock('@core/messages/MessageThread', () => ({
   MessageThreadById: (props: {
     buildLink: (message: { id: string }) => string;
-  }) => <a href={props.buildLink({ id: 'comment-root' })}>Copy link</a>,
+  }) => {
+    // Stands in for the message actions' delete confirmation, which the
+    // thread renders into a portal outside the card.
+    const [confirming, setConfirming] = createSignal(false);
+    return (
+      <>
+        <a href={props.buildLink({ id: 'comment-root' })}>Copy link</a>
+        <button onClick={() => setConfirming(true)}>Delete</button>
+        <Dialog open={confirming()} onOpenChange={setConfirming}>
+          <Dialog.Portal>
+            <Dialog.Content>
+              <button onClick={() => mocks.confirmed()}>Confirm delete</button>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog>
+      </>
+    );
+  },
 }));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
@@ -159,6 +186,42 @@ describe('anchored comment links', () => {
     expect(view.queryByRole('link')).toBeNull();
     fireEvent.click(view.getByText('1'));
     expect(view.getByRole('link')).toBeTruthy();
+  });
+
+  // The popover content, found through the thread it hosts. jsdom never runs
+  // the exit animation presence waits on, so closing leaves it mounted and
+  // only its open state changes.
+  const card = (view: ReturnType<typeof render>) =>
+    view.getByText('Copy link').closest('[data-comment-thread]')!
+      .parentElement!;
+
+  it('keeps an expanded minimized comment open through a dialog it opens', async () => {
+    const view = renderThreadBody('md', true);
+    fireEvent.click(view.getByText('1'));
+    fireEvent.click(view.getByRole('button', { name: 'Delete' }));
+    const confirm = await screen.findByRole('button', {
+      name: 'Confirm delete',
+    });
+    // Outside-press detection arms a tick after a layer opens.
+    await new Promise((resolve) => setTimeout(resolve));
+    // The confirmation is portaled out of the card; pressing it must reach
+    // its handler instead of dismissing the card that owns it.
+    fireEvent.pointerDown(confirm);
+    fireEvent.mouseDown(confirm);
+    fireEvent.click(confirm);
+    expect(mocks.confirmed).toHaveBeenCalledTimes(1);
+    expect(card(view).hasAttribute('data-expanded')).toBe(true);
+  });
+
+  it('dismisses an expanded minimized comment on a press outside it', async () => {
+    const view = renderThreadBody('md', true);
+    fireEvent.click(view.getByText('1'));
+    expect(view.getByRole('link')).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve));
+    fireEvent.pointerDown(document.body);
+    await waitFor(() =>
+      expect(card(view).hasAttribute('data-expanded')).toBe(false)
+    );
   });
 
   it.each(['md', 'task', 'snippet', 'skill', 'pdf'] as const)(

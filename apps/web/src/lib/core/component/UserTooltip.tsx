@@ -1,96 +1,25 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useSplitLayout } from '@components/app/split-layout/layout';
-import { toast } from '@core/component/Toast/Toast';
-import { enableCrm } from '@core/constant/featureFlags';
-import { isBotPrincipalId } from '@core/constant/macroAgent';
-import { useUserId } from '@core/context/user';
-import { useIsConnectedSecondaryInbox } from '@core/user';
-import WideContact from '@phosphor/address-book.svg';
-import WideChat from '@phosphor/chat.svg';
 import IconCheck from '@phosphor/check.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import WideTask from '@phosphor/list-checks.svg';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
-import { useCrmContactByEmailQuery } from '@queries/crm/contacts';
-import { useCurrentTeamQuery } from '@queries/team/teams';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn, Surface } from '@ui';
-import { createSignal, type JSX, Show, Suspense } from 'solid-js';
+import { Surface } from '@ui';
+import { createSignal, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { UserIcon } from './UserIcon';
+import {
+  type UserCardAction,
+  type UserCardTarget,
+  useUserCardActions,
+} from './userCardActions';
 
-type UserTooltipProps = {
-  displayName: string;
-  email?: string;
-  id?: string;
-  isDeleted?: boolean;
+type UserTooltipProps = UserCardTarget & {
   onClose?: () => void;
-  photoUrl?: string;
 };
 
-function copyableName(
-  displayName: string,
-  email: string | undefined
-): string | undefined {
-  const name = displayName.trim();
-  if (!name) return undefined;
-  if (name.toLowerCase() === 'me') return undefined;
-  if (email && name.toLowerCase() === email.toLowerCase()) return undefined;
-  const localPart = email?.split('@')[0];
-  if (localPart && name.toLowerCase() === localPart.toLowerCase()) {
-    return undefined;
-  }
-  return name;
-}
-
+/**
+ * The user card as a hover surface. `UserCardDrawer` renders the same card
+ * from the same actions for touch devices, which never hover.
+ */
 export function UserTooltip(props: UserTooltipProps) {
-  const currentUserId = useUserId();
-  const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
-  const canTreatAsUser = () =>
-    !!props.id && !props.isDeleted && !isConnectedSecondaryInbox(props.id);
-  // An agent is mentioned like a person and hovers like one, but there is
-  // nobody on the other end of a direct message to it: an agent answers where
-  // it was mentioned, and a DM channel it never reads would look like a
-  // conversation that is simply being ignored.
-  const canDirectMessage = () =>
-    canTreatAsUser() && !isBotPrincipalId(props.id);
-  const { openWithSplit, popoverSplit } = useSplitLayout();
-  const crmFlag = useFeatureFlag(enableCrm);
-  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
-    onError: () => toast.failure('Failed to open direct message'),
-  });
-
-  const openDM = async (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!props.id) return;
-    const preferNewSplit = e.shiftKey;
-    try {
-      const { channel_id } = await getOrCreateDmMutation.mutateAsync({
-        recipient_id: props.id,
-      });
-      openWithSplit(
-        { type: 'channel', id: channel_id },
-        { preferNewSplit, reopen: 'latest' }
-      );
-    } catch {
-      // The mutation's onError callback handles the toast.
-    } finally {
-      props.onClose?.();
-    }
-  };
-
-  const openTaskComposer = (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    props.onClose?.();
-    if (props.id) {
-      popoverSplit({
-        type: 'component',
-        id: 'task-compose',
-        params: { initialAssigneeIds: [props.id] },
-      });
-    }
-  };
+  const actions = useUserCardActions(() => props);
 
   // Determine avatar props based on what we have
   const avatarProps = () => {
@@ -125,48 +54,14 @@ export function UserTooltip(props: UserTooltipProps) {
           </div>
         </div>
 
-        <Show
-          when={
-            props.email ||
-            props.id ||
-            copyableName(props.displayName, props.email)
-          }
-        >
+        <Show when={actions().length > 0}>
           <div class="border-t border-edge"></div>
           <div class="p-1.5 flex flex-col gap-0.5">
-            <Show when={props.email}>
-              {(email) => (
-                <CopyActionItem value={email()} toastMessage="Email copied">
-                  Copy email
-                </CopyActionItem>
+            <For each={actions()}>
+              {(action) => (
+                <ActionItem action={action} onClose={props.onClose} />
               )}
-            </Show>
-            <Show when={copyableName(props.displayName, props.email)}>
-              {(name) => (
-                <CopyActionItem value={name()} toastMessage="Name copied">
-                  Copy name
-                </CopyActionItem>
-              )}
-            </Show>
-            <Show when={crmFlag().enabled ? props.email : undefined}>
-              {(email) => (
-                <Suspense fallback={null}>
-                  <OpenContactAction email={email()} onClose={props.onClose} />
-                </Suspense>
-              )}
-            </Show>
-            <Show when={canDirectMessage() && props.id !== currentUserId()}>
-              <ActionItem onClick={openDM}>
-                <WideChat class="size-3.5" />
-                DM
-              </ActionItem>
-            </Show>
-            <Show when={canTreatAsUser()}>
-              <ActionItem onClick={openTaskComposer}>
-                <WideTask class="size-3.5" />
-                Assign task
-              </ActionItem>
-            </Show>
+            </For>
           </div>
         </Show>
       </div>
@@ -174,88 +69,37 @@ export function UserTooltip(props: UserTooltipProps) {
   );
 }
 
-/**
- * Inner action: lives inside a local `<Suspense>` so the team and contact
- * lookups suspend only this button, not the tooltip.
- */
-function OpenContactAction(props: { email: string; onClose?: () => void }) {
-  const { openWithSplit } = useSplitLayout();
-  const currentTeamQuery = useCurrentTeamQuery();
-  const team = () => currentTeamQuery.data?.team;
-  const crmEnabled = () => team()?.crm_enabled === true;
-  const contactQuery = useCrmContactByEmailQuery(
-    () => team()?.id ?? '',
-    () => props.email,
-    crmEnabled
-  );
+function ActionItem(props: { action: UserCardAction; onClose?: () => void }) {
+  const [copied, setCopied] = createSignal(false);
+  const resetCopied = debounce(() => setCopied(false), 800);
 
-  const openContact = (e: MouseEvent, contactId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    openWithSplit(
-      { type: 'contact', id: contactId },
-      { preferNewSplit: e.shiftKey, reopen: 'latest' }
-    );
+  const handleClick = async (event: MouseEvent) => {
+    try {
+      await props.action.onSelect(event);
+    } catch {
+      // The action reports the failure; leave the card ready to retry.
+      return;
+    }
+    // A copy keeps the card open long enough to show that it landed; anything
+    // that navigates has already taken the user elsewhere.
+    if (props.action.copies) {
+      setCopied(true);
+      resetCopied();
+      return;
+    }
     props.onClose?.();
   };
 
   return (
-    <Show when={crmEnabled() ? contactQuery.data : undefined}>
-      {(contact) => (
-        <ActionItem onClick={(e) => openContact(e, contact().id)}>
-          <WideContact class="size-3.5" />
-          Open contact
-        </ActionItem>
-      )}
-    </Show>
-  );
-}
-
-function CopyActionItem(props: {
-  value: string;
-  toastMessage: string;
-  children: JSX.Element;
-}) {
-  const [copied, setCopied] = createSignal(false);
-  const resetCopied = debounce(() => setCopied(false), 800);
-
-  function handleCopy(e: MouseEvent) {
-    e.stopPropagation();
-    setCopied(true);
-    navigator.clipboard.writeText(props.value);
-    toast.success(props.toastMessage);
-    resetCopied();
-  }
-
-  return (
-    <ActionItem onClick={handleCopy}>
-      {copied() ? (
-        <IconCheck class="size-3.5" />
-      ) : (
-        <CopyIcon class="size-3.5" />
-      )}
-      {props.children}
-    </ActionItem>
-  );
-}
-
-function ActionItem(props: {
-  children: JSX.Element;
-  onClick: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
-  class?: string;
-  disabled?: boolean;
-}) {
-  return (
     <button
       type="button"
-      class={cn(
-        'group rounded-lg w-full flex items-center gap-2 px-2 h-8 text-left font-medium text-xs cursor-default outline-none hover:bg-ink/5 focus:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed',
-        props.class
-      )}
-      onClick={props.onClick}
-      disabled={props.disabled}
+      class="group rounded-lg w-full flex items-center gap-2 px-2 h-8 text-left font-medium text-xs cursor-default outline-none hover:bg-ink/5 focus:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed"
+      onClick={handleClick}
     >
-      {props.children}
+      <Show when={!copied()} fallback={<IconCheck class="size-3.5" />}>
+        <Dynamic component={props.action.icon} class="size-3.5" />
+      </Show>
+      {props.action.label}
     </button>
   );
 }

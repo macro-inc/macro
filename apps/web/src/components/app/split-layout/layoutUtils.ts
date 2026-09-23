@@ -1,4 +1,4 @@
-import { isListViewID } from '@app/constants/list-views';
+import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCallback } from '@solid-primitives/rootless';
 import {
@@ -67,6 +67,29 @@ export function useSplitPanel() {
 /** Whether closing this split leaves another split visible. */
 export function shouldShowSplitCloseButton(manager: SplitManager) {
   return manager.getVisibleSplitCount() > 1;
+}
+
+/** Close a visible panel, or return the last one to its most recent list. */
+export function closeSplitOrReturnToList(
+  manager: SplitManager,
+  handle: SplitHandle
+) {
+  if (shouldShowSplitCloseButton(manager)) {
+    handle.close();
+    return;
+  }
+  const content = handle.content();
+  if (content.type === 'component' && isListViewID(content.id)) return;
+  if (
+    handle.goBackTo(
+      (entry) => entry.type === 'component' && isListViewID(entry.id)
+    )
+  )
+    return;
+  handle.replace({
+    next: { type: 'component', id: LIST_VIEW_ID.inbox },
+    mergeHistory: true,
+  });
 }
 
 /** Inline previews stay passive until the user focuses them. */

@@ -200,14 +200,6 @@ services:
     command: ["/app/out/email_service"]
     ports:
       - "8087:8080"
-    environment:
-      # Local calendar cutover: calendar_service owns calendar locally. With sync
-      # off the email HTTP service stops mounting its /calendar mutation routes
-      # (see email_service api.rs), so the web client reaches calendar_service
-      # instead. The actual sync workers run in email_pubsub_workers, which is
-      # disabled separately below. Overrides the generated env file's global
-      # CALENDAR_SYNC_ENABLED=true for this service only.
-      CALENDAR_SYNC_ENABLED: "false"
     depends_on:
       - authentication-service
       - document_storage_service
@@ -235,12 +227,6 @@ services:
   email_pubsub_workers:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/pubsub_workers"]
-    environment:
-      # Local calendar cutover: the calendar sync scheduler + outbox drain run
-      # in this worker (email_service::calendar_outbox::run), so this is where
-      # email's calendar sync is actually turned off. calendar_service is the
-      # sole syncer of the shared local MacroDB.
-      CALENDAR_SYNC_ENABLED: "false"
     depends_on:
       - postgres
       - redis
@@ -255,10 +241,7 @@ services:
 
   # ============================================================================
   # calendar_service (Port 8088)
-  # Google Calendar sync + calendar API. Local owner of /calendar: email's
-  # calendar sync is disabled locally (CALENDAR_SYNC_ENABLED=false on both
-  # email_service and email_pubsub_workers above) so only one service syncs the
-  # shared MacroDB.
+  # Google Calendar sync + calendar API, and the local owner of /calendar.
   # ============================================================================
   calendar_service:
     <<: [*common-env, *rust-services-image]

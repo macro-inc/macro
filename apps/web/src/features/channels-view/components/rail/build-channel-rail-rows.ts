@@ -13,7 +13,6 @@ import {
   rowKeyForChannel,
   rowKeyForFavorite,
   rowKeyForLabel,
-  rowKeyForUnread,
 } from './ChannelsRailContext';
 
 export type ChannelRailItemsByScope = Record<
@@ -21,8 +20,6 @@ export type ChannelRailItemsByScope = Record<
   readonly ChannelEntity[]
 > & {
   favorites: readonly Favorite[];
-  /** Channels with unread activity, newest first. Empty hides the section. */
-  unread: readonly ChannelEntity[];
 };
 
 const compareChannelName = (left: ChannelEntity, right: ChannelEntity) =>
@@ -107,23 +104,6 @@ export function buildChannelRailRows(
             id: rowKeyForFavorite(favorite),
             group: 'favorites',
             favorite,
-          })
-        )
-      );
-    }
-  }
-
-  if (items.unread.length > 0) {
-    rows.push({ kind: 'section', id: 'section:unread', group: 'unread' });
-    if (expandedGroups.unread) {
-      rows.push(
-        ...items.unread.map(
-          (channel, localIndex): ChannelRailRow => ({
-            kind: 'unread',
-            id: rowKeyForUnread(channel.id),
-            group: 'unread',
-            localIndex,
-            channel,
           })
         )
       );

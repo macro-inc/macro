@@ -57,7 +57,6 @@ import {
   domIdForRow,
   rowKeyForChannel,
   rowKeyForFavorite,
-  rowKeyForUnread,
   useChannelsRail,
 } from './ChannelsRailContext';
 import {
@@ -73,7 +72,6 @@ import {
   useChannelRailItemState,
   useChannelRailScopeState,
   useChannelRailSectionState,
-  useChannelRailUnreadState,
   useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
 
@@ -259,8 +257,6 @@ function ChannelOption(props: {
   rowId?: ChannelRailRow['id'];
   /** Nest under a label heading, with the branch rail. */
   labelId?: string;
-  /** Keep the timestamp visible instead of revealing it on hover. */
-  alwaysShowTimestamp?: boolean;
   /** Make a team-channel row draggable between labels (Channels section only). */
   draggable?: boolean;
 }) {
@@ -359,14 +355,7 @@ function ChannelOption(props: {
             </Show>
             <Show when={!item().incomingCallId && timestamp()}>
               {(value) => (
-                <span
-                  class={cn(
-                    'relative shrink-0',
-                    props.alwaysShowTimestamp
-                      ? 'block'
-                      : 'hidden group-hover/channel-option:block touch:hidden'
-                  )}
-                >
+                <span class="relative hidden shrink-0 group-hover/channel-option:block touch:hidden">
                   <span
                     aria-hidden="true"
                     class="invisible whitespace-nowrap text-xs font-light"
@@ -399,66 +388,6 @@ function ChannelOption(props: {
         </ViewSidebar.Item>
       </ChannelRailItemContextMenu>
     </div>
-  );
-}
-
-/**
- * Channels with unread activity, newest notification first, so nothing gets
- * lost in the stable label groups below. Hidden when nothing is unread.
- */
-function ExpandedUnreadSection() {
-  const rail = useChannelsRail();
-  const section = useChannelRailUnreadState();
-
-  return (
-    <Show when={section().items.length > 0}>
-      <CollapsibleSection.Root open={section().open} sizing="content">
-        <CollapsibleSection.Header
-          focused={section().focused}
-          focusWithin={section().containsFocus}
-        >
-          <button
-            id={section().domId}
-            type="button"
-            role="treeitem"
-            tabIndex={-1}
-            class="relative flex h-full min-w-0 flex-1 items-center gap-1 rounded-xl px-2 text-left outline-none"
-            aria-expanded={section().open}
-            onMouseDown={(event) => {
-              if (!isPrimaryMouseDown(event)) return;
-              event.preventDefault();
-              rail.toggleGroup('unread');
-            }}
-          >
-            <span class="min-w-0 truncate">Unread</span>
-            <CaretDownIcon
-              class={cn(
-                'size-2.5 shrink-0 opacity-0 transition-[opacity,rotate] duration-200 motion-reduce:transition-none group-hover/sidebar-section:opacity-100',
-                !section().open && '-rotate-90 opacity-100'
-              )}
-            />
-            <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none tabular-nums text-accent-contrast">
-              {section().items.length}
-            </span>
-          </button>
-        </CollapsibleSection.Header>
-        <CollapsibleSection.Content
-          open={section().open}
-          contentRef={(element) => rail.registerScrollRef('unread', element)}
-          class="flex min-h-0 flex-col gap-0.5"
-        >
-          <For each={section().items}>
-            {(channel) => (
-              <ChannelOption
-                channel={channel}
-                rowId={rowKeyForUnread(channel.id)}
-                alwaysShowTimestamp
-              />
-            )}
-          </For>
-        </CollapsibleSection.Content>
-      </CollapsibleSection.Root>
-    </Show>
   );
 }
 
@@ -973,7 +902,6 @@ function ExpandedBrowse() {
       <Match when={true}>
         <ViewSidebar.Content class="h-full overflow-hidden">
           <ExpandedFavoritesSection />
-          <ExpandedUnreadSection />
           {/* The groups split the height left after favorites between them.
               Their half-height caps resolve against this column, not the
               whole sidebar, so favorites is never squeezed out. */}
