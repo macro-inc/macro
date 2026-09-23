@@ -118,7 +118,7 @@ async fn bounded<T>(
     anyhow::ensure!(!remaining.is_zero(), "scheduled action deadline exceeded");
     tokio::select! {
         biased;
-        _ = cancellation => return Err(ExecutionCancelled.into()),
+        _ = cancellation => Err(ExecutionCancelled.into()),
         _ = tokio::time::sleep(remaining) => anyhow::bail!("scheduled action deadline exceeded"),
         result = operation => result,
     }

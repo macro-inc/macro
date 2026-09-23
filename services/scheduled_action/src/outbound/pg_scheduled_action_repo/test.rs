@@ -1,10 +1,10 @@
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::Owner;
 use serde_json::json;
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 
 use super::*;
 use crate::domain::event_runs::ConfigurationRevision;
@@ -26,20 +26,22 @@ fn user_owner(id: &'static str) -> Owner {
 
 async fn insert_user(pool: &PgPool, id: &str) {
     let macro_user_id = macro_uuid::generate_uuid_v7();
-    sqlx::query(
+    sqlx::query!(
         r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)"#,
+        macro_user_id,
+        id,
     )
-    .bind(macro_user_id)
-    .bind(id)
     .execute(pool)
     .await
     .expect("macro_user should insert");
-    sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#)
-        .bind(id)
-        .bind(macro_user_id)
-        .execute(pool)
-        .await
-        .expect("user should insert");
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#,
+        id,
+        macro_user_id,
+    )
+    .execute(pool)
+    .await
+    .expect("user should insert");
 }
 
 fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
@@ -66,38 +68,24 @@ fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
     }
 }
 
-async fn fetch_entity_row(pool: &PgPool, id: Uuid) -> sqlx::postgres::PgRow {
-    sqlx::query(
-        r#"
-        SELECT
-            owner_type::text AS owner_type,
-            owner_id,
-            entity_type,
-            deleted_at
-        FROM entity
-        WHERE id = $1
-        "#,
+async fn entity_row_count(pool: &PgPool, id: Uuid) -> i64 {
+    sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM entity WHERE id = $1"#,
+        id
     )
-    .bind(id)
     .fetch_one(pool)
     .await
     .unwrap()
 }
 
-async fn entity_row_count(pool: &PgPool, id: Uuid) -> i64 {
-    sqlx::query_scalar("SELECT COUNT(*) FROM entity WHERE id = $1")
-        .bind(id)
-        .fetch_one(pool)
-        .await
-        .unwrap()
-}
-
 async fn scheduled_action_row_count(pool: &PgPool, id: Uuid) -> i64 {
-    sqlx::query_scalar("SELECT COUNT(*) FROM scheduled_action WHERE id = $1")
-        .bind(id)
-        .fetch_one(pool)
-        .await
-        .unwrap()
+    sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM scheduled_action WHERE id = $1"#,
+        id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -301,11 +289,25 @@ async fn create_action_registers_entity_row(pool: PgPool) {
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
 
-    let row = fetch_entity_row(&pool, id).await;
-    assert_eq!(row.get::<String, _>("entity_type"), "scheduled_action");
-    assert_eq!(row.get::<String, _>("owner_type"), "user");
-    assert_eq!(row.get::<String, _>("owner_id"), USER_A);
-    assert_eq!(row.get::<Option<DateTime<Utc>>, _>("deleted_at"), None);
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            owner_type::text AS "owner_type!",
+            owner_id,
+            entity_type,
+            deleted_at
+        FROM entity
+        WHERE id = $1
+        "#,
+        id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.entity_type, "scheduled_action");
+    assert_eq!(row.owner_type, "user");
+    assert_eq!(row.owner_id, USER_A);
+    assert_eq!(row.deleted_at, None);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -337,8 +339,7 @@ async fn delete_action_succeeds_when_entity_row_is_missing(pool: PgPool) {
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
 
-    sqlx::query("DELETE FROM entity WHERE id = $1")
-        .bind(id)
+    sqlx::query!("DELETE FROM entity WHERE id = $1", id)
         .execute(&pool)
         .await
         .expect("entity row should delete");
