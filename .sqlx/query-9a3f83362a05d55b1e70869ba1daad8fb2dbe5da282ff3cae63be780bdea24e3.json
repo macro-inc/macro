@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_channel_topics SET name = COALESCE($2, name), description = COALESCE($3, description) WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9a3f83362a05d55b1e70869ba1daad8fb2dbe5da282ff3cae63be780bdea24e3"
+}

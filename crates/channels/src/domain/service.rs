@@ -542,6 +542,7 @@ where
         if req.channel_name.is_none()
             && req.convert_to_team_channel.is_none()
             && req.auto_join_team.is_none()
+            && req.topic_id.is_none()
         {
             return Ok(());
         }
@@ -581,6 +582,11 @@ where
 
         let converting_to_team =
             req.convert_to_team_channel == Some(true) && info.channel_type != ChannelType::Team;
+        if req.topic_id.is_some() && !converting_to_team {
+            return Err(ChannelMutationErr::BadRequest(
+                "topic_id requires conversion to a team channel".to_string(),
+            ));
+        }
         let converting_to_private =
             req.convert_to_team_channel == Some(false) && info.channel_type == ChannelType::Team;
         let team_id = if converting_to_team {
@@ -605,6 +611,18 @@ where
 
         let is_team_channel =
             info.channel_type == ChannelType::Team && !converting_to_private || converting_to_team;
+        if let Some(topic_id) = req.topic_id {
+            let topic_team = self
+                .repo
+                .get_topic_team_id(topic_id)
+                .await
+                .map_err(|error| ChannelMutationErr::Repo(error.into()))?;
+            if topic_team != team_id {
+                return Err(ChannelMutationErr::BadRequest(
+                    "topic does not belong to the channel's team".to_string(),
+                ));
+            }
+        }
         if req.auto_join_team == Some(true) && (!is_team_channel || team_id.is_none()) {
             return Err(ChannelMutationErr::BadRequest(
                 "auto-join is only available for team channels".to_string(),

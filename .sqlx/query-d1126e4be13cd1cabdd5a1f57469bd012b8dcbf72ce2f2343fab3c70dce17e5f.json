@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id, t.team_id, t.name, t.description, t.sort_order,\n                   p.sort_position,\n                   (SELECT COUNT(*) FROM comms_channel_topic_channels tc WHERE tc.topic_id = t.id) AS \"channel_count!\",\n                   COALESCE(\n                       (SELECT array_agg(tc.channel_id)\n                        FROM comms_channel_topic_channels tc\n                        JOIN comms_channel_participants cp ON cp.channel_id = tc.channel_id\n                        WHERE tc.topic_id = t.id AND cp.user_id = $2 AND cp.left_at IS NULL),\n                       '{}'::uuid[]\n                   ) AS \"channel_ids!\"\n            FROM comms_channel_topics t\n            LEFT JOIN comms_user_channel_topic_prefs p ON p.topic_id = t.id AND p.user_id = $2\n            WHERE t.team_id = $1\n            ORDER BY COALESCE(p.sort_position, t.sort_order), t.name\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sort_order",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "sort_position",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "channel_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "channel_ids!",
+        "type_info": "UuidArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "d1126e4be13cd1cabdd5a1f57469bd012b8dcbf72ce2f2343fab3c70dce17e5f"
+}

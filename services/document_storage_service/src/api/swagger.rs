@@ -227,6 +227,13 @@ use utoipa::OpenApi;
 
         // channel list (comms hex)
         channels::inbound::list_router::get_channels_handler,
+        channels::inbound::topics_router::list,
+        channels::inbound::topics_router::create,
+        channels::inbound::topics_router::update,
+        channels::inbound::topics_router::delete,
+        channels::inbound::topics_router::add_channel,
+        channels::inbound::topics_router::remove_channel,
+        channels::inbound::topics_router::order,
 
         // messages (channels and documents)
         messages::inbound::axum_router::timeline,
@@ -632,6 +639,11 @@ use utoipa::OpenApi;
             channels::domain::models::GetOrCreatePrivateRequest,
             channels::domain::models::GetOrCreateChannelResponse,
             channels::domain::models::PatchChannelRequest,
+            channels::domain::topics::ChannelTopic,
+            channels::inbound::topics_router::TopicBody,
+            channels::inbound::topics_router::TopicOrderBody,
+            channels::inbound::topics_router::CreateTopicResponse,
+            channels::inbound::topics_router::TopicListResponse,
             channels::domain::models::PostMessageRequest,
             channels::domain::models::PostMessageResponse,
             channels::domain::models::PatchMessageRequest,

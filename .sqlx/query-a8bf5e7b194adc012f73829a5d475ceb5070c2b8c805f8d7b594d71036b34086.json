@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_channel_topic_channels (topic_id, channel_id, added_by)\n             VALUES ($1, $2, $3) ON CONFLICT (topic_id, channel_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a8bf5e7b194adc012f73829a5d475ceb5070c2b8c805f8d7b594d71036b34086"
+}

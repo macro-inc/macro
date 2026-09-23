@@ -214,6 +214,17 @@ fn api_router(state: ApiContext) -> Router {
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),
         )
         .nest(
+            "/channel-topics",
+            channels::inbound::topics_router::topics_router(
+                channels::inbound::topics_router::TopicsRouterState::new(
+                    channels::domain::topics::TopicService::new(
+                        channels::outbound::pg_topics_repo::PgTopicsRepo::new(state.db.clone()),
+                    ),
+                    state.authorization_state.clone(),
+                ),
+            ),
+        )
+        .nest(
             "/messages",
             messages::inbound::axum_router::router(state.messages_state.clone()),
         )

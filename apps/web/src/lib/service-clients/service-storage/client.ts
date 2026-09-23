@@ -381,6 +381,52 @@ const { showPaywall } = usePaywallState();
 export const DOCUMENT_NAME_TOO_LONG_CODE = 'DOCUMENT_NAME_TOO_LONG' as const;
 
 export const storageServiceClient = {
+  async listChannelTopics() {
+    return await dssFetch<{
+      topics: import('@app/features/channels-view/topics/queries').ChannelTopic[];
+    }>('/channel-topics');
+  },
+
+  async createChannelTopic(args: { name: string; description?: string }) {
+    return await dssFetch<{ id: string }>('/channel-topics', {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+  },
+
+  async updateChannelTopic(
+    id: string,
+    args: { name?: string; description?: string }
+  ) {
+    return await dssFetch(`/channel-topics/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(args),
+    });
+  },
+
+  async deleteChannelTopic(id: string) {
+    return await dssFetch(`/channel-topics/${id}`, { method: 'DELETE' });
+  },
+
+  async addChannelToTopic(topicId: string, channelId: string) {
+    return await dssFetch(`/channel-topics/${topicId}/channels/${channelId}`, {
+      method: 'PUT',
+    });
+  },
+
+  async removeChannelFromTopic(topicId: string, channelId: string) {
+    return await dssFetch(`/channel-topics/${topicId}/channels/${channelId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async setChannelTopicOrder(topicIds: string[]) {
+    return await dssFetch('/channel-topics/prefs/order', {
+      method: 'PUT',
+      body: JSON.stringify({ topic_ids: topicIds }),
+    });
+  },
+
   async ping() {
     return (await dssFetch<SuccessResponse>(`/ping`)).map(
       (result) => result.data

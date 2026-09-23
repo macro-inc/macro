@@ -30,6 +30,13 @@
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 
+With `ENABLE_CHANNEL_TOPICS`, the expanded Chat sidebar groups participant team
+channels under Topics and Uncategorized, then lists External, Private, and
+Direct messages below them. Favorites stays above Topics. The Topics header's
+order control changes only the current user's topic order; see
+[channels.md](channels.md#channel-topics-enable_channel_topics) for creation,
+conversion, menus, and drag and drop.
+
 Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
 (`/app/<left>/<right>`). Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.

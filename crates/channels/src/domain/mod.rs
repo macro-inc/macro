@@ -40,3 +40,6 @@ pub mod side_effects;
 /// Ensure teammate direct messages from a join payload.
 #[cfg(feature = "ports")]
 pub mod teammate_dms;
+/// Channel topic policy and use cases.
+#[cfg(feature = "ports")]
+pub mod topics;

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_channel_topics (id, team_id, name, description, sort_order, created_by)\n             VALUES ($1, $2, $3, $4, COALESCE((SELECT MAX(sort_order) + 1 FROM comms_channel_topics WHERE team_id = $2), 0), $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4a8327b9447b17079c577d5503887efffbc36ccac4399ad50b847341fab6a6ee"
+}

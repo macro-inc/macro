@@ -63,6 +63,7 @@ where
                 channel_name: Some(display_name),
                 convert_to_team_channel: None,
                 auto_join_team: None,
+                topic_id: None,
             },
         )
         .await?;

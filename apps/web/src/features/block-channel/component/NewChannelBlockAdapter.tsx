@@ -1,3 +1,4 @@
+import { openConvertChannelDialog } from '@app/features/channels-view/topics/ConvertChannelDialog';
 import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
@@ -7,6 +8,7 @@ import {
   makeRenameAction,
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
 import { convertTargetMessage } from '@block-channel/utils/target-message';
@@ -52,7 +54,10 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import {
+  ENABLE_CALLS,
+  ENABLE_CHANNEL_TOPICS,
+} from '@core/constant/featureFlags';
 import {
   useChannel,
   useChannelName,
@@ -65,6 +70,7 @@ import { awaitCondition, createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { buildEntityData } from '@entity';
+import ArrowUpIcon from '@phosphor/arrow-up.svg';
 import PictureIcon from '@phosphor/image.svg';
 import RenameIcon from '@phosphor/pencil-line.svg';
 import TrashIcon from '@phosphor/trash.svg';
@@ -75,9 +81,10 @@ import {
   findThreadIdInMessageTimeline,
   findTopLevelMessageInMessageTimeline,
 } from '@queries/messages/timeline';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { useSearchParams } from '@solidjs/router';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import {
   createComputed,
   createSignal,
@@ -148,12 +155,33 @@ function NewTop(props: { channelId: string }) {
   const channelType = useChannelType(props.channelId);
   const channel = useChannel(props.channelId);
   const userId = useUserId();
+  const topicsEnabled = useFeatureFlag(ENABLE_CHANNEL_TOPICS);
+  const currentTeamQuery = useCurrentTeamQuery();
   const renameAction = makeRenameAction({ userId });
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const call = useCall(() => props.channelId);
   const activeCallQuery = useActiveCallQuery(() => props.channelId);
   const participants = () =>
     participantsQuery.isLoading ? [] : participantsQuery.data;
+  const canConvertToTeam = () =>
+    topicsEnabled().enabled &&
+    currentTeamQuery.isSuccess &&
+    !!currentTeamQuery.data?.team &&
+    (channelType() === ChannelType.private ||
+      channelType() === ChannelType.public) &&
+    (participants() ?? []).some(
+      (participant) =>
+        participant.user_id === userId() &&
+        (participant.role === 'owner' || participant.role === 'admin')
+    );
+  const openConversion = () => {
+    if (!canConvertToTeam()) return;
+    openConvertChannelDialog({
+      id: props.channelId,
+      name: channelName() ?? 'channel',
+      type: channelType() === ChannelType.public ? 'public' : 'private',
+    });
+  };
   const picture = useChannelPictureActions({
     channelId: () => props.channelId,
     canEdit: () =>
@@ -254,6 +282,13 @@ function NewTop(props: { channelId: string }) {
           mobileViews={isMobile() ? mobileViews() : undefined}
           tools={[
             {
+              group: 'file',
+              label: 'Make a team channel',
+              icon: ArrowUpIcon,
+              action: openConversion,
+              condition: canConvertToTeam,
+            },
+            {
               label: 'Ask Macro',
               icon: ChatWithAgentIcon,
               action: () => {
@@ -296,6 +331,15 @@ function NewTop(props: { channelId: string }) {
           ]}
         />
       </SplitTitleFileMenu>
+      <Show when={canConvertToTeam() && !isMobile()}>
+        <SplitHeaderRight>
+          <HeaderIsland>
+            <Button variant="accent" size="sm" onClick={openConversion}>
+              Make a team channel
+            </Button>
+          </HeaderIsland>
+        </SplitHeaderRight>
+      </Show>
       {/* Desktop only: on mobile the action lives in the title drawer above. */}
       <Show when={!isMobile() && askMacroEntity()}>
         {(entity) => (

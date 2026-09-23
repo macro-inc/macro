@@ -1,4 +1,7 @@
+import { openConvertChannelDialog } from '@app/features/channels-view/topics/ConvertChannelDialog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { ENABLE_CHANNEL_TOPICS } from '@core/constant/featureFlags';
 import { useChannel, useChannelType } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { idToEmail } from '@core/user';
@@ -36,6 +39,7 @@ export function ChannelParticipantsTab(props: {
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const currentTeamQuery = useCurrentTeamQuery();
   const patchChannelMutation = usePatchChannelMutation();
+  const topicsEnabled = useFeatureFlag(ENABLE_CHANNEL_TOPICS);
   const addParticipantsMutation = useAddParticipantsMutation();
   const removeParticipantsMutation = useRemoveParticipantsMutation();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
@@ -112,10 +116,18 @@ export function ChannelParticipantsTab(props: {
 
   const convertToTeamChannel = () => {
     if (!canManageChannel() || !canConvertToTeam()) return;
-    patchChannelMutation.mutate({
-      channelId: props.channelId,
-      channel_name: channel()?.name,
-      convert_to_team_channel: true,
+    if (!topicsEnabled().enabled) {
+      patchChannelMutation.mutate({
+        channelId: props.channelId,
+        channel_name: channel()?.name,
+        convert_to_team_channel: true,
+      });
+      return;
+    }
+    openConvertChannelDialog({
+      id: props.channelId,
+      name: channel()?.name ?? 'channel',
+      type: channelType() === ChannelType.public ? 'public' : 'private',
     });
   };
 

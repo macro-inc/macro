@@ -7,6 +7,7 @@
 import type { PatchChannelRequestAutoJoinTeam } from './patchChannelRequestAutoJoinTeam';
 import type { PatchChannelRequestChannelName } from './patchChannelRequestChannelName';
 import type { PatchChannelRequestConvertToTeamChannel } from './patchChannelRequestConvertToTeamChannel';
+import type { PatchChannelRequestTopicId } from './patchChannelRequestTopicId';
 
 /**
  * Request to patch a channel.
@@ -21,4 +22,6 @@ export interface PatchChannelRequest {
 `true` converts a non-team channel to a team channel, while `false`
 converts a team channel to a private channel. */
   convert_to_team_channel?: PatchChannelRequestConvertToTeamChannel;
+  /** Topic to file the channel under as part of conversion. */
+  topic_id?: PatchChannelRequestTopicId;
 }

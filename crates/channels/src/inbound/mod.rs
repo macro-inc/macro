@@ -13,3 +13,6 @@ pub mod teammate_dms_consumer;
 /// AI toolset for reading channel messages and threads.
 #[cfg(feature = "ai_tools")]
 pub mod toolset;
+/// Channel topics HTTP routes.
+#[cfg(feature = "inbound")]
+pub mod topics_router;

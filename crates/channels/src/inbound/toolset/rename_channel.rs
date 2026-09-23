@@ -81,6 +81,7 @@ where
                     channel_name: Some(name.clone()),
                     convert_to_team_channel: None,
                     auto_join_team: None,
+                    topic_id: None,
                 },
             )
             .await

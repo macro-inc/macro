@@ -6,6 +6,7 @@ import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthent
 import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { useIncomingCallWidgetVisible } from '@app/features/block-call/sidebar/incoming-calls';
+import { ConvertChannelDialog } from '@app/features/channels-view/topics/ConvertChannelDialog';
 import { CommandMenu } from '@app/features/command';
 import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
 import {
@@ -466,6 +467,7 @@ function LayoutInner(props: RouteSectionProps) {
           <IosShareSheet />
           <MacroMcpSetupModal />
           <CreateChannelModal />
+          <ConvertChannelDialog />
           <CreateCompanyModal />
           <CreateContactModal />
           {/* Reactive, unlike the imperative isFeatureEnabled(enableReminders) gate on the

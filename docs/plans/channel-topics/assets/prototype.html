@@ -1,0 +1,2495 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body>
+<title>Channel topics — sidebar concept</title>
+
+<style>
+  /* ---------- tokens ---------------------------------------------------- */
+  :root {
+    color-scheme: light dark;
+
+    /* neutrals carry a whisper of the accent hue (59deg), like the app ramp */
+    --page: oklch(0.958 0.003 59);
+    --panel: oklch(0.995 0.002 59);
+    --raised: oklch(1 0 59);
+    --sunken: oklch(0.93 0.004 59);
+    --edge: oklch(0.885 0.005 59);
+    --edge-soft: oklch(0.925 0.004 59);
+
+    --ink: oklch(0.18 0.008 59);
+    --ink-1: oklch(0.42 0.006 59);
+    --ink-2: oklch(0.54 0.006 59);
+    --ink-3: oklch(0.68 0.005 59);
+
+    --accent: oklch(0.6 0.16 59);
+    --accent-ink: oklch(0.46 0.15 59);
+    --accent-wash: color-mix(in oklch, var(--accent) 13%, transparent);
+    --accent-line: color-mix(in oklch, var(--accent) 45%, transparent);
+
+    --blue: oklch(0.54 0.16 259);
+    --green: oklch(0.55 0.13 150);
+    --red: oklch(0.58 0.19 25);
+    --violet: oklch(0.55 0.17 293);
+
+    --hover: color-mix(in oklch, var(--ink) 4%, transparent);
+    --active: color-mix(in oklch, var(--ink) 7%, transparent);
+    --shadow: 0 1px 2px oklch(0.2 0.01 59 / 0.08), 0 8px 24px oklch(0.2 0.01 59 / 0.1);
+
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, ui-serif, serif;
+    --mono: ui-monospace, "Roboto Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+    --doc-w: 70ch;
+    --stage-w: 1120px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: oklch(0.145 0.004 59);
+      --panel: oklch(0.192 0.005 59);
+      --raised: oklch(0.235 0.005 59);
+      --sunken: oklch(0.115 0.004 59);
+      --edge: oklch(0.29 0.006 59);
+      --edge-soft: oklch(0.245 0.005 59);
+
+      --ink: oklch(0.97 0.004 59);
+      --ink-1: oklch(0.82 0.005 59);
+      --ink-2: oklch(0.7 0.006 59);
+      --ink-3: oklch(0.56 0.006 59);
+
+      --accent: oklch(0.78 0.16 59);
+      --accent-ink: oklch(0.84 0.13 59);
+      --accent-wash: color-mix(in oklch, var(--accent) 16%, transparent);
+      --accent-line: color-mix(in oklch, var(--accent) 50%, transparent);
+
+      --blue: oklch(0.72 0.15 259);
+      --green: oklch(0.74 0.15 150);
+      --red: oklch(0.72 0.18 25);
+      --violet: oklch(0.73 0.16 293);
+
+      --hover: color-mix(in oklch, var(--ink) 7%, transparent);
+      --active: color-mix(in oklch, var(--ink) 11%, transparent);
+      --shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 12px 32px oklch(0 0 0 / 0.45);
+    }
+  }
+
+  :root[data-theme="light"] {
+    --page: oklch(0.958 0.003 59);
+    --panel: oklch(0.995 0.002 59);
+    --raised: oklch(1 0 59);
+    --sunken: oklch(0.93 0.004 59);
+    --edge: oklch(0.885 0.005 59);
+    --edge-soft: oklch(0.925 0.004 59);
+    --ink: oklch(0.18 0.008 59);
+    --ink-1: oklch(0.42 0.006 59);
+    --ink-2: oklch(0.54 0.006 59);
+    --ink-3: oklch(0.68 0.005 59);
+    --accent: oklch(0.6 0.16 59);
+    --accent-ink: oklch(0.46 0.15 59);
+    --blue: oklch(0.54 0.16 259);
+    --green: oklch(0.55 0.13 150);
+    --red: oklch(0.58 0.19 25);
+    --violet: oklch(0.55 0.17 293);
+    --hover: color-mix(in oklch, var(--ink) 4%, transparent);
+    --active: color-mix(in oklch, var(--ink) 7%, transparent);
+    --shadow: 0 1px 2px oklch(0.2 0.01 59 / 0.08), 0 8px 24px oklch(0.2 0.01 59 / 0.1);
+  }
+
+  :root[data-theme="dark"] {
+    --page: oklch(0.145 0.004 59);
+    --panel: oklch(0.192 0.005 59);
+    --raised: oklch(0.235 0.005 59);
+    --sunken: oklch(0.115 0.004 59);
+    --edge: oklch(0.29 0.006 59);
+    --edge-soft: oklch(0.245 0.005 59);
+    --ink: oklch(0.97 0.004 59);
+    --ink-1: oklch(0.82 0.005 59);
+    --ink-2: oklch(0.7 0.006 59);
+    --ink-3: oklch(0.56 0.006 59);
+    --accent: oklch(0.78 0.16 59);
+    --accent-ink: oklch(0.84 0.13 59);
+    --blue: oklch(0.72 0.15 259);
+    --green: oklch(0.74 0.15 150);
+    --red: oklch(0.72 0.18 25);
+    --violet: oklch(0.73 0.16 293);
+    --hover: color-mix(in oklch, var(--ink) 7%, transparent);
+    --active: color-mix(in oklch, var(--ink) 11%, transparent);
+    --shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 12px 32px oklch(0 0 0 / 0.45);
+  }
+
+  /* ---------- page chrome ----------------------------------------------- */
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 72px;
+    padding: 56px 24px 120px;
+    align-items: center;
+  }
+
+  .col {
+    width: 100%;
+    max-width: var(--doc-w);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .bleed {
+    width: 100%;
+    max-width: var(--stage-w);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  h1, h2, h3, .eyebrow, .ui, table, .card h4 {
+    font-family: var(--sans);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(38px, 6vw, 60px);
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    font-weight: 660;
+    text-wrap: balance;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 25px;
+    line-height: 1.2;
+    letter-spacing: -0.022em;
+    font-weight: 620;
+    text-wrap: balance;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    letter-spacing: -0.012em;
+    font-weight: 620;
+  }
+
+  p { margin: 0; text-wrap: pretty; }
+  p + p { margin-top: -4px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 500;
+  }
+
+  .deck {
+    font-size: 21px;
+    line-height: 1.45;
+    color: var(--ink-1);
+    max-width: 60ch;
+  }
+
+  .lede { color: var(--ink-1); }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-3);
+    border-top: 1px solid var(--edge);
+    padding-top: 12px;
+  }
+  .meta b { color: var(--ink-1); font-weight: 500; }
+
+  code, .mono { font-family: var(--mono); font-size: 0.85em; }
+  .col p code, td code, li code {
+    background: var(--sunken);
+    border: 1px solid var(--edge-soft);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+    color: var(--ink-1);
+  }
+
+  a { color: var(--accent-ink); text-underline-offset: 3px; }
+
+  .rule { height: 1px; background: var(--edge); border: 0; margin: 0; width: 100%; }
+
+  ul.spec { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 7px; }
+  ul.spec li::marker { color: var(--ink-3); }
+
+  /* ---------- the app stage --------------------------------------------- */
+  .stage {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 286px minmax(0, 1fr);
+    height: min(700px, 82vh);
+    position: relative;
+    font-family: var(--sans);
+  }
+
+  .stage-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+  .stage-bar .hint {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    color: var(--ink-3);
+  }
+  .stage-bar kbd {
+    font-family: var(--mono);
+    font-size: 11px;
+    border: 1px solid var(--edge);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 1px 5px;
+    background: var(--raised);
+    color: var(--ink-1);
+  }
+
+  /* ---------- sidebar --------------------------------------------------- */
+  .sb {
+    border-right: 1px solid var(--edge);
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    user-select: none;
+    font-size: 13.5px;
+    color: var(--ink-1);
+  }
+
+  .sb-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 10px 10px 14px;
+  }
+  .sb-team {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 14px;
+    letter-spacing: -0.01em;
+  }
+  .sb-mark {
+    width: 20px; height: 20px;
+    border-radius: 6px;
+    background: var(--accent);
+    color: oklch(0.15 0.02 59);
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .sb-head .spacer { flex: 1; }
+
+  .icon-btn {
+    width: 26px; height: 26px;
+    display: grid; place-items: center;
+    border-radius: 6px;
+    border: 0;
+    background: transparent;
+    color: var(--ink-2);
+    cursor: pointer;
+    padding: 0;
+  }
+  .icon-btn:hover { background: var(--hover); color: var(--ink); }
+  .icon-btn[aria-expanded="true"] { background: var(--active); color: var(--ink); }
+
+  .sb-search {
+    margin: 0 10px 8px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 7px;
+    background: var(--sunken);
+    border: 1px solid transparent;
+    color: var(--ink-3);
+    font-size: 12.5px;
+  }
+
+  .sb-filters {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px 8px;
+    flex-wrap: wrap;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 9px;
+    border-radius: 999px;
+    border: 1px solid var(--edge);
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 11.5px;
+    font-family: var(--sans);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .pill:hover { background: var(--hover); color: var(--ink); }
+  .pill[aria-pressed="true"] {
+    background: var(--accent-wash);
+    border-color: var(--accent-line);
+    color: var(--accent-ink);
+  }
+  .pill .count { margin-left: 1px; }
+
+  .sb-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 2px 6px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .sb-section { display: flex; flex-direction: column; gap: 1px; }
+
+  .sb-section-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 4px 6px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .sb-section-head .spacer { flex: 1; }
+  .sb-section-head .count { letter-spacing: 0; font-size: 10.5px; }
+
+  /* topic header */
+  .topic { display: flex; flex-direction: column; }
+
+  .topic-head {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 27px;
+    padding: 0 6px 0 4px;
+    border-radius: 7px;
+    cursor: pointer;
+    color: var(--ink-1);
+    position: relative;
+  }
+  .topic-head:hover { background: var(--hover); }
+  .topic-head .twist {
+    width: 16px; height: 16px;
+    display: grid; place-items: center;
+    color: var(--ink-3);
+    transition: transform 0.14s ease;
+    flex: none;
+  }
+  .topic.collapsed .topic-head .twist { transform: rotate(-90deg); }
+  .topic-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    color: var(--ink-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .topic-head .spacer { flex: 1; }
+  .topic.is-hidden-preview { opacity: 0.62; }
+
+  .chip-smart {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 15px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: color-mix(in oklch, var(--violet) 15%, transparent);
+    color: var(--violet);
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    flex: none;
+  }
+
+  .topic-actions { display: flex; align-items: center; gap: 2px; opacity: 0; flex: none; }
+  .topic-head:hover .topic-actions,
+  .topic-head:focus-within .topic-actions { opacity: 1; }
+  .topic-head:hover .topic-summary,
+  .topic-head:focus-within .topic-summary { display: none; }
+
+  .topic-summary { display: flex; align-items: center; gap: 5px; flex: none; }
+
+  /* one indicator everywhere: a dot and a number. orange when you're named. */
+  .count {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: none;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    color: var(--ink-2);
+  }
+  .count .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ink-3);
+    flex: none;
+  }
+  .count.mention { color: var(--accent-ink); gap: 3px; }
+  .count .at {
+    display: grid;
+    place-items: center;
+    color: var(--accent);
+    flex: none;
+  }
+
+  .topic-body { display: flex; flex-direction: column; gap: 1px; padding-bottom: 2px; }
+  .topic-body:empty { display: none; }
+  /* a collapsed topic still surfaces the channels that want you */
+  .topic-body.peek { padding-bottom: 4px; }
+
+  /* channel row */
+  .ch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 6px 0 22px;
+    border-radius: 7px;
+    cursor: pointer;
+    color: var(--ink-2);
+    position: relative;
+  }
+  .sb-section.flat .ch { padding-left: 8px; }
+  .ch:hover { background: var(--hover); }
+  .ch.selected { background: var(--accent-wash); color: var(--accent-ink); }
+  .ch.selected .ch-name { color: var(--accent-ink); font-weight: 600; }
+  .ch.unread .ch-name { color: var(--ink); font-weight: 650; }
+  .ch.muted { opacity: 0.55; }
+  .ch .glyph { flex: none; color: var(--ink-3); display: grid; place-items: center; width: 14px; }
+  .ch.selected .glyph { color: var(--accent-ink); }
+  .ch-name {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.005em;
+  }
+  .ch .spacer { flex: 1; }
+  .ch-actions { display: flex; align-items: center; gap: 2px; opacity: 0; flex: none; }
+  .ch:hover .ch-actions, .ch:focus-within .ch-actions { opacity: 1; }
+  .ch:hover .ch-meta, .ch:focus-within .ch-meta { display: none; }
+  .ch-meta { display: flex; align-items: center; gap: 5px; flex: none; }
+
+  .avatar {
+    width: 17px; height: 17px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 8.5px;
+    font-weight: 700;
+    color: oklch(0.15 0.02 59);
+    flex: none;
+    letter-spacing: 0.02em;
+  }
+  .presence {
+    width: 7px; height: 7px; border-radius: 50%;
+    border: 1.5px solid var(--panel);
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+  }
+  .ch .av-wrap { position: relative; display: grid; place-items: center; flex: none; }
+
+  .guests {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--ink-3);
+    font-size: 10px;
+    font-family: var(--mono);
+  }
+
+  .sb-foot {
+    border-top: 1px solid var(--edge-soft);
+    padding: 7px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .foot-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 0;
+    background: transparent;
+    color: var(--ink-2);
+    font-family: var(--sans);
+    font-size: 12.5px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 6px;
+    flex: 1;
+  }
+  .foot-btn:hover { background: var(--hover); color: var(--ink); }
+
+  /* drag + drop */
+  .ch.dragging, .topic.dragging { opacity: 0.4; }
+  .topic.drop-target > .topic-head,
+  .topic.drop-target > .topic-body {
+    background: var(--accent-wash);
+  }
+  .topic.drop-target > .topic-head { box-shadow: inset 0 0 0 1px var(--accent-line); }
+  .drop-line {
+    height: 2px;
+    background: var(--accent);
+    border-radius: 2px;
+    margin: 0 6px;
+  }
+
+  /* ---------- content pane stub ----------------------------------------- */
+  .pane {
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    color: var(--ink-2);
+  }
+  .pane-head {
+    height: 46px;
+    border-bottom: 1px solid var(--edge-soft);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 16px;
+    flex: none;
+  }
+  .pane-title { font-weight: 640; color: var(--ink); font-size: 14.5px; letter-spacing: -0.012em; }
+  .pane-topics { display: flex; gap: 5px; align-items: center; }
+  .topic-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    border: 1px solid var(--edge);
+    font-size: 11px;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .pane-body { padding: 22px 26px; display: flex; flex-direction: column; gap: 18px; opacity: 0.85; }
+  .msg { display: flex; gap: 10px; }
+  .msg .body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .msg .who { font-size: 13px; font-weight: 640; color: var(--ink); }
+  .msg .who span { font-weight: 400; color: var(--ink-3); font-size: 11px; margin-left: 6px; font-family: var(--mono); }
+  .msg .text { font-size: 13.5px; line-height: 1.5; color: var(--ink-1); }
+  .msg .avatar { width: 26px; height: 26px; font-size: 11px; }
+  .pane-note {
+    margin: auto 26px 26px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    letter-spacing: 0.02em;
+  }
+
+  /* ---------- menus, dialogs, toast ------------------------------------- */
+  .menu {
+    position: absolute;
+    z-index: 40;
+    min-width: 232px;
+    background: var(--raised);
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 5px;
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink-1);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .menu-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    padding: 7px 9px 4px;
+  }
+  .menu-note {
+    padding: 4px 9px 7px;
+    font-size: 11.5px;
+    color: var(--ink-3);
+    line-height: 1.4;
+  }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 6px 9px;
+    border-radius: 6px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .menu-item:hover { background: var(--hover); color: var(--ink); }
+  .menu-item .tick { width: 14px; flex: none; color: var(--accent); display: grid; place-items: center; }
+  .menu-item .sub { display: block; font-size: 11px; color: var(--ink-3); }
+  .menu-item .grow { flex: 1; min-width: 0; }
+  .menu-item .chev { color: var(--ink-3); display: grid; place-items: center; flex: none; }
+  .menu-item.danger:hover { color: var(--red); }
+  .menu-item.open-flyout { background: var(--hover); color: var(--ink); }
+  .menu-sep { height: 1px; background: var(--edge-soft); margin: 4px 2px; }
+  .menu.flyout { min-width: 196px; }
+
+  .scrim {
+    position: absolute;
+    inset: 0;
+    background: oklch(0.15 0.01 59 / 0.35);
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+
+  .dialog {
+    background: var(--raised);
+    border: 1px solid var(--edge);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    width: min(660px, 100%);
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: var(--sans);
+  }
+  .dialog-head {
+    padding: 16px 18px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    border-bottom: 1px solid var(--edge-soft);
+  }
+  .dialog-head h3 { font-size: 16px; color: var(--ink); }
+  .dialog-head p { font-size: 12.5px; color: var(--ink-2); font-family: var(--sans); }
+  .dialog-body { padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .dialog-foot {
+    padding: 11px 14px;
+    border-top: 1px solid var(--edge-soft);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .btn {
+    height: 30px;
+    padding: 0 13px;
+    border-radius: 7px;
+    border: 1px solid var(--edge);
+    background: var(--raised);
+    color: var(--ink-1);
+    font-family: var(--sans);
+    font-size: 12.5px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--hover); color: var(--ink); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: transparent;
+    color: oklch(0.16 0.02 59);
+  }
+  .btn.primary:hover { filter: brightness(1.06); background: var(--accent); }
+  .btn.small { height: 25px; padding: 0 10px; font-size: 11.5px; }
+
+  .topic-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 11px 12px;
+    border: 1px solid var(--edge-soft);
+    border-radius: 10px;
+    background: var(--panel);
+  }
+  .topic-card .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .topic-card .name { font-size: 13.5px; font-weight: 640; color: var(--ink); display: flex; align-items: center; gap: 7px; }
+  .topic-card .desc { font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+  .topic-card .chans {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .topic-card .side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--raised);
+    border: 1px solid var(--edge);
+    border-radius: 9px;
+    box-shadow: var(--shadow);
+    padding: 8px 10px 8px 14px;
+    font-family: var(--sans);
+    font-size: 12.5px;
+    color: var(--ink-1);
+    max-width: calc(100% - 40px);
+  }
+  .toast .link {
+    border: 0;
+    background: transparent;
+    color: var(--accent-ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+
+  /* ---------- annotation cards ------------------------------------------ */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 14px;
+    width: 100%;
+  }
+  .card {
+    border: 1px solid var(--edge);
+    border-radius: 12px;
+    background: var(--panel);
+    padding: 15px 16px 17px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .card h4 {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 620;
+    letter-spacing: -0.008em;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card p { font-size: 14.5px; line-height: 1.5; color: var(--ink-1); }
+  .card .try {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    letter-spacing: 0.01em;
+    border-top: 1px dashed var(--edge);
+    padding-top: 8px;
+    margin-top: auto;
+  }
+  .card .try b { color: var(--accent-ink); font-weight: 500; }
+
+  .num {
+    width: 20px; height: 20px;
+    border-radius: 6px;
+    background: var(--sunken);
+    color: var(--ink-2);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  /* ---------- tables ----------------------------------------------------- */
+  .table-scroll { width: 100%; overflow-x: auto; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 13.5px;
+    min-width: 520px;
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 12px 9px 0;
+    border-bottom: 1px solid var(--edge-soft);
+    vertical-align: top;
+    line-height: 1.45;
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 500;
+    border-bottom-color: var(--edge);
+  }
+  td { color: var(--ink-1); }
+  td:first-child { color: var(--ink); font-weight: 550; white-space: nowrap; padding-right: 20px; }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--edge);
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .tag.new { border-color: var(--accent-line); color: var(--accent-ink); background: var(--accent-wash); }
+  .tag.exists { border-color: color-mix(in oklch, var(--green) 40%, transparent); color: var(--green); }
+
+  .callouts { display: flex; flex-direction: column; gap: 10px; }
+  .callout {
+    display: block;
+    padding: 13px 15px;
+    border-left: 2px solid var(--accent);
+    background: color-mix(in oklch, var(--accent) 6%, transparent);
+    border-radius: 0 9px 9px 0;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--ink-1);
+  }
+
+  :where(button, [tabindex]):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-radius: 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  @media (max-width: 880px) {
+    .stage { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+    .pane { display: none; }
+    .sb { border-right: 0; height: 640px; }
+  }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="i-hash"><path d="M5.5 2.5 4 13.5M11 2.5 9.5 13.5M2.5 5.5h11M2 10.5h11" /></g>
+    <g id="i-lock"><rect x="3.5" y="7" width="9" height="6.5" rx="1.6" /><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" /></g>
+    <g id="i-globe"><circle cx="8" cy="8" r="5.6" /><path d="M2.4 8h11.2M8 2.4c1.5 1.6 2.3 3.5 2.3 5.6S9.5 12 8 13.6C6.5 12 5.7 10.1 5.7 8S6.5 4 8 2.4Z" /></g>
+    <g id="i-chev"><path d="M4 6.2 8 10l4-3.8" /></g>
+    <g id="i-dots"><circle cx="3.5" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="12.5" cy="8" r="1.1" fill="currentColor" stroke="none"/></g>
+    <g id="i-bell"><path d="M4.2 11.2V7.6a3.8 3.8 0 0 1 7.6 0v3.6M2.8 11.2h10.4M6.4 13.2a1.7 1.7 0 0 0 3.2 0" /></g>
+    <g id="i-bell-off"><path d="M4.2 11.2V7.6c0-.6.1-1.1.3-1.6M6 4.3a3.8 3.8 0 0 1 5.8 3.3v3.6M2.8 11.2h10.4M6.4 13.2a1.7 1.7 0 0 0 3.2 0M2.6 2.6l10.8 10.8" /></g>
+    <g id="i-at"><circle cx="8" cy="8" r="2.4" /><path d="M10.4 5.6v3a1.9 1.9 0 0 0 3.2 1.3A6 6 0 1 0 11 13.3" /></g>
+    <g id="i-plus"><path d="M8 3.4v9.2M3.4 8h9.2" /></g>
+    <g id="i-search"><circle cx="7.2" cy="7.2" r="4.3" /><path d="m10.6 10.6 2.6 2.6" /></g>
+    <g id="i-eye"><path d="M1.6 8S4 4 8 4s6.4 4 6.4 4-2.4 4-6.4 4S1.6 8 1.6 8Z" /><circle cx="8" cy="8" r="1.7" /></g>
+    <g id="i-eye-off"><path d="M6.3 4.3A6.6 6.6 0 0 1 8 4c4 0 6.4 4 6.4 4a11 11 0 0 1-2.2 2.6M9.6 9.7a1.9 1.9 0 0 1-2.6-2.7M4.3 5.3A11 11 0 0 0 1.6 8S4 12 8 12c.8 0 1.5-.2 2.2-.4M2.6 2.6l10.8 10.8" /></g>
+    <g id="i-sparkle"><path d="M8 2.4 9.3 6 13 7.3 9.3 8.6 8 12.2 6.7 8.6 3 7.3 6.7 6 8 2.4Z" /></g>
+    <g id="i-check"><path d="m3.5 8.4 3 3 6-6.6" /></g>
+    <g id="i-compass"><circle cx="8" cy="8" r="5.8" /><path d="m10.4 5.6-1.2 3.6-3.6 1.2 1.2-3.6 3.6-1.2Z" /></g>
+    <g id="i-folder"><path d="M2.4 12.2V4.4c0-.5.4-.9.9-.9h2.6l1.4 1.7h5.4c.5 0 .9.4.9.9v6.1c0 .5-.4.9-.9.9H3.3a.9.9 0 0 1-.9-.9Z" /></g>
+    <g id="i-arrow"><path d="M3.2 8h9.6M9 4.2 12.8 8 9 11.8" /></g>
+    <g id="i-sort"><path d="M2.8 4.2h10.4M2.8 8h7M2.8 11.8h4" /></g>
+    <g id="i-grip"><circle cx="6" cy="4" r="0.9" fill="currentColor" stroke="none"/><circle cx="10" cy="4" r="0.9" fill="currentColor" stroke="none"/><circle cx="6" cy="8" r="0.9" fill="currentColor" stroke="none"/><circle cx="10" cy="8" r="0.9" fill="currentColor" stroke="none"/><circle cx="6" cy="12" r="0.9" fill="currentColor" stroke="none"/><circle cx="10" cy="12" r="0.9" fill="currentColor" stroke="none"/></g>
+    <g id="i-up"><path d="M8 12.6V3.8M4.4 7.4 8 3.8l3.6 3.6" /></g>
+    <g id="i-down"><path d="M8 3.4v8.8M4.4 8.6 8 12.2l3.6-3.6" /></g>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+  <!-- ============================ masthead ============================= -->
+  <header class="col">
+    <span class="eyebrow">Macro · channels</span>
+    <h1>Topics</h1>
+    <p class="deck">
+      A grouping layer over team channels, so a new teammate can see what the
+      company talks about on day one — and everyone else can turn down the
+      parts they don't work on.
+    </p>
+    <div class="meta">
+      <span><b>Branch</b> channel-topics</span>
+      <span><b>Status</b> concept, for review</span>
+      <span><b>Replaces</b> channel labels</span>
+      <span><b>Backend change</b> additive</span>
+    </div>
+  </header>
+
+  <!-- ============================ the problem ========================= -->
+  <section class="col">
+    <span class="eyebrow">Why labels weren't it</span>
+    <h2>Three channel types, and nobody can find any of them</h2>
+    <p class="lede">
+      The model already has four types — <code>Public</code>, <code>Private</code>,
+      <code>DirectMessage</code>, <code>Team</code> — but in practice only three get
+      used. Everything that <em>should</em> be a team channel is a private channel
+      someone happened to invite you to. That produces two failures at once.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>What we have</th><th>What it means today</th><th>What breaks</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Public</td>
+            <td>A channel that includes people outside the company</td>
+            <td>The name says "open to everyone," the behavior says the opposite</td>
+          </tr>
+          <tr>
+            <td>Private</td>
+            <td>Invite-only group channel — where all real team channels live</td>
+            <td>Undiscoverable by design. You can't join what you can't see</td>
+          </tr>
+          <tr>
+            <td>Direct message</td>
+            <td>One-to-one or small group, created by messaging someone</td>
+            <td>Fine — but it's stacked in the same list as the other two</td>
+          </tr>
+          <tr>
+            <td>Team</td>
+            <td>Team-scoped, auto-joinable — already in the domain model</td>
+            <td>Nothing creates them, so nothing surfaces them</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callouts">
+      <p class="callout">
+        A new hire lands in a handful of channels, has no list of what else exists,
+        and has to be invited into every conversation by someone who remembers they
+        exist. Labels made a flat list slightly tidier. They didn't make anything
+        <em>findable</em>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================ the shape =========================== -->
+  <section class="col">
+    <span class="eyebrow">The shape</span>
+    <h2>Topics group team channels. The sidebar splits in two.</h2>
+    <ul class="spec">
+      <li><b>Topics are team-owned and public to the team.</b> Joining the team subscribes you to every topic; you opt out of the ones you don't care about rather than being invited into the ones you do.</li>
+      <li><b>Subscription and visibility are separate settings.</b> Unsubscribing stops notifications. Hiding removes it from the sidebar. They're different needs and they get different controls.</li>
+      <li><b>Collapsing hides the quiet channels, not the loud ones.</b> A collapsed topic still lists the channels with unreads or mentions — so collapsing is how you get a topic down to what's actually happening in it.</li>
+      <li><b>Smart topics match by rule.</b> A channel can belong to several topics at once, and any channel in at least one topic stays out of <span class="mono">Uncategorized</span>.</li>
+      <li><b>Team channels live above the line; everything else below.</b> Topics on top, then one section holding external, private, and direct-message channels — the conversations that belong to a specific set of people rather than to the company.</li>
+    </ul>
+  </section>
+
+  <!-- ============================ the stage =========================== -->
+  <section class="bleed">
+    <div class="stage-bar">
+      <span class="eyebrow" style="letter-spacing:0.16em">The sidebar</span>
+      <span class="hint">— it's live: drag channels between topics, open a topic's ⋯ menu, toggle Hidden, press <kbd>Esc</kbd> to close menus</span>
+    </div>
+
+    <div class="stage" id="stage">
+      <!-- sidebar -->
+      <nav class="sb" aria-label="Channels">
+        <div class="sb-head">
+          <div class="sb-team">
+            <span class="sb-mark" aria-hidden="true">M</span>
+            Macro
+          </div>
+          <span class="spacer"></span>
+          <button class="icon-btn" id="btn-create" aria-haspopup="menu" aria-expanded="false" aria-label="Create">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-plus"/></svg>
+          </button>
+        </div>
+
+        <div class="sb-search" aria-hidden="true">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><use href="#i-search"/></svg>
+          Search channels and topics
+        </div>
+
+        <div class="sb-filters">
+          <button class="pill" id="btn-hidden" aria-pressed="false">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-eye-off"/></svg>
+            <span id="hidden-label">Hidden</span>
+            <span id="hidden-count"></span>
+          </button>
+          <button class="pill" id="btn-unread" aria-pressed="false">Unread only</button>
+        </div>
+
+        <div class="sb-scroll" id="sb-scroll"></div>
+
+        <div class="sb-foot">
+          <button class="foot-btn" id="btn-browse">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-compass"/></svg>
+            Browse topics
+          </button>
+        </div>
+      </nav>
+
+      <!-- content stub -->
+      <div class="pane">
+        <div class="pane-head">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink-3)" aria-hidden="true"><use href="#i-hash" id="pane-glyph"/></svg>
+          <span class="pane-title" id="pane-title">launch-ga</span>
+          <div class="pane-topics" id="pane-topics"></div>
+          <span class="spacer" style="flex:1"></span>
+          <span id="pane-action"></span>
+        </div>
+        <div class="pane-body">
+          <div class="msg">
+            <span class="avatar" style="background:oklch(0.78 0.13 200)">SK</span>
+            <div class="body">
+              <div class="who">Sasha Kim <span>9:14</span></div>
+              <div class="text">Pricing page copy is locked. Anything left before we hand it to the launch checklist?</div>
+            </div>
+          </div>
+          <div class="msg">
+            <span class="avatar" style="background:oklch(0.8 0.14 130)">DP</span>
+            <div class="body">
+              <div class="who">Dev Patel <span>9:22</span></div>
+              <div class="text">One thing — Customers should see this too, it's in both topics now so they'll get it without a cross-post.</div>
+            </div>
+          </div>
+          <div class="msg">
+            <span class="avatar" style="background:oklch(0.82 0.12 60)">EH</span>
+            <div class="body">
+              <div class="who">Eric Hayes <span>9:26</span></div>
+              <div class="text">Good. That's the whole point of a channel being in more than one topic.</div>
+            </div>
+          </div>
+        </div>
+        <p class="pane-note">Message pane is a stub — the sidebar is the subject.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h4><span class="num">1</span> Topic menu</h4>
+        <p>
+          Two sections, because they're two different decisions.
+          <b>Notifications</b> sets the level channels inherit.
+          <b>Actions</b> holds the two ways out: hide it from your sidebar but stay
+          in, or unsubscribe and leave the topic's channels entirely.
+        </p>
+        <p class="try">Try: hover <b>Engineering</b> → ⋯ → set <b>Mentions only</b>.</p>
+      </div>
+      <div class="card">
+        <h4><span class="num">2</span> Hidden, not unsubscribed</h4>
+        <p>
+          Hiding is per-person and reversible from the same place every time — the
+          <b>Hidden</b> pill. A hidden topic you're still subscribed to shows a dot
+          on the pill when it has mentions, so nothing disappears silently.
+        </p>
+        <p class="try">Try: toggle <b>Hidden</b> to reveal hidden topics inline.</p>
+      </div>
+      <div class="card">
+        <h4><span class="num">3</span> Creation</h4>
+        <p>
+          The <b>+</b> menu asks the question that matters first: is this for the
+          team, for a specific group, or for someone outside. A team channel picks
+          a topic at creation, which is what keeps <span class="mono">Uncategorized</span> small.
+        </p>
+        <p class="try">Try: <b>+</b> → <b>New team channel</b>.</p>
+      </div>
+      <div class="card">
+        <h4><span class="num">4</span> Drag and drop</h4>
+        <p>
+          Drag a channel onto a topic to move it; hold <b>⌥</b> to leave it in both.
+          Drag a topic header to reorder. Dragging a private channel up into a topic
+          is one route to converting it — it asks first, because it makes the
+          channel team-visible.
+        </p>
+        <p class="try">Try: drag <b>#perf-notes</b> from Uncategorized into Engineering.</p>
+      </div>
+      <div class="card">
+        <h4><span class="num">5</span> Your order, not the team's</h4>
+        <p>
+          The <b>≡</b> button on the Topics header sets how they're stacked:
+          <b>Custom</b>, <b>A–Z</b>, <b>Recent activity</b>, or <b>Unread first</b>.
+          Order is stored per person, so arranging your sidebar never moves anyone
+          else's. Dragging or using <b>Move up</b> switches you to custom and keeps
+          what was already on screen.
+        </p>
+        <p class="try">Try: <b>≡</b> → <b>Recent activity</b>, then drag a topic.</p>
+      </div>
+      <div class="card">
+        <h4><span class="num">6</span> Promoting a private channel</h4>
+        <p>
+          Every private and external channel carries a <b>Make a team channel</b>
+          button — in its header and on the row itself. It asks which topic to file
+          it under and says plainly what changes: the team can find it and join
+          without an invite, and the history comes along.
+        </p>
+        <p class="try">Try: open <b>#founders</b> and use the header button.</p>
+      </div>
+      <div class="card">
+        <h4><span class="num">7</span> Discovery</h4>
+        <p>
+          <b>Browse topics</b> is the answer to "what exists here." Every topic,
+          every channel in it, joinable without an invite — the screen a new
+          teammate gets pointed at instead of a list of names to ask.
+        </p>
+        <p class="try">Try: <b>Browse topics</b> at the bottom of the sidebar.</p>
+      </div>
+      <div class="card">
+        <h4><span class="num">8</span> Keyboard path</h4>
+        <p>
+          Drag and drop is the fast path, never the only one. Channels move via
+          <b>Move to topic</b> in the ⋯ menu; topics reorder via <b>Move up</b> and
+          <b>Move down</b> in theirs. Anything you can drag, you can also do from a
+          menu.
+        </p>
+        <p class="try">Try: hover any channel → ⋯ → <b>Move to topic</b>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ two axes ============================ -->
+  <section class="col">
+    <span class="eyebrow">The rule behind the menu</span>
+    <h2>Subscribed and visible are independent</h2>
+    <p class="lede">
+      Collapsing these into one control is the mistake every version of this
+      feature makes. "I don't want to hear about it" and "I don't want to look at
+      it" are different sentences, and people mean both separately.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Notifications</th><th>Shown in sidebar</th><th>Hidden</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>All activity</td>
+            <td>Default for everyone on the team. Unreads and mentions both count.</td>
+            <td>Not in the list; mentions still reach Activity and carry a count on the Hidden pill.</td>
+          </tr>
+          <tr>
+            <td>Mentions only</td>
+            <td>In the list, no unread weight — only direct mentions raise an orange @ count.</td>
+            <td>An archive you can still be pulled into by name.</td>
+          </tr>
+          <tr>
+            <td>Nothing</td>
+            <td>Visible because you want to glance at it, silent because you don't work on it.</td>
+            <td>Fully out of the way, still one click back from the Hidden pill.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="lede">
+      <b>Unsubscribe</b> is the third, coarser action, and it's why the topic menu
+      has an Actions section rather than one more radio button: it removes you from
+      the topic altogether — its channels leave your sidebar — and you rejoin from
+      Browse topics. Hiding is a view preference; unsubscribing is membership.
+    </p>
+  </section>
+
+  <!-- ============================ data model ========================== -->
+  <section class="col">
+    <span class="eyebrow">Data model</span>
+    <h2>The channel model doesn't have to change</h2>
+    <p class="lede">
+      <code>ChannelType::Team</code> already exists in
+      <span class="mono">crates/channels/src/domain/models.rs</span>, along with
+      <code>team_id</code>, <code>auto_join_team</code>, and
+      <code>convert_to_team_channel</code> in the channel service. The type isn't
+      broken — it's unused, because nothing in the product creates a team channel
+      or shows you one you haven't joined. Topics give it a reason to exist.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Piece</th><th>Status</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>comms_channels.channel_type</code></td>
+            <td><span class="tag exists">unchanged</span></td>
+            <td>Team channels sit under topics; public / private / DM sit below the line. No new variant, no backfill of existing rows.</td>
+          </tr>
+          <tr>
+            <td><code>channel_topics</code></td>
+            <td><span class="tag new">new</span></td>
+            <td>Team-scoped: id, team_id, name, description, sort order, created_by.</td>
+          </tr>
+          <tr>
+            <td><code>channel_topic_channels</code></td>
+            <td><span class="tag new">new</span></td>
+            <td>Many-to-many. A channel in ≥1 topic never appears in Uncategorized.</td>
+          </tr>
+          <tr>
+            <td><code>channel_topic_rules</code></td>
+            <td><span class="tag new">new</span></td>
+            <td>Smart topics: name pattern, creator, participants, or activity window. Evaluated on membership read and on channel create/rename.</td>
+          </tr>
+          <tr>
+            <td><code>user_channel_topic_prefs</code></td>
+            <td><span class="tag new">new</span></td>
+            <td>Per user per topic: notification level, hidden, collapsed, manual sort position. Absent row = subscribed, visible, default order — which is what makes "subscribed by default" free.</td>
+          </tr>
+          <tr>
+            <td>Channel → team conversion</td>
+            <td><span class="tag exists">exists</span></td>
+            <td><code>convert_to_team_channel</code> already handles the private → team transition the drag-up gesture needs.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callouts">
+      <p class="callout">
+        One thing genuinely changes behaviorally: team channels become listable to
+        people who aren't participants. That's a read-authorization change in the
+        channel list service, not a schema change — and it's the change the whole
+        feature is actually about.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================ open questions ====================== -->
+  <section class="col">
+    <span class="eyebrow">Still open</span>
+    <h2>Decisions this concept doesn't make for you</h2>
+    <ul class="spec">
+      <li><b>Migration.</b> Existing private channels that are obviously team channels need a path up. A one-time admin screen that proposes conversions per channel, or leave them and let topics fill in going forward.</li>
+      <li><b>Does joining a topic join its channels?</b> Subscribing to a topic could mean "show me these channels" without adding you as a participant — cheaper, but then unread state and posting rights diverge from membership.</li>
+      <li><b>Who creates topics.</b> Anyone on the team, or admins only. Anyone is the right default for a company this size and the wrong one at 200 people.</li>
+      <li><b>Smart topic authoring.</b> The rule builder is a real surface and isn't drawn here — the concept only shows what a smart topic looks like once it exists.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ---------------- data ------------------------------------------------ */
+  const CHANNELS = {
+    platform:    { name: "platform",       kind: "team", unread: 4 },
+    web:         { name: "web",            kind: "team", unread: 0 },
+    releases:    { name: "releases",       kind: "team", unread: 0, muted: true },
+    oncall:      { name: "oncall",         kind: "team", unread: 0, mentions: 1 },
+    "design-crit": { name: "design-crit",  kind: "team", unread: 2 },
+    brand:       { name: "brand",          kind: "team", unread: 0 },
+    "launch-ga": { name: "launch-ga",      kind: "team", unread: 0, mentions: 3, selected: true },
+    pricing:     { name: "pricing",        kind: "team", unread: 0 },
+    demos:       { name: "demos",          kind: "team", unread: 0 },
+    "acme-rollout": { name: "acme-rollout", kind: "team", unread: 1 },
+    escalations: { name: "escalations",    kind: "team", unread: 0 },
+    "inc-storage-0914": { name: "inc-storage-0914", kind: "team", unread: 7 },
+    "inc-auth-0830": { name: "inc-auth-0830", kind: "team", unread: 0 },
+    announcements: { name: "announcements", kind: "team", unread: 0 },
+    wins:        { name: "wins",           kind: "team", unread: 2 },
+    "perf-notes": { name: "perf-notes",    kind: "team", unread: 0 },
+    "hiring-bar": { name: "hiring-bar",    kind: "team", unread: 0 },
+    "sourcing":  { name: "sourcing",       kind: "team", unread: 0 },
+    "interview-kits": { name: "interview-kits", kind: "team", unread: 0 },
+    "rotations": { name: "rotations",      kind: "team", unread: 0, mentions: 2 },
+
+    "acme-macro": { name: "acme-macro",    kind: "external", unread: 0, guests: 2 },
+    "northwind-pilot": { name: "northwind-pilot", kind: "external", unread: 1, guests: 1 },
+    founders:    { name: "founders",       kind: "private", unread: 0 },
+    "comp-cycle": { name: "comp-cycle",    kind: "private", unread: 0 },
+    "board-prep": { name: "board-prep",    kind: "private", unread: 3 },
+
+    "dm-sasha":  { name: "Sasha Kim",      kind: "dm", unread: 0, mentions: 2, color: "oklch(0.78 0.13 200)", initials: "SK", presence: "online" },
+    "dm-dev":    { name: "Dev Patel",      kind: "dm", unread: 0, color: "oklch(0.8 0.14 130)", initials: "DP", presence: "online" },
+    "dm-maya":   { name: "Maya Chen, Ravi", kind: "dm", unread: 1, color: "oklch(0.75 0.15 320)", initials: "MC" },
+    "dm-agent":  { name: "Macro Agent",    kind: "dm", unread: 0, color: "oklch(0.8 0.12 60)", initials: "MA", bot: true },
+  };
+
+  const initial = {
+    showHidden: false,
+    unreadOnly: false,
+    selected: "launch-ga",
+    topicSort: "custom",
+    topics: [
+      { id: "eng", name: "Engineering", notif: "all", hidden: false, collapsed: false, activeMinsAgo: 3,
+        desc: "Platform, web, releases, and the on-call rotation.",
+        channels: ["platform", "web", "releases", "oncall"] },
+      { id: "design", name: "Design", notif: "all", hidden: false, collapsed: false, activeMinsAgo: 26,
+        desc: "Crit, brand, and the shared surfaces work.",
+        channels: ["design-crit", "web", "brand"] },
+      { id: "gtm", name: "Go-to-market", notif: "all", hidden: false, collapsed: false, activeMinsAgo: 9,
+        desc: "Launches, pricing, and demo practice.",
+        channels: ["launch-ga", "pricing", "demos"] },
+      { id: "customers", name: "Customers", notif: "mentions", hidden: false, collapsed: true, activeMinsAgo: 44,
+        desc: "Named accounts, rollouts, and escalations.",
+        channels: ["launch-ga", "acme-rollout", "escalations"] },
+      { id: "incidents", name: "Incidents", notif: "all", hidden: false, collapsed: false, smart: true, activeMinsAgo: 1,
+        rule: "name starts with inc- · or channel has an open incident",
+        desc: "Every incident channel, automatically, for as long as it's open.",
+        channels: ["inc-storage-0914", "inc-auth-0830", "oncall"] },
+      { id: "company", name: "Company", notif: "all", hidden: false, collapsed: true, activeMinsAgo: 190,
+        desc: "Announcements, wins, and everything everyone gets.",
+        channels: ["announcements", "wins"] },
+      { id: "recruiting", name: "Recruiting", notif: "none", hidden: true, collapsed: false, activeMinsAgo: 320,
+        desc: "Loops, sourcing, and interview kits.",
+        channels: ["hiring-bar", "sourcing", "interview-kits"] },
+      { id: "support", name: "Support rotations", notif: "all", hidden: true, collapsed: false, activeMinsAgo: 96,
+        desc: "Weekend coverage and handoffs.",
+        channels: ["rotations"] },
+    ],
+    uncategorized: ["perf-notes"],
+    below: {
+      external: ["acme-macro", "northwind-pilot"],
+      private: ["founders", "comp-cycle", "board-prep"],
+      dm: ["dm-sasha", "dm-dev", "dm-maya", "dm-agent"],
+    },
+  };
+
+  const NOTIF = {
+    all:      { label: "All activity",  sub: "Unreads and mentions",   icon: "#i-bell" },
+    mentions: { label: "Mentions only", sub: "Only when you're named", icon: "#i-at" },
+    none:     { label: "Nothing",       sub: "No counts, no Activity", icon: "#i-bell-off" },
+  };
+
+  let state = structuredClone(initial);
+  state.topics.forEach((t) => { t.subscribed = t.subscribed !== false; });
+  let undoSnapshot = null;
+
+  const stage = document.getElementById("stage");
+  const scroll = document.getElementById("sb-scroll");
+
+  /* ---------------- helpers --------------------------------------------- */
+  const icon = (id, size = 14, w = 1.45) =>
+    `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="${id}"/></svg>`;
+
+  const el = (tag, cls, html) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  };
+
+  const chan = (id) => CHANNELS[id];
+  const topic = (id) => state.topics.find((t) => t.id === id);
+  const ORDERS = {
+    custom:   { label: "Custom",          sub: "Drag topics to arrange them", iconId: "#i-grip" },
+    alpha:    { label: "A–Z",             sub: "By topic name",               iconId: "#i-sort" },
+    activity: { label: "Recent activity", sub: "Busiest topic first",         iconId: "#i-arrow" },
+    unread:   { label: "Unread first",    sub: "Mentions, then unreads",      iconId: "#i-at" },
+  };
+
+  const subscribedTopics = () => state.topics.filter((t) => t.subscribed);
+
+  /** The order the user chose. Custom is the stored order of state.topics. */
+  function orderedTopics(list) {
+    const topics = [...(list || subscribedTopics())];
+    if (state.topicSort === "alpha") {
+      return topics.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    if (state.topicSort === "activity") {
+      return topics.sort((a, b) => a.activeMinsAgo - b.activeMinsAgo);
+    }
+    if (state.topicSort === "unread") {
+      const score = (t) => {
+        const w = topicWeight(t);
+        return w.mentions * 1000 + w.unread;
+      };
+      return topics.sort((a, b) => score(b) - score(a));
+    }
+    return topics;
+  }
+
+  /** Freeze whatever is on screen into the stored order, then go manual. */
+  function makeOrderCustom() {
+    if (state.topicSort === "custom") return false;
+    const shown = orderedTopics().map((t) => t.id);
+    state.topics.sort((a, b) => {
+      const ai = shown.indexOf(a.id);
+      const bi = shown.indexOf(b.id);
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    });
+    state.topicSort = "custom";
+    return true;
+  }
+
+  const visibleTopics = () =>
+    orderedTopics().filter((t) => !t.hidden || state.showHidden);
+  const hiddenTopics = () => subscribedTopics().filter((t) => t.hidden);
+  const notified = (c) => (c ? (c.mentions || 0) > 0 || ((c.unread || 0) > 0 && !c.muted) : false);
+
+  const topicWeight = (t) =>
+    t.channels.reduce(
+      (acc, id) => {
+        const c = chan(id);
+        if (!c) return acc;
+        acc.mentions += c.mentions || 0;
+        acc.unread += c.unread || 0;
+        return acc;
+      },
+      { mentions: 0, unread: 0 }
+    );
+
+  const topicsForChannel = (id) =>
+    state.topics.filter((t) => t.channels.includes(id));
+
+  /** The one activity indicator: a dot and a count, orange when it's a mention. */
+  function countChip(n, isMention, title) {
+    const chip = el("span", "count" + (isMention ? " mention" : ""));
+    chip.append(
+      isMention ? el("span", "at", icon("#i-at", 12, 1.5)) : el("span", "dot"),
+      el("span", null, String(n))
+    );
+    chip.title = title || (isMention ? `${n} mention${n > 1 ? "s" : ""}` : `${n} unread`);
+    return chip;
+  }
+
+  const glyphFor = (c) =>
+    c.kind === "external" ? "#i-globe" : c.kind === "private" ? "#i-lock" : "#i-hash";
+
+  /* ---------------- toast ----------------------------------------------- */
+  let toastTimer = null;
+  function toast(message, undoable) {
+    stage.querySelector(".toast")?.remove();
+    const t = el("div", "toast");
+    t.append(el("span", null, message));
+    if (undoable && undoSnapshot) {
+      const b = el("button", "link", "Undo");
+      b.addEventListener("click", () => {
+        state = undoSnapshot;
+        undoSnapshot = null;
+        t.remove();
+        render();
+      });
+      t.append(b);
+    }
+    stage.append(t);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.remove(), 5200);
+  }
+
+  const snapshot = () => { undoSnapshot = structuredClone(state); };
+
+  /* ---------------- moving a channel between topics --------------------- */
+  function moveChannel(id, fromTopicId, toTopicId, additive) {
+    const c = chan(id);
+    const to = topic(toTopicId);
+    const leaving = fromTopicId && fromTopicId !== toTopicId && !additive;
+
+    if (to.channels.includes(id) && !leaving) {
+      toast(`#${c.name} is already in ${to.name}`);
+      return;
+    }
+
+    snapshot();
+    if (!to.channels.includes(id)) to.channels.push(id);
+    state.uncategorized = state.uncategorized.filter((x) => x !== id);
+
+    let msg;
+    if (leaving) {
+      const from = topic(fromTopicId);
+      from.channels = from.channels.filter((x) => x !== id);
+      msg = `#${c.name} moved from ${from.name} to ${to.name}`;
+    } else {
+      const n = topicsForChannel(id).length;
+      msg = `#${c.name} added to ${to.name}${n > 1 ? ` · now in ${n} topics` : ""}`;
+    }
+    render();
+    toast(msg, true);
+  }
+
+  /* ---------------- menus ------------------------------------------------ */
+  function closeFlyout() {
+    stage.querySelectorAll(".menu.flyout").forEach((n) => n.remove());
+    stage.querySelectorAll(".menu-item.open-flyout").forEach((n) =>
+      n.classList.remove("open-flyout")
+    );
+  }
+
+  function closeMenu() {
+    stage.querySelectorAll(".menu").forEach((n) => n.remove());
+    stage.querySelectorAll('[aria-expanded="true"]').forEach((b) =>
+      b.setAttribute("aria-expanded", "false")
+    );
+  }
+
+  function openMenu(anchor, build) {
+    const wasOpen = anchor.getAttribute("aria-expanded") === "true";
+    closeMenu();
+    if (wasOpen) return;
+
+    const menu = el("div", "menu");
+    menu.setAttribute("role", "menu");
+    build(menu);
+    stage.append(menu);
+
+    const a = anchor.getBoundingClientRect();
+    const s = stage.getBoundingClientRect();
+    let top = a.bottom - s.top + 4;
+    let left = a.left - s.left;
+    if (left + menu.offsetWidth > s.width - 8) left = s.width - menu.offsetWidth - 8;
+    if (top + menu.offsetHeight > s.height - 8) top = Math.max(8, a.top - s.top - menu.offsetHeight - 4);
+    menu.style.top = top + "px";
+    menu.style.left = Math.max(8, left) + "px";
+
+    anchor.setAttribute("aria-expanded", "true");
+    menu.querySelector("button")?.focus();
+  }
+
+  function menuItem(menu, { label, sub, iconId, checked, danger, flyout, onClick }) {
+    const b = el("button", "menu-item" + (danger ? " danger" : ""));
+    b.setAttribute("role", "menuitem");
+    b.innerHTML =
+      `<span class="tick">${checked ? icon("#i-check", 13, 1.8) : ""}</span>` +
+      (iconId ? `<span style="color:var(--ink-3);display:grid;place-items:center">${icon(iconId, 14)}</span>` : "") +
+      `<span class="grow">${label}${sub ? `<span class="sub">${sub}</span>` : ""}</span>` +
+      (flyout ? `<span class="chev" style="transform:rotate(-90deg)">${icon("#i-chev", 13, 1.7)}</span>` : "");
+
+    if (flyout) {
+      b.setAttribute("aria-haspopup", "menu");
+      const open = () => openFlyout(b, flyout);
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        b.classList.contains("open-flyout") ? closeFlyout() : open();
+      });
+      b.addEventListener("mouseenter", open);
+    } else {
+      b.addEventListener("mouseenter", closeFlyout);
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeMenu();
+        onClick(e);
+      });
+    }
+    menu.append(b);
+    return b;
+  }
+
+  function openFlyout(item, build) {
+    if (item.classList.contains("open-flyout")) return;
+    closeFlyout();
+    item.classList.add("open-flyout");
+
+    const menu = el("div", "menu flyout");
+    menu.setAttribute("role", "menu");
+    build(menu);
+    stage.append(menu);
+
+    const parent = item.closest(".menu").getBoundingClientRect();
+    const a = item.getBoundingClientRect();
+    const s = stage.getBoundingClientRect();
+    let left = parent.right - s.left + 3;
+    if (left + menu.offsetWidth > s.width - 8) left = parent.left - s.left - menu.offsetWidth - 3;
+    let top = a.top - s.top - 5;
+    if (top + menu.offsetHeight > s.height - 8) top = Math.max(8, s.height - menu.offsetHeight - 8);
+    menu.style.left = Math.max(8, left) + "px";
+    menu.style.top = top + "px";
+  }
+
+  const sep = (menu) => menu.append(el("div", "menu-sep"));
+  const label = (menu, text) => menu.append(el("div", "menu-label", text));
+
+  /* ---------------- topic menu ------------------------------------------ */
+  function topicMenu(anchor, t) {
+    openMenu(anchor, (menu) => {
+      label(menu, "Notifications");
+      Object.entries(NOTIF).forEach(([key, cfg]) => {
+        menuItem(menu, {
+          label: cfg.label,
+          sub: cfg.sub,
+          iconId: cfg.icon,
+          checked: t.notif === key,
+          onClick: () => {
+            t.notif = key;
+            render();
+            toast(`${t.name} set to ${cfg.label.toLowerCase()}`);
+          },
+        });
+      });
+      menu.append(
+        el("div", "menu-note", "Channels in this topic inherit this unless you set them individually.")
+      );
+
+      sep(menu);
+      label(menu, "Actions");
+
+      const order = visibleTopics();
+      const at = order.findIndex((x) => x.id === t.id);
+      if (at > 0) {
+        menuItem(menu, {
+          label: "Move up",
+          iconId: "#i-up",
+          onClick: () => nudgeTopic(t, -1),
+        });
+      }
+      if (at > -1 && at < order.length - 1) {
+        menuItem(menu, {
+          label: "Move down",
+          iconId: "#i-down",
+          onClick: () => nudgeTopic(t, 1),
+        });
+      }
+
+      menuItem(menu, {
+        label: t.hidden ? "Show in sidebar" : "Hide from sidebar",
+        sub: t.hidden ? "Put it back in the list" : "Stays subscribed — find it under Hidden",
+        iconId: t.hidden ? "#i-eye" : "#i-eye-off",
+        onClick: () => {
+          snapshot();
+          t.hidden = !t.hidden;
+          render();
+          toast(t.hidden ? `${t.name} hidden` : `${t.name} shown`, true);
+        },
+      });
+      menuItem(menu, {
+        label: "Unsubscribe from topic",
+        sub: "Leaves its channels — rejoin from Browse topics",
+        iconId: "#i-bell-off",
+        danger: true,
+        onClick: () => {
+          snapshot();
+          t.subscribed = false;
+          t.hidden = false;
+          render();
+          toast(`Unsubscribed from ${t.name}`, true);
+        },
+      });
+
+      if (t.smart) {
+        sep(menu);
+        menuItem(menu, {
+          label: "Edit matching rule",
+          iconId: "#i-sparkle",
+          onClick: () => toast("Rule builder isn't drawn in this concept"),
+        });
+      } else {
+        sep(menu);
+        menuItem(menu, {
+          label: "Add channels to topic",
+          iconId: "#i-plus",
+          onClick: () => openBrowse(t.id),
+        });
+        menuItem(menu, {
+          label: "Rename topic",
+          iconId: "#i-folder",
+          onClick: () => toast("Rename isn't wired up in this concept"),
+        });
+      }
+    });
+  }
+
+  /* ---------------- topic order ----------------------------------------- */
+  /** Keyboard equivalent of dragging: move one topic past its neighbour. */
+  function nudgeTopic(t, delta) {
+    snapshot();
+    const switched = makeOrderCustom();
+    const neighbour = visibleTopics()[visibleTopics().findIndex((x) => x.id === t.id) + delta];
+    if (!neighbour) return;
+
+    const from = state.topics.findIndex((x) => x.id === t.id);
+    const to = state.topics.findIndex((x) => x.id === neighbour.id);
+    state.topics.splice(to, 0, state.topics.splice(from, 1)[0]);
+    render();
+    toast(
+      `${t.name} moved ${delta < 0 ? "up" : "down"}${switched ? " · switched to custom order" : ""}`,
+      true
+    );
+  }
+
+  /* ---------------- topic order menu ------------------------------------ */
+  function orderMenu(anchor) {
+    openMenu(anchor, (menu) => {
+      label(menu, "Order topics");
+      Object.entries(ORDERS).forEach(([key, cfg]) =>
+        menuItem(menu, {
+          label: cfg.label,
+          sub: cfg.sub,
+          iconId: cfg.iconId,
+          checked: state.topicSort === key,
+          onClick: () => {
+            snapshot();
+            if (key === "custom") makeOrderCustom();
+            else state.topicSort = key;
+            render();
+            toast(`Topics ordered by ${cfg.label.toLowerCase()}`, true);
+          },
+        })
+      );
+      menu.append(
+        el("div", "menu-note", "Your order only — everyone on the team arranges topics their own way.")
+      );
+    });
+  }
+
+  /* ---------------- channel menu ---------------------------------------- */
+  function channelMenu(anchor, id, fromTopicId) {
+    const c = chan(id);
+    openMenu(anchor, (menu) => {
+      label(menu, c.kind === "dm" ? c.name : "#" + c.name);
+      menuItem(menu, {
+        label: c.muted ? "Unmute channel" : "Mute channel",
+        sub: c.muted ? null : "Overrides the topic setting",
+        iconId: c.muted ? "#i-bell" : "#i-bell-off",
+        onClick: () => { c.muted = !c.muted; render(); toast(`#${c.name} ${c.muted ? "muted" : "unmuted"}`); },
+      });
+
+      if (c.kind === "team") {
+        sep(menu);
+        label(menu, "Actions");
+        menuItem(menu, {
+          label: "Move to topic",
+          iconId: "#i-folder",
+          flyout: (sub) => {
+            subscribedTopics()
+              .filter((t) => !t.smart)
+              .forEach((t) =>
+                menuItem(sub, {
+                  label: t.name,
+                  checked: t.channels.includes(id),
+                  onClick: (e) => moveChannel(id, fromTopicId, t.id, e.altKey),
+                })
+              );
+            sub.append(
+              el("div", "menu-note", "Hold ⌥ to add it to a topic without removing it from this one.")
+            );
+          },
+        });
+        if (fromTopicId) {
+          menuItem(menu, {
+            label: "Remove from " + topic(fromTopicId).name,
+            danger: true,
+            onClick: () => {
+              snapshot();
+              const t = topic(fromTopicId);
+              t.channels = t.channels.filter((x) => x !== id);
+              if (topicsForChannel(id).length === 0) state.uncategorized.push(id);
+              render();
+              toast(`#${c.name} removed from ${t.name}`, true);
+            },
+          });
+        }
+      } else if (c.kind === "private" || c.kind === "external") {
+        sep(menu);
+        label(menu, "Actions");
+        menuItem(menu, {
+          label: "Make a team channel…",
+          sub: "Everyone on the team can find and join it",
+          iconId: "#i-up",
+          onClick: () => confirmConvert(id),
+        });
+      }
+
+      sep(menu);
+      menuItem(menu, { label: "Leave channel", danger: true, onClick: () => toast("Leaving isn't wired up in this concept") });
+    });
+  }
+
+  /* ---------------- create menu ----------------------------------------- */
+  function createMenu(anchor) {
+    openMenu(anchor, (menu) => {
+      label(menu, "Create");
+      menuItem(menu, {
+        label: "New team channel",
+        sub: "Team-visible, filed under a topic",
+        iconId: "#i-hash",
+        onClick: () => openCreate(),
+      });
+      menuItem(menu, {
+        label: "New private channel",
+        sub: "Invite only, not discoverable",
+        iconId: "#i-lock",
+        onClick: () => toast("Private channel creation is unchanged"),
+      });
+      menuItem(menu, {
+        label: "New external channel",
+        sub: "Includes people outside the company",
+        iconId: "#i-globe",
+        onClick: () => toast("External channel creation is unchanged"),
+      });
+      sep(menu);
+      menuItem(menu, {
+        label: "New topic",
+        sub: "Groups team channels for everyone",
+        iconId: "#i-folder",
+        onClick: () => openCreateTopic(false),
+      });
+      menuItem(menu, {
+        label: "New smart topic",
+        sub: "Channels join automatically by rule",
+        iconId: "#i-sparkle",
+        onClick: () => openCreateTopic(true),
+      });
+    });
+  }
+
+  /* ---------------- dialogs --------------------------------------------- */
+  function dialog(build) {
+    closeMenu();
+    stage.querySelector(".scrim")?.remove();
+    const scrim = el("div", "scrim");
+    const d = el("div", "dialog");
+    d.setAttribute("role", "dialog");
+    d.setAttribute("aria-modal", "true");
+    build(d, () => scrim.remove());
+    scrim.append(d);
+    scrim.addEventListener("mousedown", (e) => { if (e.target === scrim) scrim.remove(); });
+    stage.append(scrim);
+    d.querySelector("button, input")?.focus();
+    return scrim;
+  }
+
+  function openBrowse(focusTopicId) {
+    dialog((d, close) => {
+      d.innerHTML =
+        `<div class="dialog-head">
+           <h3>Browse topics</h3>
+           <p>Everything the team talks about. Join anything — team channels don't need an invite.</p>
+         </div>`;
+      const body = el("div", "dialog-body");
+      state.topics.forEach((t) => {
+        const w = topicWeight(t);
+        const card = el("div", "topic-card");
+        if (t.id === focusTopicId) card.style.borderColor = "var(--accent-line)";
+        card.innerHTML =
+          `<div class="body">
+             <div class="name">${t.name}
+               ${t.smart ? `<span class="chip-smart">${icon("#i-sparkle", 10, 1.6)} smart</span>` : ""}
+               ${!t.subscribed ? `<span class="tag">not subscribed</span>` : t.hidden ? `<span class="tag">hidden</span>` : ""}
+             </div>
+             <div class="desc">${t.desc}</div>
+             <div class="chans">${t.channels.map((id) => "#" + chan(id).name).join("  ")}</div>
+             ${t.smart ? `<div class="chans" style="color:var(--violet)">rule · ${t.rule}</div>` : ""}
+           </div>`;
+        const side = el("div", "side");
+        side.innerHTML = `<span class="tag">${t.channels.length} channel${t.channels.length === 1 ? "" : "s"}</span>`;
+        if (w.mentions) side.append(countChip(w.mentions, true));
+        const action = !t.subscribed ? "join" : t.hidden ? "show" : "leave";
+        const btn = el(
+          "button",
+          "btn small" + (action === "leave" ? "" : " primary"),
+          { join: "Subscribe", show: "Show", leave: "Leave" }[action]
+        );
+        btn.addEventListener("click", () => {
+          snapshot();
+          if (action === "join") { t.subscribed = true; t.hidden = false; }
+          else if (action === "show") t.hidden = false;
+          else t.subscribed = false;
+          render();
+          close();
+          toast(
+            action === "leave"
+              ? `Unsubscribed from ${t.name}`
+              : `${t.name} added to your sidebar`,
+            true
+          );
+        });
+        side.append(btn);
+        card.append(side);
+        body.append(card);
+      });
+      d.append(body);
+      const foot = el("div", "dialog-foot");
+      const done = el("button", "btn", "Done");
+      done.addEventListener("click", close);
+      foot.append(done);
+      d.append(foot);
+    });
+  }
+
+  function openCreate() {
+    dialog((d, close) => {
+      d.innerHTML =
+        `<div class="dialog-head">
+           <h3>New team channel</h3>
+           <p>Anyone on the team will be able to find it and join. Pick the topics it belongs to.</p>
+         </div>`;
+      const body = el("div", "dialog-body");
+      body.innerHTML =
+        `<label class="ui" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-2)">
+           Name
+           <span style="display:flex;align-items:center;gap:6px;border:1px solid var(--edge);border-radius:8px;padding:0 10px;height:34px;background:var(--panel)">
+             <span style="color:var(--ink-3)">#</span>
+             <input id="new-ch-name" value="design-systems" style="flex:1;border:0;background:transparent;color:var(--ink);font:inherit;font-size:13.5px;outline:none" />
+           </span>
+         </label>
+         <div class="ui" style="font-size:12px;color:var(--ink-2);margin-top:4px">Topics</div>`;
+      const picks = new Set(["design"]);
+      state.topics.filter((t) => !t.smart).forEach((t) => {
+        const row = el("button", "topic-card");
+        row.style.cursor = "pointer";
+        row.style.textAlign = "left";
+        const paint = () => {
+          row.style.borderColor = picks.has(t.id) ? "var(--accent-line)" : "var(--edge-soft)";
+          row.style.background = picks.has(t.id) ? "var(--accent-wash)" : "var(--panel)";
+        };
+        row.innerHTML = `<div class="body"><div class="name">${t.name}</div><div class="desc">${t.desc}</div></div>`;
+        row.addEventListener("click", () => {
+          picks.has(t.id) ? picks.delete(t.id) : picks.add(t.id);
+          paint();
+        });
+        paint();
+        body.append(row);
+      });
+      d.append(body);
+      const foot = el("div", "dialog-foot");
+      const cancel = el("button", "btn", "Cancel");
+      cancel.addEventListener("click", close);
+      const create = el("button", "btn primary", "Create channel");
+      create.addEventListener("click", () => {
+        const raw = (d.querySelector("#new-ch-name").value || "new-channel").trim().replace(/\s+/g, "-");
+        const id = raw;
+        CHANNELS[id] = { name: raw, kind: "team", unread: 0 };
+        snapshot();
+        if (picks.size === 0) state.uncategorized.push(id);
+        picks.forEach((tid) => topic(tid).channels.push(id));
+        state.selected = id;
+        render();
+        close();
+        toast(
+          picks.size
+            ? `#${raw} created in ${[...picks].map((tid) => topic(tid).name).join(", ")}`
+            : `#${raw} created — it's in Uncategorized`,
+          true
+        );
+      });
+      foot.append(cancel, create);
+      d.append(foot);
+    });
+  }
+
+  function openCreateTopic(smart) {
+    dialog((d, close) => {
+      d.innerHTML =
+        `<div class="dialog-head">
+           <h3>${smart ? "New smart topic" : "New topic"}</h3>
+           <p>${
+             smart
+               ? "Channels join and leave automatically as they match. A channel can match several smart topics at once."
+               : "Everyone on the team is subscribed to a new topic by default, and can unsubscribe or hide it."
+           }</p>
+         </div>`;
+      const body = el("div", "dialog-body");
+      body.innerHTML =
+        `<label class="ui" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-2)">
+           Name
+           <input id="new-topic-name" value="${smart ? "Escalations" : "Research"}" style="border:1px solid var(--edge);border-radius:8px;padding:0 10px;height:34px;background:var(--panel);color:var(--ink);font:inherit;font-size:13.5px;outline:none" />
+         </label>` +
+        (smart
+          ? `<label class="ui" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-2);margin-top:4px">
+               Channels match when
+               <input id="new-topic-rule" value="name starts with esc-" style="border:1px solid var(--edge);border-radius:8px;padding:0 10px;height:34px;background:var(--panel);color:var(--ink);font-family:var(--mono);font-size:12.5px;outline:none" />
+             </label>
+             <p class="ui" style="font-size:12px;color:var(--ink-3);line-height:1.5;margin:2px 0 0">
+               Rules run on channel create and rename, and on read. Matching channels stay out of Uncategorized even if they're in no manual topic.
+             </p>`
+          : `<p class="ui" style="font-size:12px;color:var(--ink-3);line-height:1.5;margin:2px 0 0">
+               You can drag channels in afterwards, or add them from each channel's menu.
+             </p>`);
+      d.append(body);
+      const foot = el("div", "dialog-foot");
+      const cancel = el("button", "btn", "Cancel");
+      cancel.addEventListener("click", close);
+      const create = el("button", "btn primary", "Create topic");
+      create.addEventListener("click", () => {
+        const name = (d.querySelector("#new-topic-name").value || "Untitled").trim();
+        snapshot();
+        state.topics.push({
+          id: "t" + state.topics.length,
+          name,
+          notif: "all",
+          subscribed: true,
+          hidden: false,
+          collapsed: false,
+          smart,
+          rule: smart ? d.querySelector("#new-topic-rule").value : undefined,
+          desc: smart ? "Automatic membership." : "No channels yet.",
+          channels: [],
+        });
+        render();
+        close();
+        toast(`${name} created — everyone on the team is subscribed`, true);
+      });
+      foot.append(cancel, create);
+      d.append(foot);
+    });
+  }
+
+  function confirmConvert(channelId, topicId) {
+    const c = chan(channelId);
+    // hidden topics can still receive the channel, but they sort last and say so
+    const choices = subscribedTopics()
+      .filter((t) => !t.smart)
+      .sort((a, b) => (a.hidden ? 1 : 0) - (b.hidden ? 1 : 0));
+    let picked = topicId || choices[0].id;
+
+    dialog((d, close) => {
+      const origin =
+        c.kind === "external"
+          ? "It includes people outside the company today, so converting it removes the guests."
+          : "It's private today.";
+      d.innerHTML =
+        `<div class="dialog-head">
+           <h3>Make #${c.name} a team channel?</h3>
+           <p>${origin} Everyone on the team will be able to find it and join without an invite, and past messages come with it.</p>
+         </div>`;
+
+      const body = el("div", "dialog-body");
+      body.append(el("div", "ui", "File it under"));
+      body.querySelector(".ui").style.cssText = "font-size:12px;color:var(--ink-2)";
+      const row = el("div");
+      row.style.cssText = "display:flex;flex-wrap:wrap;gap:6px";
+      const repaint = [];
+      choices.forEach((t) => {
+        const chip = el("button", "btn small", t.hidden ? `${t.name} · hidden` : t.name);
+        const paint = () => {
+          const on = picked === t.id;
+          chip.style.borderColor = on ? "transparent" : "var(--edge)";
+          chip.style.background = on ? "var(--accent)" : "var(--raised)";
+          chip.style.color = on ? "oklch(0.16 0.02 59)" : "var(--ink-1)";
+          chip.style.fontWeight = on ? "600" : "550";
+        };
+        chip.addEventListener("click", () => {
+          picked = t.id;
+          repaint.forEach((fn) => fn());
+        });
+        repaint.push(paint);
+        paint();
+        row.append(chip);
+      });
+      body.append(row);
+      d.append(body);
+
+      const foot = el("div", "dialog-foot");
+      const cancel = el("button", "btn", c.kind === "external" ? "Leave it as is" : "Keep it private");
+      cancel.addEventListener("click", close);
+      const go = el("button", "btn primary", "Make it a team channel");
+      go.addEventListener("click", () => {
+        snapshot();
+        const t = topic(picked);
+        c.kind = "team";
+        c.guests = 0;
+        state.below.private = state.below.private.filter((x) => x !== channelId);
+        state.below.external = state.below.external.filter((x) => x !== channelId);
+        t.channels.push(channelId);
+        render();
+        close();
+        toast(`#${c.name} is now a team channel in ${t.name}`, true);
+      });
+      foot.append(cancel, go);
+      d.append(foot);
+    });
+  }
+
+  /* ---------------- drag and drop --------------------------------------- */
+  let drag = null; // { type: 'channel'|'topic', id, fromTopicId }
+
+  function clearDropStyling() {
+    stage.querySelectorAll(".drop-target").forEach((n) => n.classList.remove("drop-target"));
+    stage.querySelectorAll(".drop-line").forEach((n) => n.remove());
+  }
+
+  function wireChannelDrag(node, id, fromTopicId) {
+    node.draggable = true;
+    node.addEventListener("dragstart", (e) => {
+      drag = { type: "channel", id, fromTopicId };
+      node.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", id);
+      closeMenu();
+    });
+    node.addEventListener("dragend", () => {
+      node.classList.remove("dragging");
+      drag = null;
+      clearDropStyling();
+    });
+  }
+
+  function wireTopicDropTarget(node, t) {
+    const accepts = () => drag && (drag.type === "channel" ? !t.smart : drag.type === "topic");
+
+    node.addEventListener("dragover", (e) => {
+      if (!accepts()) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      clearDropStyling();
+      if (drag.type === "channel") {
+        node.classList.add("drop-target");
+      } else if (drag.id !== t.id) {
+        const box = node.querySelector(".topic-head").getBoundingClientRect();
+        const after = e.clientY > box.top + box.height / 2;
+        const line = el("div", "drop-line");
+        node.parentElement.insertBefore(line, after ? node.nextSibling : node);
+      }
+    });
+
+    node.addEventListener("dragleave", (e) => {
+      if (!node.contains(e.relatedTarget)) node.classList.remove("drop-target");
+    });
+
+    node.addEventListener("drop", (e) => {
+      if (!accepts()) return;
+      e.preventDefault();
+      const d = drag;
+      clearDropStyling();
+      drag = null;
+
+      if (d.type === "topic") {
+        const box = node.querySelector(".topic-head").getBoundingClientRect();
+        const after = e.clientY > box.top + box.height / 2;
+        snapshot();
+        // dragging is an instruction to arrange by hand, so adopt custom order
+        const switched = makeOrderCustom();
+        const moving = topic(d.id);
+        state.topics = state.topics.filter((x) => x.id !== d.id);
+        const at = state.topics.findIndex((x) => x.id === t.id);
+        state.topics.splice(after ? at + 1 : at, 0, moving);
+        render();
+        toast(
+          `${moving.name} moved${switched ? " · switched to custom order" : ""}`,
+          true
+        );
+        return;
+      }
+
+      if (chan(d.id).kind !== "team") {
+        confirmConvert(d.id, t.id);
+        return;
+      }
+      moveChannel(d.id, d.fromTopicId, t.id, e.altKey);
+    });
+  }
+
+  /* ---------------- render ---------------------------------------------- */
+  function channelRow(id, opts = {}) {
+    const c = chan(id);
+    if (!c) return null;
+    if (state.unreadOnly && !c.unread && !c.mentions && state.selected !== id) return null;
+
+    const row = el("div", "ch");
+    row.tabIndex = 0;
+    // multi-topic membership needs no glyph — the channel is simply listed twice
+    if (opts.multi) row.title = `#${c.name} — in ${opts.multi}`;
+    if (state.selected === id) row.classList.add("selected");
+    if ((c.unread || c.mentions) && !c.muted) row.classList.add("unread");
+    if (c.muted) row.classList.add("muted");
+
+    if (c.kind === "dm") {
+      const wrap = el("span", "av-wrap");
+      const av = el("span", "avatar", c.initials);
+      av.style.background = c.color;
+      wrap.append(av);
+      if (c.presence) {
+        const p = el("span", "presence");
+        p.style.background = "var(--green)";
+        wrap.append(p);
+      }
+      row.append(wrap);
+    } else {
+      row.append(el("span", "glyph", icon(glyphFor(c), 13, 1.5)));
+    }
+
+    row.append(el("span", "ch-name", c.kind === "dm" ? c.name : c.name));
+    row.append(el("span", "spacer"));
+
+    const meta = el("span", "ch-meta");
+    if (c.guests) meta.append(el("span", "guests", `${c.guests} guest${c.guests > 1 ? "s" : ""}`));
+    if (c.muted) meta.append(el("span", "glyph", icon("#i-bell-off", 12, 1.4)));
+    // the count always sits last, so every row's activity lines up on one edge
+    if (c.mentions) meta.append(countChip(c.mentions, true));
+    else if (c.unread && !c.muted) meta.append(countChip(c.unread, false));
+    row.append(meta);
+
+    const actions = el("span", "ch-actions");
+
+    // a private channel is one click from becoming a team channel
+    if (c.kind === "private" || c.kind === "external") {
+      const promote = el("button", "icon-btn", icon("#i-up", 13, 1.5));
+      promote.style.width = "20px";
+      promote.style.height = "20px";
+      promote.title = "Make a team channel";
+      promote.setAttribute("aria-label", `Make #${c.name} a team channel`);
+      promote.addEventListener("click", (e) => {
+        e.stopPropagation();
+        confirmConvert(id);
+      });
+      actions.append(promote);
+    }
+
+    const more = el("button", "icon-btn", icon("#i-dots", 14, 1));
+    more.style.width = "20px";
+    more.style.height = "20px";
+    more.setAttribute("aria-haspopup", "menu");
+    more.setAttribute("aria-expanded", "false");
+    more.setAttribute("aria-label", `Options for ${c.name}`);
+    more.addEventListener("click", (e) => {
+      e.stopPropagation();
+      channelMenu(more, id, opts.topicId);
+    });
+    actions.append(more);
+    row.append(actions);
+
+    row.addEventListener("click", () => {
+      state.selected = id;
+      if (c.unread) c.unread = 0;
+      if (c.mentions) c.mentions = 0;
+      render();
+    });
+    row.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); row.click(); }
+    });
+
+    wireChannelDrag(row, id, opts.topicId);
+    return row;
+  }
+
+  function topicNode(t) {
+    const node = el("div", "topic" + (t.collapsed ? " collapsed" : "") + (t.hidden ? " is-hidden-preview" : ""));
+
+    const head = el("div", "topic-head");
+    head.tabIndex = 0;
+    head.setAttribute("role", "button");
+    head.setAttribute("aria-expanded", String(!t.collapsed));
+    head.append(el("span", "twist", icon("#i-chev", 13, 1.7)));
+    head.append(el("span", "topic-name", t.name));
+    if (t.smart) head.append(el("span", "chip-smart", `${icon("#i-sparkle", 9, 1.6)} smart`));
+    head.append(el("span", "spacer"));
+
+    // Channels that want you are listed whether the topic is open or closed, so
+    // the header never carries a count of its own.
+    const peeking = t.channels.filter((id) => notified(chan(id)));
+    const summary = el("span", "topic-summary");
+    if (t.hidden) summary.append(el("span", "tag", "hidden"));
+    // "Nothing" is worth a persistent glyph; "mentions only" isn't — an orange @
+    // in the rail now means an actual mention, and two @s would fight.
+    if (t.notif === "none") summary.append(el("span", "glyph", icon("#i-bell-off", 12, 1.4)));
+    // Channels that want you are always listed, collapsed or not, so the header
+    // never repeats their badge — it only says how much quiet is folded away.
+    head.append(summary);
+
+    const actions = el("span", "topic-actions");
+    const add = el("button", "icon-btn", icon("#i-plus", 13, 1.5));
+    add.style.width = "20px"; add.style.height = "20px";
+    add.setAttribute("aria-label", `Add channel to ${t.name}`);
+    add.addEventListener("click", (e) => { e.stopPropagation(); openCreate(); });
+    const more = el("button", "icon-btn", icon("#i-dots", 14, 1));
+    more.style.width = "20px"; more.style.height = "20px";
+    more.setAttribute("aria-haspopup", "menu");
+    more.setAttribute("aria-expanded", "false");
+    more.setAttribute("aria-label", `Options for ${t.name}`);
+    more.addEventListener("click", (e) => { e.stopPropagation(); topicMenu(more, t); });
+    actions.append(add, more);
+    head.append(actions);
+
+    head.addEventListener("click", () => { t.collapsed = !t.collapsed; render(); });
+    head.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); t.collapsed = !t.collapsed; render(); }
+    });
+
+    head.draggable = true;
+    head.addEventListener("dragstart", (e) => {
+      drag = { type: "topic", id: t.id };
+      node.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", t.id);
+      closeMenu();
+    });
+    head.addEventListener("dragend", () => {
+      node.classList.remove("dragging");
+      drag = null;
+      clearDropStyling();
+    });
+
+    node.append(head);
+
+    const body = el("div", "topic-body" + (t.collapsed ? " peek" : ""));
+    const shown = t.collapsed ? peeking : t.channels;
+    shown.forEach((id) => {
+      const others = topicsForChannel(id);
+      const row = channelRow(id, {
+        topicId: t.id,
+        multi: others.length > 1 ? others.map((x) => x.name).join(", ") : null,
+      });
+      if (row) body.append(row);
+    });
+    if (!t.channels.length && !t.collapsed) {
+      body.append(el("div", "ch", `<span class="ch-name" style="color:var(--ink-3);font-style:italic">Drop a channel here</span>`));
+    }
+    node.append(body);
+
+    wireTopicDropTarget(node, t);
+    return node;
+  }
+
+  function sectionHead(text, right) {
+    const h = el("div", "sb-section-head");
+    h.append(el("span", null, text));
+    h.append(el("span", "spacer"));
+    if (right) h.append(right);
+    return h;
+  }
+
+  function render() {
+    closeMenu();
+    scroll.innerHTML = "";
+
+    /* ---- topics section ---- */
+    const topics = el("div", "sb-section");
+
+    const sortBtn = el("button", "icon-btn", icon("#i-sort", 13, 1.5));
+    sortBtn.style.width = "20px";
+    sortBtn.style.height = "18px";
+    sortBtn.setAttribute("aria-haspopup", "menu");
+    sortBtn.setAttribute("aria-expanded", "false");
+    sortBtn.setAttribute("aria-label", "Order topics");
+    sortBtn.title = `Order: ${ORDERS[state.topicSort].label}`;
+    sortBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      orderMenu(sortBtn);
+    });
+    topics.append(sectionHead("Topics", sortBtn));
+    visibleTopics().forEach((t) => topics.append(topicNode(t)));
+
+    if (state.uncategorized.length) {
+      const unc = el("div", "topic");
+      const head = el("div", "topic-head");
+      head.append(el("span", "twist", icon("#i-chev", 13, 1.7)));
+      head.append(el("span", "topic-name", "Uncategorized"));
+      head.append(el("span", "spacer"));
+      head.append(el("span", "topic-summary", `<span class="tag">${state.uncategorized.length}</span>`));
+      unc.append(head);
+      const body = el("div", "topic-body");
+      state.uncategorized.forEach((id) => {
+        const row = channelRow(id, {});
+        if (row) body.append(row);
+      });
+      unc.append(body);
+      topics.append(unc);
+    }
+    scroll.append(topics);
+
+    /* ---- below the line: one section per kind, no umbrella label ---- */
+    const groups = [
+      ["External", state.below.external],
+      ["Private", state.below.private],
+      ["Direct messages", state.below.dm],
+    ];
+    groups.forEach(([name, ids]) => {
+      if (!ids.length) return;
+      const section = el("div", "sb-section flat");
+      section.append(sectionHead(name));
+      ids.forEach((id) => {
+        const row = channelRow(id, {});
+        if (row) section.append(row);
+      });
+      scroll.append(section);
+    });
+
+    /* ---- hidden pill ---- */
+    const hidden = hiddenTopics();
+    const pill = document.getElementById("btn-hidden");
+    const hlabel = document.getElementById("hidden-label");
+    const hcount = document.getElementById("hidden-count");
+    pill.setAttribute("aria-pressed", String(state.showHidden));
+    hlabel.textContent = "Hidden";
+    pill.hidden = hidden.length === 0 && !state.showHidden;
+    const hiddenMentions = hidden
+      .filter((t) => t.notif !== "none")
+      .reduce((n, t) => n + topicWeight(t).mentions, 0);
+    hcount.innerHTML = "";
+    if (hiddenMentions && !state.showHidden) {
+      hcount.append(countChip(hiddenMentions, true, `${hiddenMentions} mention${hiddenMentions > 1 ? "s" : ""} in hidden topics`));
+    }
+
+    /* ---- pane header ---- */
+    const sel = chan(state.selected);
+    document.getElementById("pane-title").textContent = sel ? sel.name : "";
+    document
+      .getElementById("pane-glyph")
+      .setAttribute("href", sel && sel.kind !== "dm" ? glyphFor(sel) : "#i-at");
+
+    const tags = document.getElementById("pane-topics");
+    tags.innerHTML = "";
+    topicsForChannel(state.selected).forEach((t) => {
+      tags.append(el("span", "topic-tag", `${t.smart ? icon("#i-sparkle", 10, 1.6) + " " : ""}${t.name}`));
+    });
+
+    const paneAction = document.getElementById("pane-action");
+    paneAction.innerHTML = "";
+    if (sel && (sel.kind === "private" || sel.kind === "external")) {
+      const promote = el("button", "btn small", "Make a team channel");
+      promote.addEventListener("click", () => confirmConvert(state.selected));
+      paneAction.append(promote);
+    }
+  }
+
+  /* ---------------- wiring ---------------------------------------------- */
+  document.getElementById("btn-create").addEventListener("click", (e) => {
+    e.stopPropagation();
+    createMenu(e.currentTarget);
+  });
+  document.getElementById("btn-hidden").addEventListener("click", () => {
+    state.showHidden = !state.showHidden;
+    render();
+    if (state.showHidden) toast("Showing hidden topics — use a topic's ⋯ menu to put one back");
+  });
+  document.getElementById("btn-unread").addEventListener("click", (e) => {
+    state.unreadOnly = !state.unreadOnly;
+    e.currentTarget.setAttribute("aria-pressed", String(state.unreadOnly));
+    render();
+  });
+  document.getElementById("btn-browse").addEventListener("click", () => openBrowse());
+
+  document.addEventListener("mousedown", (e) => {
+    if (!e.target.closest(".menu") && !e.target.closest("[aria-haspopup]")) closeMenu();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeMenu();
+      stage.querySelector(".scrim")?.remove();
+    }
+  });
+  scroll.addEventListener("dragover", (e) => { if (drag) e.preventDefault(); });
+
+  render();
+})();
+</script>
+
+</body>
+</html>

@@ -287,6 +287,14 @@ pub trait ChannelRepo: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
+    /// Resolve the owning team of a topic for conversion authorization.
+    fn get_topic_team_id(
+        &self,
+        _topic_id: Uuid,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send {
+        async { Ok(None) }
+    }
+
     /// Create a channel and return its complete active participant set.
     fn create_channel<'a>(
         &self,

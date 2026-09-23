@@ -1,9 +1,15 @@
+import {
+  addChannelToTopic,
+  useChannelTopicsQuery,
+} from '@app/features/channels-view/topics/queries';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { TabsInset } from '@core/component/TabsInset';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
+import { ENABLE_CHANNEL_TOPICS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
@@ -20,7 +26,7 @@ import { useCreateChannelMutation } from '@queries/channel/channels';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { Button, Dialog, Panel, ToggleSwitch, Tooltip } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 
 const [newChannelModalOpen, setNewChannelModalOpen] = createSignal(false);
 const newChannelModalFocusLock = useFocusLock('create-channel');
@@ -28,9 +34,10 @@ const newChannelModalFocusLock = useFocusLock('create-channel');
 const CHANNEL_TYPE_TABS = [
   { value: 'private', label: 'Private' },
   { value: 'team', label: 'Team' },
+  { value: 'public', label: 'External' },
 ];
 
-type CreatableChannelType = 'private' | 'team';
+type CreatableChannelType = 'private' | 'team' | 'public';
 
 function TeamMemberListItem(props: { member: TeamMember; isLast: boolean }) {
   const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
@@ -54,10 +61,14 @@ function TeamMemberListItem(props: { member: TeamMember; isLast: boolean }) {
   );
 }
 
-export function openNewChannelModal() {
+export function openNewChannelModal(type: CreatableChannelType = 'private') {
   newChannelModalFocusLock.acquire();
+  setRequestedChannelType(type);
   setNewChannelModalOpen(true);
 }
+
+const [requestedChannelType, setRequestedChannelType] =
+  createSignal<CreatableChannelType>('private');
 
 export function CreateChannelModal() {
   const { replaceOrInsertSplit } = useSplitLayout();
@@ -65,11 +76,19 @@ export function CreateChannelModal() {
   const { users: recipientOptions } = useCombinedRecipients();
   const createChannelMutation = useCreateChannelMutation();
   const currentTeamQuery = useCurrentTeamQuery();
+  const topicsEnabled = useFeatureFlag(ENABLE_CHANNEL_TOPICS);
+  const topicsQuery = useChannelTopicsQuery(
+    () => topicsEnabled().enabled && newChannelModalOpen()
+  );
+  const [selectedTopicId, setSelectedTopicId] = createSignal<string>();
   const [name, setName] = createSignal('');
   const [teamListScrollRef, setTeamListScrollRef] =
     createSignal<HTMLDivElement>();
   const [channelType, setChannelType] =
     createSignal<CreatableChannelType>('private');
+  createEffect(() => {
+    if (newChannelModalOpen()) setChannelType(requestedChannelType());
+  });
   const [autoJoinTeam, setAutoJoinTeam] = createSignal(false);
   const [selectedRecipients, setSelectedRecipients] = createSignal<
     WithCustomUserInput<'user' | 'contact'>[]
@@ -86,6 +105,7 @@ export function CreateChannelModal() {
     setName('');
     setChannelType('private');
     setAutoJoinTeam(false);
+    setSelectedTopicId(undefined);
     setSelectedRecipients([]);
     setError(undefined);
   }
@@ -134,6 +154,19 @@ export function CreateChannelModal() {
         team_id: isTeamChannel ? selectedTeam?.id : undefined,
         auto_join_team: isTeamChannel && autoJoinTeam(),
       });
+      if (isTeamChannel && selectedTopicId()) {
+        try {
+          await addChannelToTopic(selectedTopicId()!, id);
+        } catch (cause) {
+          console.error(
+            'Created channel but could not file it under topic',
+            cause
+          );
+          toast.failure(
+            'Channel created, but it could not be filed under the topic'
+          );
+        }
+      }
       resetAndClose();
       replaceOrInsertSplit({ type: 'channel', id });
     } catch (cause) {
@@ -155,10 +188,21 @@ export function CreateChannelModal() {
               <Show when={team()}>
                 <TabsInset
                   depth={2}
-                  list={CHANNEL_TYPE_TABS}
+                  list={
+                    topicsEnabled().enabled
+                      ? CHANNEL_TYPE_TABS
+                      : CHANNEL_TYPE_TABS.filter(
+                          (item) => item.value !== 'public'
+                        )
+                  }
                   value={channelType()}
                   onChange={(value) => {
-                    if (value !== 'private' && value !== 'team') return;
+                    if (
+                      value !== 'private' &&
+                      value !== 'team' &&
+                      value !== 'public'
+                    )
+                      return;
                     setChannelType(value);
                     setError(undefined);
                   }}
@@ -201,6 +245,32 @@ export function CreateChannelModal() {
                   class="h-10 w-full border-none bg-transparent px-0 text-xl font-medium text-ink outline-none placeholder:text-ink-placeholder focus:ring-0"
                 />
               </div>
+
+              <Show when={topicsEnabled().enabled && channelType() === 'team'}>
+                <div class="flex flex-col gap-2 px-2">
+                  <span class="text-xs font-medium text-ink-muted">
+                    File under a topic
+                  </span>
+                  <div class="flex flex-wrap gap-2">
+                    <For each={topicsQuery.isSuccess ? topicsQuery.data : []}>
+                      {(topic) => (
+                        <Button
+                          size="sm"
+                          variant={
+                            selectedTopicId() === topic.id
+                              ? 'accent'
+                              : 'outline'
+                          }
+                          aria-pressed={selectedTopicId() === topic.id}
+                          onClick={() => setSelectedTopicId(topic.id)}
+                        >
+                          {topic.name}
+                        </Button>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
 
               <div class="flex flex-col gap-2 px-2">
                 <div class="flex items-center gap-2">

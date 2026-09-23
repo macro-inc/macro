@@ -117,6 +117,12 @@ export const enableNewAppViews = defineFlag({
   default: DEV_MODE_ENV || undefined,
 });
 
+/** Enables the Channel Topics sidebar and creation flows. */
+export const ENABLE_CHANNEL_TOPICS = defineFlag({
+  key: 'enable-channel-topics',
+  env: 'ENABLE_CHANNEL_TOPICS',
+});
+
 /**
  * This constant reflects whether the app is running in production mode with prod backend environment
  *

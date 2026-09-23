@@ -537,6 +537,7 @@ async fn patch_channel_rename_advances_updated_at(pool: Pool<Postgres>) {
             channel_name: Some("renamed-channel".to_string()),
             convert_to_team_channel: None,
             auto_join_team: None,
+            topic_id: None,
         },
     )
     .await
@@ -569,6 +570,7 @@ async fn patch_channel_rename_allows_a_member(pool: Pool<Postgres>) {
             channel_name: Some("member-renamed".to_string()),
             convert_to_team_channel: None,
             auto_join_team: None,
+            topic_id: None,
         },
     )
     .await
@@ -597,6 +599,7 @@ async fn patch_channel_settings_reject_a_member(pool: Pool<Postgres>) {
                 channel_name: None,
                 convert_to_team_channel: None,
                 auto_join_team: Some(false),
+                topic_id: None,
             },
         )
         .await
@@ -648,6 +651,7 @@ async fn patch_channel_converts_to_team_and_updates_auto_join_members(pool: Pool
             channel_name: None,
             convert_to_team_channel: Some(true),
             auto_join_team: Some(true),
+            topic_id: None,
         },
     )
     .await
@@ -702,6 +706,7 @@ async fn patch_channel_converts_to_team_and_updates_auto_join_members(pool: Pool
             channel_name: None,
             convert_to_team_channel: None,
             auto_join_team: Some(false),
+            topic_id: None,
         },
     )
     .await
@@ -747,6 +752,7 @@ async fn patch_team_channel_converts_to_private_and_clears_team_settings(pool: P
             channel_name: None,
             convert_to_team_channel: Some(false),
             auto_join_team: Some(true),
+            topic_id: None,
         },
     )
     .await

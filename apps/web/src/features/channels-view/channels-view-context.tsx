@@ -52,6 +52,9 @@ function createInitialState(
     expandedGroups: {
       favorites: initial.expandedGroups?.favorites ?? true,
       channels: initial.expandedGroups?.channels ?? true,
+      topics: initial.expandedGroups?.topics ?? true,
+      external: initial.expandedGroups?.external ?? true,
+      private: initial.expandedGroups?.private ?? true,
       direct_messages: initial.expandedGroups?.direct_messages ?? true,
     },
     sortBy: {

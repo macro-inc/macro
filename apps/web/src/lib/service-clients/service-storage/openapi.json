@@ -1861,6 +1861,190 @@
         }
       }
     },
+    "/channel-topics": {
+      "get": {
+        "tags": ["channel-topics"],
+        "summary": "List the caller's team topics and participant-scoped channel IDs.",
+        "operationId": "list_channel_topics",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["channel-topics"],
+        "summary": "Create a topic.",
+        "operationId": "create_channel_topic",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTopicResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-topics/prefs/order": {
+      "put": {
+        "tags": ["channel-topics"],
+        "summary": "Set this user's custom topic order.",
+        "operationId": "set_channel_topic_order",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicOrderBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/channel-topics/{id}": {
+      "delete": {
+        "tags": ["channel-topics"],
+        "summary": "Delete a topic.",
+        "operationId": "delete_channel_topic",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "tags": ["channel-topics"],
+        "summary": "Update topic metadata.",
+        "operationId": "update_channel_topic",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/channel-topics/{id}/channels/{channel_id}": {
+      "put": {
+        "tags": ["channel-topics"],
+        "summary": "File a channel under a topic.",
+        "operationId": "add_channel_to_topic",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "tags": ["channel-topics"],
+        "summary": "Remove a channel from a topic.",
+        "operationId": "remove_channel_from_topic",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/channels": {
       "post": {
         "tags": ["channels"],
@@ -18074,6 +18258,61 @@
           }
         }
       },
+      "ChannelTopic": {
+        "type": "object",
+        "description": "A topic with only the channel memberships visible to this user.",
+        "required": [
+          "id",
+          "team_id",
+          "name",
+          "sort_order",
+          "channel_count",
+          "channel_ids"
+        ],
+        "properties": {
+          "channel_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of channels filed in this topic."
+          },
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "IDs of channels this user participates in."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional explanation."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Topic id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "sort_order": {
+            "type": "number",
+            "format": "double",
+            "description": "Team default position."
+          },
+          "sort_position": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "User's custom position, when set."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning team."
+          }
+        }
+      },
       "ChannelTopicEvent": {
         "oneOf": [
           {
@@ -19486,6 +19725,18 @@
           "token": {
             "type": "string",
             "description": "A pre-generated permission token that you can use for SS"
+          }
+        }
+      },
+      "CreateTopicResponse": {
+        "type": "object",
+        "description": "A newly created topic ID.",
+        "required": ["id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Topic ID."
           }
         }
       },
@@ -25275,6 +25526,11 @@
           "convert_to_team_channel": {
             "type": ["boolean", "null"],
             "description": "Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel."
+          },
+          "topic_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Topic to file the channel under as part of conversion."
           }
         }
       },
@@ -29755,6 +30011,49 @@
           "user_id": {
             "type": "string",
             "description": "User who owns this discussion, including imported discussions."
+          }
+        }
+      },
+      "TopicBody": {
+        "type": "object",
+        "description": "Topic metadata command.",
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
+          }
+        }
+      },
+      "TopicListResponse": {
+        "type": "object",
+        "description": "Participant-scoped topic list.",
+        "required": ["topics"],
+        "properties": {
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelTopic"
+            },
+            "description": "Team topics."
+          }
+        }
+      },
+      "TopicOrderBody": {
+        "type": "object",
+        "description": "Ordered topic IDs for this user.",
+        "required": ["topic_ids"],
+        "properties": {
+          "topic_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Topic IDs in display order."
           }
         }
       },

@@ -1,9 +1,11 @@
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
+import { ENABLE_CHANNEL_TOPICS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
@@ -24,6 +26,7 @@ import {
   Switch,
 } from 'solid-js';
 import { Virtualizer } from 'virtua/solid';
+import { TopicsRailBody } from '../../topics/TopicsRail';
 import type { ChannelListSort, ChannelsGroup } from '../../types';
 import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
@@ -575,6 +578,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
 
 function ExpandedBrowse() {
   const rail = useChannelsRail();
+  const topicsEnabled = useFeatureFlag(ENABLE_CHANNEL_TOPICS);
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
@@ -590,20 +594,30 @@ function ExpandedBrowse() {
 
   return (
     <Switch>
-      <Match when={forceEmptyState() || (sourcesSettled() && !hasItems())}>
+      <Match
+        when={
+          forceEmptyState() ||
+          (sourcesSettled() && !hasItems() && !topicsEnabled().enabled)
+        }
+      >
         <ChannelsEmptyState scope="channels" topAligned />
       </Match>
       <Match when={true}>
         <ViewSidebar.Content class="h-full overflow-hidden">
           <ExpandedFavoritesSection />
-          {/* The groups split the height left after favorites between them.
+          <Show when={topicsEnabled().enabled}>
+            <TopicsRailBody />
+          </Show>
+          <Show when={!topicsEnabled().enabled}>
+            {/* The groups split the height left after favorites between them.
               Their half-height caps resolve against this column, not the
               whole sidebar, so favorites is never squeezed out. */}
-          <div class="flex min-h-0 flex-1 flex-col gap-(--sidebar-section-gap)">
-            <For each={GROUPS}>
-              {(config) => <ExpandedGroupSection config={config} />}
-            </For>
-          </div>
+            <div class="flex min-h-0 flex-1 flex-col gap-(--sidebar-section-gap)">
+              <For each={GROUPS}>
+                {(config) => <ExpandedGroupSection config={config} />}
+              </For>
+            </div>
+          </Show>
         </ViewSidebar.Content>
       </Match>
     </Switch>

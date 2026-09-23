@@ -3073,6 +3073,15 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(row.map(|row| row.id))
     }
 
+    async fn get_topic_team_id(&self, topic_id: Uuid) -> Result<Option<Uuid>, Self::Err> {
+        Ok(sqlx::query_scalar!(
+            "SELECT team_id FROM comms_channel_topics WHERE id = $1",
+            topic_id
+        )
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
     async fn patch_channel(
         &self,
         channel_id: Uuid,
@@ -3084,6 +3093,7 @@ impl ChannelRepo for PgChannelsRepo {
             channel_name,
             convert_to_team_channel,
             auto_join_team,
+            topic_id,
         } = req;
         let enables_auto_join =
             auto_join_team == Some(true) && convert_to_team_channel != Some(false);
@@ -3165,6 +3175,48 @@ impl ChannelRepo for PgChannelsRepo {
         .execute(&mut *transaction)
         .await
         .context("unable to patch channel")?;
+
+        if convert_to_team_channel == Some(true) {
+            sqlx::query!(
+                r#"
+                UPDATE comms_channel_participants cp
+                SET left_at = NOW()
+                WHERE cp.channel_id = $1
+                  AND cp.left_at IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM team_user tu
+                      WHERE tu.user_id = cp.user_id AND tu.team_id = $2
+                  )
+                "#,
+                channel_id,
+                team_id,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("unable to remove guests from converted channel")?;
+        }
+
+        if let Some(topic_id) = topic_id {
+            let team_id = team_id.context("topic conversion requires a team")?;
+            let inserted = sqlx::query!(
+                r#"
+                INSERT INTO comms_channel_topic_channels (topic_id, channel_id, added_by)
+                SELECT id, $2, $3 FROM comms_channel_topics
+                WHERE id = $1 AND team_id = $4
+                ON CONFLICT (topic_id, channel_id) DO NOTHING
+                "#,
+                topic_id,
+                channel_id,
+                user_id,
+                team_id,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("unable to file converted channel")?;
+            if inserted.rows_affected() == 0 {
+                anyhow::bail!("topic does not belong to the channel's team");
+            }
+        }
 
         if enables_auto_join {
             sqlx::query!(

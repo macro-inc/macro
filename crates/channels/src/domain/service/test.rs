@@ -2866,6 +2866,7 @@ async fn patch_channel_dispatches_channel_updated() {
             channel_name: Some("Renamed".to_string()),
             convert_to_team_channel: None,
             auto_join_team: None,
+            topic_id: None,
         },
     )
     .await
@@ -2896,6 +2897,7 @@ async fn noop_patch_channel_dispatches_nothing() {
             channel_name: None,
             convert_to_team_channel: None,
             auto_join_team: None,
+            topic_id: None,
         },
     )
     .await
@@ -2925,6 +2927,7 @@ async fn patch_channel_conversion_uses_the_users_team() {
             channel_name: None,
             convert_to_team_channel: Some(true),
             auto_join_team: None,
+            topic_id: None,
         },
     )
     .await
@@ -2962,6 +2965,7 @@ async fn patch_channel_conversion_names_an_unnamed_private_channel() {
             channel_name: None,
             convert_to_team_channel: Some(true),
             auto_join_team: None,
+            topic_id: None,
         },
     )
     .await
@@ -2997,6 +3001,7 @@ async fn patch_team_channel_conversion_to_private_clears_team_settings() {
             channel_name: None,
             convert_to_team_channel: Some(false),
             auto_join_team: Some(true),
+            topic_id: None,
         },
     )
     .await
@@ -3030,6 +3035,7 @@ async fn patch_channel_conversion_requires_the_user_to_have_a_team() {
                 channel_name: None,
                 convert_to_team_channel: Some(true),
                 auto_join_team: None,
+                topic_id: None,
             },
         )
         .await
@@ -3058,6 +3064,7 @@ async fn patch_channel_rejects_enabling_auto_join_on_a_non_team_channel() {
                 channel_name: None,
                 convert_to_team_channel: None,
                 auto_join_team: Some(true),
+                topic_id: None,
             },
         )
         .await
@@ -3091,6 +3098,7 @@ async fn patch_team_channel_auto_join_uses_its_existing_team() {
             channel_name: None,
             convert_to_team_channel: None,
             auto_join_team: Some(true),
+            topic_id: None,
         },
     )
     .await
@@ -3119,6 +3127,7 @@ async fn patch_channel_allows_disabling_auto_join_without_a_team() {
             channel_name: None,
             convert_to_team_channel: None,
             auto_join_team: Some(false),
+            topic_id: None,
         },
     )
     .await
@@ -3148,6 +3157,7 @@ async fn patch_channel_member_can_rename() {
             channel_name: Some("Member Name".to_string()),
             convert_to_team_channel: None,
             auto_join_team: None,
+            topic_id: None,
         },
     )
     .await
@@ -3176,11 +3186,19 @@ async fn patch_channel_member_cannot_convert_or_change_auto_join() {
             channel_name: None,
             convert_to_team_channel: Some(true),
             auto_join_team: None,
+            topic_id: None,
         },
         PatchChannelRequest {
             channel_name: Some("Still Member".to_string()),
             convert_to_team_channel: None,
             auto_join_team: Some(false),
+            topic_id: None,
+        },
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: Some(true),
+            auto_join_team: None,
+            topic_id: Some(Uuid::new_v4()),
         },
     ];
     for req in requests {

@@ -4,7 +4,12 @@ export type ChannelsGroup = 'channels' | 'direct_messages';
 
 export type ChannelListSort = 'viewed_at' | 'updated_at' | 'created_at';
 
-export type ChannelsRailSection = 'favorites' | ChannelsGroup;
+export type ChannelsRailSection =
+  | 'favorites'
+  | ChannelsGroup
+  | 'topics'
+  | 'external'
+  | 'private';
 
 export type ChannelsQueryScope = ChannelsGroup | 'recents';
 

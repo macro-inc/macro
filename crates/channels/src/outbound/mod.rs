@@ -12,5 +12,7 @@ pub mod pg_channel_reference_share_permissions;
 pub mod pg_channels_repo;
 /// Postgres context adapter for channel side-effect policy.
 pub mod pg_side_effect_context;
+/// Postgres topic repository.
+pub mod pg_topics_repo;
 /// Static-file metadata adapter for channel pictures.
 pub mod static_file_pictures;

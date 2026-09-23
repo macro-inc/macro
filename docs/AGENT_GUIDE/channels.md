@@ -14,6 +14,27 @@
 Channels are invite-only ("Only people you invite can see this channel"). A DM is just a
 channel between two users.
 
+## Channel Topics (ENABLE_CHANNEL_TOPICS)
+
+When the Channel Topics flag is enabled, the Chat rail shows **Favorites** first,
+then **Topics** with an **Uncategorized** group for team channels that have no
+topic, followed by **External**, **Private**, and **Direct messages**. A channel
+can appear under several topics. Only channels the viewer has joined are shown
+as rows. Collapsing a topic keeps its unread channel rows visible. Each topic's
+actions menu offers Move up, Move down, Add channels to topic, and Rename topic.
+The order menu beside Topics offers Custom, A–Z, Recent activity, and Unread
+first. Dragging a topic or using Move up/down switches to Custom order.
+
+The **+** beside Topics opens New team channel, New private channel, New
+external channel, and New topic. Creating a team channel offers a topic picker.
+To file an existing team channel, use its **⋯ → Move to topic** submenu, or drag
+its row onto a topic. Hold Option while moving to add a second topic membership.
+Drag a private or external channel onto a topic to open the conversion dialog;
+the channel stays as it was until its owner or admin confirms conversion.
+The channel header and channel settings also offer **Make a team channel** to
+owners and admins. The dialog explains who will be able to find and join the
+channel and lets the user choose a topic.
+
 ## Agent session entities
 
 The Agents list includes owned and shared sessions. Rows show the shared agent

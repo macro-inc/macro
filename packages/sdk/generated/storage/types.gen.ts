@@ -2735,6 +2735,44 @@ export type ChannelThreadFilters = {
 };
 
 /**
+ * A topic with only the channel memberships visible to this user.
+ */
+export type ChannelTopic = {
+    /**
+     * Number of channels filed in this topic.
+     */
+    channel_count: number;
+    /**
+     * IDs of channels this user participates in.
+     */
+    channel_ids: Array<string>;
+    /**
+     * Optional explanation.
+     */
+    description?: string | null;
+    /**
+     * Topic id.
+     */
+    id: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Team default position.
+     */
+    sort_order: number;
+    /**
+     * User's custom position, when set.
+     */
+    sort_position?: number | null;
+    /**
+     * Owning team.
+     */
+    team_id: string;
+};
+
+/**
  * Events that can be published to [`MacroChannelsTopic`].
  */
 export type ChannelTopicEvent = {
@@ -3733,6 +3771,16 @@ export type CreateTaskResponse = {
      * A pre-generated permission token that you can use for SS
      */
     token: string;
+};
+
+/**
+ * A newly created topic ID.
+ */
+export type CreateTopicResponse = {
+    /**
+     * Topic ID.
+     */
+    id: string;
 };
 
 export type CreateUnthreadedAnchorRequest = CreateUnthreadedPdfAnchorRequest & {
@@ -7207,6 +7255,10 @@ export type PatchChannelRequest = {
      * converts a team channel to a private channel.
      */
     convert_to_team_channel?: boolean | null;
+    /**
+     * Topic to file the channel under as part of conversion.
+     */
+    topic_id?: string | null;
 };
 
 /**
@@ -9912,6 +9964,40 @@ export type ThreadState = {
 };
 
 /**
+ * Topic metadata command.
+ */
+export type TopicBody = {
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Display name.
+     */
+    name?: string | null;
+};
+
+/**
+ * Participant-scoped topic list.
+ */
+export type TopicListResponse = {
+    /**
+     * Team topics.
+     */
+    topics: Array<ChannelTopic>;
+};
+
+/**
+ * Ordered topic IDs for this user.
+ */
+export type TopicOrderBody = {
+    /**
+     * Topic IDs in display order.
+     */
+    topic_ids: Array<string>;
+};
+
+/**
  * A transcript segment from LiveKit Inference STT.
  */
 export type TranscriptSegmentRequest = {
@@ -11456,6 +11542,107 @@ export type IngestTranscriptResponses = {
      */
     200: unknown;
 };
+
+export type ListChannelTopicsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/channel-topics';
+};
+
+export type ListChannelTopicsResponses = {
+    200: TopicListResponse;
+};
+
+export type ListChannelTopicsResponse = ListChannelTopicsResponses[keyof ListChannelTopicsResponses];
+
+export type CreateChannelTopicData = {
+    body: TopicBody;
+    path?: never;
+    query?: never;
+    url: '/channel-topics';
+};
+
+export type CreateChannelTopicResponses = {
+    200: CreateTopicResponse;
+};
+
+export type CreateChannelTopicResponse = CreateChannelTopicResponses[keyof CreateChannelTopicResponses];
+
+export type SetChannelTopicOrderData = {
+    body: TopicOrderBody;
+    path?: never;
+    query?: never;
+    url: '/channel-topics/prefs/order';
+};
+
+export type SetChannelTopicOrderResponses = {
+    204: void;
+};
+
+export type SetChannelTopicOrderResponse = SetChannelTopicOrderResponses[keyof SetChannelTopicOrderResponses];
+
+export type DeleteChannelTopicData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/channel-topics/{id}';
+};
+
+export type DeleteChannelTopicResponses = {
+    204: void;
+};
+
+export type DeleteChannelTopicResponse = DeleteChannelTopicResponses[keyof DeleteChannelTopicResponses];
+
+export type UpdateChannelTopicData = {
+    body: TopicBody;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/channel-topics/{id}';
+};
+
+export type UpdateChannelTopicResponses = {
+    204: void;
+};
+
+export type UpdateChannelTopicResponse = UpdateChannelTopicResponses[keyof UpdateChannelTopicResponses];
+
+export type RemoveChannelFromTopicData = {
+    body?: never;
+    path: {
+        id: string;
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channel-topics/{id}/channels/{channel_id}';
+};
+
+export type RemoveChannelFromTopicResponses = {
+    204: void;
+};
+
+export type RemoveChannelFromTopicResponse = RemoveChannelFromTopicResponses[keyof RemoveChannelFromTopicResponses];
+
+export type AddChannelToTopicData = {
+    body?: never;
+    path: {
+        id: string;
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channel-topics/{id}/channels/{channel_id}';
+};
+
+export type AddChannelToTopicResponses = {
+    204: void;
+};
+
+export type AddChannelToTopicResponse = AddChannelToTopicResponses[keyof AddChannelToTopicResponses];
 
 export type CreateChannelData = {
     body: CreateChannelRequest;

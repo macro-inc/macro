@@ -18,10 +18,10 @@ import type { ChannelsViewState } from './types';
 
 const CHANNELS_ENTRY_STATE_KEY = 'channels.view';
 const channelsLocalStateStorage = createUserScopedStorage(
-  'macro:channels:view-state:v1'
+  'macro:channels:view-state:v2'
 );
 const channelsPreferencesStorage = createUserScopedStorage(
-  'macro:channels:preferences:v1'
+  'macro:channels:preferences:v2'
 );
 
 const channelsExpandedGroupsSchema = z.preprocess(
@@ -39,12 +39,15 @@ const channelsExpandedGroupsSchema = z.preprocess(
   z.object({
     favorites: z.boolean().default(true),
     channels: z.boolean().default(true),
+    topics: z.boolean().default(true),
+    external: z.boolean().default(true),
+    private: z.boolean().default(true),
     direct_messages: z.boolean().default(true),
   })
 );
 
 const channelsEntryStateSchemaWithDefaults = z.object({
-  version: z.literal(1).default(1),
+  version: z.literal(2).default(2),
   tab: z.enum(['browse', 'recents']).default('browse'),
   mobileTab: z
     .enum(['channels', 'direct_messages', 'recents'])
@@ -53,6 +56,9 @@ const channelsEntryStateSchemaWithDefaults = z.object({
   expandedGroups: channelsExpandedGroupsSchema.default({
     favorites: true,
     channels: true,
+    topics: true,
+    external: true,
+    private: true,
     direct_messages: true,
   }),
 });
@@ -60,19 +66,22 @@ const channelsEntryStateSchemaWithDefaults = z.object({
 type ChannelsEntryState = z.infer<typeof channelsEntryStateSchemaWithDefaults>;
 
 const DEFAULT_CHANNELS_ENTRY_STATE = {
-  version: 1,
+  version: 2,
   tab: 'browse',
   mobileTab: 'channels',
   selectedChannelId: undefined,
   expandedGroups: {
     favorites: true,
     channels: true,
+    topics: true,
+    external: true,
+    private: true,
     direct_messages: true,
   },
 } satisfies ChannelsEntryState;
 
 const channelsPreferencesSchema = z.object({
-  version: z.literal(1).default(1),
+  version: z.literal(2).default(2),
   asideWidth: z
     .number()
     .finite()
@@ -93,14 +102,14 @@ const channelsPreferencesSchema = z.object({
 type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
 
 const DEFAULT_CHANNELS_PREFERENCES = {
-  version: 1,
+  version: 2,
   asideWidth: CHANNELS_DEFAULT_RAIL_WIDTH,
   sortBy: CHANNELS_DEFAULT_SORT_BY,
 } satisfies ChannelsPreferences;
 
 function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
   return {
-    version: 1,
+    version: 2,
     tab: state.tab,
     mobileTab: state.mobileTab,
     ...(state.selectedChannelId === undefined
@@ -189,7 +198,7 @@ function createChannelsPreferencesStorage(options: {
   let previous: string | undefined;
   const serialize = (state: ChannelsViewState) =>
     JSON.stringify({
-      version: 1,
+      version: 2,
       asideWidth: clampChannelsRailWidth(state.asideWidth),
       sortBy: state.sortBy,
     } satisfies ChannelsPreferences);

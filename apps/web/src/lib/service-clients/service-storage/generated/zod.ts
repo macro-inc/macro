@@ -2312,6 +2312,104 @@ export const ingestTranscriptBody = zod
   .describe('A transcript segment from LiveKit Inference STT.');
 
 /**
+ * @summary List the caller's team topics and participant-scoped channel IDs.
+ */
+export const listChannelTopicsResponse = zod
+  .object({
+    topics: zod
+      .array(
+        zod
+          .object({
+            channel_count: zod
+              .number()
+              .describe('Number of channels filed in this topic.'),
+            channel_ids: zod
+              .array(zod.uuid())
+              .describe('IDs of channels this user participates in.'),
+            description: zod
+              .string()
+              .nullish()
+              .describe('Optional explanation.'),
+            id: zod.uuid().describe('Topic id.'),
+            name: zod.string().describe('Display name.'),
+            sort_order: zod.number().describe('Team default position.'),
+            sort_position: zod
+              .number()
+              .nullish()
+              .describe("User's custom position, when set."),
+            team_id: zod.uuid().describe('Owning team.'),
+          })
+          .describe(
+            'A topic with only the channel memberships visible to this user.'
+          )
+      )
+      .describe('Team topics.'),
+  })
+  .describe('Participant-scoped topic list.');
+
+/**
+ * @summary Create a topic.
+ */
+export const createChannelTopicBody = zod
+  .object({
+    description: zod.string().nullish().describe('Optional description.'),
+    name: zod.string().nullish().describe('Display name.'),
+  })
+  .describe('Topic metadata command.');
+
+export const createChannelTopicResponse = zod
+  .object({
+    id: zod.uuid().describe('Topic ID.'),
+  })
+  .describe('A newly created topic ID.');
+
+/**
+ * @summary Set this user's custom topic order.
+ */
+export const setChannelTopicOrderBody = zod
+  .object({
+    topic_ids: zod.array(zod.uuid()).describe('Topic IDs in display order.'),
+  })
+  .describe('Ordered topic IDs for this user.');
+
+/**
+ * @summary Delete a topic.
+ */
+export const deleteChannelTopicParams = zod.object({
+  id: zod.uuid(),
+});
+
+/**
+ * @summary Update topic metadata.
+ */
+export const updateChannelTopicParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const updateChannelTopicBody = zod
+  .object({
+    description: zod.string().nullish().describe('Optional description.'),
+    name: zod.string().nullish().describe('Display name.'),
+  })
+  .describe('Topic metadata command.');
+
+/**
+ * @summary File a channel under a topic.
+ */
+export const addChannelToTopicParams = zod.object({
+  id: zod.uuid(),
+  channel_id: zod.uuid(),
+});
+
+/**
+ * @summary Remove a channel from a topic.
+ */
+export const removeChannelFromTopicParams = zod.object({
+  id: zod.uuid(),
+  channel_id: zod.uuid(),
+});
+
+/**
  * @summary Handler for `POST /channels`.
  */
 export const createChannelBodyAutoJoinTeamDefault = false;
@@ -2892,6 +2990,10 @@ export const patchChannelBody = zod
       .describe(
         'Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel.'
       ),
+    topic_id: zod
+      .uuid()
+      .nullish()
+      .describe('Topic to file the channel under as part of conversion.'),
   })
   .describe('Request to patch a channel.');
 

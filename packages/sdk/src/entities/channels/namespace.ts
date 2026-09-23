@@ -5,9 +5,15 @@ import type { SearchOpts } from '../search';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
 import { Channel } from './channel';
+import { ChannelTopics } from './topics';
 
 export class ChannelNamespace {
   constructor(private readonly client: MacroClient) {}
+
+  /** Team-owned channel topics. */
+  get topics(): ChannelTopics {
+    return new ChannelTopics(this.client);
+  }
 
   byId(id: string): Channel {
     return Channel.byId(this.client, id);

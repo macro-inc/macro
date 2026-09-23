@@ -763,6 +763,8 @@ pub struct PatchChannelRequest {
     pub convert_to_team_channel: Option<bool>,
     /// Whether team members should automatically join the channel.
     pub auto_join_team: Option<bool>,
+    /// Topic to file the channel under as part of conversion.
+    pub topic_id: Option<Uuid>,
 }
 
 /// New attachment to add to a channel message.

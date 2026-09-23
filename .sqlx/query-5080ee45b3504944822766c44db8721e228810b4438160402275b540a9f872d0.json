@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE comms_channel_participants cp\n                SET left_at = NOW()\n                WHERE cp.channel_id = $1\n                  AND cp.left_at IS NULL\n                  AND NOT EXISTS (\n                      SELECT 1 FROM team_user tu\n                      WHERE tu.user_id = cp.user_id AND tu.team_id = $2\n                  )\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5080ee45b3504944822766c44db8721e228810b4438160402275b540a9f872d0"
+}

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO comms_channel_topic_channels (topic_id, channel_id, added_by)\n                SELECT id, $2, $3 FROM comms_channel_topics\n                WHERE id = $1 AND team_id = $4\n                ON CONFLICT (topic_id, channel_id) DO NOTHING\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cfef9bde2f594288cbde1624165997169aa54eefc22e49ffc488e245c622d96d"
+}
