@@ -12,7 +12,7 @@ export function openAgentsPage(
     preserveParams: true,
     params: { agentPage: page, agentPageRequest: crypto.randomUUID() },
   };
-  const split = layout.openWithSplit(content, { activate: true });
+  const split = layout.openWithSplit(content, { activate: true }).split;
   if (!split) return;
   const current = split.content();
   if (

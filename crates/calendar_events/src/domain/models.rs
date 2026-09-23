@@ -1261,7 +1261,19 @@ pub struct StoredGoogleCalendar {
     pub synced_at: Option<DateTime<Utc>>,
     /// Expiry of the active push notification channel, when one exists.
     pub watch_expires_at: Option<DateTime<Utc>>,
+    /// When the provider last refused a push channel for this calendar.
+    pub watch_unsupported_at: Option<DateTime<Utc>>,
 }
+
+/// Renew a channel whenever less than this much lifetime remains, so every
+/// poll cycle has several chances before expiry.
+pub const WATCH_RENEWAL_THRESHOLD: chrono::Duration = chrono::Duration::hours(12);
+
+/// How long a provider refusal to push for a calendar suppresses further
+/// watch attempts. Google refuses read-only feeds such as holiday and shared
+/// group calendars on every call, so retrying each poll only produces noise;
+/// the occasional re-probe notices a calendar that has since become watchable.
+pub const WATCH_UNSUPPORTED_RETRY_INTERVAL: chrono::Duration = chrono::Duration::days(7);
 
 /// How often Google's own read-only system calendars (holidays, birthdays)
 /// are synced. Their content changes on the order of once a year, and Google
@@ -1329,6 +1341,18 @@ pub enum GoogleSyncPlan {
 }
 
 impl StoredGoogleCalendar {
+    /// Whether this calendar's push channel should be opened or renewed now.
+    pub fn needs_watch_renewal(&self, now: DateTime<Utc>) -> bool {
+        if self
+            .watch_unsupported_at
+            .is_some_and(|refused_at| refused_at > now - WATCH_UNSUPPORTED_RETRY_INTERVAL)
+        {
+            return false;
+        }
+        self.watch_expires_at
+            .is_none_or(|expires_at| expires_at < now + WATCH_RENEWAL_THRESHOLD)
+    }
+
     /// Choose how the adapter must reconcile this calendar for a requested
     /// window, keeping full rebuilds for lost tokens or uncovered history
     /// and extending decayed future coverage incrementally.

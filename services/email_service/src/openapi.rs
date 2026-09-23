@@ -3,7 +3,7 @@
 mod api;
 mod backfill_completion_service;
 mod backfill_init_service;
-mod calendar_outbox;
+mod backfill_outbox;
 mod config;
 mod outbound;
 mod pubsub;

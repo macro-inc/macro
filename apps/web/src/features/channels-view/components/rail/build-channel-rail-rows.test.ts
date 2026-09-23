@@ -172,18 +172,16 @@ describe('buildChannelSectionRows', () => {
 describe('buildChannelRailRows', () => {
   const expanded = {
     favorites: true,
-    unread: true,
     channels: true,
     direct_messages: true,
   };
 
-  it('puts the unread section between favorites and channels, newest first', () => {
+  it('lists channels once in their section and source order', () => {
     const rows = buildChannelRailRows(
       'browse',
       expanded,
       {
         favorites: [],
-        unread: [zeta, acme],
         channels: [acme, zeta],
         direct_messages: [],
         recents: [],
@@ -197,38 +195,9 @@ describe('buildChannelRailRows', () => {
     );
 
     expect(rows.map((row) => row.id)).toEqual([
-      'section:unread',
-      'unread:zeta',
-      'unread:acme',
       'section:channels',
       'channel:acme',
       'channel:zeta',
-      'section:direct_messages',
-    ]);
-  });
-
-  it('skips the unread section when nothing is unread and honours its collapse', () => {
-    const items = {
-      favorites: [],
-      unread: [] as ChannelEntity[],
-      channels: [],
-      direct_messages: [],
-      recents: [],
-    };
-    expect(
-      buildChannelRailRows('browse', expanded, items, []).map((row) => row.id)
-    ).toEqual(['section:channels', 'section:direct_messages']);
-
-    expect(
-      buildChannelRailRows(
-        'browse',
-        { ...expanded, unread: false },
-        { ...items, unread: [acme] },
-        []
-      ).map((row) => row.id)
-    ).toEqual([
-      'section:unread',
-      'section:channels',
       'section:direct_messages',
     ]);
   });
@@ -245,7 +214,6 @@ describe('buildChannelRailRows', () => {
       expanded,
       {
         favorites: [],
-        unread: [],
         channels: [deals],
         direct_messages: [],
         recents: [],
@@ -277,7 +245,6 @@ describe('buildChannelRailRows', () => {
       expanded,
       {
         favorites: [],
-        unread: [acme],
         channels: [acme],
         direct_messages: [],
         recents: [zeta, acme],
@@ -318,10 +285,9 @@ it('renders a channel in every matching smart tag with unique navigation IDs, ex
   ).toEqual(['deals']);
   const rows = buildChannelRailRows(
     'browse',
-    { favorites: true, unread: true, channels: true, direct_messages: true },
+    { favorites: true, channels: true, direct_messages: true },
     {
       favorites: [],
-      unread: [],
       channels: [acme, zeta, deals],
       direct_messages: [],
       recents: [],

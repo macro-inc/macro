@@ -228,6 +228,12 @@ pub struct AgentContextAnchor<'a> {
     /// The marked text when the comment was posted, when it was captured.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub marked_text: Option<&'a str>,
+    /// The text the mark covers in the document now, when it was resolved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_marked_text: Option<&'a str>,
+    /// The passage around the mark now, when it was resolved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub surrounding_text: Option<&'a str>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -245,6 +251,22 @@ struct AgentContextRequest<'a> {
 #[derive(Debug, Clone, serde::Deserialize)]
 struct AgentContextResponse {
     markdown: String,
+}
+
+/// The live text of a comment mark, resolved from the current document by the
+/// lexical service `/comment-mark` endpoint. Both fields are bounded there.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentMarkContext {
+    /// The text the mark covers now.
+    pub marked_text: String,
+    /// The block or blocks containing the mark, windowed around it.
+    pub surrounding_text: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct CommentMarkResponse {
+    data: Option<CommentMarkContext>,
 }
 
 /// Rendering target supported by the lexical service `/markdown` endpoint.
@@ -368,6 +390,20 @@ impl LexicalClient {
             .get_markdown(document_id, MarkdownTarget::Embedding)
             .await?;
         Ok(EmbeddingMarkdown(markdown))
+    }
+
+    /// Resolve a comment mark against the live document: `None` when the
+    /// document no longer carries it. Performs no access check of its own, so
+    /// callers must already hold access to the document.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn resolve_comment_mark(
+        &self,
+        document_id: &str,
+        mark_id: &str,
+    ) -> Result<Option<CommentMarkContext>> {
+        let url = format!("{}/comment-mark/{}/{}", self.url, document_id, mark_id);
+        let response: CommentMarkResponse = self.get_json(&url).await?;
+        Ok(response.data)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -715,6 +751,23 @@ mod tests {
         let value = serde_json::to_value(&document).unwrap();
         assert!(value.get("channelId").is_none());
         assert_eq!(value["parent"]["id"], "doc-1");
+    }
+
+    #[test]
+    fn comment_mark_response_reads_a_resolved_or_missing_mark() {
+        let found: CommentMarkResponse = serde_json::from_str(
+            r#"{"data":{"markedText":"the phrase","surroundingText":"all of the phrase here"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            found.data,
+            Some(CommentMarkContext {
+                marked_text: "the phrase".to_owned(),
+                surrounding_text: "all of the phrase here".to_owned(),
+            })
+        );
+        let missing: CommentMarkResponse = serde_json::from_str(r#"{"data":null}"#).unwrap();
+        assert_eq!(missing.data, None);
     }
 
     #[test]

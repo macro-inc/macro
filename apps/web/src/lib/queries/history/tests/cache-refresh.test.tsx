@@ -1,7 +1,7 @@
 import type { CacheChangeOptions } from '@graphql-cache/host/types';
-import { render, waitFor } from '@solidjs/testing-library';
+import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useHistoryQuery } from '../history';
 
 const mocks = vi.hoisted(() => ({
@@ -32,7 +32,68 @@ vi.mock('@queries/history/graphql', () => ({
 vi.mock('@queries/client', () => ({ queryClient: {} }));
 vi.mock('@queries/utils', () => ({ withCallbacks: vi.fn() }));
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.readHistory.mockReset();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+});
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
 describe('cache-backed history refresh', () => {
+  it('coalesces hidden cache changes without hiding the previous history', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    let notify: (() => void) | undefined;
+    mocks.subscribe.mockImplementation((callback: () => void) => {
+      notify = callback;
+      return mocks.unsubscribe;
+    });
+    const original = {
+      id: 'original',
+      name: 'Original task',
+      type: 'document',
+      ownerId: 'owner',
+    };
+    const latest = { ...original, name: 'Updated task' };
+    mocks.readHistory.mockResolvedValue([original]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let query: ReturnType<typeof useHistoryQuery> | undefined;
+    const Probe = () => {
+      query = useHistoryQuery();
+      return null;
+    };
+    const view = render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(query?.isSuccess).toBe(true));
+    const initialCalls = mocks.readHistory.mock.calls.length;
+    vi.useFakeTimers();
+    visibility.mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    mocks.readHistory.mockResolvedValue([latest]);
+    notify?.();
+    notify?.();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls);
+    expect(query?.data).toEqual([original]);
+
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls + 1);
+    expect(query?.data).toEqual([latest]);
+    expect(mocks.fetchHistory).not.toHaveBeenCalled();
+    view.unmount();
+    client.clear();
+  });
+
   it('opts into hydration, refreshes only local history, and unsubscribes on disposal', async () => {
     let notify: (() => void) | undefined;
     mocks.subscribe.mockImplementation(

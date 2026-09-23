@@ -314,6 +314,11 @@ records `path` (`catch_up` or `full`) and `reason`
 
 ## Chat navigation rail
 
+Following a channel mention or browser notification for the conversation already
+shown in Chat activates that workspace and jumps to the targeted message or reply. It keeps
+the existing preview and does not show a **Content already open** toast. The
+same applies to a channel preview in Home; a closed channel opens normally.
+
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
 **Show navigation** (the hamburger) immediately before the conversation title,
 or in the Chat header when no conversation is selected. Chat remembers this
@@ -323,16 +328,11 @@ the shared 256px default sidebar width and resize limits. In splits narrower tha
 with the same full sidebar contents. There is no separate skinny sidebar mode.
 
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
-optional `Favorites` section, an optional `Unread` section, and the
+optional `Favorites` section and the
 independently paginated `Channels` and `DMs` sections. Favorites appears when
 the user has channel favorites and only lists channels. Channel favorites open
 in the channel preview. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead.
-
-`Unread` appears only while at least one channel (not DM) has unread activity.
-It is a flat list, newest unread notification first, with each row's timestamp
-always visible, and a count pill on its heading. Marking a channel read drops
-it from the list. It is capped at a third of the column and scrolls inside.
 
 ### Channel labels
 
@@ -375,9 +375,8 @@ channels, including non-team channels and other teams' channels in shared labels
 Names are unique within the team or account, case-insensitively.
 
 Layout: labels come first in creation order, each showing its visible channels
-A→Z, followed by ungrouped channels in the section's selected sort order. The
-`Unread` section remains ordered by activity. A label row has an unread count,
-a `···` menu (`Rename`, `Mark all as read`, `Delete label`), and a disclosure caret.
+A→Z, followed by ungrouped channels in the section's selected sort order. A label
+row has an unread count, a `···` menu (`Rename`, `Mark all as read`, `Delete label`), and a disclosure caret.
 Clicking the row or pressing Enter toggles it; `h` / `l` on a label or one of its
 channels collapses or expands that label. `[` / `]` jump between section headings.
 
@@ -470,7 +469,7 @@ keyboard activation still toggles the highlighted section.
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances
 into the appended rows. If the section has no next page, navigation proceeds
-to the next section. `[` and `]` jump between the visible Favorites, Unread,
+to the next section. `[` and `]` jump between the visible Favorites,
 Channels, and DMs section headers.
 
 On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain

@@ -907,6 +907,7 @@ async fn open_sends_the_comment_anchor_the_prompt_was_posted_on() {
         anchor: Some(CommentAnchor {
             mark_id: "0199f3d4-0000-7000-8000-00000000000a".to_owned(),
             marked_text: Some("the marked phrase".to_owned()),
+            current: None,
         }),
         messages: vec![],
     };

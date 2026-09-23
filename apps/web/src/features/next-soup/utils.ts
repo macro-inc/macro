@@ -591,7 +591,7 @@ export const openEntityInSplitFromUnifiedList = async (
 
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {
-      splitManager.openWithSplit(
+      const result = splitManager.openWithSplit(
         { type: 'pr', id: entity.id },
         {
           referredFrom: options.referredFrom,
@@ -601,6 +601,9 @@ export const openEntityInSplitFromUnifiedList = async (
           mergeHistory,
         }
       );
+      if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+        toast.alert('Content already open');
+      }
     } else {
       openExternalUrl(entity.metadata.url);
     }
@@ -695,7 +698,7 @@ export const openEntityInSplitFromUnifiedList = async (
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
 
-  splitManager.openWithSplit(splitContent, {
+  const result = splitManager.openWithSplit(splitContent, {
     referredFrom,
     activate: true,
     preferNewSplit: openInNewSplit,
@@ -711,6 +714,9 @@ export const openEntityInSplitFromUnifiedList = async (
         ? 'latest'
         : undefined,
   });
+  if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+    toast.alert('Content already open');
+  }
 
   // Navigate to specific location if provided
   if (location) {

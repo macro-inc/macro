@@ -16,7 +16,7 @@ import {
 
 declare const self: DedicatedWorkerGlobalScope;
 
-const withVersion = <T extends { coordinatorVersion: 3 }>(
+const withVersion = <T extends { coordinatorVersion: 4 }>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({

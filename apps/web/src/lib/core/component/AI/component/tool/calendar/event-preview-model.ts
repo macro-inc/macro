@@ -18,7 +18,7 @@ import {
   WEEKDAY_CODES,
 } from '@app/features/calendar/utils/recurrence';
 import { TZDateMini } from '@date-fns/tz';
-import type { EventTime } from '@service-email/generated/schemas/eventTime';
+import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
 
 interface CalendarToolPreviewEventInput {
   id: string;

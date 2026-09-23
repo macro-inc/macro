@@ -1,19 +1,21 @@
-import {
-  NavigationStack,
-  useNavigationStack,
-} from '@app/components/navigation-stack/NavigationStack';
+import { EntityDetailNavigationStack } from '@app/components/entity-detail/EntityDetailNavigationStack';
+import { useNavigationStack } from '@app/components/navigation-stack/NavigationStack';
 import { toast } from '@core/component/Toast/Toast';
-import { createContentInstanceRegistry } from '@core/contentInstanceRegistry';
 import { render } from '@solidjs/testing-library';
+import { createMemo, createRoot, type ParentProps } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createPreviewSelectionGuard } from './createPreviewSelectionGuard';
 import type { PreviewPanelSelection } from './previewTarget';
+import { createContentInstanceRegistry } from './split-layout/contentInstanceRegistry';
+import { SplitLayoutContext } from './split-layout/context';
+import type { SplitManager } from './split-layout/layoutManager';
 
-const app = vi.hoisted(() => ({ orchestrator: {} as Record<string, unknown> }));
-vi.mock('./GlobalAppState', () => ({
-  useGlobalBlockOrchestrator: () => app.orchestrator,
-}));
+let manager: Pick<SplitManager, 'findOpenView' | 'registerOpenViews'>;
+const activate = vi.hoisted(() => vi.fn());
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { alert: vi.fn() } }));
+vi.mock('./split-layout/layoutUtils', () => ({
+  useSplitPanelOrThrow: () => ({ handle: { activate } }),
+}));
 vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => (type === 'task' ? 'md' : type),
 }));
@@ -25,27 +27,122 @@ vi.mock('./previewTarget', () => ({
 }));
 
 beforeEach(() => {
-  app.orchestrator = { contentInstances: createContentInstanceRegistry() };
+  const registry = createContentInstanceRegistry();
+  manager = {
+    findOpenView: registry.find,
+    registerOpenViews: registry.register,
+  };
   vi.mocked(toast.alert).mockClear();
+  activate.mockClear();
 });
 
-function setup() {
+it('activates the split owning a preview and stops exposing it after close', () => {
+  const view = setup();
+  const channel = { type: 'channel', id: 'channel' } as const;
+  view.stack.reset(channel);
+
+  const existing = manager.findOpenView(channel);
+  expect(existing).toBeDefined();
+  existing?.activate?.();
+  expect(activate).toHaveBeenCalledOnce();
+  expect(view.stack.active()?.data).toEqual(channel);
+  expect(toast.alert).not.toHaveBeenCalled();
+
+  view.stack.clear();
+  expect(manager.findOpenView(channel)).toBeUndefined();
+  view.stack.reset(channel);
+  view.unmount();
+  expect(manager.findOpenView(channel)).toBeUndefined();
+  expect(activate).toHaveBeenCalledOnce();
+});
+
+it('reactively exposes preview claims, releases, and unmounts', () => {
+  createRoot((dispose) => {
+    const channel = { type: 'channel', id: 'channel' } as const;
+    const existing = createMemo(() => manager.findOpenView(channel));
+    expect(existing()).toBeUndefined();
+    const view = setup();
+    view.stack.reset(channel);
+    expect(existing()).toBeDefined();
+    view.stack.clear();
+    expect(existing()).toBeUndefined();
+    view.stack.reset(channel);
+    expect(existing()).toBeDefined();
+    view.unmount();
+    expect(existing()).toBeUndefined();
+    dispose();
+  });
+});
+
+function Layout(props: ParentProps) {
+  return (
+    <SplitLayoutContext.Provider value={{ manager: manager as SplitManager }}>
+      {props.children}
+    </SplitLayoutContext.Provider>
+  );
+}
+
+function setup(defaultValue?: PreviewPanelSelection[]) {
   let stack!: ReturnType<typeof useNavigationStack<PreviewPanelSelection>>;
   function Capture() {
     stack = useNavigationStack<PreviewPanelSelection>();
     return null;
   }
   function App() {
-    const guard = createPreviewSelectionGuard();
     return (
-      <NavigationStack.Root<PreviewPanelSelection> beforeChange={guard}>
-        <Capture />
-      </NavigationStack.Root>
+      <Layout>
+        <EntityDetailNavigationStack.Root defaultValue={defaultValue}>
+          <Capture />
+        </EntityDetailNavigationStack.Root>
+      </Layout>
     );
   }
   const view = render(App);
   return { stack, ...view };
 }
+
+it('does not move focus or toast for a conflicting restored selection', () => {
+  const channel = { type: 'channel', id: 'channel' } as const;
+  const first = setup([channel]);
+  const restored = setup([channel]);
+  expect(restored.stack.active()).toBeUndefined();
+  expect(activate).not.toHaveBeenCalled();
+  expect(toast.alert).not.toHaveBeenCalled();
+
+  restored.stack.reset(channel);
+  expect(activate).toHaveBeenCalledOnce();
+  expect(toast.alert).toHaveBeenCalledWith('Content already open');
+  restored.unmount();
+  first.unmount();
+});
+
+it('uses the change reason independently of mount timing', () => {
+  const channel = { type: 'channel', id: 'channel' } as const;
+  const first = setup([channel]);
+  let selectPreview!: ReturnType<typeof createPreviewSelectionGuard>;
+  function NavigateBeforeMount() {
+    selectPreview = createPreviewSelectionGuard();
+    // Navigation requested before mount still activates the existing view.
+    expect(selectPreview(channel, 'navigate')).toBe(false);
+    return null;
+  }
+  const second = render(() => (
+    <Layout>
+      <NavigateBeforeMount />
+    </Layout>
+  ));
+  expect(activate).toHaveBeenCalledOnce();
+  expect(toast.alert).toHaveBeenCalledWith('Content already open');
+
+  activate.mockClear();
+  vi.mocked(toast.alert).mockClear();
+  // Restoring after mount must remain passive.
+  expect(selectPreview(channel, 'restore')).toBe(false);
+  expect(activate).not.toHaveBeenCalled();
+  expect(toast.alert).not.toHaveBeenCalled();
+  second.unmount();
+  first.unmount();
+});
 
 it('rejects a second detail selection without changing its current entry and releases on close', () => {
   const first = setup();
@@ -55,6 +152,7 @@ it('rejects a second detail selection without changing its current entry and rel
   const current = second.stack.active();
   expect(second.stack.reset({ type: 'email', id: 'one' })).toBeUndefined();
   expect(second.stack.active()).toBe(current);
+  expect(activate).toHaveBeenCalledOnce();
   expect(toast.alert).toHaveBeenCalledWith('Content already open');
   first.stack.clear();
   expect(second.stack.reset({ type: 'email', id: 'one' })).toBeDefined();
