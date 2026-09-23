@@ -12,7 +12,7 @@
 
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { agentSessionKeys } from './keys';
 
@@ -64,11 +64,10 @@ export function useAgentSessionExternalUrlQuery(
 const STATUS_POLL_INTERVAL_MS = 5_000;
 const MAX_STATUS_POLLS = 120;
 
-/** Shared session metadata, polling only while the session is starting. */
-export function useAgentSessionQuery(id: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: agentSessionKeys.detail(id()).queryKey,
-    queryFn: () => throwOnErr(() => agentHarnessServiceClient.get(id())),
+function agentSessionQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: agentSessionKeys.detail(id).queryKey,
+    queryFn: () => throwOnErr(() => agentHarnessServiceClient.get(id)),
     staleTime: 0,
     retry: false,
     refetchInterval: (query) => {
@@ -81,5 +80,10 @@ export function useAgentSessionQuery(id: Accessor<string>) {
         return STATUS_POLL_INTERVAL_MS;
       return false;
     },
-  }));
+  });
+}
+
+/** Shared session metadata, polling only while the session is starting. */
+export function useAgentSessionQuery(id: Accessor<string>) {
+  return useQuery(() => agentSessionQueryOptions(id()));
 }

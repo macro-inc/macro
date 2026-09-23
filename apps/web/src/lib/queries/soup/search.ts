@@ -4,15 +4,15 @@ import { throwOnErr } from '@core/util/result';
 import type { ChannelMessageEntity, EntityData, WithSearch } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
 import {
+  createSearchResponseItemMapper,
   mapChannelSearchResultItem,
-  useSearchResponseItemMapper,
 } from '@queries/soup/transform-utils';
 import {
   type ChannelSearchRequest,
   searchClient,
 } from '@service-search/client';
 import type { UnifiedSearchRequest } from '@service-search/generated/models';
-import { useInfiniteQuery } from '@tanstack/solid-query';
+import { infiniteQueryOptions, useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 
 export type SearchSoupQueryArgs = {
@@ -32,12 +32,57 @@ export const validateSearchServiceText = (text: string) => {
   return text.length >= 3;
 };
 
+// Only plain request values and channel names enter the cached callbacks.
+function searchSoupQueryOptions(
+  args: SearchSoupQueryArgs,
+  channels: ReadonlyArray<{ id: string; name?: string | null }>,
+  enabled: boolean
+) {
+  const mapSearchResponseItem = createSearchResponseItemMapper(channels);
+  return infiniteQueryOptions({
+    queryKey: soupKeys.search({ params: args.params, body: args.body })
+      .queryKey,
+    queryFn: async (ctx) => {
+      return throwOnErr(
+        async () =>
+          await searchClient.search(
+            {
+              params: ctx.pageParam,
+              request: { ...args.body },
+            },
+            { signal: ctx.signal }
+          )
+      );
+    },
+    initialPageParam: {
+      cursor: null as string | null,
+      page_size: args.params.page_size,
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.next_cursor) return;
+      return {
+        cursor: lastPage.next_cursor,
+        page_size: args.params.page_size,
+      };
+    },
+    select: (data) => {
+      const searchQuery = args.body.query;
+      return data.pages.flatMap((page) => {
+        return page.results
+          .flatMap((result) => mapSearchResponseItem(result, searchQuery))
+          .filter((entity): entity is WithSearch<EntityData> => !!entity);
+      });
+    },
+    enabled: enabled,
+    placeholderData: (p) => p,
+    meta: { normalize: false },
+  });
+}
+
 export const useSearchSoupQuery = (
   args: Accessor<SearchSoupQueryArgs>,
   options?: Accessor<SearchQueryOptions>
 ) => {
-  const pageSize = createMemo(() => args().params.page_size);
-
   const request = createMemo(() => {
     const body = args().body;
     return {
@@ -56,46 +101,18 @@ export const useSearchSoupQuery = (
     return ENABLE_SEARCH_SERVICE && validSearch();
   });
 
-  const mapSearchResponseItem = useSearchResponseItemMapper();
+  const { channels } = useChannelsContext();
+  const channelNames = createMemo(() =>
+    channels().map(({ id, name }) => ({ id, name }))
+  );
 
-  return useInfiniteQuery(() => ({
-    queryKey: soupKeys.search({ params: args().params, body: request() })
-      .queryKey,
-    queryFn: async (ctx) => {
-      return throwOnErr(
-        async () =>
-          await searchClient.search(
-            {
-              params: ctx.pageParam,
-              request: { ...request() },
-            },
-            { signal: ctx.signal }
-          )
-      );
-    },
-    initialPageParam: {
-      cursor: null as string | null,
-      page_size: pageSize(),
-    },
-    getNextPageParam: (lastPage) => {
-      if (!lastPage.next_cursor) return;
-      return {
-        cursor: lastPage.next_cursor,
-        page_size: pageSize(),
-      };
-    },
-    select: (data) => {
-      const searchQuery = request().query;
-      return data.pages.flatMap((page) => {
-        return page.results
-          .flatMap((result) => mapSearchResponseItem(result, searchQuery))
-          .filter((entity): entity is WithSearch<EntityData> => !!entity);
-      });
-    },
-    enabled: enabled(),
-    placeholderData: (p) => p,
-    meta: { normalize: false },
-  }));
+  return useInfiniteQuery(() =>
+    searchSoupQueryOptions(
+      { params: args().params, body: request() },
+      channelNames(),
+      enabled()
+    )
+  );
 };
 
 type SearchChannelQueryArgs = {
@@ -105,6 +122,52 @@ type SearchChannelQueryArgs = {
   };
   body: ChannelSearchRequest;
 };
+
+function searchChannelQueryOptions(
+  args: SearchChannelQueryArgs,
+  channels: ReadonlyArray<{ id: string; name?: string | null }>,
+  enabled: boolean
+) {
+  return infiniteQueryOptions({
+    queryKey: ['search-channel', args.params, args.body] as const,
+    queryFn: async (ctx) => {
+      return throwOnErr(
+        async () =>
+          await searchClient.searchChannel(
+            {
+              params: ctx.pageParam,
+              request: { ...args.body },
+            },
+            { signal: ctx.signal }
+          )
+      );
+    },
+    initialPageParam: {
+      cursor: null as string | null,
+      page_size: args.params.page_size,
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.next_cursor) return;
+      return {
+        cursor: lastPage.next_cursor,
+        page_size: args.params.page_size,
+      };
+    },
+    select: (data) => {
+      const items = data.pages.flatMap((page) =>
+        page.results.flatMap((item) =>
+          mapChannelSearchResultItem(item, channels)
+        )
+      ) as WithSearch<ChannelMessageEntity>[];
+      // stable per query so first page is enough
+      const totalCount = data.pages[0]?.total_count;
+      return { items, totalCount };
+    },
+    enabled: enabled,
+    placeholderData: (p) => p,
+    meta: { normalize: false },
+  });
+}
 
 /**
  * Hits the channel-only `/search/channel` endpoint. Use this for the in-channel
@@ -118,8 +181,6 @@ export const useSearchChannelQuery = (
 ) => {
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
-
-  const pageSize = createMemo(() => args().params.page_size);
 
   const request = createMemo(() => {
     const body = args().body;
@@ -139,43 +200,14 @@ export const useSearchChannelQuery = (
     return ENABLE_SEARCH_SERVICE && validSearch();
   });
 
-  return useInfiniteQuery(() => ({
-    queryKey: ['search-channel', args().params, request()] as const,
-    queryFn: async (ctx) => {
-      return throwOnErr(
-        async () =>
-          await searchClient.searchChannel(
-            {
-              params: ctx.pageParam,
-              request: { ...request() },
-            },
-            { signal: ctx.signal }
-          )
-      );
-    },
-    initialPageParam: {
-      cursor: null as string | null,
-      page_size: pageSize(),
-    },
-    getNextPageParam: (lastPage) => {
-      if (!lastPage.next_cursor) return;
-      return {
-        cursor: lastPage.next_cursor,
-        page_size: pageSize(),
-      };
-    },
-    select: (data) => {
-      const items = data.pages.flatMap((page) =>
-        page.results.flatMap((item) =>
-          mapChannelSearchResultItem(item, channels())
-        )
-      ) as WithSearch<ChannelMessageEntity>[];
-      // stable per query so first page is enough
-      const totalCount = data.pages[0]?.total_count;
-      return { items, totalCount };
-    },
-    enabled: enabled(),
-    placeholderData: (p) => p,
-    meta: { normalize: false },
-  }));
+  const channelNames = createMemo(() =>
+    channels().map(({ id, name }) => ({ id, name }))
+  );
+  return useInfiniteQuery(() =>
+    searchChannelQueryOptions(
+      { params: args().params, body: request() },
+      channelNames(),
+      enabled()
+    )
+  );
 };

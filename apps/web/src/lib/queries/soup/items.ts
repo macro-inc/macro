@@ -27,6 +27,7 @@ import type { PostSoupAstRequestAllOf } from '@service-storage/generated/schemas
 import type { PostSoupRequest } from '@service-storage/generated/schemas/postSoupRequest';
 import {
   type InfiniteData,
+  infiniteQueryOptions,
   type StaleTime,
   useInfiniteQuery,
 } from '@tanstack/solid-query';
@@ -115,52 +116,58 @@ export type SoupAstItemsData = {
   itemsById?: SoupAstItemsGroupedPage['items'];
 };
 
+// Cached options outlive the view. Keep its accessors and query proxies out.
+function soupItemsQueryOptions(
+  args: SoupItemsQueryArgs,
+  enabled: boolean | undefined,
+  staleTime: StaleTime | undefined,
+  instructionsId: string | null | undefined,
+  showSupportedForeignEntities: boolean | undefined
+) {
+  const { params, body } = args;
+  return infiniteQueryOptions({
+    queryKey: soupKeys.items(args).queryKey,
+    queryFn: (ctx) =>
+      throwOnErr(() =>
+        storageServiceClient.getSoupItems({
+          params: { cursor: ctx.pageParam },
+          body: { ...body, ...params },
+        })
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.next_cursor,
+    select: (data) =>
+      data.pages.flatMap((page) =>
+        mapSoupPageToEntityList(page, {
+          instructionsIdQuery: { isSuccess: true, data: instructionsId },
+          showSupportedForeignEntities,
+        })
+      ),
+    enabled,
+    staleTime,
+    placeholderData: (p) => p,
+    meta: {
+      itemFilter: (item: SoupApiItem) =>
+        !body || filterSoupItemByRequestBody(item, body),
+      normalize: true,
+    },
+  });
+}
+
 export const useSoupItemsQuery = (
   args: Accessor<SoupItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
 ) => {
   const instructionsIdQuery = useInstructionsMdIdQuery();
-
-  const itemFilter: SoupApiItemFilter = (item: SoupApiItem) => {
-    const body = args().body;
-    if (!body) return true;
-    return filterSoupItemByRequestBody(item, body);
-  };
-
-  return useInfiniteQuery(() => ({
-    queryKey: soupKeys.items(args()).queryKey,
-    queryFn: async (ctx) => {
-      const { params, body } = args();
-
-      return throwOnErr(
-        async () =>
-          await storageServiceClient.getSoupItems({
-            params: { cursor: ctx.pageParam },
-            body: {
-              ...body,
-              ...params,
-            },
-          })
-      );
-    },
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => {
-      return lastPage.next_cursor;
-    },
-    select: (data) => {
-      return data.pages.flatMap((page) => {
-        return mapSoupPageToEntityList(page, {
-          instructionsIdQuery,
-          showSupportedForeignEntities:
-            options?.().showSupportedForeignEntities,
-        });
-      });
-    },
-    enabled: options?.().enabled,
-    staleTime: options?.().staleTime,
-    placeholderData: (p) => p,
-    meta: { itemFilter, normalize: true },
-  }));
+  return useInfiniteQuery(() =>
+    soupItemsQueryOptions(
+      args(),
+      options?.().enabled,
+      options?.().staleTime,
+      instructionsIdQuery.isSuccess ? instructionsIdQuery.data : undefined,
+      options?.().showSupportedForeignEntities
+    )
+  );
 };
 
 /** REST implementation kept private behind {@link useSoupAstItemsQuery}. */

@@ -7,17 +7,21 @@ import type { ActiveCallSummary } from '@service-storage/generated/schemas/activ
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import type { SharePermissionV2 } from '@service-storage/generated/schemas/sharePermissionV2';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { callKeys } from './keys';
 
-export function useActiveCallQuery(channelId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: callKeys.active(channelId()).queryKey,
-    queryFn: () => fetchActiveCall(channelId()),
+function activeCallQueryOptions(channelId: string) {
+  return queryOptions({
+    queryKey: callKeys.active(channelId).queryKey,
+    queryFn: () => fetchActiveCall(channelId),
     placeholderData: null,
     refetchInterval: 15_000,
-  }));
+  });
+}
+
+export function useActiveCallQuery(channelId: Accessor<string>) {
+  return useQuery(() => activeCallQueryOptions(channelId()));
 }
 
 /** Fresh lookups keep recovery from re-creating a call that already ended. */
@@ -147,17 +151,21 @@ export function useLeaveCallMutation() {
   }));
 }
 
-export function useCallRecordQuery(callId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: callKeys.record(callId()).queryKey,
+function callRecordQueryOptions(callId: string) {
+  return queryOptions({
+    queryKey: callKeys.record(callId).queryKey,
     queryFn: async () =>
-      await throwOnErr(() => callServiceClient.getCallRecord(callId())),
+      await throwOnErr(() => callServiceClient.getCallRecord(callId)),
     // The call block's load() primes this cache; a stale time keeps that
     // primed record from triggering an immediate duplicate fetch on mount.
     // Mutations still invalidate, so sharing edits stay reactive.
     staleTime: 60_000,
-    enabled: callId().length > 0,
-  }));
+    enabled: callId.length > 0,
+  });
+}
+
+export function useCallRecordQuery(callId: Accessor<string>) {
+  return useQuery(() => callRecordQueryOptions(callId()));
 }
 
 export function fetchCallRecord(

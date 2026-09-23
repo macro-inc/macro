@@ -5,7 +5,7 @@ import {
   type TaskDuplicate,
   type TaskSimilarityResult,
 } from '@service-storage/client';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { entityKeys, taskSimilaritySearchKeys } from './keys';
 
@@ -39,13 +39,17 @@ async function fetchTaskDuplicates(
   return result.value;
 }
 
-export function useTaskDuplicatesQuery(documentId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: entityKeys.taskDuplicates(documentId()).queryKey,
-    queryFn: () => fetchTaskDuplicates(documentId()),
-    enabled: !!documentId(),
+function taskDuplicatesQueryOptions(documentId: string) {
+  return queryOptions({
+    queryKey: entityKeys.taskDuplicates(documentId).queryKey,
+    queryFn: () => fetchTaskDuplicates(documentId),
+    enabled: !!documentId,
     staleTime: 30 * 1000,
-  }));
+  });
+}
+
+export function useTaskDuplicatesQuery(documentId: Accessor<string>) {
+  return useQuery(() => taskDuplicatesQueryOptions(documentId()));
 }
 
 export function useDismissTaskDuplicatesMutation(documentId: Accessor<string>) {
@@ -90,6 +94,17 @@ async function searchSimilarTasks(
   return result.value;
 }
 
+function taskSimilaritySearchQueryOptions(input: TaskSimilaritySearchInput) {
+  return queryOptions({
+    queryKey: taskSimilaritySearchKeys.forInput(input).queryKey,
+    queryFn: () => searchSimilarTasks(input),
+    // Only query when there is something to search on: a title or a body.
+    enabled: input.title.trim().length > 0 || input.markdown.trim().length > 0,
+    staleTime: 30 * 1000,
+    placeholderData: (prev) => prev,
+  });
+}
+
 /**
  * Live, ephemeral similarity search used by the task composer. Hits the
  * stateless `/documents/similarity_search` HTTP endpoint — nothing is
@@ -98,15 +113,7 @@ async function searchSimilarTasks(
 export function useTaskSimilaritySearchQuery(
   input: Accessor<TaskSimilaritySearchInput>
 ) {
-  return useQuery(() => ({
-    queryKey: taskSimilaritySearchKeys.forInput(input()).queryKey,
-    queryFn: () => searchSimilarTasks(input()),
-    // Only query when there is something to search on: a title or a body.
-    enabled:
-      input().title.trim().length > 0 || input().markdown.trim().length > 0,
-    staleTime: 30 * 1000,
-    placeholderData: (prev) => prev,
-  }));
+  return useQuery(() => taskSimilaritySearchQueryOptions(input()));
 }
 
 export function useDeleteThisDuplicateTaskMutation(
