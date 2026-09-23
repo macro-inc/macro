@@ -225,6 +225,7 @@ function MessageThreadBody(props: ThreadBodyProps) {
             parent={parent()}
             rootId={String(props.comment.threadId)}
             canWrite={context.canComment()}
+            monorail
             hideReplyInput={props.hideReplyInput}
             onEditingChange={context.setMessageEditing}
             targetId={targetId()}
