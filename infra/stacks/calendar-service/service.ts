@@ -72,7 +72,7 @@ export class CalendarService extends pulumi.ComponentResource {
     super('my:components:CalendarService', name, {}, opts);
     this.domain = `https://${
       stack === 'prod' ? '' : `${stack}-`
-    }gateway.${BASE_DOMAIN}/calendar-service`;
+    }gateway.${BASE_DOMAIN}/calendar`;
     this.tags = tags;
     this.cloudStorageClusterName = cloudStorageClusterName;
 
@@ -184,21 +184,10 @@ export class CalendarService extends pulumi.ComponentResource {
         containerPort: serviceContainerPort,
         service: GatewayService.CALENDAR_SERVICE,
         healthCheckPath,
-        // calendar-service claims `/calendar` here ahead of cutover, but this
-        // rule receives no `/calendar` traffic yet: email-service's rule
-        // (GatewayService.EMAIL_SERVICE, priority 110) sits below
-        // calendar-service's (CALENDAR_SERVICE, priority 140) on the shared
-        // gateway listener, and the ALB evaluates lower priority numbers first
-        // — see infra/packages/shared/src/gateway_priorities.ts. Email keeps
-        // winning every `/calendar` match until the cutover PR drops those
-        // patterns from email-service. The `/calendar-service` prefixes stay
-        // for now so the service remains reachable in the meantime.
-        pathPatterns: [
-          '/calendar',
-          '/calendar/*',
-          '/calendar-service',
-          '/calendar-service/*',
-        ],
+        // calendar-service owns `/calendar` on the shared gateway listener
+        // (GatewayService.CALENDAR_SERVICE, priority 140) — see
+        // infra/packages/shared/src/gateway_priorities.ts.
+        pathPatterns: ['/calendar', '/calendar/*'],
         serviceSecurityGroupId: this.serviceSg.id,
         albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
       },
