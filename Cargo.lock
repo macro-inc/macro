@@ -2931,6 +2931,7 @@ dependencies = [
  "channels",
  "chrono",
  "entity_access",
+ "entity_registry",
  "harness_id",
  "hex",
  "macro_authorization",
@@ -2942,6 +2943,7 @@ dependencies = [
  "messages",
  "mockall",
  "model-error-response",
+ "model_owner",
  "rand 0.9.4",
  "rootcause",
  "schemars 1.2.1",
@@ -6614,6 +6616,7 @@ dependencies = [
 name = "entity_registry"
 version = "0.1.0"
 dependencies = [
+ "bot_id",
  "chrono",
  "macro_db_migrator",
  "model-entity",
@@ -6631,7 +6634,10 @@ dependencies = [
 name = "entity_registry_db_utils"
 version = "0.1.0"
 dependencies = [
+ "bot_id",
  "chrono",
+ "entity_access_db_utils",
+ "entity_registry",
  "macro_db_migrator",
  "model_owner",
  "rootcause",

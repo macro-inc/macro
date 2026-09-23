@@ -4,10 +4,14 @@
 //! Other crates call these helpers from inside their own resource-row
 //! transactions. The helpers never commit. Reads go through
 //! `entity_registry::EntityRegistryService`. Shared types live in
-//! `shared_entity_registry`; this crate does not depend on the read service.
+//! `shared_entity_registry`. [`OwnedEntityRegistrar`] applies the registry's
+//! domain owner-grant policy alongside the row write in the caller's transaction.
 
 #[cfg(test)]
 mod test;
+
+mod owned;
+pub use owned::OwnedEntityRegistrar;
 
 use chrono::{DateTime, Utc};
 use model_owner::{Owner, OwnerType};
