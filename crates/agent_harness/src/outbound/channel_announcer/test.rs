@@ -7,6 +7,7 @@ use bot_id::BotId;
 fn announcement() -> SessionAnnouncement {
     SessionAnnouncement {
         bot_id: BotId::TEST_A,
+        kind: crate::domain::model::AgentKind::SandboxedCoder,
         session_id: agent_session::domain::model::AgentSessionId::TEST_A,
         origin_parent: MessageParent::Channel(Uuid::from_u128(1)),
         origin_thread_id: Uuid::from_u128(2),
@@ -73,5 +74,41 @@ fn reply_target_carries_the_originating_channel_message() {
             display_text: "@claude fix the failing test".to_owned(),
             sender_id: "macro|user@example.com".to_owned(),
         }
+    );
+}
+
+#[test]
+fn the_pending_reply_is_an_inline_await_node() {
+    assert!(PENDING_REPLY.starts_with("<m-await>"));
+    assert!(PENDING_REPLY.ends_with("</m-await>"));
+    let body: serde_json::Value = serde_json::from_str(
+        PENDING_REPLY
+            .trim_start_matches("<m-await>")
+            .trim_end_matches("</m-await>"),
+    )
+    .expect("the await node body is JSON");
+    assert_eq!(body["inline"], true);
+}
+
+#[test]
+fn a_resolved_reply_is_never_blank() {
+    assert_eq!(
+        reply_content(ReplyOutcome::Answered("Sure.".to_owned())),
+        "Sure."
+    );
+    for outcome in [
+        ReplyOutcome::Empty,
+        ReplyOutcome::Cancelled,
+        ReplyOutcome::Failed,
+    ] {
+        assert!(
+            !reply_content(outcome.clone()).trim().is_empty(),
+            "{outcome:?}"
+        );
+    }
+    assert_ne!(
+        reply_content(ReplyOutcome::Failed),
+        reply_content(ReplyOutcome::Empty),
+        "an error and a silence read differently"
     );
 }

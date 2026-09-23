@@ -124,6 +124,7 @@ where
             let announcement = SessionAnnouncement {
                 session_id: session.id,
                 bot_id: request.bot_id,
+                kind: AgentKind::for_session(session.bot_id, &session.harness),
                 origin_parent: thread.parent,
                 origin_thread_id: thread.thread_id,
                 origin_message_id: thread.message_id,

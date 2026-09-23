@@ -2,6 +2,7 @@
 //! with in-memory persistence, mock containers, a fake agent, and a
 //! recording announcer. Only the edges are doubles.
 
+mod chat_reply;
 mod user_cleanup;
 
 use messages::domain::models::MessageParent;

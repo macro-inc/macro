@@ -371,6 +371,18 @@ where
                 if ended.is_none() {
                     tracing::info!(%session_id, "turn ended with no in-flight record");
                 }
+                // The thread hears first, before any fact is published or
+                // the next prompt dispatched: a chat agent's pending reply
+                // is what the person who asked is looking at, and it must
+                // never outlive the turn it stands for. Per turn, not per
+                // settle - a second mention queued behind this one would
+                // otherwise leave the first spinning until both finished.
+                self.resolve_reply(
+                    session_id,
+                    ended.as_ref(),
+                    ReplyOutcome::of_turn(&stop, last_text.clone()),
+                )
+                .await;
                 if let (Some(turn), Some(fold_action_id)) = (&ended, fold_action_id)
                     && turn.action_id != fold_action_id
                 {
@@ -423,6 +435,10 @@ where
             }
             HarnessCommand::SessionStopped { reason } => {
                 let in_flight = self.busy.take(session_id);
+                // No `TurnEnded` follows a death, so this is the turn's last
+                // chance to stop its pending reply spinning.
+                self.resolve_reply(session_id, in_flight.as_ref(), ReplyOutcome::Failed)
+                    .await;
                 self.publish_lifecycle(session_id, |identity| {
                     AgentSessionLifecycleEvent::Stopped(SessionStoppedMetadata {
                         identity,
@@ -755,6 +771,7 @@ where
                     action_id: entry.action_id,
                     turn: prompted_message_id.turn,
                     actor: entry.actor,
+                    announce: entry.announce,
                     announcement_message_id: entry.announced,
                 };
                 self.busy.mark_turn(session_id, turn.clone());

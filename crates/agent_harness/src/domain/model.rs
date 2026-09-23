@@ -2,7 +2,7 @@
 
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
 use agent_egress::domain::model::{McpServerSlug, RepoSlug};
-use agent_fold::domain::model::TurnSignal;
+use agent_fold::domain::model::{StopReason, TurnSignal};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
@@ -212,6 +212,18 @@ impl AgentKind {
     #[must_use]
     pub fn is_managed(self) -> bool {
         !matches!(self, Self::External)
+    }
+
+    /// Whether this kind's sessions work in a repository.
+    ///
+    /// Decides how a mention is answered in its thread. A coding runtime runs
+    /// for minutes and produces diffs, so its turn is announced as a magic
+    /// chip - a live portal into the session. The in-memory runtime has no
+    /// repository and chats, so its thread gets a pending reply that becomes
+    /// the answer when the turn ends, the way the original Macro bot replied.
+    #[must_use]
+    pub const fn is_coding(self) -> bool {
+        !matches!(self, Self::InMemory)
     }
 
     /// How this kind's sessions answer permission requests without a registered
@@ -495,6 +507,9 @@ pub struct SessionAnnouncement {
     pub session_id: AgentSessionId,
     /// The bot the session runs for; the announcement posts as it.
     pub bot_id: BotId,
+    /// The runtime serving the session, which decides what the announcement
+    /// looks like (see [`AgentKind::is_coding`]).
+    pub kind: AgentKind,
     /// Channel or document containing the mention that opened the session.
     pub origin_parent: messages::domain::models::MessageParent,
     /// Thread where the announcement should be posted.
@@ -544,8 +559,71 @@ pub struct DeclinedMention {
 /// The message an announcement became.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AnnouncedMessage {
-    /// The posted message: the magic chip its turn renders into.
+    /// The posted message: a coding agent's magic chip, or a chat agent's
+    /// pending reply.
     pub message_id: Uuid,
+}
+
+/// How a turn ended, as the thread that prompted it should hear.
+///
+/// Text wins whenever there is any: an agent that wrote something and was
+/// then cancelled or cut off still said it, and the thread would rather read
+/// that than a notice. The rest distinguish the silences a reader can act on
+/// differently - try again, or not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReplyOutcome {
+    /// The agent answered; its last message, whole.
+    Answered(String),
+    /// The turn ran to its end without saying anything.
+    Empty,
+    /// The turn was cancelled before it finished: a stop, or a follow-up in
+    /// the thread that steered the session onto a new prompt.
+    Cancelled,
+    /// The runtime refused the prompt or died underneath the turn.
+    Failed,
+}
+
+impl ReplyOutcome {
+    /// The outcome of a turn the fold closed with `stop`, whose last text
+    /// part was `last_text`.
+    #[must_use]
+    pub fn of_turn(stop: &StopReason, last_text: Option<String>) -> Self {
+        match last_text.filter(|text| !text.trim().is_empty()) {
+            Some(text) => Self::Answered(text),
+            None => match stop {
+                StopReason::Cancelled => Self::Cancelled,
+                StopReason::Failed { .. } => Self::Failed,
+                StopReason::EndTurn
+                | StopReason::MaxTokens
+                | StopReason::MaxTurnRequests
+                | StopReason::Refusal
+                | StopReason::Other { .. } => Self::Empty,
+            },
+        }
+    }
+}
+
+/// Facts required to replace a turn's pending reply with how it ended.
+///
+/// Modelled on [`SessionAnnouncement`], which posted the message this
+/// resolves: the same bot posts, on the same person's current capability
+/// to the same parent, so a mentioner who has since lost access to the
+/// thread gets nothing patched in their name either.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedReply {
+    /// The bot the session runs for; the patch is made as it.
+    pub bot_id: BotId,
+    /// The runtime serving the session. A coding runtime's chip renders
+    /// the turn itself, so there is nothing to resolve for one.
+    pub kind: AgentKind,
+    /// The pending reply posted when the turn was announced.
+    pub message_id: Uuid,
+    /// Channel or document the mention was posted in.
+    pub origin_parent: messages::domain::models::MessageParent,
+    /// Who prompted the turn.
+    pub triggered_by: MacroUserIdStr<'static>,
+    /// What the turn became.
+    pub outcome: ReplyOutcome,
 }
 
 /// Values required to provision a new session container.

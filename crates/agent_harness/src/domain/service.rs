@@ -48,8 +48,8 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, CommandOutcome, DeclinedMention, DeliverAction,
-    HarnessCommand, HarnessDefaults, OpenSession, SessionAnnouncement, SpawnContainer,
-    is_macro_staff,
+    HarnessCommand, HarnessDefaults, OpenSession, ReplyOutcome, ResolvedReply, SessionAnnouncement,
+    SpawnContainer, is_macro_staff,
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
@@ -387,6 +387,7 @@ where
             .announce(SessionAnnouncement {
                 session_id,
                 bot_id: session.bot_id,
+                kind: AgentKind::for_session(session.bot_id, &session.harness),
                 origin_parent: prompt.origin.parent,
                 origin_thread_id: prompt.origin.thread_id,
                 origin_message_id: prompt.origin.message_id,

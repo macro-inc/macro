@@ -49,8 +49,23 @@ where
 {
     /// The identity block for one session, from its row and its bot.
     pub(super) async fn identity(&self, session_id: AgentSessionId) -> Result<SessionIdentity> {
+        self.identity_and_kind(session_id)
+            .await
+            .map(|(identity, _)| identity)
+    }
+
+    /// [`Self::identity`], with the runtime kind the same row names - read
+    /// together because the notifications a fact warrants depend on both.
+    pub(super) async fn identity_and_kind(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<(SessionIdentity, AgentKind)> {
         let session = self.sessions.get_session(session_id).await?;
-        self.identity_of(&session).await
+        let identity = self.identity_of(&session).await?;
+        Ok((
+            identity,
+            AgentKind::for_session(session.bot_id, &session.harness),
+        ))
     }
 
     /// The identity block for a session whose row is already in hand.
@@ -74,10 +89,10 @@ where
         session_id: AgentSessionId,
         build: impl FnOnce(SessionIdentity) -> AgentSessionLifecycleEvent,
     ) {
-        match self.identity(session_id).await {
-            Ok(identity) => {
+        match self.identity_and_kind(session_id).await {
+            Ok((identity, kind)) => {
                 let event = build(identity);
-                let notifications = plan(&event);
+                let notifications = plan(&event, kind);
                 self.lifecycle_publisher.publish(event).await;
                 for notification in notifications {
                     self.notifier.notify(notification).await;
