@@ -4,20 +4,17 @@ import { soupKeys } from './keys';
 import { getSoupNormalizer, soupNormKey } from './normalized-cache/normalizer';
 
 /**
- * Revalidate REST lists after a committed server change. Initial reads have no
- * normalized dependencies yet, so they must also be cancelled and restarted.
- * Unknown entities can enter any list; known entities target dependent lists.
+ * Revalidate the REST lists that already hold these entities after a committed
+ * server change. Lists that do not hold them are left alone.
  */
 export async function refreshSoupEntities(
-  entityIds?: string[],
+  entityIds: string[],
   options: { throwOnError?: boolean } = {}
 ): Promise<void> {
-  const dependencies = entityIds?.map((id) =>
+  const keys = entityIds.flatMap((id) =>
     getSoupNormalizer().getDependentQueriesByIds([soupNormKey(id)])
   );
-  const all =
-    !dependencies?.length || dependencies.some((keys) => !keys.length);
-  const keys = dependencies?.flat() ?? [];
+  if (keys.length === 0) return;
   const listPrefixes = [
     soupKeys.items._def,
     soupKeys.astItems._def,
@@ -25,12 +22,9 @@ export async function refreshSoupEntities(
   ];
   const predicate = (query: Query) =>
     listPrefixes.some((prefix) => partialMatchKey(query.queryKey, prefix)) &&
-    (all ||
-      query.state.data === undefined ||
-      keys.some((key) => partialMatchKey(query.queryKey, key)));
+    keys.some((key) => partialMatchKey(query.queryKey, key));
 
-  // Explicit cancellation also supersedes initial requests with no data;
-  // invalidateQueries alone would share their older in-flight result.
+  // Cancel an in-flight refetch so its older snapshot cannot land after this one.
   await queryClient.cancelQueries({ predicate, type: 'active' });
   await queryClient.invalidateQueries({ predicate }, options);
 }
