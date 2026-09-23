@@ -496,10 +496,14 @@ Check cached Home → Chat navigation, All/Recent/search, and unread state after
 read, a new notification, deletion, and reconnect. Cache reads remain asynchronous:
 a brief spinner can still appear, but cached rows must not wait for a background
 network refresh. Conversely, `cache-and-network` refreshes must start without
-waiting for a busy cache worker. When checking slow loads, distinguish network
-start from result display: network results still wait for cache persistence and
-revision acknowledgement. A late cache snapshot must not replace newer network
-rows or an optimistic update. Check a cold offline open too: a cache hit arriving
+waiting for a busy cache worker. Successful foreground query results display
+before cache persistence finishes; a delayed acknowledgement must not replay old
+rows or overwrite an optimistic update. Check initial and continuation pages with
+a slow cache, overlapping refreshes, and leaving/reopening Chat during a write.
+A cache write failure must not discard successful network rows. Mutations and
+cache-only hydration still wait for their durable/cache-projection work.
+A late cache snapshot must not replace newer network rows. Check a cold offline
+open too: a cache hit arriving
 after the network failure must remain usable without erasing the refresh error.
 If more unread notifications
 remain, the limited edge must refresh to the next one rather than staying empty.

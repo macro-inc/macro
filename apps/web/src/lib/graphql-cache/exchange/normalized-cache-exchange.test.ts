@@ -984,14 +984,19 @@ describe('normalizedCacheExchange', () => {
     ]);
     expect(results.map(normalizedCacheResultMetadata)).toEqual([
       { source: 'normalized-cache-hit' },
-      { source: 'live-network', revision: INITIAL_CACHE_REVISION },
+      { source: 'live-network', persistence: expect.any(Promise) },
     ]);
+    const metadata = normalizedCacheResultMetadata(results[1]!);
+    expect(metadata?.source).toBe('live-network');
+    if (metadata?.source === 'live-network') {
+      await expect(metadata.persistence).resolves.toBe(INITIAL_CACHE_REVISION);
+    }
     expect(forwarded.map((op) => op.key)).toEqual([1]);
     expect(host.writes).toHaveLength(1);
     expect(host.reads).toHaveLength(1);
   });
 
-  it('shows a cache hit while the network response is still being persisted', async () => {
+  it('publishes network data before persistence and acknowledges without replaying it', async () => {
     const read = deferred<ReadResult>();
     const write = deferred<WriteResult>();
     host.readQuery = vi.fn(() => read.promise);
@@ -1001,13 +1006,17 @@ describe('normalizedCacheExchange', () => {
     await tick();
     expect(forwarded).toHaveLength(1);
     expect(host.writeQuery).toHaveBeenCalledOnce();
-    expect(results).toHaveLength(0);
-
+    expect(results.map((result) => [result.data, result.stale])).toEqual([
+      [{ from: 'network' }, false],
+    ]);
+    const metadata = normalizedCacheResultMetadata(results[0]!);
+    expect(metadata).toEqual({
+      source: 'live-network',
+      persistence: expect.any(Promise),
+    });
     read.resolve({ kind: 'hit', data: { from: 'cache' } });
     await tick();
-    expect(results.map((result) => [result.data, result.stale])).toEqual([
-      [{ from: 'cache' }, true],
-    ]);
+    expect(results).toHaveLength(1);
     write.resolve({
       revision: INITIAL_CACHE_REVISION,
       revisionAdvanced: true,
@@ -1016,10 +1025,199 @@ describe('normalizedCacheExchange', () => {
       reset: false,
     });
     await tick();
-    expect(results.map((result) => [result.data, result.stale])).toEqual([
-      [{ from: 'cache' }, true],
-      [{ from: 'network' }, false],
+    if (metadata?.source === 'live-network') {
+      await expect(metadata.persistence).resolves.toBe(INITIAL_CACHE_REVISION);
+    }
+    expect(results).toHaveLength(1);
+  });
+
+  it.each([false, true])(
+    'publishes later network data without waiting for an earlier write (streaming=%s)',
+    async (streaming) => {
+      const firstWrite = deferred<void>();
+      const originalWrite = host.writeQuery;
+      host.writeQuery = vi
+        .fn()
+        .mockImplementationOnce(async (args) => {
+          await firstWrite.promise;
+          return await originalWrite(args);
+        })
+        .mockImplementation(originalWrite);
+      const { ops, network, forwarded, results } = controlledQueryHarness(host);
+      ops.next(makeOp(1, 'network-only'));
+      network.next({
+        ...queryResult(forwarded[0]!, { version: 'A' }),
+        hasNext: streaming,
+      });
+      await tick();
+      if (!streaming) ops.next(makeOp(1, 'network-only'));
+      network.next(queryResult(forwarded.at(-1)!, { version: 'B' }));
+      await tick();
+
+      expect(results.map((result) => result.data)).toEqual([
+        { version: 'A' },
+        { version: 'B' },
+      ]);
+      expect(results.map((result) => result.hasNext)).toEqual([
+        streaming,
+        false,
+      ]);
+      expect(host.writeQuery).toHaveBeenCalledOnce();
+      firstWrite.resolve();
+      await tick();
+      expect(host.writes.map((write) => write.data)).toEqual([
+        { version: 'A' },
+        { version: 'B' },
+      ]);
+      expect(results).toHaveLength(2);
+    }
+  );
+
+  it('does not let a persistence acknowledgement overwrite a newer optimistic result', async () => {
+    const write = deferred<void>();
+    const originalWrite = host.writeQuery;
+    host.writeQuery = async (args) => {
+      await write.promise;
+      return await originalWrite(args);
+    };
+    const { ops, results, forwarded } = harness(host);
+    ops.next(makeOp(1, 'network-only'));
+    await tick();
+    expect(results).toHaveLength(1);
+    host.scriptRead({ kind: 'hit', data: { from: 'optimistic layer' } });
+    host.pushAffected([1]);
+    await tick();
+    expect(results.at(-1)?.data).toEqual({ from: 'optimistic layer' });
+    expect(results.at(-1)?.stale).toBe(false);
+    write.resolve();
+    await tick();
+
+    expect(results.map((result) => result.data)).toEqual([
+      { from: 'network' },
+      { from: 'optimistic layer' },
     ]);
+    expect(forwarded).toHaveLength(1);
+  });
+
+  it('keeps successful network data when background persistence fails', async () => {
+    const write = deferred<WriteResult>();
+    host.writeQuery = vi.fn(() => write.promise);
+    const onCacheError = vi.fn();
+    const { ops, results } = harness(host, undefined, { onCacheError });
+    ops.next(makeOp(1, 'network-only'));
+    await tick();
+    expect(results[0]?.data).toEqual({ from: 'network' });
+    const metadata = normalizedCacheResultMetadata(results[0]!);
+    write.reject(new Error('disk full'));
+    await tick();
+
+    expect(onCacheError).toHaveBeenCalledOnce();
+    expect(results).toHaveLength(1);
+    expect(results[0]?.error).toBeUndefined();
+    expect(metadata?.source).toBe('live-network');
+    if (metadata?.source === 'live-network') {
+      await expect(metadata.persistence).resolves.toBeUndefined();
+    }
+  });
+
+  it('settles persistence even when its diagnostic callback throws', async () => {
+    host.writeQuery = vi.fn().mockRejectedValue(new Error('disk full'));
+    const { ops, results } = harness(host, undefined, {
+      onCacheError: () => {
+        throw new Error('diagnostic failed');
+      },
+    });
+    ops.next(makeOp(1, 'network-only'));
+    await tick();
+    const metadata = normalizedCacheResultMetadata(results[0]!);
+    expect(metadata?.source).toBe('live-network');
+    if (metadata?.source === 'live-network') {
+      await expect(metadata.persistence).resolves.toBeUndefined();
+    }
+    ops.next(makeOp(1, 'network-only'));
+    await tick();
+    expect(host.writeQuery).toHaveBeenCalledTimes(2);
+    expect(results).toHaveLength(2);
+  });
+
+  it('publishes a network error while an earlier response is still being persisted', async () => {
+    const write = deferred<void>();
+    const originalWrite = host.writeQuery;
+    host.writeQuery = async (args) => {
+      await write.promise;
+      return await originalWrite(args);
+    };
+    const { ops, network, forwarded, results } = controlledQueryHarness(host);
+    ops.next(makeOp(1, 'network-only'));
+    network.next(queryResult(forwarded[0]!, { version: 'A' }));
+    await tick();
+    ops.next(makeOp(1, 'network-only'));
+    const error = new CombinedError({ networkError: new Error('offline') });
+    network.next({ ...queryResult(forwarded[1]!), data: undefined, error });
+    await tick();
+    expect(results).toHaveLength(2);
+    expect(results[1]?.error).toBe(error);
+    write.resolve();
+    await tick();
+    expect(results).toHaveLength(2);
+    expect(host.writes).toHaveLength(1);
+  });
+
+  it('preserves background write order without registering a torn-down query after remount', async () => {
+    const firstWrite = deferred<void>();
+    const originalWrite = host.writeQuery;
+    host.writeQuery = vi
+      .fn()
+      .mockImplementationOnce(async (args) => {
+        await firstWrite.promise;
+        return await originalWrite(args);
+      })
+      .mockImplementation(originalWrite);
+    const { ops, network, forwarded, results, client } =
+      controlledQueryHarness(host);
+    const first = makeOp(1, 'network-only');
+    ops.next(first);
+    network.next(queryResult(first, { version: 'A' }));
+    await tick();
+    ops.next(makeOp(1, 'network-only'));
+    network.next(queryResult(forwarded.at(-1)!, { version: 'B' }));
+    await tick();
+    ops.next(teardownOf(first));
+    ops.next(makeOp(1, 'network-only'));
+    network.next(queryResult(forwarded.at(-1)!, { version: 'C' }));
+    await tick();
+    expect(results.map((result) => result.data)).toEqual([
+      { version: 'A' },
+      { version: 'B' },
+      { version: 'C' },
+    ]);
+    expect(host.writeQuery).toHaveBeenCalledOnce();
+    firstWrite.resolve();
+    await tick();
+
+    expect(
+      host.writes.map((write) => [write.data, write.registerDependencies])
+    ).toEqual([
+      [{ version: 'A' }, true],
+      [{ version: 'B' }, false],
+      [{ version: 'C' }, true],
+    ]);
+    expect(results).toHaveLength(3);
+    expect(client.reexecuteOperation).not.toHaveBeenCalled();
+  });
+
+  it('still waits for hydrate-only projection instead of exposing cache-only fields', async () => {
+    const hydration =
+      deferred<Awaited<ReturnType<CacheHost['hydrateQuery']>>>();
+    host.hydrateQuery = vi.fn(() => hydration.promise);
+    const { ops, results } = harness(host);
+    ops.next(makeHydrationOp(1));
+    await tick();
+    expect(results).toHaveLength(0);
+    hydration.resolve({ kind: 'void', revision: INITIAL_CACHE_REVISION });
+    await tick();
+    expect(results).toHaveLength(1);
+    expect(results[0]?.data).toBeUndefined();
   });
 
   it.each(['hit', 'miss', 'error'] as const)(

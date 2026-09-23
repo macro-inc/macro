@@ -153,6 +153,14 @@ export function createGraphqlSoupAstItemsQuery(
       records: GraphqlSoupItem[];
     };
   };
+  type UnpersistedPage = {
+    input: GraphqlSoupInput | undefined;
+    generation: number;
+    observation: number;
+  };
+  const [unpersistedPages, setUnpersistedPages] = createSignal<
+    ReadonlyMap<number, UnpersistedPage>
+  >(new Map());
   const [currentCacheRevision, setCurrentCacheRevision] = createSignal<
     CacheRevision | undefined
   >();
@@ -176,6 +184,11 @@ export function createGraphqlSoupAstItemsQuery(
   let localEvaluationRunning = false;
   let localEvaluationPending = false;
   let cacheGeneration = 0;
+  let cacheObservation = 0;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const [baselineGeneration, setBaselineGeneration] = createSignal<number>();
   let previousInitialInput: GraphqlSoupInput | undefined;
   let networkAuthorityInput: GraphqlSoupInput | undefined;
@@ -192,6 +205,51 @@ export function createGraphqlSoupAstItemsQuery(
     staleFallbackSpan = undefined;
   };
 
+  const hasUnpersistedPages = (input: GraphqlSoupInput | undefined) =>
+    [...unpersistedPages().values()].some(
+      (page) => page.input === input && page.generation === cacheGeneration
+    );
+  const forgetUnpersistedPage = (index: number) => {
+    setUnpersistedPages((pages) => {
+      if (!pages.has(index)) return pages;
+      const next = new Map(pages);
+      next.delete(index);
+      return next;
+    });
+  };
+  const acknowledgeNetworkPage = async (
+    index: number,
+    page: UnpersistedPage,
+    persistence: Promise<CacheRevision | undefined>
+  ): Promise<void> => {
+    let revision: CacheRevision | undefined;
+    try {
+      revision = await persistence;
+    } catch {
+      // A failed cache write cannot revoke the successful network snapshot.
+      return;
+    }
+    if (
+      revision === undefined ||
+      disposed ||
+      page.generation !== cacheGeneration ||
+      page.input !== firstPageInput() ||
+      unpersistedPages().get(index) !== page
+    )
+      return;
+    batch(() => {
+      // Cache pushes (including optimistic writes) can arrive before this ack.
+      // Never rewind their watermark or republish/clear the visible row data.
+      if (cacheObservation === page.observation) {
+        setCurrentCacheRevision(revision);
+        cacheObservation += 1;
+      }
+      networkAuthorityInput = page.input;
+      setNetworkAuthorityRevision(revision);
+      forgetUnpersistedPage(index);
+    });
+  };
+
   createEffect(() => {
     const host = getGraphqlSoupCacheHost();
     if (!host) return;
@@ -202,6 +260,7 @@ export function createGraphqlSoupAstItemsQuery(
       setNetworkAuthorityRevision(undefined);
       setLocalProjection(undefined);
       setBaselineGeneration(undefined);
+      setUnpersistedPages(new Map());
     };
     const observeCurrentRevision = () => {
       const observedGeneration = cacheGeneration;
@@ -218,6 +277,7 @@ export function createGraphqlSoupAstItemsQuery(
         .catch(() => undefined);
     };
     const unsubscribeChanges = host.onCacheChanged((revision) => {
+      cacheObservation += 1;
       if (
         networkAuthorityRevision() !== undefined &&
         networkAuthorityRevision() !== revision &&
@@ -268,6 +328,7 @@ export function createGraphqlSoupAstItemsQuery(
       return;
     if (
       revision === undefined ||
+      hasUnpersistedPages(input) ||
       (networkAuthorityInput === input &&
         networkAuthorityRevision() === revision &&
         !offline() &&
@@ -536,11 +597,47 @@ export function createGraphqlSoupAstItemsQuery(
       requestPolicy: 'cache-and-network',
       keepPreviousData: false,
       onResult: (result, page) => {
-        if (result.data) setBaselineGeneration(cacheGeneration);
-        if (page.pageIndex !== 0) return;
+        if (!result.data) return;
+        setBaselineGeneration(cacheGeneration);
         const metadata = normalizedCacheResultMetadata(result);
-        if (metadata?.source !== 'live-network' || !metadata.revision) return;
+        if (metadata?.source !== 'live-network') {
+          // An affected/cache result already reflects local state. Its pending
+          // network acknowledgement may no longer claim authority over it.
+          forgetUnpersistedPage(page.pageIndex);
+          return;
+        }
+        if (metadata.persistence) {
+          const pending: UnpersistedPage = {
+            input: firstInput,
+            generation: cacheGeneration,
+            observation: cacheObservation,
+          };
+          localRequest += 1;
+          batch(() => {
+            setUnpersistedPages((pages) =>
+              new Map(
+                [...pages].filter(
+                  ([, entry]) =>
+                    entry.input === firstInput &&
+                    entry.generation === cacheGeneration
+                )
+              ).set(page.pageIndex, pending)
+            );
+            setLocalProjection(undefined);
+          });
+          recordAuthority('network');
+          finishStaleFallback('network');
+          void acknowledgeNetworkPage(
+            page.pageIndex,
+            pending,
+            metadata.persistence
+          );
+          return;
+        }
+        forgetUnpersistedPage(page.pageIndex);
+        if (page.pageIndex !== 0 || !metadata.revision) return;
         networkAuthorityInput = firstInput;
+        cacheObservation += 1;
         batch(() => {
           setCurrentCacheRevision(metadata.revision);
           setNetworkAuthorityRevision(metadata.revision);
@@ -596,11 +693,12 @@ export function createGraphqlSoupAstItemsQuery(
     return local;
   };
   const networkIsAuthoritative = (): boolean =>
-    !offline() &&
-    !query.error?.networkError &&
-    networkAuthorityInput === firstPageInput() &&
-    networkAuthorityRevision() !== undefined &&
-    networkAuthorityRevision() === currentCacheRevision();
+    hasUnpersistedPages(firstPageInput()) ||
+    (!offline() &&
+      !query.error?.networkError &&
+      networkAuthorityInput === firstPageInput() &&
+      networkAuthorityRevision() !== undefined &&
+      networkAuthorityRevision() === currentCacheRevision());
 
   // An overlay covers only the server rows that existed when it was evaluated.
   // New server pages must render immediately, even if the next evaluation stalls
