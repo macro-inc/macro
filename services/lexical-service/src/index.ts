@@ -44,6 +44,7 @@ app.use('/cognitionv2/*', internalAuth);
 app.use('/search/*', internalAuth);
 app.use('/xml/*', internalAuth);
 app.use('/markdown/*', internalAuth);
+app.use('/comment-mark/*', internalAuth);
 app.use('/snapshot/*', internalAuth);
 app.use('/mentions', internalAuth);
 app.use('/extract-reply', internalAuth);

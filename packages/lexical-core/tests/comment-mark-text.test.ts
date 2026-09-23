@@ -102,6 +102,27 @@ describe('$getCommentMarkContext', () => {
     expect(editor.read(() => $getCommentMarkContext('mark'))).toBeNull();
   });
 
+  it('centres on the marked copy of a phrase repeated in the block', () => {
+    const editor = editorWith(() => {
+      const mark = $createCommentNode({ ids: ['mark'], isDraft: false });
+      mark.append($createTextNode('needle'));
+      $getRoot().append(
+        $createParagraphNode().append(
+          $createTextNode(`needle ${'a'.repeat(100)} `),
+          mark,
+          $createTextNode(` ${'b'.repeat(100)}`)
+        )
+      );
+    });
+
+    const context = editor.read(() =>
+      $getCommentMarkContext('mark', { surroundingLimit: 20 })
+    );
+    expect(context?.surroundingText).toBe(
+      `\u2026${'a'.repeat(6)} needle ${'b'.repeat(6)}\u2026`
+    );
+  });
+
   it('windows a long block around the mark and bounds the marked text', () => {
     const before = 'a'.repeat(500);
     const after = 'b'.repeat(500);

@@ -3,8 +3,10 @@ import { $dfs } from '@lexical/utils';
 import {
   $applyNodeReplacement,
   $getRoot,
+  $isRootOrShadowRoot,
   type EditorConfig,
   type ElementNode,
+  type LexicalNode,
   type LexicalUpdateJSON,
   type NodeKey,
   type RangeSelection,
@@ -70,11 +72,15 @@ function clip(text: string, limit: number): string {
   return text.length > limit ? text.slice(0, limit) + ELLIPSIS : text;
 }
 
-/** A window of `text` at most `limit` long, centred on `focus` when it fits. */
-function windowAround(text: string, focus: string, limit: number): string {
+/** A window of `text` at most `limit` long, centred on `focus` starting at `at`. */
+function windowAround(
+  text: string,
+  at: number,
+  focusLength: number,
+  limit: number
+): string {
   if (text.length <= limit) return text;
-  const at = Math.max(0, text.indexOf(focus));
-  const pad = Math.floor((limit - Math.min(focus.length, limit)) / 2);
+  const pad = Math.floor((limit - Math.min(focusLength, limit)) / 2);
   const start = Math.max(0, Math.min(at - pad, text.length - limit));
   const end = start + limit;
   return (
@@ -82,6 +88,27 @@ function windowAround(text: string, focus: string, limit: number): string {
     text.slice(start, end) +
     (end < text.length ? ELLIPSIS : '')
   );
+}
+
+/**
+ * The length of the text that precedes `node` within its top-level block,
+ * found from the node's own position so a phrase repeated elsewhere in the
+ * block cannot be mistaken for the marked one.
+ */
+function $textBefore(node: LexicalNode): number {
+  let length = 0;
+  let current: LexicalNode | null = node;
+  while (current && !$isRootOrShadowRoot(current.getParent())) {
+    for (
+      let sibling = current.getPreviousSibling();
+      sibling;
+      sibling = sibling.getPreviousSibling()
+    ) {
+      length += sibling.getTextContent().length;
+    }
+    current = current.getParent();
+  }
+  return length;
 }
 
 /**
@@ -95,20 +122,28 @@ export function $getCommentMarkContext(
   { markedLimit = 1000, surroundingLimit = 2000 } = {}
 ): CommentMarkContext | null {
   const blocks = new Map<NodeKey, ElementNode>();
+  let offset: number | undefined;
   for (const { node } of $dfs($getRoot())) {
     if (!$isCommentNode(node) || !node.getIDs().includes(markId)) continue;
+    offset ??= $textBefore(node);
     const block = node.getTopLevelElement();
     if (block && !blocks.has(block.getKey())) blocks.set(block.getKey(), block);
   }
   if (blocks.size === 0) return null;
   const markedText = $getCommentMarkText(markId);
-  const surrounding = [...blocks.values()]
+  const joined = [...blocks.values()]
     .map((block) => block.getTextContent())
-    .join('\n')
-    .trim();
+    .join('\n');
+  const leading = joined.length - joined.trimStart().length;
+  const surrounding = joined.trim();
   return {
     markedText: clip(markedText, markedLimit),
-    surroundingText: windowAround(surrounding, markedText, surroundingLimit),
+    surroundingText: windowAround(
+      surrounding,
+      Math.max(0, (offset ?? 0) - leading),
+      markedText.length,
+      surroundingLimit
+    ),
   };
 }
 
