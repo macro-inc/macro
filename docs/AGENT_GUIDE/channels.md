@@ -495,7 +495,13 @@ open the last selected conversation, not a slower earlier request.
 Check cached Home → Chat navigation, All/Recent/search, and unread state after a
 read, a new notification, deletion, and reconnect. Cache reads remain asynchronous:
 a brief spinner can still appear, but cached rows must not wait for a background
-network refresh. If more unread notifications
+network refresh. Conversely, `cache-and-network` refreshes must start without
+waiting for a busy cache worker. When checking slow loads, distinguish network
+start from result display: network results still wait for cache persistence and
+revision acknowledgement. A late cache snapshot must not replace newer network
+rows or an optimistic update. Check a cold offline open too: a cache hit arriving
+after the network failure must remain usable without erasing the refresh error.
+If more unread notifications
 remain, the limited edge must refresh to the next one rather than staying empty.
 Refreshing unread indicators while composing must preserve the conversation,
 scroll position, and input focus. The backend must support the new edge arguments

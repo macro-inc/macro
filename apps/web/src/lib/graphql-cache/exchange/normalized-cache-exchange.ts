@@ -3,17 +3,17 @@
  *
  * Differences from `@urql/exchange-graphcache`:
  * - cache reads are **async** (the cache is disk-backed, possibly in another
- *   worker/process), so operations needing the network are re-injected into
- *   the forward pipeline through a queue after the read resolves;
+ *   worker/process). Cache-first misses enter the network queue after reading;
+ *   cache-and-network queries start the network without waiting for storage;
  * - invalidation is push-based: the host emits "these operation keys must
  *   re-execute" (local sibling writes, other tabs/webviews, external
  *   invalidations) and the exchange re-executes them as `cache-first`.
  *
  * Request policies:
  * - `cache-first` (default): hit → emit; miss → network.
- * - `cache-and-network`: hit → emit with `stale: true`, then network.
- *   (`toPromise()` ignores stale results, so imperative callers keep
- *   network-fresh semantics for free.)
+ * - `cache-and-network`: read and fetch concurrently; a cache hit may emit with
+ *   `stale: true` only before newer results supersede that read. (`toPromise()`
+ *   ignores stale results, so imperative callers keep network-fresh semantics.)
  * - `network-only`: skip read; response still written to cache.
  * - `cache-only`: hit → emit; miss → emit `data: undefined`, no network.
  *
@@ -447,6 +447,8 @@ export function normalizedCacheExchange(
       networkRegistrationSatisfied: boolean;
       retainedReplacementFallback?: RetainedReplacementFallback;
       networkResultVersion: number;
+      cacheReadVersion: number;
+      networkError?: CombinedError;
       queryResultTurn?: Promise<void>;
     };
     const queryStates = new Map<number, QueryState>();
@@ -460,10 +462,22 @@ export function normalizedCacheExchange(
           completedReplacementFallback: false,
           networkRegistrationSatisfied: false,
           networkResultVersion: 0,
+          cacheReadVersion: 0,
         };
         queryStates.set(key, state);
       }
       return state;
+    };
+
+    // Async reads must not resurrect a torn-down operation, overwrite a newer
+    // network result, or undo a subsequent optimistic/affected cache reread.
+    const beginCacheRead = (key: number): (() => boolean) => {
+      const state = queryState(key);
+      const version = ++state.cacheReadVersion;
+      return () =>
+        activeOps.has(key) &&
+        queryStates.get(key) === state &&
+        state.cacheReadVersion === version;
     };
 
     const acquireQueryResultTurn = async (key: number): Promise<() => void> => {
@@ -605,6 +619,7 @@ export function normalizedCacheExchange(
     const emitAffectedWhileNetworkBound = (key: number): void => {
       const operation = activeOps.get(key);
       if (!operation) return;
+      const isCurrentRead = beginCacheRead(key);
       void host
         .readQuery({
           opKey: operation.key,
@@ -616,7 +631,7 @@ export function normalizedCacheExchange(
         })
         .then((read) => {
           const active = activeOps.get(key);
-          if (read.kind !== 'hit' || !active) return;
+          if (read.kind !== 'hit' || !active || !isCurrentRead()) return;
           // Preserve the authoritative request while immediately surfacing the
           // newer local view. Its eventual result still gets the deferred
           // cache reread below when it could not register fresh dependencies.
@@ -660,7 +675,9 @@ export function normalizedCacheExchange(
         makeSubject<Operation>();
 
       const enqueueQueryForward = (op: Operation): void => {
-        queryState(op.key).networkBoundQueries += 1;
+        const state = queryState(op.key);
+        state.networkBoundQueries += 1;
+        state.networkError = undefined;
         enqueueForward(op);
       };
 
@@ -884,13 +901,17 @@ export function normalizedCacheExchange(
           enqueueForward(hydrationTransportOperation(op));
           return undefined;
         }
+        const isCurrentRead = beginCacheRead(op.key);
         const policy = op.context.requestPolicy;
         if (policy === 'network-only') {
           enqueueQueryForward(op);
           return undefined;
         }
+        const registrationOnly =
+          op.context[REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY] === true;
+        let networkForwarded = false;
         try {
-          const read = await host.readQuery({
+          const pendingRead = host.readQuery({
             opKey: op.key,
             query: queryText(op),
             operationName: operationName(op),
@@ -901,16 +922,30 @@ export function normalizedCacheExchange(
                 ? 'user-visible'
                 : undefined,
           });
+          // Admit the cache read first, but never wait for the worker's queue
+          // before starting a request that needs the network regardless.
+          if (policy === 'cache-and-network' && !registrationOnly) {
+            networkForwarded = true;
+            enqueueQueryForward(op);
+          }
+          const read = await pendingRead;
+          if (!isCurrentRead()) return undefined;
           if (read.kind === 'hit') {
-            const stale = policy === 'cache-and-network';
-            if (stale) enqueueQueryForward(op);
-            return cacheResult(op, read.data, stale);
+            const state = queryState(op.key);
+            const stale = networkForwarded && state.networkBoundQueries > 0;
+            return {
+              ...cacheResult(op, read.data, stale),
+              // A fast offline failure must not discard a slower usable cache
+              // hit, nor may that hit erase the failed revalidation's error.
+              error: networkForwarded ? state.networkError : undefined,
+            };
           }
           if (policy === 'cache-only') {
             return cacheResult(op, undefined, false);
           }
         } catch (error) {
           options.onCacheError?.(error, op);
+          if (!isCurrentRead()) return undefined;
           if (isOwnerEpochLostError(error)) {
             queryState(op.key).replacementFallback = true;
           }
@@ -920,10 +955,7 @@ export function normalizedCacheExchange(
             return cacheResult(op, undefined, false);
           }
         }
-        if (op.context[REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY] === true) {
-          return undefined;
-        }
-        enqueueQueryForward(op);
+        if (!networkForwarded && !registrationOnly) enqueueQueryForward(op);
         return undefined;
       }
 
@@ -1141,6 +1173,8 @@ export function normalizedCacheExchange(
             };
           }
         } else if (op.kind === 'query') {
+          const readState = queryState(op.key);
+          if (result.data != null) readState.cacheReadVersion += 1;
           const releaseTurn = await acquireQueryResultTurn(op.key);
           try {
             const state = queryState(op.key);
@@ -1196,12 +1230,16 @@ export function normalizedCacheExchange(
                 options.onCacheError?.(error, op);
               }
             }
+            state.networkError = result.error;
             if (result.hasNext !== true) {
               const registrationSatisfied = state.networkRegistrationSatisfied;
               state.networkRegistrationSatisfied = false;
               finishNetworkQuery(op.key, registrationSatisfied);
             }
           } finally {
+            // Also fence reads started during persistence: their snapshot may
+            // predate the result about to be published. Never touch a remount.
+            if (result.data != null) readState.cacheReadVersion += 1;
             if (!activeOps.has(op.key)) queryStates.delete(op.key);
             releaseTurn();
           }
