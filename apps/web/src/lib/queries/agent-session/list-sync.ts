@@ -19,12 +19,8 @@ async function refreshQueuedLists(resolve: () => void): Promise<void> {
         const results = await Promise.allSettled([
           refreshSoupEntities(all ? undefined : sessions, {
             throwOnError: true,
-            agentSessionListsOnly: true,
           }),
-          refreshActiveGraphqlSoupQueries({
-            throwOnError: true,
-            agentSessionListsOnly: true,
-          }),
+          refreshActiveGraphqlSoupQueries({ throwOnError: true }),
         ]);
         const failed = results.find((result) => result.status === 'rejected');
         if (failed?.status === 'rejected') throw failed.reason;

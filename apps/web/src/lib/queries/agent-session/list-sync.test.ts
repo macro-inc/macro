@@ -2,17 +2,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   rest: vi.fn<
-    (
-      ids?: string[],
-      options?: { throwOnError?: boolean; agentSessionListsOnly?: boolean }
-    ) => Promise<void>
+    (ids?: string[], options?: { throwOnError?: boolean }) => Promise<void>
   >(async () => {}),
-  graphql: vi.fn<
-    (options?: {
-      throwOnError?: boolean;
-      agentSessionListsOnly?: boolean;
-    }) => Promise<void>
-  >(async () => {}),
+  graphql: vi.fn<(options?: { throwOnError?: boolean }) => Promise<void>>(
+    async () => {}
+  ),
 }));
 
 vi.mock('@queries/soup/refresh', () => ({
@@ -34,12 +28,9 @@ it('coalesces a metadata burst and refreshes both list transports', async () => 
     refreshAgentSessionLists('second'),
   ]);
   expect(mocks.rest.mock.calls).toEqual([
-    [['first', 'second'], { throwOnError: true, agentSessionListsOnly: true }],
+    [['first', 'second'], { throwOnError: true }],
   ]);
-  expect(mocks.graphql).toHaveBeenCalledExactlyOnceWith({
-    throwOnError: true,
-    agentSessionListsOnly: true,
-  });
+  expect(mocks.graphql).toHaveBeenCalledExactlyOnceWith({ throwOnError: true });
 });
 
 it('reconnect refreshes all lists to recover missed events', async () => {
@@ -47,9 +38,7 @@ it('reconnect refreshes all lists to recover missed events', async () => {
     refreshAgentSessionLists('first'),
     refreshAgentSessionLists(),
   ]);
-  expect(mocks.rest.mock.calls).toEqual([
-    [undefined, { throwOnError: true, agentSessionListsOnly: true }],
-  ]);
+  expect(mocks.rest.mock.calls).toEqual([[undefined, { throwOnError: true }]]);
   expect(mocks.graphql).toHaveBeenCalledOnce();
 });
 
@@ -69,8 +58,8 @@ it('does not lose metadata committed while a refresh is in flight', async () => 
   await Promise.all([first, second]);
   expect(mocks.graphql).toHaveBeenCalledTimes(2);
   expect(mocks.rest.mock.calls).toEqual([
-    [['first'], { throwOnError: true, agentSessionListsOnly: true }],
-    [['second'], { throwOnError: true, agentSessionListsOnly: true }],
+    [['first'], { throwOnError: true }],
+    [['second'], { throwOnError: true }],
   ]);
 });
 

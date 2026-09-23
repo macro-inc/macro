@@ -117,34 +117,6 @@ describe('active GraphQL Soup queries', () => {
     await expect(result).resolves.toBeUndefined();
   });
 
-  it('agent-session revalidation skips readers that cannot show agent sessions', async () => {
-    const sessions = vi.fn(async () => undefined);
-    const inbox = vi.fn(async () => undefined);
-    const undeclared = vi.fn(async () => undefined);
-    register({
-      isEnabled: () => true,
-      refresh: sessions,
-      mayContainAgentSessions: () => true,
-    });
-    register({
-      isEnabled: () => true,
-      refresh: inbox,
-      mayContainAgentSessions: () => false,
-    });
-    register({ isEnabled: () => true, refresh: undeclared });
-
-    await expect(
-      refreshActiveGraphqlSoupQueries({
-        throwOnError: true,
-        agentSessionListsOnly: true,
-      })
-    ).resolves.toBeUndefined();
-
-    expect(sessions).toHaveBeenCalledOnce();
-    expect(inbox).not.toHaveBeenCalled();
-    expect(undeclared).toHaveBeenCalledOnce();
-  });
-
   it('refreshes only enabled registered queries', async () => {
     const enabledRefresh = vi.fn(async () => undefined);
     const disabledRefresh = vi.fn(async () => undefined);

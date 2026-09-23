@@ -1,6 +1,5 @@
 import { queryClient } from '@queries/client';
 import { partialMatchKey, type Query } from '@tanstack/solid-query';
-import { bodyMayContainAgentSessions } from './agent-session-scope';
 import { soupKeys } from './keys';
 import { getSoupNormalizer, soupNormKey } from './normalized-cache/normalizer';
 
@@ -8,13 +7,11 @@ import { getSoupNormalizer, soupNormKey } from './normalized-cache/normalizer';
  * Revalidate REST lists after a committed server change. Initial reads have no
  * normalized dependencies yet, so they must also be cancelled and restarted.
  * Unknown entities can enter any list; known entities target dependent lists.
- * `agentSessionListsOnly` limits both to lists whose filter admits sessions.
  */
 export async function refreshSoupEntities(
   entityIds?: string[],
-  options: { throwOnError?: boolean; agentSessionListsOnly?: boolean } = {}
+  options: { throwOnError?: boolean } = {}
 ): Promise<void> {
-  const { agentSessionListsOnly, ...invalidateOptions } = options;
   const dependencies = entityIds?.map((id) =>
     getSoupNormalizer().getDependentQueriesByIds([soupNormKey(id)])
   );
@@ -28,8 +25,6 @@ export async function refreshSoupEntities(
   ];
   const predicate = (query: Query) =>
     listPrefixes.some((prefix) => partialMatchKey(query.queryKey, prefix)) &&
-    (!agentSessionListsOnly ||
-      query.queryKey.some(bodyMayContainAgentSessions)) &&
     (all ||
       query.state.data === undefined ||
       keys.some((key) => partialMatchKey(query.queryKey, key)));
@@ -37,5 +32,5 @@ export async function refreshSoupEntities(
   // Explicit cancellation also supersedes initial requests with no data;
   // invalidateQueries alone would share their older in-flight result.
   await queryClient.cancelQueries({ predicate, type: 'active' });
-  await queryClient.invalidateQueries({ predicate }, invalidateOptions);
+  await queryClient.invalidateQueries({ predicate }, options);
 }

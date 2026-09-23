@@ -4,8 +4,6 @@ import { createRequest } from '@urql/core';
 type ActiveGraphqlSoupQuery = {
   isEnabled: () => boolean;
   refresh: () => Promise<void>;
-  /** Readers that omit this are refreshed for agent-session changes. */
-  mayContainAgentSessions?: () => boolean;
 };
 
 const activeQueries = new Set<ActiveGraphqlSoupQuery>();
@@ -38,22 +36,17 @@ export function registerActiveGraphqlSoupQuery(
   return () => activeQueries.delete(query);
 }
 
-/** Network-refreshes every mounted and enabled GraphQL Soup query, or only
- * readers that can show agent sessions when `agentSessionListsOnly` is set.
+/** Network-refreshes every mounted and enabled GraphQL Soup query.
  * Strict callers may only release optimistic state after every active reader
  * succeeded. Other callers retain the existing best-effort behavior.
  */
 export async function refreshActiveGraphqlSoupQueries(
-  options: { throwOnError?: boolean; agentSessionListsOnly?: boolean } = {}
+  options: { throwOnError?: boolean } = {}
 ): Promise<void> {
-  const targeted = (query: ActiveGraphqlSoupQuery) =>
-    query.isEnabled() &&
-    (!options.agentSessionListsOnly ||
-      (query.mayContainAgentSessions?.() ?? true));
   const refreshed = new Set<ActiveGraphqlSoupQuery>();
   await Promise.all(
     [...activeQueries].map(async (query) => {
-      if (!targeted(query)) return;
+      if (!query.isEnabled()) return;
       try {
         await query.refresh();
         refreshed.add(query);
@@ -66,7 +59,9 @@ export async function refreshActiveGraphqlSoupQueries(
   // Conversely, a failed reader that unmounted no longer blocks completion.
   if (
     options.throwOnError &&
-    [...activeQueries].some((query) => targeted(query) && !refreshed.has(query))
+    [...activeQueries].some(
+      (query) => query.isEnabled() && !refreshed.has(query)
+    )
   ) {
     throw new Error(
       'GraphQL Soup revalidation did not succeed for every active query'

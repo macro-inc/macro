@@ -20,7 +20,6 @@ vi.mock('./graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: vi.fn(async () => {}),
 }));
 
-import { NIL_UUID } from '@app/features/next-soup/filters/configs/base';
 import { refreshAgentSessionLists } from '../agent-session/list-sync';
 import { soupKeys } from './keys';
 import { refreshSoupEntities } from './refresh';
@@ -93,39 +92,6 @@ it('leaves unrelated loaded REST lists alone for a known session', async () => {
   await refreshSoupEntities(['session']);
   expect(unrelated).not.toHaveBeenCalled();
   expect(client.getQueryData(otherKey)).toBe('already loaded');
-});
-
-it('leaves REST lists that exclude agent sessions alone for an unknown session', async () => {
-  const excluded = [
-    [
-      ...soupKeys.items._def,
-      {},
-      { agent_session_filters: { ids: [NIL_UUID] } },
-    ],
-    [...soupKeys.astItems._def, {}, { asf: { l: { id: NIL_UUID } } }],
-    [...soupKeys.astItems._def, {}, { df: { l: 'task' } }],
-  ];
-  const queryFns = excluded.map((queryKey) => {
-    const queryFn = vi.fn(async () => 'refetched');
-    const observer = new QueryObserver(client, {
-      queryKey,
-      queryFn,
-      initialData: 'already loaded',
-      staleTime: Infinity,
-    });
-    unsubscribers.push(observer.subscribe(() => {}));
-    return queryFn;
-  });
-  const sessions = mountInitialList();
-
-  const refresh = refreshSoupEntities(['session'], {
-    agentSessionListsOnly: true,
-  });
-  await vi.waitFor(() => expect(sessions.queryFn).toHaveBeenCalledTimes(2));
-  sessions.responses[1]('idle');
-  await refresh;
-
-  for (const queryFn of queryFns) expect(queryFn).not.toHaveBeenCalled();
 });
 
 it('retries a real query failure so persisted metadata can replace the cached row', async () => {
