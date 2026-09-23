@@ -6,7 +6,13 @@ control; do not regenerate them to repair a build error.
 
 ## Prerequisites
 
-- Run `bun install --frozen-lockfile` with the repository's Bun/Rust tools installed.
+- Use the repository's Bun version (`packageManager` in the root `package.json`)
+  or a compatible newer version, and confirm `bun --version` in the shell that
+  will run the build. Run `bun install --frozen-lockfile` from the repository root.
+  Older Bun installations can fail to resolve workspace `catalog:` dependencies.
+- Install the Rust toolchain in `rust-toolchain.toml`, `just`, `wasm-pack`, and
+  the Tauri CLI (`cargo tauri`). The clean-checkout validation below records the
+  tool versions used.
 - Install Android SDK Platform **36**, Build Tools 36, Platform Tools, and an
   Android 16 / API 36 Google Play ARM64 emulator through Android Studio.
 - Install NDK **30.0.16248370**, or set `NDK_HOME` to another intended installed NDK.
@@ -43,9 +49,9 @@ PORT=3004 just android-dev --no-watch --no-dev-server-wait --config '{"build":{"
 That address is emulator-only; the host-side server check must be skipped.
 
 Build commands embed the production frontend. Outputs are under
-`tauri/src-tauri/gen/android/app/build/outputs/`. The launcher defaults to ARM64;
-other ABIs and Play distribution are task 06. Release builds require the signing
-configuration below and produce signed artifacts.
+`tauri/src-tauri/gen/android/app/build/outputs/`. The launcher defaults to ARM64.
+Other ABIs are task 06 and Play distribution is task 07. Release builds require
+the signing configuration below and produce signed artifacts.
 
 ## Release signing
 
@@ -192,10 +198,102 @@ After installing an APK signed with an associated certificate:
 ```sh
 adb shell pm verify-app-links --re-verify com.macro.app.prod
 adb shell pm get-app-links com.macro.app.prod
-adb shell am start -W -a android.intent.action.VIEW -d 'https://dev.macro.com/app/task/TASK_ID'
+adb shell am start -W -a android.intent.action.VIEW -c android.intent.category.DEFAULT -c android.intent.category.BROWSABLE -d 'https://dev.macro.com/app/task/TASK_ID'
 ```
 
 Adding `-p com.macro.app.prod` tests routing but does not prove domain verification.
 Test cold/warm links, auth cancellation/retry, email-code login, relaunch with a
 session, logout/account switching, and entity links through login. Real provider
 testing and signed release qualification are required before completing task 01.
+
+### Production and staging publication handoff
+
+Task 01 prepares this handoff and verifies development links. Task 07 owns the
+Play certificate, publication using that certificate, and Play-installed checks.
+Task 06 owns any hosting preparation that can proceed without Play access.
+
+Read-only inspection on 2026-09-23 found:
+
+| Host | Hosting and current response | Next step |
+| --- | --- | --- |
+| `dev.macro.com` | CloudFront `E1YKU2ZF1GN77R`, `/.well-known/*` routes to `macro-oidc-dev`; HTTPS returns JSON containing this checkout's debug and upload certificates for `com.macro.app.prod`. | Preserve the verified development association and other existing entries. |
+| `macro.com` | CloudFront `E17BXLF369UBEG`, `/.well-known/*` routes to `macro-oidc-prod`; HTTPS returns JSON with a legacy `com.tauri.dev` association. | Add `com.macro.app.prod` with the Play App Signing certificate when available. Do not publish the development certificate file here. |
+| `staging.macro.com` | DNS resolves, but HTTPS fails its TLS handshake; neither inspected distribution declares this hostname, and no staging alias was present in the account's distribution list. | Establish the intended staging HTTPS/CDN origin and `/.well-known/*` routing before publishing or claiming staging verification. Do not assume the production bucket owns staging. |
+
+The S3 object key for the confirmed dev/prod routes is
+`.well-known/assetlinks.json`. The website infrastructure owns these distributions;
+the app build does not deploy them. The manifest declares `/app` links on all
+three hosts. Staging testing is deferred until its hosting works; it is not a
+substitute for the completed development-host checks.
+
+Publication procedure for the hosting owner:
+
+1. Recheck the chosen hostname's DNS, valid HTTPS certificate, CDN aliases and
+   `/.well-known/*` origin. Confirm the endpoint returns HTTP 200 with JSON
+   directly, without a redirect or an HTML fallback.
+2. Obtain the SHA-256 **app-signing** fingerprint from Play Console for
+   `com.macro.app.prod`. The upload certificate is only suitable for testing
+   locally signed builds. If staging is used for such a test, explicitly select
+   the local-release certificate; keep debug certificates confined to dev.
+3. Download and retain the existing association JSON, S3 ETag and object metadata.
+   Generate the candidate Macro statement from `apps/web`:
+
+   ```sh
+   bun scripts/android-assetlinks.ts 'PLAY_APP_SIGNING_SHA256' > /tmp/macro-assetlinks-candidate.json
+   ```
+
+   Replace the placeholder with the actual 32-byte colon-separated fingerprint.
+   Merge the generated statement into the downloaded array, preserving unrelated
+   packages, relations and any still-required certificates. The generated file is
+   a candidate statement, not a replacement for the full live object. Removing
+   legacy associations requires a separate ownership/usage check.
+4. Review the merged JSON for the exact package, certificate and
+   `delegate_permission/common.handle_all_urls` relation. Upload only the chosen
+   `.well-known/assetlinks.json` object, using `Content-Type: application/json`,
+   a short cache lifetime (e.g. `max-age=300`) and `--if-match` with its prior ETag.
+   If the ETag changed, fetch and merge again instead of overwriting new content.
+5. Invalidate only `/.well-known/assetlinks.json` on that host's distribution.
+   Fetch the public URL again, confirm the intended JSON and preservation of old
+   entries, and check Google's Digital Asset Links result for the exact
+   host/package/certificate. Allow its independent cache to expire as necessary.
+6. Install the appropriate signed build. Run the verification commands above and
+   require `verified` for each intended host. Test natural cold/warm links with
+   both DEFAULT and BROWSABLE categories, without a package override or forced
+   approval. Exercise an entity link while signed in and through a login detour,
+   including query preservation. Task 07 repeats this with a Play-installed build.
+7. Record the artifact certificate, host, served JSON, verification result and
+   route result. If rollback is needed, restore the saved JSON and metadata with
+   a conditional write against the published ETag, then invalidate the same URL.
+   Reconcile concurrent edits before restoring anything.
+
+## Clean-checkout validation
+
+On 2026-09-23, app commit `fe0385bbe1` was checked out into a new detached
+worktree. No `node_modules`, frontend/WASM output, Cargo target directory or
+Gradle project build output was copied from the development checkout. Normal
+machine-level dependency caches and the installed SDK were available.
+
+The run used Bun 1.3.13, Rust 1.94.0, Tauri CLI 2.9.6, wasm-pack 0.13.1,
+just 1.45.0, Java 21, SDK 36 and NDK 30.0.16248370. After
+`bun install --frozen-lockfile`, the existing Firebase inputs were provisioned in
+ignored files and the signing key was restored from Doppler into owner-only
+temporary storage outside the checkout. From `apps/web`, both commands passed:
+
+```sh
+just android-build --debug --apk true --aab false -- --no-default-features
+just android-build --apk true --aab true -- --no-default-features
+```
+
+Both APK signatures, package/version metadata and 16 KB ZIP alignment passed.
+The release APK was non-debuggable and matched the backed-up upload certificate;
+the AAB passed `jarsigner -verify` and bundletool validation. The debug APK
+installed on a fresh API 36 emulator, displayed login, and received a natural
+cold development App Link with Android reporting `dev.macro.com: verified`.
+The release APK replaced the existing local release installation without clearing
+data; a natural cold Settings link retained the authenticated production account.
+The eight focused auth/navigation/Firebase test files passed all 43 tests.
+Tracked files in the clean checkout remained unchanged.
+
+This run used embedded production assets with OTA disabled. Tasks 05–07 retain
+OTA qualification, the wider device/ABI/16 KB runtime matrix, staging hosting
+preparation, and Play-installed release checks.
