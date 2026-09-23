@@ -15,8 +15,13 @@ vi.mock('@queries/soup/refresh', () => ({
 vi.mock('@queries/soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: mocks.graphql,
 }));
+vi.mock('@queries/client', async () => {
+  const { QueryClient } = await import('@tanstack/query-core');
+  return { queryClient: new QueryClient() };
+});
 
 import { refreshAgentSessionLists } from './list-sync';
+import { invalidateAgentSessionMetadata } from './session-metadata-sync';
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.restoreAllMocks());
@@ -34,16 +39,12 @@ it('coalesces a metadata burst into one REST list refresh', async () => {
 
 it('never network-refreshes the GraphQL soup queries', async () => {
   await refreshAgentSessionLists('first');
-  await refreshAgentSessionLists();
   expect(mocks.graphql).not.toHaveBeenCalled();
 });
 
-it('reconnect refreshes all lists to recover missed events', async () => {
-  await Promise.all([
-    refreshAgentSessionLists('first'),
-    refreshAgentSessionLists(),
-  ]);
-  expect(mocks.rest.mock.calls).toEqual([[undefined, { throwOnError: true }]]);
+it('leaves soup lists alone when the gateway socket opens', async () => {
+  await invalidateAgentSessionMetadata();
+  expect(mocks.rest).not.toHaveBeenCalled();
 });
 
 it('does not lose metadata committed while a refresh is in flight', async () => {
@@ -102,19 +103,4 @@ it('retains failed IDs after a bounded retry for the next refresh', async () => 
     ['failed'],
     ['failed', 'next'],
   ]);
-});
-
-it('preserves a failed reconnect refresh across later session-specific updates', async () => {
-  const error = new Error('offline');
-  const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
-  mocks.rest.mockRejectedValueOnce(error).mockRejectedValueOnce(error);
-  await expect(refreshAgentSessionLists()).resolves.toBeUndefined();
-
-  await refreshAgentSessionLists('next');
-  expect(mocks.rest.mock.calls.map(([ids]) => ids)).toEqual([
-    undefined,
-    undefined,
-    undefined,
-  ]);
-  expect(logged).toHaveBeenCalledOnce();
 });
