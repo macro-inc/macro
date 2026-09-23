@@ -7,7 +7,7 @@
 #[cfg(test)]
 mod test;
 
-use std::future::Future;
+use std::{future::Future, time::Duration};
 
 use crate::domain::{
     models::{Patch, SoupRealtimePatch},
@@ -32,6 +32,8 @@ use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
+use tokio_retry::{Retry, strategy::ExponentialBackoff};
+use tracing::Instrument as _;
 
 /// Consumer group used for Soup-affecting entity event offsets.
 struct SoupRealtimeConsumerGroup;
@@ -473,33 +475,64 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
     }
 }
 
+/// Total publication attempts per patch before returning for supervision.
+const MAX_NOTIFY_ATTEMPTS: usize = 5;
+
+/// Retries after one, two, four, and eight seconds.
+fn notify_retry_strategy() -> impl Iterator<Item = Duration> {
+    ExponentialBackoff::from_millis(2)
+        .factor(500)
+        .take(MAX_NOTIFY_ATTEMPTS - 1)
+}
+
 /// Commit-safe outcome after processing one entity event.
 enum EventOutcome {
-    /// Every affected item was successfully sent through the domain service.
+    /// Every affected item was successfully published through the domain service.
     Notified,
     /// A recognized event does not change a Soup-visible entity.
     Ignored,
 }
 
-#[tracing::instrument(skip(service, event), err)]
-fn process_event<S: SoupRealtimeService>(
+#[tracing::instrument(skip(service, event, commit), err)]
+async fn process_event<S: SoupRealtimeService>(
     service: &S,
     event: &DeclaredMacroEvent,
+    commit: impl FnOnce(),
 ) -> Result<EventOutcome, Report> {
     let patches = patches_from_event(event);
-    if patches.is_empty() {
+    let outcome = if patches.is_empty() {
         tracing::trace!("ignoring event without a Soup patch");
-        return Ok(EventOutcome::Ignored);
-    }
+        EventOutcome::Ignored
+    } else {
+        for patch in patches {
+            Retry::start(notify_retry_strategy(), || {
+                service.notify_users(patch.clone())
+            })
+            .await
+            .context(format!(
+                "failed to publish realtime Soup patch after {MAX_NOTIFY_ATTEMPTS} attempts"
+            ))?;
+        }
+        EventOutcome::Notified
+    };
 
-    for patch in patches {
-        service.notify_users(patch)?;
-    }
-    Ok(EventOutcome::Notified)
+    commit();
+    Ok(outcome)
 }
 
 fn commit_logged(consumer: &SoupRealtimeKafkaConsumer, message: &BorrowedMessage<'_>) {
-    let _ = consumer.inner().commit_message(message, CommitMode::Async);
+    let _ = consumer
+        .inner()
+        .commit_message(message, CommitMode::Async)
+        .inspect_err(|error| {
+            tracing::error!(
+                error = ?error,
+                topic = message.topic(),
+                partition = message.partition(),
+                offset = message.offset(),
+                "failed to commit realtime Soup source offset"
+            );
+        });
 }
 
 impl SoupRealtimeServiceImpl {
@@ -537,14 +570,17 @@ impl SoupRealtimeServiceImpl {
                 result = consumer.recv() => {
                     let Ok(message) = result else { continue; };
                     let kafka_message = message.inner();
-                    let _message_span = tracing::info_span!(
+                    let span = tracing::info_span!(
                         "realtime_soup_source_event",
                         topic = kafka_message.topic(),
                         partition = kafka_message.partition(),
                         offset = kafka_message.offset(),
-                    )
-                    .entered();
-                    let event = match message.decode_payload() {
+                    );
+                    let decoded = {
+                        let _guard = span.enter();
+                        message.decode_payload()
+                    };
+                    let event = match decoded {
                         Ok(event) => event,
                         Err(_) => {
                             commit_logged(&consumer, kafka_message);
@@ -552,9 +588,17 @@ impl SoupRealtimeServiceImpl {
                         }
                     };
 
-                    let _ = process_event(self,&event);
-
-                    commit_logged(&consumer, kafka_message);
+                    // Stop on failure: committing any later record on the same
+                    // partition would also commit past this unprocessed event.
+                    tokio::select! {
+                        biased;
+                        _ = &mut shutdown => break,
+                        result = process_event(self, &event, || {
+                            commit_logged(&consumer, kafka_message);
+                        }).instrument(span) => {
+                            result.context("failed to process realtime Soup source event")?;
+                        }
+                    }
                 }
             }
         }
