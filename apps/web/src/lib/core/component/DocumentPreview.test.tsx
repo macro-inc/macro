@@ -1,10 +1,23 @@
 import type { PreviewItem } from '@queries/preview/types';
 import type { CalendarMentionEvent } from '@service-storage/generated/schemas/calendarMentionEvent';
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   item: undefined as unknown,
+  openDocument: vi.fn(),
+  openExternalUrl: vi.fn(),
+}));
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/BlockLink',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    openDocument: mocks.openDocument,
+  })
+);
+vi.mock('@core/util/url', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  openExternalUrl: mocks.openExternalUrl,
 }));
 vi.mock('./ItemPreview', () => ({
   useItemPreviewData: () => ({
@@ -76,6 +89,7 @@ function renderCard() {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   mocks.item = calendarItem({});
 });
 
@@ -122,5 +136,24 @@ describe('calendar mention preview card', () => {
 
     expect(screen.getByText("You don't have access to this file")).toBeTruthy();
     expect(view.container.textContent).not.toContain('Pilates');
+  });
+
+  it('opens description links like the event view does', () => {
+    mocks.item = calendarItem({
+      description:
+        'See <a href="https://macro.com/app/md/doc-1?line=3">notes</a> and <a href="https://zoom.us/j/1">Zoom</a>',
+    });
+    renderCard();
+
+    fireEvent.click(screen.getByText('notes'));
+    expect(mocks.openDocument).toHaveBeenCalledWith(
+      'md',
+      'doc-1',
+      { line: '3' },
+      false
+    );
+
+    fireEvent.click(screen.getByText('Zoom'));
+    expect(mocks.openExternalUrl).toHaveBeenCalledWith('https://zoom.us/j/1');
   });
 });

@@ -383,7 +383,9 @@ function CalendarEventPreviewDetails(props: {
     props.event.organizerName ?? props.event.organizerEmail;
   const descriptionHtml = () =>
     sanitizeCalendarDescription(props.event.description ?? '');
-  const openDescriptionLink = (event: MouseEvent) => {
+  // Opening a Macro link reads the split layout from context, so the handler
+  // keeps this component's owner.
+  const openDescriptionLink = createCallback((event: MouseEvent) => {
     const anchor = (event.target as Element | null)?.closest('a[href]');
     if (!(anchor instanceof HTMLAnchorElement)) return;
     event.preventDefault();
@@ -393,13 +395,13 @@ function CalendarEventPreviewDetails(props: {
       openBlockDocument(
         target.blockName,
         target.documentId,
-        undefined,
+        Object.fromEntries(new URL(anchor.href).searchParams),
         event.shiftKey
       );
       return;
     }
     openExternalUrl(anchor.href);
-  };
+  });
   return (
     <div class="px-2 pb-2 flex flex-col gap-1 text-sm text-ink-muted">
       <Show when={!props.event.viewerEventId}>

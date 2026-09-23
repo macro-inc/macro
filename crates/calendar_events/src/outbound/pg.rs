@@ -1149,9 +1149,12 @@ impl CalendarRepository for PgCalendarRepository {
                 (mentioned.id IS NOT NULL) AS "mention_exists!",
                 viewer_event.id AS "resolved_event_id?",
                 viewer_event.is_channel_shared AS "is_channel_shared?",
-                viewer_event.title AS "title?",
-                viewer_event.description AS "description?",
-                viewer_event.location AS "location?",
+                COALESCE(occurrence_override.title, viewer_event.title) AS "title?",
+                left(
+                    COALESCE(occurrence_override.description, viewer_event.description),
+                    $5
+                ) AS "description?",
+                COALESCE(occurrence_override.location, viewer_event.location) AS "location?",
                 viewer_event.organizer_email AS "organizer_email?",
                 viewer_event.organizer_name AS "organizer_name?",
                 viewer_event.recurrence_lines AS "recurrence_lines?",
@@ -1181,7 +1184,7 @@ impl CalendarRepository for PgCalendarRepository {
                         (candidate.owner_id = $1) AS is_owned,
                         (candidate.id = mentioned.id) AS is_mentioned,
                         candidate.title,
-                        left(candidate.description, $5) AS description,
+                        candidate.description,
                         candidate.location,
                         candidate.organizer_email,
                         candidate.organizer_name,
@@ -1211,7 +1214,7 @@ impl CalendarRepository for PgCalendarRepository {
                         false,
                         true,
                         mentioned.title,
-                        left(mentioned.description, $5),
+                        mentioned.description,
                         mentioned.location,
                         mentioned.organizer_email,
                         mentioned.organizer_name,
@@ -1246,6 +1249,7 @@ impl CalendarRepository for PgCalendarRepository {
             LEFT JOIN LATERAL (
                 SELECT
                     instance.occurrence_key,
+                    instance.recurrence_id,
                     instance.starts_at,
                     instance.ends_at,
                     instance.start_date,
@@ -1268,6 +1272,11 @@ impl CalendarRepository for PgCalendarRepository {
                     instance.occurrence_key
                 LIMIT 1
             ) occurrence ON true
+            -- An exception's content replaces the series content for the
+            -- previewed occurrence alone, as it does in the event view.
+            LEFT JOIN calendar_event_overrides occurrence_override
+                ON occurrence_override.event_id = viewer_event.id
+               AND occurrence_override.recurrence_id = occurrence.recurrence_id
             LEFT JOIN LATERAL (
                 SELECT count(*) AS attendee_count
                 FROM calendar_event_attendees attendee
