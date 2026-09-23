@@ -347,20 +347,30 @@ fn process_is_running(pid: rustix::process::Pid) -> bool {
     if rustix::process::test_kill_process(pid).is_err() {
         return false;
     }
+    !is_zombie(pid)
+}
 
-    // A killed orphan can remain as a zombie under a container PID 1 that
-    // does not reap promptly. Treat zombies as exited.
-    match std::process::Command::new("ps")
-        .args(["-o", "stat=", "-p", &pid.to_string()])
-        .output()
-    {
-        Ok(output) if output.status.success() => {
-            let state = String::from_utf8_lossy(&output.stdout);
-            !state.trim().is_empty() && !state.trim_start().starts_with('Z')
-        }
-        Ok(_) => false,
-        Err(_) => true,
-    }
+/// A killed orphan can remain a zombie under a container PID 1 that does not
+/// reap promptly, and a zombie still answers `kill(pid, 0)`.
+///
+/// Read the state from procfs rather than shelling out to `ps`: CI's container
+/// answers `ps -o stat= -p` differently from a developer machine, which made
+/// live processes look exited.
+#[cfg(all(unix, target_os = "linux"))]
+fn is_zombie(pid: rustix::process::Pid) -> bool {
+    let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
+        return false;
+    };
+    // `<pid> (<comm>) <state> ...`, where `comm` may itself contain spaces and
+    // parentheses, so the state is the first field after the final `)`.
+    stat.rsplit_once(')')
+        .and_then(|(_, rest)| rest.split_whitespace().next())
+        .is_some_and(|state| state == "Z")
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn is_zombie(_pid: rustix::process::Pid) -> bool {
+    false
 }
 
 #[cfg(unix)]
