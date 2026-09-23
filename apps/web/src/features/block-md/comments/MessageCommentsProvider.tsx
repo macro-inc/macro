@@ -1,3 +1,4 @@
+import { URL_PARAMS } from '@block-md/constants';
 import {
   type CommentId,
   commentView,
@@ -17,6 +18,7 @@ import {
   DELETE_COMMENT_COMMAND,
   MARK_SELECTED_COMMENT_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
+import { useParamNavigationCount } from '@core/component/ParamsProvider';
 import { useUserId } from '@core/context/user';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { CommentNode } from '@macro-inc/lexical-core';
@@ -505,14 +507,22 @@ export const MessageCommentsProvider: VoidComponent<{
   // (not `target.messageId()`, which also tracks the resolve query) so a
   // settling GET cannot re-arm and steal focus from a later user action such as
   // opening a thread or starting a draft, while a repeat click on a link to the
-  // same comment still navigates.
+  // same comment still navigates. Once a link has navigated the block, a value
+  // change without a navigation is the URL `comment_id` showing through after a
+  // navigation that cleared it, and is not a request to go there.
+  const commentNavigationCount = useParamNavigationCount(URL_PARAMS.commentId);
   let navigation = 0;
   let handledNavigation: number | undefined;
   createComputed(
     on(
-      () => props.activeComment?.(),
-      () => {
-        navigation += 1;
+      [() => props.activeComment?.(), commentNavigationCount],
+      ([comment, count], previous) => {
+        const [previousComment, previousCount] = previous ?? [];
+        if (
+          count !== previousCount ||
+          (count === 0 && comment !== previousComment)
+        )
+          navigation += 1;
       }
     )
   );
