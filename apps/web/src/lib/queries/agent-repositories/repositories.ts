@@ -13,11 +13,14 @@ import { agentRepositoryKeys } from './keys';
  * Kept fresh for a while: the harness caches the listing for ten minutes
  * itself, and installing the App somewhere new is rare and deliberate.
  */
+function fetchAgentRepositories() {
+  return throwOnErr(() => agentHarnessServiceClient.listRepositories());
+}
+
 export function useAgentRepositoriesQuery(enabled: () => boolean = () => true) {
   return useQuery(() => ({
     queryKey: agentRepositoryKeys.list.queryKey,
-    queryFn: async () =>
-      throwOnErr(() => agentHarnessServiceClient.listRepositories()),
+    queryFn: fetchAgentRepositories,
     enabled: enabled(),
     staleTime: 5 * 60 * 1000,
   }));

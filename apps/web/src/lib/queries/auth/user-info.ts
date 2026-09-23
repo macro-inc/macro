@@ -3,7 +3,7 @@ import { enableUserInfoQuery } from '@core/context/user-info-gate';
 import { hasLoginCookie } from '@core/util/cookies';
 import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { authKeys } from './keys';
 
@@ -20,28 +20,34 @@ type UseUserInfoQueryOptions = {
   enabled?: boolean | (() => boolean);
 };
 
+function fetchLegacyUserPermissions() {
+  return throwOnErr(() => authServiceClient.getLegacyUserPermissions());
+}
+
+// Cached callbacks stay at module scope so they never retain the caller.
+function userInfoQueryOptions(enabled: boolean) {
+  return queryOptions({
+    queryKey: authKeys.userInfo.queryKey,
+    queryFn: fetchLegacyUserPermissions,
+    throwOnError: false,
+    staleTime: USER_INFO_STALE_TIME,
+    // Never pause on navigator.onLine — it reports false during native cold
+    // launches (e.g. woken by a notification tap) while the network is fine,
+    // and a paused auth check renders as "unauthenticated" at the base path.
+    networkMode: 'always',
+    enabled,
+  });
+}
+
 /** Query for the current user's info and permissions. */
 export function useUserInfoQuery(options?: UseUserInfoQueryOptions) {
-  return useQuery(() => {
-    const enabled =
+  return useQuery(() =>
+    userInfoQueryOptions(
       typeof options?.enabled === 'function'
         ? options.enabled()
-        : (options?.enabled ?? true);
-    return {
-      queryKey: authKeys.userInfo.queryKey,
-      queryFn: async () =>
-        await throwOnErr(
-          async () => await authServiceClient.getLegacyUserPermissions()
-        ),
-      throwOnError: false,
-      staleTime: USER_INFO_STALE_TIME,
-      // Never pause on navigator.onLine — it reports false during native cold
-      // launches (e.g. woken by a notification tap) while the network is fine,
-      // and a paused auth check renders as "unauthenticated" at the base path.
-      networkMode: 'always',
-      enabled,
-    };
-  });
+        : (options?.enabled ?? true)
+    )
+  );
 }
 
 /** Invalidate the user info query to trigger a refetch. */

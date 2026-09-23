@@ -2,7 +2,7 @@ import { throwOnErr } from '@core/util/result';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { storageServiceClient } from '@service-storage/client';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 import type { PrRef } from '../util/prKey';
@@ -102,19 +102,22 @@ function prForeignEntityDataFromForeignEntity(
   });
 }
 
-export function usePrForeignEntityQuery(id: Accessor<string>) {
-  return useQuery(() => {
-    const currentId = id();
-    return {
-      queryKey: prForeignEntityQueryKey(currentId),
-      queryFn: async (): Promise<PrForeignEntityData> => {
-        const entity = await throwOnErr(() =>
-          storageServiceClient.getForeignEntity({ id: currentId })
-        );
-        return prForeignEntityDataFromForeignEntity(entity);
-      },
-      staleTime: PR_STALE_TIME,
-      retry: 1,
-    };
+async function fetchPrForeignEntity(id: string): Promise<PrForeignEntityData> {
+  const entity = await throwOnErr(() =>
+    storageServiceClient.getForeignEntity({ id })
+  );
+  return prForeignEntityDataFromForeignEntity(entity);
+}
+
+function prForeignEntityQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: prForeignEntityQueryKey(id),
+    queryFn: () => fetchPrForeignEntity(id),
+    staleTime: PR_STALE_TIME,
+    retry: 1,
   });
+}
+
+export function usePrForeignEntityQuery(id: Accessor<string>) {
+  return useQuery(() => prForeignEntityQueryOptions(id()));
 }

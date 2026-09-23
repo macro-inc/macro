@@ -28,20 +28,26 @@ const queryEnabled = () => true;
 export function useInboxHealthProbeQuery() {
   return useQuery(() => ({
     queryKey: emailKeys.linksHealthProbe.queryKey,
-    queryFn: async () => {
-      await emailClient.healthCheckLinks();
-      return null;
-    },
+    queryFn: probeInboxHealth,
     staleTime: HEALTH_PROBE_STALE_TIME,
     refetchOnWindowFocus: true,
     retry: false,
   }));
 }
 
+async function probeInboxHealth() {
+  await emailClient.healthCheckLinks();
+  return null;
+}
+
+function fetchEmailLinks() {
+  return throwOnErr(() => emailClient.getLinks());
+}
+
 export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
   return useQuery(() => ({
     queryKey: emailKeys.links.queryKey,
-    queryFn: async () => throwOnErr(async () => await emailClient.getLinks()),
+    queryFn: fetchEmailLinks,
     enabled: enabled(),
     staleTime: LINK_STALE_TIME,
     refetchOnWindowFocus: 'always',

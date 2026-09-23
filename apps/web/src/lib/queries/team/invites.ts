@@ -11,11 +11,14 @@ import { type MutationCallbacks, withCallbacks } from '../utils';
 
 import { teamKeys } from './keys';
 
+function fetchTeamInvites() {
+  return throwOnErr(() => authServiceClient.getTeamInvites());
+}
+
 export function useTeamInvitesQuery(teamId: Accessor<string>) {
   return useQuery(() => ({
     queryKey: teamKeys.invites(teamId()).queryKey,
-    queryFn: async () =>
-      await throwOnErr(() => authServiceClient.getTeamInvites()),
+    queryFn: fetchTeamInvites,
     enabled: !!teamId(),
   }));
 }

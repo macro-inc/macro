@@ -4,7 +4,11 @@ import { storageServiceClient } from '@service-storage/client';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { CalendarOccurrenceResponse } from '@service-storage/generated/schemas/calendarOccurrenceResponse';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
-import { useQuery } from '@tanstack/solid-query';
+import {
+  keepPreviousData,
+  queryOptions,
+  useQuery,
+} from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { type CalendarOccurrenceQueryRange, calendarKeys } from './keys';
 
@@ -97,33 +101,50 @@ export async function fetchCalendarOccurrences(
   };
 }
 
+// Cached callbacks close over the resolved range and flags only.
+function calendarOccurrencesQueryOptions(
+  userId: string | undefined,
+  range: CalendarOccurrenceQueryRange | undefined,
+  enabled: boolean,
+  pollWhileSyncing: boolean,
+  refetchOnWindowFocus: boolean
+) {
+  return queryOptions({
+    queryKey: calendarKeys.occurrences(userId ?? '', range).queryKey,
+    queryFn: ({ signal }) => {
+      if (!range) {
+        throw new Error('Calendar occurrence range is unavailable');
+      }
+
+      return fetchCalendarOccurrences(range, signal);
+    },
+    enabled: Boolean(userId) && range !== undefined && enabled,
+    staleTime: CALENDAR_STALE_TIME,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus,
+    refetchInterval: (query) =>
+      pollWhileSyncing &&
+      query.state.data?.syncStatus === CalendarSyncStatus.syncing
+        ? CALENDAR_SYNC_POLL_INTERVAL
+        : false,
+  });
+}
+
 export function useCalendarOccurrencesQuery(
   input: Accessor<CalendarOccurrencesQueryInput>,
   options?: Accessor<CalendarOccurrencesQueryOptions>
 ) {
   return useQuery(() => {
     const { userId, range } = input();
+    const opts = options?.();
 
-    return {
-      queryKey: calendarKeys.occurrences(userId ?? '', range).queryKey,
-      queryFn: ({ signal }) => {
-        if (!range) {
-          throw new Error('Calendar occurrence range is unavailable');
-        }
-
-        return fetchCalendarOccurrences(range, signal);
-      },
-      enabled:
-        Boolean(userId) && range !== undefined && options?.().enabled !== false,
-      staleTime: CALENDAR_STALE_TIME,
-      placeholderData: (p) => p,
-      refetchOnWindowFocus: options?.().refetchOnWindowFocus ?? true,
-      refetchInterval: (query) =>
-        options?.().pollWhileSyncing !== false &&
-        query.state.data?.syncStatus === CalendarSyncStatus.syncing
-          ? CALENDAR_SYNC_POLL_INTERVAL
-          : false,
-    };
+    return calendarOccurrencesQueryOptions(
+      userId,
+      range,
+      opts?.enabled !== false,
+      opts?.pollWhileSyncing !== false,
+      opts?.refetchOnWindowFocus ?? true
+    );
   });
 }
 

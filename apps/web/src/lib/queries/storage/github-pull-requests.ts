@@ -9,8 +9,9 @@ import type {
   GithubPullRequest,
   GithubPullRequestsResponse,
 } from '@service-storage/generated/schemas';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { queryClient } from '../client';
 import { documentGithubPullRequestsKeys } from './keys';
 
 const DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME = 60 * 1000;
@@ -155,35 +156,42 @@ export async function fetchDocumentGithubPullRequests(
   return mergedResponse;
 }
 
+// Cached callbacks outlive the caller; only the resolved id enters them.
+function documentGithubPullRequestsQueryOptions(
+  documentId: string | null | undefined,
+  enabled: boolean
+) {
+  const queryKey = documentId
+    ? documentGithubPullRequestsKeys.list(documentId).queryKey
+    : documentGithubPullRequestsKeys.list._def;
+
+  return {
+    queryKey,
+    queryFn: () => {
+      if (!documentId) {
+        throw new Error(
+          'Document ID is required to fetch GitHub pull requests'
+        );
+      }
+      return fetchDocumentGithubPullRequests(documentId, {
+        onInitialResponse: (initialResponse) => {
+          queryClient.setQueryData(queryKey, initialResponse);
+        },
+      });
+    },
+    staleTime: DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME,
+    enabled: !!documentId && enabled,
+  };
+}
+
 export function useDocumentGithubPullRequestsQuery(
   documentId: DocumentIdInput,
   enabled?: EnabledInput
 ) {
-  const queryClient = useQueryClient();
-
-  return useQuery(() => {
-    const currentDocumentId = readDocumentId(documentId);
-    const currentEnabled = !!currentDocumentId && readEnabled(enabled);
-    const queryKey = currentDocumentId
-      ? documentGithubPullRequestsKeys.list(currentDocumentId).queryKey
-      : documentGithubPullRequestsKeys.list._def;
-
-    return {
-      queryKey,
-      queryFn: () => {
-        if (!currentDocumentId) {
-          throw new Error(
-            'Document ID is required to fetch GitHub pull requests'
-          );
-        }
-        return fetchDocumentGithubPullRequests(currentDocumentId, {
-          onInitialResponse: (initialResponse) => {
-            queryClient.setQueryData(queryKey, initialResponse);
-          },
-        });
-      },
-      staleTime: DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME,
-      enabled: currentEnabled,
-    };
-  });
+  return useQuery(() =>
+    documentGithubPullRequestsQueryOptions(
+      readDocumentId(documentId),
+      readEnabled(enabled)
+    )
+  );
 }

@@ -1,7 +1,7 @@
 import { throwOnErr } from '@core/util/result';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { queryClient } from './client';
 import { historyKeys } from './history/keys';
 import { invalidatePreview } from './preview';
@@ -16,20 +16,18 @@ type ChatRenamedMessage = {
   name: string;
 };
 
-export function useChatQuery(chatId: () => string | undefined) {
-  return useQuery(() => {
-    const id = chatId();
-
-    return {
-      queryKey: ['chat', id],
-      queryFn: async () =>
-        throwOnErr(
-          async () => await cognitionApiServiceClient.getChat({ chat_id: id! })
-        ),
-      staleTime: CHAT_STALE_TIME,
-      enabled: !!id,
-    };
+function chatQueryOptions(id: string | undefined) {
+  return queryOptions({
+    queryKey: ['chat', id],
+    queryFn: () =>
+      throwOnErr(() => cognitionApiServiceClient.getChat({ chat_id: id! })),
+    staleTime: CHAT_STALE_TIME,
+    enabled: !!id,
   });
+}
+
+export function useChatQuery(chatId: () => string | undefined) {
+  return useQuery(() => chatQueryOptions(chatId()));
 }
 
 export function useChatRenameWebsocketSync() {

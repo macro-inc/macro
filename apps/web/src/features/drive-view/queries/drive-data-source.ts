@@ -12,7 +12,10 @@ import {
 import { enableSnippets, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
+import {
+  type SoupApiItemFilter,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import {
   isDisplayableSoupItem,
   mapApiSoupItemToEntity,
@@ -27,6 +30,31 @@ import {
   orderDriveEntities,
 } from './drive-results';
 import { buildDriveSearchRequest } from './drive-search';
+
+// Cached query meta outlives the view, so these filters are built at module
+// scope over plain snapshots and cannot retain the data source's scope.
+
+// REST inserts omit attachment status. Let a scoped server refetch admit them
+// rather than inserting an unverifiable document.
+function driveInsertFilter(current: DriveSelection): SoupApiItemFilter {
+  return (item) => current.scope === 'all' || item.tag !== 'document';
+}
+
+function driveItemFilter(
+  current: DriveSelection,
+  viewer: string | undefined,
+  context: ReturnType<typeof createTagFacetContext>
+): SoupApiItemFilter {
+  return (item) => {
+    if (!isDisplayableSoupItem(item)) return false;
+
+    const entity = mapApiSoupItemToEntity(item);
+
+    if (!driveEntityMatchesLocation(entity, current, viewer)) return false;
+
+    return testFacets(current.facets, DRIVE_FACETS, entity, context);
+  };
+}
 
 /** Query, local/service search and row assembly owned by Drive. */
 export function createDriveDataSource(options: {
@@ -66,21 +94,8 @@ export function createDriveDataSource(options: {
       return {
         enabled: Boolean(viewer) && facetsReady() && !current.search.trim(),
         meta: {
-          // REST inserts omit attachment status. Let a scoped server refetch
-          // admit them rather than inserting an unverifiable document.
-          insertFilter: (item) =>
-            current.scope === 'all' || item.tag !== 'document',
-
-          itemFilter: (item) => {
-            if (!isDisplayableSoupItem(item)) return false;
-
-            const entity = mapApiSoupItemToEntity(item);
-
-            if (!driveEntityMatchesLocation(entity, current, viewer))
-              return false;
-
-            return testFacets(current.facets, DRIVE_FACETS, entity, context);
-          },
+          insertFilter: driveInsertFilter(current),
+          itemFilter: driveItemFilter(current, viewer, context),
         },
       };
     }

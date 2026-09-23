@@ -38,26 +38,27 @@ export const EXTERNAL_URL_POLL_ATTEMPTS = 15;
 export function useAgentSessionExternalUrlQuery(
   sessionId: Accessor<string | undefined>
 ) {
-  return useQuery(() => {
-    const id = sessionId();
-    return {
-      queryKey: ['agentSession', 'externalUrl', id ?? ''] as const,
-      queryFn: async () =>
-        await throwOnErr(() => agentHarnessServiceClient.get(id!)),
-      enabled: Boolean(id),
-      // Stop once the url lands or the attempt budget is spent. Failed
-      // fetches count too, so a streak of errors cannot poll forever.
-      refetchInterval: (query) => {
-        if (query.state.data?.external?.url) return false;
-        const attempts =
-          query.state.dataUpdateCount + query.state.errorUpdateCount;
-        if (attempts >= EXTERNAL_URL_POLL_ATTEMPTS) return false;
-        return EXTERNAL_URL_POLL_INTERVAL_MS;
-      },
-      retry: false,
-      staleTime: 0,
-      gcTime: 0,
-    };
+  return useQuery(() => agentSessionExternalUrlQueryOptions(sessionId()));
+}
+
+function agentSessionExternalUrlQueryOptions(id: string | undefined) {
+  return queryOptions({
+    queryKey: ['agentSession', 'externalUrl', id ?? ''] as const,
+    queryFn: async () =>
+      await throwOnErr(() => agentHarnessServiceClient.get(id!)),
+    enabled: Boolean(id),
+    // Stop once the url lands or the attempt budget is spent. Failed
+    // fetches count too, so a streak of errors cannot poll forever.
+    refetchInterval: (query) => {
+      if (query.state.data?.external?.url) return false;
+      const attempts =
+        query.state.dataUpdateCount + query.state.errorUpdateCount;
+      if (attempts >= EXTERNAL_URL_POLL_ATTEMPTS) return false;
+      return EXTERNAL_URL_POLL_INTERVAL_MS;
+    },
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
   });
 }
 

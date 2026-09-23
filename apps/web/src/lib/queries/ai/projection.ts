@@ -7,7 +7,7 @@ import type { RefreshCadence } from '@service-cognition/generated/schemas/refres
 import type { TargetType } from '@service-cognition/generated/schemas/targetType';
 import type { UpsertProjectionRequest } from '@service-cognition/generated/schemas/upsertProjectionRequest';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { z } from 'zod';
 import { queryClient } from '../client';
@@ -71,6 +71,24 @@ function toOutputSchema(schema: z.ZodType): Record<string, unknown> {
     cycles: 'throw',
     reused: 'inline',
   }) as Record<string, unknown>;
+}
+
+// Cached past unmount: closes over the request snapshot, not the options
+// accessor, so an unmounted caller can be collected.
+function aiProjectionQueryOptions(
+  queryKey: ReturnType<typeof aiProjectionQueryKey>,
+  request: UpsertProjectionRequest,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey,
+    queryFn: async () =>
+      throwOnErr(
+        async () => await cognitionApiServiceClient.upsertAiProjection(request)
+      ),
+    enabled,
+    staleTime: PROJECTION_STALE_TIME,
+  });
 }
 
 function toProjectionState(
@@ -140,17 +158,16 @@ export function createAIProjection<Schema extends z.ZodType>(
     };
   };
 
-  const query = useQuery(() => ({
-    queryKey: queryKey(),
-    queryFn: async () =>
-      throwOnErr(
-        async () =>
-          await cognitionApiServiceClient.upsertAiProjection(buildRequest())
-      ),
-    enabled:
-      (options().enabled ?? true) && !!options().id && !!options().prompt,
-    staleTime: PROJECTION_STALE_TIME,
-  }));
+  // Memoized so the schema is only re-serialized when the options change.
+  const request = createMemo(() => buildRequest());
+
+  const query = useQuery(() =>
+    aiProjectionQueryOptions(
+      queryKey(),
+      request(),
+      (options().enabled ?? true) && !!options().id && !!options().prompt
+    )
+  );
 
   // Materializations finish out-of-band (SQS worker or refresh sweeps); the
   // gateway pushes the final state, which we write straight into the cache.

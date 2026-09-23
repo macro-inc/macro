@@ -11,7 +11,7 @@ import { setPreviewOnCreate } from '@queries/preview/preview';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { Project } from '@service-storage/generated/schemas/project';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/solid-query';
 import { v4 as uuidv4 } from 'uuid';
 import { queryClient } from '../client';
 import { storageKeys } from './keys';
@@ -59,23 +59,28 @@ function filterByUserId(
   return projects.filter((project) => project.userId === userId);
 }
 
-export function useProjectsQuery() {
-  const userId = useUserId();
-
-  return useQuery(() => ({
+// Cached callbacks outlive the caller; only the resolved user id enters them.
+function projectsListQueryOptions(userId: string | undefined) {
+  return {
     ...projectsQueryOptions(),
-    placeholderData: (prev) => prev,
+    placeholderData: keepPreviousData,
     select: (data: ProjectsQueryResponse): Project[] => {
       const allProjects = [...data.projects, ...data.pending];
       const sorted = sortProjects(allProjects);
 
       if (!ENABLE_PROJECT_SHARING) {
-        return filterByUserId(sorted, userId());
+        return filterByUserId(sorted, userId);
       }
 
       return sorted;
     },
-  }));
+  };
+}
+
+export function useProjectsQuery() {
+  const userId = useUserId();
+
+  return useQuery(() => projectsListQueryOptions(userId()));
 }
 
 export function invalidateProjects() {

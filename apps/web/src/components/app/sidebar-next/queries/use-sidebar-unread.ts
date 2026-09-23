@@ -5,8 +5,15 @@ import { EMPTY_TAG_FACET_CONTEXT } from '@app/features/soup/filters/facets/tag-f
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { notificationIsRead } from '@entity/utils/notification';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
+import {
+  type SoupApiItemFilter,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { createMemo } from 'solid-js';
+
+// Module scope: cached query meta outlives the hook that registered it.
+const signalInsertFilter: SoupApiItemFilter = (item) =>
+  soupItemMatchesInboxTab(item, 'signal');
 
 /** Presence in the loaded unread page, never a total or a pagination loop. */
 export function useSidebarUnread() {
@@ -24,7 +31,7 @@ export function useSidebarUnread() {
         facetContext: EMPTY_TAG_FACET_CONTEXT,
       }),
     () => ({
-      meta: { insertFilter: (item) => soupItemMatchesInboxTab(item, 'signal') },
+      meta: { insertFilter: signalInsertFilter },
     })
   );
 

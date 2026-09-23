@@ -91,13 +91,16 @@ export const DEFAULT_CRM_PERMISSIONS: CrmPermissions = {
 /** Labels treated as closed when no explicit closed set is configured. */
 const DEFAULT_CLOSED_STAGE_LABEL = /customer|churned|closed|won|lost/i;
 
+function fetchCrmTeamSettings() {
+  return throwOnErr(() => storageServiceClient.getCrmTeamSettings());
+}
+
 export function useTeamCrmConfig() {
   const queryClient = useQueryClient();
 
   const settingsQuery = useQuery(() => ({
     queryKey: CRM_TEAM_SETTINGS_QUERY_KEY,
-    queryFn: async () =>
-      await throwOnErr(() => storageServiceClient.getCrmTeamSettings()),
+    queryFn: fetchCrmTeamSettings,
   }));
 
   const config = createMemo((): TeamCrmConfig => {

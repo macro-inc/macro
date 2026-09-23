@@ -1,6 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import { emailClient } from '@service-email/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { calendarKeys } from './keys';
 
@@ -15,11 +15,20 @@ const CALENDAR_LIST_STALE_TIME = 5 * 60_000;
 export function useVisibleCalendarsQuery(
   options?: Accessor<{ enabled?: boolean }>
 ) {
-  return useQuery(() => ({
+  return useQuery(() =>
+    visibleCalendarsQueryOptions(options?.().enabled !== false)
+  );
+}
+
+async function fetchVisibleCalendars() {
+  return (await throwOnErr(() => emailClient.listCalendars())).calendars;
+}
+
+function visibleCalendarsQueryOptions(enabled: boolean) {
+  return queryOptions({
     queryKey: calendarKeys.visibleCalendars.queryKey,
-    queryFn: async () =>
-      (await throwOnErr(() => emailClient.listCalendars())).calendars,
+    queryFn: fetchVisibleCalendars,
     staleTime: CALENDAR_LIST_STALE_TIME,
-    enabled: options?.().enabled !== false,
-  }));
+    enabled,
+  });
 }

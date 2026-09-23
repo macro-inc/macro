@@ -3,13 +3,17 @@ import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type {
-  ActionExecutionRecord,
   CreateScheduledAction,
   InProgressExecution,
   ScheduledAction,
   UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import {
+  keepPreviousData,
+  queryOptions,
+  useMutation,
+  useQuery,
+} from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { scheduledActionKeys } from './keys';
 
@@ -42,41 +46,46 @@ function removeSchedule(scheduleId: string) {
   );
 }
 
+function fetchSchedules() {
+  return throwOnErr(async () => await scheduledActionClient.listSchedules());
+}
+
 export function useSchedulesQuery(enabled: Accessor<boolean>) {
   return useQuery(() => ({
     queryKey: scheduledActionKeys.list.queryKey,
     enabled: enabled(),
-    queryFn: async () =>
-      throwOnErr(async () => await scheduledActionClient.listSchedules()),
-    placeholderData: (prev: ScheduledAction[] | undefined) => prev,
+    queryFn: fetchSchedules,
+    placeholderData: keepPreviousData,
     reconcile: 'id',
     ...QUERY_REFETCH_BEHAVIOR,
   }));
+}
+
+// Cached past unmount; closes over the resolved schedule id only.
+function scheduleHistoryQueryOptions(
+  scheduleId: string | null | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: scheduledActionKeys.history({
+      scheduleId: scheduleId ?? '__none__',
+    }).queryKey,
+    enabled: enabled && Boolean(scheduleId),
+    queryFn: async () =>
+      throwOnErr(
+        async () =>
+          await scheduledActionClient.listHistory({ scheduleId: scheduleId! })
+      ),
+    placeholderData: keepPreviousData,
+    ...QUERY_REFETCH_BEHAVIOR,
+  });
 }
 
 export function useScheduleHistoryQuery(
   scheduleId: Accessor<string | null | undefined>,
   enabled: Accessor<boolean>
 ) {
-  return useQuery(() => {
-    const currentScheduleId = scheduleId();
-
-    return {
-      queryKey: scheduledActionKeys.history({
-        scheduleId: currentScheduleId ?? '__none__',
-      }).queryKey,
-      enabled: enabled() && Boolean(currentScheduleId),
-      queryFn: async () =>
-        throwOnErr(
-          async () =>
-            await scheduledActionClient.listHistory({
-              scheduleId: currentScheduleId!,
-            })
-        ),
-      placeholderData: (prev: ActionExecutionRecord[] | undefined) => prev,
-      ...QUERY_REFETCH_BEHAVIOR,
-    };
-  });
+  return useQuery(() => scheduleHistoryQueryOptions(scheduleId(), enabled()));
 }
 
 export function invalidateSchedules() {

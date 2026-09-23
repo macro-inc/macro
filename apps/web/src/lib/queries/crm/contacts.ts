@@ -48,21 +48,20 @@ export function useCrmContactByEmailQuery(
  * just calls the endpoint and trusts the response.
  */
 export function useContactQuery(contactId: Accessor<string>) {
-  return useQuery(() => {
-    const id = contactId();
-    return {
-      queryKey: crmKeys.contact(id).queryKey,
-      queryFn: () => {
-        if (!id) {
-          throw new Error('contact id is required to fetch contact');
-        }
-        return throwOnErr(() =>
-          storageServiceClient.getContact({ contactId: id })
-        );
-      },
-      staleTime: CONTACT_STALE_TIME,
-      enabled: !!id,
-    };
+  return useQuery(() => contactQueryOptions(contactId()));
+}
+
+function contactQueryOptions(contactId: string) {
+  return queryOptions({
+    queryKey: crmKeys.contact(contactId).queryKey,
+    queryFn: () => {
+      if (!contactId) {
+        throw new Error('contact id is required to fetch contact');
+      }
+      return throwOnErr(() => storageServiceClient.getContact({ contactId }));
+    },
+    staleTime: CONTACT_STALE_TIME,
+    enabled: !!contactId,
   });
 }
 

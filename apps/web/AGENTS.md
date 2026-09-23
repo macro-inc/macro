@@ -86,6 +86,15 @@ every local variable.
   factory. For reactive selection, pass plain snapshots of the needed values
   (such as channel names or a resolved document ID). Naming a function or copying
   an ID inside the hook does not isolate its closure from the hook.
+- Use `keepPreviousData` from `@tanstack/solid-query` instead of an inline
+  `placeholderData: (p) => p`.
+- The same rule applies to callers of wrapper hooks such as `useSoupAstItemsQuery`
+  and `createGroupedSoupQueries`: `meta.itemFilter` / `meta.insertFilter` passed
+  from a component or view context are cached too, so build them with a
+  module-scope factory over plain snapshots (see
+  [drive-data-source](src/features/drive-view/queries/drive-data-source.ts)).
+- Query hooks in `src/lib/urql-solid` are exempt: their observers are created per
+  mount and destroyed on cleanup, so nothing outlives the component.
 
 Examples: [session query factory](src/lib/queries/agent-session/session.ts) and
 [search query factories](src/lib/queries/soup/search.ts).

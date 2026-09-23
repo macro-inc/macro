@@ -18,7 +18,7 @@ import type {
 } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
@@ -88,6 +88,43 @@ async function setRestEntityProperty(args: {
   }
 }
 
+// Cached callbacks outlive the caller; only plain values enter here.
+function entityPropertiesQueryOptions(
+  entityType: EntityType,
+  entityId: string,
+  enabled: boolean,
+  includeMetadata: boolean
+) {
+  return queryOptions({
+    queryKey: propertiesKeys.entity({ entityType, entityId }).queryKey,
+    enabled,
+    queryFn: async () => {
+      // Always fetch with metadata so consumers with different
+      // `includeMetadata` values share one cache entry and one request.
+      const data = await throwOnErr(() =>
+        propertiesServiceClient.getEntityProperties({
+          entity_type: toPropertyTargetEntityType(entityType),
+          entity_id: entityId,
+          query: { include_metadata: true },
+        })
+      );
+      return data.properties.flatMap((property) => {
+        try {
+          return [entityPropertyFromApi(property)];
+        } catch (error) {
+          console.warn('Skipping property with unsupported type', error);
+          return [];
+        }
+      });
+    },
+    select: (properties: Property[]) =>
+      includeMetadata
+        ? properties
+        : properties.filter((property) => property.isMetadata !== true),
+    staleTime: 0,
+  });
+}
+
 export function useEntityPropertiesQuery(
   entityType: Accessor<EntityType>,
   entityId: Accessor<string>,
@@ -108,40 +145,13 @@ export function useEntityPropertiesQuery(
 
   const restQuery = useQuery(
     () => {
-      const type = entityType();
       const id = entityId();
-      return {
-        queryKey: propertiesKeys.entity({
-          entityType: type,
-          entityId: id,
-        }).queryKey,
-        enabled: !usesGraphql() && id.length > 0,
-        queryFn: async () => {
-          // Always fetch with metadata so consumers with different
-          // `includeMetadata` values share one cache entry and one request.
-          const data = await throwOnErr(
-            async () =>
-              await propertiesServiceClient.getEntityProperties({
-                entity_type: toPropertyTargetEntityType(type),
-                entity_id: id,
-                query: { include_metadata: true },
-              })
-          );
-          return data.properties.flatMap((property) => {
-            try {
-              return [entityPropertyFromApi(property)];
-            } catch (error) {
-              console.warn('Skipping property with unsupported type', error);
-              return [];
-            }
-          });
-        },
-        select: (properties: Property[]) =>
-          includeMetadata
-            ? properties
-            : properties.filter((property) => property.isMetadata !== true),
-        staleTime: 0,
-      };
+      return entityPropertiesQueryOptions(
+        entityType(),
+        id,
+        !usesGraphql() && id.length > 0,
+        includeMetadata
+      );
     },
     () => queryClient
   );

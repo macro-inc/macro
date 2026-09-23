@@ -1,13 +1,13 @@
 /** Authentication queries used by the entity feature. */
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
+import { queryClient } from '@queries/client';
 import type { MacroApiTokenResponse } from '@service-auth/generated/schemas/macroApiTokenResponse';
 import {
   queryOptions,
   type SolidQueryOptions,
   useQuery,
 } from '@tanstack/solid-query';
-
 import { queryKeys } from './key';
 
 const authHost = SERVER_HOSTS['auth-service'];
@@ -41,6 +41,32 @@ export async function withApiTokenRetry<T>(
       if (refetchResult.isSuccess) {
         return await fetchFn(refetchResult.data);
       }
+    }
+    throw error;
+  }
+}
+
+/**
+ * Like {@link withApiTokenRetry} but reads the token from the query cache, so
+ * it can live inside cached query callbacks without retaining an observer.
+ */
+export async function withCachedApiTokenRetry<T>(
+  fetchFn: (apiToken: string) => Promise<T>
+): Promise<T> {
+  const apiToken = queryClient.getQueryData<string>(
+    createApiTokenQueryOptions().queryKey
+  );
+  if (!apiToken) throw new Error('No API token available');
+
+  try {
+    return await fetchFn(apiToken);
+  } catch (error) {
+    if (error instanceof FetchDocumentsError && error.isJwtExpired()) {
+      const refreshed = await queryClient.fetchQuery({
+        ...createApiTokenQueryOptions(),
+        staleTime: 0,
+      });
+      return await fetchFn(refreshed);
     }
     throw error;
   }

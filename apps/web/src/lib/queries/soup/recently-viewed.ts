@@ -2,7 +2,11 @@ import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filter
 import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
-import { useQuery } from '@tanstack/solid-query';
+import {
+  keepPreviousData,
+  queryOptions,
+  useQuery,
+} from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import type { SoupItemsQueryArgs } from './items';
 import { soupKeys } from './keys';
@@ -44,50 +48,54 @@ function recentlyViewedQueryKey() {
   return soupKeys.items(buildRecentlyViewedArgs()).queryKey;
 }
 
-export function useRecentlyViewedSoupQuery() {
-  return useQuery(() => {
-    const args = buildRecentlyViewedArgs();
-    return {
-      queryKey: soupKeys.items(args).queryKey,
-      queryFn: async (): Promise<RecentlyViewedItem[]> => {
-        const page = await throwOnErr(
-          async () =>
-            await storageServiceClient.getSoupItems({
-              params: {},
-              body: {
-                ...args.body,
-                ...args.params,
-              },
-            })
-        );
-        return page.items.flatMap((item): RecentlyViewedItem[] => {
-          // Reminders have no `viewedAt` — they are never "viewed", only fired.
-          if (
-            item.tag === 'call' ||
-            item.tag === 'foreignEntity' ||
-            item.tag === 'channelThread' ||
-            item.tag === 'calendarEvent' ||
-            item.tag === 'reminder'
-          ) {
-            return [];
-          }
-
-          return [
-            {
-              id: item.tag === 'channel' ? item.data.channel.id : item.data.id,
-              viewedAt:
-                (item.tag === 'channel'
-                  ? item.data.viewed_at
-                  : item.data.viewedAt) ?? undefined,
-            },
-          ];
-        });
+async function fetchRecentlyViewed(
+  args: SoupItemsQueryArgs
+): Promise<RecentlyViewedItem[]> {
+  const page = await throwOnErr(() =>
+    storageServiceClient.getSoupItems({
+      params: {},
+      body: {
+        ...args.body,
+        ...args.params,
       },
-      staleTime: RECENTLY_VIEWED_STALE_TIME,
-      gcTime: RECENTLY_VIEWED_GC_TIME,
-      placeholderData: (prev) => prev,
-    };
+    })
+  );
+  return page.items.flatMap((item): RecentlyViewedItem[] => {
+    // Reminders have no `viewedAt` — they are never "viewed", only fired.
+    if (
+      item.tag === 'call' ||
+      item.tag === 'foreignEntity' ||
+      item.tag === 'channelThread' ||
+      item.tag === 'calendarEvent' ||
+      item.tag === 'reminder'
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        id: item.tag === 'channel' ? item.data.channel.id : item.data.id,
+        viewedAt:
+          (item.tag === 'channel' ? item.data.viewed_at : item.data.viewedAt) ??
+          undefined,
+      },
+    ];
   });
+}
+
+// Cached callbacks outlive the caller; only the plain request enters here.
+function recentlyViewedQueryOptions(args: SoupItemsQueryArgs) {
+  return queryOptions({
+    queryKey: soupKeys.items(args).queryKey,
+    queryFn: () => fetchRecentlyViewed(args),
+    staleTime: RECENTLY_VIEWED_STALE_TIME,
+    gcTime: RECENTLY_VIEWED_GC_TIME,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useRecentlyViewedSoupQuery() {
+  return useQuery(() => recentlyViewedQueryOptions(buildRecentlyViewedArgs()));
 }
 
 export function updateRecentlyViewedItem(itemId: string, viewedAt?: string) {

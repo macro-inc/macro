@@ -40,14 +40,21 @@ export function requestCallToken(channelId: string) {
  * call_started/call_ended handlers keep it live.
  */
 export function useActiveCallsQuery() {
-  return useQuery(() => ({
+  return useQuery(activeCallsQueryOptions);
+}
+
+function fetchActiveCalls() {
+  return throwOnErr(() => callServiceClient.getActiveCalls());
+}
+
+function activeCallsQueryOptions() {
+  return queryOptions({
     queryKey: callKeys.allActive.queryKey,
-    queryFn: async () =>
-      await throwOnErr(() => callServiceClient.getActiveCalls()),
+    queryFn: fetchActiveCalls,
     placeholderData: [] as ActiveCallSummary[],
     refetchInterval: 30_000,
     enabled: ENABLE_CALLS,
-  }));
+  });
 }
 
 export function setActiveCallStartedCache(call: CallActiveResponse) {
