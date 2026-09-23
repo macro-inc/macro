@@ -36,6 +36,10 @@ use call::{
         s3_recording_storage::{RecordingCloudFrontConfig, S3RecordingStorage},
     },
 };
+use channel_labels::{
+    domain::service::ChannelLabelsServiceImpl, inbound::axum_router::ChannelLabelsRouterState,
+    outbound::pg_channel_labels_repo::PgChannelLabelsRepo,
+};
 use channels::{
     domain::{
         list_service::ChannelListServiceImpl,
@@ -942,19 +946,30 @@ async fn run() -> anyhow::Result<()> {
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
 
-    // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
-    // (resolved from the `openai-key` secret at deploy time by the infra stack),
-    // the same way `document_cognition_service` consumes it. Fail fast if it's
-    // empty so the service never starts with a broken task-dedup embedder.
+    // MacroConfig reads the shared OPENAI_API_KEY from Doppler's APP_SECRETS_JSON
+    // or the local environment. Validate once before constructing consumers.
     let openai_api_key = config.openai_api_key.as_ref().to_owned();
     anyhow::ensure!(
         !openai_api_key.trim().is_empty(),
-        "OpenAI API key is required for task dedup embeddings",
+        "OpenAI API key is required for task dedup embeddings and dictation",
     );
     let cohere_api_key = config.cohere_api_key.as_ref().to_owned();
     anyhow::ensure!(
         !cohere_api_key.trim().is_empty(),
         "Cohere API key is required for task dedup reranking",
+    );
+    let dictation_state = dictation::inbound::axum_router::DictationRouterState::new(
+        dictation::domain::DictationServiceImpl::new(
+            dictation::outbound::WhisperTranscriber::new(&config.openai_api_key)?,
+            dictation::outbound::SymphoniaRecordingInspector,
+            ai_usage::pg_recorder(db.clone()),
+        ),
+        RateLimitServiceImpl {
+            repo: RedisRateLimitAdapter {
+                redis: redis_client.clone(),
+            },
+        },
+        authorization_state.clone(),
     );
     let task_dedup_service = Arc::new(TaskDedupService::new(
         TextEmbedding3Small::new(openai_api_key),
@@ -1150,6 +1165,9 @@ async fn run() -> anyhow::Result<()> {
                 calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
             )),
         )),
+        Arc::new(channel_bots::outbound::LexicalCommentMarks::new(
+            (*lexical_client).clone(),
+        )),
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
 
@@ -1193,16 +1211,21 @@ async fn run() -> anyhow::Result<()> {
         config.document_permission_jwt.as_ref().to_string(),
     );
 
-    let soup_service = Arc::new(SoupImpl::new(
-        PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-        frecency_service,
-        readonly_email_service,
-        channel_service_for_soup,
-        call_record_query_service,
-        crm_service.clone(),
-        foreign_entity_service_for_soup,
-        reminders_service.clone(),
-    ));
+    let soup_service = Arc::new(
+        SoupImpl::new(
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+            frecency_service,
+            readonly_email_service,
+            channel_service_for_soup,
+            call_record_query_service,
+            crm_service.clone(),
+            foreign_entity_service_for_soup,
+            reminders_service.clone(),
+        )
+        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
+            readonly_db.clone(),
+        )),
+    );
 
     let websocket_notification_consumer_service =
         Arc::new(WebSocketNotificationConsumerService::new(
@@ -1473,6 +1496,7 @@ async fn run() -> anyhow::Result<()> {
         ));
 
     let api_context = ApiContext {
+        dictation_state,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),
@@ -1490,6 +1514,13 @@ async fn run() -> anyhow::Result<()> {
         ),
         favorites_service,
         favorites_mutation_service,
+        channel_labels_state: ChannelLabelsRouterState::new(
+            Arc::new(ChannelLabelsServiceImpl::new(PgChannelLabelsRepo::new(
+                db.clone(),
+            ))),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
         user_api_key_state: UserApiKeyRouterState::new(
             user_api_key_service,
             authorization_state.clone(),

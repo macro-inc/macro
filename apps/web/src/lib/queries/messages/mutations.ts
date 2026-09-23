@@ -15,7 +15,11 @@ import type { MessageAttachment } from '@service-storage/generated/schemas/messa
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import type { ThreadPatch } from '@service-storage/generated/schemas/threadPatch';
-import type { MessageListItem, MessageParent } from '@service-storage/messages';
+import type {
+  MessageListItem,
+  MessageParent,
+  MessageThread,
+} from '@service-storage/messages';
 import {
   type Message as EntityMessage,
   entityMessagesClient,
@@ -29,6 +33,7 @@ import { senderFromStorageId } from './message-sender';
 import {
   captureDeleteSnapshotForTarget,
   type DeleteTargetSnapshot,
+  getCachedThreadState,
   getTargetMessage,
   getTopLevelMessageDeletedAt,
   insertMessageIntoTargetCaches,
@@ -41,7 +46,7 @@ import {
   softInvalidateTargetCaches,
   topLevelMessageHasReplies,
 } from './reconcile';
-import { applyMessage, applyThreadState } from './sync';
+import { applyMessage, applyRootDeletion, applyThreadState } from './sync';
 import { getMessageTimelineQueryKeyPrefix } from './timeline';
 
 /** Deduplicate the one committed-message event echoed by the server. */
@@ -73,6 +78,12 @@ type DeleteMessageContext = {
    * captured so rollback can revert the optimistic mutation.
    */
   previousDeletedAt?: string | null;
+  /**
+   * Thread state of a discussion root, read before this delete removed the
+   * root from the caches that hold it, so the committed teardown can be
+   * applied on success.
+   */
+  threadState?: MessageThread['state'];
 };
 
 type UpdateMessageContext = {
@@ -246,11 +257,14 @@ function replaceOptimisticMessage(
 /**
  * Optimistically delete a message from the channel cache.
  *
- * Top-level messages with thread replies are soft-deleted in place (we set
+ * A channel root with thread replies is soft-deleted in place (we set
  * `deleted_at`) so the UI renders the "this message was deleted" placeholder
- * while preserving the replies hanging off the message. Top-level messages
- * with no replies are removed outright. Replies are removed from the caches,
- * with a snapshot retained for rollback.
+ * above the replies it keeps: that conversation continues without its first
+ * message. Every other delete leaves nothing behind — a channel root with no
+ * replies, a reply, and a document root, which takes its whole discussion with
+ * it — so it is removed outright, with a snapshot retained for rollback. The
+ * discussion's teardown itself is applied on success rather than here: it
+ * deletes the document's mark, which a rollback could not put back.
  */
 export function optimisticDeleteMessage(
   vars: WithParent<{ message_id: string; threadId?: string }>
@@ -264,25 +278,22 @@ export function optimisticDeleteMessage(
     target,
   };
 
-  if (target.kind === 'top_level') {
-    if (
-      vars.parent.type === 'document' ||
-      topLevelMessageHasReplies(vars.parent, target.messageId)
-    ) {
-      context.previousDeletedAt =
-        getTopLevelMessageDeletedAt(vars.parent, target.messageId) ?? null;
-      markTopLevelMessageDeletedInTargetCaches(
-        vars.parent,
-        target,
-        new Date().toISOString()
-      );
-    } else {
-      context.targetSnapshot = captureDeleteSnapshotForTarget(
-        vars.parent,
-        target
-      );
-      removeMessageFromTargetCaches(vars.parent, target);
-    }
+  if (target.kind === 'top_level' && vars.parent.type !== 'channel') {
+    context.threadState = getCachedThreadState(vars.parent, target.messageId);
+  }
+
+  if (
+    target.kind === 'top_level' &&
+    vars.parent.type === 'channel' &&
+    topLevelMessageHasReplies(vars.parent, target.messageId)
+  ) {
+    context.previousDeletedAt =
+      getTopLevelMessageDeletedAt(vars.parent, target.messageId) ?? null;
+    markTopLevelMessageDeletedInTargetCaches(
+      vars.parent,
+      target,
+      new Date().toISOString()
+    );
   } else {
     context.targetSnapshot = captureDeleteSnapshotForTarget(
       vars.parent,
@@ -530,7 +541,7 @@ const deleteNonce = createMutationNonce<DeleteMessageParams>(
  */
 export function useDeleteMessageMutation(
   callbacks?: MutationCallbacks<
-    void,
+    EntityMessage,
     Error,
     DeleteMessageParams,
     DeleteMutationContext
@@ -539,13 +550,18 @@ export function useDeleteMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: DeleteMessageParams) => {
-      await entityMessagesClient.delete(
+      return entityMessagesClient.delete(
         vars.parent,
         vars.messageID,
         deleteNonce.use(vars)
       );
     },
-    ...withCallbacks<void, Error, DeleteMessageParams, DeleteMutationContext>(
+    ...withCallbacks<
+      EntityMessage,
+      Error,
+      DeleteMessageParams,
+      DeleteMutationContext
+    >(
       {
         onMutate: async (vars) => {
           deleteNonce.prepare(vars);
@@ -557,6 +573,9 @@ export function useDeleteMessageMutation(
             message_id: vars.messageID,
             threadId: vars.threadID,
           });
+        },
+        onSuccess(data, _vars, context) {
+          applyRootDeletion(data, context?.threadState);
         },
         onError(error, vars, context) {
           console.error('failed to delete message', error);

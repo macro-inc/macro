@@ -91,7 +91,10 @@ pub struct DocumentFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
 
-    /// Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+    /// Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+    /// ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+    /// search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
 
@@ -157,7 +160,10 @@ pub struct ChatFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
 
-    /// Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+    /// Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+    /// ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+    /// search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
 
@@ -477,8 +483,9 @@ pub struct AgentSessionFilters {
     /// Agent session ids to filter by. Empty to include all accessible sessions.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ids: Vec<String>,
-    /// Filter by session owner. Examples: ['macro|user1@user.com']. Empty to
-    /// include every owner.
+    /// Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+    /// owner.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
 }
@@ -714,7 +721,10 @@ pub struct ProjectFilters {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub include_root: bool,
 
-    /// Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+    /// Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+    /// ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+    /// search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
 

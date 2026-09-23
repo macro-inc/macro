@@ -79,6 +79,7 @@ fn typescript() -> Job {
         ))
         .add_step(generate_api_types())
         .add_step(show_sccache_stats())
+        .add_step(check_dynamic_ui_schema())
         .add_step(check_types())
         .add_step(check_collaboration_types())
         .add_step(check_lexical_service_types())
@@ -187,7 +188,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - '.github/actions/setup-reqs-web/**'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-reqs-web/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-reqs-web/**'\n"
             ),
         ))
 }
@@ -212,6 +213,12 @@ fn show_sccache_stats() -> Step<Run> {
 fn check_types() -> Step<Run> {
     Step::new("Check Types")
         .run("bun run --bun --silent tsc --project ./tsconfig.json")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+fn check_dynamic_ui_schema() -> Step<Run> {
+    Step::new("Check Dynamic UI Schema")
+        .run("bun run check-dynamic-ui-schema")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 

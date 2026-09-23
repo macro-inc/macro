@@ -97,9 +97,9 @@ Unmodified clicks keep each surface’s default (same split, preview, or new spl
 Existing-content deduplication and split-capacity limits still apply; touch devices
 continue to navigate in place.
 
-A block mounted in an inline preview cannot also open in a split. An attempt
-shows `Content already open.` and keeps the preview in place. Select another
-preview item or leave that view before opening the block in a split. Duplicate
+A block mounted in an inline detail is reused when opened elsewhere. Mentions
+and notifications activate its host without a toast; explicit list or Cmd+K
+selection shows `Content already open` to explain the move. Duplicate
 mounts reached through direct layout paths show the same message instead of a
 second block instance.
 
@@ -137,6 +137,17 @@ not clear its dot — reading or completing the represented items does. The butt
 accessible description is `Unread items` while its dot is active.
 
 The Agents sidebar mixes chat and coding sessions in one newest-first list.
+New agent sessions use one dot in the left slot for activity and notifications:
+pulsing accent for starting/working, amber for waiting for input, and solid accent
+for an unread dormant session. Read dormant sessions leave that slot empty.
+Hover a row for its full title and activity label. Coding sessions show a second
+line with repository, captured working branch (when available), and linked PR
+number/status; non-coding sessions stay on one line. The starting branch is never
+presented as the working branch. PR states come from synced GitHub data; an
+unsynced PR shows its number without an assumed status. Missing metadata is omitted;
+"Coding agent" is never substituted for a branch. There is no right-side dot in
+Agents; Home keeps its sparkle and trailing unread dot. Only the selected row has
+the selected background. Legacy chat rows keep their chat icon.
 Use **Search conversations** beside the Conversations heading to filter by title.
 Results stay packed at the top with compact spacing, even with only a few matches;
 clearing the search restores the list.
@@ -152,7 +163,11 @@ to Home's starting pane without creating a chat. Email and Tasks use the same
 pill styling and top placement for **New email** and **New task**, replacing
 the sidebar title bars. When multiple desktop splits are open, a **Close** (X)
 button appears beside each sidebar's New button and closes that split. The last
-logical split has no close button; mobile chrome is unchanged.
+logical split has no sidebar close button; mobile chrome is unchanged.
+A lone non-list content split still shows a header X labeled **Return to list**,
+which returns that split to the most recent list in its history, preserving
+that list’s state. If there is no prior list, it replaces the current entry with
+inbox. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
@@ -278,6 +293,13 @@ rows; period, week start, time format, and month choices show trailing checkmark
 All popover splits open as bottom drawers on touch devices and dialogs
 on desktop, including task, calendar event, skill, and agent session composers.
 
+Hovering an `@user` mention or a profile picture on desktop opens the user card:
+the person's name and email above Copy email, Copy name, Open contact (CRM teams
+only), DM, and Assign task. Touch devices have no hover, so tapping the mention
+or the picture opens that same card as a bottom sheet; any action there runs and
+dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
+drops in favour of the card's DM action.
+
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
 Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task and Channel open dialogs.
@@ -369,15 +391,29 @@ create a session before the user sends. Repeating it focuses the existing draft.
 Splits navigate independently. The retired Preview Pair mode no longer creates
 an adjacent viewer, redirects list navigation, or links split sizes and history.
 Inline details in workspaces continue to use their own navigation stack.
+Split back/forward navigation skips entries whose entities are open elsewhere,
+without moving focus or showing a toast. Those entries remain in history and
+become reachable again after their owning view releases them. A direction is
+unavailable when no reachable entries remain. Mobile swipe navigation reuses
+an already-mounted conversation without losing the other pane.
+History controls update when an inline detail claims or releases an entry,
+including when the detail closes.
+Resetting a split clears its previous history and starts at the default view;
+after opening another item, Back returns to that default view.
 
 Entity content can be open in only one split or inline preview/detail view at a
 time. Shell components may have duplicate splits when `allowDuplicate` is enabled.
 An Agents conversation route counts as the same entity as its agent or chat block.
+Following a mention or notification reuses the existing split or inline detail,
+activates its workspace, and navigates to any specified location without a toast.
+Explicit entity selections from lists or Cmd+K also reuse the existing view, but
+show the duplicate-content toast to explain the move. A list whose detail cannot
+claim that entity keeps its previous selection and history.
 Opening an entity already in a split focuses that split when activation is
 requested; the sidebar's **Open in new split** also shows a **Content already open** toast.
 Selecting an entity owned by another view from a detail view leaves the current
-detail and navigation history unchanged and shows a **Content already open**
-toast. Close or navigate away
+detail and navigation history unchanged, focuses the owning view, and shows a
+**Content already open** toast. Close or navigate away
 from the owning view before opening it elsewhere. The same rule applies to mouse
 selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
 never render inline previews or detail views: a tap opens the entity in the

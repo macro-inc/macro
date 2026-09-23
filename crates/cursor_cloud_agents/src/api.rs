@@ -200,6 +200,36 @@ const BRANCH_UNVERIFIABLE_RETRY_BACKOFF: [std::time::Duration; 2] = [
     std::time::Duration::from_secs(5),
 ];
 
+/// How long to wait before each retry of a POST that starts a turn; its
+/// length is the retry budget.
+///
+/// Sized against the one limit we have watched a turn die on — GitHub
+/// throttling Cursor's token mint, asking for sixty seconds (prod,
+/// 2026-09-22). Forty-two seconds of asking does not outlast that, and is
+/// not meant to: a turn that sits silent for a full minute is its own kind
+/// of broken. It covers a limit that clears early, a gateway restarting,
+/// and every other transient that is measured in seconds.
+const TURN_START_RETRY_BACKOFF: [std::time::Duration; 3] = [
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(10),
+    std::time::Duration::from_secs(30),
+];
+
+/// Whether a failed POST is worth simply asking again.
+///
+/// Status alone, deliberately. Every provider states its transients in its
+/// own dialect — Cursor's 429 arrives as a `connect` envelope wrapping a
+/// base64 blob — and a classifier that reads bodies is a classifier that
+/// goes stale the first time one changes. The status codes do not: 429 and
+/// 5xx mean "not now", 408 means the request never landed, and every other
+/// 4xx is a fact about the request itself that an identical second POST
+/// cannot change.
+fn is_transient(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::TOO_MANY_REQUESTS
+        || status == reqwest::StatusCode::REQUEST_TIMEOUT
+        || status.is_server_error()
+}
+
 /// Which repository refusal, if any, a create-agent failure is.
 ///
 /// Matches only the documented envelope, `{"error": {"code", "message"}}`,
@@ -239,6 +269,7 @@ pub struct CursorClient {
     /// [`BRANCH_UNVERIFIABLE_RETRY_BACKOFF`]. Overridable so a test can
     /// exercise the retry without sleeping through the production schedule.
     branch_retry_backoff: Vec<std::time::Duration>,
+    turn_start_retry_backoff: Vec<std::time::Duration>,
 }
 
 impl CursorClient {
@@ -266,6 +297,7 @@ impl CursorClient {
             http,
             config,
             branch_retry_backoff: BRANCH_UNVERIFIABLE_RETRY_BACKOFF.to_vec(),
+            turn_start_retry_backoff: TURN_START_RETRY_BACKOFF.to_vec(),
         })
     }
 
@@ -274,6 +306,14 @@ impl CursorClient {
     #[must_use]
     pub fn with_branch_retry_backoff(mut self, backoff: Vec<std::time::Duration>) -> Self {
         self.branch_retry_backoff = backoff;
+        self
+    }
+
+    /// Replace the retry schedule for turn-starting POSTs. An empty schedule
+    /// disables the retry.
+    #[must_use]
+    pub fn with_turn_start_retry_backoff(mut self, backoff: Vec<std::time::Duration>) -> Self {
+        self.turn_start_retry_backoff = backoff;
         self
     }
 
@@ -324,6 +364,46 @@ impl CursorClient {
             .await
             .map_err(|error| rootcause::report!(error))?;
         Ok((status, text))
+    }
+
+    /// POST a request that starts a turn, riding out transient failures.
+    ///
+    /// Only the two calls that begin a turn take this path: minting an agent
+    /// and opening a follow-up run. Both are safe to repeat, because a
+    /// failed status is Cursor saying it started nothing, so a second POST
+    /// cannot duplicate work on cursor.com. Cancelling and archiving keep
+    /// the plain path — making a stop wait out someone else's limit is worse
+    /// than the stop failing.
+    ///
+    /// A budget spent without success returns the last answer rather than a
+    /// failure of its own, so an exhausted retry is reported exactly as the
+    /// same failure is today.
+    async fn post_starting_turn<Body>(
+        &self,
+        path: &str,
+        body: &Body,
+    ) -> Result<(reqwest::StatusCode, String), rootcause::Report>
+    where
+        Body: serde::Serialize + Sync,
+    {
+        let mut retries = self.turn_start_retry_backoff.iter();
+        loop {
+            let (status, text) = self.post_for_text(path, body).await?;
+            if !is_transient(status) {
+                return Ok((status, text));
+            }
+            let Some(delay) = retries.next() else {
+                return Ok((status, text));
+            };
+            tracing::warn!(
+                path,
+                status = status.as_u16(),
+                retry_in_ms = delay.as_millis() as u64,
+                detail = %text,
+                "cursor could not start the turn; retrying"
+            );
+            tokio::time::sleep(*delay).await;
+        }
     }
 
     /// Turn one POST's status and body into the reply or a report.
@@ -578,7 +658,7 @@ impl CursorAgents for CursorClient {
         };
         let mut retries = self.branch_retry_backoff.iter();
         let (status, text) = loop {
-            let (status, text) = self.post_for_text("/v1/agents", &request).await?;
+            let (status, text) = self.post_starting_turn("/v1/agents", &request).await?;
             let Some(repo) = repo else {
                 break (status, text);
             };
@@ -632,9 +712,9 @@ impl CursorAgents for CursorClient {
             },
             model: model.map(ModelSelection::from),
         };
-        let reply: CreateRunResponse = self
-            .post_json(&format!("/v1/agents/{agent}/runs"), &request)
-            .await?;
+        let path = format!("/v1/agents/{agent}/runs");
+        let (status, text) = self.post_starting_turn(&path, &request).await?;
+        let reply: CreateRunResponse = Self::decode_post(&path, status, &text)?;
         Ok(CursorRunId::new(reply.into_run_id()))
     }
 

@@ -60,6 +60,21 @@ fn receive_participant_joined(
     client.receive_webhook(&body, &token)
 }
 
+#[test]
+fn room_composite_egress_uses_speaker_layout() {
+    let request = build_room_composite_egress_request(
+        "room-1",
+        &EgressS3Config {
+            bucket: "test-bucket".to_owned(),
+            region: "us-east-1".to_owned(),
+            access_key: "test-access-key".to_owned(),
+            secret: "test-secret".to_owned(),
+        },
+    );
+
+    assert_eq!(request.options.layout, "speaker");
+}
+
 #[tokio::test]
 async fn verify_access_token_round_trips_identity_and_room() {
     let client = client();

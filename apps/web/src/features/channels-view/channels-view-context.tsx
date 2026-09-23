@@ -1,3 +1,4 @@
+import type { NavigationStackChangeReason } from '@app/components/navigation-stack/NavigationStack';
 import { makePersistedState } from '@app/lib/persistence';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -37,6 +38,8 @@ export type ChannelsViewContext = {
   setMobileTab: (tab: ChannelsQueryScope) => void;
   setSelectedChannelId: (channelId: string | undefined) => void;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
+  /** Per-user collapse state of a team channel label. */
+  setLabelOpen: (labelId: string, open: boolean) => void;
   setSortBy: (group: ChannelsGroup, sort: ChannelListSort) => void;
   setAsideWidth: (width: number) => void;
 };
@@ -54,6 +57,7 @@ function createInitialState(
       channels: initial.expandedGroups?.channels ?? true,
       direct_messages: initial.expandedGroups?.direct_messages ?? true,
     },
+    collapsedLabels: initial.collapsedLabels ?? [],
     sortBy: {
       channels: initial.sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
       direct_messages:
@@ -91,18 +95,21 @@ export const [ChannelsViewProvider, useChannelsView] =
       const mobileLayout = () => isTouchDevice();
       const selectPreview = createPreviewSelectionGuard();
       const [previewChannelId, setPreviewChannelId] = createSignal<string>();
-      const setSelectedChannelId = (id: string | undefined) => {
+      const setSelectedChannelId = (
+        id: string | undefined,
+        reason: NavigationStackChangeReason = 'navigate'
+      ) => {
         // The mobile layout keeps the selection for row highlighting only, so
         // there is no preview to claim.
         const preview =
           id && !mobileLayout() ? { type: 'channel' as const, id } : undefined;
-        if (!selectPreview(preview)) return;
+        if (!selectPreview(preview, reason)) return;
         setPreviewChannelId(preview?.id);
         setState('selectedChannelId', id);
       };
       // Keep restored selection in persistence even if another view currently
       // owns its preview. It can be retried on selection or the next mount.
-      setSelectedChannelId(state.selectedChannelId);
+      setSelectedChannelId(state.selectedChannelId, 'restore');
 
       return {
         state,
@@ -112,6 +119,14 @@ export const [ChannelsViewProvider, useChannelsView] =
         setMobileTab: (tab) => setState('mobileTab', tab),
         setSelectedChannelId,
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),
+        setLabelOpen: (labelId, open) =>
+          setState('collapsedLabels', (collapsed) =>
+            open
+              ? collapsed.filter((id) => id !== labelId)
+              : collapsed.includes(labelId)
+                ? collapsed
+                : [...collapsed, labelId]
+          ),
         setSortBy: (group, sort) => setState('sortBy', group, sort),
         setAsideWidth: (width) =>
           setState('asideWidth', clampChannelsRailWidth(width)),

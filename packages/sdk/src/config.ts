@@ -7,6 +7,7 @@ export type ServiceName =
   | 'storage'
   | 'auth'
   | 'email'
+  | 'calendar'
   | 'cognition'
   | 'notification'
   | 'properties'
@@ -29,6 +30,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     storage: 'https://dev-gateway.macro.com/dss',
     auth: 'https://dev-gateway.macro.com/auth',
     email: 'https://dev-gateway.macro.com/email',
+    calendar: 'https://dev-gateway.macro.com/calendar',
     cognition: 'https://dev-gateway.macro.com/cognition',
     notification: 'https://dev-gateway.macro.com/notification',
     properties: 'https://dev-gateway.macro.com/dss',
@@ -44,6 +46,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     storage: 'https://gateway.macro.com/dss',
     auth: 'https://gateway.macro.com/auth',
     email: 'https://gateway.macro.com/email',
+    calendar: 'https://gateway.macro.com/calendar',
     cognition: 'https://gateway.macro.com/cognition',
     notification: 'https://gateway.macro.com/notification',
     properties: 'https://gateway.macro.com/dss',
@@ -59,6 +62,10 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     storage: 'http://localhost:8086',
     auth: 'http://localhost:8080',
     email: 'http://localhost:8087',
+    // calendar_service serves its routes under `/calendar` as well as at the
+    // root; the `/calendar` segment keeps local paths identical to the
+    // gateway's. Mirrors apps/web servers.ts.
+    calendar: 'http://localhost:8088/calendar',
     cognition: 'http://localhost:8085',
     notification: 'http://localhost:8089',
     properties: 'http://localhost:8086',

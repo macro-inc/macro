@@ -22,7 +22,11 @@ use model::{
     document::{DocumentBasic, FileType, FileTypeExt, response::LocationResponseData},
     response::{GenericErrorResponse, GenericResponse, PresignedUrl},
 };
-use s3_key::{build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key};
+use model_owner::Owner;
+use s3_key::{
+    build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key,
+    document_key_url_path,
+};
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -67,10 +71,9 @@ pub async fn get_location_handler(
         .as_deref()
         .and_then(|f| FileType::from_str(f).ok());
 
-    let owner = document_context.owner.principal_id();
     let response_data = get_presigned_url_by_type(
         &state,
-        &owner,
+        &document_context.owner,
         &document_id,
         file_type,
         params.document_version_id,
@@ -112,18 +115,17 @@ pub async fn get_location_handler(
 }
 
 /// Signs a document key and returns a CloudFront presigned URL.
-/// `check_key` is the non-URL-encoded key for S3 existence verification.
-/// `signed_key` is the URL-encoded key for the CloudFront signed URL.
+/// The object key is used as-is for S3 existence verification and
+/// percent-encoded only where it becomes the URL path.
 #[tracing::instrument(skip(state), err)]
 async fn sign_document_key(
     state: &ApiContext,
-    #[allow(unused_variables)] check_key: &str,
-    signed_key: &str,
+    #[allow(unused_variables)] key: &str,
 ) -> anyhow::Result<LocationResponseData> {
     #[cfg(feature = "location_check")]
     {
-        tracing::trace!("checking if file exists in s3, key: {}", check_key);
-        let exists = &state.s3_client.exists(check_key).await?;
+        tracing::trace!("checking if file exists in s3, key: {}", key);
+        let exists = &state.s3_client.exists(key).await?;
         if !exists {
             anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
         }
@@ -146,7 +148,7 @@ async fn sign_document_key(
         &state
             .config
             .document_storage_service_cloudfront_distribution_url,
-        signed_key,
+        &document_key_url_path(key),
         &signed_options,
     )?;
 
@@ -161,7 +163,7 @@ async fn sign_document_key(
 #[tracing::instrument(skip(state))]
 pub(in crate::api::documents) async fn get_versioned_url(
     state: &ApiContext,
-    owner: &str,
+    owner: &Owner,
     document_id: &str,
     document_version_id: Option<i64>,
     is_static: bool,
@@ -180,30 +182,21 @@ pub(in crate::api::documents) async fn get_versioned_url(
         }
     };
 
-    let check_key =
-        build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
-    let url_encoded_owner = urlencoding::encode(owner);
-    let signed_key = build_cloud_storage_bucket_document_key(
-        &url_encoded_owner,
-        document_id,
-        document_version_id,
-    );
+    let key = build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
 
-    sign_document_key(state, &check_key, &signed_key).await
+    sign_document_key(state, &key).await
 }
 
 /// Gets the presigned url for the converted docx file
 #[tracing::instrument(skip(state))]
 async fn get_converted_docx_url(
     state: &ApiContext,
-    owner: &str,
+    owner: &Owner,
     document_id: &str,
 ) -> anyhow::Result<LocationResponseData> {
-    let check_key = build_docx_to_pdf_converted_document_key(owner, document_id);
-    let url_encoded_owner = urlencoding::encode(owner);
-    let signed_key = build_docx_to_pdf_converted_document_key(&url_encoded_owner, document_id);
+    let key = build_docx_to_pdf_converted_document_key(owner, document_id);
 
-    sign_document_key(state, &check_key, &signed_key).await
+    sign_document_key(state, &key).await
 }
 
 #[tracing::instrument(skip(state))]
@@ -297,7 +290,7 @@ pub(in crate::api::documents) fn get_cloudfront_signed_options(
 #[tracing::instrument(skip(state))]
 pub(in crate::api::documents) async fn get_presigned_url_by_type(
     state: &ApiContext,
-    owner: &str,
+    owner: &Owner,
     document_id: &str,
     file_type: Option<FileType>,
     document_version_id: Option<i64>,

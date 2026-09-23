@@ -56,7 +56,9 @@ export function AgentChangesProvider(props: ParentProps) {
   };
   const pullRequestChangeCounts = createPullRequestStatsSource(
     () =>
-      coding() ? (session.session()?.pullRequestUrl ?? undefined) : undefined,
+      coding() && session.userId()
+        ? (session.session()?.pullRequestUrl ?? undefined)
+        : undefined,
     () => source.summary()?.changeset?.id
   );
   const host: ChangesHost = {

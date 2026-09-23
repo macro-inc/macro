@@ -941,7 +941,11 @@ async fn test_get_entity_notifications_batch_matches_channel_thread_secondary_en
     let thread_ref = EntityType::ChannelMessage.with_entity_string(thread_id);
     let other_thread_ref = EntityType::ChannelMessage.with_entity_string(other_thread_id);
     let result = pool
-        .get_entity_notifications_batch(user, vec![thread_ref.clone(), other_thread_ref.clone()])
+        .get_entity_notifications_batch(
+            user,
+            vec![thread_ref.clone(), other_thread_ref.clone()],
+            Default::default(),
+        )
         .await
         .unwrap();
 
@@ -1027,7 +1031,11 @@ async fn test_get_entity_notifications_batch_preserves_canonical_entity_identity
     .unwrap();
 
     let result = pool
-        .get_entity_notifications_batch(user, vec![task_entity.clone(), foreign_entity.clone()])
+        .get_entity_notifications_batch(
+            user,
+            vec![task_entity.clone(), foreign_entity.clone()],
+            Default::default(),
+        )
         .await
         .unwrap();
 

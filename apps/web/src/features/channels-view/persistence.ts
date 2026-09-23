@@ -55,6 +55,7 @@ const channelsEntryStateSchemaWithDefaults = z.object({
     channels: true,
     direct_messages: true,
   }),
+  collapsedLabels: z.array(z.string()).default([]),
 });
 
 type ChannelsEntryState = z.infer<typeof channelsEntryStateSchemaWithDefaults>;
@@ -69,6 +70,7 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
     channels: true,
     direct_messages: true,
   },
+  collapsedLabels: [],
 } satisfies ChannelsEntryState;
 
 const channelsPreferencesSchema = z.object({
@@ -107,6 +109,7 @@ function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
       ? {}
       : { selectedChannelId: state.selectedChannelId }),
     expandedGroups: state.expandedGroups,
+    collapsedLabels: state.collapsedLabels,
   };
 }
 
@@ -123,6 +126,7 @@ function restoreChannelsEntryState(
     mobileTab: restored.mobileTab,
     selectedChannelId: restored.selectedChannelId,
     expandedGroups: restored.expandedGroups,
+    collapsedLabels: restored.collapsedLabels,
   };
 }
 

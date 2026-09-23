@@ -5,7 +5,6 @@ import {
   ResponsiveBlockToolbar,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -23,16 +22,11 @@ import { isMobile } from '@core/mobile/isMobile';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import ChatCircleDots from '@phosphor/chat-circle-dots.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import ShareIcon from '@phosphor/share.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
-import {
-  ORIGIN_THREAD_DRAWER_ID,
-  sessionOriginThread,
-} from '../context/origin-thread';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
 import {
   harnessTitle,
@@ -69,9 +63,14 @@ export function AgentSplitHeader(props: {
   // The session, not `useBlockId()`: a block created from the launcher mounts
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
-  const { sessionId, metadata } = useAgentSession();
-  const conversation = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
+  const { sessionId, metadata, userId } = useAgentSession();
   const title = () => agentSessionTitle(props.session, props.title);
+  const permissions = () =>
+    userId() && props.session?.ownerId === userId()
+      ? Permissions.OWNER
+      : props.session?.canEdit
+        ? Permissions.CAN_EDIT
+        : Permissions.CAN_VIEW;
 
   const entity = (): AgentSessionEntity | undefined => {
     const session = props.session;
@@ -108,12 +107,6 @@ export function AgentSplitHeader(props: {
   ];
 
   const tools: BlockTool[] = [
-    {
-      label: 'Open conversation',
-      icon: ChatCircleDots,
-      action: () => conversation.toggle(),
-      condition: () => sessionOriginThread(props.session) !== undefined,
-    },
     {
       label: () => {
         const provider = props.session?.external?.provider;
@@ -189,7 +182,7 @@ export function AgentSplitHeader(props: {
               owner={session().ownerId}
               itemType="agent_session"
               blockAlias="agent"
-              userPermissions={Permissions.OWNER}
+              userPermissions={permissions()}
               isSharePermOpen={shareOpen()}
               setIsSharePermOpen={setShareOpen}
             />
@@ -204,6 +197,7 @@ export function AgentSplitHeader(props: {
         id={sessionId() ?? ''}
         itemType="agent_session"
         entity={entity()}
+        permissions={permissions()}
         name={title()}
       />
     </ShareDialogContext.Provider>

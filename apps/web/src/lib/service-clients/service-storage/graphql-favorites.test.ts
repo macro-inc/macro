@@ -53,7 +53,7 @@ const revalidations = [
   {
     query: stringifyDocument(FavoritesDocument),
     operationName: 'Favorites',
-    variablesJson: '{}',
+    variablesJson: '{"filter":null}',
   },
 ];
 
@@ -97,7 +97,7 @@ describe('favorites GraphQL mutations', () => {
               {
                 query: stringifyDocument(FavoritesDocument),
                 operationName: 'Favorites',
-                variablesJson: '{}',
+                variablesJson: '{"filter":null}',
                 path: [{ field: 'user' }, { field: 'favorites' }],
                 operation: {
                   kind: patchKind,

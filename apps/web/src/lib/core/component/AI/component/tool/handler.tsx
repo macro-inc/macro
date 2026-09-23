@@ -205,6 +205,11 @@ type TriggerToolArgs = Omit<
   type: 'call' | 'response' | 'error';
 };
 
+/** Schema support alone does not guarantee that this surface has a renderer. */
+export function hasToolRenderer(name: string): boolean {
+  return Object.hasOwn(toolHandlers, name);
+}
+
 export function RenderTool(props: ToolProps) {
   const maybeTool = deserializeToolCall({
     id: props.tool_id,

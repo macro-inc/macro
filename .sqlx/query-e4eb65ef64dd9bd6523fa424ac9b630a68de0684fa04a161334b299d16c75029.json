@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session SET working_branch = $2, modified_at = clock_timestamp()\n            WHERE id = $1 AND working_branch IS DISTINCT FROM $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e4eb65ef64dd9bd6523fa424ac9b630a68de0684fa04a161334b299d16c75029"
+}

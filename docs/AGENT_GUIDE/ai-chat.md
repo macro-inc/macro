@@ -88,9 +88,10 @@ permission failures should display a failed tool call without a successful resul
   vertical center. The heading and first input line stay anchored while the composer
   expands downward. The plus attachment button stays at the far left: before the
   text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
-  on the left and the agent/model and Send on the right. An inset repository bar
+  on the left and the agent/model and Send on the right. A full-width repository bar
   slides and fades in below the rounded input over 200ms, with rounded bottom corners
-  and a darker surface in dark mode. Selecting a chat agent retracts the bar and
+  and a subtle border along its sides and bottom, with a darker surface in dark mode.
+  Selecting a chat agent retracts the bar and
   restores the compact input when the draft fits on one line, without remounting
   the editor or losing the draft. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
@@ -200,6 +201,11 @@ The area behind the composer is transparent, without a bottom gradient overlay.
 The composer has one editable field. Its placeholder appears only while empty;
 placeholder updates and disabled-state changes preserve the editor and draft.
 
+The **Ask AI** button beside the mobile search field sends the typed query.
+With `enable-chat-v3-agents` on, it opens an agent session (`/app/agent/<id>`)
+and delivers the query as the first prompt. With the flag off, it opens a
+cognition chat (`/app/chat/<uuid>`) and sends the query.
+
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively,
@@ -261,6 +267,45 @@ attached as context (it appears as a link chip in the composer). New-chat pane s
 notified when the AI responds). Legacy Home background sends preserve the submitted tool selection.
 
 ## Composer anatomy (a11y)
+
+AI chat (including Home and doc-scoped chat) and agent session composers have
+a **Start dictation with OpenAI Whisper** microphone beside Send. It records
+in memory and uploads to the
+authenticated `/dictation/transcribe` storage endpoint only on confirmation.
+Whisper is available on all plans without consuming chat credits; its server
+credential is never exposed to the browser. Unsupported recording environments
+show a disabled microphone. Every supported browser uses Whisper; there are
+no browser speech-recognition or language-pack installation flows.
+
+While dictating, a scrolling microphone-volume timeline and **Cancel dictation** / **Use dictation**
+replace the composer controls. Cancel (or Escape) preserves the original draft.
+Bars sample microphone volume as recording chunks arrive (normally every 200ms): silence stays dotted, louder speech
+creates taller bars, and earlier levels move left without changing height.
+Volume analysis stays on-device and stops on confirm, cancel, error, or close.
+Use dictation stops recording, waits for Whisper, and appends plain text to
+the draft without sending it. Existing rich text and attachments remain intact.
+If the browser stops listening on its own, **Ready** waits for confirmation.
+While **Finishing…**, the checkmark is disabled and Cancel remains available.
+Mobile chat stays expanded when focus moves into dictation controls.
+Starting dictation in another composer releases the previous session without
+moving focus back to it. Closing the composer releases the microphone. Capture failures
+appear below the composer.
+
+Whisper dictation supports WebM, MP4, and Ogg recording depending on browser.
+Recordings stop just before five minutes or near 8 MB and wait for confirmation.
+Cancel discards the recording; cancel during transcription aborts the request and
+ignores any late result. If the service is temporarily at capacity, the composer
+stays in **Finishing…** while TanStack retries up to twice with exponential backoff,
+jitter, and the server's `Retry-After` delay. Cancel also cancels these retries.
+Other failures keep the recording in memory for an explicit retry with the
+checkmark. No audio or transcript is stored in the query cache or persisted by the dictation
+endpoint. Provider diagnostics exclude response content. The server detects
+the audio container and inspects its duration before contacting OpenAI, requires a
+signed-in user (bots and internal callers are refused), and rate limits each
+user to 60 attempts per hour (failed requests and retries count). Hourly limits
+show “Dictation limit reached. Please try again later.” and are not automatically retried.
+The backend records provider-reported audio seconds in the shared AI usage system
+and uses Whisper's per-minute model pricing without charging user credits.
 
 Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.
@@ -395,20 +440,59 @@ to open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
 merged / closed.
 
-Tool groups and individual tool cards start collapsed. Expand a group to see
-its calls, then expand an edit card to view its file diffs. Diff bodies load
-only when their card opens; syntax highlighting may appear after the diff text.
-Opening a session or expanding a group should leave the app responsive, even
-when the session contains many file edits.
+Individual tools appear as bare rows with an icon, tool name, optional detail,
+and a right-aligned result summary. The caret on the right opens the results;
+it points right when collapsed and down when expanded. Individual results start
+collapsed. Existing rich result views retain their own content and controls;
+when a result view provides its own disclosure, use that control rather than
+adding a second nested disclosure. Counts come from structured responses,
+edits show additions/deletions, and other tools show their outcome. A call cut
+off when its turn ends reads **Stopped**.
+
+Only tools with a supported result view can expand. Unknown tools, unsupported
+drafts, and payloads that do not fit their renderer stay as summary rows with
+no caret. Tool arguments and results never fall back to raw JSON.
+
+Consecutive calls collect under an expanded **Calling N tools** group while
+running. Rows appear as calls arrive; after the calls finish, the group briefly
+settles and collapses to **Called N tools**. Group growth and collapse happen
+immediately, without animation, including fast batches. Completed groups in
+history start collapsed and can be reopened. The group caret sits immediately
+after its label and appears on hover or keyboard focus. Expand an edit row to
+view its diffs. Result bodies load only when their row opens; syntax highlighting
+may appear after the diff text. Opening a session or expanding a group should
+leave the app responsive, even when the session contains many file edits.
+
+`DisplayResults` renders its dynamic view directly in the reply and stays visible
+without opening a tool row. It breaks tool groups before and after itself,
+including while pending; later calls start a separate group.
+Its dashboard supports markdown, timelines, entity lists, and channel messages,
+using the same full-width view as AI chat. Incomplete arguments stay hidden while
+streaming; a valid view updates as arguments arrive. Malformed completed views
+show **Couldn't render dashboard**; failed calls show a **Failed** summary row
+without a disclosure. Macro's built-in agents receive the complete view schema
+with the tool definition. External coding agents connected through Macro's MCP
+server do not currently receive this tool.
+
+The development gallery at `/app/component/agent-ui` includes **Replay tool
+calls** and **Replay fast batch**, both using the message renderer. Check that
+rows accumulate, completed calls stop shimmering, the group collapses after
+completion without height animation, and its carets still expand the results.
+Check that rich result controls still work and `DisplayResults` stays visible
+between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
+and confirm unknown tools have no individual disclosure or JSON payload. Repeat
+at a narrow viewport width.
 
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
 as soon as a tool or answer follows, including during long Cursor turns. A
-trailing thought stays outside the tool group so the live reasoning row stays
-visible. Only the newest turn can be live: once the composer stops showing the
+trailing thought at the end of a message stays outside the tool group so live
+reasoning stays visible; thoughts followed by prose stay inside the group.
+Only the newest turn can be live: once the composer stops showing the
 agent as working, every Thinking label, **Calling N tools** row, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
-the runtime cut off mid-call. At most one shimmering row is ever expected.
+the runtime cut off mid-call. Shimmer identifies current activity: an active
+tool and its containing group can shimmer together; completed rows stay still.
 
 ### Sharing a session
 
@@ -416,29 +500,51 @@ In the Agents workspace, saved sessions use the shared top-bar controls: session
 icon, title and action menu, Share, Copy Share Link, and a side-panel toggle.
 There is no breadcrumb because Agents has no subspaces. Unknown model providers
 fall back to the chat icon. The toggle (or `]`) opens the session's Details, Plan,
-Changes, and Activity sections when available, beside the transcript in wide
+Changes, Activity, and References sections when available, beside the transcript in wide
 layouts or over it in narrow layouts; it does not open another split.
 Details lists Status, Agent, Model, and dates for every session; the Harness
 row appears only for coding runtimes, never for in-memory chat agents.
+`References` is the same section documents show: one row per channel message that
+`@`-mentioned or shared the session (sender, channel chip, time, and a two-line
+message excerpt) and per document that mentions it (author and document chip).
+Click a row to open that message or document in a split. The section is hidden
+until at least one reference exists, and only lists channels you belong to.
 New conversation pages have no disabled session action buttons. Older chats
 also have one header row, and empty chats show a simple conversation prompt
 instead of the standalone recent-sessions and tips surface.
 
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;
 on mobile, open the session title menu and choose **Share**. The owner can
-select people or channels and send the session with an optional message using
-the same Share dialog and mobile drawer as documents. Sessions also support
-**Share** from entity list menus and the entity sharing shortcut. People receive it through a direct or
-group message. Recipients can view and control the session; there is no access
-level selector. The owner sees the standard recipient-and-message form without
-an extra session notice or Copy Link footer; **Copy Share Link** remains in
-the header. Cancel closes the composer without sending.
+select people or channels, choose their access level, and send the session with
+an optional message using the same Share dialog and mobile drawer as tasks.
+Sessions also support **Share** from entity list menus and the entity sharing
+shortcut. **People with access** lists the owner and shared conversations;
+the owner can change or remove a conversation's access. **Link sharing** offers
+None / Public / Team and an access level. **Team access** shares directly with
+the owner's team when one exists. On mobile these controls are in the Share,
+People, and Link tabs. View and Comment allow reading; Edit also allows
+controlling the session. View-only sessions keep the composer, model selector,
+and queued-message controls disabled. **Copy Share Link** remains in the header. Cancel
+closes the composer without sending.
+
+Sharing a session reference in a message grants View by default and preserves
+an existing grant. Use the access selector to grant Comment or Edit.
 
 Other participants can copy a link for people who already have access, but
-cannot grant access. Copying a link alone never changes permissions. New,
+cannot grant access or change sharing settings. Copying a link alone never changes permissions. New,
 unsaved session drafts do not offer sharing.
 
 Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and agent names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.
+
+### Replying to selected agent text
+
+On desktop, drag to select transcript prose or expanded **Thought** text, then
+choose **Reply to this** above the selection. The composer inserts a single-line
+**Replying to** preview with the same quote-reply styling as channel replies.
+Click the preview to open the full **Referenced text** viewer. While editable,
+hover the preview for its menu: **Copy**, **Convert to text**, or **Delete**.
+Selecting text in the composer or outside the transcript must not show the reply
+button; clearing the transcript selection dismisses it.
 
 ### Expanded session mentions
 

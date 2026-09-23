@@ -10,7 +10,6 @@ import {
 } from '@core/constant/featureFlags';
 import { MessageThreadById } from '@core/messages/MessageThread';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import { useContacts } from '@queries/contacts/contacts';
 import { Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import {
@@ -163,8 +162,6 @@ export function ThreadBody(props: ThreadBodyProps) {
 /** Document threads render the shared message thread; a draft composes its root. */
 function MessageThreadBody(props: ThreadBodyProps) {
   const context = useContext(CommentsContext);
-  // Workspace users for @-mentions, matching the legacy comment composer.
-  const participants = useContacts();
   const parent = () => ({ type: 'document' as const, id: context.documentId });
   const targetId = () => {
     const highlighted = context.highlightedCommentId();
@@ -177,7 +174,6 @@ function MessageThreadBody(props: ThreadBodyProps) {
         fallback={
           <ChannelInput
             parent={parent()}
-            participants={participants}
             flat={props.flatComposer}
             input={{ mode: 'reply', placeholder: 'Leave a comment...' }}
             onClose={() => context.setActiveThread(null)}
@@ -400,8 +396,6 @@ export function Thread(props: {
   theme?: EditorThemeClasses;
   maxHeight?: number;
   handleMouseDown?: (e: MouseEvent) => void;
-  ref?: (el: HTMLDivElement) => void;
-  width?: number;
 }) {
   let measureContainerRef!: HTMLDivElement;
 
@@ -423,32 +417,49 @@ export function Thread(props: {
       threadId={props.comment.threadId}
       maxHeight={props.maxHeight}
       isActive={props.isActive}
-      forceWidth={props.width}
       transition={false}
     >
-      <Layer depth={2}>
-        <div
-          data-comment-thread
-          // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
-          // pointer-events: none vs. all inside the .pdfOverlayInner div.
-          class="shrink-0 border border-edge bg-surface p-2 shadow-md rounded-xl shadow-drop-shadow portal-scope pointer-events-auto pdf-pointer-event-reset"
-          classList={{
-            'transition-transform duration-100': true,
-            '-translate-x-8': props.isActive,
-          }}
-          style={{
-            width: props.width ? `${props.width}px` : 'auto',
-          }}
-          ref={props.ref}
-        >
-          <ThreadBody
-            comment={props.comment}
-            isActive={props.isActive}
-            theme={props.theme}
-            flatComposer
-          />
-        </div>
-      </Layer>
+      <ThreadCard
+        comment={props.comment}
+        isActive={props.isActive}
+        theme={props.theme}
+        shifted={props.isActive}
+      />
     </MeasureContainer>
+  );
+}
+
+/** The floating card around a thread, placed by the margin or by a popover. */
+export function ThreadCard(props: {
+  comment: Root;
+  isActive: boolean;
+  theme?: EditorThemeClasses;
+  width?: number;
+  /** Nudge the active card toward the text it annotates. */
+  shifted?: boolean;
+}) {
+  return (
+    <Layer depth={2}>
+      <div
+        data-comment-thread
+        // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
+        // pointer-events: none vs. all inside the .pdfOverlayInner div.
+        class="shrink-0 border border-edge bg-surface p-2 shadow-md rounded-xl shadow-drop-shadow portal-scope pointer-events-auto pdf-pointer-event-reset"
+        classList={{
+          'transition-transform duration-100': true,
+          '-translate-x-8': props.shifted,
+        }}
+        style={{
+          width: props.width ? `${props.width}px` : 'auto',
+        }}
+      >
+        <ThreadBody
+          comment={props.comment}
+          isActive={props.isActive}
+          theme={props.theme}
+          flatComposer
+        />
+      </div>
+    </Layer>
   );
 }

@@ -1,11 +1,10 @@
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import { touchHandler } from '@core/directive/touchHandler';
 import type { MessageActions, MessageData } from '@core/messages/types';
-import type { IUser } from '@core/user/types';
 import { messageSendMotion } from '@core/util/message-send-motion';
 import TrashIcon from '@phosphor/trash.svg';
 import type { MessageParent } from '@service-storage/messages';
-import { type Accessor, type JSX, Match, Show, Switch } from 'solid-js';
+import { type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
 import { useMessage } from './context';
@@ -20,7 +19,6 @@ type ChannelMessageProps = {
   actions?: MessageActions;
   listMeta?: ChannelMessageListMeta;
   messageEditor?: MessageEditor;
-  participants?: Accessor<IUser[]>;
   selected?: boolean;
   /**
    * The unified-input mode's floating reply/edit input, or message
@@ -41,7 +39,6 @@ function MessageContentSlot(props: {
   parent: MessageParent;
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
-  participants?: Accessor<IUser[]>;
   class?: string;
 }) {
   const message = useMessage();
@@ -59,7 +56,6 @@ function MessageContentSlot(props: {
             parent={props.parent}
             message={message()}
             messageEditor={messageEditor()}
-            participants={props.participants}
             class={props.class}
           />
         )}
@@ -117,7 +113,6 @@ function RegularMessageLayout(props: {
   parent: MessageParent;
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
-  participants?: Accessor<IUser[]>;
 }) {
   return (
     <Message.Layout class="pt-(--regular-message-padding-t)">
@@ -138,7 +133,6 @@ function RegularMessageLayout(props: {
           parent={props.parent}
           inputMode={props.inputMode}
           messageEditor={props.messageEditor}
-          participants={props.participants}
         />
       </Message.Slot>
       <Message.Slot
@@ -156,7 +150,6 @@ function GroupedMessageLayout(props: {
   parent: MessageParent;
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
-  participants?: Accessor<IUser[]>;
 }) {
   return (
     <Message.Layout>
@@ -169,7 +162,6 @@ function GroupedMessageLayout(props: {
             parent={props.parent}
             inputMode={props.inputMode}
             messageEditor={props.messageEditor}
-            participants={props.participants}
             class="min-w-0 flex-1"
           />
         </div>
@@ -223,7 +215,6 @@ export function ChannelMessage(props: ChannelMessageProps) {
               parent={props.parent}
               inputMode={props.inputMode}
               messageEditor={props.messageEditor}
-              participants={props.participants}
             />
           </Match>
           <Match when={true}>
@@ -231,7 +222,6 @@ export function ChannelMessage(props: ChannelMessageProps) {
               parent={props.parent}
               inputMode={props.inputMode}
               messageEditor={props.messageEditor}
-              participants={props.participants}
             />
           </Match>
         </Switch>

@@ -11,6 +11,7 @@ import { consumeNonce } from '../nonce';
 import { MessageNonceKeys, messageKeys } from './keys';
 import { normalizeMessageSender } from './message-sender';
 import {
+  getCachedThreadState,
   getTargetMessage,
   insertMessageIntoTargetCaches,
   patchTargetMessage,
@@ -97,6 +98,33 @@ export function applyMessage(
     patchTargetMessage(parent, target, normalized);
   }
   softInvalidateTargetCaches(parent, target);
+}
+
+/**
+ * Deleting the root of a discussion deletes the discussion, and the response
+ * carries only the root's own tombstone. Apply the committed teardown so the
+ * margin and the document mark clear without waiting on the live event, using
+ * the thread state `cached` before the optimistic delete dropped the root from
+ * the caches; the refetch it triggers reconciles the rest. With no state to
+ * build on, only that refetch can report the teardown.
+ */
+export function applyRootDeletion(
+  message: Message,
+  cached?: MessageThread['state']
+) {
+  const parent = message.parent;
+  if (parent.type === 'channel' || message.thread_id) return;
+  const state = cached ?? getCachedThreadState(parent, message.id);
+  if (!state) {
+    void queryClient.invalidateQueries({
+      queryKey: getMessageTimelineQueryKeyPrefix(parent),
+    });
+    return;
+  }
+  applyThreadState(parent, {
+    ...state,
+    deleted_at: message.deleted_at ?? new Date().toISOString(),
+  });
 }
 
 /** One live message protocol for channel screens, document discussions, and linked drawers. */

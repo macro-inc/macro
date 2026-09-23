@@ -31,6 +31,10 @@ const live = vi.hoisted(() => ({
 }));
 const serviceClient = vi.hoisted(() => ({ get: vi.fn() }));
 
+vi.mock('@queries/agent-session/list-sync', () => ({
+  refreshAgentSessionLists: vi.fn(async () => {}),
+}));
+
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return {

@@ -1,5 +1,4 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
-import { createContentInstanceRegistry } from '@core/contentInstanceRegistry';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { Navigator } from '@solidjs/router';
 import { batch, createRoot, createSignal } from 'solid-js';
@@ -38,7 +37,6 @@ beforeAll(() => {
 
 function createMockOrchestrator(): BlockOrchestrator {
   return {
-    contentInstances: createContentInstanceRegistry(),
     isBlockMounted: vi.fn(() => false),
     createBlockInstance: vi.fn((_type, id, _splitId) => ({
       node: { type: 'mock-node', id },

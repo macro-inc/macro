@@ -25,11 +25,12 @@ use super::models::FileTypeUpdate;
 pub struct DocumentCreatedMetadata {
     /// The id of the created document.
     pub document_id: String,
-    /// The owner (creator) of the document.
+    /// The principal who owns the document.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub owner: Owner,
     /// Who mechanically created the document. Absent on events published
-    /// before attribution: ingest then treats [`Self::owner`] as the actor.
+    /// before attribution: ingest derives a user/bot actor from [`Self::owner`].
+    /// Team owners fall back to [`Self::on_behalf_of`], then the system bot.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
     pub actor: Option<Actor<'static>>,
@@ -206,7 +207,7 @@ pub struct DocumentCopiedMetadata {
     pub source_document_id: String,
     /// The specific source version copied, when requested.
     pub source_version_id: Option<i64>,
-    /// The owner of the new copy (the copier).
+    /// The principal who owns the new copy.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub owner: Owner,
     /// The name of the new document.

@@ -26,11 +26,6 @@ export {
   type ElicitationFormProps,
 } from './ElicitationForm';
 export { FoldedAnsiText } from './FoldedAnsiText';
-export {
-  exchangeText,
-  FoldedExchange,
-  type FoldedExchangeProps,
-} from './FoldedExchange';
 export { FoldedOutput } from './FoldedOutput';
 export { FoldedPathList } from './FoldedPathList';
 export { FoldedTerminal } from './FoldedTerminal';

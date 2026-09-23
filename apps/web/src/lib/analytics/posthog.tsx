@@ -16,7 +16,9 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
   () => {
     const analytics = useAnalytics();
 
-    const [featureFlags, setFeatureFlags] = createSignal<string[]>([]);
+    const [featureFlags, setFeatureFlags] = createSignal<string[]>([], {
+      equals: false,
+    });
     // Distinguishes "flags not fetched yet" from "no flags enabled": both
     // leave featureFlags empty, but destructive flag-off fallbacks (e.g.
     // RedirectSplit) must not fire before the answer arrives. Set even on
@@ -71,6 +73,9 @@ function readFeatureFlag<T extends JsonType>(
         return { enabled: false, payload: fallbackPayload, loading: true };
       }
 
+      // The SDK is not reactive. Re-read on each successful refresh, including
+      // payload changes that leave the enabled flag list unchanged.
+      posthog.featureFlags();
       const result = posthog.instance.getFeatureFlagResult(key);
 
       return {

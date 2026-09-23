@@ -114,6 +114,7 @@ export function insertDocumentMentionAtDragInsertPosition(
         ? $createAgentSessionMentionNode({
             id: mentionInfo.documentId,
             label: mentionInfo.documentName,
+            mentionUuid: mentionInfo.mentionUuid,
           })
         : $createDocumentMentionNode({
             ...mentionInfo,

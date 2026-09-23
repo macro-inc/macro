@@ -145,7 +145,7 @@ function CommandKDemo(props: LessonContentProps) {
           <div class="z-modal fixed inset-0 flex items-start justify-center pt-[15vh]">
             <Dialog.Content
               ref={contentEl}
-              class="max-w-[calc(100vw-16px)] overflow-hidden portal-scope"
+              class="max-w-[calc(100vw-16px)] overflow-hidden rounded-xl bg-dialog portal-scope"
               style={{ width: '800px' }}
             >
               <CommandMenuInner

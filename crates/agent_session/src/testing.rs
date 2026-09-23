@@ -26,6 +26,8 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod working_branch;
+
 /// One session's lease state: the holding replica (if any) and the fence,
 /// which outlives the holder as in the real schema.
 type Lease = (Option<ReplicaId>, i64);
@@ -47,6 +49,8 @@ pub struct InMemoryAgentSessionRepo {
     logs: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredAgentSessionLog>>>>,
     log_transaction: Arc<Mutex<()>>,
     history_boundaries: Arc<Mutex<HashMap<AgentSessionId, macro_uuid::Uuid>>>,
+    turn_states: Arc<Mutex<HashMap<AgentSessionId, agent_fold::domain::model::TurnState>>>,
+    working_branches: Arc<Mutex<HashMap<AgentSessionId, String>>>,
     user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
     log_reads: Arc<AtomicUsize>,
     session_reads: Arc<AtomicUsize>,
@@ -71,6 +75,21 @@ impl InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory session store is not poisoned")
             .insert(session.id, session);
+    }
+
+    /// The activity projection last committed with this session's log.
+    #[must_use]
+    pub fn turn_state(
+        &self,
+        session: AgentSessionId,
+    ) -> Option<agent_fold::domain::model::TurnState> {
+        self.turn_states.lock().unwrap().get(&session).copied()
+    }
+
+    /// The last runtime branch accepted for the session's repository.
+    #[must_use]
+    pub fn working_branch(&self, session: AgentSessionId) -> Option<String> {
+        self.working_branches.lock().unwrap().get(&session).cloned()
     }
 
     /// How many times a session's whole log has been read back.
@@ -325,8 +344,11 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = sessions.get_mut(&id).ok_or_else(|| {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
-        session.repo_url = repo_url;
-        session.modified_at = chrono::Utc::now();
+        if session.repo_url != repo_url {
+            session.repo_url = repo_url;
+            self.working_branches.lock().unwrap().remove(&id);
+            session.modified_at = chrono::Utc::now();
+        }
         Ok(())
     }
 
@@ -413,6 +435,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         let _transaction = self.log_transaction.lock().unwrap();
         self.history_boundaries.lock().unwrap().remove(&id);
+        self.turn_states.lock().unwrap().remove(&id);
         self.sessions
             .lock()
             .expect("in-memory session store is not poisoned")
@@ -569,10 +592,49 @@ impl InMemoryAgentSessionRepo {
     }
 }
 
+impl crate::domain::turn_state::SessionTurnProjectionRepo for InMemoryAgentSessionRepo {
+    async fn unprojected_sessions(&self, limit: NonZeroUsize) -> Result<Vec<AgentSessionId>> {
+        let sessions = self.sessions.lock().unwrap();
+        let turns = self.turn_states.lock().unwrap();
+        let mut ids: Vec<_> = sessions
+            .keys()
+            .filter(|id| !turns.contains_key(id))
+            .copied()
+            .collect();
+        ids.sort_by_key(|id| id.as_uuid());
+        ids.truncate(limit.get());
+        Ok(ids)
+    }
+
+    async fn initialize_turn_state(
+        &self,
+        session: AgentSessionId,
+        last_log_id: Option<Uuid>,
+        turn_state: agent_fold::domain::model::TurnState,
+    ) -> Result<bool> {
+        let _transaction = self.log_transaction.lock().unwrap();
+        if !self.sessions.lock().unwrap().contains_key(&session) {
+            return Ok(false);
+        }
+        let logs = self.logs.lock().unwrap();
+        let current = logs
+            .get(&session)
+            .into_iter()
+            .flatten()
+            .max_by_key(|row| (row.created_at, row.id))
+            .map(|row| row.id);
+        let mut turns = self.turn_states.lock().unwrap();
+        if current != last_log_id || turns.contains_key(&session) {
+            return Ok(false);
+        }
+        turns.insert(session, turn_state);
+        Ok(true)
+    }
+}
+
 impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
-        let _transaction = self.log_transaction.lock().unwrap();
-        self.create_log(log)
+        self.create_projected(log, None, None, None).await
     }
 
     async fn participants(
@@ -651,14 +713,29 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
         claim: &SessionClaim,
         boundary: Option<crate::domain::model::HistoryBoundary>,
     ) -> Result<StoredAgentSessionLog> {
+        self.create_projected(log, Some(claim), boundary, None)
+            .await
+    }
+
+    async fn create_projected(
+        &self,
+        log: AgentSessionLog,
+        claim: Option<&SessionClaim>,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+        turn_state: Option<agent_fold::domain::model::TurnState>,
+    ) -> Result<StoredAgentSessionLog> {
+        if boundary.is_some() && claim.is_none() {
+            return Err(AgentSessionError::FencedOut(log.agent_session_id));
+        }
         let _transaction = self.log_transaction.lock().unwrap();
         let leases = self.leases.lock().unwrap();
-        if claim.session != log.agent_session_id
-            || !matches!(
-                leases.get(&log.agent_session_id), Some((holder, fence))
-                    if *holder == Some(claim.replica) && *fence == claim.fence.0
-            )
-        {
+        if claim.is_some_and(|claim| {
+            claim.session != log.agent_session_id
+                || !matches!(
+                    leases.get(&log.agent_session_id), Some((holder, fence))
+                        if *holder == Some(claim.replica) && *fence == claim.fence.0
+                )
+        }) {
             return Err(AgentSessionError::FencedOut(log.agent_session_id));
         }
         if !self
@@ -687,6 +764,9 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
                 .lock()
                 .unwrap()
                 .insert(session, boundary.initialization_log_id);
+        }
+        if let Some(turn_state) = turn_state {
+            self.turn_states.lock().unwrap().insert(session, turn_state);
         }
         Ok(stored)
     }

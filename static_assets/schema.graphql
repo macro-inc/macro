@@ -585,6 +585,28 @@ type GraphqlActivityUnknownAction {
 }
 
 """
+Last synchronized state of a session's linked GitHub pull request.
+"""
+enum GraphqlAgentPullRequestState {
+	"""
+	The pull request accepts changes.
+	"""
+	OPEN
+	"""
+	The pull request is still a draft.
+	"""
+	DRAFT
+	"""
+	The pull request was closed without merging.
+	"""
+	CLOSED
+	"""
+	The pull request was merged.
+	"""
+	MERGED
+}
+
+"""
 The two operands of a recursive `AgentSessionFilterExpr` binary expression.
 """
 input GraphqlAgentSessionBinaryExpr {
@@ -636,7 +658,8 @@ input GraphqlAgentSessionLiteral @oneOf {
 	"""
 	id: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 }
@@ -1414,7 +1437,8 @@ input GraphqlChatLiteral @oneOf {
 	"""
 	chatId: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 	"""
@@ -1646,7 +1670,8 @@ input GraphqlDocumentLiteral @oneOf {
 	"""
 	projectId: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 	"""
@@ -2134,9 +2159,14 @@ Metadata shared by every canonical Soup entity.
 """
 type GraphqlEntityMetadata {
 	"""
-	Owning user, when applicable.
+	Owning principal, when applicable.
 	"""
 	ownerId: String
+	"""
+	The kind of principal `ownerId` names. Null exactly when `ownerId`
+	is, for the entities that have no owner of their own.
+	"""
+	ownerType: GraphqlOwnerType
 	"""
 	Parent project, channel, or team, when applicable.
 	"""
@@ -3353,6 +3383,21 @@ enum GraphqlNotificationDocumentSubType {
 }
 
 """
+Filters applied before the per-entity notification limit.
+"""
+input GraphqlNotificationFilter {
+	"""
+	Exact states to include; omitted means active (unseen and seen).
+	An empty list matches no notifications.
+	"""
+	states: [NotificationState!]
+	"""
+	Event names to include; omitted or empty means every event type.
+	"""
+	eventTypes: [String!]
+}
+
+"""
 Realtime notification patch represented as a new, updated, or deleted notification.
 """
 union GraphqlNotificationPatch = GraphqlNewNotification | GraphqlUpdatedNotification | GraphqlCacheDeletion
@@ -3365,6 +3410,26 @@ type GraphqlNumberPropertyValue {
 	The stored number.
 	"""
 	value: Float!
+}
+
+"""
+GraphQL representation of [`OwnerType`]: the kind of principal that owns an
+entity. Paired with an `ownerId` principal string, which is a user id, a
+bot id, or a team id depending on this discriminator.
+"""
+enum GraphqlOwnerType {
+	"""
+	A Macro user.
+	"""
+	USER
+	"""
+	A bot.
+	"""
+	BOT
+	"""
+	A team.
+	"""
+	TEAM
 }
 
 """
@@ -3416,7 +3481,8 @@ input GraphqlProjectLiteral @oneOf {
 	"""
 	projectIdSelf: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 	"""
@@ -3972,9 +4038,13 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The bot running this session.
 	"""
@@ -3983,6 +4053,38 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	The bot running this session, when its profile still exists.
 	"""
 	bot: GraphqlSessionBot
+	"""
+	The runtime snapshotted when the session was created.
+	"""
+	harness: String!
+	"""
+	The repository the session works with, when one was selected.
+	"""
+	repoUrl: String
+	"""
+	The starting branch selected for this session, not its current branch.
+	"""
+	repoBranch: String
+	"""
+	The persisted pull request associated with the session.
+	"""
+	pullRequestUrl: String
+	"""
+	Last captured working branch, when the runtime has reported one.
+	"""
+	workingBranch: String
+	"""
+	Last synchronized state of the linked pull request, when visible.
+	"""
+	pullRequestState: GraphqlAgentPullRequestState
+	"""
+	The linked pull request's Macro entity, when visible to the viewer.
+	"""
+	pullRequestId: ID
+	"""
+	Last persisted fold turn state. Absent until an older session next runs.
+	"""
+	turnState: String
 	"""
 	The channel thread the session was opened from, when any.
 	"""
@@ -4011,7 +4113,7 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4133,7 +4235,7 @@ type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4241,7 +4343,7 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4371,7 +4473,7 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4451,7 +4553,7 @@ type GraphqlSoupChannelMessage implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4573,9 +4675,13 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	model: String
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The identifier of the project.
 	"""
@@ -4607,7 +4713,7 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4695,7 +4801,7 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4745,9 +4851,13 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The file type.
 	"""
@@ -4783,7 +4893,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5293,7 +5403,7 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5373,7 +5483,7 @@ interface GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the current viewer.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the current viewer has favorited this entity.
 	"""
@@ -5505,7 +5615,7 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5555,9 +5665,13 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The identifier of the parent.
 	"""
@@ -5585,7 +5699,7 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5688,7 +5802,7 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""

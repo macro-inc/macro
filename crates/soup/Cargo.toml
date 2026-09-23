@@ -44,6 +44,7 @@ ports = ["crm/ports", "dep:tokio", "frecency/ports", "reminders/ports"]
 
 
 [dependencies]
+agent_changes = { path = "../agent_changes", default-features = false }
 activity = { path = "../activity", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
@@ -73,6 +74,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
+model_owner = { path = "../model_owner" }
 models_grouping = { path = "../models_grouping" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }

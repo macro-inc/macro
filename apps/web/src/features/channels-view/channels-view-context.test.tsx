@@ -14,6 +14,7 @@ const entry = vi.hoisted(() => ({
 const touch = vi.hoisted(() => ({ value: false }));
 const guard = vi.hoisted(() => ({
   selections: [] as unknown[],
+  reasons: [] as unknown[],
   allow: true,
 }));
 
@@ -22,8 +23,9 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => touch.value,
 }));
 vi.mock('@components/app/createPreviewSelectionGuard', () => ({
-  createPreviewSelectionGuard: () => (selection: unknown) => {
+  createPreviewSelectionGuard: () => (selection: unknown, reason: unknown) => {
     guard.selections.push(selection);
+    guard.reasons.push(reason);
     return selection === undefined || guard.allow;
   },
 }));
@@ -59,6 +61,7 @@ beforeEach(() => {
   entry.captors.clear();
   touch.value = false;
   guard.selections = [];
+  guard.reasons = [];
   guard.allow = true;
 });
 afterEach(cleanup);
@@ -78,6 +81,7 @@ describe('ChannelsViewProvider preview selection', () => {
 
       expect(first.context.state.selectedChannelId).toBe('c1');
       expect(first.context.previewChannelId()).toBeUndefined();
+      expect(guard.reasons.at(-1)).toBe('restore');
       // Unrelated preference writes must retain the blocked selection too.
       first.context.setGroupOpen('channels', false);
       expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject(
@@ -103,6 +107,7 @@ describe('ChannelsViewProvider preview selection', () => {
     guard.allow = true;
     context.setSelectedChannelId('c1');
     expect(context.previewChannelId()).toBe('c1');
+    expect(guard.reasons.at(-1)).toBe('navigate');
 
     guard.allow = false;
     context.setSelectedChannelId('c2');
@@ -123,6 +128,30 @@ describe('ChannelsViewProvider preview selection', () => {
     expect(guard.selections.at(-1)).toEqual({ type: 'channel', id: 'c1' });
     expect(context.state.selectedChannelId).toBeUndefined();
     expect(context.previewChannelId()).toBeUndefined();
+  });
+
+  it('persists collapsed labels per user and restores them', () => {
+    const storageKey = 'macro:channels:view-state:v1:alice';
+    const first = mountProvider();
+
+    first.context.setLabelOpen('enterprise', false);
+    first.context.setLabelOpen('smb', false);
+    first.context.setLabelOpen('enterprise', false);
+    expect(first.context.state.collapsedLabels).toEqual(['enterprise', 'smb']);
+    first.context.setLabelOpen('smb', true);
+    expect(first.context.state.collapsedLabels).toEqual(['enterprise']);
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({
+      collapsedLabels: ['enterprise'],
+      expandedGroups: {
+        favorites: true,
+        channels: true,
+        direct_messages: true,
+      },
+    });
+    first.unmount();
+
+    const second = mountProvider();
+    expect(second.context.state.collapsedLabels).toEqual(['enterprise']);
   });
 
   it('keeps touch selections out of the preview registry', () => {

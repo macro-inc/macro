@@ -87,13 +87,27 @@ fragment MailItemFields on GraphqlSoupEntity {
 }
 
 fragment SoupItemFields on GraphqlSoupEntity {
+	...SoupItemPreviewFields
+	notifications { ...SoupNotificationFields }
+}
+
+# Shared entity data without historical notification presentation payloads.
+fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	__typename
 	cacheProjection @cacheOnly
-	...SoupEntityCoreFields
+	...SoupEntityIdentityFields
 	... on GraphqlSoupAgentSession {
 		sessionName: name
 		ownerId
 		botId
+		harness
+		repoUrl
+		repoBranch
+		pullRequestUrl
+		workingBranch
+		pullRequestState
+		pullRequestId
+		turnState
 		bot {
 			id
 			name
@@ -324,13 +338,15 @@ fragment SoupItemFields on GraphqlSoupEntity {
 }
 
 fragment SoupEntityCoreFields on GraphqlSoupEntity {
+	...SoupEntityIdentityFields
+	notifications { ...SoupNotificationFields }
+}
+
+fragment SoupEntityIdentityFields on GraphqlSoupEntity {
 	id
 	entityType
 	displayName
 	isFavorited
-	notifications {
-		...SoupNotificationFields
-	}
 }
 
 fragment SoupPropertyFields on GraphqlProperty {
@@ -385,6 +401,11 @@ fragment SoupChannelMessageFields on GraphqlSoupChannelMessagePreview {
 }
 
 fragment SoupNotificationFields on GraphqlNotification {
+	...SoupNotificationStateFields
+	metadata { ...SoupNotificationMetadataFields }
+}
+
+fragment SoupNotificationStateFields on GraphqlNotification {
 	id
 	eventType
 	entityType
@@ -395,22 +416,40 @@ fragment SoupNotificationFields on GraphqlNotification {
 	viewedAt
 	updatedAt
 	senderId
-	metadata {
-		...SoupNotificationMetadataFields
-	}
 }
 
 fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
+	...SoupNotificationNavigationMetadataFields
+	... on GraphqlChannelMentionMetadata {
+		channelMentionHasAttachments: hasAttachments
+		channelMentionSenderDisplayName: senderDisplayName
+		channelMentionChannelName: channelName
+		channelMentionSenderProfilePictureUrl: senderProfilePictureUrl
+	}
+	... on GraphqlChannelMessageSendMetadata {
+		channelMessageSendMessageContent: messageContent
+		channelMessageSendHasAttachments: hasAttachments
+		channelMessageSendSenderDisplayName: senderDisplayName
+		channelMessageSendChannelName: channelName
+		channelMessageSendSenderProfilePictureUrl: senderProfilePictureUrl
+	}
+	... on GraphqlChannelReplyMetadata {
+		channelReplyHasAttachments: hasAttachments
+		channelReplySenderDisplayName: senderDisplayName
+		channelReplyChannelName: channelName
+		channelReplySenderProfilePictureUrl: senderProfilePictureUrl
+	}
+}
+
+# Preserve notification lifecycle, thread membership, and click targets. Required
+# REST metadata (including mention/reply content) remains available to consumers.
+fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	__typename
 	... on GraphqlChannelMentionMetadata {
 		channelMentionMessageId: messageId
 		channelMentionMessageContent: messageContent
-		channelMentionHasAttachments: hasAttachments
 		channelMentionThreadId: threadId
-		channelMentionSenderDisplayName: senderDisplayName
 		channelMentionChannelType: channelType
-		channelMentionChannelName: channelName
-		channelMentionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlDocumentMentionMetadata {
 		documentMentionDocumentName: documentName
@@ -468,25 +507,16 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 	}
 	... on GraphqlChannelMessageSendMetadata {
 		channelMessageSendSender: sender
-		channelMessageSendSenderDisplayName: senderDisplayName
-		channelMessageSendMessageContent: messageContent
 		channelMessageSendMessageId: messageId
-		channelMessageSendHasAttachments: hasAttachments
 		channelMessageSendChannelType: channelType
-		channelMessageSendChannelName: channelName
-		channelMessageSendSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId
 		channelReplyMessageId: messageId
 		channelReplyUserId: userId
-		channelReplySenderDisplayName: senderDisplayName
 		channelReplyMessageContent: messageContent
-		channelReplyHasAttachments: hasAttachments
 		channelReplyThreadParentSenderId: threadParentSenderId
 		channelReplyChannelType: channelType
-		channelReplyChannelName: channelName
-		channelReplySenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlCallStartedMetadata {
 		callStartedChannelName: channelName

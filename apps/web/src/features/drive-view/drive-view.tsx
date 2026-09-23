@@ -15,12 +15,18 @@ import {
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { onCleanup, onMount, Suspense } from 'solid-js';
 import { DriveProvider } from './context/drive-context';
 import { driveLocationLabel } from './core/location-label';
-import type { DriveState } from './core/types';
+import {
+  DRIVE_MOBILE_TABS,
+  DRIVE_TABS,
+  type DriveState,
+  driveMobileTabLocation,
+} from './core/types';
 import { createDriveHostActions } from './drive-host-actions';
 import {
   createDriveList,
@@ -49,7 +55,10 @@ function DriveComposition(props: DriveViewProps) {
 
   const [value, setValue] = useEntryState<DriveState>('drive.view.v2', {
     default: {
-      location: { kind: 'tab', tab: 'owned' },
+      // Each form factor opens on the first entry of its own tab list.
+      location: isTouchDevice()
+        ? driveMobileTabLocation(DRIVE_MOBILE_TABS[0].id)
+        : { kind: 'tab', tab: DRIVE_TABS[0].id },
       scope: 'default',
       sort: 'updated_at',
       search: '',

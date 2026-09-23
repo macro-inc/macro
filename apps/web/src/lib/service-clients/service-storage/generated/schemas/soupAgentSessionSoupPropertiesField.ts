@@ -10,9 +10,8 @@ import type { SoupAgentSessionSoupPropertiesFieldAllOfTwo } from './soupAgentSes
 /**
  * An agent session as displayed in Soup.
 
-Mirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent
-counterpart of a chat, so it carries the same identity, ownership, and
-recency fields plus the session's last known status.
+Includes the persisted runtime and repository metadata needed to render
+coding and non-coding sessions without fetching each session separately.
  */
 export type SoupAgentSessionSoupPropertiesField =
   SoupAgentSessionSoupPropertiesFieldAllOf &

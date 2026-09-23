@@ -11,8 +11,8 @@ use notification_state::graphql::GraphqlNotificationState;
 mod test;
 
 use crate::{
-    GraphqlNotifEvent,
-    loaders::{EntityNotificationsLoader, SoupNotificationEdgeReader},
+    GraphqlNotifEvent, GraphqlNotificationFilter,
+    loaders::{EntityNotificationsKey, EntityNotificationsLoader, SoupNotificationEdgeReader},
 };
 
 /// GraphQL notification backed by either an owned or shared notification row.
@@ -123,13 +123,19 @@ impl GraphqlNotification {
 pub async fn load_entity_notifications<'a, R>(
     ctx: &'a Context<'a>,
     entity: model_entity::Entity<'static>,
+    filter: Option<GraphqlNotificationFilter>,
+    limit: Option<i32>,
 ) -> async_graphql::Result<Vec<GraphqlNotification>>
 where
     R: SoupNotificationEdgeReader,
 {
+    let query = filter.unwrap_or_default().into_query(limit)?;
     let loader = ctx.data::<DataLoader<EntityNotificationsLoader<R>>>()?;
     let notifications = loader
-        .load_one(model_entity::OwnedEntity::from(entity))
+        .load_one(EntityNotificationsKey {
+            entity: entity.into(),
+            query,
+        })
         .await
         .map_err(|error| {
             tracing::error!(error = ?error, "failed to load entity notifications");

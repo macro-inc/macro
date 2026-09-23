@@ -1,3 +1,4 @@
+import type { Permissions } from '@core/component/SharePermissions';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData } from '@entity';
@@ -101,6 +102,8 @@ interface BlockToolbarProps {
    * id/name/blockName alone (e.g. calls need their channelId).
    */
   entity?: EntityData;
+  /** Feature-owned access when the session loads outside legacy Block state. */
+  permissions?: Permissions;
 }
 
 /**
@@ -162,6 +165,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
               ops={props.ops}
               tools={fileMenuTools()}
               entity={props.entity}
+              permissions={props.permissions}
               buttonClass="order-first"
             />
           </SplitTitleFileMenu>
@@ -192,6 +196,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
           ops={props.ops}
           tools={fileMenuTools()}
           entity={props.entity}
+          permissions={props.permissions}
           buttonClass="order-last"
         />
       </SplitTitleFileMenu>

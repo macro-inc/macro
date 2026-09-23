@@ -586,3 +586,56 @@ async fn a_loop_with_telemetry_off_records_no_genai_content() {
         );
     }
 }
+
+/// Stream liveness: how many items the provider sent, when the first arrived,
+/// and how long it had been quiet when the run ended. Without these a parked
+/// stream is unreadable - a provider dribbling tokens and one that has gone
+/// silent look identical from the span's duration alone.
+#[tokio::test]
+async fn the_run_span_records_how_the_provider_stream_behaved() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+
+    let model = MockCompletionModel::from_stream_turns([vec![
+        MockStreamEvent::ReasoningDelta {
+            id: None,
+            reasoning: "thinking".to_owned(),
+        },
+        MockStreamEvent::Text("done".to_owned()),
+        MockStreamEvent::final_response_with_default_usage(),
+    ]]);
+
+    let mut session = util::test_loop()
+        .with_genai_telemetry(false)
+        .test_session(
+            util::tool_set(ai_toolset::AsyncToolCollection::<()>::new()),
+            Arc::new(()),
+            "test preamble",
+            util::usage_ctx(),
+            model,
+        )
+        .await;
+    util::drive(&mut session, "think then answer").await;
+    drop(session);
+
+    let spans = finished(&exporter, &provider);
+    let run = spans
+        .iter()
+        .find(|span| span.name == "agent.turn")
+        .unwrap_or_else(|| panic!("the run span, got {}", describe(&spans)));
+
+    // Numbers, not strings: a `u64` reaches OpenTelemetry as a string
+    // attribute and every numeric query on it silently misses.
+    assert!(
+        int_attribute(run, "agent.stream.items").is_some_and(|items| items >= 3),
+        "every item the driver saw is counted, as a number: {:?}",
+        attribute(run, "agent.stream.items")
+    );
+    assert!(
+        int_attribute(run, "agent.stream.first_item_ms").is_some(),
+        "the wait for the first item is recorded"
+    );
+    assert!(
+        int_attribute(run, "agent.stream.trailing_silence_ms").is_some(),
+        "the silence at the end is recorded"
+    );
+}

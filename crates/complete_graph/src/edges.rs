@@ -16,7 +16,8 @@ use graphql_email::{
 };
 use graphql_favorite::{EntityFavoriteEdgeReader, load_entity_favorite};
 use graphql_notification::{
-    GraphqlNotification, SoupNotificationEdgeReader, load_entity_notifications,
+    GraphqlNotification, GraphqlNotificationFilter, SoupNotificationEdgeReader,
+    load_entity_notifications,
 };
 use graphql_permission::{
     EntityPermissionEdgeReader, GraphqlEntityPermission, load_entity_permission,
@@ -67,6 +68,7 @@ where
 {
     type Property = GraphqlProperty;
     type Notification = GraphqlNotification;
+    type NotificationFilter = GraphqlNotificationFilter;
     type ActivityEvent = GraphqlActivityEvent;
     type EmailThreadEdges = SoupEmailThreadEdges<ER>;
     type AgentSessionEdges = SoupAgentSessionEdges;
@@ -132,8 +134,10 @@ where
     async fn resolve_notifications(
         &self,
         ctx: &Context<'_>,
+        filter: Option<GraphqlNotificationFilter>,
+        limit: Option<i32>,
     ) -> async_graphql::Result<Vec<Self::Notification>> {
-        load_entity_notifications::<NR>(ctx, self.entity.clone()).await
+        load_entity_notifications::<NR>(ctx, self.entity.clone(), filter, limit).await
     }
 
     async fn resolve_is_favorited(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
@@ -277,8 +281,10 @@ where
     async fn notifications(
         &self,
         ctx: &Context<'_>,
+        filter: Option<GraphqlNotificationFilter>,
+        limit: Option<i32>,
     ) -> async_graphql::Result<Vec<GraphqlNotification>> {
-        self.resolve_notifications(ctx).await
+        self.resolve_notifications(ctx, filter, limit).await
     }
 
     /// Whether the authenticated viewer has favorited this entity.

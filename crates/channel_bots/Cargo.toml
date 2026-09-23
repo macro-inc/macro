@@ -18,6 +18,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 futures = { workspace = true }
+lexical_client = { path = "../lexical_client" }
 macro_user_id = { path = "../macro_user_id" }
 messages = { path = "../messages", features = ["ports"] }
 prompt = { path = "../prompt" }

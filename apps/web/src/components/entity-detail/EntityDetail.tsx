@@ -1,10 +1,31 @@
-import { CanvasDetail } from '@app/features/drive-view/views/CanvasDetail';
-import { CodeDetail } from '@app/features/drive-view/views/CodeDetail';
-import { ImageDetail } from '@app/features/drive-view/views/ImageDetail';
-import { MarkdownDetail } from '@app/features/drive-view/views/MarkdownDetail';
-import { PdfDetail } from '@app/features/drive-view/views/PdfDetail';
-import { UnknownDetail } from '@app/features/drive-view/views/UnknownDetail';
-import { VideoDetail } from '@app/features/drive-view/views/VideoDetail';
+import {
+  CanvasDetail,
+  type CanvasDetailContext,
+} from '@app/features/drive-view/views/CanvasDetail';
+import {
+  CodeDetail,
+  type CodeDetailContext,
+} from '@app/features/drive-view/views/CodeDetail';
+import {
+  ImageDetail,
+  type ImageDetailContext,
+} from '@app/features/drive-view/views/ImageDetail';
+import {
+  MarkdownDetail,
+  type MarkdownDetailContext,
+} from '@app/features/drive-view/views/MarkdownDetail';
+import {
+  PdfDetail,
+  type PdfDetailContext,
+} from '@app/features/drive-view/views/PdfDetail';
+import {
+  UnknownDetail,
+  type UnknownDetailContext,
+} from '@app/features/drive-view/views/UnknownDetail';
+import {
+  VideoDetail,
+  type VideoDetailContext,
+} from '@app/features/drive-view/views/VideoDetail';
 import { getChannelEntityTarget } from '@app/features/next-soup/utils';
 import type { MarkdownDocumentKind } from '@block-md/types';
 import { ChannelDetail } from '@channel/Channel/ChannelDetail';
@@ -14,16 +35,17 @@ import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
-import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { createMemo, type JSX, Match, Switch, untrack } from 'solid-js';
 import type { EntityDetailTarget } from './EntityDetailNavigationStack';
 
-export type EntityDetailContext = {
-  documentMetadata: DocumentMetadata;
-  userAccessLevel: AccessLevel;
-  blockType: BlockName | BlockAlias;
-};
+export type EntityDetailContext =
+  | MarkdownDetailContext
+  | CodeDetailContext
+  | CanvasDetailContext
+  | ImageDetailContext
+  | VideoDetailContext
+  | PdfDetailContext
+  | UnknownDetailContext;
 
 export type EntityDetailProps = {
   target: EntityDetailTarget;
@@ -123,15 +145,8 @@ export function EntityDetail(props: EntityDetailProps) {
     const target = props.target;
     return untrack(() => channelDetailTarget(target));
   });
-  const renderChildren = (
-    documentMetadata: DocumentMetadata,
-    userAccessLevel: AccessLevel
-  ) =>
-    props.children?.({
-      documentMetadata,
-      userAccessLevel,
-      blockType: blockType()!,
-    });
+  const renderChildren = (context: EntityDetailContext) =>
+    props.children?.(context);
 
   return (
     <Switch>
@@ -153,12 +168,7 @@ export function EntityDetail(props: EntityDetailProps) {
             shareOpen={props.shareOpen}
             onShareOpenChange={props.onShareOpenChange}
           >
-            {(context) =>
-              renderChildren(
-                context.data.metadata,
-                context.data.userAccessLevel
-              )
-            }
+            {(context) => <>{renderChildren(context)}</>}
           </MarkdownDetail>
         )}
       </Match>
@@ -168,12 +178,7 @@ export function EntityDetail(props: EntityDetailProps) {
           shareOpen={props.shareOpen}
           onShareOpenChange={props.onShareOpenChange}
         >
-          {(context) =>
-            renderChildren(
-              context.data.documentMetadata,
-              context.data.userAccessLevel
-            )
-          }
+          {(context) => <>{renderChildren(context)}</>}
         </CodeDetail>
       </Match>
       <Match when={blockType() === 'canvas'}>
@@ -182,12 +187,7 @@ export function EntityDetail(props: EntityDetailProps) {
           shareOpen={props.shareOpen}
           onShareOpenChange={props.onShareOpenChange}
         >
-          {(context) =>
-            renderChildren(
-              context.data.documentMetadata,
-              context.data.userAccessLevel
-            )
-          }
+          {(context) => <>{renderChildren(context)}</>}
         </CanvasDetail>
       </Match>
       <Match when={blockType() === 'image'}>
@@ -196,12 +196,7 @@ export function EntityDetail(props: EntityDetailProps) {
           shareOpen={props.shareOpen}
           onShareOpenChange={props.onShareOpenChange}
         >
-          {(context) =>
-            renderChildren(
-              context.data.documentMetadata,
-              context.data.userAccessLevel
-            )
-          }
+          {(context) => <>{renderChildren(context)}</>}
         </ImageDetail>
       </Match>
       <Match when={blockType() === 'video'}>
@@ -210,12 +205,7 @@ export function EntityDetail(props: EntityDetailProps) {
           shareOpen={props.shareOpen}
           onShareOpenChange={props.onShareOpenChange}
         >
-          {(context) =>
-            renderChildren(
-              context.data.documentMetadata,
-              context.data.userAccessLevel
-            )
-          }
+          {(context) => <>{renderChildren(context)}</>}
         </VideoDetail>
       </Match>
       <Match when={blockType() === 'pdf'}>
@@ -224,12 +214,7 @@ export function EntityDetail(props: EntityDetailProps) {
           shareOpen={props.shareOpen}
           onShareOpenChange={props.onShareOpenChange}
         >
-          {(context) =>
-            renderChildren(
-              context.data.documentMetadata,
-              context.data.userAccessLevel
-            )
-          }
+          {(context) => <>{renderChildren(context)}</>}
         </PdfDetail>
       </Match>
       <Match when={blockType() === 'unknown'}>
@@ -238,12 +223,7 @@ export function EntityDetail(props: EntityDetailProps) {
           shareOpen={props.shareOpen}
           onShareOpenChange={props.onShareOpenChange}
         >
-          {(context) =>
-            renderChildren(
-              context.data.documentMetadata,
-              context.data.userAccessLevel
-            )
-          }
+          {(context) => <>{renderChildren(context)}</>}
         </UnknownDetail>
       </Match>
       <Match when={channelTarget()}>

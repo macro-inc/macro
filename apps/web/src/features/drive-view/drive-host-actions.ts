@@ -15,6 +15,7 @@ import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -130,10 +131,13 @@ export function createDriveHostActions(options: {
         }
       }
 
-      layout.openWithSplit(favoriteSplitContent(favorite), {
+      const result = layout.openWithSplit(favoriteSplitContent(favorite), {
         referredFrom: 'sidebar',
         preferNewSplit: event.shiftKey,
       });
+      if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+        toast.alert('Content already open');
+      }
     },
 
     openFolderInNewSplit: (folder) => {

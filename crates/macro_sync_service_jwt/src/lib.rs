@@ -1,5 +1,9 @@
-//! Minting and validation for the document-permission JWTs that authorize the
-//! sync service to grant document access.
+//! Minting and validation for sync-service permission JWTs.
+//!
+//! Legacy document consumers use [`encode`] and [`decode`]. Isolated surface
+//! sessions use the distinct identities, claims, and token helpers in [`session`].
+
+pub mod session;
 
 use jsonwebtoken::{
     Algorithm, DecodingKey, EncodingKey, Header, Validation, decode as jwt_decode,

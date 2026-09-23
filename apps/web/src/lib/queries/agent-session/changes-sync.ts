@@ -1,5 +1,6 @@
 import { queryClient } from '@queries/client';
 import { agentSessionChangesKeys } from './keys';
+import { refreshAgentSessionLists } from './list-sync';
 import type { AgentSessionChangesEvent } from './realtime-protocol';
 
 /**
@@ -10,7 +11,10 @@ import type { AgentSessionChangesEvent } from './realtime-protocol';
 export async function handleAgentSessionChanges(
   event: AgentSessionChangesEvent
 ): Promise<void> {
-  await invalidateAgentSessionChanges(event.agentSessionId);
+  await Promise.all([
+    invalidateAgentSessionChanges(event.agentSessionId),
+    refreshAgentSessionLists(event.agentSessionId),
+  ]);
 }
 
 /** Drop and refetch one session's changes summary. */

@@ -7,6 +7,7 @@
 mod config;
 mod context;
 mod markdown_images;
+mod tool_response;
 mod tool_service;
 use anyhow::Context;
 use config::Config;
@@ -35,6 +36,8 @@ async fn main() -> anyhow::Result<()> {
     // Base URL of the Macro web app, used to build links to Macro items in MCP
     // responses.
     let item_base_url = config.app_base_url.as_ref().to_string();
+    let static_file_base_url =
+        url::Url::parse(macro_service_urls::StaticFileServiceUrl::new()?.as_ref())?;
 
     let event_broker_tracker = TaskTracker::new();
     let context = build_context(&config, event_broker_tracker.clone()).await?;
@@ -47,6 +50,7 @@ async fn main() -> anyhow::Result<()> {
                 tools.toolset,
                 context.tool_context.clone(),
                 item_base_url.clone(),
+                static_file_base_url.clone(),
             ))
         },
         Arc::new(LocalSessionManager::default()),

@@ -26,6 +26,7 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
+import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
@@ -73,6 +74,7 @@ import {
   setDoneOverride,
   type UnifiedNotification,
 } from '@notifications';
+import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { fetchAndCacheThread } from '@queries/email/thread';
@@ -587,7 +589,7 @@ export const openEntityInSplitFromUnifiedList = async (
 
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {
-      splitManager.openWithSplit(
+      const result = splitManager.openWithSplit(
         { type: 'pr', id: entity.id },
         {
           referredFrom: options.referredFrom,
@@ -597,6 +599,9 @@ export const openEntityInSplitFromUnifiedList = async (
           mergeHistory,
         }
       );
+      if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+        toast.alert('Content already open');
+      }
     } else {
       openExternalUrl(entity.metadata.url);
     }
@@ -631,6 +636,19 @@ export const openEntityInSplitFromUnifiedList = async (
     }
     await navigateCalendarEntityToTarget(entity, blockOrchestrator);
     return;
+  }
+
+  if (entity.type === 'channel' && entity.unreadNotifications !== undefined) {
+    try {
+      entity = await hydrateChannelNotificationSelection(
+        entity,
+        options.notificationSource?.withLocalOverrides
+      );
+    } catch (error) {
+      console.error('Failed to load conversation notifications', error);
+      toast.failure('Unable to open conversation. Please try again.');
+      return;
+    }
   }
 
   const content = getEntitySplitContent(entity);
@@ -672,7 +690,7 @@ export const openEntityInSplitFromUnifiedList = async (
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
 
-  splitManager.openWithSplit(splitContent, {
+  const result = splitManager.openWithSplit(splitContent, {
     referredFrom,
     activate: true,
     preferNewSplit: openInNewSplit,
@@ -684,6 +702,9 @@ export const openEntityInSplitFromUnifiedList = async (
         ? 'latest'
         : undefined,
   });
+  if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+    toast.alert('Content already open');
+  }
 
   // Navigate to specific location if provided
   if (location) {

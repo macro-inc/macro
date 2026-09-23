@@ -257,6 +257,136 @@ async fn a_branch_still_unverifiable_after_retrying_is_typed_with_the_branch() {
     assert_eq!(requests.try_iter().count(), 2, "one retry, then give up");
 }
 
+/// The 429 Cursor answered a real create with while GitHub was throttling its
+/// token mint (prod, 2026-09-22), trimmed of its base64 twin. Read by these
+/// tests as a status and nothing else — which is the point.
+const RATE_LIMITED_BODY: &str = r#"{"code":"resource_exhausted","message":"[resource_exhausted] Error","details":[{"debug":{"error":"ERROR_RATE_LIMITED","details":{"title":"GitHub rate limited","isRetryable":true,"additionalInfo":{"operation":"getScopedInstallationAccessKey","retryAfter":"60"}}}}]}"#;
+
+/// A client whose turn-start schedule does not sleep, so the retry path runs
+/// in test time rather than the production forty-two seconds.
+fn client_with_instant_turn_retries(base_url: String, retries: usize) -> CursorClient {
+    client_against(base_url).with_turn_start_retry_backoff(vec![std::time::Duration::ZERO; retries])
+}
+
+/// The statuses that mean "not now" are the whole classifier: no body is
+/// read, so a provider that rephrases its errors cannot break this.
+#[test]
+fn only_statuses_that_mean_not_now_are_retried() {
+    for status in [
+        reqwest::StatusCode::TOO_MANY_REQUESTS,
+        reqwest::StatusCode::REQUEST_TIMEOUT,
+        reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+        reqwest::StatusCode::BAD_GATEWAY,
+        reqwest::StatusCode::SERVICE_UNAVAILABLE,
+    ] {
+        assert!(is_transient(status), "{status} is worth asking again");
+    }
+    for status in [
+        reqwest::StatusCode::BAD_REQUEST,
+        reqwest::StatusCode::UNAUTHORIZED,
+        reqwest::StatusCode::FORBIDDEN,
+        reqwest::StatusCode::NOT_FOUND,
+        reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+    ] {
+        assert!(
+            !is_transient(status),
+            "{status} is a fact about the request, not the moment"
+        );
+    }
+}
+
+/// The limit that killed a turn in production: upstream of Cursor, clearing
+/// on its own, and now waited out without the person who prompted ever
+/// learning it happened.
+#[tokio::test]
+async fn a_rate_limited_create_is_asked_again() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("429 Too Many Requests".to_owned(), RATE_LIMITED_BODY),
+        ("200 OK".to_owned(), CREATED_BODY),
+    ]);
+    let (agent, _) = client_with_instant_turn_retries(base_url, 3)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect("the second answer is a created agent");
+    assert_eq!(agent.as_str(), "bc-00000000-0000-0000-0000-000000000001");
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then created");
+}
+
+/// Nothing about the retry is rate-limit shaped: a gateway that fell over
+/// between two prompts is the same kind of "not now".
+#[tokio::test]
+async fn a_failing_gateway_is_asked_again() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("502 Bad Gateway".to_owned(), "<html>bad gateway</html>"),
+        ("200 OK".to_owned(), CREATED_BODY),
+    ]);
+    let (agent, _) = client_with_instant_turn_retries(base_url, 3)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect("the second answer is a created agent");
+    assert_eq!(agent.as_str(), "bc-00000000-0000-0000-0000-000000000001");
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then created");
+}
+
+/// A follow-up prompt mints a token the same way a create does, so it rides
+/// out the same transients.
+#[tokio::test]
+async fn a_rate_limited_follow_up_run_is_asked_again() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("429 Too Many Requests".to_owned(), RATE_LIMITED_BODY),
+        (
+            "200 OK".to_owned(),
+            r#"{"id":"run-00000000-0000-0000-0000-000000000002"}"#,
+        ),
+    ]);
+    let run = client_with_instant_turn_retries(base_url, 3)
+        .create_run(
+            &CursorAgentId::new("bc-00000000-0000-0000-0000-000000000001".to_owned()),
+            "prompt",
+            None,
+        )
+        .await
+        .expect("the second answer is a run");
+    assert_eq!(run.as_str(), "run-00000000-0000-0000-0000-000000000002");
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then a run");
+}
+
+/// A transient that outlasts the budget is reported as the same failure it
+/// was before any of this: the retry adds attempts, never a new error.
+#[tokio::test]
+async fn a_transient_that_outlasts_the_budget_fails_as_it_always_did() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("429 Too Many Requests".to_owned(), RATE_LIMITED_BODY),
+        ("429 Too Many Requests".to_owned(), RATE_LIMITED_BODY),
+    ]);
+    let error = client_with_instant_turn_retries(base_url, 1)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect_err("the stand-in never relents");
+    assert!(
+        error
+            .downcast_current_context::<crate::domain::error::PromptRejected>()
+            .is_some(),
+        "still the rejection a 4xx has always been"
+    );
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then give up");
+}
+
+/// A rejection the request itself earned must still cost exactly one POST —
+/// retrying a malformed model id only makes the user wait for the same no.
+#[tokio::test]
+async fn a_rejection_is_never_asked_again() {
+    let (base_url, requests) = stand_in_server_sequence(vec![(
+        "400 Bad Request".to_owned(),
+        r#"{"error":{"code":"validation_error","message":"Model 'nope' does not match a known variant"}}"#,
+    )]);
+    client_with_instant_turn_retries(base_url, 3)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect_err("the stand-in rejects the create");
+    assert_eq!(requests.try_iter().count(), 1, "asked exactly once");
+}
+
 /// The retry exists for one wording only. A `validation_error` about anything
 /// else is not asked again — a malformed model id will not fix itself.
 #[tokio::test]

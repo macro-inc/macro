@@ -1599,7 +1599,7 @@ const CREATOR_TEAM_ID: Uuid = Uuid::from_u128(42);
 fn team_share_facts() -> TeamShareFacts {
     TeamShareFacts {
         entity: EntityType::Call.with_entity_string(MUTATED_EVENT_CALL_ID.to_string()),
-        owner: user("creator@example.com"),
+        owner: user("creator@example.com").into(),
         owner_team_id: Some(CREATOR_TEAM_ID),
         current: None,
         revision: 0,
