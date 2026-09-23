@@ -374,6 +374,7 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
             <Show when={builderConfig.links?.floatingMenu}>
               <FloatingLinkMenu
                 autoLinkMatchMode={builderConfig.links?.autoLinkMatchMode}
+                portalScope={props.portalScope}
               />
             </Show>
             <Show when={builderConfig.floatingFormatMenu}>

@@ -1,14 +1,13 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { createSignal, Show } from 'solid-js';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { CodexConnection } from './CodexConnection';
 
-vi.mock('@ui', () => ({
-  Button: (
-    props: import('solid-js').JSX.ButtonHTMLAttributes<HTMLButtonElement>
-  ) => <button {...props} />,
-}));
+beforeAll(() => vi.stubGlobal('scrollTo', vi.fn()));
 const base = () => ({
+  open: true,
+  onOpen: vi.fn(),
+  onClose: vi.fn(),
   connection: undefined,
   login: undefined,
   environments: [],
@@ -189,6 +188,118 @@ describe('Codex connection', () => {
         .getByRole('button', { name: 'Connect with ChatGPT' })
         .hasAttribute('disabled')
     ).toBe(true);
+  });
+
+  it('opens configuration from the runtime row without starting sign-in', () => {
+    const props = base();
+    const [open, setOpen] = createSignal(false);
+    render(() => (
+      <CodexConnection
+        {...props}
+        open={open()}
+        onOpen={() => setOpen(true)}
+        onClose={() => setOpen(false)}
+        connection={{ connected: true, environmentId: 'env-1' }}
+        login={{ ...login, status: 'connected' }}
+      />
+    ));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }));
+    expect(screen.getByRole('dialog', { name: 'Codex' })).toBeTruthy();
+    expect(screen.getByLabelText('Cloud environment')).toBeTruthy();
+    expect(props.onConnect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('continues first sign-in through required environment setup after the account remounts', () => {
+    const props = base();
+    const [connection, setConnection] = createSignal({
+      connected: false,
+      accountId: null as string | null,
+      environmentId: null as string | null,
+    });
+    const [open, setOpen] = createSignal(true);
+    const [loginStatus, setLoginStatus] = createSignal<'pending' | 'connected'>(
+      'pending'
+    );
+    render(() => (
+      <Show when={connection().accountId ?? 'disconnected'} keyed>
+        {(_account) => (
+          <CodexConnection
+            {...props}
+            open={open()}
+            onClose={() => setOpen(false)}
+            connection={connection()}
+            login={{ ...login, status: loginStatus() }}
+            environments={[
+              { id: 'env-1', label: 'My project', repositories: [] },
+            ]}
+          />
+        )}
+      </Show>
+    ));
+    expect(screen.getByText('ABCD-EFGH')).toBeTruthy();
+    setLoginStatus('connected');
+    setConnection({
+      connected: true,
+      accountId: 'new-account',
+      environmentId: null,
+    });
+    expect(screen.queryByText('ABCD-EFGH')).toBeNull();
+    expect(screen.getByText('Setup required')).toBeTruthy();
+    expect(screen.queryByText('Connected')).toBeNull();
+    const environment = screen.getByLabelText('Cloud environment');
+    expect(
+      screen.getByRole('button', { name: 'Save Codex settings' })
+    ).toHaveProperty('disabled', true);
+    fireEvent.change(environment, { target: { value: 'env-1' } });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save Codex settings' })
+    );
+    expect(props.onSave).toHaveBeenCalledWith({ environmentId: 'env-1' });
+    expect(screen.getByText('Setup required')).toBeTruthy();
+    setConnection({
+      connected: true,
+      accountId: 'new-account',
+      environmentId: 'env-1',
+    });
+    expect(screen.queryByText('Setup required')).toBeNull();
+    expect(screen.getByText('Connected')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByLabelText('Cloud environment')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Configure Codex' })
+    ).toBeTruthy();
+  });
+
+  it('keeps an unsaved environment selection when its modal is closed and reopened', () => {
+    const props = base();
+    const [open, setOpen] = createSignal(true);
+    render(() => (
+      <CodexConnection
+        {...props}
+        open={open()}
+        onOpen={() => setOpen(true)}
+        onClose={() => setOpen(false)}
+        connection={{ connected: true, environmentId: 'env-1' }}
+        environments={[
+          { id: 'env-1', repositories: [] },
+          { id: 'env-2', repositories: [] },
+        ]}
+      />
+    ));
+    fireEvent.change(screen.getByLabelText('Cloud environment'), {
+      target: { value: 'env-2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(props.onSave).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }));
+    expect(screen.getByLabelText('Cloud environment')).toHaveProperty(
+      'value',
+      'env-2'
+    );
+    expect(screen.getByRole('status').textContent).toContain('Unsaved changes');
   });
 
   it('marks selections unsaved until the server confirms them and preserves failed edits', () => {

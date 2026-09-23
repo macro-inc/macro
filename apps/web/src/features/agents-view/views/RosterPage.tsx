@@ -331,8 +331,8 @@ export function RosterPage(props: {
                     <button
                       type="button"
                       class="icon-btn"
-                      aria-label={`Configure ${MACRO_HARNESS_NAME}`}
-                      onClick={() => openSettings('Harness')}
+                      aria-label="Configure runtimes"
+                      onClick={() => openSettings('Agents')}
                     >
                       <GearIcon class="ph" />
                     </button>
@@ -353,7 +353,7 @@ export function RosterPage(props: {
                       type="button"
                       class="icon-btn"
                       aria-label="Configure Cursor"
-                      onClick={() => openSettings('Harness')}
+                      onClick={() => openSettings('Agents')}
                     >
                       <GearIcon class="ph" />
                     </button>

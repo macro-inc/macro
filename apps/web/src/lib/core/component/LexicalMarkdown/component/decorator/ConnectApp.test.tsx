@@ -97,7 +97,7 @@ describe('connect-app chip', () => {
     expect(mocks.openSettings).not.toHaveBeenCalled();
   });
 
-  it('sends a harness chip to the Harness page without touching Pipedream', () => {
+  it('sends a harness chip to the combined Agents page without touching Pipedream', () => {
     render(() => (
       <ConnectApp
         appSlug="cursor"
@@ -108,7 +108,7 @@ describe('connect-app chip', () => {
       />
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Connect Cursor' }));
-    expect(mocks.openSettings).toHaveBeenCalledWith('Harness');
+    expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
     expect(mocks.requestConnectApp).not.toHaveBeenCalled();
   });
 
@@ -145,7 +145,7 @@ describe('connect-app chip', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Connect Another harness' })
     );
-    expect(mocks.openSettings).toHaveBeenCalledWith('Harness');
+    expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
   });
 
   it('renders a connect action while the harness status is loading', () => {
@@ -168,7 +168,7 @@ describe('connect-app chip', () => {
     ['codex-cloud', 'Codex'],
     ['claude-cloud', 'Claude'],
   ])(
-    'opens Harness settings for an unconnected %s account',
+    'opens agent and runtime settings for an unconnected %s account',
     (appSlug, name) => {
       render(() => (
         <ConnectApp
@@ -180,7 +180,7 @@ describe('connect-app chip', () => {
         />
       ));
       fireEvent.click(screen.getByRole('button', { name: `Connect ${name}` }));
-      expect(mocks.openSettings).toHaveBeenCalledWith('Harness');
+      expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
       expect(mocks.requestConnectApp).not.toHaveBeenCalled();
     }
   );
@@ -216,7 +216,7 @@ describe('connect-app chip', () => {
       />
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Connect Codex' }));
-    expect(mocks.openSettings).toHaveBeenCalledWith('Harness');
+    expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
   });
 
   it('does not let a Cursor key satisfy a Pipedream chip for an app of the same name', () => {

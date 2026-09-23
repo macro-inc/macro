@@ -13,7 +13,7 @@ import {
 } from '@core/signal/settingsTab';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useSettingsState } from './SettingsState';
+import { settingsTabFromSplitPath, useSettingsState } from './SettingsState';
 
 const mocks = vi.hoisted(() => ({
   mobile: true,
@@ -54,13 +54,21 @@ vi.mock('@solidjs/router', () => ({
     hash: '#position',
   }),
 }));
-vi.mock('./settingsSplitUrl', () => ({
+vi.mock('./settingsSplitUrl', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./settingsSplitUrl')>()),
   stripSettingsSplitFromUrl: (url: string) => url,
   appendSettingsSplitToUrl: (url: string) => url,
 }));
-vi.mock('./settingsTabsConfig', () => ({
-  settingsTabToSlug: (tab: string) => tab.toLowerCase(),
-  settingsSlugToTab: () => undefined,
+vi.mock('@core/constant/allBlocks', () => ({
+  isBlockAlias: vi.fn(() => false),
+  resolveBlockAlias: vi.fn((type: string) => type),
+}));
+vi.mock('@app/lib/analytics', () => ({ analytics: {} }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: true }),
+}));
+vi.mock('../context/user', () => ({
+  useHasPermission: () => () => true,
 }));
 
 function mountSettings() {
@@ -90,6 +98,24 @@ beforeEach(() => {
   setSplitActiveTabId('Account');
 });
 afterEach(cleanup);
+
+describe('settings runtime links', () => {
+  it.each(['runtimes', 'harness'])(
+    'opens the runtimes tab from /settings/%s',
+    (slug) => {
+      expect(settingsTabFromSplitPath(`/app/settings/${slug}`)).toBe('Agents');
+      expect(
+        settingsTabFromSplitPath(`/app/component/inbox/settings/${slug}`)
+      ).toBe('Agents');
+    }
+  );
+
+  it('does not treat a document named settings as a settings split', () => {
+    expect(
+      settingsTabFromSplitPath('/app/md/settings/md/runtimes')
+    ).toBeUndefined();
+  });
+});
 
 describe('settings entry points', () => {
   it('routes desktop tab selections without prewriting entries and retains A-B-A history', () => {

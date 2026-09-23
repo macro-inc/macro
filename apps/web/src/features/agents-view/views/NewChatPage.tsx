@@ -92,7 +92,7 @@ export function NewChatPage(props: {
   };
 
   const connect = (agent: RosterAgent) => {
-    if (agent.harness === 'cursor') openSettings('Harness');
+    if (agent.harness === 'cursor') openSettings('Agents');
   };
 
   const attachmentTracker = createInputAttachmentTracker();

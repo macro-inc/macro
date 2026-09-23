@@ -19,6 +19,7 @@ export function CodexHarness() {
   );
 }
 function CodexHarnessContent() {
+  const [open, setOpen] = createSignal(false);
   const connection = useCodexStatusQuery();
   const begin = useBeginCodexLogin();
   const cancel = useCancelCodexLogin();
@@ -81,6 +82,9 @@ function CodexHarnessContent() {
     >
       {(_account) => (
         <CodexConnection
+          open={open()}
+          onOpen={() => setOpen(true)}
+          onClose={() => setOpen(false)}
           connection={
             connection.isSuccess && !connection.isPlaceholderData
               ? connection.data
