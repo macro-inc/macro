@@ -222,6 +222,22 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
 
   registerHotkey({
     scopeId: scope,
+    hotkey: 'e',
+    description: 'Keep edit shortcut on selected reply',
+    registrationType: 'add',
+    handlerPriority: HOTKEY_PRIORITY_HIGH,
+    hide: true,
+    condition: () =>
+      options.isThreadFocused() &&
+      !!options.replySelection.selectedId() &&
+      !options.isEditing(),
+    // Keep the reply's priority after its edit command: an uneditable reply
+    // must not fall through to editing the root or marking Home done.
+    keyDownHandler: () => true,
+  }).withGroup(group);
+
+  registerHotkey({
+    scopeId: scope,
     hotkey: 'backspace',
     hotkeyToken: TOKENS.channel.threadDeleteReply,
     description: 'Delete reply',

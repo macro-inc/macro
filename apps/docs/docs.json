@@ -144,6 +144,7 @@
               "AI/mcp/tools/update-calendar-event",
               "AI/mcp/tools/update-reminder",
               "AI/mcp/tools/update-thread-labels",
+              "AI/mcp/tools/upload-file",
               "AI/mcp/tools/web-fetch",
               "AI/mcp/tools/web-search"
             ]

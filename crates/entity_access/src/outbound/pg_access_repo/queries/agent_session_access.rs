@@ -44,19 +44,14 @@ pub async fn accessible_session_ids(
 /// `entity_access`; it arrives here through `source_ids`, so adding someone
 /// to that channel gives them the session on their next request.
 ///
-/// Unlike documents and calls there is no public-sharing arm: a session
-/// carries no `SharePermission`, so a caller with no source ids has no way
-/// to reach one.
+/// Public links also work without source IDs. Team links require membership in
+/// the owner's current team, while explicit team shares use canonical grants.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn get_agent_session_access(
     pool: &PgPool,
     agent_session_id: &uuid::Uuid,
     source_ids: &SourceIds,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
-    if source_ids.0.is_empty() {
-        return Ok(None);
-    }
-
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
         r#"
         SELECT access_level::text
@@ -64,6 +59,25 @@ pub async fn get_agent_session_access(
         WHERE entity_id = $1
         AND entity_type = 'agent_session'
         AND source_id = ANY($2)
+
+        UNION ALL
+
+        SELECT sp."linkShareAccessLevel"::text
+        FROM agent_session s
+        JOIN "SharePermission" sp ON sp.id = s.share_permission_id
+        WHERE s.id = $1
+          AND sp."linkShareAccessLevel" IS NOT NULL
+          AND (
+              sp."linkShare" = 'PUBLIC'
+              OR (
+                  sp."linkShare" = 'TEAM'
+                  AND EXISTS (
+                      SELECT 1 FROM team_user owner_team
+                      WHERE owner_team.user_id = s.owner_id
+                        AND owner_team.team_id::text = ANY($2)
+                  )
+              )
+          )
         "#,
         agent_session_id,
         &source_ids.0,
@@ -86,5 +100,40 @@ pub async fn explain_agent_session_access(
     agent_session_id: &uuid::Uuid,
     source_ids: &SourceIds,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
-    list_entity_access_grants(pool, agent_session_id, EntityType::AgentSession, source_ids).await
+    let mut grants =
+        list_entity_access_grants(pool, agent_session_id, EntityType::AgentSession, source_ids)
+            .await?;
+    let links = sqlx::query!(
+        r#"
+        SELECT sp."linkShareAccessLevel" AS "access_level!: AccessLevel",
+               sp."linkShare" = 'PUBLIC' AS "is_public!",
+               owner_team.team_id AS "team_id?"
+        FROM agent_session s
+        JOIN "SharePermission" sp ON sp.id = s.share_permission_id
+        LEFT JOIN team_user owner_team ON owner_team.user_id = s.owner_id
+        WHERE s.id = $1
+          AND sp."linkShareAccessLevel" IS NOT NULL
+          AND (
+              sp."linkShare" = 'PUBLIC'
+              OR (sp."linkShare" = 'TEAM' AND owner_team.team_id::text = ANY($2))
+          )
+        "#,
+        agent_session_id,
+        &source_ids.0,
+    )
+    .fetch_all(pool)
+    .await?;
+    grants.extend(links.into_iter().filter_map(|row| {
+        if row.is_public {
+            Some(AccessGrant::PublicLink {
+                access_level: row.access_level,
+            })
+        } else {
+            row.team_id.map(|owner_team_id| AccessGrant::TeamLink {
+                access_level: row.access_level,
+                owner_team_id,
+            })
+        }
+    }));
+    Ok(grants)
 }

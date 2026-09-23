@@ -906,7 +906,7 @@ fn team_share_facts(
 ) -> TeamShareFacts {
     TeamShareFacts {
         entity: EntityType::Chat.with_entity_str(CHAT_ID),
-        owner,
+        owner: owner.into(),
         owner_team_id,
         current: None,
         revision,

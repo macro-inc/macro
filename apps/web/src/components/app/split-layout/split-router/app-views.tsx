@@ -156,7 +156,7 @@ function LegacyInboxView() {
   );
 }
 export const InboxRouteView = withAuth(() => (
-  <NewAppView id="inbox" desktopOnly fallback={<LegacyInboxView />}>
+  <NewAppView id="inbox" composableOnTouch fallback={<LegacyInboxView />}>
     <InboxView />
   </NewAppView>
 ));
@@ -358,7 +358,7 @@ export const DriveRouteView = withAuth(
     return (
       <NewAppView
         id="documents"
-        desktopOnly
+        composableOnTouch
         fallback={
           <SoupView
             viewName="Files"

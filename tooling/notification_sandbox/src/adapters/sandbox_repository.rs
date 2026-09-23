@@ -169,9 +169,10 @@ impl NotificationRepository for SandboxNotificationRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: Vec<Entity<'static>>,
+        query: notification::domain::models::entity_query::EntityNotificationQuery,
     ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>, Report> {
         self.inner
-            .get_entity_notifications_batch(user_id, entities)
+            .get_entity_notifications_batch(user_id, entities, query)
             .await
     }
 

@@ -1,5 +1,5 @@
 import { EphemeralStore, LoroDoc } from 'loro-crdt';
-import { Miniflare, type WebSocket } from 'miniflare';
+import { Miniflare, type MiniflareOptions, type WebSocket } from 'miniflare';
 import { assert } from 'vitest';
 import jwt from 'jsonwebtoken';
 import {
@@ -27,7 +27,7 @@ async function migrateDatabase(mf: Miniflare) {
   }
 }
 
-export async function setupMiniflare(options: { persistPath?: string; migrate?: boolean } = {}) {
+export async function setupMiniflare(options: { persistPath?: string; migrate?: boolean; fetchMock?: MiniflareOptions['fetchMock'] } = {}) {
   const persist = (name: string) => options.persistPath ? `${options.persistPath}/${name}` : false;
   const mf = new Miniflare({
     d1Databases: {
@@ -55,7 +55,9 @@ export async function setupMiniflare(options: { persistPath?: string; migrate?: 
     d1Persist: persist('d1'),
     kvPersist: persist('kv'),
     r2Persist: persist('r2'),
+    fetchMock: options.fetchMock,
     bindings: {
+      ...(options.fetchMock ? { DSS_URL: "https://dss.test", DSS_INTERNAL_AUTH_KEY: "local" } : {}),
       DOCUMENT_PERMISSIONS_SECRET: "local",
       INTERNAL_API_SECRET_KEY: "INTERNAL_API_SECRET",
       INTERNAL_API_SECRET,
@@ -222,7 +224,7 @@ export function createTestWebSocket(ws: WebSocket) {
 
       return new Promise<ArrayBuffer>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
-          const index = waiters.indexOf(resolve);
+          const index = waiters.indexOf(wrappedResolve);
           if (index !== -1) {
             waiters.splice(index, 1);
           }
@@ -242,8 +244,8 @@ export function createTestWebSocket(ws: WebSocket) {
       });
     },
 
-    send(message: string | ArrayBuffer) {
-      ws.send(message);
+    send(message: string | ArrayBuffer | Uint8Array): void {
+      ws.send(message instanceof Uint8Array ? new Uint8Array(message) : message);
     },
 
     getWebSocket() {
@@ -255,7 +257,7 @@ export function createTestWebSocket(ws: WebSocket) {
 export function getTokenForDocument(
   documentId: string,
   userId: string,
-  permissionLevel: 'view' | 'edit' | 'owner'
+  permissionLevel: 'view' | 'edit' | 'owner' | 'comment'
 ): string {
   const token = jwt.sign({
     user_id: userId,
@@ -267,6 +269,21 @@ export function getTokenForDocument(
   return token;
 }
 
+
+export function getTokenForSurface(
+  surfaceId: string,
+  permissionLevel: 'view' | 'comment' | 'edit' | 'owner' = 'edit',
+  expiresAt = Math.floor(Date.now() / 1000) + 60,
+): string {
+  return jwt.sign({
+    session_kind: 'surface',
+    surface_id: surfaceId,
+    user_id: 'surface-user',
+    access_level: permissionLevel,
+    exp: expiresAt,
+    iss: 'document_storage_service',
+  }, 'local', { noTimestamp: true });
+}
 
 export async function connectToDocumentForTesting(
   mf: Miniflare,

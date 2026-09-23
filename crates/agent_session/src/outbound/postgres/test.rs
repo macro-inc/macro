@@ -1,5 +1,6 @@
 use super::*;
 mod search;
+mod working_branch;
 use crate::domain::model::{AgentMcpServer, DEFAULT_AGENT_SESSION_NAME};
 use crate::domain::ports::AgentSessionRepo;
 use agent_client_protocol::RawJsonRpcMessage;
@@ -52,7 +53,7 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
     .expect("insert User");
 }
 
-async fn create_test_bot(pool: &PgPool) -> BotId {
+pub(super) async fn create_test_bot(pool: &PgPool) -> BotId {
     // Every session fixture is owned by the same user, and
     // `agent_session.owner_id` references `"User"(id)` - so seed the
     // row here, where every session-creating test already passes through.
@@ -78,7 +79,7 @@ async fn create_test_bot(pool: &PgPool) -> BotId {
     bot.id
 }
 
-fn new_session(
+pub(super) fn new_session(
     bot_id: BotId,
     thread_id: Option<Uuid>,
     originating_message_id: Option<Uuid>,
@@ -101,7 +102,7 @@ fn new_session(
     }
 }
 
-async fn create_session(
+pub(super) async fn create_session(
     repo: &PgAgentSessionRepo,
     params: CreateAgentSessionParams,
 ) -> AgentSession {
@@ -129,7 +130,7 @@ async fn append_system_event(
     .expect("append system event log entry");
 }
 
-async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) {
+pub(super) async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) {
     let channel_id = macro_uuid::generate_uuid_v7();
     let thread_id = macro_uuid::generate_uuid_v7();
     let originating_message_id = macro_uuid::generate_uuid_v7();
@@ -1894,6 +1895,7 @@ async fn history_boundary_range_uses_order_index_and_uuid_tie_break(pool: PgPool
         let dto = crate::inbound::axum_router::AgentSessionLogEntryDto::from(stored.clone());
         let event = crate::outbound::connection_gateway_realtime::AgentSessionLogEvent::new(
             crate::domain::model::LogAppended {
+                turn_state: None,
                 agent_session_id: session.id,
                 entries: vec![stored.clone()],
             },
@@ -2456,4 +2458,76 @@ async fn create_batch_fenced_refuses_stale_claims_and_foreign_frames(pool: PgPoo
             .is_empty(),
         "nothing landed from a refused batch"
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn turn_projection_is_atomic_fenced_and_backfill_cannot_overwrite_live_state(pool: PgPool) {
+    use crate::domain::turn_state::SessionTurnProjectionRepo;
+    use agent_fold::domain::model::TurnState;
+
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let replica = ReplicaId::mint();
+    let claim = claimed(repo.claim(session.id, replica).await.unwrap());
+    let first = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    let second = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    assert!(
+        !repo
+            .initialize_turn_state(session.id, Some(first.id), TurnState::Idle)
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.initialize_turn_state(session.id, Some(second.id), TurnState::Running)
+            .await
+            .unwrap()
+    );
+
+    repo.create_projected(
+        fenced_log(session.id),
+        Some(&claim),
+        None,
+        Some(TurnState::Blocked),
+    )
+    .await
+    .unwrap();
+    let current = claimed(repo.claim(session.id, replica).await.unwrap());
+    assert!(matches!(
+        repo.create_projected(
+            fenced_log(session.id),
+            Some(&claim),
+            None,
+            Some(TurnState::Idle)
+        )
+        .await,
+        Err(AgentSessionError::FencedOut(_))
+    ));
+    assert!(
+        !repo
+            .initialize_turn_state(session.id, Some(second.id), TurnState::Idle)
+            .await
+            .unwrap()
+    );
+    let logs = repo.list_by_session(session.id).await.unwrap();
+    assert_eq!(
+        logs.len(),
+        3,
+        "a rejected projection cannot append its frame"
+    );
+    let turn = sqlx::query_scalar!(
+        "SELECT turn_state FROM agent_session WHERE id = $1",
+        session.id.as_uuid()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(turn.as_deref(), Some("blocked"));
+    repo.release(&current).await.unwrap();
 }

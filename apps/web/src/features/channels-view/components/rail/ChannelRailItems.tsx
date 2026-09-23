@@ -21,7 +21,7 @@ import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { Button, cn, Tooltip } from '@ui';
-import { Match, type ParentProps, Show, Switch } from 'solid-js';
+import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
 import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
 import { rowKeyForChannel, useChannelsRail } from './ChannelsRailContext';
 
@@ -59,6 +59,8 @@ export function ChannelRailItemContextMenu(
   props: ParentProps<{
     channel: ChannelEntity;
     class?: string;
+    /** Rail-specific items shown after the entity actions. */
+    extraItems?: JSX.Element;
   }>
 ) {
   const rail = useChannelsRail();
@@ -74,6 +76,7 @@ export function ChannelRailItemContextMenu(
       selectedEntities={() => []}
       viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
       class={props.class}
+      extraItems={props.extraItems}
       onOpenChange={(open) => {
         if (!open) return;
 

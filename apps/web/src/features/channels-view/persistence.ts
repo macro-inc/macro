@@ -38,6 +38,7 @@ const channelsExpandedGroupsSchema = z.preprocess(
   },
   z.object({
     favorites: z.boolean().default(true),
+    unread: z.boolean().default(true),
     channels: z.boolean().default(true),
     direct_messages: z.boolean().default(true),
   })
@@ -52,9 +53,11 @@ const channelsEntryStateSchemaWithDefaults = z.object({
   selectedChannelId: z.string().optional(),
   expandedGroups: channelsExpandedGroupsSchema.default({
     favorites: true,
+    unread: true,
     channels: true,
     direct_messages: true,
   }),
+  collapsedLabels: z.array(z.string()).default([]),
 });
 
 type ChannelsEntryState = z.infer<typeof channelsEntryStateSchemaWithDefaults>;
@@ -66,9 +69,11 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
   selectedChannelId: undefined,
   expandedGroups: {
     favorites: true,
+    unread: true,
     channels: true,
     direct_messages: true,
   },
+  collapsedLabels: [],
 } satisfies ChannelsEntryState;
 
 const channelsPreferencesSchema = z.object({
@@ -107,6 +112,7 @@ function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
       ? {}
       : { selectedChannelId: state.selectedChannelId }),
     expandedGroups: state.expandedGroups,
+    collapsedLabels: state.collapsedLabels,
   };
 }
 
@@ -123,6 +129,7 @@ function restoreChannelsEntryState(
     mobileTab: restored.mobileTab,
     selectedChannelId: restored.selectedChannelId,
     expandedGroups: restored.expandedGroups,
+    collapsedLabels: restored.collapsedLabels,
   };
 }
 

@@ -100,6 +100,7 @@ import {
   type ToolRenderContext,
 } from './ToolRenderer';
 import { updateThreadLabelsHandler } from './UpdateThreadLabels';
+import { uploadFileHandler } from './UploadFile';
 import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
@@ -144,6 +145,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   DisplayResults: displayResultsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
+  UploadFile: uploadFileHandler,
   CreateProject: createProjectHandler,
   CreateReminder: createReminderHandler,
   CreateTag: createTagHandler,
@@ -202,6 +204,11 @@ type TriggerToolArgs = Omit<
 > & {
   type: 'call' | 'response' | 'error';
 };
+
+/** Schema support alone does not guarantee that this surface has a renderer. */
+export function hasToolRenderer(name: string): boolean {
+  return Object.hasOwn(toolHandlers, name);
+}
 
 export function RenderTool(props: ToolProps) {
   const maybeTool = deserializeToolCall({

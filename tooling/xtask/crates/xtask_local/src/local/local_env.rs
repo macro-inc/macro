@@ -216,6 +216,14 @@ impl InfraEnv {
             "OVERRIDE_EMAIL_SERVICE_URL".into(),
             "http://email-service:8080".into(),
         );
+        // Same host-vs-container split for calendar: `CalendarServiceUrl`'s
+        // Local default is http://localhost:8088, which inside a container is
+        // the caller itself. In-network callers (the agent calendar tools point
+        // at calendar_service) reach it through this override instead.
+        env.insert(
+            "OVERRIDE_CALENDAR_SERVICE_URL".into(),
+            "http://calendar-service:8080".into(),
+        );
         env.insert(
             "OVERRIDE_AUTH_SERVICE_URL".into(),
             "http://authentication-service:8080".into(),

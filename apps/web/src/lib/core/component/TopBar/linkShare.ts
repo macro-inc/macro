@@ -10,6 +10,7 @@ const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ItemType> = new Set<ItemType>([
   'chat',
   'call',
   'project',
+  'agent_session',
 ]);
 
 export function isTeamShareSupportedForItem(itemType: ItemType): boolean {

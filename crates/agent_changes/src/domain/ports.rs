@@ -1,12 +1,35 @@
 //! Storage and GitHub capabilities required by the changes service.
 
+use std::collections::HashMap;
 use std::future::Future;
+use std::pin::Pin;
 
 use agent_session::domain::model::AgentSession;
 
 use super::error::ExtractError;
-use super::model::{AgentSessionId, AttemptOutcome, Changeset, ExtractedChangeset, SessionChanges};
+use super::model::{
+    AgentSessionId, AttemptOutcome, CapturedBranch, Changeset, ExtractedChangeset, SessionChanges,
+};
 use chrono::{DateTime, Utc};
+
+/// Pending batched branch facts for optional domain composition.
+pub type SessionBranchesFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<HashMap<AgentSessionId, CapturedBranch>, rootcause::Report>>
+            + Send
+            + 'a,
+    >,
+>;
+
+/// Batched, persisted working-branch facts for already-authorized sessions.
+///
+/// Callers must first restrict the ids to sessions the requesting user can view.
+/// Missing captures and detached heads have no branch; a session's starting
+/// branch is never substituted for its captured working branch.
+pub trait SessionBranchReader: Send + Sync + 'static {
+    /// Fetch repository and branch facts in one batch without loading patches or file lists.
+    fn working_branches<'a>(&'a self, sessions: &'a [AgentSessionId]) -> SessionBranchesFuture<'a>;
+}
 
 /// Reads the linked GitHub pull request for a session. The service derives
 /// per-file facts from the raw patch.

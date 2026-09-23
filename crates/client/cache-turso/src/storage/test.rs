@@ -1,6 +1,7 @@
 use super::*;
 
 mod predicate_cost;
+mod startup;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -478,9 +479,7 @@ fn fresh_schema_metadata_foreign_keys_quick_check_and_cascade_are_real() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("schema-scope").unwrap();
         assert_eq!(raw_scalar(&storage, "PRAGMA foreign_keys"), 1);
-        let quick = driver::query(&storage.connection(), "PRAGMA quick_check", Vec::new()).unwrap();
-        assert_eq!(quick.len(), 1);
-        assert_eq!(required_text(&quick[0], 0).unwrap(), "ok");
+        storage.check_integrity().unwrap();
         assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM meta"), 3);
 
         let violation = driver::execute(
@@ -914,25 +913,6 @@ fn invalid_shadow_state_requests_reset_on_reopen() {
         error.physical_reset_reason(),
         Some(PhysicalResetReason::Invariant)
     );
-}
-
-#[test]
-fn quick_check_requires_exactly_one_ok_text_row() {
-    assert!(validate_quick_check_rows(&[vec![text("ok")]]).is_ok());
-    for rows in [
-        Vec::new(),
-        vec![vec![text("corrupt")]],
-        vec![vec![text("ok")], vec![text("ok")]],
-        vec![vec![text("ok"), text("extra")]],
-        vec![vec![Value::from_i64(1)]],
-    ] {
-        assert_eq!(
-            validate_quick_check_rows(&rows)
-                .unwrap_err()
-                .physical_reset_reason(),
-            Some(PhysicalResetReason::Integrity)
-        );
-    }
 }
 
 #[test]

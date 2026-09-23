@@ -80,6 +80,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
+import { ContentLoading } from './ContentLoading';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
@@ -492,7 +493,9 @@ function LayoutInner(props: RouteSectionProps) {
       </Show> */}
 
       <Show when={paywallOpen()}>
-        <Paywall />
+        <Suspense>
+          <Paywall />
+        </Suspense>
       </Show>
       <div class="max-h-full grow flex">
         {/* The provider spans the sidebar too so its favorites can register
@@ -535,7 +538,8 @@ function LayoutInner(props: RouteSectionProps) {
           </Show>
 
           <div class="flex-1 w-full min-h-0 font-sans text-ink caret-current">
-            {props.children}
+            {/* Route loading must not detach the shell or mobile navigation. */}
+            <Suspense fallback={<ContentLoading />}>{props.children}</Suspense>
           </div>
         </ItemDndProvider>
       </div>

@@ -8,10 +8,12 @@ import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import type { ChannelEntity } from '@entity';
 import { isMutedItem } from '@entity/utils/notification';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
 import {
@@ -19,6 +21,7 @@ import {
   createSignal,
   createUniqueId,
   Match,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -107,13 +110,29 @@ export function ChannelsMobileView(props: {
     loadNextPage();
   }
 
-  const openChannel = (channel: ChannelEntity) => {
+  let opening = 0;
+  onCleanup(() => {
+    opening += 1;
+  });
+  const openChannel = async (channel: ChannelEntity) => {
+    const request = ++opening;
     setSelectedChannelId(channel.id);
-    void openEntityInSplitFromUnifiedList(channel, {
-      splitHandle: panel.handle,
-      referredFrom: 'channels',
-      notificationSource,
-    });
+    try {
+      const full = await hydrateChannelNotificationSelection(
+        channel,
+        notificationSource.withLocalOverrides
+      );
+      if (request !== opening) return;
+      await openEntityInSplitFromUnifiedList(full, {
+        splitHandle: panel.handle,
+        referredFrom: 'channels',
+        notificationSource,
+      });
+    } catch (error) {
+      if (request !== opening) return;
+      console.error('Failed to open conversation', error);
+      toast.failure('Unable to open conversation. Please try again.');
+    }
   };
 
   return (

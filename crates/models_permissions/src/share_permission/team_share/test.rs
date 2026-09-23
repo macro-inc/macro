@@ -8,7 +8,7 @@ fn owner() -> MacroUserIdStr<'static> {
 fn facts() -> TeamShareFacts {
     TeamShareFacts {
         entity: EntityType::Document.with_entity_string("document-id".to_string()),
-        owner: owner(),
+        owner: owner().into(),
         owner_team_id: Some(Uuid::from_u128(1)),
         current: None,
         revision: 7,
@@ -83,6 +83,34 @@ fn every_supplied_operation_requires_the_actual_owner() {
             Err(TeamSharePolicyError::NotOwner)
         );
         assert!(authorize(&facts, request).unwrap().is_some());
+    }
+}
+
+#[test]
+fn resolving_a_bot_or_team_audience_does_not_authorize_a_user_to_edit_sharing() {
+    for owner in [
+        Owner::Team(Uuid::from_u128(1)),
+        Owner::from_principal_str("bot|00000000-0000-0000-0000-000000000002").unwrap(),
+    ] {
+        let facts = TeamShareFacts { owner, ..facts() };
+        for request in [
+            request(Some(AccessLevel::Edit)),
+            request(None),
+            TeamShareRequest {
+                legacy_enabled: Some(true),
+                ..Default::default()
+            },
+            TeamShareRequest {
+                legacy_enabled: Some(false),
+                ..Default::default()
+            },
+        ] {
+            assert_eq!(
+                authorize(&facts, request),
+                Err(TeamSharePolicyError::NotOwner)
+            );
+        }
+        assert_eq!(authorize(&facts, TeamShareRequest::default()), Ok(None));
     }
 }
 

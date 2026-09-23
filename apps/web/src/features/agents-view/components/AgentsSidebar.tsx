@@ -16,6 +16,7 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { unreadFilterFn } from '@entity/utils/filter';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlugIcon from '@phosphor/plugs-connected.svg';
@@ -71,6 +72,8 @@ function ConversationContextMenu(props: {
       selectedEntities={() => []}
       viewContext={AGENTS_ACTION_VIEW_CONTEXT}
       as="div"
+      // The nav is a fixed-height flex column, so the trigger's default
+      // `h-full` would split that height between the rows; keep rows content-sized.
       class="block h-auto w-full shrink-0"
       onOpenChange={(open) => {
         if (!open) return;
@@ -112,6 +115,8 @@ function Row(props: {
       {(session) => (
         <AgentSessionListItem
           entity={session()}
+          surface="agents"
+          unread={unreadFilterFn(session())}
           mode={props.mode}
           active={props.active}
           onOpen={props.onOpen}

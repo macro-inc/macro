@@ -11,8 +11,9 @@ import { Navigate } from '@solidjs/router';
 import { HomeBackfillProgress } from './home-backfill-progress';
 import { HomeChatInput } from './home-chat-input';
 import { HomeExamples } from './home-examples';
+import { HomeGettingStartedLink } from './home-getting-started-link';
 import { GettingStartedSection, RecommendedSection } from './home-hub';
-import { createHomePreferences } from './home-prefs';
+import { useHomePreferences } from './home-prefs';
 import { HomeSectionBoundary } from './home-section-boundary';
 
 const MACRO_LOGO_PATH =
@@ -68,7 +69,7 @@ export function Home() {
 
 function HomeContent() {
   const user = useUserContext();
-  const preferences = createHomePreferences();
+  const preferences = useHomePreferences();
 
   const firstName = () => {
     const name = user.author();
@@ -133,6 +134,7 @@ function HomeContent() {
       <FloatRegionOrInline region="accessory">
         <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
           <HomeChatInput />
+          <HomeGettingStartedLink preferences={preferences} />
         </div>
       </FloatRegionOrInline>
     </main>

@@ -92,6 +92,53 @@
         ]
       }
     },
+    "/agent-repositories/branches": {
+      "get": {
+        "tags": ["agent-repositories"],
+        "summary": "List the branches on one repository the caller can start a session from.",
+        "operationId": "list_agent_repository_branches",
+        "parameters": [
+          {
+            "name": "repoUrl",
+            "in": "query",
+            "description": "Canonical https://github.com/owner/name URL",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The repository's branches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRepositoryBranchesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The query did not name a GitHub repository"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "The caller cannot reach this repository"
+          },
+          "502": {
+            "description": "GitHub could not be asked which branches the repository has"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/agent-sandbox-size": {
       "get": {
         "tags": ["agent-sessions"],
@@ -842,6 +889,136 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/permissions": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read sharing settings for a session the caller can view.",
+        "operationId": "get_agent_session_permissions",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharePermissionV2"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["agent-sessions"],
+        "summary": "Update link, channel, or team sharing after owner authorization.",
+        "operationId": "update_agent_session_permissions",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharePermissionV2"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/queue": {
       "get": {
         "tags": ["agent-sessions"],
@@ -1274,6 +1451,11 @@
   },
   "components": {
     "schemas": {
+      "AccessLevel": {
+        "type": "string",
+        "description": "Ordered from least to most access top -> bottom",
+        "enum": ["view", "comment", "edit", "owner"]
+      },
       "AgentAction": {
         "oneOf": [
           {
@@ -1453,6 +1635,20 @@
               "$ref": "#/components/schemas/AgentRepositoryDto"
             },
             "description": "Every repository the caller reaches through Macro's GitHub App, sorted\nby `owner/name`. Empty when the App is installed nowhere the caller\nhas a claim to."
+          }
+        }
+      },
+      "AgentRepositoryBranchesResponse": {
+        "type": "object",
+        "description": "Response body for `GET /agent-repositories/branches`.",
+        "required": ["branches"],
+        "properties": {
+          "branches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Branch names on the repository, in the order GitHub returned them.\nEmpty when the repository has no commits yet."
           }
         }
       },
@@ -2015,6 +2211,21 @@
         "description": "The source of the captured diff, on the wire.",
         "enum": ["github_pull_request"]
       },
+      "ChannelSharePermission": {
+        "type": "object",
+        "description": "The channel share permission",
+        "required": ["channel_id", "access_level"],
+        "properties": {
+          "access_level": {
+            "$ref": "#/components/schemas/AccessLevel",
+            "description": "The access level for the channel"
+          },
+          "channel_id": {
+            "type": "string",
+            "description": "The channel id"
+          }
+        }
+      },
       "CompleteRequest": {
         "type": "object",
         "description": "One-time manual code. Deliberately does not implement Debug.",
@@ -2088,6 +2299,10 @@
           "instructions": {
             "type": ["string", "null"],
             "description": "Instructions the session's runtime works under, for its whole life.\n\nRecorded on the session whichever runtime serves it. Only the\nin-process one acts on them today; `agent_harness`'s `AgentKind`\nrecords what each of the others will need to."
+          },
+          "model": {
+            "type": ["string", "null"],
+            "description": "Model the managed session runs on, overriding the persona's. Managed\nsessions only: an external runtime picks its own.\n\nThe session's model from the moment it exists, which is what a caller\nchoosing one before the first prompt means. Selecting a model *during*\na session is a control action instead, and reads as one in its\ntranscript."
           },
           "owner": {
             "type": ["string", "null"],
@@ -2320,6 +2535,11 @@
             "description": "The commit, when known."
           }
         }
+      },
+      "LinkShare": {
+        "type": "string",
+        "description": "Defines who can access an item through its share link.",
+        "enum": ["PUBLIC", "TEAM"]
       },
       "LoadAgentModelsRequest": {
         "type": "object",
@@ -2631,6 +2851,60 @@
         ],
         "description": "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
       },
+      "SharePermissionV2": {
+        "type": "object",
+        "required": ["id", "owner"],
+        "properties": {
+          "channelSharePermissions": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ChannelSharePermission"
+            },
+            "description": "The channel share permissions for the item"
+          },
+          "id": {
+            "type": "string",
+            "description": "The share permission id"
+          },
+          "linkShare": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkShare",
+                "description": "Who can access the item through its share link"
+              }
+            ]
+          },
+          "linkShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The level of access granted through the share link"
+              }
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the item"
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The explicit access level granted to the owner's team, or `null` when disabled."
+              }
+            ]
+          }
+        }
+      },
       "StartResponse": {
         "type": "object",
         "description": "Public PKCE challenge and attempt handle; contains no verifier or provider tokens.",
@@ -2668,6 +2942,80 @@
           "ephemeral": {
             "type": "boolean",
             "description": "Whether reconnecting after service restart is required."
+          }
+        }
+      },
+      "UpdateChannelSharePermission": {
+        "type": "object",
+        "required": ["operation", "channelId"],
+        "properties": {
+          "accessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The access level for the channel\nThis is required if the operation is add or replace"
+              }
+            ]
+          },
+          "channelId": {
+            "type": "string",
+            "description": "The channel id"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/UpdateOperation",
+            "description": "The type of operation to be performed on the chanel share permission\nYou can add, remove or replace and existing permission"
+          }
+        }
+      },
+      "UpdateOperation": {
+        "type": "string",
+        "enum": ["add", "remove", "replace"]
+      },
+      "UpdateSharePermissionRequestV2": {
+        "type": "object",
+        "properties": {
+          "channelSharePermissions": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/UpdateChannelSharePermission"
+            },
+            "description": "Any channel share permissions to be created/updated/removed"
+          },
+          "linkShare": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkShare",
+                "description": "Who can access the item through its share link. Omit to leave unchanged or pass `null` to\ndisable link sharing."
+              }
+            ]
+          },
+          "linkShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The link access level. Omit to leave unchanged or pass `null` to reset it to the default\nlevel when a link share exists."
+              }
+            ]
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The explicit team access level. Omit to leave unchanged or pass `null` to disable team\nsharing. Only the actual owner may change this setting; `owner` is not an allowed level."
+              }
+            ]
           }
         }
       },

@@ -51,6 +51,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 activity = { path = "../activity", default-features = false, features = ["realtime"] }
 apollo-compiler = { workspace = true }
 chrono = { workspace = true }
+model_owner = { path = "../model_owner" }
 model_user = { path = "../model_user" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }

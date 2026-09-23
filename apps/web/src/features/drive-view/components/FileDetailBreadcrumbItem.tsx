@@ -10,13 +10,6 @@ import { buildEntityData } from '@entity';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 
-const fileOperations: FileOperation[] = [
-  { op: 'copy' },
-  { op: 'rename' },
-  { op: 'moveToProject' },
-  { op: 'delete' },
-];
-
 export function FileDetailBreadcrumbItem(props: {
   value: string;
   metadata: unknown;
@@ -25,10 +18,18 @@ export function FileDetailBreadcrumbItem(props: {
   userAccessLevel: AccessLevel;
   blockType: BlockName | BlockAlias;
   fallbackName?: string;
+  operations?: FileOperation[];
   onClose: () => void;
   onDuplicate: (id: string, name: string) => void;
 }) {
   const panel = useSplitPanelOrThrow();
+  const fileOperations = (): FileOperation[] => [
+    { op: 'copy' },
+    { op: 'rename' },
+    { op: 'moveToProject' },
+    ...(props.operations ?? []),
+    { op: 'delete' },
+  ];
   const documentId = () => props.documentMetadata.documentId;
   const documentName = () =>
     props.documentMetadata.documentName ?? props.fallbackName ?? 'Untitled';
@@ -73,7 +74,7 @@ export function FileDetailBreadcrumbItem(props: {
               id={documentId()}
               itemType="document"
               name={documentName()}
-              ops={fileOperations}
+              ops={fileOperations()}
               entityKind={props.blockType}
               permissions={getPermissions(props.userAccessLevel)}
               onDuplicate={(id) => props.onDuplicate(id, documentName())}

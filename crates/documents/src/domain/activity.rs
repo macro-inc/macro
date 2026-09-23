@@ -16,11 +16,19 @@ use super::events::DocumentTopicEvent;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
 
-fn actor_from_owner(owner: &Owner) -> Option<Actor<'static>> {
+// Display attribution only: teams cannot act. Prefer the initiating user when
+// known, otherwise represent an unattributed team creation as system activity.
+fn actor_from_owner(
+    owner: &Owner,
+    on_behalf_of: Option<&MacroUserIdStr<'static>>,
+) -> Actor<'static> {
     match owner {
-        Owner::User(user) => Some(Actor::new_from_user(user.clone())),
-        Owner::Bot(bot_id) => Some(Actor::new_from_bot(*bot_id)),
-        Owner::Team(_) => None,
+        Owner::User(user) => Actor::new_from_user(user.clone()),
+        Owner::Bot(bot_id) => Actor::new_from_bot(*bot_id),
+        Owner::Team(_) => on_behalf_of
+            .cloned()
+            .map(Actor::new_from_user)
+            .unwrap_or_else(|| Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
     }
 }
 
@@ -61,19 +69,15 @@ impl ActivitySource for DocumentTopicEvent {
 
         match self {
             DocumentTopicEvent::Created(metadata) => {
-                match metadata
-                    .actor
-                    .clone()
-                    .or_else(|| actor_from_owner(&metadata.owner))
-                {
-                    Some(actor) => single(
-                        Attribution::new(actor, metadata.on_behalf_of.clone()),
-                        CommonAction::Created,
-                        &metadata.document_id,
-                        metadata.created_at.unwrap_or_else(|| event_time(event_id)),
-                    ),
-                    None => Ingest::Ignore,
-                }
+                let actor = metadata.actor.clone().unwrap_or_else(|| {
+                    actor_from_owner(&metadata.owner, metadata.on_behalf_of.as_ref())
+                });
+                single(
+                    Attribution::new(actor, metadata.on_behalf_of.clone()),
+                    CommonAction::Created,
+                    &metadata.document_id,
+                    metadata.created_at.unwrap_or_else(|| event_time(event_id)),
+                )
             }
             DocumentTopicEvent::Updated(metadata) => {
                 match mutation_attribution(
@@ -106,15 +110,12 @@ impl ActivitySource for DocumentTopicEvent {
                 }
             }
             // The copy is a new document; its creation is the activity.
-            DocumentTopicEvent::Copied(metadata) => match actor_from_owner(&metadata.owner) {
-                Some(actor) => single(
-                    Attribution::direct(actor),
-                    CommonAction::Created,
-                    &metadata.document_id,
-                    event_time(event_id),
-                ),
-                None => Ingest::Ignore,
-            },
+            DocumentTopicEvent::Copied(metadata) => single(
+                Attribution::direct(actor_from_owner(&metadata.owner, None)),
+                CommonAction::Created,
+                &metadata.document_id,
+                event_time(event_id),
+            ),
             DocumentTopicEvent::Purged(metadata) => {
                 Ingest::Purge(vec![(EntityType::Document, metadata.document_id.clone())])
             }

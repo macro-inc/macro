@@ -10,11 +10,14 @@ import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { Show } from 'solid-js';
 import { HomeRecommendedActions } from '../../home/components/home-recommended-actions';
 import { HomeChatInput } from '../../home/home-chat-input';
+import { HomeGettingStartedLink } from '../../home/home-getting-started-link';
+import { useHomePreferences } from '../../home/home-prefs';
 
 /** Desktop Home's idle pane uses the single-line chat composer and send flow. */
 export function HomeChatStart() {
   const shell = useViewShell();
   const agents = useFeatureFlag(enableChatV3Agents);
+  const preferences = useHomePreferences();
   const showHomeTopBar = () =>
     shell.aside.isCollapsed() || shell.aside.isOverlay();
   return (
@@ -34,7 +37,7 @@ export function HomeChatStart() {
         >
           {/*
             Agents new conversation sits under ViewShell.TopBar (h-12) and
-            centers with .newchat padding 24/64. Home only renders that bar
+            anchors the greeting above center with .newchat padding 24/64. Home only renders that bar
             when the list is collapsed, so reserve the same offset here.
           */}
           <Show when={agents().enabled && !showHomeTopBar()}>
@@ -47,7 +50,7 @@ export function HomeChatStart() {
           <div
             class={
               agents().enabled
-                ? 'mx-auto grid min-h-64 min-w-0 w-full max-w-180 flex-1 grid-cols-1 grid-rows-[1fr_auto_1fr] pt-6 pb-16'
+                ? 'mx-auto grid min-h-64 min-w-0 w-full max-w-180 flex-1 grid-cols-1 grid-rows-[max(0px,calc(40%-60px))_auto_1fr] pt-6 pb-16'
                 : 'mx-auto grid h-full min-h-64 min-w-0 w-full max-w-180 grid-cols-1 grid-rows-[1fr_auto_1fr] pb-16'
             }
             data-home-composer-align={agents().enabled ? 'agents' : 'legacy'}
@@ -65,6 +68,7 @@ export function HomeChatStart() {
               autoFocusOnMount={false}
             />
             <div class="min-h-0 min-w-0 pb-8">
+              <HomeGettingStartedLink preferences={preferences} />
               <HomeRecommendedActions />
             </div>
           </div>

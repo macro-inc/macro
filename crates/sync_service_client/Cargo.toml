@@ -12,7 +12,9 @@ serde = { workspace = true }
 sync_service_hex = { path = "../sync_service", package = "sync_service_hex" }
 tokio = { workspace = true }
 tracing = { workspace = true }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tokio = { workspace = true }

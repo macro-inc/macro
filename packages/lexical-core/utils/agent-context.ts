@@ -20,13 +20,33 @@ export type AgentContextParent = {
   id: string;
 };
 
+/** Where in a document the comment thread a prompt was posted in sits. */
+export type AgentContextAnchor = {
+  markId: string;
+  /** Absent on threads anchored before marked text was captured. */
+  markedText?: string;
+};
+
 /** Input used to compose an agent prompt with private conversation context. */
 export type AgentContextPrompt = {
   promptMarkdown: string;
   /** Supplied by the message service, never by the prompt's author. */
   parent?: AgentContextParent;
+  anchor?: AgentContextAnchor;
   messages?: AgentContextMessage[];
 };
+
+/**
+ * Name the document range a comment marks. The mark id identifies it, but
+ * nothing the agent can read maps that id back onto text, so the text the
+ * comment covered travels with it — as a snapshot, since the document is free
+ * to change after the comment is written.
+ */
+function describeAnchor(anchor: AgentContextAnchor): string {
+  const location = `Comment anchor: ${JSON.stringify(anchor)}`;
+  if (anchor.markedText === undefined) return location;
+  return `${location}\nmarkedText is what the mark covered when the comment was posted; the document may have changed since.`;
+}
 
 function escapeAgentContextTags(markdown: string): string {
   // No user-authored entity may decode into reserved syntax during import.
@@ -58,7 +78,7 @@ export function composeAgentContextPrompt(input: AgentContextPrompt): string {
 
   editor.update(
     () => {
-      if (!input.messages?.length && !input.parent) return;
+      if (!input.messages?.length && !input.parent && !input.anchor) return;
 
       const history = (input.messages ?? [])
         .map(
@@ -69,9 +89,10 @@ export function composeAgentContextPrompt(input: AgentContextPrompt): string {
       const location = input.parent
         ? `Conversation parent: ${JSON.stringify(input.parent)}`
         : '';
+      const anchor = input.anchor ? describeAnchor(input.anchor) : '';
       const context = $createAgentContextNode({
         version: 1,
-        text: [location, history].filter(Boolean).join('\n\n'),
+        text: [location, anchor, history].filter(Boolean).join('\n\n'),
       });
       const firstChild = $getRoot().getFirstChild();
       if (firstChild) firstChild.insertBefore(context);

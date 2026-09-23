@@ -17,7 +17,7 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { UserMessageBubble } from '@ui';
-import { For, Index, type JSX, Show } from 'solid-js';
+import { For, Index, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
 import { thoughtIsStreaming } from '../state/thought-streaming';
@@ -34,7 +34,7 @@ import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
-import { type ToolUsePart, toolCallDetail, toolLabel } from './parts/shared';
+import type { ToolUsePart } from './parts/shared';
 import { TextPart } from './parts/TextPart';
 import { ToolCallPart } from './parts/ToolCallPart';
 
@@ -54,41 +54,56 @@ function AgentMessagePart(props: {
   /** The turn is still in flight — the tail thought reads "Thinking". */
   inFlight: boolean;
 }): JSX.Element {
-  return match(props.part)
-    .with({ kind: 'text' }, (part) => (
-      <TextPart text={part.text} inFlight={props.inFlight} />
-    ))
-    .with({ kind: 'attachment' }, (part) => <AttachmentPart part={part} />)
-    .with({ kind: 'thought' }, (part) => (
-      <Thought
-        text={part.text}
-        active={thoughtIsStreaming(
-          props.inFlight,
-          props.index,
-          props.message.parts.length
+  // Match accessors keep a part's renderer mounted when a streamed snapshot
+  // replaces the object, preserving disclosures while updating their contents.
+  return (
+    <Switch>
+      <Match when={props.part.kind === 'text' && props.part}>
+        {(part) => <TextPart text={part().text} inFlight={props.inFlight} />}
+      </Match>
+      <Match when={props.part.kind === 'attachment' && props.part}>
+        {(part) => <AttachmentPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'thought' && props.part}>
+        {(part) => (
+          <Thought
+            text={part().text}
+            active={thoughtIsStreaming(
+              props.inFlight,
+              props.index,
+              props.message.parts.length
+            )}
+          />
         )}
-      />
-    ))
-    .with({ kind: 'tool_use' }, (part) => (
-      <ToolCallPart
-        part={part}
-        context={{
-          sessionId: props.message.agentSessionId,
-          // The turn and side identify a message within its session (see
-          // `@core/agent-fold/message-id.ts`), so they make its stable id.
-          messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
-          partIndex: props.index,
-          inFlight: props.inFlight,
-        }}
-      />
-    ))
-    .with({ kind: 'permission' }, (part) => <PermissionPart part={part} />)
-    .with({ kind: 'plan' }, (part) => <PlanPart part={part} />)
-    .with({ kind: 'control' }, (part) => <ControlPart part={part} />)
-    .with({ kind: 'elicitation' }, (part) => (
-      <ElicitationPart part={part} turn={props.message.turn} />
-    ))
-    .exhaustive();
+      </Match>
+      <Match when={props.part.kind === 'tool_use' && props.part}>
+        {(part) => (
+          <ToolCallPart
+            part={part()}
+            context={{
+              sessionId: props.message.agentSessionId,
+              // Turn and side identify a message within its session.
+              messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
+              partIndex: props.index,
+              inFlight: props.inFlight,
+            }}
+          />
+        )}
+      </Match>
+      <Match when={props.part.kind === 'permission' && props.part}>
+        {(part) => <PermissionPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'plan' && props.part}>
+        {(part) => <PlanPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'control' && props.part}>
+        {(part) => <ControlPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'elicitation' && props.part}>
+        {(part) => <ElicitationPart part={part()} turn={props.message.turn} />}
+      </Match>
+    </Switch>
+  );
 }
 
 /**
@@ -106,34 +121,29 @@ function ToolGroupPart(props: {
   const parts = () => props.message.parts.slice(props.start, props.end);
   const calls = () =>
     parts().filter((part): part is ToolUsePart => part.kind === 'tool_use');
+  const live = () => props.inFlight && props.end === props.message.parts.length;
   // A call the log left running in a finished turn is over (see
   // `settledToolStatus`), so a settled turn's run is never "Calling".
   const active = () =>
     props.inFlight && calls().some((call) => isToolActive(call.status));
+  const renderParts = () => (
+    <Index each={parts()}>
+      {(part, offset) => (
+        <AgentMessagePart
+          part={part()}
+          message={props.message}
+          index={props.start + offset}
+          inFlight={props.inFlight}
+        />
+      )}
+    </Index>
+  );
 
   return (
-    <Show when={calls().at(-1)}>
-      {(latest) => (
-        <ToolGroup
-          count={calls().length}
-          active={active()}
-          latest={{
-            label: toolLabel(latest().name),
-            detail: toolCallDetail(latest()),
-          }}
-        >
-          <For each={parts()}>
-            {(part, offset) => (
-              <AgentMessagePart
-                part={part}
-                message={props.message}
-                index={props.start + offset()}
-                inFlight={props.inFlight}
-              />
-            )}
-          </For>
-        </ToolGroup>
-      )}
+    <Show when={calls().length > 0} fallback={renderParts()}>
+      <ToolGroup count={calls().length} active={active()} live={live()}>
+        {renderParts()}
+      </ToolGroup>
     </Show>
   );
 }
@@ -146,6 +156,12 @@ function ToolGroupPart(props: {
  * or elicitation prompt is waiting on the reader, not working.
  */
 function showsWorkingLine(message: FoldedMessage): boolean {
+  if (
+    message.parts.some(
+      (part) => part.kind === 'tool_use' && isToolActive(part.status)
+    )
+  )
+    return false;
   const last = message.parts[message.parts.length - 1];
   if (last === undefined) return true;
   return match(last)

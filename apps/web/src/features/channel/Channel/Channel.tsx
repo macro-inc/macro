@@ -808,7 +808,6 @@ export function Channel(props: ChannelProps) {
                                     }
                                     listMeta={listMetaByMessageId()[item.id]}
                                     messageEditor={messageEditor}
-                                    participants={participants.users}
                                     threadActions={{
                                       onDismissNewMessages:
                                         activityTracker.dismissNewMessages,

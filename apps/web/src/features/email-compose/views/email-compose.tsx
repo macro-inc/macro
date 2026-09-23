@@ -37,6 +37,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
     delivery: composeContext.delivery,
     notices: composeContext.notices,
     accounts: composeContext.accounts,
+    connectivity: composeContext.connectivity,
     viewerEmail: composeContext.viewerEmail,
     hasPaidAccess: composeContext.hasPaidAccess,
     recipients: composeContext.recipients,

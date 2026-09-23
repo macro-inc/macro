@@ -37,7 +37,6 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   isFeatureEnabled: () => mocks.unifiedDiscussions,
 }));
 vi.mock('@channel/Input', () => ({ ChannelInput: () => null }));
-vi.mock('@queries/contacts/contacts', () => ({ useContacts: () => () => [] }));
 vi.mock('@channel/Input/message-payload', () => ({
   buildPostMessageSendPayload: () => ({ message: {} }),
 }));

@@ -1512,9 +1512,7 @@ fn owner_receipt(document_id: &str) -> EntityAccessReceipt<OwnerAccessLevel> {
 }
 
 fn team_share_facts() -> models_permissions::share_permission::team_share::TeamShareFacts {
-    let Owner::User(owner) = task_document_context("doc-1").owner else {
-        panic!("test document owner is a user");
-    };
+    let owner = task_document_context("doc-1").owner;
     models_permissions::share_permission::team_share::TeamShareFacts {
         entity: EntityType::Document.with_entity_str("doc-1"),
         owner,
@@ -1644,7 +1642,7 @@ fn owner_bot_edit_receipt() -> EntityAccessReceipt<EditAccessLevel> {
     EntityAccessReceipt::try_new_bot(
         bot_id().into_storage_id(),
         BotReceiptScope::User {
-            acting_user: team_share_facts().owner,
+            acting_user: team_share_facts().owner.as_user().unwrap().clone(),
         },
         Entity {
             entity_id: "doc-1".to_string(),
@@ -2891,4 +2889,46 @@ fn spreadsheet_uploads_are_rejected_instead_of_discarding_their_bytes() {
             .is_ok()
     );
     assert!(validate_spreadsheet_creation(Some(FileType::Csv), "uploaded-csv-sha").is_ok());
+}
+
+#[test]
+fn presigned_url_path_percent_encodes_the_owner_segment_of_the_object_key() {
+    let service = make_test_service(make_mock_repo());
+    let owner = Owner::from_principal_str("macro|owner@user.com").unwrap();
+    let key = build_cloud_storage_bucket_document_key(&owner, "doc-1", 7);
+
+    // The object key stays the raw principal; only the URL path is encoded.
+    assert_eq!(key, "macro|owner@user.com/doc-1/7");
+    assert_eq!(
+        service.cloudfront_url_for_key(&key),
+        "https://cdn.example.test/macro%7Cowner%40user.com/doc-1/7"
+    );
+}
+
+#[test]
+fn presigned_url_path_for_a_converted_docx_matches_the_legacy_encoding() {
+    let service = make_test_service(make_mock_repo());
+    let owner = Owner::from_principal_str("macro|owner@user.com").unwrap();
+    let key = build_docx_to_pdf_converted_document_key(&owner, "doc-1");
+
+    assert_eq!(
+        service.cloudfront_url_for_key(&key),
+        "https://cdn.example.test/macro%7Cowner%40user.com/doc-1/converted.pdf"
+    );
+}
+
+#[test]
+fn presigned_url_path_for_bot_and_team_owners_uses_their_principals() {
+    let service = make_test_service(make_mock_repo());
+    let bot = Owner::from_principal_str("bot|00000000-0000-0000-0000-00000000a1a1").unwrap();
+    let team = Owner::from_principal_str("00000000-0000-0000-0000-000000000456").unwrap();
+
+    assert_eq!(
+        service.cloudfront_url_for_key(&build_cloud_storage_bucket_document_key(&bot, "doc-1", 7)),
+        "https://cdn.example.test/bot%7C00000000-0000-0000-0000-00000000a1a1/doc-1/7"
+    );
+    assert_eq!(
+        service.cloudfront_url_for_key(&build_cloud_storage_bucket_document_key(&team, "doc-1", 7)),
+        "https://cdn.example.test/00000000-0000-0000-0000-000000000456/doc-1/7"
+    );
 }
