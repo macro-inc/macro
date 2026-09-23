@@ -53,12 +53,35 @@ const SNAPSHOT_ANCHOR_INSTRUCTION: &str = "The document text this discussion is 
 is what the mark covered when the discussion was started, so the document may have changed since \
 — read the document itself if you need its current wording.";
 
+const HIGHLIGHT_ANCHOR_INSTRUCTION: &str = "The PDF text this discussion is attached to: the \
+words the highlight covers.";
+
+const BLANK_HIGHLIGHT_INSTRUCTION: &str = "This discussion is attached to a PDF highlight that \
+carries no text, so which words it covers is not known.";
+
+const PIN_ANCHOR_INSTRUCTION: &str = "This discussion is pinned to a point on a PDF page rather \
+than to a span of text, so it covers no words.";
+
 /// The thread a mention sits in, read once for everything the prompt needs.
 struct ThreadContext {
     lines: Vec<PromptLine>,
     ids: HashSet<Uuid>,
-    /// Present only for a document discussion the author anchored to text.
-    anchor: Option<MarkAnchor>,
+    /// Present only for an inline document discussion.
+    anchor: Option<DiscussionAnchor>,
+}
+
+/// What an inline document discussion is attached to.
+enum DiscussionAnchor {
+    Mark(MarkAnchor),
+    /// A PDF highlight and the text it covers, read from the highlight.
+    PdfHighlight {
+        anchor_id: Uuid,
+        marked_text: Option<String>,
+    },
+    /// A point on a PDF page, which covers no text.
+    PdfPin {
+        anchor_id: Uuid,
+    },
 }
 
 /// The mark a markdown discussion is attached to — the same id the comment
@@ -126,6 +149,33 @@ fn append_anchor(prompt: &mut String, anchor: &MarkAnchor, current: Option<&Mark
         }
         (None, None) => {}
     }
+}
+
+/// Write the block naming what a PDF discussion is attached to. A highlight
+/// carries its own text; a pin or a highlight without text says so, so the
+/// agent is not left to infer the words from the page.
+fn append_pdf_anchor(prompt: &mut String, anchor: &DiscussionAnchor) {
+    let _ = match anchor {
+        DiscussionAnchor::Mark(_) => return,
+        DiscussionAnchor::PdfHighlight {
+            anchor_id,
+            marked_text: Some(text),
+        } => write!(
+            prompt,
+            "\n<anchor highlight=\"{anchor_id}\">\n{HIGHLIGHT_ANCHOR_INSTRUCTION}\n\n{text}\n</anchor>\n"
+        ),
+        DiscussionAnchor::PdfHighlight {
+            anchor_id,
+            marked_text: None,
+        } => write!(
+            prompt,
+            "\n<anchor highlight=\"{anchor_id}\">\n{BLANK_HIGHLIGHT_INSTRUCTION}\n</anchor>\n"
+        ),
+        DiscussionAnchor::PdfPin { anchor_id } => write!(
+            prompt,
+            "\n<anchor pin=\"{anchor_id}\">\n{PIN_ANCHOR_INSTRUCTION}\n</anchor>\n"
+        ),
+    };
 }
 
 /// Write a tagged context block: an instruction line followed by one message
@@ -251,16 +301,23 @@ where
         root_id: Uuid,
     ) -> anyhow::Result<ThreadContext> {
         let thread = self.messages.get_thread(access, root_id).await?;
-        let anchor = match thread.state.anchor {
-            Some(ThreadAnchor::Markdown {
+        let anchor = thread.state.anchor.map(|anchor| match anchor {
+            ThreadAnchor::Markdown {
                 mark_id,
                 marked_text,
-            }) => Some(MarkAnchor {
+            } => DiscussionAnchor::Mark(MarkAnchor {
                 mark_id,
                 snapshot: marked_text,
             }),
-            _ => None,
-        };
+            ThreadAnchor::PdfHighlight {
+                anchor_id,
+                marked_text,
+            } => DiscussionAnchor::PdfHighlight {
+                anchor_id,
+                marked_text,
+            },
+            ThreadAnchor::PdfPlaceable { anchor_id } => DiscussionAnchor::PdfPin { anchor_id },
+        });
         let mut thread_ids = HashSet::new();
         let mut lines = Vec::new();
         for message in std::iter::once(thread.root).chain(thread.replies) {
@@ -366,9 +423,13 @@ where
                 ids: thread_ids,
                 anchor,
             } = self.thread_lines(event, view, root_id).await?;
-            if let Some(anchor) = &anchor {
-                let current = self.current_mark(parent, anchor.mark_id).await;
-                append_anchor(&mut prompt, anchor, current.as_ref());
+            match &anchor {
+                Some(DiscussionAnchor::Mark(mark)) => {
+                    let current = self.current_mark(parent, mark.mark_id).await;
+                    append_anchor(&mut prompt, mark, current.as_ref());
+                }
+                Some(pdf) => append_pdf_anchor(&mut prompt, pdf),
+                None => {}
             }
             append_block(&mut prompt, "thread", thread_instruction, marker, &thread);
 

@@ -325,6 +325,7 @@ async fn thread_patch_cannot_detach_pdf_annotations() {
     let mut repo = fixture();
     repo.state.anchor = Some(ThreadAnchor::PdfHighlight {
         anchor_id: Uuid::from_u128(3),
+        marked_text: None,
     });
     let events = Events::default();
     let service = MessageService::new(repo.clone(), events.clone());

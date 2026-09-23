@@ -30337,6 +30337,10 @@
                 "format": "uuid",
                 "description": "Highlight annotation UUID."
               },
+              "marked_text": {
+                "type": ["string", "null"],
+                "description": "The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text."
+              },
               "type": {
                 "type": "string",
                 "enum": ["pdf_highlight"]
@@ -30345,7 +30349,7 @@
           },
           {
             "type": "object",
-            "description": "A comment-only placeable PDF annotation.",
+            "description": "A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.",
             "required": ["anchor_id", "type"],
             "properties": {
               "anchor_id": {

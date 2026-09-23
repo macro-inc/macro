@@ -67,8 +67,12 @@ pub enum CommentAnchor {
     PdfHighlight {
         /// The highlight annotation.
         anchor_id: Uuid,
+        /// The text the highlight covers; absent when the highlight carries none.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        marked_text: Option<String>,
     },
-    /// A comment pinned to a point on a PDF page.
+    /// A comment pinned to a point on a PDF page. A pin marks a place, not a
+    /// span of text, so it has no marked text.
     #[serde(rename_all = "camelCase")]
     PdfPin {
         /// The pin annotation.
@@ -336,7 +340,13 @@ fn comment_anchor(
                 removed: false,
             },
         },
-        Some(ThreadAnchor::PdfHighlight { anchor_id }) => CommentAnchor::PdfHighlight { anchor_id },
+        Some(ThreadAnchor::PdfHighlight {
+            anchor_id,
+            marked_text,
+        }) => CommentAnchor::PdfHighlight {
+            anchor_id,
+            marked_text,
+        },
         Some(ThreadAnchor::PdfPlaceable { anchor_id }) => CommentAnchor::PdfPin { anchor_id },
     }
 }

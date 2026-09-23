@@ -9996,6 +9996,13 @@ export type ThreadAnchor = {
      * Highlight annotation UUID.
      */
     anchor_id: string;
+    /**
+     * The text the highlight covers, trimmed and bounded like a markdown
+     * snapshot. The highlight owns it and it can be edited there, so it is
+     * read from the highlight whenever the thread is, never stored on the
+     * thread. Absent when the highlight carries no text.
+     */
+    marked_text?: string | null;
     type: 'pdf_highlight';
 } | {
     /**

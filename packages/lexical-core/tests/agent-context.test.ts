@@ -242,6 +242,52 @@ describe('composeAgentContextPrompt', () => {
     });
   });
 
+  it('names the words a PDF highlight covers', () => {
+    const composed = composeAgentContextPrompt({
+      promptMarkdown: 'what does this mean?',
+      anchor: {
+        type: 'pdfHighlight',
+        anchorId: 'highlight-1',
+        markedText: 'indemnifies the lessor',
+      },
+    });
+    const state = markdownToSerializedEditorStateWithIds(composed);
+
+    expect(state.root.children[0]).toMatchObject({
+      text:
+        'Comment anchor: {"type":"pdfHighlight","anchorId":"highlight-1","markedText":"indemnifies the lessor"}\n' +
+        'markedText is the text the PDF highlight covers.',
+    });
+  });
+
+  it('says a PDF highlight without text covers unknown words', () => {
+    const composed = composeAgentContextPrompt({
+      promptMarkdown: 'what does this mean?',
+      anchor: { type: 'pdfHighlight', anchorId: 'highlight-1' },
+    });
+    const state = markdownToSerializedEditorStateWithIds(composed);
+
+    expect(state.root.children[0]).toMatchObject({
+      text:
+        'Comment anchor: {"type":"pdfHighlight","anchorId":"highlight-1"}\n' +
+        'The PDF highlight carries no text, so which words it covers is not known.',
+    });
+  });
+
+  it('says a PDF pin covers no words', () => {
+    const composed = composeAgentContextPrompt({
+      promptMarkdown: 'what does this mean?',
+      anchor: { type: 'pdfPin', anchorId: 'pin-1' },
+    });
+    const state = markdownToSerializedEditorStateWithIds(composed);
+
+    expect(state.root.children[0]).toMatchObject({
+      text:
+        'Comment anchor: {"type":"pdfPin","anchorId":"pin-1"}\n' +
+        'The comment is pinned to a point on a PDF page rather than to text, so it covers no words.',
+    });
+  });
+
   it('cannot close the context envelope from marked text', () => {
     const composed = composeAgentContextPrompt({
       promptMarkdown: 'original',

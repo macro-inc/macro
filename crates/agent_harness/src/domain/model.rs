@@ -321,19 +321,36 @@ pub struct PriorMessage {
     pub content: String,
 }
 
-/// Where in a document a comment thread sits. The mark id alone names a
+/// Where in a document a comment thread sits. An annotation id alone names a
 /// location the agent has no way to resolve: the document body it can read
-/// carries no marks, so the text the comment covers travels with the id.
+/// carries no marks or highlights, so the text the comment covers travels
+/// with the id.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CommentAnchor {
-    /// Lexical mark the thread is attached to.
-    pub mark_id: String,
-    /// The marked text as it read when the comment was posted. Absent on
-    /// threads anchored before snapshots were captured.
-    pub marked_text: Option<String>,
-    /// The mark as the document reads now. Absent when the document no longer
-    /// carries it or the lookup failed, leaving the snapshot as the fallback.
-    pub current: Option<MarkedPassage>,
+pub enum CommentAnchor {
+    /// A comment mark in a markdown document.
+    Mark {
+        /// Lexical mark the thread is attached to.
+        mark_id: String,
+        /// The marked text as it read when the comment was posted. Absent on
+        /// threads anchored before snapshots were captured.
+        marked_text: Option<String>,
+        /// The mark as the document reads now. Absent when the document no longer
+        /// carries it or the lookup failed, leaving the snapshot as the fallback.
+        current: Option<MarkedPassage>,
+    },
+    /// A highlight on a PDF.
+    PdfHighlight {
+        /// Highlight annotation the thread is attached to.
+        anchor_id: String,
+        /// The text the highlight covers, read from the highlight. Absent when
+        /// the highlight carries none.
+        marked_text: Option<String>,
+    },
+    /// A point pinned on a PDF page, which covers no text.
+    PdfPin {
+        /// Pin annotation the thread is attached to.
+        anchor_id: String,
+    },
 }
 
 /// A comment mark resolved against the live document, both fields bounded.

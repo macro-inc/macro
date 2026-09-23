@@ -73,6 +73,44 @@ impl PgMessageRepository {
         Self { pool }
     }
 
+    /// Fill in what each PDF highlight anchor covers. The highlight owns its
+    /// text and can be edited or re-derived, so the thread only names it and
+    /// every read resolves it here; channel threads never carry one and cost
+    /// nothing.
+    async fn resolve_highlight_text<'s>(
+        executor: impl sqlx::PgExecutor<'_>,
+        states: impl IntoIterator<Item = &'s mut ThreadState>,
+    ) -> Result<(), MessageError> {
+        let mut anchors: Vec<(Uuid, &mut Option<String>)> = states
+            .into_iter()
+            .filter_map(|state| match &mut state.anchor {
+                Some(ThreadAnchor::PdfHighlight {
+                    anchor_id,
+                    marked_text,
+                }) => Some((*anchor_id, marked_text)),
+                _ => None,
+            })
+            .collect();
+        if anchors.is_empty() {
+            return Ok(());
+        }
+        let ids: Vec<Uuid> = anchors.iter().map(|(id, _)| *id).collect();
+        let texts: HashMap<Uuid, String> = sqlx::query!(
+            r#"SELECT uuid, text FROM "PdfHighlightAnchor" WHERE uuid = ANY($1)"#,
+            &ids,
+        )
+        .fetch_all(executor)
+        .await
+        .map_err(database_error)?
+        .into_iter()
+        .map(|row| (row.uuid, row.text))
+        .collect();
+        for (id, marked_text) in &mut anchors {
+            **marked_text = texts.get(id).and_then(|text| marked_text_snapshot(text));
+        }
+        Ok(())
+    }
+
     async fn hydrate(&self, rows: Vec<Json<StoredMessage>>) -> Result<Vec<Message>, MessageError> {
         let mut connection = self.pool.acquire().await.map_err(database_error)?;
         Self::hydrate_in(&mut connection, rows).await
@@ -445,13 +483,14 @@ impl PgMessageRepository {
                 .map_err(database_error)?;
             }
         }
-        let result = sqlx::query_scalar!(
+        let mut result = sqlx::query_scalar!(
             r#"UPDATE comms_message_threads t SET resolved = COALESCE($2, resolved), updated_at = now(),
                    deleted_at = CASE WHEN $3 THEN now() ELSE deleted_at END,
                    anchor = CASE WHEN $4 OR ($3 AND anchor->>'type' <> 'markdown') THEN NULL ELSE anchor END
                WHERE root_id = $1 RETURNING to_jsonb(t) AS "state!: Json<ThreadState>""#,
             root_id, patch.resolved, delete, patch.detach_anchor,
         ).fetch_one(&mut **tx).await.map_err(database_error)?;
+        Self::resolve_highlight_text(&mut **tx, [&mut result.0]).await?;
         Ok(result.0)
     }
 }
@@ -505,7 +544,7 @@ impl MessageRepository for PgMessageRepository {
         parent: &MessageParent,
         root: Uuid,
     ) -> Result<Option<ThreadState>, MessageError> {
-        Ok(sqlx::query_scalar!(
+        let mut state = sqlx::query_scalar!(
             r#"SELECT to_jsonb(t) AS "state!: Json<ThreadState>" FROM comms_message_threads t
                WHERE t.root_id = $1 AND t.parent_entity_type = $2 AND t.parent_entity_id = $3"#,
             root,
@@ -515,7 +554,9 @@ impl MessageRepository for PgMessageRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(database_error)?
-        .map(|state| state.0))
+        .map(|state| state.0);
+        Self::resolve_highlight_text(&self.pool, state.as_mut()).await?;
+        Ok(state)
     }
 
     async fn preceding(
