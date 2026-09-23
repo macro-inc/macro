@@ -60,7 +60,6 @@ where
 {
     type Output = ReplyToDocumentCommentResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, document_id=%self.document_id, thread_id=?self.thread_id), err)]
     async fn call(
         &self,
         service_context: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
