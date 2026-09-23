@@ -1328,7 +1328,7 @@ describe('split router', () => {
     ).toBe('one');
   });
 
-  it('repairs stale router commits that settle out of order', async () => {
+  it('accepts Back to a URL whose outbound write was coalesced', async () => {
     let current: SplitRouterExternalLocationValue = {
       pathname: '/drive',
       search: '',
@@ -1357,17 +1357,19 @@ describe('split router', () => {
     router.updateSearch(splitId, 'drive', { sort: ['name'] });
     router.updateSearch(splitId, 'drive', { sort: ['created_at'] });
 
+    const earlier = pending[0]!;
     flush(1);
-    flush();
+    pending.length = 0; // The adapter discards the superseded write.
+    expect(router.search(splitId, 'drive')).toEqual({ sort: ['created_at'] });
 
-    expect(pending).toHaveLength(1);
-    flush();
+    // A later browser Back reaches the same URL as that superseded write.
+    current = earlier;
+    for (const listener of listeners) listener(current);
     await settle();
 
-    expect(router.search(splitId, 'drive')).toEqual({
-      sort: ['created_at'],
-    });
-    expect(location.read().search).toBe('?s0.drive.sort=created_at');
+    expect(pending).toHaveLength(0);
+    expect(router.search(splitId, 'drive')).toEqual({ sort: ['name'] });
+    expect(location.read().search).toBe('?s0.drive.sort=name');
   });
 
   it('skips layout reconciliation for an identical external location', () => {

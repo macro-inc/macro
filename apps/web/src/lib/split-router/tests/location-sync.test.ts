@@ -43,19 +43,41 @@ describe('external location synchronization', () => {
     expect(acknowledge(parseExternalLocation('/item/external'))).toBe(false);
   });
 
-  it('repairs stale acknowledgments without pushing another history entry', () => {
+  it('expires coalesced writes so a later Back is not swallowed', () => {
     const { commit, navigate, acknowledge } = setup();
     navigate('first');
     navigate('second');
+    expect(acknowledge(parseExternalLocation('/item/second'))).toBe(true);
+    expect(acknowledge(parseExternalLocation('/item/first'))).toBe(false);
     expect(commit).toHaveBeenCalledTimes(2);
-    expect(acknowledge(parseExternalLocation('/item/second'))).toBe(true);
+  });
+
+  it('accepts ordered echoes without additional writes', () => {
+    const { commit, navigate, acknowledge } = setup();
+    navigate('first');
+    navigate('second');
     expect(acknowledge(parseExternalLocation('/item/first'))).toBe(true);
-    expect(commit).toHaveBeenCalledTimes(3);
-    expect(commit).toHaveBeenLastCalledWith(
-      parseExternalLocation('/item/second'),
-      { history: 'replace' }
-    );
     expect(acknowledge(parseExternalLocation('/item/second'))).toBe(true);
+    expect(acknowledge(parseExternalLocation('/item/first'))).toBe(false);
+    expect(commit).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows a newer request to supersede an outstanding write even at the current URL', () => {
+    const { commit, navigate, acknowledge } = setup();
+    navigate('first');
+    navigate('initial');
+    expect(commit).toHaveBeenCalledTimes(2);
+    expect(acknowledge(parseExternalLocation('/item/initial'))).toBe(true);
+    expect(acknowledge(parseExternalLocation('/item/first'))).toBe(false);
+  });
+
+  it('expires older duplicate signatures when the latest request repeats a URL', () => {
+    const { commit, navigate, acknowledge } = setup();
+    navigate('first');
+    navigate('second');
+    navigate('first');
     expect(commit).toHaveBeenCalledTimes(3);
+    expect(acknowledge(parseExternalLocation('/item/first'))).toBe(true);
+    expect(acknowledge(parseExternalLocation('/item/second'))).toBe(false);
   });
 });

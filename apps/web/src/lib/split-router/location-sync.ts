@@ -50,8 +50,9 @@ export function createLocationSync(options: {
     const signature = externalLocationSignature(next);
 
     if (
-      signature === externalLocationSignature(options.location.read()) ||
-      outbound.includes(signature)
+      (outbound.length === 0 &&
+        signature === externalLocationSignature(options.location.read())) ||
+      outbound.at(-1) === signature
     ) {
       return;
     }
@@ -63,11 +64,17 @@ export function createLocationSync(options: {
   return {
     acknowledge(external) {
       const signature = externalLocationSignature(external);
-      const index = outbound.indexOf(signature);
+      const index = outbound.lastIndexOf(signature);
 
-      if (index < 0) return false;
+      if (index < 0) {
+        outbound.length = 0;
+        return false;
+      }
 
-      outbound.splice(index, 1);
+      // Location adapters may coalesce writes (last transition wins). Once a
+      // newer write is observed, earlier signatures cannot remain echo tokens:
+      // a later Back to one of those URLs is genuine external navigation.
+      outbound.splice(0, index + 1);
 
       const desiredSignature = externalLocationSignature(desired);
       if (
