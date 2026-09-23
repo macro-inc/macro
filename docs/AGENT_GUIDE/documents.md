@@ -281,6 +281,10 @@ service; the frontend alone cannot test their hosted path.
 
 ## Create and type
 
+Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts
+it to an agent mention, just like the legacy `/app/agent/<uuid>` URL. Link query
+parameters are retained, except for referral codes.
+
 1. `Create` → `Document D`. The app navigates to `/app/md/<uuid>` with the **title field
    focused**.
 2. `type_text` the title, then `submitKey: "Enter"` to drop into the body.
