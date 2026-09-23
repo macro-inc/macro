@@ -31,6 +31,11 @@ pub enum AgentSessionError {
     Disconnected(AgentSessionId),
     #[error("this bot already has a session for this thread")]
     ThreadSessionExists,
+    /// A create named an id a session already holds. Ids are minted by the
+    /// client so a surface can open on the final id before the create
+    /// answers; two creates under one id is a client bug, not a retry.
+    #[error("agent session {0} already exists")]
+    SessionIdTaken(AgentSessionId),
     #[error("the session owner is not a known user")]
     UnknownOwner,
     /// A path that runs as the session's owner - spending their credentials,
