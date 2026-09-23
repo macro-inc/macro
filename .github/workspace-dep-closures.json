@@ -6834,10 +6834,12 @@
       "crates/workspace-hack"
     ],
     "models_permissions": [
+      "crates/bot_id",
       "crates/cowlike",
       "crates/macro_user_id",
       "crates/model-entity",
       "crates/model_file_type",
+      "crates/model_owner",
       "crates/models_permissions",
       "crates/workspace-hack"
     ],
