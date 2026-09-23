@@ -11,8 +11,7 @@ control; do not regenerate them to repair a build error.
   will run the build. Run `bun install --frozen-lockfile` from the repository root.
   Older Bun installations can fail to resolve workspace `catalog:` dependencies.
 - Install the Rust toolchain in `rust-toolchain.toml`, `just`, `wasm-pack`, and
-  the Tauri CLI (`cargo tauri`). The clean-checkout validation below records the
-  tool versions used.
+  the Tauri CLI (`cargo tauri`).
 - Install Android SDK Platform **36**, Build Tools 36, Platform Tools, and an
   Android 16 / API 36 Google Play ARM64 emulator through Android Studio.
 - Install NDK **30.0.16248370**, or set `NDK_HOME` to another intended installed NDK.
@@ -50,29 +49,14 @@ That address is emulator-only; the host-side server check must be skipped.
 
 Build commands embed the production frontend. Outputs are under
 `tauri/src-tauri/gen/android/app/build/outputs/`. The launcher defaults to ARM64.
-Other ABIs are task 06 and Play distribution is task 07. Release builds require
-the signing configuration below and produce signed artifacts.
+Release builds require the signing configuration below and produce signed artifacts.
 
 ## Release signing
 
-The existing upload key is backed up in Macro's Doppler workspace, project
-`android-release`, production config `prd`, secret `ANDROID_UPLOAD_SIGNING_JSON`.
-This JSON contains `package_name`, `key_alias`, `store_password`, `key_password`,
-`keystore_base64`, `keystore_sha256`, and `certificate_sha256`. The backup was
-retrieved and verified against the original on 2026-09-23, including opening the
-restored keystore and matching its certificate.
-
-For recovery, retrieve that secret without printing it to terminal output or logs,
-decode `keystore_base64` to an owner-only file outside the checkout, and verify
-`keystore_sha256`. Populate the properties below from the recovered passwords and
-alias, using the restored file's absolute path. Keep access limited to release
-maintainers and build jobs that need to sign uploads; this secret is not runtime
-app configuration. Retain the existing key instead of generating a replacement.
-
-If a new upload key is ever required, follow
-[Tauri's Android signing guide](https://v2.tauri.app/distribute/sign/android/)
-and coordinate any replacement with Play Console. Key creation and backup do not
-require completed Google Play identity verification.
+Obtain the existing upload keystore and signing credentials from the release
+maintainers. Keep them outside the checkout and provision them securely for CI.
+Coordinate key replacement with Play Console; do not generate a new key for
+routine builds.
 
 Gradle reads ignored `tauri/src-tauri/gen/android/keystore.properties`:
 
@@ -113,15 +97,12 @@ its fingerprint to production associations before testing Play-installed links.
 ## Firebase
 
 Debug builds work without Firebase configuration for auth/navigation development.
-Android remote push registration is disabled until task 02 implements its token,
-permission, and notification watcher contracts. Local notifications remain available.
+The launcher requires package **com.macro.app.prod** and validates these projects:
 
-Both environments already have package **com.macro.app.prod** registered:
-
-| Build command | Firebase project | Existing SNS credential |
-| --- | --- | --- |
-| `android-dev` | `macro-app-dev-12ae0` | `fcm-credential-dev` |
-| `android-build` (including `--debug`) | `macro-app-955f1` | `fcm-credential-prod` |
+| Build command | Firebase project |
+| --- | --- |
+| `android-dev` | `macro-app-dev-12ae0` |
+| `android-build` (including `--debug`) | `macro-app-955f1` |
 
 Download `google-services.json` for that package from the matching Firebase
 project's settings. Keep local copies in ignored
@@ -138,17 +119,17 @@ The launcher validates both the package and Firebase project before copying the
 file to ignored `gen/android/app/google-services.json`. It also validates an
 existing destination when no source is supplied, so switching build modes cannot
 silently reuse the wrong environment. Do not commit these files. Release builds
-fail with an explicit error if configuration is absent; this is our project
-guardrail, not a Google Play requirement. Push delivery and token lifecycle
-implementation remain task 02. Firebase setup does not require Play approval.
+fail with an explicit error if configuration is absent.
 
 ## Browser authentication
 
 Android uses `android_auth_plugin` and AndroidX Auth Tab, with a Custom Tabs
 fallback. Each attempt creates `macro://android-auth/<random UUID>` before the
-backend creates OAuth state. The receiver checks the exact authority/path and
-rejects duplicate parameters and mismatched callbacks. Canceling settles the
-request so another attempt can start. Never log callback URLs or session codes.
+backend creates OAuth state. The receiver checks the exact authority/path;
+mismatched callbacks leave the active attempt pending. Duplicate parameters are
+rejected. The Custom Tabs fallback returns to the task that owns the invocation.
+Canceling settles the request so another attempt can start. Never log callback
+URLs or session codes.
 Android navigation uses `macro://app/<route>`; its MainActivity filter is scoped
 to host `app` so older browsers send `macro://android-auth/...` exclusively to
 the authentication receiver, without an activity chooser.
@@ -159,14 +140,10 @@ replacing the Macro session. After process death mid-flow, restart authenticatio
 orphaned callbacks must not silently log in the replacement process. Macro logout
 does not sign out of Google/GitHub in the system browser.
 
-iOS retains its existing auth/keyboard plugins. Android does not build the invalid
-keyboard scaffold; native IME/inset support is task 03.
-
 ## App Links
 
-The old Tauri-example association was invalid for Macro. The checked-in
-`src-tauri/.well-known/assetlinks.json` is empty pending real signing certificates.
-Generate an association for the correct package with:
+App Links require a domain association for `com.macro.app.prod` and the certificate
+that signed the installed APK. From `apps/web`, generate a candidate association:
 
 ```sh
 bun scripts/android-assetlinks.ts 'AA:BB:...32-byte-SHA256-fingerprint...'
@@ -178,18 +155,8 @@ does not automatically publish the source file to those domain roots. Production
 the **Play App Signing** fingerprint, not merely the upload key; keep debug
 certificates on the development host. Builds do not publish domain associations.
 
-Development associations for this checkout's debug and local-release certificates
-are in `src-tauri/.well-known/assetlinks.dev.json`; never publish this file to the
-production domain. The development website's `/.well-known/*` CloudFront behavior
-currently reads from S3 bucket `macro-oidc-dev`. The object key is
-`.well-known/assetlinks.json` and the distribution is `E1YKU2ZF1GN77R` (owned by
-the separate website infrastructure). Merge new associations with existing
-entries, publish as `application/json`, and invalidate only that URL. Use a
-conditional write against the previous ETag to avoid overwriting concurrent
-edits. Keep this object when deploying the website's other well-known files.
-
 Google's Digital Asset Links service caches association results separately from
-CloudFront. A freshly published file can be correct while Android still reports
+the hosting CDN. A freshly published file can be correct while Android still reports
 the previous result; wait for the service's reported cache lifetime before
 re-verifying. Do not force a domain to `approved` or `verified` to claim success.
 
@@ -203,28 +170,10 @@ adb shell am start -W -a android.intent.action.VIEW -c android.intent.category.D
 
 Adding `-p com.macro.app.prod` tests routing but does not prove domain verification.
 Test cold/warm links, auth cancellation/retry, email-code login, relaunch with a
-session, logout/account switching, and entity links through login. Real provider
-testing and signed release qualification are required before completing task 01.
+session, logout/account switching, and entity links through login. Repeat with
+signed release builds and actual provider sign-in.
 
-### Production and staging publication handoff
-
-Task 01 prepares this handoff and verifies development links. Task 07 owns the
-Play certificate, publication using that certificate, and Play-installed checks.
-Task 06 owns any hosting preparation that can proceed without Play access.
-
-Read-only inspection on 2026-09-23 found:
-
-| Host | Hosting and current response | Next step |
-| --- | --- | --- |
-| `dev.macro.com` | CloudFront `E1YKU2ZF1GN77R`, `/.well-known/*` routes to `macro-oidc-dev`; HTTPS returns JSON containing this checkout's debug and upload certificates for `com.macro.app.prod`. | Preserve the verified development association and other existing entries. |
-| `macro.com` | CloudFront `E17BXLF369UBEG`, `/.well-known/*` routes to `macro-oidc-prod`; HTTPS returns JSON with a legacy `com.tauri.dev` association. | Add `com.macro.app.prod` with the Play App Signing certificate when available. Do not publish the development certificate file here. |
-| `staging.macro.com` | DNS resolves, but HTTPS fails its TLS handshake; neither inspected distribution declares this hostname, and no staging alias was present in the account's distribution list. | Establish the intended staging HTTPS/CDN origin and `/.well-known/*` routing before publishing or claiming staging verification. Do not assume the production bucket owns staging. |
-
-The S3 object key for the confirmed dev/prod routes is
-`.well-known/assetlinks.json`. The website infrastructure owns these distributions;
-the app build does not deploy them. The manifest declares `/app` links on all
-three hosts. Staging testing is deferred until its hosting works; it is not a
-substitute for the completed development-host checks.
+### Publishing associations
 
 Publication procedure for the hosting owner:
 
@@ -260,40 +209,9 @@ Publication procedure for the hosting owner:
    require `verified` for each intended host. Test natural cold/warm links with
    both DEFAULT and BROWSABLE categories, without a package override or forced
    approval. Exercise an entity link while signed in and through a login detour,
-   including query preservation. Task 07 repeats this with a Play-installed build.
+   including query preservation. Repeat with a Play-installed build when
+   validating the Play App Signing certificate.
 7. Record the artifact certificate, host, served JSON, verification result and
    route result. If rollback is needed, restore the saved JSON and metadata with
    a conditional write against the published ETag, then invalidate the same URL.
    Reconcile concurrent edits before restoring anything.
-
-## Clean-checkout validation
-
-On 2026-09-23, app commit `fe0385bbe1` was checked out into a new detached
-worktree. No `node_modules`, frontend/WASM output, Cargo target directory or
-Gradle project build output was copied from the development checkout. Normal
-machine-level dependency caches and the installed SDK were available.
-
-The run used Bun 1.3.13, Rust 1.94.0, Tauri CLI 2.9.6, wasm-pack 0.13.1,
-just 1.45.0, Java 21, SDK 36 and NDK 30.0.16248370. After
-`bun install --frozen-lockfile`, the existing Firebase inputs were provisioned in
-ignored files and the signing key was restored from Doppler into owner-only
-temporary storage outside the checkout. From `apps/web`, both commands passed:
-
-```sh
-just android-build --debug --apk true --aab false -- --no-default-features
-just android-build --apk true --aab true -- --no-default-features
-```
-
-Both APK signatures, package/version metadata and 16 KB ZIP alignment passed.
-The release APK was non-debuggable and matched the backed-up upload certificate;
-the AAB passed `jarsigner -verify` and bundletool validation. The debug APK
-installed on a fresh API 36 emulator, displayed login, and received a natural
-cold development App Link with Android reporting `dev.macro.com: verified`.
-The release APK replaced the existing local release installation without clearing
-data; a natural cold Settings link retained the authenticated production account.
-The eight focused auth/navigation/Firebase test files passed all 43 tests.
-Tracked files in the clean checkout remained unchanged.
-
-This run used embedded production assets with OTA disabled. Tasks 05–07 retain
-OTA qualification, the wider device/ABI/16 KB runtime matrix, staging hosting
-preparation, and Play-installed release checks.

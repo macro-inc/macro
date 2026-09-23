@@ -1,8 +1,7 @@
-import { createNativeAuthSession } from '@core/auth/native-auth';
+import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { invalidateGithubLinkStatus } from '@queries/auth';
+import { throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import { createSignal, onMount } from 'solid-js';
 
@@ -15,29 +14,16 @@ async function checkGithubReauthenticationStatus(): Promise<boolean> {
       );
 }
 
-/** Kick off the OAuth flow; on success the browser navigates away. */
+/** Kick off the OAuth flow; the web navigates away, native completes in-app. */
 async function startGithubReauthentication(): Promise<void> {
-  const session = isNativeMobilePlatform()
-    ? createNativeAuthSession('github-link-callback')
-    : undefined;
-  const result = await authServiceClient.reauthenticateGithub(
-    session?.callbackUrl ?? window.location.href
-  );
-
-  if (result.isErr()) {
+  try {
+    await authorizeGithub(
+      (callbackUrl) =>
+        throwOnErr(() => authServiceClient.reauthenticateGithub(callbackUrl)),
+      'Failed to reconnect GitHub'
+    );
+  } catch {
     toast.failure('Failed to start GitHub reconnect flow');
-    return;
-  }
-
-  if (!session) {
-    window.location.href = result.value;
-    return;
-  }
-  const auth = await session.authenticate(result.value);
-  if (auth.success) {
-    await invalidateGithubLinkStatus();
-  } else if (auth.error !== 'User canceled login') {
-    toast.failure('Failed to reconnect GitHub');
   }
 }
 
@@ -66,8 +52,8 @@ export function GithubReauthenticationPrompt() {
         {
           label: 'Reconnect',
           onClick: () => {
-            // Suppress re-prompting while the OAuth flow runs; success
-            // navigates the page away entirely.
+            // Suppress re-prompting while the OAuth flow runs. On the web
+            // success navigates away; on native the link status is refetched.
             dismiss();
             void startGithubReauthentication();
           },

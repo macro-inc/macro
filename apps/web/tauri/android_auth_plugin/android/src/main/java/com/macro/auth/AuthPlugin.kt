@@ -20,33 +20,32 @@ class AuthenticateArgs {
 
 @TauriPlugin
 class AuthPlugin(private val activity: Activity) : Plugin(activity) {
-    private var active = false
-
     @Command
     fun authenticate(invoke: Invoke) {
-        if (active) {
-            invoke.reject("An authentication session is already running")
-            return
-        }
+        var started: AuthSession.Pending? = null
         try {
             val args = invoke.parseArgs(AuthenticateArgs::class.java)
             val authUrl = URI(args.authUrl)
             require(authUrl.scheme == "https" && authUrl.host != null && authUrl.userInfo == null)
             require(AuthCallback.isExpectedUrl(args.callbackUrl))
+            val session = AuthSession.Pending(args.authUrl, args.callbackUrl, activity.taskId)
+            if (!AuthSession.begin(session)) {
+                invoke.reject("An authentication session is already running")
+                return
+            }
+            started = session
             val intent = Intent(activity, AuthActivity::class.java)
-                .putExtra("authUrl", args.authUrl)
                 .putExtra("callbackUrl", args.callbackUrl)
-            active = true
             startActivityForResult(invoke, intent, "authResult")
         } catch (_: Exception) {
-            active = false
+            started?.let { AuthSession.clear(it.callbackUrl) }
             invoke.reject("Unable to start authentication")
         }
     }
 
     @ActivityCallback
     fun authResult(invoke: Invoke, result: ActivityResult) {
-        active = false
+        AuthSession.clear(invoke.parseArgs(AuthenticateArgs::class.java).callbackUrl)
         val response = JSObject()
         val success = result.resultCode == Activity.RESULT_OK
         response.put("success", success)

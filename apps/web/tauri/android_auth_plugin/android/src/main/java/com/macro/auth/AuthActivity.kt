@@ -11,9 +11,19 @@ import androidx.browser.auth.AuthTabIntent
 class AuthActivity : ComponentActivity() {
     private val launcher = AuthTabIntent.registerActivityResultLauncher(this) { result ->
         if (!isFinishing) {
+            // Returning to our task can dismiss the fallback browser first.
+            // Its cancellation must not win over an already validated redirect.
+            val received = AuthSession.pending
+                ?.takeIf { it.callbackUrl == intent.getStringExtra("callbackUrl") }
+                ?.receivedCallback
             val callback = result.resultUri
-            if (result.resultCode == AuthTabIntent.RESULT_OK && callback != null) {
-                complete(callback.toString())
+            if (received != null) {
+                complete(received)
+            } else if (result.resultCode == AuthTabIntent.RESULT_OK && callback != null) {
+                // The browser has closed, so a mismatch is final rather than a stray intent.
+                if (!complete(callback.toString())) {
+                    fail("Authentication callback did not match this session")
+                }
             } else {
                 fail(if (result.resultCode == AuthTabIntent.RESULT_CANCELED) {
                     "User canceled login"
@@ -29,14 +39,18 @@ class AuthActivity : ComponentActivity() {
         // A stale browser callback can recreate this activity after process death.
         // Never redeem it without the original in-memory invocation.
         val expected = intent.getStringExtra("callbackUrl")
-        val authUrl = intent.getStringExtra("authUrl")
-        if (expected == null || authUrl == null || !AuthCallback.isExpectedUrl(expected)) {
+        val session = AuthSession.pending?.takeIf { it.callbackUrl == expected }
+        if (session == null) {
             fail("Authentication session expired. Please try again.")
+            return
+        }
+        session.receivedCallback?.let {
+            complete(it)
             return
         }
         if (savedInstanceState == null) {
             try {
-                AuthTabIntent.Builder().build().launch(launcher, Uri.parse(authUrl), "macro")
+                AuthTabIntent.Builder().build().launch(launcher, Uri.parse(session.authUrl), "macro")
             } catch (_: Exception) {
                 fail("No authentication browser available")
             }
@@ -45,21 +59,21 @@ class AuthActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // Retain the original intent, which carries the expected nonce.
+        // Retain the original intent, which carries the expected nonce. A stray
+        // redirect that does not match is ignored while the browser stays open.
         intent.data?.let { complete(it.toString()) }
     }
 
-    private fun complete(callback: String) {
-        val expected = intent.getStringExtra("callbackUrl") ?: return
-        if (!AuthCallback.matches(expected, callback)) {
-            fail("Authentication callback did not match this session")
-            return
-        }
+    /** Settles this activity for a callback that belongs to its session; false otherwise. */
+    private fun complete(callback: String): Boolean {
+        if (isFinishing) return true
+        val expected = intent.getStringExtra("callbackUrl") ?: return false
+        if (!AuthCallback.matches(expected, callback)) return false
         try {
             val params = AuthCallback.parameters(callback)
             if (params.containsKey("error")) {
                 fail("Authentication was not completed")
-                return
+                return true
             }
             val result = Intent()
             params["token"]?.let { result.putExtra("token", it) }
@@ -68,6 +82,14 @@ class AuthActivity : ComponentActivity() {
         } catch (_: Exception) {
             fail("Invalid authentication callback")
         }
+        return true
+    }
+
+    override fun onDestroy() {
+        if (isFinishing) {
+            intent.getStringExtra("callbackUrl")?.let { AuthSession.clear(it) }
+        }
+        super.onDestroy()
     }
 
     private fun fail(message: String) {

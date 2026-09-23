@@ -466,12 +466,7 @@ fn emit_navigate_for_deep_link(url: Url, handle: &AppHandle) -> Result<(), Repor
     // Universal/App links come in as https:// URLs, custom scheme links come in as macro://
     let macro_scheme = match url.scheme() {
         s if s == APP_SCHEME => MacroScheme::new(url)?,
-        "http" | "https"
-            if url
-                .host_str()
-                .is_some_and(|host| APP_LINK_HOSTS.contains(&host))
-                && (url.path() == "/app" || url.path().starts_with("/app/")) =>
-        {
+        "http" | "https" if navigation_plugin::is_app_link(APP_LINK_HOSTS, &url) => {
             MacroScheme::from_url(&url)?
         }
         scheme => {

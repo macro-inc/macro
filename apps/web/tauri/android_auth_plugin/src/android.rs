@@ -25,6 +25,7 @@ pub(crate) async fn authenticate<R: Runtime>(
 ) -> Result<AuthResult, String> {
     app.state::<Auth<R>>()
         .0
-        .run_mobile_plugin("authenticate", payload)
+        .run_mobile_plugin_async("authenticate", payload)
+        .await
         .map_err(|error| error.to_string())
 }

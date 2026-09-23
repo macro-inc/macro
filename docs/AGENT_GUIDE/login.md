@@ -43,6 +43,9 @@ The Android welcome screen also offers `Create new account` and `Log into existi
 account`. Google sign-in opens a system browser Auth Tab; completing or canceling
 returns to Macro. Cancel and retry should open a fresh attempt. Enter provider
 passwords and verification codes only in that browser, never in agent messages.
+For browsers using the Custom Tabs fallback, verify that the callback returns to
+the original Macro task. A callback for another attempt must leave the current
+attempt pending; a callback after process death must not restore that attempt.
 
 After signing in, test background/foreground, force-stop/relaunch, logout, and
 signing in as another account. An entity link opened while signed out should
