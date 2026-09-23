@@ -1,8 +1,10 @@
 //! Kafka consumer for entity events that change realtime Soup items.
 //!
-//! Delivery is at least once: offsets are committed only after successful
-//! domain processing. Malformed and recognized-but-irrelevant events are
-//! poison/ignored records and are committed so they cannot wedge a partition.
+//! Delivery is best effort with bounded retries: offsets are committed after
+//! successful domain processing or a logged terminal failure. Exhausted retries
+//! discard the rest of that event so it cannot wedge a partition. Malformed and
+//! recognized-but-irrelevant events are also committed. Cancellation leaves the
+//! in-flight event uncommitted; partial delivery and replay can produce duplicates.
 
 #[cfg(test)]
 mod test;
@@ -475,7 +477,7 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
     }
 }
 
-/// Total publication attempts per patch before returning for supervision.
+/// Total publication attempts per patch before discarding its source event.
 const MAX_NOTIFY_ATTEMPTS: usize = 5;
 
 /// Retries after one, two, four, and eight seconds.
@@ -491,33 +493,47 @@ enum EventOutcome {
     Notified,
     /// A recognized event does not change a Soup-visible entity.
     Ignored,
+    /// A patch exhausted its retries; the remaining event was logged and discarded.
+    Dropped,
 }
 
-#[tracing::instrument(skip(service, event, commit), err)]
+#[tracing::instrument(skip(service, event, commit))]
 async fn process_event<S: SoupRealtimeService>(
     service: &S,
     event: &DeclaredMacroEvent,
     commit: impl FnOnce(),
-) -> Result<EventOutcome, Report> {
+) -> EventOutcome {
     let patches = patches_from_event(event);
-    let outcome = if patches.is_empty() {
+    let mut outcome = if patches.is_empty() {
         tracing::trace!("ignoring event without a Soup patch");
         EventOutcome::Ignored
     } else {
-        for patch in patches {
-            Retry::start(notify_retry_strategy(), || {
-                service.notify_users(patch.clone())
-            })
-            .await
-            .context(format!(
-                "failed to publish realtime Soup patch after {MAX_NOTIFY_ATTEMPTS} attempts"
-            ))?;
-        }
         EventOutcome::Notified
     };
 
+    let patch_count = patches.len();
+    for (index, patch) in patches.into_iter().enumerate() {
+        let result = Retry::start(notify_retry_strategy(), || {
+            service.notify_users(patch.clone())
+        })
+        .await
+        .inspect_err(|error| {
+            tracing::error!(
+                error = ?error,
+                patch = ?patch,
+                attempts = MAX_NOTIFY_ATTEMPTS,
+                skipped_patch_count = patch_count - index - 1,
+                "discarding realtime Soup source event after exhausting notification retries"
+            );
+        });
+        if result.is_err() {
+            outcome = EventOutcome::Dropped;
+            break;
+        }
+    }
+
     commit();
-    Ok(outcome)
+    outcome
 }
 
 fn commit_logged(consumer: &SoupRealtimeKafkaConsumer, message: &BorrowedMessage<'_>) {
@@ -540,9 +556,12 @@ impl SoupRealtimeServiceImpl {
     ///
     /// The consumer subscribes to every existing entity topic with events that
     /// can change a Soup item under the `soup-realtime` group. It commits malformed
-    /// and recognized-but-ignored events, and commits affecting events only after
-    /// [`SoupRealtimeService`] succeeds. Exhausted service retries return without
-    /// committing so a future supervisor restart can redeliver the record.
+    /// and recognized-but-ignored events immediately. Affecting events are committed
+    /// after every patch succeeds or a patch exhausts its five publication attempts.
+    /// Exhaustion logs an error and discards the remaining event before committing,
+    /// intentionally preferring consumer progress over delivery during persistent
+    /// failures. Shutdown during processing or retry backoff leaves the event
+    /// uncommitted for replay.
     #[tracing::instrument(skip(self, shutdown), fields(brokers), err)]
     pub async fn run_entity_update_consumer(
         &self,
@@ -588,16 +607,14 @@ impl SoupRealtimeServiceImpl {
                         }
                     };
 
-                    // Stop on failure: committing any later record on the same
-                    // partition would also commit past this unprocessed event.
+                    // Do not advance until delivery succeeds or the event reaches
+                    // the logged terminal-drop outcome after bounded retries.
                     tokio::select! {
                         biased;
                         _ = &mut shutdown => break,
-                        result = process_event(self, &event, || {
+                        _ = process_event(self, &event, || {
                             commit_logged(&consumer, kafka_message);
-                        }).instrument(span) => {
-                            result.context("failed to process realtime Soup source event")?;
-                        }
+                        }).instrument(span) => {}
                     }
                 }
             }
