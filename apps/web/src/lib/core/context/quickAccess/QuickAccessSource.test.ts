@@ -7,10 +7,14 @@ import type {
 } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { HistoryItem } from '@queries/history/types';
-import { createRoot, createSignal } from 'solid-js';
+import { render } from '@solidjs/testing-library';
+import { QueryClient, QueryClientProvider, useQuery, type UseQueryResult } from '@tanstack/solid-query';
+import { createComponent, createRenderEffect, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_BROWSE_PAGES_PER_LOAD } from './projected-list';
 import { createQuickAccessValue } from './QuickAccessSource';
+import { QuickAccessProvider } from './QuickAccessProvider';
+import { useQuickAccess } from './context';
 import {
   BUCKET_COMBINATIONS,
   type Bucket,
@@ -28,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   companies: [] as CrmCompanyEntity[],
   crmEnabled: (): boolean => true,
   cacheEnabled: true,
+  queries: {} as Partial<Record<'history' | 'channels' | 'recently-viewed', () => UseQueryResult<never[]>>>,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
@@ -48,8 +53,9 @@ vi.mock('@core/user', () => ({
   useIsConnectedSecondaryInbox: () => () => false,
 }));
 vi.mock('@queries/channel/channels', () => ({
-  useCachedGraphqlChannelsQuery: () => ({
+  useCachedGraphqlChannelsQuery: () => mocks.queries.channels?.() ?? ({
     data: [],
+    isSuccess: true,
     isLoading: false,
     refetch: mocks.channelRefetch,
   }),
@@ -59,8 +65,9 @@ vi.mock('@queries/channel/graphql', () => ({
 }));
 vi.mock('@queries/gate', () => ({ queryReadyGate: () => true }));
 vi.mock('@queries/history/history', () => ({
-  useHistoryQuery: () => ({
+  useHistoryQuery: () => mocks.queries.history?.() ?? ({
     data: mocks.history,
+    isSuccess: true,
     isLoading: false,
     refetch: vi.fn(),
   }),
@@ -96,7 +103,7 @@ vi.mock('@queries/soup/quick-access-snippets', () => ({
   useQuickAccessSnippetsQuery: () => ({ query: {}, snippets: () => [] }),
 }));
 vi.mock('@queries/soup/recently-viewed', () => ({
-  useRecentlyViewedSoupQuery: () => ({ data: [] }),
+  useRecentlyViewedSoupQuery: () => mocks.queries['recently-viewed']?.() ?? ({ data: [], isSuccess: true }),
 }));
 vi.mock('@queries/storage/instructions-md', () => ({
   useInstructionsMdIdQuery: () => ({ data: undefined }),
@@ -148,6 +155,7 @@ beforeEach(() => {
   mocks.companies = [];
   mocks.crmEnabled = () => true;
   mocks.cacheEnabled = true;
+  mocks.queries = {};
   mocks.readRecordsByKeys.mockReset().mockResolvedValue({
     revision: INITIAL_CACHE_REVISION,
     records: [
@@ -193,6 +201,48 @@ const restCompany: CrmCompanyEntity = {
 };
 
 describe('Quick Access source integration', () => {
+  it.each((['history', 'channels', 'recently-viewed'] as const).flatMap(source =>
+    (['resolve', 'reject'] as const).map(settlement => ({ source, settlement }))
+  ))(
+    'keeps the same app shell mounted while $source is pending and after $settlement',
+    async ({ source, settlement }) => {
+      let resolve!: (items: never[]) => void;
+      let reject!: (error: Error) => void;
+      const pending = new Promise<never[]>((finish, fail) => { resolve = finish; reject = fail; });
+      let query: UseQueryResult<never[]> | undefined;
+      mocks.queries[source] = () => query = useQuery(() => ({
+        queryKey: ['shell-regression', source], queryFn: () => pending,
+        retry: false, throwOnError: false,
+      }));
+      const client = new QueryClient();
+      const Shell = () => {
+        const list = useQuickAccess().useList();
+        const node = document.createElement('main');
+        node.dataset.testid = 'app-shell';
+        createRenderEffect(() => { node.textContent = `Items: ${list.totalCount()}`; });
+        return node;
+      };
+      const rendered = render(() => createComponent(QueryClientProvider, {
+        client,
+        get children() { return createComponent(QuickAccessProvider, {
+          get children() { return createComponent(Shell, {}); },
+        }); },
+      }));
+      try {
+        await vi.waitFor(() => expect(query?.isPending).toBe(true));
+        const shell = rendered.getByTestId('app-shell');
+        expect(shell.textContent).toBe('Items: 0');
+        if (settlement === 'resolve') resolve([]);
+        else reject(new Error('cache lookup failed'));
+        await vi.waitFor(() => expect(settlement === 'resolve' ? query?.isSuccess : query?.isError).toBe(true));
+        expect(rendered.getByTestId('app-shell')).toBe(shell);
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+
   it.each(['Acme', 'acme.example'])(
     'finds a cached CRM company absent from the REST feed by %s',
     async (query) => {

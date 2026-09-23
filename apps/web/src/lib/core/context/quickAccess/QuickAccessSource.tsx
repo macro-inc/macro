@@ -380,7 +380,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   const soupViewedAtMap = createLazyMemo(() => {
     const map = new Map<string, string>();
-    const data = recentlyViewedQuery.data;
+    const data = recentlyViewedQuery.isSuccess
+      ? recentlyViewedQuery.data
+      : undefined;
     if (!data) return map;
     for (const item of data) {
       if (item.viewedAt) map.set(item.id, item.viewedAt);
@@ -394,7 +396,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const allEntries: IndexEntry[] = [];
 
     // Process history items
-    const historyData = historyQuery.data ?? [];
+    const historyData = historyQuery.isSuccess ? historyQuery.data : [];
     const hidden = hiddenIds();
     for (const item of historyData) {
       if (item.deletedAt) continue;
@@ -454,7 +456,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     // The GraphQL cache is authoritative while enabled. Otherwise preserve the
     // existing channel-list source unchanged.
     const channelData = cacheHost
-      ? (cachedChannelsQuery.data ?? [])
+      ? cachedChannelsQuery.isSuccess
+        ? cachedChannelsQuery.data
+        : []
       : channels().map(apiChannelToQuickAccessChannel);
     for (const sourceChannel of channelData) {
       const viewedAt = cacheHost
