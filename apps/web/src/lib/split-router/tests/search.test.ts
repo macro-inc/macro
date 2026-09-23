@@ -9,6 +9,44 @@ import {
 import type { SplitLocation } from '../types';
 
 describe('split search state', () => {
+  it.each(['toString', 'valueOf', 'hasOwnProperty'])(
+    'treats %s as an own search key without mutating Object.prototype functions',
+    (name) => {
+      const inherited = Object.getOwnPropertyDescriptor(
+        Object.prototype,
+        name
+      )!.value;
+      const before = Object.getOwnPropertyDescriptors(inherited);
+      const query = new URLSearchParams([
+        [`s0.${name}.target`, 'one'],
+        [`s0.${name}.target`, 'two'],
+        [`s0.drive.${name}`, 'value'],
+      ]);
+      const parsed = parseSplitSearch(query.toString());
+      expect(parsed.get(0)).toEqual({
+        [name]: { target: ['one', 'two'] },
+        drive: { [name]: ['value'] },
+      });
+      expect(Object.getOwnPropertyDescriptors(inherited)).toEqual(before);
+      const roundtrip = new URLSearchParams();
+      replaceSplitSearchParams(roundtrip, [
+        { location: { search: parsed.get(0) } },
+      ]);
+      expect(parseSplitSearch(roundtrip.toString())).toEqual(parsed);
+      const route: SplitLocation['route'] = {
+        matches: [{ id: 'drive', params: {} }],
+      };
+      updateSearchState(
+        { route, search: {} },
+        {
+          [name]: (current) => {
+            expect(current).toBeUndefined();
+            return { target: ['value'] };
+          },
+        }
+      );
+    }
+  );
   it('round trips repeated values and removes stale namespaced query keys', () => {
     const query = new URLSearchParams('referral_code=ref&s9.old.value=stale');
     const search = { drive: { tags: ['one', 'two'], sort: ['name'] } };

@@ -45,9 +45,12 @@ export function parseSplitSearch(value: string): Map<number, SplitSearchState> {
     }
 
     const namespaces = splits.get(splitIndex) ?? {};
-    const fields = namespaces[namespace] ?? {};
+    const fields = Object.hasOwn(namespaces, namespace)
+      ? namespaces[namespace]!
+      : {};
 
-    fields[field] = [...(fields[field] ?? []), fieldValue];
+    const values = Object.hasOwn(fields, field) ? fields[field]! : [];
+    fields[field] = [...values, fieldValue];
     namespaces[namespace] = fields;
     splits.set(splitIndex, namespaces);
   }
@@ -153,7 +156,10 @@ export function updateSearchState(
   for (const [namespace, update] of Object.entries(updates ?? {})) {
     assertSafeSearchName(namespace, 'namespace');
 
-    const current = next.search?.[namespace];
+    const current =
+      next.search && Object.hasOwn(next.search, namespace)
+        ? next.search[namespace]
+        : undefined;
     const requested = typeof update === 'function' ? update(current) : update;
 
     next = withSearchNamespace(

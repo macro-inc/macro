@@ -532,7 +532,10 @@ export function createSplitRouter<TSplitId>(
     search(splitId, namespace) {
       assertSafeSearchName(namespace, 'namespace');
 
-      return findEntry(splitId)?.location?.search?.[namespace];
+      const search = findEntry(splitId)?.location?.search;
+      return search && Object.hasOwn(search, namespace)
+        ? search[namespace]
+        : undefined;
     },
 
     canGo(splitId, delta) {
