@@ -31,6 +31,14 @@ scheduled automatically in the background. Failures latch the existing storage
 health state without deleting records or pending mutations. Recovery/reset remains
 an explicit caller decision after closing the storage.
 
+## Network refreshes
+
+Normalized refreshes persist only records whose merged contents changed. The hot
+tier is published after the atomic storage write succeeds, so failed writes cannot
+make retries incorrectly look unchanged. With no optimistic layers, the changed
+record keys also identify visible changes without duplicate before/after snapshots.
+Pending layers still use full effective-view comparison and rebasing.
+
 ## Projection refreshes
 
 Hydration folds authoritative index mutations in order and writes only final
