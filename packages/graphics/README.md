@@ -1,48 +1,98 @@
 # Graphics
 
-Experimental graphics editor: camera navigation and local image rectangle markup.
+Experimental graphics editor with a framework-independent scene tree.
 
-- `@macro-inc/graphics`: pure TypeScript model, rectangle definition and editor.
-- `@macro-inc/graphics/browser`: disposable pointer/wheel camera bindings.
-- `@macro-inc/graphics/solid`: owner-scoped projection and Solid surface/renderers.
+- `@macro-inc/graphics`: document, affine math, scene queries, selection, editing,
+  versioned decoding and local history. No DOM, Solid, app or Loro imports.
+- `@macro-inc/graphics/browser`: pointer capture, keyboard, wheel and local images.
+- `@macro-inc/graphics/solid`: read-only reactive projection and keyed renderers.
 
-The host creates an editor and disposes it on unmount. Each instance owns its
-document and camera. Document snapshots are immutable; edits and camera changes
-are published synchronously. Core uses world units for geometry and viewport
-pixels for camera translation. Zoom preserves the world point beneath its anchor.
+## Scene contract
 
-Create item data with `type: 'rectangle'`, `id`, `geometry` and `appearance`.
-The separate `rectangleDefinition` supplies pure geometry/hit testing.
-`ItemRenderers` maps each item kind to a Solid component receiving exactly that
-item type and current camera scale. The surface owns placement; components paint their content. Adding a
-kind requires extending the item union, providing its pure definition, and adding
-its typed renderer and dispatch. No global plugin registry or framework-bound
-record instances are involved.
+Version 2 documents have one surface root and a normalized node map. Rectangles
+and groups have one authoritative `placement: { parentId, order }` and a local
+affine `transform: [a,b,c,d,e,f]`. Rectangles own local width/height and appearance.
+Groups own no intrinsic geometry; their bounds come from descendants. Child lists
+and paint order are derived, with ID tie-breaking for equal numeric order keys.
+Flat scenes are ordinary trees with rectangles directly under the surface.
 
-The root export cannot import browser or Solid modules. `bun run type-check`
-includes a no-DOM core compilation, and tests guard the core import boundary.
-Run `bun run test` from this package for camera, ownership, input and rendering tests.
+Matrices use column vectors: x'=a*x+c*y+e, y'=b*x+d*y+f. World transforms compose
+parent * local. Positive rotation is clockwise; angles are radians. Core queries
+own coordinate conversion, inverse transforms, transformed corners, polygon
+intersection and topmost hits. Invalid roots, cycles, missing/leaf parents,
+nonfinite or noninvertible local/world transforms and invalid dimensions are rejected
+before an atomic document commit.
 
-Open `/app/component/graphics-playground` on the local web dev server. It is
-registered under `LOCAL_ONLY`. Scroll to pan, use middle-button or Space-drag to
-pan, and Ctrl/Meta-scroll to zoom at the pointer. Toolbar zoom uses viewport center;
-Reset view restores the initial camera. Focus the canvas before keyboard controls.
+`createScene` accepts typed nodes or the original flat rectangle seed format.
+`decodeGraphicsDocument(unknown)` validates v2 or migrates v1 position/order into
+root placements and translation matrices, returning a structured success/error.
+No automatic persistence is enabled.
 
-Open `/app/component/image-markup-playground` for the image variant. The bundled
-`teo.png` loads automatically. Draw rectangles and scroll or use the buttons to zoom.
-This host uses `centered-image` navigation: panning is disabled, and zoom and viewport
-resize keep the image centered. Fit image fits it in the current viewport. Escape, pointer cancellation and focus
-loss cancel an in-progress rectangle. Starts outside the image are ignored and
-endpoints are constrained to image bounds. Clicks/tiny drags create no annotation.
-Replace image starts a fresh scene; invalid files preserve the previous scene.
-Clear rectangles removes all annotations. This prototype does not save or upload.
+## Editing
 
-The core stores image identity and dimensions, and commits rectangles in image
-pixel coordinates. Object URLs and decoding stay in the browser layer; the host
-disposes loaded image resources on replacement/unmount. Gesture previews are
-separate from the committed document. The Solid projection updates its store from
-document notifications, preserving stable ID-based rendering. The image host uses
-a rectangle renderer with a constant screen-width outline.
+The editor composes the selection feature through its explicit `SelectionHost`
+contract. Selection, box previews and transform overrides are session state.
+Creation, move, rotation, resize, grouping, ungrouping, reparenting and subtree
+deletion commit once, with bounded 100-entry local undo/redo. Navigation and
+selection never enter history. Invalid operations make no partial changes.
 
-Selection, resizing, history, persistence and collaboration follow in later
-checkpoints. The flat document representation is not a finalized sync schema.
+Group/reparent/ungroup preserve world transforms. Selected ancestors suppress
+descendants as edit targets, preventing double movement/deletion. Mixed-parent
+moves and pivoted rotation operate in world space, then convert back into each
+parent's coordinates. Rectangle resize adjusts local dimensions and placement
+while keeping the opposite corner fixed. Shared corner handles scale multiple selections and persistent groups in world
+space about the opposite corner, then convert each selected root back into its
+parent space. Rotated selections, nested items and groups scale proportionally to avoid shear.
+Flat unrotated selections can scale independently per axis. Scale clamps at 1% to avoid collapse
+or flipping. Scaling changes transforms, not local rectangle dimensions.
+
+Grouping initially requires a common parent. Noncontiguous siblings become one
+contiguous group at their earliest selected sibling position, which can change
+stacking relative to unselected siblings. Ungroup splices children back in order.
+Reparent also supplies explicit sibling order; the memory backend uses finite
+numeric keys. This is not a finalized collaborative ordering representation.
+
+Solid renders drawable IDs in tree paint order with computed world matrices.
+Grouping/reparenting preserves keyed component identity. Selection polygons,
+a dashed shared selection box, corner handles and rotation handles are drawn in a viewport overlay, so their
+size is independent of ancestor scale/rotation. The shared box and handles hide
+during transform previews; individual outlines remain visible. The scene tree does not require
+a matching DOM tree.
+
+## Local demos
+
+- `/app/component/graphics-playground`: infinite canvas. Select/Rectangle tools,
+  drag-box selection, Shift-click toggle, Shift-drag addition, group move/delete,
+  Group/Ungroup and rotation via the circle above the selection. Alt-click targets
+  a nested rectangle; ordinary clicks select its outermost group. Single rectangle
+  selections expose corner resize handles. Space/middle-drag and wheel pan;
+  Ctrl/Meta-wheel zooms; Fit scene leaves space for rotation handles.
+- `/app/component/nested-scene-playground`: registry-mounted tester containing a
+  rotated, nonuniformly scaled outer group, a rotated inner group and root sibling.
+  Expand Scene tree to inspect hierarchy/select any node directly. Move selected
+  to root demonstrates pose-preserving reparenting. Undo restores its parent.
+- `/app/component/image-markup-playground`: bundled teo.png and local replacement
+  images. Draw annotations, zoom around the image center, fit and clear.
+  Panning stays disabled. Annotations are rectangle children of a surface root.
+  Image decoding/object URLs stay in the host/browser layer and are disposed on
+  replacement/unmount.
+
+Escape/cancellation drops previews. Delete/Backspace and Ctrl/Meta-Z,
+Ctrl/Meta-Shift-Z or Ctrl/Meta-Y apply only when the canvas has focus. Data and
+history reset on reload. Each mounted demo owns an independent editor.
+
+## Boundaries and verification
+
+One surface per document, static typed rectangle/group kinds, linear scene queries,
+and local snapshot history are deliberate prototype limits. Frames/clipping,
+layout, text, multi-surface documents and plugin registration are not implemented.
+Affine reflection/shear compose correctly, but have no dedicated UI controls.
+Loro/SyncService integration and origin-aware collaborative undo remain separate
+work; never apply snapshot undo to a shared document.
+
+The [scene foundation specification](../../docs/GRAPHICS_SCENE_FOUNDATION.md)
+describes the intended longer-term boundary and collaboration questions.
+Run `bun run test` and `bun run type-check` here. Tests cover tree invariants,
+transform math, migration, pose preservation, nested editing, history, selection,
+input routing and stable Solid mounts. The no-DOM compilation/import checks
+enforce the pure TypeScript core boundary.

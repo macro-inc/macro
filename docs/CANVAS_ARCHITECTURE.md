@@ -1,8 +1,9 @@
 # Graphics editor architecture — discussion draft
 
-Immediate implementation scope: see **First increment: rectangle playground** at
-the end. That section narrows the earlier overhaul roadmap to a small independent
-experiment; the larger migration phases are not prerequisites for this increment.
+Current implementation: [Graphics scene foundation](GRAPHICS_SCENE_FOUNDATION.md).
+The local tree and affine-transform core, nested-scene tester and demo adaptation
+are implemented. This supersedes the initial flat rectangle scope below. Loro
+encoding, persistence and collaborative history are still unimplemented.
 
 Status: proposal, not an approved implementation specification. Based on a source
 review on 2026-09-23; no runtime verification was performed. Package names are
@@ -434,7 +435,8 @@ The initial document is a versioned, typed map of rectangles plus a flat ordered
 ID sequence. Rectangle data has an immutable ID/type, a coherent axis-aligned
 `{ x, y, width, height }` geometry value, and simple appearance. This is a local
 prototype representation, not a committed CRDT schema or long-term file format.
-No parent/group/edge/tree fields are needed yet.
+This describes the initial prototype only and is superseded by the scene foundation
+checkpoint; hierarchy and transform math are now required before further features.
 
 Session state holds camera, selected IDs, active tool and a discriminated gesture
 state: idle, panning, creating a rectangle, marquee selection, or moving selection.

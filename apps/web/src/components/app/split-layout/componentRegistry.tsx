@@ -759,6 +759,12 @@ registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 
 if (LOCAL_ONLY) {
   registerComponent(
+    'nested-scene-playground',
+    lazy(
+      () => import('@app/features/graphics-playground/nested-scene-playground')
+    )
+  );
+  registerComponent(
     'image-markup-playground',
     lazy(
       () =>

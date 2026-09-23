@@ -1,6 +1,6 @@
-export type Point = Readonly<{ x: number; y: number }>;
+import type { Matrix } from './affine';
 
-/** Camera translation is measured in viewport pixels; item geometry is in world units. */
+export type Point = Readonly<{ x: number; y: number }>;
 export type Camera = Readonly<{ x: number; y: number; scale: number }>;
 export type Bounds = Readonly<{
   x: number;
@@ -8,37 +8,50 @@ export type Bounds = Readonly<{
   width: number;
   height: number;
 }>;
-
-export type RectangleItem = Readonly<{
+export type Placement = Readonly<{ parentId: string; order: number }>;
+type SpatialNode = Readonly<{
   id: string;
-  type: 'rectangle';
-  geometry: Bounds;
-  appearance: Readonly<{ fill: string; stroke: string }>;
+  placement: Placement;
+  transform: Matrix;
 }>;
-
-export type GraphicsItem = RectangleItem;
-/** Image pixels define world coordinates. Image resources are owned by the host. */
+export type RectangleItem = SpatialNode &
+  Readonly<{
+    type: 'rectangle';
+    geometry: Readonly<{ width: number; height: number }>;
+    appearance: Readonly<{ fill: string; stroke: string }>;
+  }>;
+export type GroupItem = SpatialNode & Readonly<{ type: 'group' }>;
+export type SurfaceItem = Readonly<{ id: string; type: 'surface' }>;
+export type GraphicsItem = RectangleItem | GroupItem | SurfaceItem;
 export type ImageSurface = Readonly<{
   id: string;
   width: number;
   height: number;
 }>;
 export type GraphicsDocument = Readonly<{
-  version: 1;
+  version: 2;
+  rootId: string;
   items: Readonly<Record<string, GraphicsItem>>;
-  order: readonly string[];
   surface?: ImageSurface;
 }>;
-
-export type ItemDefinition<T extends GraphicsItem> = {
+/** Input-only migration boundary for the initial flat prototype. */
+export type LegacyRectangle = Readonly<{
+  id: string;
+  type: 'rectangle';
+  geometry: Bounds;
+  appearance: RectangleItem['appearance'];
+}>;
+export type ItemDefinition<T extends RectangleItem> = {
   type: T['type'];
   bounds(item: T): Bounds;
   hitTest(item: T, point: Point): boolean;
 };
-
 export const rectangleDefinition: ItemDefinition<RectangleItem> = {
   type: 'rectangle',
-  bounds: (item) => item.geometry,
-  hitTest: ({ geometry: r }, p) =>
-    p.x >= r.x && p.y >= r.y && p.x <= r.x + r.width && p.y <= r.y + r.height,
+  bounds: (item) => ({ x: 0, y: 0, ...item.geometry }),
+  hitTest: (item, p) =>
+    p.x >= 0 &&
+    p.y >= 0 &&
+    p.x <= item.geometry.width &&
+    p.y <= item.geometry.height,
 };

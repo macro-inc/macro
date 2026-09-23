@@ -1,3 +1,4 @@
+import { translation } from './affine';
 import {
   fitImageCamera,
   INITIAL_CAMERA,
@@ -11,45 +12,81 @@ import type {
   GraphicsDocument,
   GraphicsItem,
   ImageSurface,
+  LegacyRectangle,
   Point,
   RectangleItem,
 } from './model';
+import {
+  children,
+  createScene,
+  drawableIds,
+  freezeDocument,
+  groupNodes,
+  hitTest,
+  reparent,
+  ungroupNode,
+  worldBounds,
+} from './scene';
+import { createSelection, type SelectionState } from './selection';
+
+export type EditingSession = SelectionState &
+  Readonly<{
+    canUndo: boolean;
+    canRedo: boolean;
+  }>;
 
 export type GraphicsEditor = ReturnType<typeof createGraphicsEditor>;
 
 /** One document and camera per instance. The caller owns disposal. */
-export function createGraphicsEditor(seed: readonly GraphicsItem[] = []) {
-  const items: Record<string, GraphicsItem> = {};
-  for (const item of seed) {
-    if (Object.hasOwn(items, item.id))
-      throw new Error(`Duplicate graphics item: ${item.id}`);
-    const { x, y, width, height } = item.geometry;
-    if (
-      ![x, y, width, height].every(Number.isFinite) ||
-      width < 0 ||
-      height < 0
-    ) {
-      throw new Error(`Invalid graphics geometry: ${item.id}`);
-    }
-    Object.defineProperty(items, item.id, {
-      value: Object.freeze({
-        ...item,
-        geometry: Object.freeze({ ...item.geometry }),
-        appearance: Object.freeze({ ...item.appearance }),
-      }),
-      enumerable: true,
-    });
-  }
-  let document: GraphicsDocument = Object.freeze({
-    version: 1,
-    items: Object.freeze(items),
-    order: Object.freeze(seed.map((item) => item.id)),
-  });
+export function createGraphicsEditor(
+  seed: readonly (LegacyRectangle | GraphicsItem)[] | GraphicsDocument = []
+) {
+  let document: GraphicsDocument = Array.isArray(seed)
+    ? createScene(seed)
+    : freezeDocument(seed as GraphicsDocument);
   let camera = INITIAL_CAMERA;
   let disposed = false;
   const listeners = new Set<(camera: Camera) => void>();
   const documentListeners = new Set<(document: GraphicsDocument) => void>();
   const previewListeners = new Set<(preview: Bounds | undefined) => void>();
+  const undoStack: GraphicsDocument[] = [];
+  const redoStack: GraphicsDocument[] = [];
+  const sessionListeners = new Set<(session: EditingSession) => void>();
+  const getSession = (): EditingSession =>
+    Object.freeze({
+      ...selection.getState(),
+      canUndo: undoStack.length > 0,
+      canRedo: redoStack.length > 0,
+    });
+  const emitSession = () => {
+    for (const listener of sessionListeners) listener(getSession());
+  };
+  const selection = createSelection({
+    getDocument: () => document,
+    commitDocument,
+    cancelDrawing: cancelRectangle,
+    onChange: emitSession,
+  });
+  const { select, cancelTransform } = selection;
+  function commitDocument(next: GraphicsDocument) {
+    next = freezeDocument(next);
+    undoStack.push(document);
+    if (undoStack.length > 100) undoStack.shift();
+    redoStack.length = 0;
+    publishDocument(next);
+    emitSession();
+  }
+  function travel(from: GraphicsDocument[], to: GraphicsDocument[]) {
+    if (disposed) return;
+    cancelRectangle();
+    cancelTransform();
+    const next = from.pop();
+    if (next) {
+      to.push(document);
+      publishDocument(next);
+    }
+    emitSession();
+  }
   let start: Point | undefined;
   let preview: Bounds | undefined;
 
@@ -62,6 +99,7 @@ export function createGraphicsEditor(seed: readonly GraphicsItem[] = []) {
     setPreview(undefined);
   }
   function publishDocument(next: GraphicsDocument) {
+    selection.reconcile(next);
     document = Object.freeze(next);
     for (const listener of documentListeners) listener(document);
   }
@@ -102,6 +140,7 @@ export function createGraphicsEditor(seed: readonly GraphicsItem[] = []) {
       return;
     camera = Object.freeze(next);
     cancelRectangle();
+    cancelTransform();
     for (const listener of listeners) listener(camera);
   }
 
@@ -109,6 +148,42 @@ export function createGraphicsEditor(seed: readonly GraphicsItem[] = []) {
     get document() {
       return document;
     },
+    getSession,
+    subscribeSession(listener: (session: EditingSession) => void) {
+      if (disposed) return () => {};
+      sessionListeners.add(listener);
+      return () => {
+        sessionListeners.delete(listener);
+      };
+    },
+    select,
+    hitTest: (point: Point, deep = false) => hitTest(document, point, deep),
+    groupSelection(id: string) {
+      if (disposed) return;
+      commitDocument(
+        groupNodes(document, selection.getState().selectedIds, id)
+      );
+      select(id);
+    },
+    ungroupSelection() {
+      if (disposed) return;
+      const id = selection.getState().selectedId;
+      if (id) commitDocument(ungroupNode(document, id));
+    },
+    reparent(id: string, parentId: string, order: number) {
+      if (!disposed) commitDocument(reparent(document, id, parentId, order));
+    },
+    toggleSelection: selection.toggle,
+    beginBoxSelection: selection.beginBox,
+    updateBoxSelection: selection.updateBox,
+    commitBoxSelection: selection.commitBox,
+    beginTransform: selection.beginTransform,
+    updateTransform: selection.updateTransform,
+    cancelTransform,
+    commitTransform: selection.commitTransform,
+    deleteSelection: selection.deleteSelection,
+    undo: () => travel(undoStack, redoStack),
+    redo: () => travel(redoStack, undoStack),
     getPreview: () => preview,
     subscribeDocument(listener: (document: GraphicsDocument) => void) {
       if (disposed) return () => {};
@@ -132,12 +207,36 @@ export function createGraphicsEditor(seed: readonly GraphicsItem[] = []) {
         )
       )
         throw new Error('Invalid image dimensions');
-      cancelRectangle();
+      select();
+      undoStack.length = 0;
+      redoStack.length = 0;
+      emitSession();
       publishDocument({
-        version: 1,
+        ...createScene(),
         surface: Object.freeze({ ...surface }),
-        items: Object.freeze({}),
-        order: Object.freeze([]),
+      });
+    },
+    fitScene(viewport: { width: number; height: number }) {
+      const bounds = worldBounds(document, document.rootId);
+      if (
+        bounds.width <= 0 ||
+        bounds.height <= 0 ||
+        viewport.width <= 0 ||
+        viewport.height <= 0
+      )
+        return;
+      const scale = Math.max(
+        MIN_SCALE,
+        Math.min(
+          1,
+          (viewport.width - 48) / bounds.width,
+          Math.max(1, viewport.height - 64) / bounds.height
+        )
+      );
+      publish({
+        scale,
+        x: (viewport.width - bounds.width * scale) / 2 - bounds.x * scale,
+        y: 44 - bounds.y * scale,
       });
     },
     fitImage(viewport: { width: number; height: number }) {
@@ -172,6 +271,7 @@ export function createGraphicsEditor(seed: readonly GraphicsItem[] = []) {
           point.y > surface.height)
       )
         return false;
+      select();
       start = { ...point };
       updateRectangle(point);
       return true;
@@ -197,23 +297,33 @@ export function createGraphicsEditor(seed: readonly GraphicsItem[] = []) {
       const item: RectangleItem = Object.freeze({
         id,
         type: 'rectangle',
-        geometry,
+        placement: {
+          parentId: document.rootId,
+          order: children(document).length
+            ? Math.max(
+                ...children(document).map((id) => {
+                  const n = document.items[id];
+                  return n && n.type !== 'surface' ? n.placement.order : 0;
+                })
+              ) + 1
+            : 0,
+        },
+        transform: translation(geometry.x, geometry.y),
+        geometry: { width: geometry.width, height: geometry.height },
         appearance: Object.freeze({ ...appearance }),
       });
-      publishDocument({
+      commitDocument({
         ...document,
         items: Object.freeze({ ...document.items, [id]: item }),
-        order: Object.freeze([...document.order, id]),
       });
       return true;
     },
     clearRectangles() {
-      if (disposed) return;
-      cancelRectangle();
-      publishDocument({
+      if (disposed || !drawableIds(document).length) return;
+      select();
+      commitDocument({
         ...document,
-        items: Object.freeze({}),
-        order: Object.freeze([]),
+        items: { [document.rootId]: { id: document.rootId, type: 'surface' } },
       });
     },
     getCamera: () => camera,
@@ -238,6 +348,10 @@ export function createGraphicsEditor(seed: readonly GraphicsItem[] = []) {
       listeners.clear();
       documentListeners.clear();
       previewListeners.clear();
+      sessionListeners.clear();
+      undoStack.length = 0;
+      redoStack.length = 0;
+      selection.dispose();
       start = undefined;
       preview = undefined;
     },

@@ -1,3 +1,4 @@
+export * from './affine';
 export {
   fitImageCamera,
   INITIAL_CAMERA,
@@ -7,7 +8,18 @@ export {
   worldToScreen,
   zoomAt,
 } from './camera';
-export { createGraphicsEditor, type GraphicsEditor } from './editor';
+export { type DecodeResult, decodeGraphicsDocument } from './codec';
+export {
+  createGraphicsEditor,
+  type EditingSession,
+  type GraphicsEditor,
+} from './editor';
+export type {
+  GroupItem,
+  LegacyRectangle,
+  Placement,
+  SurfaceItem,
+} from './model';
 export {
   type Bounds,
   type Camera,
@@ -19,3 +31,11 @@ export {
   type RectangleItem,
   rectangleDefinition,
 } from './model';
+export * from './scene';
+export type { TransformHandle } from './selection';
+export {
+  createSelection,
+  type ResizeCorner,
+  type SelectionHost,
+  type SelectionState,
+} from './selection';

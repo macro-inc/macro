@@ -951,6 +951,28 @@ Desktop and mobile share this scale, with accessibility text scaling preserved.
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
 # Graphics playground (local development)
 
+The scene foundation is shared by the graphics and image demos. The graphics demo
+adds a circular **Rotate selection** handle above the selected rectangle/group.
+Drag it to rotate; the edit is one undo step. The shared dashed selection box and all transform handles hide during move,
+rotate, and scale previews, then return on release or cancellation. Individual
+outlines remain visible. Drag a shared corner to scale the selection about the
+opposite corner; rotated or grouped selections scale proportionally to preserve shape angles
+and aspect ratios. Flat, unrotated rectangles can stretch independently per axis.
+Scale clamps at 1% rather than crossing into a singular or reflected transform. Rectangle corner handles follow its
+transformed corners. **Group** combines selected siblings; **Ungroup** restores
+their children to the parent. Groups can nest and contain rotation/nonuniform
+scale. Ordinary canvas clicks select the outermost group; Alt-click selects the
+hit rectangle directly. **Fit scene** brings content and handle space into view.
+
+Open `/app/component/nested-scene-playground` for the scene graph tester. It starts
+with a rotated/scaled outer group, a rotated inner group, three descendants and a
+root-level sibling. Expand **Scene tree** to see the indented hierarchy and select
+any node directly, then collapse it to edit on the canvas. **Move selected to root**
+reparents while preserving the world pose; Undo restores the prior parent and
+order. Reparenting and grouping must not remount unchanged rectangle components.
+All demos are local, in-memory; reload resets the seeded scene.
+
+
 The image variant is `/app/component/image-markup-playground`. It loads the bundled
 `teo.png` automatically. Drag over the image
 to create an annotation. Reverse drags work; ends are clipped to the image bounds.
@@ -959,6 +981,20 @@ the image stays centered on zoom and viewport resize. **Fit image** fits it in v
 removes annotations; **Replace image** starts a fresh scene after successful decode.
 Invalid files leave the previous image intact. Files and annotations stay local and
 are discarded on reload. There is no save/upload, selection or resize yet.
+
+Open `/app/component/graphics-playground` on a local frontend server.
+Use **Select** to click a rectangle and drag it, or drag a corner handle to resize.
+Drag empty canvas to select all rectangles the box touches; Shift-drag adds to the
+selection, and Shift-click toggles individual rectangles. Drag a selected rectangle
+to move the group; Delete removes the group in one undo step. Escape during box
+selection restores the previous selection. Multiple selection and persistent groups expose corner scaling handles; scaling
+is one undo step and preserves relative placement, including nested descendants. Click empty canvas to deselect. **Rectangle** draws new rectangles anywhere in the
+infinite world. **Delete** (or Delete/Backspace while the canvas is focused) removes
+the selection. Escape cancels an active gesture; otherwise it deselects.
+**Undo** / **Redo** also support Ctrl/Meta-Z, Ctrl/Meta-Shift-Z and Ctrl/Meta-Y while
+the canvas is focused. Creation, moving, resizing and deletion each undo as one
+operation. Camera and selection changes do not enter history; a new edit clears
+redo. This is local, in-memory history, discarded on reload.
 
 Open `/app/component/graphics-playground` on a local frontend server. This
 registry-mounted experiment shows three seeded rectangles, an infinite grid,

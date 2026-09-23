@@ -5,7 +5,8 @@ import type { RectangleItem } from '../core/model';
 export { type LocalImage, loadLocalImage } from './local-image';
 
 export type GraphicsInputOptions = {
-  tool?: () => 'pan' | 'rectangle';
+  tool?: () => 'pan' | 'rectangle' | 'select';
+  editing?: boolean;
   navigation?: 'free' | 'centered-image';
   createId?: () => string;
   appearance?: () => RectangleItem['appearance'];
@@ -19,7 +20,12 @@ export function attachCameraControls(
 ): () => void {
   let space = false;
   let drag:
-    | { id: number; x: number; y: number; mode: 'pan' | 'rectangle' }
+    | {
+        id: number;
+        x: number;
+        y: number;
+        mode: 'pan' | 'rectangle' | 'transform' | 'box';
+      }
     | undefined;
   const originalCursor = element.style.cursor;
 
@@ -37,6 +43,7 @@ export function attachCameraControls(
     const id = drag?.id;
     drag = undefined;
     editor.cancelRectangle();
+    editor.cancelTransform();
     space = false;
     if (id !== undefined && element.hasPointerCapture(id))
       element.releasePointerCapture(id);
@@ -54,7 +61,7 @@ export function attachCameraControls(
       event.target !== element &&
       !(
         event.target instanceof Element &&
-        event.target.closest('[data-graphics-item]')
+        event.target.closest('[data-graphics-item], [data-graphics-handle]')
       )
     )
       return;
@@ -66,7 +73,36 @@ export function attachCameraControls(
         (event.button === 0 && (space || options.tool?.() === 'pan')));
     const rectangle =
       event.button === 0 && !pan && options.tool?.() === 'rectangle';
-    if (!pan && !rectangle) return;
+    const selecting =
+      event.button === 0 && !pan && options.tool?.() === 'select';
+    let transforming = false;
+    let boxing = false;
+    if (selecting) {
+      const target = event.target instanceof Element ? event.target : undefined;
+      const handle = target
+        ?.closest('[data-graphics-handle]')
+        ?.getAttribute('data-graphics-handle');
+      const corner =
+        handle === 'nw' ||
+        handle === 'ne' ||
+        handle === 'sw' ||
+        handle === 'se' ||
+        handle === 'rotate'
+          ? handle
+          : undefined;
+      const id = corner
+        ? editor.getSession().selectedIds[0]
+        : editor.hitTest(worldPoint(event), event.altKey);
+      if (id && event.shiftKey && !corner) {
+        event.preventDefault();
+        editor.toggleSelection(id);
+        return;
+      }
+      if (id)
+        transforming = editor.beginTransform(id, worldPoint(event), corner);
+      else boxing = editor.beginBoxSelection(worldPoint(event), event.shiftKey);
+    }
+    if (!pan && !rectangle && !transforming && !boxing) return;
     if (rectangle && !editor.beginRectangle(worldPoint(event))) return;
     event.preventDefault();
     element.setPointerCapture(event.pointerId);
@@ -74,13 +110,22 @@ export function attachCameraControls(
       id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      mode: pan ? 'pan' : 'rectangle',
+      mode: pan
+        ? 'pan'
+        : transforming
+          ? 'transform'
+          : boxing
+            ? 'box'
+            : 'rectangle',
     };
     updateCursor();
   };
   const pointerMove = (event: PointerEvent) => {
     if (!drag || drag.id !== event.pointerId) return;
     if (drag.mode === 'rectangle') editor.updateRectangle(worldPoint(event));
+    else if (drag.mode === 'box') editor.updateBoxSelection(worldPoint(event));
+    else if (drag.mode === 'transform')
+      editor.updateTransform(worldPoint(event));
     else editor.panBy({ x: event.clientX - drag.x, y: event.clientY - drag.y });
     drag = { ...drag, x: event.clientX, y: event.clientY };
   };
@@ -89,6 +134,14 @@ export function attachCameraControls(
   };
   const pointerUp = (event: PointerEvent) => {
     if (drag?.id !== event.pointerId) return;
+    if (drag.mode === 'box') {
+      editor.updateBoxSelection(worldPoint(event));
+      editor.commitBoxSelection();
+    }
+    if (drag.mode === 'transform') {
+      editor.updateTransform(worldPoint(event));
+      editor.commitTransform();
+    }
     if (drag.mode === 'rectangle') {
       editor.updateRectangle(worldPoint(event));
       editor.commitRectangle(
@@ -106,7 +159,24 @@ export function attachCameraControls(
       space = true;
       updateCursor();
     }
-    if (event.key === 'Escape') cancel();
+    if (event.key === 'Escape') {
+      const active = !!drag;
+      cancel();
+      if (!active) editor.select();
+    }
+    if (options.editing && !event.repeat) {
+      const key = event.key.toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && (key === 'z' || key === 'y')) {
+        event.preventDefault();
+        cancel();
+        if (key === 'y' || event.shiftKey) editor.redo();
+        else editor.undo();
+      } else if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        cancel();
+        editor.deleteSelection();
+      }
+    }
   };
   const keyUp = (event: KeyboardEvent) => {
     if (event.code === 'Space') {

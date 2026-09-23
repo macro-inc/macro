@@ -1,4 +1,4 @@
-import { createGraphicsEditor } from '@macro-inc/graphics';
+import { createGraphicsEditor, drawableIds } from '@macro-inc/graphics';
 import {
   createGraphicsProjection,
   GraphicsSurface,
@@ -93,7 +93,7 @@ export function ImageMarkupView() {
           </button>
           <button
             type="button"
-            disabled={!document.order.length}
+            disabled={!drawableIds(document).length}
             class="rounded border border-edge-muted px-2 py-1 text-xs disabled:opacity-40"
             onClick={() => editor.clearRectangles()}
           >
@@ -145,8 +145,10 @@ export function ImageMarkupView() {
                 {image().name} · {image().width} × {image().height}
               </span>
               <span>
-                {document.order.length}{' '}
-                {document.order.length === 1 ? 'rectangle' : 'rectangles'}
+                {drawableIds(document).length}{' '}
+                {drawableIds(document).length === 1
+                  ? 'rectangle'
+                  : 'rectangles'}
               </span>
             </>
           )}

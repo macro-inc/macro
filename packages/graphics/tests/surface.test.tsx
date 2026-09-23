@@ -3,6 +3,7 @@ import { render } from 'solid-js/web';
 import { expect, it, vi } from 'vitest';
 import { attachCameraControls } from '../src/browser';
 import { createGraphicsEditor, screenToWorld } from '../src/core';
+import { drawableIds, worldBounds } from '../src/core/scene';
 import { createGraphicsProjection, GraphicsSurface } from '../src/solid';
 
 it('updates the camera without remounting rectangle components', () => {
@@ -111,9 +112,9 @@ it('creates on pointer release and cancels drawing on Escape without leaking pre
   }
   pointer('pointerdown', 100, 100);
   pointer('pointermove', 200, 180);
-  expect(editor.document.order).toHaveLength(0);
+  expect(drawableIds(editor.document)).toHaveLength(0);
   pointer('pointerup', 240, 200);
-  expect(editor.document.items.rectangle?.geometry).toEqual({
+  expect(worldBounds(editor.document, 'rectangle')).toEqual({
     x: 50,
     y: 50,
     width: 70,
@@ -123,7 +124,7 @@ it('creates on pointer release and cancels drawing on Escape without leaking pre
   pointer('pointermove', 200, 180);
   viewport.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   pointer('pointerup', 240, 200);
-  expect(editor.document.order).toHaveLength(1);
+  expect(drawableIds(editor.document)).toHaveLength(1);
   expect(editor.getPreview()).toBeUndefined();
   detach();
 });
@@ -270,4 +271,163 @@ it('keeps image navigation centered and disables pan gestures', () => {
   expect(editor.getCamera().x + 200 * camera.scale).toBeCloseTo(250);
   expect(editor.getCamera().y + 100 * camera.scale).toBeCloseTo(200);
   detach();
+});
+
+it('renders transforms and history without remounting existing rectangle nodes', () => {
+  const editor = createGraphicsEditor([
+    {
+      id: 'one',
+      type: 'rectangle',
+      geometry: { x: 10, y: 20, width: 100, height: 80 },
+      appearance: { fill: 'white', stroke: 'black' },
+    },
+  ]);
+  const host = document.createElement('div');
+  const dispose = render(
+    () => (
+      <GraphicsSurface
+        editor={editor}
+        input={{ tool: () => 'select', editing: true }}
+      />
+    ),
+    host
+  );
+  const node = host.querySelector<HTMLElement>('[data-graphics-item="one"]');
+  editor.beginTransform('one', { x: 10, y: 20 });
+  editor.updateTransform({ x: 40, y: 50 });
+  expect(node?.style.transform).toBe('matrix(1,0,0,1,40,50)');
+  expect(worldBounds(editor.document, 'one').x).toBe(10);
+  editor.cancelTransform();
+  expect(node?.style.transform).toBe('matrix(1,0,0,1,10,20)');
+  editor.beginTransform('one', { x: 10, y: 20 });
+  editor.updateTransform({ x: 40, y: 50 });
+  editor.commitTransform();
+  editor.undo();
+  expect(node?.style.transform).toBe('matrix(1,0,0,1,10,20)');
+  editor.redo();
+  expect(node?.style.transform).toBe('matrix(1,0,0,1,40,50)');
+  expect(host.querySelector('[data-graphics-item="one"]')).toBe(node);
+  editor.deleteSelection();
+  expect(host.querySelector('[data-graphics-item="one"]')).toBeNull();
+  editor.undo();
+  expect(host.querySelector('[data-graphics-item="one"]')).not.toBeNull();
+  dispose();
+});
+
+it('keeps rectangle components mounted when grouping and reparenting changes their ancestry', () => {
+  const editor = createGraphicsEditor([
+    {
+      id: 'a',
+      type: 'rectangle',
+      geometry: { x: 10, y: 20, width: 30, height: 40 },
+      appearance: { fill: 'red', stroke: 'black' },
+    },
+    {
+      id: 'b',
+      type: 'rectangle',
+      geometry: { x: 60, y: 20, width: 30, height: 40 },
+      appearance: { fill: 'blue', stroke: 'black' },
+    },
+  ]);
+  const host = document.createElement('div');
+  const dispose = render(() => <GraphicsSurface editor={editor} />, host);
+  const node = host.querySelector<HTMLElement>('[data-graphics-item="a"]');
+  const transform = node?.style.transform;
+  editor.select('a');
+  editor.toggleSelection('b');
+  editor.groupSelection('g');
+  expect(host.querySelector('[data-graphics-item="a"]')).toBe(node);
+  expect(node?.style.transform).toBe(transform);
+  editor.reparent('a', editor.document.rootId, 5);
+  expect(host.querySelector('[data-graphics-item="a"]')).toBe(node);
+  expect(node?.style.transform).toBe(transform);
+  editor.undo();
+  expect(host.querySelector('[data-graphics-item="a"]')).toBe(node);
+  dispose();
+});
+
+it('draws collective bounds and hides the rotation handle until rotation ends', () => {
+  const editor = createGraphicsEditor([
+    {
+      id: 'a',
+      type: 'rectangle',
+      geometry: { x: 10, y: 20, width: 30, height: 40 },
+      appearance: { fill: 'red', stroke: 'black' },
+    },
+    {
+      id: 'b',
+      type: 'rectangle',
+      geometry: { x: 80, y: 40, width: 20, height: 30 },
+      appearance: { fill: 'blue', stroke: 'black' },
+    },
+  ]);
+  editor.zoomAt({ x: 0, y: 0 }, 2);
+  const host = document.createElement('div');
+  const dispose = render(
+    () => <GraphicsSurface editor={editor} input={{ tool: () => 'select' }} />,
+    host
+  );
+  editor.select('a');
+  editor.toggleSelection('b');
+  const bounds = () => host.querySelector('[data-graphics-selection-bounds]');
+  const handle = () => host.querySelector('[data-graphics-handle="rotate"]');
+  expect(bounds()?.getAttribute('x')).toBe('20');
+  expect(bounds()?.getAttribute('y')).toBe('40');
+  expect(bounds()?.getAttribute('width')).toBe('180');
+  expect(bounds()?.getAttribute('height')).toBe('100');
+  expect(handle()).not.toBeNull();
+  editor.beginTransform('a', { x: 55, y: -5 }, 'rotate');
+  expect(handle()).toBeNull();
+  editor.updateTransform({ x: 105, y: 45 });
+  expect(bounds()).toBeNull();
+  expect(host.querySelector('[data-graphics-handle]')).toBeNull();
+  editor.cancelTransform();
+  expect(handle()).not.toBeNull();
+  expect(bounds()?.getAttribute('width')).toBe('180');
+  editor.beginTransform('a', { x: 55, y: -5 }, 'rotate');
+  editor.updateTransform({ x: 105, y: 45 });
+  editor.commitTransform();
+  expect(handle()).not.toBeNull();
+  editor.select();
+  expect(bounds()).toBeNull();
+  dispose();
+});
+
+it('shows multi-selection scale handles only while idle, including after move and scale cancellation', () => {
+  const editor = createGraphicsEditor([
+    {
+      id: 'a',
+      type: 'rectangle',
+      geometry: { x: 10, y: 20, width: 30, height: 40 },
+      appearance: { fill: 'red', stroke: 'black' },
+    },
+    {
+      id: 'b',
+      type: 'rectangle',
+      geometry: { x: 80, y: 40, width: 20, height: 30 },
+      appearance: { fill: 'blue', stroke: 'black' },
+    },
+  ]);
+  const host = document.createElement('div');
+  const dispose = render(
+    () => <GraphicsSurface editor={editor} input={{ tool: () => 'select' }} />,
+    host
+  );
+  editor.select('a');
+  editor.toggleSelection('b');
+  expect(host.querySelectorAll('[data-graphics-handle]')).toHaveLength(5);
+  expect(
+    host
+      .querySelector('[data-graphics-selection-bounds]')
+      ?.getAttribute('stroke-dasharray')
+  ).toBe('3 3');
+  for (const handle of [undefined, 'se'] as const) {
+    editor.beginTransform('a', { x: 100, y: 70 }, handle);
+    editor.updateTransform({ x: 130, y: 100 });
+    expect(host.querySelector('[data-graphics-selection-bounds]')).toBeNull();
+    expect(host.querySelectorAll('[data-graphics-handle]')).toHaveLength(0);
+    editor.cancelTransform();
+    expect(host.querySelectorAll('[data-graphics-handle]')).toHaveLength(5);
+  }
+  dispose();
 });

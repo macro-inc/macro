@@ -4,6 +4,7 @@ import {
   fitImageCamera,
   screenToWorld,
 } from '../src/core';
+import { drawableIds, worldBounds } from '../src/core/scene';
 
 const appearance = { fill: 'transparent', stroke: '#e53935' };
 
@@ -22,10 +23,10 @@ it('keeps reversed drags in image coordinates and commits exactly one change', (
     width: 300,
     height: 200,
   });
-  expect(editor.document.order).toHaveLength(0);
+  expect(drawableIds(editor.document)).toHaveLength(0);
   expect(changed).not.toHaveBeenCalled();
   expect(editor.commitRectangle('rect', appearance)).toBe(true);
-  expect(editor.document.items.rect?.geometry).toEqual({
+  expect(worldBounds(editor.document, 'rect')).toEqual({
     x: 100,
     y: 100,
     width: 300,
@@ -34,7 +35,7 @@ it('keeps reversed drags in image coordinates and commits exactly one change', (
   expect(changed).toHaveBeenCalledTimes(1);
   editor.panBy({ x: 100, y: -200 });
   editor.zoomAt({ x: 100, y: 100 }, 2);
-  expect(editor.document.items.rect?.geometry.x).toBe(100);
+  expect(worldBounds(editor.document, 'rect').x).toBe(100);
 });
 
 it('rejects starts outside the image, clips ends and drops cancelled or tiny rectangles', () => {
@@ -49,7 +50,7 @@ it('rejects starts outside the image, clips ends and drops cancelled or tiny rec
   editor.beginRectangle({ x: 50, y: 50 });
   editor.updateRectangle({ x: 51, y: 51 });
   expect(editor.commitRectangle('tiny', appearance, 3)).toBe(false);
-  expect(editor.document.order).toHaveLength(0);
+  expect(drawableIds(editor.document)).toHaveLength(0);
 });
 
 it('clears previews and annotations when replacing the image', () => {
@@ -60,7 +61,7 @@ it('clears previews and annotations when replacing the image', () => {
   editor.commitRectangle('one', appearance);
   editor.beginRectangle({ x: 20, y: 20 });
   editor.setImageSurface({ id: 'second', width: 200, height: 100 });
-  expect(editor.document.order).toHaveLength(0);
+  expect(drawableIds(editor.document)).toHaveLength(0);
   expect(editor.getPreview()).toBeUndefined();
   expect(editor.document.surface?.id).toBe('second');
 });
