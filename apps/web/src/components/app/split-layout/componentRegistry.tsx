@@ -264,15 +264,11 @@ function LegacyInboxView() {
 
 function RegisteredInboxView() {
   usePageViewTracking('inbox');
-  const newAppViews = useNewAppViews({
-    enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
-  });
+  const newAppViews = useNewAppViews();
   return (
-    <Show when={!isTouchDevice()} fallback={<LegacyInboxView />}>
-      <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
-        <Show when={newAppViews.enabled()} fallback={<LegacyInboxView />}>
-          <InboxView />
-        </Show>
+    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+      <Show when={newAppViews.enabled()} fallback={<LegacyInboxView />}>
+        <InboxView />
       </Show>
     </Show>
   );
@@ -496,9 +492,7 @@ registerComponent(
   'documents',
   withAuth((params: DocumentsComponentParams = {}) => {
     usePageViewTracking('documents');
-    const newAppViews = useNewAppViews({
-      enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
-    });
+    const newAppViews = useNewAppViews();
     const user = useUserContext();
     const preset = getViewPreset('documents', undefined, {
       userId: user.userId(),
@@ -515,7 +509,7 @@ registerComponent(
     return (
       <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
         <Show
-          when={newAppViews.enabled() && !isTouchDevice()}
+          when={newAppViews.enabled()}
           fallback={
             <SoupView
               viewName="Files"

@@ -19,6 +19,7 @@ const ROOT = join(import.meta.dir, '..', '..');
 const ACCESSORS: Partial<Record<(typeof services)[number], string>> = {
   'agent-harness': 'agentHarness',
   auth: 'auth',
+  calendar: 'calendar',
   cognition: 'cognition',
   contacts: 'contacts',
   email: 'email',

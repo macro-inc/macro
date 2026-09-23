@@ -430,7 +430,11 @@ function DeleteEventDialog(
   );
 }
 
-/** Anchors event details and actions to a rendered calendar event. */
+/**
+ * Anchors event details and actions to a rendered calendar event.
+ * The card stops at 32rem, or sooner when the space beside the event is
+ * shorter. Details scroll inside that cap; the RSVP row stays pinned.
+ */
 function EventDetailsPopover(props: EventDetailsPopoverProps) {
   const openEventComposer = useOpenEventComposer();
   const deleteDialog = useDeleteEventDialog({
@@ -456,6 +460,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
       gutter={8}
       flip
       slide
+      fitViewport
     >
       <Popover.Portal>
         <Layer depth={3}>
@@ -500,9 +505,9 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
             }}
           >
             <Popover.Arrow class="fill-surface" />
-            <div class="w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl glass bg-menu-glass text-ink">
+            <div class="flex max-h-[min(32rem,var(--kb-popper-content-available-height,32rem))] w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl glass bg-menu-glass text-ink">
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
-              <div class="flex items-center justify-end gap-1 px-2 pt-2">
+              <div class="flex shrink-0 items-center justify-end gap-1 px-2 pt-2">
                 <Button
                   aria-label="Copy event"
                   variant="ghost"
@@ -546,13 +551,13 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                   <CloseIcon />
                 </Popover.CloseButton>
               </div>
-              <EveryoneElseDeclinedNotice
-                event={props.event}
-                canModify={canModify()}
-                onDelete={deleteDialog.open}
-                onReschedule={openEditor}
-              />
-              <div>
+              <div class="min-h-0 flex-auto overflow-y-auto overscroll-contain">
+                <EveryoneElseDeclinedNotice
+                  event={props.event}
+                  canModify={canModify()}
+                  onDelete={deleteDialog.open}
+                  onReschedule={openEditor}
+                />
                 <div class="px-3 pb-3">
                   <EventDetails
                     event={props.event}
@@ -569,6 +574,8 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     />
                   }
                 />
+              </div>
+              <div class="shrink-0">
                 <EventRsvpSection event={props.event} />
               </div>
             </div>

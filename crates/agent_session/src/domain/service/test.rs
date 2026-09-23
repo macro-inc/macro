@@ -94,7 +94,7 @@ impl crate::domain::ports::SessionViewAccess for GrantingViewAccess {
 }
 
 #[tokio::test]
-async fn previews_resolve_inherited_document_access_through_the_view_port() {
+async fn previews_resolve_document_and_link_access_through_the_view_port() {
     let fx = fixture();
     let mut document_session = test_agent_session(AgentSessionId::new());
     document_session.thread_parent =
@@ -122,7 +122,7 @@ async fn previews_resolve_inherited_document_access_through_the_view_port() {
             .all(|preview| matches!(preview, AgentSessionPreview::NoAccess(_)))
     );
 
-    // With one, the document-born session is asked about and the rest are not.
+    // The view port can resolve document inheritance or link sharing.
     let service = fx
         .service
         .clone()
@@ -140,14 +140,13 @@ async fn previews_resolve_inherited_document_access_through_the_view_port() {
         .service
         .clone()
         .with_view_access(Arc::new(GrantingViewAccess(channel_session.id)));
-    assert_eq!(
+    assert!(matches!(
         channel_service
             .preview_sessions(&collaborator, vec![channel_session.id])
             .await
-            .unwrap(),
-        vec![AgentSessionPreview::NoAccess(channel_session.id)],
-        "channel grants are rows; the view port is never consulted for them"
-    );
+            .unwrap().as_slice(),
+        [AgentSessionPreview::Access(data)] if data.id == channel_session.id
+    ));
 }
 
 #[tokio::test]
@@ -165,6 +164,27 @@ async fn only_the_first_prompt_is_selected_for_automatic_naming() {
     assert_eq!(
         initial_prompt_for_rename(&folds, session, &prompt).await,
         Some("fix the flaky tests".to_owned())
+    );
+
+    // A control opens a turn of its own, so turn numbering cannot stand in for
+    // "nobody has spoken yet" - a model picked before the first prompt used to
+    // leave the session unnamed for life.
+    repo.extend_log(vec![AgentSessionLog {
+        agent_session_id: session,
+        user_id: None,
+        content: Message::ToRuntime(
+            AgentAction::set_model("gpt-5.5")
+                .to_runtime(
+                    &agent_client_protocol::schema::v1::SessionId::new("acp-1"),
+                    RequestId::Number(1),
+                )
+                .expect("a set-model frame builds"),
+        ),
+    }]);
+    assert_eq!(
+        initial_prompt_for_rename(&folds, session, &prompt).await,
+        Some("fix the flaky tests".to_owned()),
+        "a model chosen before the first prompt must not cost the session its name"
     );
 
     repo.extend_log(parse_log_as(session, TURN));
@@ -601,6 +621,28 @@ impl AgentSessionLogRepo for BlockingPromptLogs {
         claim: &SessionClaim,
         boundary: Option<crate::domain::model::HistoryBoundary>,
     ) -> Result<StoredAgentSessionLog> {
+        self.create_projected(log, Some(claim), boundary, None)
+            .await
+    }
+
+    async fn create_projected(
+        &self,
+        log: AgentSessionLog,
+        claim: Option<&SessionClaim>,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+        turn_state: Option<TurnState>,
+    ) -> Result<StoredAgentSessionLog> {
+        if claim.is_none()
+            && self.hang_disconnect
+            && matches!(
+                &log.content,
+                Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::Disconnected
+                })
+            )
+        {
+            return std::future::pending().await;
+        }
         let fail = match self.fail_restore_log {
             Some(RestoreLogFailure::InitializeRequest) => matches!(&log.content,
                 Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(agent_client_protocol::RawJsonRpcMessage::Request(request))))
@@ -623,7 +665,7 @@ impl AgentSessionLogRepo for BlockingPromptLogs {
             ));
         }
         self.repo
-            .create_fenced_with_boundary(log, claim, boundary)
+            .create_projected(log, claim, boundary, turn_state)
             .await
     }
 
@@ -1915,6 +1957,7 @@ async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
 
 mod initial_model;
 mod owner_binding;
+mod turn_projection;
 
 /// The live writer's fold says what each appended frame meant for the turn;
 /// history it catches up on says nothing.
@@ -2172,12 +2215,13 @@ async fn a_fenced_connection_buffers_streamed_frames_until_it_flushes() {
         );
     }
 
-    assert!(
+    assert_eq!(
         AgentSessionLogRepo::list_by_session(&repo, test_session())
             .await
             .unwrap()
-            .is_empty(),
-        "buffered frames are not yet durable"
+            .len(),
+        1,
+        "the initial activity projection is durable; subsequent token frames stay buffered"
     );
     assert!(realtime.published().is_empty());
     assert!(logs.flush_deadline().is_some());

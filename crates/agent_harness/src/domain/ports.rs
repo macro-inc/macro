@@ -15,8 +15,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{HarnessError, Result};
 use super::model::{
-    AgentKind, AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, DeclinedMention,
-    HarnessCommand, PriorMessage, ProvisionedEgress, ReachableRepository, SandboxEgress,
+    AgentKind, AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, ConversationContext,
+    DeclinedMention, HarnessCommand, ProvisionedEgress, ReachableRepository, SandboxEgress,
     SessionAnnouncement, SessionBlocker, SpawnContainer,
 };
 use super::notifications::PlannedNotification;
@@ -41,6 +41,25 @@ pub enum CommandTarget {
 pub trait ReachableRepositories: Send + Sync + 'static {
     /// Every repository `user` reaches, sorted by `owner/name`.
     async fn for_user(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<ReachableRepository>>;
+}
+
+/// The branches on one repository a user can start a coding session from.
+///
+/// Separate from [`ReachableRepositories`] because listing every repository
+/// is a cached installation sweep, and listing one repository's branches is
+/// a scoped call after proving the user reaches that repository.
+#[async_trait::async_trait]
+pub trait RepositoryBranches: Send + Sync + 'static {
+    /// Branch names on `owner`/`name`, in the order GitHub returned them.
+    ///
+    /// [`HarnessError::RepositoryUnavailable`] when the user cannot reach the
+    /// repository. An empty repository is an empty list.
+    async fn for_repository(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        owner: &str,
+        name: &str,
+    ) -> Result<Vec<String>>;
 }
 
 /// Forwards commands to the replica currently responsible for execution.
@@ -136,23 +155,24 @@ pub trait MessagePromptContext: Send + Sync + 'static {
         origin: &super::model::AnnounceOrigin,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Read up to ten preceding live messages with a fresh access check.
-    fn preceding_messages(
+    /// Read up to ten preceding live messages, and the comment anchor the
+    /// prompt sits on, with a fresh access check.
+    fn conversation_context(
         &self,
         actor: &MacroUserIdStr<'static>,
         origin: &super::model::AnnounceOrigin,
-    ) -> impl Future<Output = Result<Vec<PriorMessage>>> + Send;
+    ) -> impl Future<Output = Result<ConversationContext>> + Send;
 }
 
-/// Composes an agent prompt from raw markdown and optional channel history.
+/// Composes an agent prompt from raw markdown and optional conversation context.
 pub trait AgentPromptComposer: Send + Sync + 'static {
     /// Return the markdown that should be delivered to the agent runtime.
-    /// `None` sanitizes a prompt without adding a channel-context node.
+    /// `None` sanitizes a prompt without adding a conversation-context node.
     fn compose(
         &self,
         prompt_markdown: &str,
         parent: Option<&messages::domain::models::MessageParent>,
-        messages: Option<&[PriorMessage]>,
+        context: Option<&ConversationContext>,
     ) -> impl Future<Output = Result<String>> + Send;
 }
 

@@ -1,5 +1,8 @@
 //! PostgreSQL adapter for markdown lifecycle backfill.
 
+use anyhow::Context as _;
+use model_owner::Owner;
+
 use crate::domain::markdown_backfill::{MarkdownBackfillCandidate, MarkdownBackfillRepo};
 use crate::outbound::pg_document_repo::PgDocumentRepo;
 
@@ -44,21 +47,22 @@ impl MarkdownBackfillRepo for PgDocumentRepo {
             .fetch_all(&self.pool)
             .await?;
 
-        Ok(rows
-            .into_iter()
+        rows.into_iter()
             .map(
                 |(id, owner, document_instance_id, uploaded, content_state, content_location)| {
-                    MarkdownBackfillCandidate {
+                    let owner = Owner::from_principal_str(&owner)
+                        .with_context(|| format!("document {id} has an invalid owner"))?;
+                    Ok(MarkdownBackfillCandidate {
                         id,
                         owner,
                         document_instance_id,
                         uploaded,
                         content_state,
                         content_location,
-                    }
+                    })
                 },
             )
-            .collect())
+            .collect()
     }
 
     #[tracing::instrument(err, skip(self, candidates), fields(count = candidates.len()))]

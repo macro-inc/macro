@@ -93,13 +93,14 @@ pub trait NotificationReader: Send + Sync + 'static {
         req: GetNotificationsByEventItemIdsRequest<'_>,
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
 
-    /// Get a user's active notifications for multiple entities, grouped by requested entity.
-    ///
-    /// Metadata is deserialized from the event-type-tagged notification representation.
+    /// Get viewer-owned notifications grouped by entity, filtering before each limit.
+    /// Defaults preserve the complete active edge. Metadata is deserialized from
+    /// the event-type-tagged notification representation.
     fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: Vec<Entity<'static>>,
+        query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report>> + Send;
 
     /// Get a single user notification by ID.
@@ -745,10 +746,12 @@ where
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: Vec<Entity<'static>>,
+        query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report> {
+        query.validate()?;
         Ok(self
             .repository
-            .get_entity_notifications_batch(user_id, entities)
+            .get_entity_notifications_batch(user_id, entities, query)
             .await?
             .into_iter()
             .map(|(entity, notifications)| {

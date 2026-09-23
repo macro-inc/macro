@@ -18,7 +18,6 @@ import {
 } from '../Input/utils/persistence';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
-import { useChannelParticipants } from '../use-channel-participants';
 import type { FocusRequest } from './focus-request';
 
 type ThreadReplyChannelInputProps = {
@@ -56,9 +55,6 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();
-  const participants = useChannelParticipants(() =>
-    props.parent.type === 'channel' ? props.parent.id : ''
-  );
   const channelBotMentionUsers = useMessageBotMentionUsers(() => props.parent);
 
   const tracker = createInputAttachmentTracker({
@@ -110,7 +106,6 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       }}
       collapsible={props.collapsible}
       autofocus={false}
-      participants={participants.users}
       bots={channelBotMentionUsers}
       attachmentTracker={tracker}
       persistenceKey={makeInputValuePersistenceKey({

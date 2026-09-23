@@ -533,6 +533,7 @@ dependencies = [
  "model-entity",
  "model_owner",
  "model_user",
+ "models_permissions",
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -540,6 +541,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "share_permission_db_utils",
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
@@ -2906,7 +2908,6 @@ dependencies = [
  "thiserror 2.0.18",
  "utoipa",
  "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -3514,6 +3515,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel_labels"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "cowlike",
+ "entity_access",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-entity",
+ "model-error-response",
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "channel_sender"
 version = "0.1.0"
 dependencies = [
@@ -3610,6 +3635,7 @@ dependencies = [
  "async-trait",
  "attachment",
  "axum",
+ "bot_id",
  "chrono",
  "entity_access",
  "entity_access_db_utils",
@@ -4033,6 +4059,7 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "model_notifications",
+ "model_owner",
  "model_user",
  "models_pagination",
  "models_properties",
@@ -5289,6 +5316,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "dictation"
+version = "0.1.0"
+dependencies = [
+ "ai_usage",
+ "async-openai",
+ "axum",
+ "axum-extra",
+ "backoff",
+ "bytes",
+ "http-body-util",
+ "infer 0.19.0",
+ "macro_authorization",
+ "macro_env_var",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "opus-pure",
+ "rate_limit",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "symphonia",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "tracing-subscriber",
+ "utoipa",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
 name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5438,6 +5500,7 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "model_notifications",
+ "model_owner",
  "models_dcs",
  "models_opensearch",
  "models_permissions",
@@ -5486,6 +5549,7 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_changes",
  "agent_session",
  "ai_tools",
  "ai_usage",
@@ -5509,6 +5573,7 @@ dependencies = [
  "calendar_events",
  "call",
  "channel_bots",
+ "channel_labels",
  "channels",
  "chat",
  "chrono",
@@ -5523,6 +5588,7 @@ dependencies = [
  "cool_asserts",
  "cowlike",
  "crm",
+ "dictation",
  "document_sub_type",
  "documents",
  "doppler-config",
@@ -5789,7 +5855,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "unicode-segmentation",
- "urlencoding",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -5818,6 +5883,7 @@ dependencies = [
  "macro_sha_count_client",
  "macro_uuid",
  "model",
+ "model_owner",
  "redis",
  "s3_client",
  "s3_key",
@@ -6719,6 +6785,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "extended"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af9673d8203fcb076b19dfd17e38b3d4ae9f44959416ea532ce72415a6020365"
+
+[[package]]
 name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7541,6 +7613,7 @@ dependencies = [
  "macro_authorization",
  "macro_user_id",
  "model-entity",
+ "model_owner",
  "model_user",
  "models_properties",
  "rootcause",
@@ -7558,6 +7631,7 @@ dependencies = [
  "async-graphql",
  "chrono",
  "email",
+ "email_utils",
  "entity_access",
  "futures",
  "graphql_common",
@@ -7687,6 +7761,7 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "model_file_type",
+ "model_owner",
  "models_grouping",
  "models_pagination",
  "models_properties",
@@ -7716,6 +7791,7 @@ dependencies = [
  "item_filters",
  "macro_user_id",
  "model_file_type",
+ "model_owner",
  "notification_state",
  "serde",
  "serde_json",
@@ -9191,6 +9267,7 @@ dependencies = [
  "filter_ast",
  "macro_user_id",
  "model_file_type",
+ "model_owner",
  "nom 8.0.0",
  "non_empty",
  "notification_state",
@@ -9895,9 +9972,9 @@ dependencies = [
 
 [[package]]
 name = "loro"
-version = "1.13.7"
+version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bec673c3332ede11cc58d5d88de55a01ba17cf28b0bd0feb66ca1c66fb757ad"
+checksum = "8e86dea63b66576db244cbc3a40bdb17517263c93f318e2fbe08aca3be1192cb"
 dependencies = [
  "enum-as-inner 0.6.1",
  "generic-btree",
@@ -9911,9 +9988,9 @@ dependencies = [
 
 [[package]]
 name = "loro-common"
-version = "1.13.1"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b51042936156a1d537df8a38938ec8ed24b45de14530af933c1d02de39c9e056"
+checksum = "2146b353a56b0a743f8643725cb9f42dfe209665939b59db901ecea732a3ab29"
 dependencies = [
  "arbitrary",
  "enum-as-inner 0.6.1",
@@ -9941,9 +10018,9 @@ dependencies = [
 
 [[package]]
 name = "loro-internal"
-version = "1.13.7"
+version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b635801310e2047f74be15f58988f2f78e7874e77aa08643fe9e6eec356f6848"
+checksum = "8d5806b65ee68c3ae7891959dd968898860dab74fbf6498b312de9b548dce5ec"
 dependencies = [
  "append-only-bytes",
  "arref",
@@ -9988,9 +10065,9 @@ dependencies = [
 
 [[package]]
 name = "loro-kv-store"
-version = "1.13.7"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b42b8d6d2c95abf67d7f50a60171759d693206796d7f8f03f3fe68e531c88794"
+checksum = "841e206d3749fd14f23e64985be230dad2b2199da1d381c44c3dd0d2b9583fcc"
 dependencies = [
  "bytes",
  "ensure-cov",
@@ -10697,6 +10774,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "fusionauth",
+ "futures",
  "http 1.4.0",
  "lexical_client",
  "macro_auth",
@@ -11176,7 +11254,6 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11292,6 +11369,7 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "model_file_type",
+ "model_owner",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -11379,6 +11457,7 @@ dependencies = [
  "macro_user_id",
  "model",
  "model-entity",
+ "model_owner",
  "models_pagination",
  "models_properties",
  "reminders",
@@ -12384,6 +12463,12 @@ dependencies = [
  "tokio",
  "tokio-stream",
 ]
+
+[[package]]
+name = "opus-pure"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de6a3cef053e1fdea38a5e50edb0789590a31184c5a59f6cd5e462fe844793e7"
 
 [[package]]
 name = "ordered-float"
@@ -14687,6 +14772,7 @@ name = "s3_key"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "model_owner",
  "urlencoding",
  "workspace-hack",
 ]
@@ -15627,6 +15713,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model-entity",
+ "model_owner",
  "models_permissions",
  "rootcause",
  "sqlx",
@@ -15919,6 +16006,7 @@ name = "soup"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_changes",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -15948,6 +16036,7 @@ dependencies = [
  "mockall",
  "model-entity",
  "model-error-response",
+ "model_owner",
  "model_user",
  "models_grouping",
  "models_pagination",
@@ -16001,7 +16090,7 @@ dependencies = [
  "chrono",
  "document_sub_type",
  "item-filter-index",
- "macro_user_id",
+ "model_owner",
  "models_soup",
  "postcard",
  "predicate-index",
@@ -16626,6 +16715,107 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
+name = "symphonia"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7edef6a96b696d4e0cab5ee9ebb7ca155ed95f30a6b45bbb8b97d2727f02424"
+dependencies = [
+ "lazy_static",
+ "symphonia-core",
+ "symphonia-format-isomp4",
+ "symphonia-format-mkv",
+ "symphonia-format-ogg",
+ "symphonia-format-riff",
+ "symphonia-metadata",
+]
+
+[[package]]
+name = "symphonia-common"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2acc3fcc18ec9b8cdd48614e259c4cf0d27b71d41e5d9b120b42c5adab12d7c4"
+dependencies = [
+ "log",
+ "symphonia-core",
+ "symphonia-metadata",
+]
+
+[[package]]
+name = "symphonia-core"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01c412864d599d4750d0c3d684d7e093ec05e5309681ef5252cc1096a437f6e0"
+dependencies = [
+ "bitflags 2.11.1",
+ "bytemuck",
+ "lazy_static",
+ "log",
+ "num-complex",
+ "smallvec",
+]
+
+[[package]]
+name = "symphonia-format-isomp4"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e681a70e1870d34e02abf1dbc51e4267c3f1827801474e8870be8c689fc4dc3"
+dependencies = [
+ "log",
+ "symphonia-common",
+ "symphonia-core",
+ "symphonia-metadata",
+]
+
+[[package]]
+name = "symphonia-format-mkv"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d015c5c0558864665894b3f4cbd95e10abb01b9c868e751c72670f326a56360e"
+dependencies = [
+ "lazy_static",
+ "log",
+ "symphonia-common",
+ "symphonia-core",
+]
+
+[[package]]
+name = "symphonia-format-ogg"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b5495e7f7e3c7035328d82b6d6e377eef289bb0c4105bdeb557fc93a833f994"
+dependencies = [
+ "log",
+ "symphonia-common",
+ "symphonia-core",
+ "symphonia-metadata",
+]
+
+[[package]]
+name = "symphonia-format-riff"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ff70929083a8c1a5f6cd7c904b6071c7914ad04739b510c2f7239dfc9b7dabe"
+dependencies = [
+ "extended",
+ "log",
+ "symphonia-core",
+ "symphonia-metadata",
+]
+
+[[package]]
+name = "symphonia-metadata"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83713a97705d77bdef7cdbc0768fd6e5a54e4cd7e48d60a806ae85639e2c87c6"
+dependencies = [
+ "lazy_static",
+ "log",
+ "regex-lite",
+ "smallvec",
+ "symphonia-core",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16671,6 +16861,7 @@ dependencies = [
  "matchit 0.8.4",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "subtle",
  "sync_service_bebop_schema",
  "thiserror 2.0.18",
@@ -16700,9 +16891,11 @@ dependencies = [
  "model",
  "reqwest 0.13.4",
  "serde",
+ "serde_json",
  "sync_service_hex",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -19292,6 +19485,7 @@ dependencies = [
  "ahash",
  "aho-corasick",
  "anyhow",
+ "async-openai",
  "aws-config",
  "aws-credential-types",
  "aws-runtime",
@@ -19308,6 +19502,7 @@ dependencies = [
  "base64 0.22.1",
  "bitflags 2.11.1",
  "bstr",
+ "bytemuck",
  "byteorder",
  "bytes",
  "bzip2",

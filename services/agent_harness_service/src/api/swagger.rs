@@ -9,7 +9,9 @@ use agent_harness::inbound::model_load::{
     self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
     ModelHarnessDto,
 };
-use agent_harness::inbound::repositories::{self, AgentRepositoriesResponse, AgentRepositoryDto};
+use agent_harness::inbound::repositories::{
+    self, AgentRepositoriesResponse, AgentRepositoryBranchesResponse, AgentRepositoryDto,
+};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::inbound::axum_router::{
@@ -52,6 +54,8 @@ impl Modify for SecurityAddon {
         axum_router::get_agent_session_handler,
         axum_router::preview_agent_sessions_handler,
         axum_router::rename_agent_session_handler,
+        axum_router::sharing::get_agent_session_permissions,
+        axum_router::sharing::update_agent_session_permissions,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
         axum_router::get_agent_session_queue_handler,
@@ -63,6 +67,7 @@ impl Modify for SecurityAddon {
         axum_router::put_agent_sandbox_size_handler,
         model_load::load_agent_models_handler,
         repositories::list_agent_repositories_handler,
+        repositories::list_agent_repository_branches_handler,
         changes_router::get_agent_session_changes_handler,
         changes_router::get_agent_session_changes_patch_handler,
         changes_router::refresh_agent_session_changes_handler,
@@ -105,6 +110,7 @@ impl Modify for SecurityAddon {
         AgentModelsStatusDto,
         ModelHarnessDto,
         AgentRepositoriesResponse,
+        AgentRepositoryBranchesResponse,
         AgentRepositoryDto,
         AgentSessionChangesResponse,
         AgentSessionChangesPatchResponse,

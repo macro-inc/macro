@@ -227,6 +227,10 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       entity.type === 'email' ||
       entity.type === 'channel' ||
       entity.type === 'chat' ||
+      // Agent-session rows exist in the inbox only through their settled /
+      // waiting-for-input / mentioned notifications, so done resolves to
+      // those notification ids like every other notification-backed type.
+      entity.type === 'agent_session' ||
       entity.type === 'document' ||
       entity.type === 'project' ||
       entity.type === 'foreign' ||

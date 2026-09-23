@@ -29,7 +29,7 @@ async fn set_legacy_team_share(
 ) -> Result<crate::domain::models::DocumentTeamShare, crate::domain::models::DocumentError> {
     let facts = repo.get_team_share_facts(document_id).await?;
     let command = authorize_team_share(
-        Some(&facts.owner),
+        facts.owner.as_user(),
         &facts,
         TeamShareRequest {
             access_level: None,
@@ -45,7 +45,7 @@ async fn set_legacy_team_share(
 async fn set_comment_share(repo: &PgDocumentRepo) {
     let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
     let command = authorize_team_share(
-        Some(&facts.owner),
+        facts.owner.as_user(),
         &facts,
         TeamShareRequest {
             access_level: Some(Some(AccessLevel::Comment)),
@@ -61,7 +61,7 @@ async fn set_comment_share(repo: &PgDocumentRepo) {
 async fn team_edit_args(repo: &PgDocumentRepo, level: Option<AccessLevel>) -> EditDocumentRepoArgs {
     let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
     let command = authorize_team_share(
-        Some(&facts.owner),
+        facts.owner.as_user(),
         &facts,
         TeamShareRequest {
             access_level: Some(level),

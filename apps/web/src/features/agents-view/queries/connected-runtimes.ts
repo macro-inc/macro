@@ -1,3 +1,4 @@
+import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
 import {
   type AgentModelTarget,
   buildAgentModelTargets,
@@ -27,7 +28,7 @@ export function connectedRuntimes(
       if (target.harness === 'in-memory') {
         return {
           id: 'in-memory',
-          name: 'Macro Harness',
+          name: MACRO_HARNESS_NAME,
           kind: 'builtin',
           target,
           connected: true,

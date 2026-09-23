@@ -1,8 +1,4 @@
-import {
-  ENABLE_DOCUMENT_MENTION_NOTIFICATIONS,
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
+import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
@@ -238,6 +234,7 @@ export function createNotificationSource(
   const notificationsQuery = useUserNotificationsQuery(() => ({
     limit: QUERY_LIMIT,
   }));
+  const usesGraphql = () => notificationsQuery.transport === 'graphql';
   const mutedEntitiesQuery = createMutedEntitiesQuery({ limit: QUERY_LIMIT });
   const muteItem = useMuteItemMutation();
   const unmuteItem = useUnmuteItemMutation();
@@ -260,7 +257,7 @@ export function createNotificationSource(
   // Soup edges. Keep their intent until explicitly cleared, replaced, or rolled
   // back rather than letting pagination resurrect stale edge state.
   createEffect(() => {
-    if (isFeatureEnabled(enableGraphqlSoup)) return;
+    if (usesGraphql()) return;
     const raw = notificationsQuery.data;
     if (!raw) return;
     const presentIds = new Set(raw.map((n) => n.id));
@@ -279,7 +276,7 @@ export function createNotificationSource(
   // a fetch that is still running may hold a pre-write snapshot that will
   // land later; in both cases the override must survive.
   createEffect(() => {
-    if (isFeatureEnabled(enableGraphqlSoup)) return;
+    if (usesGraphql()) return;
     const raw = notificationsQuery.data;
     if (!raw) return;
     const seenIds = Object.keys(seenOverrides);
@@ -313,7 +310,7 @@ export function createNotificationSource(
     // TODO(dev-rb/notifications): Remove this legacy eager pagination when the
     // REST notification source is retired. GraphQL consumers should use Soup
     // notification edges or dedicated notification queries instead.
-    if (isFeatureEnabled(enableGraphqlSoup)) return;
+    if (usesGraphql()) return;
     if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
@@ -389,7 +386,7 @@ export function createNotificationSource(
 
   const unsubscribeFromGraphql = subscribeToGraphqlNotificationPatches(
     (patch) => {
-      if (!isFeatureEnabled(enableGraphqlSoup)) return;
+      if (!usesGraphql()) return;
       scheduleGraphqlNotificationRefetch();
       if (patch.__typename !== 'GraphqlNewNotification') return;
       dispatchIncomingNotification(mapGraphqlNotification(patch.notification));
@@ -411,10 +408,7 @@ export function createNotificationSource(
   };
 
   createSocketEffect(ws, (wsData) => {
-    if (
-      wsData.type !== NOTIFICATION_EVENT_TYPE ||
-      isFeatureEnabled(enableGraphqlSoup)
-    ) {
+    if (wsData.type !== NOTIFICATION_EVENT_TYPE || usesGraphql()) {
       return;
     }
     let parsedNotification: UnifiedNotification;
@@ -521,9 +515,7 @@ export function createNotificationSource(
     unmuteEntity,
     subscribe,
     get withLocalOverrides() {
-      return isFeatureEnabled(enableGraphqlSoup)
-        ? withNotificationOverrides
-        : undefined;
+      return usesGraphql() ? withNotificationOverrides : undefined;
     },
   };
 }

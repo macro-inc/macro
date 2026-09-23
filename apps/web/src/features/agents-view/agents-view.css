@@ -304,9 +304,23 @@
 		gap: 20px;
 	}
 
+	/* Keep the greeting above center, independent of the draft and repository bar height. */
+	.agents-view .newchat[data-active] {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: max(0px, calc(40% - 60px)) auto 1fr;
+		justify-items: center;
+		align-items: start;
+		gap: 0;
+	}
+
+	.agents-view .newchat > .col {
+		grid-row: 2;
+	}
+
 	:where(.agents-view, .agents-view-portal) .newchat .col {
 		width: 100%;
-		max-width: 768px;
+		max-width: 720px;
 		display: flex;
 		flex-direction: column;
 		gap: 20px;
@@ -327,12 +341,37 @@
 	}
 
 	:where(.agents-view, .agents-view-portal) .composer-drawer {
+		position: relative;
 		display: grid;
 		grid-template-rows: 0fr;
-		margin: 0 20px;
+		border-radius: 0 0 20px 20px;
+		background: color-mix(in oklch, var(--surface-1) 40%, var(--surface-2));
 		opacity: 0;
 		visibility: hidden;
-		transition: grid-template-rows 240ms ease, opacity 180ms ease, visibility 240ms;
+		transition: grid-template-rows 200ms cubic-bezier(0.77, 0, 0.175, 1), opacity 200ms cubic-bezier(0.23, 1, 0.32, 1), visibility 200ms;
+	}
+
+	:where(.agents-view, .agents-view-portal) .composer-drawer::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border: 1px solid var(--edge-muted);
+		border-top: 0;
+		border-radius: inherit;
+		pointer-events: none;
+	}
+
+	/* Continue the footer behind the input's rounded bottom corners. */
+	:where(.agents-view, .agents-view-portal) .composer-drawer::after {
+		content: '';
+		position: absolute;
+		bottom: 100%;
+		left: 0;
+		right: 0;
+		height: 32px;
+		background: inherit;
+		border-inline: 1px solid var(--edge-muted);
+		pointer-events: none;
 	}
 
 	:where(.agents-view, .agents-view-portal) .composer-drawer[data-open] {
@@ -343,19 +382,15 @@
 
 	:where(.agents-view, .agents-view-portal) .composer-drawer-inner {
 		min-height: 0;
+		overflow: hidden;
 	}
 
 	:where(.agents-view, .agents-view-portal) .composer-drawer-content {
 		display: flex;
 		align-items: center;
-		margin-top: -32px;
-		padding: 42px 12px 10px;
-		border-radius: 0 0 20px 20px;
-		background: var(--surface-2);
-		border: var(--hair) solid var(--edge-muted);
-		border-top: 0;
+		padding: 2px 10px;
 		transform: translateY(-12px);
-		transition: transform 240ms ease;
+		transition: transform 200ms cubic-bezier(0.77, 0, 0.175, 1);
 	}
 
 	:where(.agents-view, .agents-view-portal) .composer-drawer[data-open] .composer-drawer-content {

@@ -106,6 +106,7 @@ fn build_room_composite_egress_request(
     });
 
     let options = RoomCompositeOptions {
+        layout: "speaker".to_owned(),
         encoding: encoding::EncodingOptions {
             audio_codec: AudioCodec::Aac,
             video_codec: VideoCodec::H264Main,

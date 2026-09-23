@@ -43,6 +43,7 @@ frecency = { path = "../../crates/frecency", features = [
   "postgres",
 ] }
 fusionauth = { path = "../../crates/fusionauth" }
+futures = { workspace = true }
 http = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_auth = { path = "../../crates/macro_auth" }

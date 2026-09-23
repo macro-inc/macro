@@ -1,4 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { enableCrm } from '@core/constant/featureFlags';
 import {
   useChannelsContext,
   useDmActivityByUserId,
@@ -20,6 +22,7 @@ import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
 } from '@queries/channel/graphql';
+import { materializeCachedGraphqlCrmCompanies } from '@queries/crm/graphql';
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
@@ -307,6 +310,7 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
+  const crmFlag = useFeatureFlag(enableCrm);
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
@@ -867,24 +871,29 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const first = args[0];
     const options = typeof first === 'object' ? first : undefined;
     const buckets = options ? [...options.buckets] : (args as Bucket[]);
+    const projectedBuckets = createMemo(() =>
+      (buckets.length ? buckets : BUCKET_COMBINATIONS.all).filter(
+        (bucket) => bucket !== 'crm_company' || crmFlag().enabled
+      )
+    );
     const baseList = createLazyMemo(() => {
-      if (options?.enabled?.() === false) return [];
+      const activeBuckets = projectedBuckets();
+      if (options?.enabled?.() === false || activeBuckets.length === 0)
+        return [];
       let indices: IndexEntry[];
 
-      if (buckets.length === 0) {
-        indices = preBakedIndices().all;
-      } else if (buckets.length === 1) {
+      if (activeBuckets.length === 1) {
         // Single bucket = return pre-computed bucket list
-        indices = bucketIndices().get(buckets[0]) ?? [];
+        indices = bucketIndices().get(activeBuckets[0]) ?? [];
       } else {
         // Check for pre-baked combination
-        const preBaked = getPreBakedIndices(buckets);
+        const preBaked = getPreBakedIndices(activeBuckets);
         if (preBaked) {
           indices = preBaked;
         } else {
           // Fallback: merge-sort the requested bucket index lists
           const allIndices = bucketIndices();
-          const indicesToMerge = buckets
+          const indicesToMerge = activeBuckets
             .map((b) => allIndices.get(b) ?? [])
             .filter((arr) => arr.length > 0);
           indices = mergeMultipleSortedIndices(indicesToMerge);
@@ -903,10 +912,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       options && cacheHost
         ? createProjectedList<QuickAccessItem>({
             host: cacheHost,
-            buckets,
+            get buckets() {
+              return projectedBuckets();
+            },
             revision: cacheRevision,
             searchTerm: options.searchTerm,
-            enabled: options.enabled,
+            // An empty bucket list means "all" to the cache, not "none".
+            enabled: () =>
+              projectedBuckets().length > 0 && options.enabled?.() !== false,
             existingItems: localItems,
             materialize: async (documents) => {
               const idOf = (recordKey: string) =>
@@ -914,15 +927,20 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               const missing = documents.filter(
                 ({ recordKey }) => !itemCache.has(idOf(recordKey))
               );
-              const [historyItems, cachedChannelItems] = await Promise.all([
-                materializeCachedGraphqlHistoryItems(cacheHost, missing),
-                materializeCachedGraphqlChannels(cacheHost, missing),
-              ]);
+              const [historyItems, cachedChannelItems, cachedCompanies] =
+                await Promise.all([
+                  materializeCachedGraphqlHistoryItems(cacheHost, missing),
+                  materializeCachedGraphqlChannels(cacheHost, missing),
+                  materializeCachedGraphqlCrmCompanies(cacheHost, missing),
+                ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
               );
               const channelsById = new Map(
                 cachedChannelItems.map((item) => [item.id, item])
+              );
+              const companiesById = new Map(
+                cachedCompanies.map((company) => [company.id, company])
               );
               return documents.flatMap((document): QuickAccessItem[] => {
                 const id = idOf(document.recordKey);
@@ -943,6 +961,24 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                         createdAt: historyItem.createdAt,
                       },
                       data: entity,
+                    },
+                  ];
+                }
+                const company = companiesById.get(id);
+                if (company) {
+                  return [
+                    {
+                      kind: 'entity',
+                      id,
+                      bucket: 'crm_company',
+                      searchText: getCrmCompanySearchText(company),
+                      sortTimestamp: document.timestampMs,
+                      timestamps: {
+                        viewedAt: company.viewedAt,
+                        updatedAt: company.updatedAt,
+                        createdAt: company.createdAt,
+                      },
+                      data: company,
                     },
                   ];
                 }

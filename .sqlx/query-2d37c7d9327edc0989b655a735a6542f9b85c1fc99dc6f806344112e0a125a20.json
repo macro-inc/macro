@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT 'document' AS \"kind!\", id AS \"id!\" FROM \"Document\"\n        UNION ALL SELECT 'chat', id FROM \"Chat\"\n        UNION ALL SELECT 'project', id FROM \"Project\"\n        UNION ALL SELECT 'entity', id::text FROM entity\n        UNION ALL SELECT CASE WHEN granted_from_project_id IS NULL THEN 'access' ELSE 'inherited' END,\n            entity_id::text FROM entity_access\n        ORDER BY 1, 2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "2d37c7d9327edc0989b655a735a6542f9b85c1fc99dc6f806344112e0a125a20"
+}

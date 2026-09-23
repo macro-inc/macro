@@ -26,6 +26,8 @@ export type CollapsedInputProps = {
    */
   disabled?: boolean;
   class?: string;
+  /** Extra composer action placed immediately before Send. */
+  trailingAction?: JSX.Element;
   /**
    * Target of the real input this trigger stands in for. Focused via the
    * `focusInput` directive when the trigger is clicked, so the iOS virtual
@@ -112,6 +114,7 @@ export function CollapsedInput(props: CollapsedInputProps) {
             <span>{attachmentCount()}</span>
           </Button>
         </Show>
+        {props.trailingAction}
         <Show when={!isMobile() || !props.disabled}>
           <SendButton
             appearance="composer"

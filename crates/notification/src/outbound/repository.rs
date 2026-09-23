@@ -491,11 +491,12 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         filters: NotificationListFilters,
     ) -> impl std::future::Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
 
-    /// Get a user's active notifications for multiple entities, grouped by requested entity.
+    /// Get viewer-owned notification edges with per-entity filtering and limits.
     fn get_entity_notifications_batch(
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: Vec<Entity<'static>>,
+        query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> impl std::future::Future<
         Output = Result<
             HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
@@ -1188,7 +1189,14 @@ impl NotificationDbOps for PgPool {
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: Vec<Entity<'static>>,
+        query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>, Report> {
+        if query != Default::default() {
+            return super::entity_notifications::get_filtered_entity_notifications(
+                self, user_id, entities, query,
+            )
+            .await;
+        }
         let mut seen_entities = HashSet::new();
         let entities = entities
             .into_iter()
@@ -1679,9 +1687,10 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: Vec<Entity<'static>>,
+        query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>, Report> {
         self.db
-            .get_entity_notifications_batch(user_id, entities)
+            .get_entity_notifications_batch(user_id, entities, query)
             .await
     }
 

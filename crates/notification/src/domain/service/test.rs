@@ -412,6 +412,7 @@ impl NotificationRepository for MockRepository {
         &self,
         _user_id: MacroUserIdStr<'_>,
         entities: Vec<Entity<'static>>,
+        _query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>, Report> {
         Ok(entities
             .into_iter()
@@ -655,9 +656,10 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: Vec<Entity<'static>>,
+        query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>, Report> {
         (**self)
-            .get_entity_notifications_batch(user_id, entities)
+            .get_entity_notifications_batch(user_id, entities, query)
             .await
     }
 
@@ -1600,7 +1602,11 @@ async fn test_get_entity_notifications_batch_skips_invalid_tagged_metadata() {
     };
 
     let notifications = service
-        .get_entity_notifications_batch::<TestNotifEvent>(user, vec![entity_ref.clone()])
+        .get_entity_notifications_batch::<TestNotifEvent>(
+            user,
+            vec![entity_ref.clone()],
+            Default::default(),
+        )
         .await
         .expect("invalid metadata does not fail the batch");
 
@@ -1635,7 +1641,11 @@ async fn test_get_entity_notifications_batch_deserializes_tagged_metadata() {
     };
 
     let notifications = service
-        .get_entity_notifications_batch::<TestNotifEvent>(user, vec![entity_ref.clone()])
+        .get_entity_notifications_batch::<TestNotifEvent>(
+            user,
+            vec![entity_ref.clone()],
+            Default::default(),
+        )
         .await
         .expect("tagged notification metadata deserializes");
 

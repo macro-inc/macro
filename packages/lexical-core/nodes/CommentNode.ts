@@ -1,6 +1,8 @@
 import { MarkNode, type SerializedMarkNode } from '@lexical/mark';
+import { $dfs } from '@lexical/utils';
 import {
   $applyNodeReplacement,
+  $getRoot,
   type EditorConfig,
   type ElementNode,
   type LexicalUpdateJSON,
@@ -31,6 +33,27 @@ export function $createCommentNode(params: {
 
 export function $isCommentNode(node: any): node is CommentNode {
   return node instanceof CommentNode;
+}
+
+/**
+ * The document text a comment mark covers, in reading order. A range spanning
+ * several blocks is wrapped once per block, so the blocks are rejoined on
+ * newlines. Must run inside an editor read or update.
+ */
+export function $getCommentMarkText(markId: string): string {
+  const blocks: string[] = [];
+  let blockKey: NodeKey | undefined;
+  for (const { node } of $dfs($getRoot())) {
+    if (!$isCommentNode(node) || !node.getIDs().includes(markId)) continue;
+    const key = node.getTopLevelElement()?.getKey();
+    if (key !== undefined && key === blockKey) {
+      blocks[blocks.length - 1] += node.getTextContent();
+      continue;
+    }
+    blockKey = key;
+    blocks.push(node.getTextContent());
+  }
+  return blocks.join('\n').trim();
 }
 
 export class CommentNode extends MarkNode {

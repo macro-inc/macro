@@ -37,6 +37,7 @@ use item_filters::{
 };
 use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
 use model_file_type::FileType;
+use model_owner::Owner;
 use notification_state::graphql::GraphqlNotificationState;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -164,6 +165,12 @@ fn parse_id(id: ID, field: &str) -> InputResult<Uuid> {
 fn parse_macro_user_id(value: String, field: &str) -> InputResult<MacroUserIdStr<'static>> {
     MacroUserIdStr::parse_from_str(&value)
         .map(CowLike::into_owned)
+        .map_err(|err| InputError::new(format!("invalid {field} `{value}`: {err}")))
+}
+
+/// Parse an owner principal — a user, bot, or team — with a field-specific error.
+fn parse_owner(value: String, field: &str) -> InputResult<Owner> {
+    Owner::from_principal_str(&value)
         .map_err(|err| InputError::new(format!("invalid {field} `{value}`: {err}")))
 }
 
@@ -609,7 +616,8 @@ enum GraphqlDocumentLiteral {
     Id(ID),
     /// The project id option.
     ProjectId(ID),
-    /// The owner option.
+    /// The owner principal option — a user (`macro|<email>`), a bot
+    /// (`bot|<uuid>`), or a team (a bare hyphenated uuid).
     Owner(String),
     /// The importance option.
     Importance(bool),
@@ -647,7 +655,7 @@ impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
             ),
             Self::Id(id) => DocumentLiteral::Id(parse_id(id, "id")?),
             Self::ProjectId(id) => DocumentLiteral::ProjectId(parse_id(id, "projectId")?),
-            Self::Owner(owner) => DocumentLiteral::Owner(parse_macro_user_id(owner, "owner")?),
+            Self::Owner(owner) => DocumentLiteral::Owner(parse_owner(owner, "owner")?),
             Self::Importance(importance) => DocumentLiteral::Importance(importance),
             Self::NotificationState(state) => DocumentLiteral::NotificationState(state.into()),
             Self::IncludeCbmAtmNc(include) => DocumentLiteral::IncludeCbmAtmNc(include),
@@ -696,7 +704,8 @@ enum GraphqlProjectLiteral {
     ProjectId(ID),
     /// The project id self option.
     ProjectIdSelf(ID),
-    /// The owner option.
+    /// The owner principal option — a user (`macro|<email>`), a bot
+    /// (`bot|<uuid>`), or a team (a bare hyphenated uuid).
     Owner(String),
     /// The importance option.
     Importance(bool),
@@ -716,7 +725,7 @@ impl IntoFilterExpr<ProjectLiteral> for GraphqlProjectLiteral {
             Self::ProjectIdSelf(id) => {
                 ProjectLiteral::ProjectIdSelf(parse_id(id, "projectIdSelf")?)
             }
-            Self::Owner(owner) => ProjectLiteral::Owner(parse_macro_user_id(owner, "owner")?),
+            Self::Owner(owner) => ProjectLiteral::Owner(parse_owner(owner, "owner")?),
             Self::Importance(importance) => ProjectLiteral::Importance(importance),
             Self::NotificationState(state) => ProjectLiteral::NotificationState(state.into()),
             Self::CreatedAt(date) => ProjectLiteral::CreatedAt(date.into_ast()?),
@@ -737,7 +746,8 @@ enum GraphqlChatLiteral {
     Role(GraphqlChatRole),
     /// The chat id option.
     ChatId(ID),
-    /// The owner option.
+    /// The owner principal option — a user (`macro|<email>`), a bot
+    /// (`bot|<uuid>`), or a team (a bare hyphenated uuid).
     Owner(String),
     /// The importance option.
     Importance(bool),
@@ -756,7 +766,7 @@ impl IntoFilterExpr<ChatLiteral> for GraphqlChatLiteral {
             Self::ProjectId(id) => ChatLiteral::ProjectId(parse_id(id, "projectId")?),
             Self::Role(role) => ChatLiteral::Role(role.into_model()),
             Self::ChatId(id) => ChatLiteral::ChatId(parse_id(id, "chatId")?),
-            Self::Owner(owner) => ChatLiteral::Owner(parse_macro_user_id(owner, "owner")?),
+            Self::Owner(owner) => ChatLiteral::Owner(parse_owner(owner, "owner")?),
             Self::Importance(importance) => ChatLiteral::Importance(importance),
             Self::NotificationState(state) => ChatLiteral::NotificationState(state.into()),
             Self::CreatedAt(date) => ChatLiteral::CreatedAt(date.into_ast()?),
@@ -1132,7 +1142,8 @@ enum GraphqlAgentSessionLiteral {
     Include(bool),
     /// The id option.
     Id(ID),
-    /// The owner option.
+    /// The owner principal option — a user (`macro|<email>`), a bot
+    /// (`bot|<uuid>`), or a team (a bare hyphenated uuid).
     Owner(String),
 }
 
@@ -1149,7 +1160,7 @@ impl IntoFilterExpr<AgentSessionLiteral> for GraphqlAgentSessionLiteral {
             }
             Self::Include(true) => AgentSessionLiteral::Include,
             Self::Id(id) => AgentSessionLiteral::Id(parse_id(id, "id")?),
-            Self::Owner(owner) => AgentSessionLiteral::Owner(parse_macro_user_id(owner, "owner")?),
+            Self::Owner(owner) => AgentSessionLiteral::Owner(parse_owner(owner, "owner")?),
         };
         Ok(Expr::val(literal))
     }

@@ -76,10 +76,6 @@ where
             "/{parent_type}/{parent_id}/legacy/{legacy_id}",
             get(legacy::<A, Auth>),
         )
-        .route(
-            "/{parent_type}/{parent_id}/references",
-            get(referenced_threads::<A, Auth>),
-        )
         .with_state(state)
 }
 
@@ -183,17 +179,6 @@ fn path_id(path: &ParentPath) -> Result<Uuid, MessageHttpError> {
         .ok_or_else(|| MessageError::Invalid("message id required").into())
 }
 
-/// Timeline cursor parameters.
-#[derive(Debug, Default, Deserialize, utoipa::IntoParams)]
-pub struct PageQuery {
-    /// Maximum number of roots.
-    pub limit: Option<u16>,
-    /// Last root's creation timestamp.
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// Last root's UUID.
-    pub cursor_id: Option<Uuid>,
-}
-
 #[utoipa::path(operation_id = "entity_message_create", post, path = "/messages/{parent_type}/{parent_id}", params(("parent_type" = String, Path), ("parent_id" = String, Path)), request_body = PostMessage, responses((status = 200, body = Message)))]
 /// Create a root message or reply.
 pub async fn create<A, Auth>(
@@ -268,7 +253,7 @@ pub struct NonceQuery {
 }
 
 #[utoipa::path(operation_id = "entity_message_delete_message", delete, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path), NonceQuery), responses((status = 200, body = Message)))]
-/// Tombstone one message while preserving replies.
+/// Tombstone one message; deleting a discussion's root deletes the discussion.
 pub async fn delete_message<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
@@ -463,31 +448,6 @@ where
                 receipt(state.access.as_ref(), &user, &path).await?,
                 id,
                 query.thread,
-            )
-            .await?,
-    ))
-}
-
-/// Read source channel threads mentioning this document under both parents' permissions.
-#[utoipa::path(operation_id = "entity_message_references", get, path = "/messages/{parent_type}/{parent_id}/references", params(("parent_type" = String, Path), ("parent_id" = String, Path), PageQuery), responses((status = 200, body = ReferencedThreadPage)))]
-pub async fn referenced_threads<A: EntityAccessService, Auth: MacroAuthorizationService>(
-    State(state): State<MessagesRouterState<A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
-    Path(path): Path<ParentPath>,
-    Query(query): Query<PageQuery>,
-) -> Result<Json<ReferencedThreadPage>, MessageHttpError> {
-    let cursor = match (query.created_at, query.cursor_id) {
-        (Some(created_at), Some(id)) => Some(MessageCursor { created_at, id }),
-        (None, None) => None,
-        _ => return Err(MessageError::Invalid("both cursor fields are required").into()),
-    };
-    Ok(Json(
-        state
-            .service
-            .referenced_threads(
-                receipt(state.access.as_ref(), &user, &path).await?,
-                cursor,
-                query.limit.unwrap_or(50),
             )
             .await?,
     ))

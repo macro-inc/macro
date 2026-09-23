@@ -7,6 +7,15 @@ pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// Invalid link or channel sharing input.
+    #[error("{0}")]
+    InvalidSharing(&'static str),
+    /// Explicit owner-team sharing was rejected by the shared policy.
+    #[error(transparent)]
+    TeamSharing(models_permissions::share_permission::team_share::TeamSharePolicyError),
+    /// Sharing facts changed while an owner update was in flight.
+    #[error("sharing changed; reload and try again")]
+    SharingChanged,
     /// A repository or branch cannot be used by this session.
     #[error("{0}")]
     InvalidRepositorySelection(&'static str),

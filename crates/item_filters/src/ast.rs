@@ -83,6 +83,9 @@ pub enum ExpandErr {
     /// invalid macro user id
     #[error(transparent)]
     MacroIdErr(#[from] macro_user_id::error::ParseErr),
+    /// invalid owner principal
+    #[error(transparent)]
+    OwnerErr(#[from] model_owner::OwnerParseError),
     /// unknown document sub type
     #[error(transparent)]
     DocumentSubTypeErr(#[from] strum::ParseError),

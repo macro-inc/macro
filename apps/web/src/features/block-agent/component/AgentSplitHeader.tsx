@@ -69,9 +69,15 @@ export function AgentSplitHeader(props: {
   // The session, not `useBlockId()`: a block created from the launcher mounts
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
-  const { sessionId, metadata } = useAgentSession();
+  const { sessionId, metadata, userId } = useAgentSession();
   const conversation = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
   const title = () => agentSessionTitle(props.session, props.title);
+  const permissions = () =>
+    userId() && props.session?.ownerId === userId()
+      ? Permissions.OWNER
+      : props.session?.canEdit
+        ? Permissions.CAN_EDIT
+        : Permissions.CAN_VIEW;
 
   const entity = (): AgentSessionEntity | undefined => {
     const session = props.session;
@@ -189,7 +195,7 @@ export function AgentSplitHeader(props: {
               owner={session().ownerId}
               itemType="agent_session"
               blockAlias="agent"
-              userPermissions={Permissions.OWNER}
+              userPermissions={permissions()}
               isSharePermOpen={shareOpen()}
               setIsSharePermOpen={setShareOpen}
             />
@@ -204,6 +210,7 @@ export function AgentSplitHeader(props: {
         id={sessionId() ?? ''}
         itemType="agent_session"
         entity={entity()}
+        permissions={permissions()}
         name={title()}
       />
     </ShareDialogContext.Provider>

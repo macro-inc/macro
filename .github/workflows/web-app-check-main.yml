@@ -38,6 +38,7 @@ jobs:
             - 'Cargo.lock'
             - 'rust-toolchain.toml'
             - 'services/lexical-service/**'
+            - 'crates/ai_tools/src/display_results/schema.generated.json'
             - '.github/actions/setup-reqs-web/**'
           api_changed:
             - 'crates/**/*.rs'
@@ -104,6 +105,9 @@ jobs:
     - name: show sccache stats
       if: always() && needs.path-check.outputs.api_changed == 'true'
       run: sccache --show-stats || true
+    - name: Check Dynamic UI Schema
+      run: bun run check-dynamic-ui-schema
+      working-directory: apps/web
     - name: Check Types
       run: bun run --bun --silent tsc --project ./tsconfig.json
       working-directory: apps/web

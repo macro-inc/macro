@@ -44,7 +44,7 @@ use model::response::PresignedUrl;
 use model_owner::Owner;
 use s3_key::{
     build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key,
-    build_docx_to_pdf_converted_document_key,
+    build_docx_to_pdf_converted_document_key, document_key_url_path,
 };
 use tracing;
 
@@ -389,8 +389,18 @@ impl<
         }
     }
 
+    /// The CloudFront URL an object key is served from. The key is
+    /// percent-encoded per path segment here, not where it is built.
+    fn cloudfront_url_for_key(&self, key: &str) -> String {
+        format!(
+            "{}/{}",
+            self.cloudfront_config.distribution_url,
+            document_key_url_path(key)
+        )
+    }
+
     fn make_presigned_url(&self, key: &str) -> anyhow::Result<String> {
-        let constructed_url = format!("{}/{}", self.cloudfront_config.distribution_url, key);
+        let constructed_url = self.cloudfront_url_for_key(key);
         let options = self.get_signed_options();
 
         let signed_url = if !macro_aws_config::is_local_aws() {
@@ -404,12 +414,11 @@ impl<
 
     async fn get_editable_url(
         &self,
-        owner: &str,
+        owner: &Owner,
         document_id: &str,
         document_version_id: Option<i64>,
         _file_type: &str,
     ) -> anyhow::Result<LocationResponseData> {
-        let url_encoded_owner = urlencoding::encode(owner);
         let document_version_id = if let Some(id) = document_version_id {
             id
         } else {
@@ -420,11 +429,8 @@ impl<
                 .0
         };
 
-        let document_key = build_cloud_storage_bucket_document_key(
-            &url_encoded_owner,
-            document_id,
-            document_version_id,
-        );
+        let document_key =
+            build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -432,22 +438,18 @@ impl<
 
     async fn get_static_url(
         &self,
-        owner: &str,
+        owner: &Owner,
         document_id: &str,
         _file_type: &Option<FileType>,
     ) -> anyhow::Result<LocationResponseData> {
-        let url_encoded_owner = urlencoding::encode(owner);
         let (document_version_id, _) = self
             .repo
             .get_document_version_id(document_id)
             .await
             .map_err(Into::into)?;
 
-        let document_key = build_cloud_storage_bucket_document_key(
-            &url_encoded_owner,
-            document_id,
-            document_version_id,
-        );
+        let document_key =
+            build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -455,12 +457,10 @@ impl<
 
     async fn get_converted_docx_url(
         &self,
-        owner: &str,
+        owner: &Owner,
         document_id: &str,
     ) -> anyhow::Result<LocationResponseData> {
-        let url_encoded_owner = urlencoding::encode(owner);
-        let document_key =
-            build_docx_to_pdf_converted_document_key(&url_encoded_owner, document_id);
+        let document_key = build_docx_to_pdf_converted_document_key(owner, document_id);
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -512,7 +512,7 @@ impl<
 
     async fn get_presigned_url_by_type(
         &self,
-        owner: &str,
+        owner: &Owner,
         document_id: &str,
         file_type: Option<FileType>,
         document_version_id: Option<i64>,
@@ -730,9 +730,8 @@ impl<
                 Ok(None)
             }
             Some(FileType::Docx) => {
-                let owner = document_metadata.owner.principal_id();
                 let docx_key = build_docx_staging_bucket_document_key(
-                    &owner,
+                    &document_metadata.owner,
                     &document_id,
                     document_metadata.document_version_id,
                 );
@@ -742,9 +741,8 @@ impl<
                     .map(Some)
             }
             _ => {
-                let owner = document_metadata.owner.principal_id();
                 let key = build_cloud_storage_bucket_document_key(
-                    &owner,
+                    &document_metadata.owner,
                     &document_id,
                     document_metadata.document_version_id,
                 );
@@ -1017,11 +1015,10 @@ impl<
             return Ok(response);
         }
 
-        let owner = document_context.owner.principal_id();
         let get_converted_docx_url = params.get_converted_docx_url.unwrap_or(false);
         let response_data = self
             .get_presigned_url_by_type(
-                &owner,
+                &document_context.owner,
                 &document_id,
                 file_type,
                 params.document_version_id,
@@ -1683,19 +1680,18 @@ impl<
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
         let new_document_id = new_metadata.document_id.clone();
+        let new_owner = Owner::User(user_id.clone());
 
         // File-type-specific S3 operations
         let copy_result = match file_type {
             Some(FileType::Docx) => {
                 // Copy the converted PDF version
-                let owner = original_metadata.owner.principal_id();
-                let url_encoded_owner = urlencoding::encode(&owner);
                 let source_key = build_docx_to_pdf_converted_document_key(
-                    &url_encoded_owner,
+                    &original_metadata.owner,
                     &original_metadata.document_id,
                 );
                 let dest_key =
-                    build_docx_to_pdf_converted_document_key(user_id.as_ref(), &new_document_id);
+                    build_docx_to_pdf_converted_document_key(&new_owner, &new_document_id);
                 self.upload_url_service
                     .copy_object(&source_key, &dest_key)
                     .await
@@ -1727,12 +1723,12 @@ impl<
                         .0;
 
                     let source_key = build_cloud_storage_bucket_document_key(
-                        &original_metadata.owner.principal_id(),
+                        &original_metadata.owner,
                         &original_metadata.document_id,
                         source_version_id,
                     );
                     let dest_key = build_cloud_storage_bucket_document_key(
-                        user_id.as_ref(),
+                        &new_owner,
                         &new_document_id,
                         new_metadata.document_version_id,
                     );
@@ -1776,12 +1772,12 @@ impl<
                 };
 
                 let source_key = build_cloud_storage_bucket_document_key(
-                    &original_metadata.owner.principal_id(),
+                    &original_metadata.owner,
                     &original_metadata.document_id,
                     source_version_id,
                 );
                 let dest_key = build_cloud_storage_bucket_document_key(
-                    user_id.as_ref(),
+                    &new_owner,
                     &new_document_id,
                     new_metadata.document_version_id,
                 );

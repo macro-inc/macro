@@ -593,6 +593,14 @@ service_url! {
             dev: "https://dev-gateway.macro.com/email",
             prod: "https://gateway.macro.com/email",
         },
+        /// Calendar service API URL. The calendar write authority once
+        /// `calendar_service` owns provider mutations; its API is mounted at
+        /// the root and under the `/calendar` gateway prefix.
+        pub CalendarServiceUrl {
+            local: "http://localhost:8088",
+            dev: "https://dev-gateway.macro.com/calendar",
+            prod: "https://gateway.macro.com/calendar",
+        },
         /// Image proxy service API URL.
         pub ImageProxyServiceUrl {
             local: "http://localhost:8097",

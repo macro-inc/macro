@@ -91,6 +91,14 @@ including properties that do not have a value yet. Click a preview pill to edit 
 opening the task; the property picker keeps the preview open while you make a selection.
 Users with view or comment access see the same pills read-only.
 
+Selecting Status or Priority dismisses the picker immediately, without waiting
+for the save request. With the GraphQL cache active, the pill updates
+optimistically while the request is pending. To verify, delay `SetEntityProperty`
+on a disposable task: the picker should close before the response, and reopening
+it during that delay should not let the earlier save close the new picker.
+A failed save uses the mutation's rollback/error handling; it must not reopen
+the picker or trigger a success refresh.
+
 ## Messages as tasks
 
 In any channel composer, toggle the `Task` switch before sending to create a task from the

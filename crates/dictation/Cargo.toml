@@ -1,0 +1,69 @@
+[package]
+edition = "2024"
+name = "dictation"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+inbound = [
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:rate_limit",
+  "dep:rootcause",
+  "dep:serde",
+  "dep:utoipa",
+  "rate_limit/axum",
+]
+outbound = [
+  "dep:async-openai",
+  "dep:backoff",
+  "dep:macro_env_var",
+  "dep:opus-pure",
+  "dep:reqwest",
+  "dep:serde",
+  "dep:symphonia",
+]
+
+[dependencies]
+ai_usage = { path = "../ai_usage" }
+async-openai = { workspace = true, optional = true, features = ["audio"] }
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
+backoff = { workspace = true, optional = true }
+bytes = { workspace = true }
+infer = { workspace = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+  "axum",
+] }
+macro_env_var = { path = "../macro_env_var", optional = true }
+macro_user_id = { path = "../macro_user_id" }
+model-error-response = { path = "../model-error-response", optional = true }
+opus-pure = { workspace = true, optional = true }
+rate_limit = { path = "../rate_limit", optional = true, default-features = false }
+reqwest = { workspace = true, optional = true }
+rootcause = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+symphonia = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+model_user = { path = "../model_user" }
+rate_limit = { path = "../rate_limit", default-features = false, features = [
+  "axum",
+  "testing",
+] }
+rootcause = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+wiremock = { workspace = true }
