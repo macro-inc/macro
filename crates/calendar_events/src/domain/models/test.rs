@@ -47,6 +47,7 @@ fn sync_plan_extends_only_the_uncovered_tail() {
         materialized_range: Some(materialized.clone()),
         synced_at: None,
         watch_expires_at: None,
+        watch_unsupported_at: None,
     };
 
     assert_eq!(
@@ -78,6 +79,7 @@ fn sync_plan_extends_only_the_uncovered_tail() {
         materialized_range: Some(materialized.clone()),
         synced_at: None,
         watch_expires_at: None,
+        watch_unsupported_at: None,
     };
     assert_eq!(
         uninitialized.sync_plan(&OccurrenceRange::historical_sync(now)),
@@ -90,11 +92,50 @@ fn sync_plan_extends_only_the_uncovered_tail() {
         materialized_range: None,
         synced_at: None,
         watch_expires_at: None,
+        watch_unsupported_at: None,
     };
     assert_eq!(
         unmaterialized.sync_plan(&OccurrenceRange::historical_sync(now)),
         GoogleSyncPlan::FullSnapshot
     );
+}
+
+#[test]
+fn watch_renewal_skips_calendars_that_recently_refused_push() {
+    let now = Utc.with_ymd_and_hms(2026, 9, 23, 12, 0, 0).unwrap();
+    let calendar = StoredGoogleCalendar {
+        id: Uuid::now_v7(),
+        sync_token: None,
+        materialized_range: None,
+        synced_at: None,
+        watch_expires_at: None,
+        watch_unsupported_at: None,
+    };
+    assert!(calendar.needs_watch_renewal(now));
+
+    let healthy = StoredGoogleCalendar {
+        watch_expires_at: Some(now + chrono::Duration::days(3)),
+        ..calendar.clone()
+    };
+    assert!(!healthy.needs_watch_renewal(now));
+
+    let expiring = StoredGoogleCalendar {
+        watch_expires_at: Some(now + chrono::Duration::hours(1)),
+        ..calendar.clone()
+    };
+    assert!(expiring.needs_watch_renewal(now));
+
+    let refused = StoredGoogleCalendar {
+        watch_unsupported_at: Some(now - chrono::Duration::days(1)),
+        ..calendar.clone()
+    };
+    assert!(!refused.needs_watch_renewal(now));
+
+    let refusal_aged_out = StoredGoogleCalendar {
+        watch_unsupported_at: Some(now - chrono::Duration::days(8)),
+        ..calendar
+    };
+    assert!(refusal_aged_out.needs_watch_renewal(now));
 }
 
 #[test]

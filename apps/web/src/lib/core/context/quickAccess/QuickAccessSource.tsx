@@ -32,11 +32,11 @@ import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import { toDate } from 'date-fns';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { searchQuickAccessItems } from './entity-search';
@@ -324,24 +324,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const cacheHost = graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
   const [cacheRevision, setCacheRevision] = createSignal(0);
   const cachedChannelsQuery = useCachedGraphqlChannelsQuery(cacheHost);
-  const refreshCachedLists = leadingAndTrailing(
-    throttle,
-    () => {
-      setCacheRevision((revision) => revision + 1);
-      void cachedChannelsQuery.refetch();
-    },
-    250
-  );
-  const unsubscribeCacheChanges = cacheHost?.onCacheChanged(
-    refreshCachedLists,
-    {
-      includeHydration: true,
-    }
-  );
-  onCleanup(() => {
-    unsubscribeCacheChanges?.();
-    refreshCachedLists.clear();
-  });
+  if (cacheHost) {
+    onCleanup(
+      subscribeToVisibleCacheChanges(cacheHost, () => {
+        setCacheRevision((revision) => revision + 1);
+        void cachedChannelsQuery.refetch();
+      })
+    );
+  }
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const { query: crmCompaniesQuery, companies: crmCompaniesAccessor } =
     useQuickAccessCrmCompaniesQuery();
@@ -380,7 +370,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   const soupViewedAtMap = createLazyMemo(() => {
     const map = new Map<string, string>();
-    const data = recentlyViewedQuery.data;
+    const data = queryReadyGate(recentlyViewedQuery)
+      ? recentlyViewedQuery.data
+      : undefined;
     if (!data) return map;
     for (const item of data) {
       if (item.viewedAt) map.set(item.id, item.viewedAt);
@@ -394,7 +386,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const allEntries: IndexEntry[] = [];
 
     // Process history items
-    const historyData = historyQuery.data ?? [];
+    const historyData = queryReadyGate(historyQuery) ? historyQuery.data : [];
     const hidden = hiddenIds();
     for (const item of historyData) {
       if (item.deletedAt) continue;
@@ -454,7 +446,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     // The GraphQL cache is authoritative while enabled. Otherwise preserve the
     // existing channel-list source unchanged.
     const channelData = cacheHost
-      ? (cachedChannelsQuery.data ?? [])
+      ? queryReadyGate(cachedChannelsQuery)
+        ? cachedChannelsQuery.data
+        : []
       : channels().map(apiChannelToQuickAccessChannel);
     for (const sourceChannel of channelData) {
       const viewedAt = cacheHost

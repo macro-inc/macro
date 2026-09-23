@@ -48,3 +48,12 @@ pub struct TranscriptMessage {
     /// Message body.
     pub content: String,
 }
+
+/// A comment mark resolved against the live document, both fields bounded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarkedPassage {
+    /// The text the mark covers now.
+    pub marked_text: String,
+    /// The block or blocks containing the mark, windowed around it.
+    pub surrounding_text: String,
+}

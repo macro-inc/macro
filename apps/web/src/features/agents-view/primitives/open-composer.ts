@@ -15,7 +15,7 @@ export function openAgentComposer(
   const split = layout.openWithSplit(content, {
     referredFrom: 'launcher',
     preferNewSplit,
-  });
+  }).split;
   if (!split) return;
   // Opening an existing split activates it without updating its params.
   // Publish a new request so an open roster returns to the composer as well.

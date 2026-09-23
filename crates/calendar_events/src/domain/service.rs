@@ -263,10 +263,6 @@ pub struct GoogleCalendarBackfillService<R, G, B> {
     watch: Option<super::models::GoogleWatchConfig>,
 }
 
-/// Renew a channel whenever less than this much lifetime remains, so every
-/// poll cycle has several chances before expiry.
-const WATCH_RENEWAL_THRESHOLD: chrono::Duration = chrono::Duration::hours(12);
-
 /// Periodically makes completed provider jobs eligible for another incremental poll.
 pub struct GoogleCalendarSyncScheduler<R> {
     repository: R,
@@ -496,9 +492,10 @@ where
                     Some(GoogleProviderErrorKind::ReauthRequired) => {
                         CalendarBackfillFailureDisposition::CalendarPermissionRequired
                     }
-                    Some(GoogleProviderErrorKind::Permanent) => {
-                        CalendarBackfillFailureDisposition::Permanent
-                    }
+                    Some(
+                        GoogleProviderErrorKind::Permanent
+                        | GoogleProviderErrorKind::PushUnsupported,
+                    ) => CalendarBackfillFailureDisposition::Permanent,
                     Some(
                         GoogleProviderErrorKind::Transient
                         | GoogleProviderErrorKind::SyncTokenExpired,
@@ -756,7 +753,7 @@ where
                             is_read_only,
                             range: range.clone(),
                         },
-                        sync_token: stored_calendar.sync_token,
+                        sync_token: stored_calendar.sync_token.clone(),
                         plan,
                     },
                 )
@@ -848,9 +845,7 @@ where
             // so a failed watch call must not fail the sync that just
             // committed durable progress.
             if let Some(watch) = &self.watch
-                && stored_calendar
-                    .watch_expires_at
-                    .is_none_or(|expires_at| expires_at < Utc::now() + WATCH_RENEWAL_THRESHOLD)
+                && stored_calendar.needs_watch_renewal(Utc::now())
             {
                 let channel_id = Uuid::new_v4();
                 match self
@@ -879,6 +874,23 @@ where
                                     error=?error,
                                     calendar_id=%calendar_id,
                                     "failed to record Google Calendar watch channel"
+                                );
+                            })
+                            .ok();
+                    }
+                    Err(error) if error.kind() == GoogleProviderErrorKind::PushUnsupported => {
+                        tracing::info!(
+                            calendar_id=%calendar_id,
+                            "Google Calendar does not support push for this calendar; relying on polling"
+                        );
+                        self.repository
+                            .record_watch_unsupported(key, lease_token, account_id, calendar_id)
+                            .await
+                            .inspect_err(|error| {
+                                tracing::warn!(
+                                    error=?error,
+                                    calendar_id=%calendar_id,
+                                    "failed to record unsupported Google Calendar watch"
                                 );
                             })
                             .ok();

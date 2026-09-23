@@ -52,7 +52,22 @@ fn handler(
     access: Arc<Access>,
     responder: Arc<Responder>,
 ) -> MacroAiHandler<Responder, FixedTimeZones> {
-    MacroAiHandler::new(Arc::new(api), access, responder, eastern_time_zones())
+    handler_with_marks(api, access, responder, Marks::none())
+}
+
+fn handler_with_marks(
+    api: MockMessageServiceApi,
+    access: Arc<Access>,
+    responder: Arc<Responder>,
+    marks: Arc<Marks>,
+) -> MacroAiHandler<Responder, FixedTimeZones> {
+    MacroAiHandler::new(
+        Arc::new(api),
+        access,
+        responder,
+        eastern_time_zones(),
+        marks,
+    )
 }
 
 fn invocation(trigger: &messages::domain::models::Message) -> BotEvent {
@@ -156,13 +171,75 @@ async fn an_anchored_discussion_names_the_text_it_marks() {
 async fn a_discussion_with_no_marked_text_claims_no_anchor() {
     let trigger = message(1, None, "@macro help with this document");
     let mut api = MockMessageServiceApi::new();
-    // Both an unanchored discussion and one anchored before snapshots existed.
+    // Anchored before snapshots existed, and the live lookup finds nothing.
     configure_reads(&mut api, &trigger, marked_thread(trigger.clone(), None));
     let prompt = handler(api, Arc::new(Access::default()), responder("reply"))
         .build_prompt(&invocation(&trigger))
         .await
         .unwrap();
     assert!(!prompt.contains("<anchor"));
+}
+
+#[tokio::test]
+async fn a_discussion_older_than_snapshots_reads_its_mark_from_the_document() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, marked_thread(trigger.clone(), None));
+    let marks = Arc::new(Marks(Ok(Some(MarkedPassage {
+        marked_text: "backfills the ledger".to_owned(),
+        surrounding_text: "The second stage backfills the ledger from the archive.".to_owned(),
+    }))));
+    let prompt = handler_with_marks(api, Arc::new(Access::default()), responder("reply"), marks)
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(prompt.contains("as the document reads now"));
+    assert!(prompt.contains("Marked text: backfills the ledger\n"));
+    assert!(prompt.contains("The second stage backfills the ledger from the archive."));
+    assert!(!prompt.contains("When the discussion was started"));
+}
+
+#[tokio::test]
+async fn an_edited_mark_shows_both_what_it_covers_now_and_what_it_covered() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        marked_thread(trigger.clone(), Some("backfills the ledger")),
+    );
+    let marks = Arc::new(Marks(Ok(Some(MarkedPassage {
+        marked_text: "rebuilds the ledger".to_owned(),
+        surrounding_text: "The second stage rebuilds the ledger.".to_owned(),
+    }))));
+    let prompt = handler_with_marks(api, Arc::new(Access::default()), responder("reply"), marks)
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(prompt.contains("Marked text: rebuilds the ledger\n"));
+    assert!(prompt.contains("When the discussion was started it read: backfills the ledger"));
+}
+
+#[tokio::test]
+async fn a_failed_live_lookup_falls_back_to_the_snapshot() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        marked_thread(trigger.clone(), Some("backfills the ledger")),
+    );
+    let prompt = handler_with_marks(
+        api,
+        Arc::new(Access::default()),
+        responder("reply"),
+        Arc::new(Marks(Err("lexical unavailable"))),
+    )
+    .build_prompt(&invocation(&trigger))
+    .await
+    .unwrap();
+    assert!(prompt.contains("backfills the ledger"));
+    assert!(prompt.contains("the document may have changed since"));
 }
 
 #[tokio::test]
@@ -370,6 +447,7 @@ async fn prompt_says_the_time_zone_is_unknown_without_a_calendar() {
         Arc::new(Access::default()),
         responder("reply"),
         Arc::new(FixedTimeZones(None)),
+        Marks::none(),
     )
     .build_prompt(&invocation(&trigger))
     .await

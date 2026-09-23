@@ -1,11 +1,10 @@
 use crate::pubsub::backfill::{
-    backfill_attachment, backfill_message, backfill_thread, calendar_google_backfill,
-    depopulate_crm_contact, depopulate_crm_for_user, error_handlers, increment_counters, init,
-    list_threads, populate_crm_contact, populate_crm_for_user, seed_sent_contact, update_metadata,
+    backfill_attachment, backfill_message, backfill_thread, depopulate_crm_contact,
+    depopulate_crm_for_user, error_handlers, increment_counters, init, list_threads,
+    populate_crm_contact, populate_crm_for_user, seed_sent_contact, update_metadata,
 };
 use crate::pubsub::context::PubSubContext;
 use anyhow::Context;
-use email_api_client::domain::models::{EmailApiError, TokenFreshness};
 use models_email::email::service::backfill::{
     BackfillJob, BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
 };
@@ -13,30 +12,6 @@ use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
 use uuid::Uuid;
-
-/// When calendar sync is disabled, return the delivery's outbox row to the
-/// unpublished state and ack the message; the outbox drain republishes it
-/// once the switch flips back on. `None` means calendar sync is enabled and
-/// the delivery should proceed.
-async fn park_calendar_delivery(
-    ctx: &PubSubContext,
-    calendar_job_id: Uuid,
-) -> Option<Result<(), ProcessingError>> {
-    if ctx.calendar_sync_enabled {
-        return None;
-    }
-    tracing::info!(%calendar_job_id, "calendar sync disabled; returning delivery to the outbox");
-    Some(
-        crate::calendar_outbox::republish_calendar_job(&ctx.db, calendar_job_id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("failed to return calendar delivery to the outbox"),
-                })
-            }),
-    )
-}
 
 // Process a single message from the backfill queue
 pub async fn process_message(
@@ -143,39 +118,6 @@ async fn inner_process_message(
                 return Ok(());
             };
             backfill_attachment::backfill_attachment(ctx, &link, &scope.payload).await
-        }
-        BackfillOperation::CalendarGoogleBackfill(scope) => {
-            if let Some(parked) = park_calendar_delivery(ctx, scope.payload.calendar_job_id).await {
-                return parked;
-            }
-            let link = fetch_link(ctx, scope.link_id).await?;
-            // Calendar jobs can be created immediately after an incremental
-            // Google scope grant. Bypass the Gmail token cache so this job does
-            // not reuse a pre-consent access token that lacks calendar scopes.
-            let access_token = ctx
-                .email_api
-                .get_access_token(link.id, TokenFreshness::Fresh)
-                .await
-                .map_err(|error| {
-                    let is_auth_required = matches!(error, EmailApiError::AuthRequired);
-                    let detail = DetailedError {
-                        reason: FailureReason::AccessTokenFetchFailed,
-                        source: anyhow::anyhow!(error)
-                            .context("failed to fetch token for Google Calendar backfill"),
-                    };
-                    if is_auth_required {
-                        ProcessingError::NonRetryable(detail)
-                    } else {
-                        ProcessingError::Retryable(detail)
-                    }
-                })?;
-            calendar_google_backfill::calendar_google_backfill(
-                ctx,
-                access_token.expose_secret(),
-                &link,
-                &scope.payload,
-            )
-            .await
         }
         BackfillOperation::FinalizeBackfill(scope) => {
             increment_counters::finalize_backfill(ctx, scope.link_id, scope.job_id).await

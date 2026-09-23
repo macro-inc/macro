@@ -31,6 +31,9 @@ pub enum GoogleProviderErrorKind {
     ReauthRequired,
     /// The provider continuation token expired and requires a full resync.
     SyncTokenExpired,
+    /// The provider will not open push channels for this resource; only
+    /// polling can keep it in sync.
+    PushUnsupported,
 }
 
 /// Typed Google Calendar failure returned across the provider port.
@@ -509,6 +512,16 @@ pub trait CalendarRepository: Send + Sync + 'static {
         account_id: Uuid,
         calendar_id: Uuid,
         channel: GoogleWatchChannel,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Record that the provider refused a push channel for one calendar,
+    /// under the backfill's fencing token.
+    fn record_watch_unsupported(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_id: Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Resolve a push notification to the inbox whose calendar it watches.

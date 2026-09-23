@@ -7,9 +7,23 @@ import type {
 } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { HistoryItem } from '@queries/history/types';
-import { createRoot, createSignal } from 'solid-js';
+import { render } from '@solidjs/testing-library';
+import {
+  QueryClient,
+  QueryClientProvider,
+  type UseQueryResult,
+  useQuery,
+} from '@tanstack/solid-query';
+import {
+  createComponent,
+  createRenderEffect,
+  createRoot,
+  createSignal,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useQuickAccess } from './context';
 import { MAX_BROWSE_PAGES_PER_LOAD } from './projected-list';
+import { QuickAccessProvider } from './QuickAccessProvider';
 import { createQuickAccessValue } from './QuickAccessSource';
 import {
   BUCKET_COMBINATIONS,
@@ -28,6 +42,12 @@ const mocks = vi.hoisted(() => ({
   companies: [] as CrmCompanyEntity[],
   crmEnabled: (): boolean => true,
   cacheEnabled: true,
+  queries: {} as Partial<
+    Record<
+      'history' | 'channels' | 'recently-viewed',
+      () => UseQueryResult<unknown[]>
+    >
+  >,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
@@ -48,22 +68,25 @@ vi.mock('@core/user', () => ({
   useIsConnectedSecondaryInbox: () => () => false,
 }));
 vi.mock('@queries/channel/channels', () => ({
-  useCachedGraphqlChannelsQuery: () => ({
-    data: [],
-    isLoading: false,
-    refetch: mocks.channelRefetch,
-  }),
+  useCachedGraphqlChannelsQuery: () =>
+    mocks.queries.channels?.() ?? {
+      data: [],
+      isSuccess: true,
+      isLoading: false,
+      refetch: mocks.channelRefetch,
+    },
 }));
 vi.mock('@queries/channel/graphql', () => ({
   materializeCachedGraphqlChannels: async () => [],
 }));
-vi.mock('@queries/gate', () => ({ queryReadyGate: () => true }));
 vi.mock('@queries/history/history', () => ({
-  useHistoryQuery: () => ({
-    data: mocks.history,
-    isLoading: false,
-    refetch: vi.fn(),
-  }),
+  useHistoryQuery: () =>
+    mocks.queries.history?.() ?? {
+      data: mocks.history,
+      isSuccess: true,
+      isLoading: false,
+      refetch: vi.fn(),
+    },
 }));
 vi.mock('@queries/history/graphql', () => ({
   materializeCachedGraphqlHistoryItems: async (
@@ -96,7 +119,8 @@ vi.mock('@queries/soup/quick-access-snippets', () => ({
   useQuickAccessSnippetsQuery: () => ({ query: {}, snippets: () => [] }),
 }));
 vi.mock('@queries/soup/recently-viewed', () => ({
-  useRecentlyViewedSoupQuery: () => ({ data: [] }),
+  useRecentlyViewedSoupQuery: () =>
+    mocks.queries['recently-viewed']?.() ?? { data: [], isSuccess: true },
 }));
 vi.mock('@queries/storage/instructions-md', () => ({
   useInstructionsMdIdQuery: () => ({ data: undefined }),
@@ -144,10 +168,12 @@ function page(start: number, count: number, more = false): SearchCachePage {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   mocks.history = [];
   mocks.companies = [];
   mocks.crmEnabled = () => true;
   mocks.cacheEnabled = true;
+  mocks.queries = {};
   mocks.readRecordsByKeys.mockReset().mockResolvedValue({
     revision: INITIAL_CACHE_REVISION,
     records: [
@@ -162,7 +188,12 @@ beforeEach(() => {
     }
   );
 });
-afterEach(() => dispose?.());
+afterEach(() => {
+  dispose?.();
+  dispose = undefined;
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 const cachedCompany = {
   __typename: 'GraphqlSoupCrmCompany',
@@ -192,7 +223,214 @@ const restCompany: CrmCompanyEntity = {
   domains: [{ id: 'domain-1', companyId: 'company-1', domain: 'acme.example' }],
 };
 
+const retainedHistory: HistoryItem[] = [
+  {
+    id: 'older-note',
+    type: 'document',
+    fileType: 'md',
+    name: 'Older note',
+    ownerId: 'owner',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+  },
+  {
+    id: 'newer-note',
+    type: 'document',
+    fileType: 'md',
+    name: 'Newer note',
+    ownerId: 'owner',
+    updatedAt: '2026-08-02T00:00:00.000Z',
+  },
+];
+const retainedQueryData = {
+  history: retainedHistory,
+  channels: [
+    {
+      id: 'retained-channel',
+      name: 'Retained channel',
+      ownerId: 'owner',
+      channelType: 'public',
+      participantIds: [],
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-02T00:00:00.000Z',
+    },
+  ],
+  'recently-viewed': [
+    { id: 'older-note', viewedAt: '2026-08-03T00:00:00.000Z' },
+  ],
+};
+
+const retainedListText = {
+  history: `newer-note@${Date.parse('2026-08-02T00:00:00.000Z')},older-note@${Date.parse('2026-08-01T00:00:00.000Z')}`,
+  channels: `retained-channel@${Date.parse('2026-08-02T00:00:00.000Z')}`,
+  'recently-viewed': `older-note@${Date.parse('2026-08-03T00:00:00.000Z')},newer-note@${Date.parse('2026-08-02T00:00:00.000Z')}`,
+};
+
+function renderRetainedList(client: QueryClient) {
+  const Shell = () => {
+    const list = useQuickAccess().useList();
+    const node = document.createElement('main');
+    node.dataset.testid = 'retained-shell';
+    createRenderEffect(() => {
+      node.textContent = list
+        .items()
+        .map((item) => `${item.id}@${item.sortTimestamp}`)
+        .join(',');
+    });
+    return node;
+  };
+  return render(() =>
+    createComponent(QueryClientProvider, {
+      client,
+      get children() {
+        return createComponent(QuickAccessProvider, {
+          get children() {
+            return createComponent(Shell, {});
+          },
+        });
+      },
+    })
+  );
+}
+
 describe('Quick Access source integration', () => {
+  it.each(
+    (['history', 'channels', 'recently-viewed'] as const).flatMap((source) =>
+      (['resolve', 'reject'] as const).map((settlement) => ({
+        source,
+        settlement,
+      }))
+    )
+  )(
+    'keeps the same app shell mounted while $source is pending and after $settlement',
+    async ({ source, settlement }) => {
+      let resolve!: (items: never[]) => void;
+      let reject!: (error: Error) => void;
+      const pending = new Promise<never[]>((finish, fail) => {
+        resolve = finish;
+        reject = fail;
+      });
+      let query: UseQueryResult<never[]> | undefined;
+      mocks.queries[source] = () =>
+        (query = useQuery(() => ({
+          queryKey: ['shell-regression', source],
+          queryFn: () => pending,
+          retry: false,
+          throwOnError: false,
+        })));
+      const client = new QueryClient();
+      const Shell = () => {
+        const list = useQuickAccess().useList();
+        const node = document.createElement('main');
+        node.dataset.testid = 'app-shell';
+        createRenderEffect(() => {
+          node.textContent = `Items: ${list.totalCount()}`;
+        });
+        return node;
+      };
+      const rendered = render(() =>
+        createComponent(QueryClientProvider, {
+          client,
+          get children() {
+            return createComponent(QuickAccessProvider, {
+              get children() {
+                return createComponent(Shell, {});
+              },
+            });
+          },
+        })
+      );
+      try {
+        await vi.waitFor(() => expect(query?.isPending).toBe(true));
+        const shell = rendered.getByTestId('app-shell');
+        expect(shell.textContent).toBe('Items: 0');
+        if (settlement === 'resolve') resolve([]);
+        else reject(new Error('cache lookup failed'));
+        await vi.waitFor(() =>
+          expect(
+            settlement === 'resolve' ? query?.isSuccess : query?.isError
+          ).toBe(true)
+        );
+        expect(rendered.getByTestId('app-shell')).toBe(shell);
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+
+  it.each(['history', 'channels', 'recently-viewed'] as const)(
+    'preserves %s items and ordering throughout a failed background refresh',
+    async (source) => {
+      if (source === 'recently-viewed') mocks.history = retainedHistory;
+      const data = retainedQueryData[source];
+      let rejectRefresh!: (error: Error) => void;
+      const pendingRefresh = new Promise<unknown[]>((_resolve, reject) => {
+        rejectRefresh = reject;
+      });
+      const fetch = vi
+        .fn<() => Promise<unknown[]>>()
+        .mockResolvedValueOnce(data)
+        .mockReturnValueOnce(pendingRefresh);
+      let query: UseQueryResult<unknown[]> | undefined;
+      mocks.queries[source] = () =>
+        (query = useQuery(() => ({
+          queryKey: ['retained-refresh', source],
+          queryFn: fetch,
+          retry: false,
+          throwOnError: false,
+        })));
+      const client = new QueryClient();
+      const rendered = renderRetainedList(client);
+      try {
+        await vi.waitFor(() => expect(query?.isSuccess).toBe(true));
+        const shell = rendered.getByTestId('retained-shell');
+        const expected = retainedListText[source];
+        expect(shell.textContent).toBe(expected);
+        const refresh = query!.refetch();
+        await vi.waitFor(() => expect(query?.isRefetching).toBe(true));
+        expect(shell.textContent).toBe(expected);
+        rejectRefresh(new Error('cache refresh failed'));
+        await refresh;
+        await vi.waitFor(() => expect(query?.isRefetchError).toBe(true));
+        expect(query?.isSuccess).toBe(false);
+        expect(query?.data).toEqual(data);
+        expect(rendered.getByTestId('retained-shell')).toBe(shell);
+        expect(shell.textContent).toBe(expected);
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+
+  it.each(['history', 'channels', 'recently-viewed'] as const)(
+    'shows %s placeholder data without suspending while a replacement is pending',
+    async (source) => {
+      if (source === 'recently-viewed') mocks.history = retainedHistory;
+      let query: UseQueryResult<unknown[]> | undefined;
+      mocks.queries[source] = () =>
+        (query = useQuery<unknown[]>(() => ({
+          queryKey: ['placeholder', source],
+          queryFn: () => new Promise(() => {}),
+          placeholderData: retainedQueryData[source],
+          retry: false,
+        })));
+      const client = new QueryClient();
+      const rendered = renderRetainedList(client);
+      try {
+        await vi.waitFor(() => expect(query?.isPlaceholderData).toBe(true));
+        expect(query?.isFetching).toBe(true);
+        expect(query?.isSuccess).toBe(true);
+        expect(rendered.getByTestId('retained-shell').textContent).toBe(
+          retainedListText[source]
+        );
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+
   it.each(['Acme', 'acme.example'])(
     'finds a cached CRM company absent from the REST feed by %s',
     async (query) => {
@@ -416,6 +654,35 @@ describe('Quick Access source integration', () => {
     expect(mocks.channelRefetch).toHaveBeenCalledOnce();
     dispose?.();
     expect(mocks.unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('keeps hidden lists stable and refreshes their latest state once on visibility', async () => {
+    vi.useFakeTimers();
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    mocks.search.mockResolvedValue(page(0, 1));
+    const list = setup((source) => source.useList({ buckets: ['note'] }));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => item.id)).toEqual(['0']);
+    const initialCalls = mocks.search.mock.calls.length;
+
+    visibility.mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    mocks.search.mockResolvedValue(page(1, 1));
+    mocks.changed?.();
+    mocks.changed?.();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).toHaveBeenCalledTimes(initialCalls);
+    expect(mocks.channelRefetch).not.toHaveBeenCalled();
+    expect(list.items().map((item) => item.id)).toEqual(['0']);
+
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() =>
+      expect(list.items().map((item) => item.id)).toEqual(['1'])
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).toHaveBeenCalledTimes(initialCalls + 1);
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
   });
 
   it('uses one shared scan budget when hundreds of projected rows duplicate history', async () => {

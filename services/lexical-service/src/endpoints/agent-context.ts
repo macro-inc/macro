@@ -13,6 +13,8 @@ const messageParent = z.object({
 const commentAnchor = z.object({
   markId: z.string().min(1),
   markedText: z.string().optional(),
+  currentMarkedText: z.string().optional(),
+  surroundingText: z.string().optional(),
 });
 
 const agentContextRequest = z.object({

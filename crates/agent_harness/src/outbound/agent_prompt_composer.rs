@@ -41,6 +41,8 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
             .map(|anchor| AgentContextAnchor {
                 mark_id: &anchor.mark_id,
                 marked_text: anchor.marked_text.as_deref(),
+                current_marked_text: anchor.current.as_ref().map(|c| c.marked_text.as_str()),
+                surrounding_text: anchor.current.as_ref().map(|c| c.surrounding_text.as_str()),
             });
 
         self.lexical

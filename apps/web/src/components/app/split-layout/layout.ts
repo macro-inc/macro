@@ -3,6 +3,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContext } from 'solid-js';
 import { SplitPanelContext } from './context';
 import type {
+  OpenSplitResult,
   OpenWithSplitOptions,
   PopoverSplitOptions,
   ReferredFrom,
@@ -15,13 +16,13 @@ export function useSplitLayout() {
   function openWithSplit(
     content: SplitContent,
     options?: OpenWithSplitOptions
-  ) {
+  ): OpenSplitResult {
     const splitManager = globalSplitManager();
     const preferNewSplit = isTouchDevice() ? false : options?.preferNewSplit;
 
     if (!splitManager) {
       console.error('No split manager found');
-      return;
+      return { status: 'unavailable' };
     }
 
     // Use the source panel for navigation. Popover handles cannot replace
@@ -44,7 +45,7 @@ export function useSplitLayout() {
       referredFrom,
       handle: splitPanelContext?.handle,
       activate: true,
-    });
+    }).split;
   }
 
   function replaceSplit(options: {
@@ -59,7 +60,7 @@ export function useSplitLayout() {
       referredFrom,
       handle: splitPanelContext?.handle,
       preferNewSplit: false,
-    });
+    }).split;
   }
 
   function insertSplit(
@@ -72,7 +73,7 @@ export function useSplitLayout() {
       referredFrom,
       preferNewSplit: true,
       ...options,
-    });
+    }).split;
   }
 
   function popoverSplit(
