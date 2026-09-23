@@ -172,7 +172,8 @@ impl CalendarRepository for FakeRepo {
             materialized_range: None,
             synced_at: self.stored_synced_at,
             watch_expires_at: None,
-            watch_unsupported_at: None,
+            watch_unsupported_at: (!self.recorded_watch_unsupported.lock().unwrap().is_empty())
+                .then(Utc::now),
         })
     }
 
@@ -738,8 +739,10 @@ impl GoogleCalendarProvider for MixedTotalFailureGoogleProvider {
 }
 
 /// Syncs one calendar whose watch call Google refuses as push-unsupported.
-#[derive(Clone)]
-struct PushUnsupportedGoogleProvider;
+#[derive(Clone, Default)]
+struct PushUnsupportedGoogleProvider {
+    watch_calls: Arc<Mutex<usize>>,
+}
 
 impl GoogleCalendarProvider for PushUnsupportedGoogleProvider {
     async fn list_calendars(
@@ -766,6 +769,7 @@ impl GoogleCalendarProvider for PushUnsupportedGoogleProvider {
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
     ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+        *self.watch_calls.lock().unwrap() += 1;
         Err(GoogleProviderError::new(
             GoogleProviderErrorKind::PushUnsupported,
             "Push notifications are not supported by this resource.",
@@ -779,9 +783,11 @@ async fn push_unsupported_watch_is_recorded_and_the_account_completes() {
     let repository = FakeRepo::default();
     let recorded_watch_unsupported = repository.recorded_watch_unsupported.clone();
     let recorded_sync_errors = repository.recorded_sync_errors.clone();
+    let provider = PushUnsupportedGoogleProvider::default();
+    let watch_calls = provider.watch_calls.clone();
     let coordinator = GoogleCalendarBackfillCoordinator::new(
         repository,
-        PushUnsupportedGoogleProvider,
+        provider,
         lifecycle.clone(),
         NoopMacroEventBroker,
         Some(GoogleWatchConfig {
@@ -790,28 +796,36 @@ async fn push_unsupported_watch_is_recorded_and_the_account_completes() {
         }),
     );
 
-    let mut report = GoogleBackfillRunReport::default();
-    coordinator
-        .run(
-            CalendarBackfillJobKey {
-                job_id: Uuid::now_v7(),
-                email_link_id: Uuid::now_v7(),
-            },
-            "macro|calendar@example.com",
-            "secret",
-            OccurrenceRange::maintenance_horizon(Utc::now()),
-            &mut report,
-        )
-        .await
-        .expect("a calendar Google will not push for still syncs by polling");
+    let key = CalendarBackfillJobKey {
+        job_id: Uuid::now_v7(),
+        email_link_id: Uuid::now_v7(),
+    };
+    for _ in 0..2 {
+        let mut report = GoogleBackfillRunReport::default();
+        coordinator
+            .run(
+                key,
+                "macro|calendar@example.com",
+                "secret",
+                OccurrenceRange::maintenance_horizon(Utc::now()),
+                &mut report,
+            )
+            .await
+            .expect("a calendar Google will not push for still syncs by polling");
+    }
 
     assert_eq!(
         *recorded_watch_unsupported.lock().unwrap(),
         vec![Uuid::nil()],
-        "the refusal is recorded so renewal stops retrying it"
+        "the refusal is recorded once"
+    );
+    assert_eq!(
+        *watch_calls.lock().unwrap(),
+        1,
+        "the recorded refusal stops the next run from re-watching"
     );
     assert!(recorded_sync_errors.lock().unwrap().is_empty());
-    assert_eq!(lifecycle.completions.lock().unwrap().len(), 1);
+    assert_eq!(lifecycle.completions.lock().unwrap().len(), 2);
     assert!(lifecycle.failures.lock().unwrap().is_empty());
 }
 

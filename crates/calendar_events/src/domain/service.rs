@@ -739,7 +739,6 @@ where
                 continue;
             }
             let plan = stored_calendar.sync_plan(&range);
-            let watch_due = stored_calendar.needs_watch_renewal(Utc::now());
             let batch = match self
                 .provider
                 .sync_events(
@@ -754,7 +753,7 @@ where
                             is_read_only,
                             range: range.clone(),
                         },
-                        sync_token: stored_calendar.sync_token,
+                        sync_token: stored_calendar.sync_token.clone(),
                         plan,
                     },
                 )
@@ -846,7 +845,7 @@ where
             // so a failed watch call must not fail the sync that just
             // committed durable progress.
             if let Some(watch) = &self.watch
-                && watch_due
+                && stored_calendar.needs_watch_renewal(Utc::now())
             {
                 let channel_id = Uuid::new_v4();
                 match self
