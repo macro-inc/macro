@@ -5,6 +5,7 @@ import {
   agentsViewRoute,
   codersRoute,
 } from '@app/features/agents-view/route';
+import { calendarSplitRoute } from '@app/features/calendar-view/route';
 import { channelsSplitRoute } from '@app/features/channels-view/route';
 import { companiesRoute } from '@app/features/companies/route';
 import { driveSplitRoute } from '@app/features/drive-view/route';
@@ -40,6 +41,7 @@ export const appSplitRoutes = defineRoutes({
     agentsViewRoute,
     emailSplitRoute,
     tasksSplitRoute,
+    calendarSplitRoute,
     channelsSplitRoute,
     callsRoute,
     companiesRoute,

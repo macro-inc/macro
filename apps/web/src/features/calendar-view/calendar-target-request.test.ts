@@ -4,7 +4,7 @@ import {
   type CalendarTargetAim,
   createCalendarTargetAim,
 } from './calendar-target-request';
-import type { CalendarBlockProps, CalendarBlockTargetRequest } from './types';
+import type { CalendarFocusRequest, CalendarViewTarget } from './types';
 
 const RANGE = {
   start: '2026-08-17T04:00:00.000Z',
@@ -20,7 +20,7 @@ const NEXT_WEEK_RANGE = {
   endDate: '2026-08-25',
 };
 
-const standup: CalendarBlockProps = {
+const standup: CalendarViewTarget = {
   eventId: 'event-1',
   occurrenceKey: '2026-08-17T14:00:00+00:00',
   range: RANGE,
@@ -72,9 +72,9 @@ describe('createCalendarTargetAim', () => {
   it('resolves params without a range through the preview', async () => {
     const resolveFromPreview = vi.fn(
       async (
-        _params: CalendarBlockProps,
+        _params: CalendarViewTarget,
         requestId: number
-      ): Promise<CalendarBlockTargetRequest> => ({
+      ): Promise<CalendarFocusRequest> => ({
         eventId: 'viewer-copy',
         range: RANGE,
         occurrenceKey: '2026-08-17T14:00:00+00:00',
@@ -116,9 +116,9 @@ describe('createCalendarTargetAim', () => {
     let releaseStalePreview: (() => void) | undefined;
     const resolveFromPreview = vi.fn(
       async (
-        _params: CalendarBlockProps,
+        _params: CalendarViewTarget,
         requestId: number
-      ): Promise<CalendarBlockTargetRequest> => {
+      ): Promise<CalendarFocusRequest> => {
         await new Promise<void>((resolve) => {
           releaseStalePreview = resolve;
         });

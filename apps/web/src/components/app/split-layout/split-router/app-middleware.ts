@@ -1,3 +1,10 @@
+import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
+import {
+  CALENDAR_ROUTE_ID,
+  CALENDAR_SEARCH_NAMESPACE,
+  calendarPath,
+} from '@app/features/calendar-view/calendar-url';
+import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { CHANNEL_DETAIL_SEARCH_NAMESPACE } from '@app/features/channels-view/channels-route';
 import {
   driveDocumentFromContent,
@@ -50,6 +57,9 @@ export function createAppSplitRouterMiddleware(options: {
           return redirect('/inbox');
         if (id === 'documents') return redirect('/drive');
         if (id === 'settings') return redirect('/settings');
+        if (id === CALENDAR_VIEW_ID) {
+          return redirect(calendarPath(getPreferredCalendarPeriodView()));
+        }
         if (
           appSplitRoutes.definitions.some((route) => route.id === `view-${id}`)
         ) {
@@ -59,6 +69,9 @@ export function createAppSplitRouterMiddleware(options: {
 
       const content = type && id ? decodeLegacyPair(type, id) : undefined;
       if (!content) return;
+      if (content.type === 'component' && content.id === CALENDAR_VIEW_ID) {
+        return redirect(calendarPath(getPreferredCalendarPeriodView()));
+      }
       const flag = options.newAppViews();
       const canRenderDetail =
         !flag.loading && flag.enabled && !options.isTouchDevice();
@@ -94,6 +107,9 @@ export function createAppSplitRouterMiddleware(options: {
           [CHANNEL_URL_PARAMS.message, 'messageId'],
           [CHANNEL_URL_PARAMS.thread, 'threadId'],
         ];
+      } else if (leafId === CALENDAR_ROUTE_ID) {
+        namespace = CALENDAR_SEARCH_NAMESPACE;
+        fields = [['eventId', 'eventId']];
       } else {
         return;
       }

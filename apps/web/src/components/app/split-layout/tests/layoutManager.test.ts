@@ -1,4 +1,5 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
+import { CALENDAR_PREFERENCES_KEY } from '@app/features/calendar/calendar-preferences';
 import { driveDestination } from '@app/features/drive-view/drive-route-navigation';
 import { driveSplitRoute } from '@app/features/drive-view/route';
 import {
@@ -890,6 +891,68 @@ describe('layoutManager', () => {
       expect(location.read().pathname).toBe(
         '/drive/~/drive/shared/~/drive/folder/folder'
       );
+      router.dispose();
+      dispose();
+    });
+
+    it('renders Calendar as a route-backed component and restores URL state', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/calendar/week?eventId=event-1'
+      );
+      await router.settled();
+      const split = manager.splits()[0];
+      const mount = split.mount;
+      expect(split.content).toMatchObject({
+        type: 'component',
+        id: 'calendar',
+      });
+      expect(mount.kind).toBe('component');
+      expect(router.route(split.id)?.matches).toEqual([
+        { id: 'view-calendar', params: { period: 'timeGridWeek' } },
+      ]);
+      expect(router.search(split.id, 'calendar')).toEqual({
+        eventId: ['event-1'],
+      });
+      expect(location.read().pathname).toBe('/calendar/week');
+      expect(new URLSearchParams(location.read().search).get('eventId')).toBe(
+        'event-1'
+      );
+      expect(
+        new URLSearchParams(location.read().search).get('s0.calendar.eventId')
+      ).toBe('event-1');
+
+      location.set('/calendar/day?s0.calendar.eventId=event-2');
+      await router.settled();
+      expect(manager.splits()[0].mount).toBe(mount);
+      expect(router.route(split.id)?.matches).toEqual([
+        { id: 'view-calendar', params: { period: 'timeGridDay' } },
+      ]);
+      expect(router.search(split.id, 'calendar')).toEqual({
+        eventId: ['event-2'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('upgrades the legacy Calendar block URL to the preferred period route', async () => {
+      localStorage.setItem(
+        CALENDAR_PREFERENCES_KEY,
+        JSON.stringify({ periodView: 'dayGridMonth' })
+      );
+      const { manager, location, router, dispose } = ingressRouter(
+        '/calendar/view?eventId=legacy-event'
+      );
+      await router.settled();
+      const split = manager.splits()[0];
+      expect(split.content).toMatchObject({
+        type: 'component',
+        id: 'calendar',
+      });
+      expect(location.read().pathname).toBe('/calendar/month');
+      expect(router.search(split.id, 'calendar')).toEqual({
+        eventId: ['legacy-event'],
+      });
+      localStorage.removeItem(CALENDAR_PREFERENCES_KEY);
       router.dispose();
       dispose();
     });

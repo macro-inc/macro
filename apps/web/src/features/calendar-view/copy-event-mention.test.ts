@@ -62,10 +62,8 @@ describe('copyCalendarEventMentionTarget', () => {
     });
 
     const plain = written()?.['text/plain'] ?? '';
-    expect(plain).toContain('/app/calendar/');
-    expect(plain).toContain('eventId=event-1');
-    expect(plain).toContain(
-      `occurrenceKey=${encodeURIComponent('2026-08-21T18:00:00+00:00')}`
-    );
+    expect(plain).toMatch(/\/app\/calendar\/(month|week|day)\?/);
+    expect(plain).toContain('s0.calendar.eventId=event-1');
+    expect(plain).not.toContain('occurrenceKey');
   });
 });

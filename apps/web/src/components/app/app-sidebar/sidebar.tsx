@@ -3,6 +3,8 @@ import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { calendarPath } from '@app/features/calendar-view/calendar-url';
+import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { ChannelsRecentWidget } from '@app/features/channel/sidebar/channels-recent-widget';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
@@ -26,7 +28,6 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
 import {
@@ -253,7 +254,7 @@ const SIDEBAR_LINKS = [
   {
     id: 'calendar',
     label: 'Calendar',
-    href: '/calendar',
+    href: calendarPath('timeGridWeek'),
     icon: getIconConfig('calendar').icon,
     hotkey: 'r',
     hotkeyToken: TOKENS.sidebar.goTo.calendar,
@@ -310,9 +311,11 @@ export function sidebarContent(
   viewId: SidebarItem['id'],
   params?: SidebarItem['params']
 ): SplitContent {
-  return viewId === 'calendar'
-    ? { type: 'calendar', id: CALENDAR_BLOCK_ID }
-    : { type: 'component', id: viewId, params };
+  return {
+    type: 'component',
+    id: viewId === 'calendar' ? CALENDAR_VIEW_ID : viewId,
+    params,
+  };
 }
 
 /**

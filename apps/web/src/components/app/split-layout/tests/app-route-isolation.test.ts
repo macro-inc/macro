@@ -22,6 +22,9 @@ vi.mock('@app/features/activity/views/my-activity-view', () => {
 vi.mock('@app/features/agents-view/views/AgentsView', () => {
   throw new Error('Route declarations must not eagerly load agent views');
 });
+vi.mock('@app/features/calendar-view/calendar-view', () => {
+  throw new Error('Route declarations must not eagerly load Calendar views');
+});
 vi.mock('@app/features/channels-view/channels-view', () => {
   throw new Error('Route declarations must not eagerly load channel views');
 });
@@ -67,6 +70,7 @@ describe('application route import isolation', () => {
       ['tasks'],
       ['settings', 'account'],
       ['drive', 'md', 'doc'],
+      ['calendar', 'week'],
       ['channels', 'channel-id'],
     ]) {
       expect(decodeRoute(routes, path)).toBeDefined();
