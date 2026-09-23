@@ -763,6 +763,11 @@ export function useUnscheduleMessageMutation(
                 queryKey: emailKeys.previews._def,
               })
               .catch(Telemetry.error);
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.scheduledMessages._def,
+              })
+              .catch(Telemetry.error);
           } catch (error) {
             Telemetry.error(error);
           }

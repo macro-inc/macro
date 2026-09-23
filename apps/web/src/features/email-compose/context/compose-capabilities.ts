@@ -180,6 +180,12 @@ export interface EmailDraftLifecycleSource {
     state: Accessor<EmailDraftLifecycleState | undefined>;
     /** Prior observations stay invalid after failure until a fresh read succeeds. */
     refresh(): Promise<EmailDraftLifecycleState | undefined>;
+    /** Read one captured identity even if the observing composer has navigated away. */
+    refreshIdentity?(input: {
+      draftId: string;
+      threadId: string;
+      inboxId?: string;
+    }): Promise<EmailDraftLifecycleState | undefined>;
   };
 }
 

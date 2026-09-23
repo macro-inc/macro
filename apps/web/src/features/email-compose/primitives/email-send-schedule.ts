@@ -63,6 +63,17 @@ export function createEmailSendSchedule(options: {
   generation: Accessor<string>;
   lifecycleState?: Accessor<EmailDraftLifecycleState | undefined>;
   reconcile?: () => Promise<EmailDraftLifecycleState | undefined>;
+  reconcileIdentity?: (input: {
+    draftId: string;
+    threadId: string;
+    inboxId?: string;
+  }) => Promise<EmailDraftLifecycleState | undefined>;
+  onScheduleUndone?: (input: {
+    draftId: string;
+    threadId: string | undefined;
+    inboxId: string | undefined;
+    sendTime: Date;
+  }) => Promise<void> | void;
 }) {
   const { delivery, notices } = options;
   const [state, setState] = createSignal<EmailScheduleState>(
@@ -160,6 +171,63 @@ export function createEmailSendSchedule(options: {
       notices.reportError(error);
     }
     return false;
+  };
+
+  const undoInitialSchedule = async (input: {
+    draftId: string;
+    threadId: string | undefined;
+    inboxId: string | undefined;
+    sendTime: Date;
+  }) => {
+    try {
+      await delivery.unschedule({
+        draftId: input.draftId,
+        inboxId: input.inboxId,
+      });
+    } catch (error) {
+      notices.reportError(error);
+      try {
+        const authoritative =
+          input.threadId && options.reconcileIdentity
+            ? await options.reconcileIdentity({
+                draftId: input.draftId,
+                threadId: input.threadId,
+                inboxId: input.inboxId,
+              })
+            : await options.reconcile?.();
+        const matchesCapturedIdentity =
+          authoritative?.draftId === input.draftId &&
+          (input.threadId === undefined ||
+            authoritative.threadId === input.threadId) &&
+          (input.inboxId === undefined ||
+            authoritative.inboxId === input.inboxId);
+        if (matchesCapturedIdentity && authoritative?.type === 'editing') {
+          // A lost cancellation response is still a successful undo.
+        } else if (matchesCapturedIdentity && authoritative?.type === 'sent') {
+          notices.feedback.alert(
+            'This email was already sent and can no longer be unscheduled.'
+          );
+          return;
+        } else {
+          notices.feedback.failure('Failed to undo scheduled send');
+          return;
+        }
+      } catch (refreshError) {
+        notices.reportError(refreshError);
+        notices.feedback.failure('Failed to undo scheduled send');
+        return;
+      }
+    }
+
+    if (options.draftId() === input.draftId) applyEditing();
+    try {
+      await options.onScheduleUndone?.(input);
+    } catch (error) {
+      notices.reportError(error);
+    }
+    notices.feedback.success(
+      'Schedule cancelled. This email is editable again.'
+    );
   };
 
   const submit = async (): Promise<'scheduled' | 'updated' | false> => {
@@ -261,9 +329,37 @@ export function createEmailSendSchedule(options: {
           );
         }
       }
-      notices.feedback.success(
-        `Email ${action === 'update' ? 'rescheduled' : 'scheduled'} for ${format(requested, "MMM d, yyyy 'at' h:mm a")}`
-      );
+      const successMessage = `Email ${action === 'update' ? 'rescheduled' : 'scheduled'} for ${format(requested, "MMM d, yyyy 'at' h:mm a")}`;
+      try {
+        if (action === 'schedule') {
+          let undoStarted = false;
+          const toastId = notices.feedback.success(successMessage, {
+            actions: [
+              {
+                label: 'Undo',
+                onClick: () => {
+                  if (undoStarted) return;
+                  undoStarted = true;
+                  if (toastId != null) notices.feedback.dismiss(toastId);
+                  void undoInitialSchedule({
+                    draftId,
+                    threadId: threadId ?? undefined,
+                    inboxId,
+                    sendTime: requested,
+                  });
+                },
+              },
+            ],
+            duration: 5_000,
+          });
+        } else {
+          notices.feedback.success(successMessage);
+        }
+      } catch (error) {
+        // Toast rendering is post-commit UI and cannot make a successful
+        // schedule retryable.
+        notices.reportError(error);
+      }
       ignoredLifecycleObservation =
         deferredLifecycleObservation ?? options.lifecycleState?.();
       return action === 'update' ? 'updated' : 'scheduled';

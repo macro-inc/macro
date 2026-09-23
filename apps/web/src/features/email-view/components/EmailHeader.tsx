@@ -6,7 +6,7 @@ import {
 } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TABS } from '../constants';
 import { useEmailView } from '../email-view-context';
@@ -66,6 +66,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     enabled: panel.isPanelActive,
     search: {
       description: 'Search email',
+      condition: () => state.tab !== 'scheduled',
       run: () => {
         searchInput?.focus();
         searchInput?.select();
@@ -74,6 +75,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     },
     filter: {
       description: 'Filter email',
+      condition: () => state.tab !== 'scheduled',
       run: () => {
         setFilterOpen(true);
         return true;
@@ -95,22 +97,31 @@ export function EmailHeader(props: EmailHeaderProps) {
         </div>
       </div>
 
-      <div class="flex min-w-0 items-center justify-between gap-3">
-        <SearchBar
-          ref={(element) => (searchInput = element)}
-          label="Search email"
-          value={state.search}
-          hotkey="cmd+f"
-          onValueChange={(search) => setState('search', search)}
-          onEscape={props.onSearchEscape}
-          placeholder="Search email"
-          class="max-w-md flex-1"
-        />
-        <EmailControls
-          filterOpen={filterOpen()}
-          onFilterOpenChange={setFilterOpen}
-        />
-      </div>
+      <Show
+        when={state.tab !== 'scheduled'}
+        fallback={
+          <p class="text-sm text-ink-muted">
+            Confirmed scheduled messages across the selected inboxes.
+          </p>
+        }
+      >
+        <div class="flex min-w-0 items-center justify-between gap-3">
+          <SearchBar
+            ref={(element) => (searchInput = element)}
+            label="Search email"
+            value={state.search}
+            hotkey="cmd+f"
+            onValueChange={(search) => setState('search', search)}
+            onEscape={props.onSearchEscape}
+            placeholder="Search email"
+            class="max-w-md flex-1"
+          />
+          <EmailControls
+            filterOpen={filterOpen()}
+            onFilterOpenChange={setFilterOpen}
+          />
+        </div>
+      </Show>
     </div>
   );
 }

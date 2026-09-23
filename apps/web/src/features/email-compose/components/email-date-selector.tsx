@@ -38,15 +38,16 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
   const accessibleLabel = () => {
     const label = formattedDate();
     if (!label) return 'Choose send time';
-    if (!isConfirmed())
-      return `Will send ${label} after you choose Schedule send.`;
+    if (!isConfirmed()) return `Send time set to ${label}. Open to change it.`;
     if (hasProposal()) {
       const confirmed = (
         props.state as Extract<EmailScheduleState, { type: 'scheduled' }>
       ).confirmedTime;
       return `Proposed send time ${label}. The email remains scheduled for ${format(confirmed, 'MMM d, yyyy  h:mm a')} until you choose Update schedule.`;
     }
-    return `Scheduled for ${label}. Open to propose a new time or cancel the schedule.`;
+    return props.mobile
+      ? `Scheduled for ${label}. Open to propose a new time or cancel the schedule.`
+      : `Scheduled for ${label}. Open to propose a new time.`;
   };
   const clearable = () =>
     (props.state.type === 'editing' && props.state.intent.type === 'later') ||
@@ -63,9 +64,9 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
           disableAfterDate={addYears(new Date(), 1)}
           disablePortal={props.disablePortal}
           triggerLabel={accessibleLabel()}
-          clearable={clearable()}
+          clearable={props.mobile && clearable()}
           clearLabel={hasProposal() ? 'Discard proposed time' : 'Clear time'}
-          showCurrentValue={isConfirmed()}
+          showCurrentValue={props.mobile && isConfirmed()}
           currentLabel={
             hasProposal()
               ? 'Proposed:'
@@ -74,7 +75,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
                 : undefined
           }
           footer={
-            <Show when={isConfirmed()}>
+            <Show when={props.mobile && isConfirmed()}>
               <div class="flex flex-col gap-2">
                 <p class="px-1 text-xs text-ink-muted">
                   {hasProposal()
@@ -102,10 +103,10 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
               'min-w-0 max-w-full shrink gap-1 aspect-auto! bg-accent/20 text-accent hover:bg-accent/15! hover:text-accent! not-touch:min-w-[33.75px] not-touch:w-auto! not-touch:px-2'
           )}
           trigger={(state) => {
-            const selectedLabel = () =>
-              state.selectedDate
-                ? format(state.selectedDate, 'MMM d, yyyy  h:mm a')
-                : undefined;
+            // The form-owned value is authoritative. Reading the selector's
+            // internal value here can leave the clock accented for one render
+            // after the summary's Cancel action clears the time.
+            const selectedLabel = formattedDate;
             const showExpanded = () => !isCompact() && !!selectedLabel();
 
             if (props.trigger) {
@@ -117,7 +118,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
 
             return (
               <div class="flex min-w-0 items-center gap-1">
-                <ClockIcon class={state.selectedDate ? 'text-accent' : ''} />
+                <ClockIcon class={props.selectedTime ? 'text-accent' : ''} />
                 <Show when={showExpanded()}>
                   <span class="min-w-0 truncate text-sm">
                     {selectedLabel()}

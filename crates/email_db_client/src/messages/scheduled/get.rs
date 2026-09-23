@@ -177,7 +177,10 @@ pub async fn get_scheduled_db_messages_by_link_id(
             m.updated_at
         FROM email_messages m
         JOIN email_scheduled_messages sm ON m.id = sm.message_id
-        WHERE m.link_id = $1 AND sm.sent = false
+        WHERE m.link_id = $1
+          AND m.is_draft = true
+          AND m.is_sent = false
+          AND sm.sent = false
         ORDER BY m.created_at DESC
         LIMIT $2 OFFSET $3
         "#,

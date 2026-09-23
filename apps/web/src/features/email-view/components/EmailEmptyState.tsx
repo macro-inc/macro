@@ -28,6 +28,10 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
       title: 'No sent email',
       description: 'Email you send will appear here.',
     }))
+    .with('scheduled', () => ({
+      title: 'No scheduled email',
+      description: 'Email you schedule to send later will appear here.',
+    }))
     .with('calendar', () => ({
       title: 'No calendar email',
       description: 'Invitations and event updates will appear here.',

@@ -19,6 +19,7 @@ import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
+import { EmailScheduleSummary } from '../components/email-schedule-summary';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { MobileReplyToolbar } from '../components/mobile-reply-toolbar';
 import { SignaturePreview } from '../components/signature-preview';
@@ -138,22 +139,6 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     isMobileDrawer() ? signatureHtml() : undefined;
   const footerSignatureHtml = () =>
     isMobileDrawer() ? undefined : signatureHtml();
-  const expandedActionLabel = () => {
-    const schedule = scheduleState();
-    return schedule.type === 'editing' && schedule.intent.type === 'immediate'
-      ? undefined
-      : schedule.type === 'scheduled' && !schedule.proposedTime
-        ? undefined
-        : scheduleActionLabel();
-  };
-  const scheduleNotice = () => {
-    const schedule = scheduleState();
-    if (schedule.type === 'editing') return undefined;
-    if (schedule.proposedTime) {
-      return `Scheduled for ${schedule.confirmedTime.toLocaleString()}. Proposed replacement: ${schedule.proposedTime.toLocaleString()}. The original remains active until Update schedule succeeds.`;
-    }
-    return `Scheduled for ${schedule.confirmedTime.toLocaleString()}. Cancel the schedule to edit the message.`;
-  };
   // File sharing and editor plugin wiring belong to this view. The controller only
   // needs to know when editor content has changed and requires another save.
   const editorConfig = buildConfig('markdown')
@@ -359,6 +344,14 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           sending={isSending()}
           editingDisabled={editingDisabled()}
           onSend={() => sendEmail()}
+          scheduleSummary={
+            <EmailScheduleSummary
+              state={scheduleState()}
+              operation={scheduleOperation()}
+              onSelectTime={handleSendTimeChange}
+              onCancelSchedule={cancelSchedule}
+            />
+          }
           scheduleControl={
             <Show when={composeContext.presentation.scheduleEnabled}>
               <EmailDateSelector
@@ -394,13 +387,6 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         replyType={state.replyType}
         disabled={editingDisabled}
       />
-      <Show when={scheduleNotice()}>
-        {(notice) => (
-          <div role="status" class="px-4 pb-2 text-sm text-ink-muted">
-            {notice()}
-          </div>
-        )}
-      </Show>
       <div
         class={cn(
           isMobileDrawer()
@@ -586,45 +572,53 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           {/* Keep the footer intrinsic-height so it cannot overlap the signature. */}
           <div
             ref={bottomBarRef}
-            class="shrink-0 flex items-center justify-end gap-1 pt-1.5"
+            class="shrink-0 flex min-w-0 flex-wrap items-center justify-end gap-y-1 pt-1.5"
           >
-            <Button
-              onClick={deleteDraftAndReset}
-              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-              size="icon-composer"
-              disabled={editingDisabled()}
-            >
-              <Trash />
-            </Button>
-            <AttachButton />
-            <Show
-              when={
-                composeContext.presentation.scheduleEnabled &&
-                !sendActionHidden()
-              }
-            >
-              <div class="min-w-0 max-w-[45%] shrink">
-                <EmailDateSelector
-                  mobile={false}
-                  state={scheduleState()}
-                  selectedTime={selectedSendTime()}
-                  onSelectTime={handleSendTimeChange}
-                  onCancelSchedule={cancelSchedule}
-                  operation={scheduleOperation()}
-                  disabled={schedulePickerDisabled()}
-                />
-              </div>
-            </Show>
-            <SendButton
-              appearance="composer"
-              disabled={sendActionDisabled()}
-              pending={isSending()}
-              hidden={sendActionHidden()}
-              onClick={() => sendEmail()}
-              tooltip={sendUnavailableReason() ?? scheduleActionLabel()}
-              aria-label={scheduleActionLabel()}
-              actionLabel={expandedActionLabel()}
+            <EmailScheduleSummary
+              state={scheduleState()}
+              operation={scheduleOperation()}
+              onSelectTime={handleSendTimeChange}
+              onCancelSchedule={cancelSchedule}
             />
+            <div class="ml-auto flex shrink-0 items-center gap-1">
+              <Button
+                onClick={deleteDraftAndReset}
+                tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
+                size="icon-composer"
+                disabled={editingDisabled()}
+              >
+                <Trash />
+              </Button>
+              <AttachButton />
+              <Show
+                when={
+                  composeContext.presentation.scheduleEnabled &&
+                  !sendActionHidden()
+                }
+              >
+                <div class="shrink-0">
+                  <EmailDateSelector
+                    mobile={false}
+                    compact
+                    state={scheduleState()}
+                    selectedTime={selectedSendTime()}
+                    onSelectTime={handleSendTimeChange}
+                    onCancelSchedule={cancelSchedule}
+                    operation={scheduleOperation()}
+                    disabled={schedulePickerDisabled()}
+                  />
+                </div>
+              </Show>
+              <SendButton
+                appearance="composer"
+                disabled={sendActionDisabled()}
+                pending={isSending()}
+                hidden={sendActionHidden()}
+                onClick={() => sendEmail()}
+                tooltip={sendUnavailableReason() ?? scheduleActionLabel()}
+                aria-label={scheduleActionLabel()}
+              />
+            </div>
           </div>
         </Show>
       </div>

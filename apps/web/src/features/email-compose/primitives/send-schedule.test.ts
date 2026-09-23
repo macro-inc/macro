@@ -561,6 +561,144 @@ describe('send and schedule ordering', () => {
     }
   });
 
+  it('undoes a scheduled reply with its saved body, envelope, and attachments', async () => {
+    const composeContext = createComposeContext();
+    const state = mountReplyComposer(composeContext);
+    try {
+      state.form.setSubject('Scheduled reply subject');
+      state.form.attachments.add({
+        type: 'forwarded',
+        attachmentId: 'source-file',
+        fileName: 'review.txt',
+        mimeType: 'text/plain',
+        fileSize: 10,
+      });
+      state.edit('Restore this scheduled reply');
+      state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      await state.sendEmail();
+
+      const scheduledNotice = vi
+        .mocked(composeContext.notices.feedback.success)
+        .mock.calls.find(([text]) => text.startsWith('Email scheduled for'));
+      scheduledNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(composeContext.delivery.unschedule).toHaveBeenCalledWith({
+        draftId: 'draft',
+        inboxId: 'inbox',
+      });
+      expect(composeContext.drafts.restoreDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+          draft: expect.objectContaining({
+            db_id: 'draft',
+            subject: 'Scheduled reply subject',
+          }),
+        })
+      );
+      expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
+        'Restore this scheduled reply'
+      );
+      expect(state.form.attachments.list()).toEqual([
+        expect.objectContaining({ attachmentId: 'source-file' }),
+      ]);
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('keeps a newer reply when undoing an older scheduled reply', async () => {
+    const composeContext = createComposeContext();
+    const state = mountReplyComposer(composeContext);
+    try {
+      state.edit('Older scheduled reply');
+      state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      await state.sendEmail();
+      const scheduledNotice = vi
+        .mocked(composeContext.notices.feedback.success)
+        .mock.calls.find(([text]) => text.startsWith('Email scheduled for'));
+
+      state.edit('Newer reply that must survive');
+      scheduledNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
+        'Newer reply that must survive'
+      );
+      expect(composeContext.notices.feedback.alert).toHaveBeenCalledWith(
+        'Schedule cancelled. Your newer reply was kept; the cancelled message is available in Drafts.'
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('keeps a different saved reply mounted after the scheduled reply is closed', async () => {
+    const composeContext = createComposeContext();
+    const parent = () => message('parent');
+    const scheduled = mountReplyComposer(composeContext, parent);
+    scheduled.edit('Older scheduled reply');
+    scheduled.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+    await scheduled.sendEmail();
+    const scheduledNotice = vi
+      .mocked(composeContext.notices.feedback.success)
+      .mock.calls.find(([text]) => text.startsWith('Email scheduled for'));
+    scheduled.dispose();
+
+    const newer = mountReplyComposer(composeContext, parent, {
+      draft: message('newer-draft', {
+        is_draft: true,
+        replying_to_id: 'parent',
+      }),
+    });
+    try {
+      expect(newer.savedDraftId()).toBe('newer-draft');
+      scheduledNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(newer.savedDraftId()).toBe('newer-draft');
+      expect(composeContext.notices.feedback.alert).toHaveBeenCalledWith(
+        'Schedule cancelled. Your newer reply was kept; the cancelled message is available in Drafts.'
+      );
+    } finally {
+      newer.dispose();
+    }
+  });
+
+  it('does not treat another draft as proof that a lost undo response succeeded', async () => {
+    const composeContext = createComposeContext();
+    vi.mocked(composeContext.delivery.unschedule).mockRejectedValueOnce(
+      new Error('response lost')
+    );
+    const state = mountReplyComposer(composeContext);
+    try {
+      state.edit('Scheduled reply');
+      state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      await state.sendEmail();
+      composeContext.setDraftLifecycle({
+        type: 'editing',
+        draftId: 'different-draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      const scheduledNotice = vi
+        .mocked(composeContext.notices.feedback.success)
+        .mock.calls.find(([text]) => text.startsWith('Email scheduled for'));
+      scheduledNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(composeContext.notices.feedback.failure).toHaveBeenCalledWith(
+        'Failed to undo scheduled send'
+      );
+      expect(composeContext.drafts.restoreDraft).not.toHaveBeenCalled();
+    } finally {
+      state.dispose();
+    }
+  });
+
   it('does not overwrite a newly edited reply when an older unmounted send fails', async () => {
     const composeContext = createComposeContext();
     const { promise: sending, reject } =

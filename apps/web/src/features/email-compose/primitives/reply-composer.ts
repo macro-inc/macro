@@ -300,8 +300,21 @@ export function createReplyComposer(
 
   // Register a callback so stale undoSend closures from a previous mount can
   // restore state into this (the live) component instance.
+  let hasLocalChanges = false;
   const restoreMountedReply = (snapshot: UndoReplySnapshot) => {
+    const currentDraftId = savedDraftId();
+    if (
+      hasLocalChanges ||
+      (currentDraftId !== undefined && currentDraftId !== snapshot.draftId)
+    ) {
+      props.notices.feedback.alert(
+        'Schedule cancelled. Your newer reply was kept; the cancelled message is available in Drafts.'
+      );
+      props.setShowReply?.(true);
+      return;
+    }
     const draftId = snapshot.draftId;
+    hasLocalChanges = false;
     props.onEngaged?.();
     session.dispatch({
       type: 'seeded',
@@ -598,6 +611,7 @@ export function createReplyComposer(
       terminalState()
     )
       return;
+    hasLocalChanges = true;
     editVersion += 1;
     props.onEngaged?.();
     autosave.schedule();
@@ -616,6 +630,7 @@ export function createReplyComposer(
       terminalState()
     )
       return;
+    hasLocalChanges = true;
     setMovingInbox(true);
     try {
       editVersion += 1;
@@ -663,6 +678,9 @@ export function createReplyComposer(
       `${identityVersion}:${editVersion}:${activeInboxId() ?? ''}`,
     lifecycleState: lifecycle.state,
     reconcile: lifecycle.refresh,
+    reconcileIdentity: lifecycle.refreshIdentity,
+    onScheduleUndone: ({ draftId, threadId, inboxId }) =>
+      restoreAfterUndoSend(draftId, threadId, inboxId),
   });
   const cancelSchedule = async () => {
     if (!(await schedule.cancel())) return false;
@@ -754,6 +772,36 @@ export function createReplyComposer(
 
     const offline = sendRefusalBeforeSave(props.connectivity);
     if (offline) return refuseSend(props.notices, offline);
+    const currentEditor = editor();
+    const rememberCurrentReply = () => {
+      if (!currentEditor) return;
+      const snapshotDraftId = savedDraftId();
+      const snapshotThreadId = savedDraftThreadId();
+      if (!snapshotDraftId || !snapshotThreadId) return;
+      const snapshotHtml = currentEditor.read(() =>
+        $generateHtmlFromNodes(currentEditor)
+      );
+      replyUndo.remember({
+        threadId: snapshotThreadId,
+        inboxId,
+        draftId: snapshotDraftId,
+        bodyHtml: snapshotHtml,
+        attachments: [...form.attachments.list()],
+        includeSignature: includeSignature(),
+        replyAppended: form.replyAppended(),
+        draftRestore: {
+          bcc,
+          cc,
+          db_id: snapshotDraftId,
+          provider_id: draftSeed?.provider_id,
+          provider_thread_id: currentThread.provider_id,
+          replying_to_id: replyTarget?.db_id,
+          subject: form.subject(),
+          thread_db_id: snapshotThreadId,
+          to,
+        },
+      });
+    };
     const scheduleAction = schedule.action();
     if (scheduleAction === 'unavailable') {
       props.notices.feedback.alert(
@@ -765,6 +813,7 @@ export function createReplyComposer(
       const result = await schedule.submit();
       if (result === 'scheduled') {
         const scheduledDraftId = savedDraftId();
+        rememberCurrentReply();
         try {
           resetState();
           clearDraftState();
@@ -778,8 +827,6 @@ export function createReplyComposer(
       return;
     }
     if (attachmentPersistence.uploading()) return;
-
-    const currentEditor = editor();
 
     // Sending a reply marks the thread done. Gated on inbox_visible because
     // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
@@ -815,35 +862,7 @@ export function createReplyComposer(
 
       // Snapshot editor state before watermark so undo-send can restore it.
       // Remember by draft so sends in separate composers cannot replace each other.
-      if (currentEditor) {
-        const snapshotHtml = currentEditor.read(() =>
-          $generateHtmlFromNodes(currentEditor)
-        );
-        const snapshotDraftId = savedDraftId();
-        const snapshotThreadId = savedDraftThreadId();
-        if (snapshotDraftId && snapshotThreadId) {
-          replyUndo.remember({
-            threadId: snapshotThreadId,
-            inboxId,
-            draftId: snapshotDraftId,
-            bodyHtml: snapshotHtml,
-            attachments: [...form.attachments.list()],
-            includeSignature: includeSignature(),
-            replyAppended: form.replyAppended(),
-            draftRestore: {
-              bcc,
-              cc,
-              db_id: snapshotDraftId,
-              provider_id: draftSeed?.provider_id,
-              provider_thread_id: currentThread.provider_id,
-              replying_to_id: replyTarget?.db_id,
-              subject: form.subject(),
-              thread_db_id: snapshotThreadId,
-              to,
-            },
-          });
-        }
-      }
+      rememberCurrentReply();
 
       if (scheduling() || schedule.action() !== 'send') {
         return;
@@ -1009,6 +1028,7 @@ export function createReplyComposer(
     form.reset();
     schedule.reset();
     setTerminalState(undefined);
+    hasLocalChanges = false;
   };
 
   const clearDraftState = () => {
@@ -1135,6 +1155,7 @@ export function createReplyComposer(
       terminalState()
     )
       return;
+    hasLocalChanges = true;
     editVersion += 1;
     attachmentPersistence.remove(attachment);
   };

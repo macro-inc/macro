@@ -21,6 +21,9 @@ export const emailKeys = createQueryKeys('email', {
   }) => ({
     queryKey: ['compose-draft-state', params],
   }),
+  scheduledMessages: (linkIds: string[]) => ({
+    queryKey: [{ linkIds }],
+  }),
   previews: (params: {
     view: PreviewViewStandardLabel;
     limit?: number;

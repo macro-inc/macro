@@ -23,6 +23,7 @@ import {
 } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailSidebar } from './components/EmailSidebar';
+import { ScheduledEmailList } from './components/ScheduledEmailList';
 import { EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import type { EmailTab, EmailViewStateOptions } from './types';
@@ -128,13 +129,19 @@ function EmailMobileLayout(props: ParentProps) {
 
 function EmailViewRoot() {
   const panel = useSplitPanelOrThrow();
+  const { state } = useEmailView();
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
 
   onMount(() => panel.handle.setDisplayName('Email'));
 
   const list = () => (
     <Suspense fallback={<EmailListFallback />}>
-      <EmailList ref={setListElement} />
+      <Show
+        when={state.tab === 'scheduled'}
+        fallback={<EmailList ref={setListElement} />}
+      >
+        <ScheduledEmailList ref={setListElement} />
+      </Show>
     </Suspense>
   );
 

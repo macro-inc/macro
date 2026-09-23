@@ -337,12 +337,30 @@ it('only commits a selected time through the primary action', async () => {
   expect(root.state.context.schedule.confirmedTime()).toEqual(firstTime);
   expect(root.state.context.deliveryState?.()).toBe('scheduled');
   expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
-    'Email scheduled for Dec 1, 2026 at 12:00 PM'
+    'Email scheduled for Dec 1, 2026 at 12:00 PM',
+    expect.objectContaining({
+      actions: [expect.objectContaining({ label: 'Undo' })],
+      duration: 5_000,
+    })
   );
   root.state.context.onSend();
   await vi.advanceTimersByTimeAsync(1);
   expect(composeContext.delivery.schedule).toHaveBeenCalledOnce();
   expect(composeContext.delivery.sendMessage).not.toHaveBeenCalled();
+
+  const scheduledNotice = vi
+    .mocked(composeContext.notices.feedback.success)
+    .mock.calls.find(([message]) => message.startsWith('Email scheduled for'));
+  scheduledNotice?.[1]?.actions?.[0].onClick();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.delivery.unschedule).toHaveBeenCalledExactlyOnceWith({
+    draftId: 'draft',
+    inboxId: 'inbox',
+  });
+  expect(root.state.context.schedule.state()).toEqual({
+    type: 'editing',
+    intent: { type: 'immediate' },
+  });
   root.dispose();
 });
 

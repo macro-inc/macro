@@ -112,14 +112,6 @@ export function EmailComposeView(props: EmailComposeViewProps) {
       return 'This draft is no longer available.';
     return 'This is a draft email.';
   };
-  const scheduleNotice = () => {
-    const schedule = ctxValue.schedule.state();
-    if (schedule.type === 'editing') return undefined;
-    if (schedule.proposedTime) {
-      return `Scheduled for ${schedule.confirmedTime.toLocaleString()}. Proposed replacement: ${schedule.proposedTime.toLocaleString()}. The original remains active until Update schedule succeeds.`;
-    }
-    return `Scheduled for ${schedule.confirmedTime.toLocaleString()}. Cancel the schedule to edit the message.`;
-  };
 
   if (composeContext.presentation.isMobile()) {
     // Backing out of a compose that has a draft asks whether to keep it.
@@ -171,15 +163,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
-              notice={
-                hasInboxError() ? (
-                  <EmailPermissionsBanner />
-                ) : scheduleNotice() ? (
-                  <div role="status" class="text-sm text-ink-muted">
-                    {scheduleNotice()}
-                  </div>
-                ) : undefined
-              }
+              notice={hasInboxError() ? <EmailPermissionsBanner /> : undefined}
               class="size-full p-4 touch:bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
             />
           </WrapUnlessMobile>

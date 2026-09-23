@@ -1,5 +1,9 @@
-import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import {
+  type DraftLifecycleChange,
+  publishDraftLifecycleChange,
+  subscribeToDraftLifecycleChanges,
+} from '@queries/email/draft-lifecycle-events';
 import { emailKeys } from '@queries/email/keys';
 import { fetchFreshEmailThread } from '@queries/email/thread';
 import type { ApiMessage } from '@service-email/generated/schemas';
@@ -15,37 +19,7 @@ const DUE_REFRESH_INTERVAL_MS = 2_000;
 const FAR_SCHEDULE_REFRESH_INTERVAL_MS = 30_000;
 let nextObserverId = 0;
 
-type DraftLifecycleChange = {
-  draftId: string;
-  inboxId?: string;
-  changedAt: number;
-};
-
-const lifecycleBus = createCrossTabBus<DraftLifecycleChange>({
-  channelName: 'macro-email-draft-lifecycle',
-  storageKey: 'macro:email-draft-lifecycle',
-  parse(value) {
-    if (typeof value !== 'object' || value === null) return null;
-    const candidate = value as Partial<DraftLifecycleChange>;
-    if (
-      typeof candidate.draftId !== 'string' ||
-      typeof candidate.changedAt !== 'number' ||
-      (candidate.inboxId !== undefined && typeof candidate.inboxId !== 'string')
-    ) {
-      return null;
-    }
-    return candidate as DraftLifecycleChange;
-  },
-  getMessageKey: (message) =>
-    `${message.draftId}:${message.inboxId ?? ''}:${message.changedAt}`,
-});
-
-export function publishDraftLifecycleChange(
-  draftId: string,
-  inboxId?: string
-): void {
-  lifecycleBus.publish({ draftId, inboxId, changedAt: Date.now() });
-}
+export { publishDraftLifecycleChange };
 
 export function deriveEmailDraftLifecycle(input: {
   draftId: string;
@@ -208,7 +182,7 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
         // Background failures remain query errors and retry on the next event/poll.
       }
     };
-    const unsubscribe = lifecycleBus.subscribe(
+    const unsubscribe = subscribeToDraftLifecycleChanges(
       (event) => void refreshFromEvent(event)
     );
     onCleanup(unsubscribe);
@@ -229,6 +203,10 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
         ? observation.state
         : undefined;
     };
-    return { state, refresh };
+    return {
+      state,
+      refresh,
+      refreshIdentity: (identity) => fetchLifecycle(identity),
+    };
   },
 };

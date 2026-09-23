@@ -403,6 +403,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
       `${identityVersion}:${editVersion}:${activeInboxId() ?? ''}`,
     lifecycleState: lifecycle.state,
     reconcile: lifecycle.refresh,
+    reconcileIdentity: lifecycle.refreshIdentity,
+    onScheduleUndone: ({ draftId }) => {
+      session.dispatch({ type: 'schedule-cancelled' });
+      setCompleted(false);
+      props.host?.showDraft?.(draftId);
+    },
   });
   const cancelSchedule = async () => {
     if (!(await schedule.cancel())) return false;

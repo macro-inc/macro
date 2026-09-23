@@ -341,19 +341,25 @@ export const DateSelector = (props: DateSelectorProps) => {
               />
             </div>
 
-            <Show when={selectedOption()}>
-              {(option) => (
-                <CurrentValueDisplay
-                  selectedOption={option()}
-                  clearLabel={props.clearLabel}
-                  currentLabel={props.currentLabel}
-                  showValue={props.showCurrentValue !== false}
-                  clearable={props.clearable !== false}
-                  onClear={() => {
-                    void onChange(null);
-                  }}
-                />
-              )}
+            <Show
+              when={
+                props.showCurrentValue !== false || props.clearable !== false
+              }
+            >
+              <Show when={selectedOption()}>
+                {(option) => (
+                  <CurrentValueDisplay
+                    selectedOption={option()}
+                    clearLabel={props.clearLabel}
+                    currentLabel={props.currentLabel}
+                    showValue={props.showCurrentValue !== false}
+                    clearable={props.clearable !== false}
+                    onClear={() => {
+                      void onChange(null);
+                    }}
+                  />
+                )}
+              </Show>
             </Show>
             <div class="p-1.5">
               <div class="max-h-56 overflow-y-auto overflow-x-hidden scrollbar-hidden">

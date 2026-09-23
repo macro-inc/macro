@@ -20,6 +20,19 @@ export function createComposeContext(): EmailComposeContext & {
           if (state) setLifecycleState({ ...state, observedAt: Date.now() });
           return state;
         }),
+        refreshIdentity: vi.fn(async (identity) => {
+          const state = lifecycleState();
+          if (
+            !state ||
+            state.draftId !== identity.draftId ||
+            state.threadId !== identity.threadId ||
+            (identity.inboxId !== undefined &&
+              state.inboxId !== identity.inboxId)
+          ) {
+            return undefined;
+          }
+          return state;
+        }),
       })),
     },
     recipientName: (id) => id,

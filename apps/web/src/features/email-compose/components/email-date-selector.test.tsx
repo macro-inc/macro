@@ -49,7 +49,7 @@ describe('EmailDateSelector', () => {
     ));
 
     const trigger = screen.getByRole('button', {
-      name: /Scheduled for .* Open to propose a new time or cancel/,
+      name: /Scheduled for .* Open to propose a new time\./,
     });
     expect(trigger.className).toContain('not-touch:w-auto!');
     expect(trigger.className).toContain('aspect-auto!');
@@ -101,7 +101,7 @@ describe('EmailDateSelector', () => {
     ));
 
     const trigger = screen.getByRole('button', {
-      name: /Will send .* after you choose Schedule send/,
+      name: /Send time set to .* Open to change it/,
     });
     expect(trigger.dataset.showCurrentValue).toBe('false');
   });
