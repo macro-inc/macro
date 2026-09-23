@@ -39,12 +39,16 @@ pub async fn bridge(
     };
     let (mut runtime, acp) = RuntimeConnection::connect_with_model_probe_handler(channel, probes);
 
-    let agent = AcpAgent::new(AcpAgentConfig::new(&harness.command).args(harness.args.clone()))
-        // The wire tap: every ndjson line crossing the child's stdio, plus
-        // its stderr. Enable with RUST_LOG=coding_agent_worker=trace.
-        .with_debug(|line, direction| {
-            tracing::trace!(?direction, line, "acp line");
-        });
+    let agent = AcpAgent::new(
+        AcpAgentConfig::new(&harness.command)
+            .args(harness.args.clone())
+            .envs(harness.env.clone()),
+    )
+    // The wire tap: every ndjson line crossing the child's stdio, plus
+    // its stderr. Enable with RUST_LOG=coding_agent_worker=trace.
+    .with_debug(|line, direction| {
+        tracing::trace!(?direction, line, "acp line");
+    });
 
     runtime
         .system_event(SystemEvent::AcpReady)
@@ -69,6 +73,7 @@ fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {
         command: harness.command.clone().into(),
         args: harness.args.clone(),
         cwd: cwd.to_owned(),
+        env: harness.env.clone(),
     }
 }
 
