@@ -16,7 +16,7 @@ use agent_harness::inbound::repositories::{
 };
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
 use agent_session::domain::ports::{
-    AgentSessionNotificationRecipient, BotDirectory, SessionOpener,
+    AgentSessionNotificationRecipient, BotDirectory, ExternalSessionRequester, SessionOpener,
 };
 use agent_session::domain::service::AgentSessionService;
 use agent_session::inbound::axum_router::{
@@ -61,10 +61,10 @@ fn health_router(ready: tokio::sync::watch::Receiver<bool>) -> Router {
 }
 
 /// All route state served by the public agent-harness HTTP listener.
-pub struct ApiStates<T, R, Opener, Bots, Access, Auth, Models, Changes> {
+pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes> {
     read: AgentSessionRouterState<T, Access, Auth>,
     control: AgentSessionControlState<R, Access, Auth>,
-    create: CreateSessionState<Opener, Bots, Auth>,
+    create: CreateSessionState<Opener, Bots, Requests, Auth>,
     gateway: RuntimeGatewayState<Auth>,
     models: AgentModelsRouterState<Models, Auth>,
     repositories: AgentRepositoriesRouterState<Auth>,
@@ -73,14 +73,14 @@ pub struct ApiStates<T, R, Opener, Bots, Access, Auth, Models, Changes> {
     changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
 
-impl<T, R, Opener, Bots, Access, Auth, Models, Changes>
-    ApiStates<T, R, Opener, Bots, Access, Auth, Models, Changes>
+impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
+    ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
 {
     /// Group the independently constructed route states for the HTTP server.
     pub fn new(
         read: AgentSessionRouterState<T, Access, Auth>,
         control: AgentSessionControlState<R, Access, Auth>,
-        create: CreateSessionState<Opener, Bots, Auth>,
+        create: CreateSessionState<Opener, Bots, Requests, Auth>,
         gateway: RuntimeGatewayState<Auth>,
         models: AgentModelsRouterState<Models, Auth>,
         repositories: AgentRepositoriesRouterState<Auth>,
@@ -143,8 +143,8 @@ where
 }
 
 /// Build the router and serve it until the process is asked to stop.
-pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Models, Changes>(
-    states: ApiStates<T, R, Opener, Bots, Access, Auth, Models, Changes>,
+pub async fn setup_and_serve<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>(
+    states: ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>,
     runtime_commands_ready: tokio::sync::watch::Receiver<bool>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
@@ -154,6 +154,7 @@ where
     R: AgentSessionNotificationRecipient,
     Opener: SessionOpener,
     Bots: BotDirectory,
+    Requests: ExternalSessionRequester,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
     Models: AgentModelsService,
@@ -182,14 +183,15 @@ where
         .context("agent harness service http failed")
 }
 
-fn api_router<T, R, Opener, Bots, Access, Auth, Models, Changes>(
-    states: ApiStates<T, R, Opener, Bots, Access, Auth, Models, Changes>,
+fn api_router<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>(
+    states: ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>,
 ) -> Router
 where
     T: AgentSessionService,
     R: AgentSessionNotificationRecipient,
     Opener: SessionOpener,
     Bots: BotDirectory,
+    Requests: ExternalSessionRequester,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
     Models: AgentModelsService,

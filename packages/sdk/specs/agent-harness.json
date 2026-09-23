@@ -2299,7 +2299,7 @@
           "id": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Id to create the session under, minted by the caller. Lets a surface\nopen on the session's final id - URL, history row, references - the\nmoment the user acts, rather than after this request answers (which\nfor a managed sandbox can take a while). Omitted, the service mints\none. Managed sessions only. Answers 409 if a session already holds\nthe id."
+            "description": "Id to create the session under, minted by the caller. Lets a surface\nopen on the session's final id - URL, history row, references - the\nmoment the user acts, rather than after this request answers (which\nfor a managed sandbox can take a while). Omitted, the service mints\none. Answers 409 if a session already holds the id. On an external\nrequest it is how a runtime answering a composer request names the\nid it was handed, so the requester waiting on that id finds the session."
           },
           "instructions": {
             "type": ["string", "null"],

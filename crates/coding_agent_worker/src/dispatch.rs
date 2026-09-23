@@ -127,6 +127,34 @@ impl WorkExecutor for Dispatcher {
                 self.api.prompt(session, &sender, &content).await?;
                 Ok(())
             }
+            TriggerWork::OpenRequested {
+                session,
+                bot,
+                sender,
+                content,
+            } => {
+                // Same create as a mention, minus the thread: the requester is
+                // waiting on this id, so the session is created under it.
+                let request = CreateAgentSessionRequest {
+                    id: Some(session.as_uuid()),
+                    bot_id: Some(bot.as_uuid()),
+                    workspace: Some(self.workspace.path.to_string_lossy().into_owned()),
+                    prompt: None,
+                    repo_url: self.workspace.repo_url.clone(),
+                    repo_branch: None,
+                    owner: Some(sender.as_ref().to_owned()),
+                    thread: None,
+                    instructions: None,
+                    model: None,
+                };
+                self.api.create_session(&request, &sender).await?;
+                self.runtime
+                    .ensure_connected()
+                    .await
+                    .map_err(DispatchError::Dial)?;
+                self.api.prompt(session, &sender, &content).await?;
+                Ok(())
+            }
             TriggerWork::PromptExisting {
                 session,
                 sender,

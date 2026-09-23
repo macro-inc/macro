@@ -98,7 +98,7 @@ where
             .sessions
             .create_session(CreateAgentSessionParams {
                 repo_branch: None,
-                id: AgentSessionId::new(),
+                id: request.id.unwrap_or_else(AgentSessionId::new),
                 owner_id: request.owner,
                 bot_id: request.bot_id,
                 thread_id: request.thread.as_ref().map(|thread| thread.thread_id),

@@ -95,6 +95,43 @@ pub trait BotDirectory: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool>> + Send;
 }
 
+/// A persona selected for a session started from Macro, by whoever runs it.
+#[derive(Debug, Clone)]
+pub enum SelectedPersona {
+    /// This deployment provisions the runtime.
+    Managed(SelectedManagedPersona),
+    /// The persona's operator runs the runtime, which opens its own sessions.
+    External {
+        /// Bot identity used by the session.
+        bot_id: BotId,
+    },
+}
+
+/// A session asked for from the composer, for a bot whose runtime is its
+/// operator's. The runtime creates it, the way it does for a mention.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequestedExternalSession {
+    /// The id the runtime is told to create the session under.
+    pub session_id: AgentSessionId,
+    /// The bot the session runs for.
+    pub bot_id: BotId,
+    /// Who asked; owns the session and authors the prompt.
+    pub owner: MacroUserIdStr<'static>,
+    /// The first prompt, delivered by the runtime once it has created the session.
+    pub prompt: String,
+}
+
+/// Hands a composer request to the bot's own runtime and waits for the
+/// session it creates.
+pub trait ExternalSessionRequester: Send + Sync + 'static {
+    /// Ask the runtime and return the session once it exists. Fails with
+    /// [`AgentSessionError::RuntimeUnavailable`] when no runtime answers.
+    fn request(
+        &self,
+        request: RequestedExternalSession,
+    ) -> impl Future<Output = Result<AgentSession>> + Send;
+}
+
 /// Why a user cannot select a bot as a managed session persona.
 #[derive(Debug)]
 pub enum ManagedPersonaError {
@@ -124,6 +161,21 @@ pub async fn managed_persona_for_owner<Bots: BotDirectory>(
     bot_id: BotId,
     owner: &Owner,
 ) -> std::result::Result<SelectedManagedPersona, ManagedPersonaError> {
+    match persona_for_owner(bots, bot_id, owner).await? {
+        SelectedPersona::Managed(persona) => Ok(persona),
+        SelectedPersona::External { .. } => Err(ManagedPersonaError::External),
+    }
+}
+
+/// Resolve and authorize a persona for the session's owner, whoever runs its
+/// runtime. Same ownership policy as [`managed_persona_for_owner`]; an
+/// externally run persona is authorized the same way and then told apart, so
+/// the caller can hand the request to the runtime its operator runs.
+pub async fn persona_for_owner<Bots: BotDirectory>(
+    bots: &Bots,
+    bot_id: BotId,
+    owner: &Owner,
+) -> std::result::Result<SelectedPersona, ManagedPersonaError> {
     let user = owner.as_user().ok_or(ManagedPersonaError::Forbidden)?;
     let facts = bots
         .bot_facts(bot_id)
@@ -133,14 +185,14 @@ pub async fn managed_persona_for_owner<Bots: BotDirectory>(
     if !facts.has_agent {
         return Err(ManagedPersonaError::NotAgent);
     }
-    if !facts.is_managed {
-        return Err(ManagedPersonaError::External);
-    }
     if facts.is_system {
-        return Ok(SelectedManagedPersona {
+        if !facts.is_managed {
+            return Err(ManagedPersonaError::External);
+        }
+        return Ok(SelectedPersona::Managed(SelectedManagedPersona {
             bot_id,
             profile: None,
-        });
+        }));
     }
     let authorized = if let Some(owner) = &facts.owner_user_id {
         owner.as_ref() == user.as_ref()
@@ -164,11 +216,14 @@ pub async fn managed_persona_for_owner<Bots: BotDirectory>(
     if !authorized {
         return Err(ManagedPersonaError::Forbidden);
     }
+    if !facts.is_managed {
+        return Ok(SelectedPersona::External { bot_id });
+    }
     let profile = facts.managed_profile.ok_or(ManagedPersonaError::NotAgent)?;
-    Ok(SelectedManagedPersona {
+    Ok(SelectedPersona::Managed(SelectedManagedPersona {
         bot_id,
         profile: Some(profile),
-    })
+    }))
 }
 
 /// The mention that triggered a session, when one did.
@@ -196,6 +251,10 @@ pub struct SessionThread {
 /// Everything needed to open a session served by an external runtime.
 #[derive(Debug, Clone)]
 pub struct OpenExternalAgentSession {
+    /// The id to create the session under, when the caller was told one: a
+    /// runtime answering a composer request creates the session the
+    /// requester is already waiting on. Minted here otherwise.
+    pub id: Option<AgentSessionId>,
     /// The bot the session runs for.
     pub bot_id: BotId,
     /// Persisted agent settings resolved by the authenticated entry point.
