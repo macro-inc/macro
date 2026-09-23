@@ -45,7 +45,7 @@ const mocks = vi.hoisted(() => ({
   queries: {} as Partial<
     Record<
       'history' | 'channels' | 'recently-viewed',
-      () => UseQueryResult<never[]>
+      () => UseQueryResult<unknown[]>
     >
   >,
 }));
@@ -79,7 +79,6 @@ vi.mock('@queries/channel/channels', () => ({
 vi.mock('@queries/channel/graphql', () => ({
   materializeCachedGraphqlChannels: async () => [],
 }));
-vi.mock('@queries/gate', () => ({ queryReadyGate: () => true }));
 vi.mock('@queries/history/history', () => ({
   useHistoryQuery: () =>
     mocks.queries.history?.() ?? {
@@ -218,6 +217,75 @@ const restCompany: CrmCompanyEntity = {
   domains: [{ id: 'domain-1', companyId: 'company-1', domain: 'acme.example' }],
 };
 
+const retainedHistory: HistoryItem[] = [
+  {
+    id: 'older-note',
+    type: 'document',
+    fileType: 'md',
+    name: 'Older note',
+    ownerId: 'owner',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+  },
+  {
+    id: 'newer-note',
+    type: 'document',
+    fileType: 'md',
+    name: 'Newer note',
+    ownerId: 'owner',
+    updatedAt: '2026-08-02T00:00:00.000Z',
+  },
+];
+const retainedQueryData = {
+  history: retainedHistory,
+  channels: [
+    {
+      id: 'retained-channel',
+      name: 'Retained channel',
+      ownerId: 'owner',
+      channelType: 'public',
+      participantIds: [],
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-02T00:00:00.000Z',
+    },
+  ],
+  'recently-viewed': [
+    { id: 'older-note', viewedAt: '2026-08-03T00:00:00.000Z' },
+  ],
+};
+
+const retainedListText = {
+  history: `newer-note@${Date.parse('2026-08-02T00:00:00.000Z')},older-note@${Date.parse('2026-08-01T00:00:00.000Z')}`,
+  channels: `retained-channel@${Date.parse('2026-08-02T00:00:00.000Z')}`,
+  'recently-viewed': `older-note@${Date.parse('2026-08-03T00:00:00.000Z')},newer-note@${Date.parse('2026-08-02T00:00:00.000Z')}`,
+};
+
+function renderRetainedList(client: QueryClient) {
+  const Shell = () => {
+    const list = useQuickAccess().useList();
+    const node = document.createElement('main');
+    node.dataset.testid = 'retained-shell';
+    createRenderEffect(() => {
+      node.textContent = list
+        .items()
+        .map((item) => `${item.id}@${item.sortTimestamp}`)
+        .join(',');
+    });
+    return node;
+  };
+  return render(() =>
+    createComponent(QueryClientProvider, {
+      client,
+      get children() {
+        return createComponent(QuickAccessProvider, {
+          get children() {
+            return createComponent(Shell, {});
+          },
+        });
+      },
+    })
+  );
+}
+
 describe('Quick Access source integration', () => {
   it.each(
     (['history', 'channels', 'recently-viewed'] as const).flatMap((source) =>
@@ -277,6 +345,79 @@ describe('Quick Access source integration', () => {
           ).toBe(true)
         );
         expect(rendered.getByTestId('app-shell')).toBe(shell);
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+
+  it.each(['history', 'channels', 'recently-viewed'] as const)(
+    'preserves %s items and ordering throughout a failed background refresh',
+    async (source) => {
+      if (source === 'recently-viewed') mocks.history = retainedHistory;
+      const data = retainedQueryData[source];
+      let rejectRefresh!: (error: Error) => void;
+      const pendingRefresh = new Promise<unknown[]>((_resolve, reject) => {
+        rejectRefresh = reject;
+      });
+      const fetch = vi
+        .fn<() => Promise<unknown[]>>()
+        .mockResolvedValueOnce(data)
+        .mockReturnValueOnce(pendingRefresh);
+      let query: UseQueryResult<unknown[]> | undefined;
+      mocks.queries[source] = () =>
+        (query = useQuery(() => ({
+          queryKey: ['retained-refresh', source],
+          queryFn: fetch,
+          retry: false,
+          throwOnError: false,
+        })));
+      const client = new QueryClient();
+      const rendered = renderRetainedList(client);
+      try {
+        await vi.waitFor(() => expect(query?.isSuccess).toBe(true));
+        const shell = rendered.getByTestId('retained-shell');
+        const expected = retainedListText[source];
+        expect(shell.textContent).toBe(expected);
+        const refresh = query!.refetch();
+        await vi.waitFor(() => expect(query?.isRefetching).toBe(true));
+        expect(shell.textContent).toBe(expected);
+        rejectRefresh(new Error('cache refresh failed'));
+        await refresh;
+        await vi.waitFor(() => expect(query?.isRefetchError).toBe(true));
+        expect(query?.isSuccess).toBe(false);
+        expect(query?.data).toEqual(data);
+        expect(rendered.getByTestId('retained-shell')).toBe(shell);
+        expect(shell.textContent).toBe(expected);
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+
+  it.each(['history', 'channels', 'recently-viewed'] as const)(
+    'shows %s placeholder data without suspending while a replacement is pending',
+    async (source) => {
+      if (source === 'recently-viewed') mocks.history = retainedHistory;
+      let query: UseQueryResult<unknown[]> | undefined;
+      mocks.queries[source] = () =>
+        (query = useQuery<unknown[]>(() => ({
+          queryKey: ['placeholder', source],
+          queryFn: () => new Promise(() => {}),
+          placeholderData: retainedQueryData[source],
+          retry: false,
+        })));
+      const client = new QueryClient();
+      const rendered = renderRetainedList(client);
+      try {
+        await vi.waitFor(() => expect(query?.isPlaceholderData).toBe(true));
+        expect(query?.isFetching).toBe(true);
+        expect(query?.isSuccess).toBe(true);
+        expect(rendered.getByTestId('retained-shell').textContent).toBe(
+          retainedListText[source]
+        );
       } finally {
         rendered.unmount();
         client.clear();

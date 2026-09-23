@@ -326,7 +326,9 @@ email mentions keep their separate search-service path.
 
 Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
 must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. A normal cache-worker
+mounted and usable while the optional source loads or fails. A failed background
+refresh retains available history/channel items and recently-viewed ordering.
+Placeholder results also remain usable while replacement data loads. A normal cache-worker
 handoff between tabs preserves backfill cursors and watermarks; only a replacement
 that creates or resets stored cache data discards them. Per-lane full-refresh and
 Shared Mail restart rules still apply.
