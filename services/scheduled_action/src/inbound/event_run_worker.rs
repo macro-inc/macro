@@ -1,9 +1,9 @@
-//! Bounded, awaitable event dispatch. No detached execution tasks: shutdown
-//! signals active executors and waits for terminal bookkeeping before returning.
+//! Bounded continuous event dispatch. Shutdown signals active executors; the
+//! lifecycle drains the worker, then tracked executions and terminal bookkeeping.
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use futures::{StreamExt, stream};
+use tokio::sync::Semaphore;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use crate::domain::event_runs::{PageSize, dispatch::EventRunDispatch};
@@ -31,6 +31,8 @@ async fn run(
     limit: PageSize,
     interval: Duration,
 ) {
+    let service = Arc::new(service);
+    let permits = Arc::new(Semaphore::new(usize::from(limit.get())));
     loop {
         if shutdown.is_cancelled() {
             return;
@@ -41,13 +43,18 @@ async fn run(
                 "event maintenance deferred"
             );
         }
-        match service.pending(limit).await {
-            Ok(pending) => {
-                stream::iter(pending)
-                    .for_each_concurrent(usize::from(limit.get()), |pending| {
-                        let service = &service;
-                        let shutdown = &shutdown;
-                        executions.track_future(async move {
+        let free = u16::try_from(permits.available_permits()).expect("capacity fits PageSize");
+        if let Ok(page) = PageSize::try_from(free) {
+            match service.pending(page).await {
+                Ok(pending) => {
+                    for pending in pending {
+                        let Ok(permit) = permits.clone().try_acquire_owned() else {
+                            break;
+                        };
+                        let service = Arc::clone(&service);
+                        let shutdown = shutdown.clone();
+                        executions.spawn(async move {
+                            let _permit = permit;
                             if shutdown.is_cancelled() {
                                 return;
                             }
@@ -63,11 +70,11 @@ async fn run(
                                     "event dispatch or bookkeeping deferred"
                                 );
                             }
-                        })
-                    })
-                    .await;
+                        });
+                    }
+                }
+                Err(_) => tracing::warn!(outcome = "queue_unavailable", "event polling deferred"),
             }
-            Err(_) => tracing::warn!(outcome = "queue_unavailable", "event polling deferred"),
         }
         tokio::select! {
             _ = shutdown.cancelled() => return,
