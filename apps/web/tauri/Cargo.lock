@@ -197,6 +197,7 @@ version = "0.1.0"
 dependencies = [
  "graphql_cache_plugin",
  "http",
+ "jni",
  "log",
  "logger",
  "macro_bundle_updater_plugin",
@@ -206,12 +207,14 @@ dependencies = [
  "objc2 0.5.2",
  "reqwest",
  "rootcause",
+ "rustls-platform-verifier",
  "serde",
  "serde_json",
  "serde_qs",
  "staged_upload_constants",
  "tauri",
  "tauri-build",
+ "tauri-plugin-android-auth",
  "tauri-plugin-auth",
  "tauri-plugin-call-kit",
  "tauri-plugin-deep-link",
@@ -6536,6 +6539,15 @@ dependencies = [
  "tauri-utils",
  "toml 0.9.12+spec-1.1.0",
  "walkdir",
+]
+
+[[package]]
+name = "tauri-plugin-android-auth"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]
