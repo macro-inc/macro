@@ -8,7 +8,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
 import { MarkdownImage } from '@core/component/LexicalMarkdown/component/decorator/MarkdownImage';
-import { MarkdownVideo } from '@core/component/LexicalMarkdown/component/decorator/MarkdownVideo';
+import { MediaLoadingPlaceholder } from '@core/component/LexicalMarkdown/component/decorator/MediaLoadingPlaceholder';
 import { useUserId } from '@core/context/user';
 import FileText from '@phosphor/file-text.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
@@ -1259,16 +1259,7 @@ export default function AgentUiGallery() {
                 height={0}
                 scale={1}
               />
-              <MarkdownVideo
-                key="artifact-video"
-                srcType="url"
-                id=""
-                url=""
-                controls
-                width={0}
-                height={0}
-                scale={1}
-              />
+              <MediaLoadingPlaceholder kind="video" label="demo.mp4" />
             </div>
           </Item>
 
