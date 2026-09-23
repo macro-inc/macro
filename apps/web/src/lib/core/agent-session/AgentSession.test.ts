@@ -12,7 +12,7 @@ import type {
   AgentSessionLogResponse,
 } from '@service-agent-harness/generated/schemas';
 import { err, ok, type Result } from 'neverthrow';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fold = vi.hoisted(() => ({
   pushSession: vi.fn(),
@@ -44,6 +44,7 @@ import {
   AgentSession,
   AgentSessionAccessDenied,
   AgentSessionReleased,
+  QUIET_TURN_RESYNC_MS,
 } from './AgentSession';
 import { resetSessionTurns, sessionTurn } from './session-turn';
 
@@ -79,6 +80,10 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -399,6 +404,72 @@ describe('AgentSession', () => {
 
     expect(speculations()).toEqual([]);
     live.release();
+  });
+
+  /** Snapshot inputs the worker saw after the load's own. */
+  const resnapshots = () =>
+    inputs()
+      .filter((input) => input.kind === 'snapshot')
+      .slice(1);
+
+  it('refetches the log when a working turn goes quiet', async () => {
+    vi.useFakeTimers();
+    const live = await loadedWith('running');
+    harness.getLog.mockResolvedValue(logOf([row(1), row(2)]));
+
+    await vi.advanceTimersByTimeAsync(QUIET_TURN_RESYNC_MS - 1);
+    expect(resnapshots()).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(resnapshots()).toEqual([
+      { kind: 'snapshot', rows: [row(1), row(2)] },
+    ]);
+    live.release();
+  });
+
+  it('keeps waiting while frames keep arriving', async () => {
+    vi.useFakeTimers();
+    const live = await loadedWith('running');
+
+    await vi.advanceTimersByTimeAsync(QUIET_TURN_RESYNC_MS - 1000);
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+    await vi.advanceTimersByTimeAsync(QUIET_TURN_RESYNC_MS - 1000);
+
+    expect(resnapshots()).toEqual([]);
+    live.release();
+  });
+
+  it.each(['idle', 'blocked', 'disconnected'])(
+    'does not refetch a %s session, which has nothing on the wire',
+    async (state) => {
+      vi.useFakeTimers();
+      const live = await loadedWith(state);
+
+      await vi.advanceTimersByTimeAsync(QUIET_TURN_RESYNC_MS * 3);
+
+      expect(resnapshots()).toEqual([]);
+      live.release();
+    }
+  );
+
+  it('stops watching once the turn settles, and after release', async () => {
+    vi.useFakeTimers();
+    const live = await loadedWith('running');
+    fold.pushSession.mockResolvedValueOnce([
+      { kind: 'metadata', metadata: { turn: 'idle' } },
+    ]);
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+    await vi.advanceTimersByTimeAsync(QUIET_TURN_RESYNC_MS * 2);
+    expect(resnapshots()).toEqual([]);
+
+    fold.pushSession.mockResolvedValueOnce([
+      { kind: 'metadata', metadata: { turn: 'running' } },
+    ]);
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
+    await vi.advanceTimersByTimeAsync(0);
+    live.release();
+    await vi.advanceTimersByTimeAsync(QUIET_TURN_RESYNC_MS * 2);
+    expect(harness.getLog).toHaveBeenCalledOnce();
   });
 
   it('publishes the fold turn so list rows can follow a working session', async () => {
