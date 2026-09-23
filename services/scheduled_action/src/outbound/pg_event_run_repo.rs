@@ -11,8 +11,8 @@ use serde_json::{Value, json};
 use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::event_runs::{
-    AdmissionResult, AuthorizedEventRun, CancellationReason, ClaimToken, ClaimedEventRun,
-    ConfigurationRevision, EventActionConfiguration, EventRunKey, EventRunOutcome,
+    AdmissionResult, AuthorizedEventRun, CancellationReason, CandidateActionPage, ClaimToken,
+    ClaimedEventRun, ConfigurationRevision, EventActionConfiguration, EventRunKey, EventRunOutcome,
     EventRunRepository, FinalizationResult, FinalizeEventRun, PageSize, PendingEventRun,
 };
 use crate::domain::event_trigger::{ActionTrigger, EventReference};
@@ -44,16 +44,32 @@ struct ConfigurationRow {
     event_activated_at: DateTime<Utc>,
 }
 
-impl TryFrom<ConfigurationRow> for EventActionConfiguration {
-    type Error = Report;
+/// Deliberately excludes persisted content and underlying parser errors.
+#[derive(Debug, thiserror::Error)]
+enum InvalidConfiguration {
+    #[error("invalid_owner")]
+    Owner,
+    #[error("invalid_revision")]
+    Revision,
+    #[error("invalid_filters")]
+    Filters,
+}
 
-    fn try_from(row: ConfigurationRow) -> Result<Self, Report> {
+impl TryFrom<ConfigurationRow> for EventActionConfiguration {
+    type Error = InvalidConfiguration;
+
+    fn try_from(row: ConfigurationRow) -> Result<Self, Self::Error> {
         Ok(Self {
             action_id: row.action_id,
-            owner: Owner::from_principal_str(&row.owner)?,
+            owner: Owner::from_principal_str(&row.owner)
+                .map_err(|_| InvalidConfiguration::Owner)?,
             enabled: row.enabled,
-            revision: row.configuration_revision.try_into()?,
-            filters: serde_json::from_value(row.event_filters)?,
+            revision: row
+                .configuration_revision
+                .try_into()
+                .map_err(|_| InvalidConfiguration::Revision)?,
+            filters: serde_json::from_value(row.event_filters)
+                .map_err(|_| InvalidConfiguration::Filters)?,
             activated_at: row.event_activated_at,
         })
     }
@@ -99,7 +115,7 @@ impl EventRunRepository for PgEventRunRepo {
         event: &EventReference,
         after: Option<Uuid>,
         limit: PageSize,
-    ) -> Result<Vec<EventActionConfiguration>, Report> {
+    ) -> Result<CandidateActionPage, Report> {
         let rows = sqlx::query_as!(
             ConfigurationRow,
             r#"
@@ -124,14 +140,30 @@ impl EventRunRepository for PgEventRunRepo {
         )
         .fetch_all(&self.pool)
         .await?;
-        rows.into_iter().map(TryInto::try_into).collect()
+        let next_after = rows.last().map(|row| row.action_id);
+        let mut configurations = Vec::with_capacity(rows.len());
+        for row in rows {
+            let action_id = row.action_id;
+            match row.try_into() {
+                Ok(configuration) => configurations.push(configuration),
+                Err(error) => tracing::warn!(
+                    %action_id,
+                    classification = %error,
+                    "invalid event configuration skipped"
+                ),
+            }
+        }
+        Ok(CandidateActionPage {
+            configurations,
+            next_after,
+        })
     }
 
     async fn current_configuration(
         &self,
         action_id: Uuid,
     ) -> Result<Option<EventActionConfiguration>, Report> {
-        sqlx::query_as!(
+        Ok(sqlx::query_as!(
             ConfigurationRow,
             r#"
             SELECT id AS action_id, owner, enabled, configuration_revision,
@@ -143,7 +175,7 @@ impl EventRunRepository for PgEventRunRepo {
         .fetch_optional(&self.pool)
         .await?
         .map(TryInto::try_into)
-        .transpose()
+        .transpose()?)
     }
 
     async fn admit(

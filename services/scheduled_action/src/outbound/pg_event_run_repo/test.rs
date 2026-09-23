@@ -214,15 +214,22 @@ async fn candidates_exact_recheck_activation_and_keyset_pages(pool: PgPool) {
     let repo = PgEventRunRepo::new(pool.clone());
     let first = repo.candidate_actions(&event, None, page(1)).await.unwrap();
     let second = repo
-        .candidate_actions(&event, Some(first[0].action_id), page(1))
+        .candidate_actions(&event, first.next_after, page(1))
         .await
         .unwrap();
-    assert_eq!([first[0].action_id, second[0].action_id], [null_ids, exact]);
+    assert_eq!(
+        [
+            first.configurations[0].action_id,
+            second.configurations[0].action_id
+        ],
+        [null_ids, exact]
+    );
     assert!(
         repo.candidate_actions(&event, Some(exact), page(1))
             .await
             .unwrap()
-            .is_empty()
+            .next_after
+            .is_none()
     );
     admit(&repo, exact, &event).await;
     assert_eq!(repo.pending_runs(page(100)).await.unwrap().len(), 1);
@@ -244,8 +251,148 @@ async fn candidates_exact_recheck_activation_and_keyset_pages(pool: PgPool) {
         repo.candidate_actions(&event, None, page(100))
             .await
             .unwrap()
+            .configurations
             .len(),
         1
+    );
+}
+
+struct AllowAccess;
+
+impl crate::domain::event_runs::CurrentOwnerAccess for AllowAccess {
+    async fn authorize(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        event: &EventReference,
+    ) -> Result<Option<crate::domain::event_runs::EventAccessCapability>, Report> {
+        Ok(Some(
+            crate::domain::event_runs::EventAccessCapability::Document(
+                EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
+                    owner.clone(),
+                    &event.entity_id().to_string(),
+                    EntityType::Document,
+                ),
+            ),
+        ))
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn admission_skips_invalid_first_and_middle_pages_without_truncating_fanout(pool: PgPool) {
+    use crate::domain::event_runs::{
+        EventIngestion, EventIngestionResult, admission::EventAdmissionService,
+    };
+    use crate::domain::event_trigger::{EventPayload, IncomingEvent};
+    use std::sync::Arc;
+
+    let valid = json!([{"events": ["document.updated"]}]);
+    let malformed_owner = action(&pool, valid.clone()).await;
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id)
+           SELECT $1, $1, id FROM macro_user WHERE email = $2"#,
+        "invalid private owner",
+        USER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE scheduled_action SET owner = $2 WHERE id = $1",
+        malformed_owner,
+        "invalid private owner"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let too_many_events = action(&pool, json!([{"events": vec!["document.updated"; 8]}])).await;
+    let first_valid = action(&pool, valid.clone()).await;
+    let second_valid = action(&pool, valid.clone()).await;
+    // Another entirely invalid page after valid candidates have been admitted.
+    action(&pool, json!([{"events": ["document.updated"], "ids": vec![generate_uuid_v7().to_string(); 101]}, {"events": ["document.updated"]}])).await;
+    action(
+        &pool,
+        json!([{"events": ["document.updated", "unknown.event"]}]),
+    )
+    .await;
+    let last_valid = action(&pool, valid).await;
+    let incoming = IncomingEvent {
+        event_id: generate_uuid_v7(),
+        schema_version: 1,
+        payload: EventPayload::Document(
+            serde_json::from_value(json!({
+                "event_type": "document.updated", "metadata": {
+                    "document_id": generate_uuid_v7(), "owner": USER,
+                    "actor_user_id": USER, "share_permission_updated": false,
+                }
+            }))
+            .unwrap(),
+        ),
+    };
+    let repo = Arc::new(PgEventRunRepo::new(pool.clone()));
+    let first = repo
+        .candidate_actions(&incoming.normalize().unwrap(), None, page(2))
+        .await
+        .unwrap();
+    assert!(first.configurations.is_empty());
+    assert_eq!(first.next_after, Some(too_many_events));
+    let service = EventAdmissionService::new(repo.clone(), Arc::new(AllowAccess), page(2));
+    assert_eq!(
+        service.ingest(&incoming).await.unwrap(),
+        EventIngestionResult::Admitted { inserted: 3 }
+    );
+    let mut admitted: Vec<_> = repo
+        .pending_runs(page(100))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|run| run.action_id)
+        .collect();
+    admitted.sort();
+    assert_eq!(admitted, vec![first_valid, second_valid, last_valid]);
+    assert_eq!(
+        service.ingest(&incoming).await.unwrap(),
+        EventIngestionResult::Admitted { inserted: 0 }
+    );
+    // A repository outage is not a malformed configuration and must defer intake.
+    pool.close().await;
+    assert!(service.ingest(&incoming).await.is_err());
+}
+
+#[test]
+fn invalid_configuration_classifications_do_not_include_persisted_content() {
+    fn row() -> ConfigurationRow {
+        ConfigurationRow {
+            action_id: generate_uuid_v7(),
+            owner: USER.into(),
+            enabled: true,
+            configuration_revision: 1,
+            event_filters: json!([{"events": ["document.updated"]}]),
+            event_activated_at: Utc::now(),
+        }
+    }
+    let mut owner = row();
+    owner.owner = "private malformed owner".into();
+    assert_eq!(
+        EventActionConfiguration::try_from(owner)
+            .unwrap_err()
+            .to_string(),
+        "invalid_owner"
+    );
+    let mut revision = row();
+    revision.configuration_revision = 0;
+    assert_eq!(
+        EventActionConfiguration::try_from(revision)
+            .unwrap_err()
+            .to_string(),
+        "invalid_revision"
+    );
+    let mut filters = row();
+    filters.event_filters = json!([{"events": ["private malformed event"]}]);
+    assert_eq!(
+        EventActionConfiguration::try_from(filters)
+            .unwrap_err()
+            .to_string(),
+        "invalid_filters"
     );
 }
 

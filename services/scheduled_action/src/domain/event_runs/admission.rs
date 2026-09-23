@@ -39,12 +39,20 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess> EventIngestion for EventAdmis
                 .repository
                 .candidate_actions(&event, after, self.page_size)
                 .await?;
-            if candidates.is_empty() {
+            let Some(next_after) = candidates.next_after else {
+                if !candidates.configurations.is_empty() {
+                    return Err(rootcause::report!("event candidate page has no cursor"));
+                }
                 return Ok(EventIngestionResult::Admitted { inserted });
+            };
+            if after.is_some_and(|id| next_after <= id) {
+                return Err(rootcause::report!("event candidate cursor did not advance"));
             }
-            for configuration in candidates {
+            for configuration in candidates.configurations {
                 // Enforce forward progress even for a broken repository adapter.
-                if after.is_some_and(|id| configuration.action_id <= id) {
+                if after.is_some_and(|id| configuration.action_id <= id)
+                    || configuration.action_id > next_after
+                {
                     return Err(rootcause::report!("event candidate page is not ordered"));
                 }
                 after = Some(configuration.action_id);
@@ -75,6 +83,7 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess> EventIngestion for EventAdmis
                     inserted += 1;
                 }
             }
+            after = Some(next_after);
         }
     }
 }

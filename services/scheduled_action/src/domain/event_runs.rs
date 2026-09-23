@@ -317,17 +317,25 @@ pub struct FinalizeEventRun {
     pub execution: EventExecutionResult,
 }
 
+/// A bounded raw page, with invalid persisted configurations omitted.
+pub struct CandidateActionPage {
+    pub configurations: Vec<EventActionConfiguration>,
+    /// Last raw action ID, including invalid rows. None only at end of scan.
+    pub next_after: Option<Uuid>,
+}
+
 /// Durable queue port. Implementations own locking, deduplication and fencing,
 /// but not user authorization or event attribution policy.
 pub trait EventRunRepository: Send + Sync + 'static {
     /// Keyset page ordered by action ID. May return indexed coarse candidates;
     /// the domain must recheck exact filters and the activation boundary.
+    /// Advance by the raw-page cursor even when every configuration is invalid.
     fn candidate_actions(
         &self,
         event: &EventReference,
         after: Option<Uuid>,
         limit: PageSize,
-    ) -> impl Future<Output = Result<Vec<EventActionConfiguration>, Report>> + Send;
+    ) -> impl Future<Output = Result<CandidateActionPage, Report>> + Send;
 
     /// None also covers actions that are no longer event-triggered.
     fn current_configuration(

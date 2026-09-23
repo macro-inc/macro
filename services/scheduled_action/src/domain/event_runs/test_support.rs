@@ -135,7 +135,7 @@ impl EventRunRepository for Repo {
         _: &EventReference,
         after: Option<Uuid>,
         limit: PageSize,
-    ) -> Result<Vec<EventActionConfiguration>, Report> {
+    ) -> Result<CandidateActionPage, Report> {
         let mut state = self.0.lock().unwrap();
         state.pages.push(after);
         if state.fail_page == Some(state.pages.len()) {
@@ -143,11 +143,15 @@ impl EventRunRepository for Repo {
         }
         let mut configs = state.configurations.clone();
         configs.sort_by_key(|config| config.action_id);
-        Ok(configs
+        let configurations: Vec<_> = configs
             .into_iter()
             .filter(|config| after.is_none_or(|id| config.action_id > id))
             .take(limit.get().into())
-            .collect())
+            .collect();
+        Ok(CandidateActionPage {
+            next_after: configurations.last().map(|config| config.action_id),
+            configurations,
+        })
     }
     async fn current_configuration(
         &self,
