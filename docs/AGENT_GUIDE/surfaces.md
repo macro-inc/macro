@@ -304,6 +304,14 @@ on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
 ### Read state and trash
 
+In the Email view, Status is a client-side admission filter over the paginated
+mailbox source. With Unread selected, opening or marking an admitted row read
+keeps that row in place across refreshes; already-read rows are not admitted.
+Changing the read filter, tab, or inbox resets admission. Archive and trash still
+remove rows through the authoritative source rather than retained row snapshots.
+Verify keyboard focus stays on the same row when marking it read, including with
+more than one loaded page.
+
 With GraphQL Soup enabled, **Mark read/unread** updates the normalized email row
 optimistically. Permanent server errors roll it back; retryable transport failures
 can leave the action in the durable queue. Mark unread sends only the thread ID;

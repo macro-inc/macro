@@ -8,6 +8,7 @@ import { batch, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmailTab, EmailViewState } from '../types';
+import { buildEmailQuery } from './email-query';
 import { type EmailDataSource, useEmailDataSource } from './use-email-query';
 
 const searchQueryMock = vi.hoisted(() => vi.fn());
@@ -190,6 +191,59 @@ describe('Email list query transitions', () => {
     expect(ids(source)).toEqual([]);
     expect(source.isLoading()).toBe(true);
     expect(source.hasMore()).toBe(false);
+  });
+
+  it('keeps read-state admission client-side so refresh cannot drop the focused row', () => {
+    const { source, setState, setEntities } = mount();
+    batch(() => {
+      setState('facets', { read: ['unread'], done: ['not-done'] });
+      setEntities([
+        email('before'),
+        email('focused'),
+        { ...email('already-read'), isRead: true },
+        email('after'),
+      ]);
+    });
+    expect(ids(source)).toEqual(['before', 'focused', 'after']);
+
+    const queryArgs = vi.mocked(useSoupAstItemsQuery).mock.calls[0][0];
+    expect(queryArgs()).toEqual(
+      buildEmailQuery({
+        tab: 'noise',
+        inboxIds: ['inbox-a'],
+        facets: { read: [], done: ['not-done'] },
+        facetContext: { tagPropertyDefinitionByOptionId: new Map() },
+      })
+    );
+
+    // Both the optimistic response and the subsequent full server page keep
+    // the newly read row, in place, without admitting previously read mail.
+    const refreshed = [
+      email('before'),
+      { ...email('focused'), isRead: true },
+      { ...email('already-read'), isRead: true },
+      email('after'),
+    ];
+    setEntities(refreshed);
+    expect(ids(source)).toEqual(['before', 'focused', 'after']);
+    setEntities(refreshed.map((entity) => ({ ...entity })));
+    expect(ids(source)).toEqual(['before', 'focused', 'after']);
+
+    // Admission must not resurrect archived/deleted rows from snapshots.
+    setEntities(refreshed.filter((entity) => entity.id !== 'focused'));
+    expect(ids(source)).toEqual(['before', 'after']);
+  });
+
+  it('resets read admission when the read filter changes', () => {
+    const { source, setState, setEntities } = mount();
+    setState('facets', { read: ['unread'] });
+    expect(ids(source)).toEqual(['noise']);
+    setEntities([{ ...email('noise'), isRead: true }]);
+    expect(ids(source)).toEqual(['noise']);
+    setState('facets', { read: ['read'] });
+    expect(ids(source)).toEqual(['noise']);
+    setState('facets', { read: ['unread'] });
+    expect(ids(source)).toEqual([]);
   });
 
   it('keeps current-query cached results visible during a background refresh', () => {

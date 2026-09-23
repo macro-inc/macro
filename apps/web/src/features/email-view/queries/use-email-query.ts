@@ -90,7 +90,17 @@ export function useEmailDataSource(
     })
   );
 
-  const queryArgs = createMemo(() => buildEmailQuery(queryContext()));
+  // Read status is an admission filter, not list membership: opening an
+  // admitted thread must not remove it or move keyboard focus. Keep the
+  // authoritative source unfiltered by read state so subsequent refreshes
+  // can still update (or remove) admitted rows after archive/trash writes.
+  const queryArgs = createMemo(() => {
+    const context = queryContext();
+    return buildEmailQuery({
+      ...context,
+      facets: { ...context.facets, read: [] },
+    });
+  });
   // A restored tag selection waits for the tag sets rather than listing the
   // whole mailbox and then narrowing.
   const facetsReady = () => tagFacetReady(state.facets, options.tagSetsReady());
