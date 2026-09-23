@@ -40,10 +40,11 @@ permission failures should display a failed tool call without a successful resul
   shows the same three-dot working wave as the transcript in place of the
   leading icon; the row's accessible name appends `Starting` or `Working`.
   Sessions with a linked PR show
-  **View PR #<number> in GitHub** beneath the title; clicking it opens the synced
+  **#<number>** beneath the title (icon colored by open / merged / closed; no
+  status word). Clicking it opens the synced
   GitHub PR entity in a split (the same destination as the session header chip
   and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
-  tab. Either click leaves the session unopened. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
+  tab. Either click leaves the session unopened. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Delete, and the other session actions.
