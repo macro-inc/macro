@@ -54,7 +54,9 @@ vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));
 vi.mock('@app/features/next-soup/use-recent-view-flag', () => ({}));
 vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({}));
-vi.mock('@app/features/settings/Settings', () => ({}));
+vi.mock('@app/features/settings/Settings', () => ({
+  SettingsPanelComponentWrapper: () => null,
+}));
 vi.mock('@app/features/tasks-view/tasks-view', () => ({}));
 vi.mock('@app/signal/splitLayout', () => ({}));
 vi.mock('@block-calendar/components/EventComposerSplit', () => ({}));
