@@ -1,5 +1,6 @@
 //! Prompt-free inspection of a configured ACP subprocess.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -21,6 +22,9 @@ pub(crate) struct ProbeSubprocess {
     pub(crate) args: Vec<String>,
     /// Directory in which the executable runs.
     pub(crate) cwd: PathBuf,
+    /// Environment added on top of this process's own: the same variables
+    /// the bridge applies, so the probe inspects the harness that will run.
+    pub(crate) env: BTreeMap<String, String>,
 }
 
 /// A failure to discover an ACP agent's session configuration.
@@ -122,7 +126,11 @@ fn subprocess_agent(process: &ProbeSubprocess) -> Result<AcpAgent, ProbeError> {
         process.command.to_string_lossy().into_owned(),
     ];
     args.extend(process.args.iter().cloned());
-    Ok(AcpAgent::new(AcpAgentConfig::new("/bin/sh").args(args)))
+    Ok(AcpAgent::new(
+        AcpAgentConfig::new("/bin/sh")
+            .args(args)
+            .envs(process.env.clone()),
+    ))
 }
 
 #[cfg(not(unix))]

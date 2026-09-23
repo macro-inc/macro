@@ -20,6 +20,7 @@ fn start_runtime(listener: &TcpListener) -> Runtime {
         Harness {
             command: "cat".to_owned(),
             args: Vec::new(),
+            env: Default::default(),
         },
         Path::new("/"),
     )
