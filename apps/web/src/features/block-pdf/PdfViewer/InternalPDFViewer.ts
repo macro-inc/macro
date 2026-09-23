@@ -1478,11 +1478,12 @@ export class InternalPDFViewer {
     element: HTMLElement;
     location: Rect;
   } | null {
-    const pageOverlayContainer = this._pageOverlayContainersByPage[pageIndex];
-    if (!pageOverlayContainer) return null;
     const range = selection.getRangeAt(0);
+    const textLayer = this._viewer
+      .getPageView(pageIndex)
+      ?.div.querySelector<HTMLElement>('.textLayer');
     const rect =
-      selectedTextBounds(range, pageOverlayContainer.getBoundingClientRect()) ??
+      (textLayer && selectedTextBounds(range, textLayer)) ??
       range.getBoundingClientRect();
     const pdfCoords = this.windowToPagePercentCoords(pageIndex, rect);
     return this.setSelectionOverlay(pageIndex, pdfCoords, false);
