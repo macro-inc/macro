@@ -92,7 +92,7 @@ describe('Calendar Create menu', () => {
     await choose(/^Quick Call/);
     await vi.waitFor(() =>
       expect(mocks.navigate).toHaveBeenCalledWith(
-        '/meet/new-call-token?start=true'
+        '/meet/join/new-call-token?start=true'
       )
     );
     expect(mocks.create).toHaveBeenCalledWith({ title: 'Quick Call' });

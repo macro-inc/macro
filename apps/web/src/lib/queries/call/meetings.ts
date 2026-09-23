@@ -27,6 +27,33 @@ export function useInviteToMeetingMutation() {
   }));
 }
 
+export function useMeetingInvitePermissionsQuery(
+  shareToken: Accessor<string>,
+  userId: Accessor<string | undefined>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => ({
+    queryKey: callKeys.meetingInvitePermissions(shareToken(), userId() ?? '')
+      .queryKey,
+    queryFn: () =>
+      throwOnErr(() =>
+        callServiceClient.getMeetingInvitePermissions(shareToken())
+      ),
+    enabled: enabled() && Boolean(userId()) && Boolean(shareToken()),
+    retry: false,
+  }));
+}
+
+export function useInviteMeetingUsersMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (args: { shareToken: string; userIds: string[] }) =>
+      throwOnErr(() =>
+        callServiceClient.inviteMeetingUsers(args.shareToken, args.userIds)
+      ),
+  }));
+}
+
 export function useMeetingsQuery(options?: {
   refetchInterval?: number | false;
 }) {
@@ -51,8 +78,26 @@ export function useCreateMeetingMutation() {
       throwOnErr(() => callServiceClient.createMeeting(body)),
     onSuccess: () => {
       void queryClient.invalidateQueries(callKeys.meetings);
+      void queryClient.invalidateQueries(callKeys.activeMeetings);
     },
   }));
+}
+
+export function useActiveMeetingsQuery(userId: Accessor<string | undefined>) {
+  return useQuery(() => ({
+    queryKey: [...callKeys.activeMeetings.queryKey, userId() ?? ''],
+    queryFn: () => throwOnErr(() => callServiceClient.getActiveMeetings()),
+    enabled: Boolean(userId()),
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+  }));
+}
+
+/** Targeted invite/join events only change the receiving account's live list. */
+export function invalidateActiveMeetings(userId: string) {
+  return queryClient.invalidateQueries({
+    queryKey: [...callKeys.activeMeetings.queryKey, userId],
+  });
 }
 
 export function fetchMeeting(shareToken: string) {
@@ -72,6 +117,7 @@ export function useUpdateMeetingMutation() {
         meeting
       );
       void queryClient.invalidateQueries(callKeys.meetings);
+      void queryClient.invalidateQueries(callKeys.activeMeetings);
     },
   }));
 }
@@ -82,6 +128,7 @@ export function useCancelMeetingMutation() {
       throwOnErr(() => callServiceClient.cancelMeeting(meetingId)),
     onSuccess: () => {
       void queryClient.invalidateQueries(callKeys.meetings);
+      void queryClient.invalidateQueries(callKeys.activeMeetings);
       // A revoked link must stop rendering as live everywhere: the meeting
       // page holds callKeys.meeting(token) and the copy-link affordances
       // cache callKeys.link(callId) with staleTime: Infinity.
@@ -122,9 +169,16 @@ export function useJoinMeetingMutation() {
               params.displayName
             )
       ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries(callKeys.activeMeetings);
+    },
   }));
 }
 
-export function leaveMeeting(shareToken: string, token: string) {
-  return throwOnErr(() => callServiceClient.leaveMeeting(shareToken, token));
+export async function leaveMeeting(shareToken: string, token: string) {
+  const result = await throwOnErr(() =>
+    callServiceClient.leaveMeeting(shareToken, token)
+  );
+  void queryClient.invalidateQueries(callKeys.activeMeetings);
+  return result;
 }

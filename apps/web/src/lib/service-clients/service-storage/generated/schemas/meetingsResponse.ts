@@ -7,7 +7,7 @@
 import type { Meeting } from './meeting';
 
 /**
- * The actor's most recent uncancelled standalone meetings.
+ * Uncancelled standalone meetings visible in the requested meeting list.
  */
 export interface MeetingsResponse {
   /** Persistent meeting invitations, most recently created first. */

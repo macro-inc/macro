@@ -673,6 +673,13 @@ impl CallRtcClient for NoOpCallRtcClient {
         Ok(())
     }
 
+    async fn list_participant_identities(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        Ok(Some(Vec::new()))
+    }
+
     async fn start_room_composite_egress(
         &self,
         _room_name: &str,

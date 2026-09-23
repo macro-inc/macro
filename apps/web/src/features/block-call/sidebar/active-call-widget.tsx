@@ -111,8 +111,7 @@ function computeChannelLetters(
 }
 
 type IncomingCallContextMenuProps = {
-  callId: string;
-  channelId: string;
+  onJoin: () => void;
   onDismiss: () => void;
 };
 
@@ -127,10 +126,7 @@ const IncomingCallContextMenu: FlowComponent<IncomingCallContextMenuProps> = (
 
       <ContextMenu.Portal>
         <ContextMenuContent class="text-xs text-ink-muted">
-          <MenuItem
-            text="Join call"
-            onClick={() => void joinChannelCall(props.channelId)}
-          />
+          <MenuItem text="Join call" onClick={props.onJoin} />
           <MenuItem text="Dismiss" onClick={props.onDismiss} />
         </ContextMenuContent>
       </ContextMenu.Portal>
@@ -177,8 +173,7 @@ export function SidebarActiveCallWidget(props: {
                 return (
                   <div class="size-8">
                     <IncomingCallContextMenu
-                      callId={call.callId}
-                      channelId={call.channelId}
+                      onJoin={() => void joinChannelCall(call.channelId)}
                       onDismiss={() =>
                         dismissIncomingCallEverywhere(call.callId)
                       }
@@ -235,8 +230,7 @@ export function SidebarActiveCallWidget(props: {
                 return (
                   <div class="w-full">
                     <IncomingCallContextMenu
-                      callId={call.callId}
-                      channelId={call.channelId}
+                      onJoin={() => void joinChannelCall(call.channelId)}
                       onDismiss={() =>
                         dismissIncomingCallEverywhere(call.callId)
                       }

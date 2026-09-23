@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use super::*;
 use crate::domain::meetings::{
-    CreateMeetingRequest, GuestJoinRequest, Meeting, MeetingToken, MeetingsResponse,
-    UpdateMeetingRequest,
+    ActiveMeetingsResponse, CreateMeetingRequest, GuestJoinRequest, InviteMeetingUsersRequest,
+    Meeting, MeetingInvitePermissions, MeetingToken, MeetingsResponse, UpdateMeetingRequest,
 };
 use axum::RequestPartsExt;
 use axum::extract::{FromRequestParts, Path};
@@ -96,6 +96,57 @@ pub async fn invite<S: CallService, Svc: EntityAccessService, Auth: MacroAuthori
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Read the authenticated caller's invitation capability without exposing the creator.
+#[utoipa::path(get, operation_id = "meeting_invite_permissions", path = "/call/meetings/invite/{token}",
+    params(("token" = String, Path)),
+    responses((status = 200, body = MeetingInvitePermissions), (status = 401, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
+pub async fn invite_permissions<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    Path(token): Path<String>,
+    actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<MeetingInvitePermissions>, CallError> {
+    Ok(Json(
+        state
+            .service
+            .get_meeting_invite_permissions(
+                actor.authorization.user.macro_user_id.clone(),
+                MeetingToken::try_from(token)?,
+            )
+            .await?,
+    ))
+}
+
+/// Ring registered teammates selected by the standalone meeting owner.
+#[utoipa::path(post, operation_id = "meeting_invite_users", path = "/call/meetings/invite/{token}/users",
+    params(("token" = String, Path)), request_body = InviteMeetingUsersRequest,
+    responses((status = 204), (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
+pub async fn invite_users<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    Path(token): Path<String>,
+    actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(request): Json<InviteMeetingUsersRequest>,
+) -> Result<StatusCode, CallError> {
+    state
+        .service
+        .invite_users_to_meeting(
+            actor.authorization.user.macro_user_id.clone(),
+            MeetingToken::try_from(token)?,
+            request,
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 /// Handle `POST /call/meetings` through the call domain service.
 #[utoipa::path(post, operation_id = "meeting_create", path = "/call/meetings",
     request_body = CreateMeetingRequest,
@@ -127,6 +178,25 @@ pub async fn list<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriza
         .list_meetings(actor.authorization.user.macro_user_id.clone())
         .await?;
     Ok(Json(MeetingsResponse { meetings }))
+}
+
+/// List the authenticated actor's active quick calls.
+#[utoipa::path(get, operation_id = "meeting_list_active", path = "/call/meetings/active",
+    responses((status = 200, body = ActiveMeetingsResponse), (status = 401, body = ErrorResponse))) ]
+#[tracing::instrument(err, skip_all)]
+pub async fn list_active<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<ActiveMeetingsResponse>, CallError> {
+    let meetings = state
+        .service
+        .list_active_meetings(actor.authorization.user.macro_user_id.clone())
+        .await?;
+    Ok(Json(ActiveMeetingsResponse { meetings }))
 }
 
 /// Handle `DELETE /call/meetings/{meeting_id}` through the call domain service.

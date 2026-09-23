@@ -3,14 +3,17 @@ import { fetchWithToken } from '@core/util/fetchWithToken';
 import { safeFetch } from '@core/util/safeFetch';
 
 import type { ActiveCallsResponse } from '@service-storage/generated/schemas/activeCallsResponse';
+import type { ActiveMeeting as ApiActiveMeeting } from '@service-storage/generated/schemas/activeMeeting';
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { CallTokenResponse as ApiCallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
 import type { CreateMeetingRequest } from '@service-storage/generated/schemas/createMeetingRequest';
 import type { EditCallRecordRequest } from '@service-storage/generated/schemas/editCallRecordRequest';
 import type { InviteMeetingRequest } from '@service-storage/generated/schemas/inviteMeetingRequest';
+import type { InviteMeetingUsersRequest } from '@service-storage/generated/schemas/inviteMeetingUsersRequest';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
 import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/meeting';
+import type { MeetingInvitePermissions } from '@service-storage/generated/schemas/meetingInvitePermissions';
 import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 
@@ -19,10 +22,23 @@ export type { CallRecord, CreateMeetingRequest, UpdateMeetingRequest };
 // Rust serializes these nullable fields explicitly; Orval marks Option<T> optional.
 export type CallTokenResponse = Required<ApiCallTokenResponse>;
 export type Meeting = Required<ApiMeeting>;
+export type ActiveMeeting = Required<ApiActiveMeeting>;
 
 const host: string = SERVER_HOSTS['document-storage-service'];
 
 export const callServiceClient = {
+  getMeetingInvitePermissions(shareToken: string) {
+    return fetchWithToken<MeetingInvitePermissions>(
+      `${host}/call/meetings/invite/${encodeURIComponent(shareToken)}`
+    );
+  },
+  inviteMeetingUsers(shareToken: string, userIds: string[]) {
+    const body: InviteMeetingUsersRequest = { userIds };
+    return fetchWithToken<Record<string, never>>(
+      `${host}/call/meetings/invite/${encodeURIComponent(shareToken)}/users`,
+      { method: 'POST', body: JSON.stringify(body) }
+    );
+  },
   inviteToMeeting(shareToken: string, email: string) {
     const body: InviteMeetingRequest = { email };
     return fetchWithToken<Record<string, never>>(
@@ -78,6 +94,15 @@ export const callServiceClient = {
             };
           },
         }
+      )
+    ).map((result) => result.meetings);
+  },
+
+  /** Live Quick Calls created or attended by the current user. */
+  async getActiveMeetings() {
+    return (
+      await fetchWithToken<{ meetings: ActiveMeeting[] }>(
+        `${host}/call/meetings/active`
       )
     ).map((result) => result.meetings);
   },

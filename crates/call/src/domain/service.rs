@@ -3,7 +3,9 @@
 #[cfg(test)]
 mod test;
 
+mod meeting_invites;
 mod meetings;
+mod reconcile;
 
 use connection::domain::ports::ConnectionService;
 use entity_access::domain::models::{
@@ -44,7 +46,8 @@ use crate::domain::models::{
 };
 
 use super::meetings::{
-    CreateMeetingRequest, GuestJoinRequest, Meeting, MeetingToken, UpdateMeetingRequest,
+    ActiveMeeting, CreateMeetingRequest, GuestJoinRequest, InviteMeetingUsersRequest, Meeting,
+    MeetingInvitePermissions, MeetingToken, UpdateMeetingRequest,
 };
 use super::models::{
     ActiveCallsResponse, AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError,
@@ -580,6 +583,15 @@ impl<
     async fn list_meetings(&self, actor: MacroUserIdStr<'_>) -> Result<Vec<Meeting>, CallError> {
         self.repo.list_meetings(actor.as_ref()).await
     }
+    async fn list_active_meetings(
+        &self,
+        actor: MacroUserIdStr<'_>,
+    ) -> Result<Vec<ActiveMeeting>, CallError> {
+        self.repo
+            .list_active_meetings(actor.as_ref())
+            .await
+            .map(|meetings| meetings.into_iter().map(ActiveMeeting::from).collect())
+    }
     async fn invite_to_meeting(
         &self,
         actor: MacroUserIdStr<'_>,
@@ -587,6 +599,21 @@ impl<
         email: String,
     ) -> Result<(), CallError> {
         self.email_invitation(actor, token, email).await
+    }
+    async fn get_meeting_invite_permissions(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        token: MeetingToken,
+    ) -> Result<MeetingInvitePermissions, CallError> {
+        self.meeting_invite_permissions(actor, token).await
+    }
+    async fn invite_users_to_meeting(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        token: MeetingToken,
+        request: InviteMeetingUsersRequest,
+    ) -> Result<(), CallError> {
+        self.ring_meeting_invitation(actor, token, request).await
     }
     async fn update_meeting(
         &self,
@@ -668,6 +695,25 @@ impl<
                 created_at: c.created_at,
             })
         }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn reconcile_stale_calls(&self) -> Result<(), CallError> {
+        let now = chrono::Utc::now();
+        let calls = self
+            .repo
+            .list_active_calls()
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        for call in calls {
+            self.reconcile_call(&call, now)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(call_id = %call.id, error = ?error, "failed to reconcile call")
+                })
+                .ok();
+        }
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -959,24 +1005,14 @@ impl<
             }
         };
 
-        // Enforce: a user can only be active in one call at a time. If the
-        // user already has an active participation in a *different* call,
-        // reject before we add them here.
-        if let Some((other_call_id, other_channel_id)) = self
-            .repo
-            .find_active_call_for_user(user_id.copied())
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?
-            && other_call_id != call.id
-        {
-            return Err(CallError::AlreadyInCall(
-                other_channel_id.unwrap_or(other_call_id).to_string(),
-            ));
-        }
+        // A user is active in one call at a time; joining this one switches
+        // them out of any other.
+        self.leave_other_active_call(user_id.copied(), call.id)
+            .await?;
 
         // Idempotent upsert — handles concurrent joins and rejoin after leave.
         // The DB-level partial unique index is the race-safe backstop: if a
-        // concurrent request slipped past the pre-flight above, the adapter
+        // concurrent join slipped past the switch above, the adapter
         // returns AddParticipantError::UserAlreadyActive, which we translate
         // to a typed CallError::AlreadyInCall.
         match self.repo.add_participant(&call.id, user_id.copied()).await {

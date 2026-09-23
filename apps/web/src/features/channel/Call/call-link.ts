@@ -1,7 +1,12 @@
 import { getWebOrigin } from '@core/util/webOrigin';
 
-/** Router-relative path for a persistent, shareable meeting. */
+/** Router-relative setup path used by a persistent meeting invitation. */
 export function getMeetingPath(shareToken: string) {
+  return `/meet/join/${encodeURIComponent(shareToken)}`;
+}
+
+/** Router-relative path while participating in a meeting. */
+export function getActiveMeetingPath(shareToken: string) {
   return `/meet/${encodeURIComponent(shareToken)}`;
 }
 
@@ -11,16 +16,27 @@ export function getMeetingUrl(shareToken: string) {
 }
 
 export function isMeetingPath(pathname: string) {
-  return /^\/(?:app\/)?meet\/[^/]+\/?$/.test(pathname);
+  return (
+    /^\/(?:app\/)?meet\/new\/?$/.test(pathname) ||
+    meetingShareTokenFromPath(pathname) !== undefined
+  );
+}
+
+function meetingShareTokenFromPath(pathname: string): string | undefined {
+  const match = pathname.match(/^\/(?:app\/)?meet\/(?:join\/)?([^/?#]+)\/?$/);
+  if (!match) return undefined;
+  try {
+    const token = decodeURIComponent(match[1]);
+    return token === 'new' || token === 'join' ? undefined : token;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Share token embedded in a meeting URL, for URLs not accompanied by a model. */
 export function getMeetingShareToken(url: string): string | undefined {
   try {
-    const match = new URL(url, getWebOrigin()).pathname.match(
-      /^\/(?:app\/)?meet\/([^/]+)\/?$/
-    );
-    return match ? decodeURIComponent(match[1]) : undefined;
+    return meetingShareTokenFromPath(new URL(url, getWebOrigin()).pathname);
   } catch {
     return undefined;
   }

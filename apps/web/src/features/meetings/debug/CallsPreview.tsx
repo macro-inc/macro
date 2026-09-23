@@ -1,15 +1,20 @@
 import { CallStateProvider } from '@channel/Call/CallContext';
 import { CallOverlay } from '@channel/Call/CallOverlay';
 import { writeClipboardData } from '@core/util/dataTransfer';
+import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { type Accessor, createSignal, Show } from 'solid-js';
 import { CalendarActiveCallNotice } from '../components/calendar-active-call-notice';
 import { MeetingCallHeading } from '../components/meeting-call-heading';
 import { MeetingCopyButton } from '../components/meeting-copy-button';
 import type { CalendarCallItem } from '../core/calendar-calls';
+import type { MeetingRouteTarget } from '../core/meeting-navigation';
+import { createMeetingNavigation } from '../primitives/meeting-navigation';
+import { createMeetingSessionLifecycle } from '../primitives/meeting-session-lifecycle';
 import { CalendarCalls } from '../views/calendar-calls';
 import { CalendarCreateMenuView as CalendarCreateMenu } from '../views/calendar-create-menu';
 import { CallInvite } from '../views/call-invite';
+import { MeetingInvite } from '../views/meeting-invite';
 import { MeetingPage } from '../views/meeting-page';
 import { createPreviewCallState } from './preview-call-state';
 
@@ -209,7 +214,44 @@ export default function CallsPreview() {
 }
 
 export function JoinCallPreview(props: { startInCall?: boolean }) {
+  const navigate = useNavigate();
+  const lifecycle = createMeetingSessionLifecycle();
+  const [target, setTarget] = createSignal<MeetingRouteTarget>({
+    kind: props.startInCall ? 'active' : 'setup',
+    shareToken: 'preview-only',
+  });
+  const navigation = createMeetingNavigation({
+    target,
+    replace: setTarget,
+    returnToApp: () => navigate('/', { replace: true }),
+  });
+  const leave = () => navigation.leave(navigation.entry());
   const [member, setMember] = createSignal(Boolean(props.startInCall));
+  const [selectedTeammates, setSelectedTeammates] = createSignal(
+    new Set<string>()
+  );
+  const teammates = [
+    {
+      id: 'macro|maya@example.com',
+      name: 'Maya Chen',
+      email: 'maya@example.com',
+    },
+    {
+      id: 'macro|ada@example.com',
+      name: 'Ada Rivera',
+      email: 'ada@example.com',
+    },
+    {
+      id: 'macro|dana@example.com',
+      name: 'Dana Davis',
+      email: 'dana@example.com',
+    },
+    {
+      id: 'macro|evan@example.com',
+      name: 'Evan Ellis',
+      email: 'evan@example.com',
+    },
+  ];
   const [title, setTitle] = createSignal('Northwind kickoff');
   const [connected, setConnected] = createSignal(false);
   const controller = createPreviewCallState();
@@ -260,6 +302,14 @@ export function JoinCallPreview(props: { startInCall?: boolean }) {
           when={showInCallPreview()}
           fallback={
             <MeetingPage
+              onLeave={leave}
+              onCallStateChange={(connected) =>
+                navigation.setCallState(
+                  navigation.entry(),
+                  connected,
+                  'preview-only'
+                )
+              }
               source={() => ({
                 kind: 'ready',
                 title: title(),
@@ -268,6 +318,20 @@ export function JoinCallPreview(props: { startInCall?: boolean }) {
                 channelId: null,
               })}
               authenticated={member}
+              startCall={member() && !props.startInCall}
+              renderInvite={(joining) => (
+                <MeetingInvite
+                  source={{
+                    people: () => teammates,
+                    loading: () => false,
+                    error: () => undefined,
+                    refresh: () => {},
+                  }}
+                  selected={selectedTeammates}
+                  setSelected={setSelectedTeammates}
+                  disabled={joining()}
+                />
+              )}
               author={() => 'Eric Hayes'}
               avatar={
                 <img
@@ -286,6 +350,7 @@ export function JoinCallPreview(props: { startInCall?: boolean }) {
               url={previewUrl}
               onCopy={copy}
               session={{
+                lifecycle,
                 shareToken: () => 'preview-only',
                 isInCall: connected,
                 activeCallId: () => (connected() ? 'preview-call' : null),
@@ -330,7 +395,10 @@ export function JoinCallPreview(props: { startInCall?: boolean }) {
             </header>
             <div class="min-h-0 flex-1">
               {renderCall(
-                () => setShowInCallPreview(false),
+                () => {
+                  leave();
+                  setShowInCallPreview(false);
+                },
                 () => 'Eric Hayes'
               )}
             </div>

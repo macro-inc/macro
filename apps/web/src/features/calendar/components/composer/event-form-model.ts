@@ -1,3 +1,4 @@
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   type CombinedRecipientItem,
   recipientEntityMapper,
@@ -66,7 +67,11 @@ function defaultEditorTimes(reference: Date) {
 }
 
 /** Conferencing displayed by the editor before it is submitted. */
-export type EventEditorConferenceChoice = 'none' | 'google_meet' | 'existing';
+export type EventEditorConferenceChoice =
+  | 'none'
+  | 'macro'
+  | 'google_meet'
+  | 'existing';
 
 /** Values used to initialize the shared event editor form. */
 export interface EventEditorInitialValues {
@@ -137,7 +142,9 @@ export interface EventEditorSubmitValues {
   guestEmails: string[];
   location: string;
   description: string;
-  /** Present only when conferencing should be attached, replaced, or removed. */
+  /** Selected conferencing, including client-managed Macro call links. */
+  conferenceChoice: EventEditorConferenceChoice;
+  /** Present only when provider conferencing should change. */
   conference?: ConferenceChange;
   /** Present only when the user changed the event's reminder configuration. */
   reminders?: EventReminders;
@@ -163,7 +170,7 @@ export function defaultEditorInitialValues(
     guests: '',
     location: '',
     description: '',
-    conference: 'none',
+    conference: ENABLE_CALLS ? 'macro' : 'none',
     reminders: undefined,
     eventType: undefined,
     outOfOffice: undefined,
@@ -196,6 +203,7 @@ export function calendarSelectionToEditorInitialValues(selection: {
 function initialConferenceChoice(
   event: CalendarEvent
 ): EventEditorConferenceChoice {
+  if (calendarMacroCallUrl(event)) return 'macro';
   if (!event.conferenceUrl) return 'none';
   return event.conferenceProvider === 'google_meet'
     ? 'google_meet'

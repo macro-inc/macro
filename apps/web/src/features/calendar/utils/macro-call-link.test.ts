@@ -7,6 +7,7 @@ import {
 } from './macro-call-link';
 
 const URL = 'https://macro.com/app/meet/8m8mGwzHqxzYjeIN5-nJRquRbzyTEhGF';
+const SETUP_URL = URL.replace('/meet/', '/meet/join/');
 
 describe('Macro calendar call links', () => {
   it('recognizes shared links in invitations and drops autojoin parameters', () => {
@@ -22,6 +23,19 @@ describe('Macro calendar call links', () => {
     ).toBe('http://localhost:3003/app/meet/8m8mGwzHqxzYjeIN5-nJRquRbzyTEhGF');
   });
 
+  it('recognizes setup links and UUID links alongside saved legacy invitations', () => {
+    for (const url of [
+      SETUP_URL,
+      'https://macro.com/app/meet/join/01955c94-2576-7f3a-9d60-173d74b7f812',
+      'https://macro.com/meet/join/01955c94-2576-7f3a-9d60-173d74b7f812',
+      URL,
+    ]) {
+      expect(
+        calendarMacroCallUrl({ location: `${url}/?source=calendar` })
+      ).toBe(url);
+    }
+  });
+
   it('rejects lookalike sites, credentials, unsafe protocols and malformed routes', () => {
     for (const candidate of [
       URL.replace('macro.com', 'macro.com.evil.test'),
@@ -30,6 +44,10 @@ describe('Macro calendar call links', () => {
       URL.replace('https:', 'http:'),
       `${URL}/extra`,
       'https://macro.com/app/meet/short',
+      'https://macro.com/app/meet/new',
+      'https://macro.com/app/meet/join',
+      'https://macro.com/app/meet/join/short',
+      `${SETUP_URL}/extra`,
     ]) {
       expect(macroCallUrl(candidate)).toBeUndefined();
     }
@@ -56,6 +74,20 @@ describe('Macro calendar call links', () => {
     );
     expect(attachCalendarMacroCall(initial, URL)).toEqual(initial);
     expect(removeCalendarMacroCall(initial, URL)).toEqual({
+      description: '<p>Notes</p>',
+      location: '',
+    });
+  });
+
+  it('replaces a generated legacy invitation with the setup link without losing notes', () => {
+    const legacy = attachCalendarMacroCall(
+      { description: '<p>Notes</p>' },
+      URL
+    );
+    const updated = attachCalendarMacroCall(legacy, SETUP_URL, URL);
+    expect(updated.location).toBe(SETUP_URL);
+    expect(calendarMacroCallUrl(updated)).toBe(SETUP_URL);
+    expect(removeCalendarMacroCall(updated, SETUP_URL)).toEqual({
       description: '<p>Notes</p>',
       location: '',
     });

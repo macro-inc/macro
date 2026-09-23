@@ -29,7 +29,9 @@ import { createStore } from 'solid-js/store';
 import { CallAudioSink } from './CallAudioSink';
 import {
   type CallSessionController,
+  type CallPrejoinTracks,
   createCallSessionController,
+  stopPrejoinTracks,
 } from './CallSessionController';
 import { createCallLifecycle } from './call-lifecycle';
 import { publishCallResolution } from './call-resolution';
@@ -1121,15 +1123,106 @@ function createCallState() {
 
   // --- mutations ---
 
-  async function finishLocalMediaSetup(targetRoom: Room, setupVersion: number) {
+  /**
+   * Publishes a live prejoin track as if LiveKit had captured it, so muting
+   * still releases the device and unmuting re-acquires it with the same
+   * constraints.
+   */
+  async function publishPrejoinTrack(
+    targetRoom: Room,
+    source: keyof CallPrejoinTracks,
+    mediaStreamTrack: MediaStreamTrack
+  ) {
+    const livekit = getLivekit();
+    if (!livekit) throw new Error('LiveKit is not loaded');
+    const track =
+      source === 'microphone'
+        ? new livekit.LocalAudioTrack(
+            mediaStreamTrack,
+            currentMicrophoneCaptureOptions() as MediaTrackConstraints,
+            false
+          )
+        : new livekit.LocalVideoTrack(
+            mediaStreamTrack,
+            mediaStreamTrack.getConstraints(),
+            false
+          );
+    track.source =
+      LK_TRACK_SOURCE[source === 'microphone' ? 'Microphone' : 'Camera'];
+    try {
+      await targetRoom.localParticipant.publishTrack(track, {
+        source: track.source,
+      });
+    } catch (error) {
+      track.stop();
+      throw error;
+    }
+  }
+
+  /**
+   * Enables a device from its prejoin track when one was handed off, and
+   * otherwise (or if publishing it fails) lets LiveKit open the device.
+   */
+  async function enablePrejoinOrDevice(
+    targetRoom: Room,
+    source: keyof CallPrejoinTracks,
+    prejoinTrack: MediaStreamTrack | undefined,
+    enableDevice: () => Promise<unknown>
+  ) {
+    if (prejoinTrack?.readyState === 'live') {
+      try {
+        await publishPrejoinTrack(targetRoom, source, prejoinTrack);
+        return;
+      } catch (e) {
+        console.error(`failed to publish prejoin ${source} track`, e);
+      }
+    }
+    prejoinTrack?.stop();
+    await enableDevice();
+  }
+
+  async function finishLocalMediaSetup(
+    targetRoom: Room,
+    setupVersion: number,
+    prejoinTracks?: CallPrejoinTracks
+  ) {
+    // Each step claims its track; anything left unclaimed is stopped.
+    const unclaimed = { ...prejoinTracks };
+    const claim = (source: keyof CallPrejoinTracks) => {
+      const track = unclaimed[source];
+      delete unclaimed[source];
+      return track;
+    };
+    try {
+      await setUpLocalMedia(targetRoom, setupVersion, claim);
+    } finally {
+      stopPrejoinTracks(unclaimed);
+    }
+  }
+
+  async function setUpLocalMedia(
+    targetRoom: Room,
+    setupVersion: number,
+    claim: (source: keyof CallPrejoinTracks) => MediaStreamTrack | undefined
+  ) {
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
     // Respect the pre-join microphone preference before opening a device.
     try {
-      await targetRoom.localParticipant.setMicrophoneEnabled(
-        !store.isAudioMuted,
-        currentMicrophoneCaptureOptions()
-      );
+      if (store.isAudioMuted) {
+        await targetRoom.localParticipant.setMicrophoneEnabled(false);
+      } else {
+        await enablePrejoinOrDevice(
+          targetRoom,
+          'microphone',
+          claim('microphone'),
+          () =>
+            targetRoom.localParticipant.setMicrophoneEnabled(
+              true,
+              currentMicrophoneCaptureOptions()
+            )
+        );
+      }
     } catch (e) {
       console.error('failed to enable microphone', e);
       if (isCurrentMediaSetup(targetRoom, setupVersion))
@@ -1153,7 +1246,9 @@ function createCallState() {
 
     if (!store.isVideoMuted) {
       try {
-        await targetRoom.localParticipant.setCameraEnabled(true);
+        await enablePrejoinOrDevice(targetRoom, 'camera', claim('camera'), () =>
+          targetRoom.localParticipant.setCameraEnabled(true)
+        );
         if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
         if (store.isVideoMuted) {
           await targetRoom.localParticipant.setCameraEnabled(false);
@@ -1249,9 +1344,15 @@ function createCallState() {
     nativeCall,
     jsConnect: async (tokenResponse, metadata) => {
       const generation = ++browserConnectGeneration;
-      const controller = await getLivekitJsController();
-      if (disposed || generation !== browserConnectGeneration) return;
-      return controller.connect(tokenResponse, metadata);
+      let handedOff = false;
+      try {
+        const controller = await getLivekitJsController();
+        if (disposed || generation !== browserConnectGeneration) return;
+        handedOff = true;
+        return await controller.connect(tokenResponse, metadata);
+      } finally {
+        if (!handedOff) stopPrejoinTracks(metadata?.localTracks);
+      }
     },
     jsDisconnect: async () => {
       // Cancel a connect that is still waiting on its dynamic import. This is

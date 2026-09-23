@@ -724,6 +724,11 @@ async fn run() -> anyhow::Result<()> {
             .with_event_broker(macro_event_broker.clone()),
     );
 
+    tokio::spawn(call::inbound::stale_call_sweeper::run_stale_call_sweeper(
+        call_service.clone(),
+        call::inbound::stale_call_sweeper::SWEEP_INTERVAL,
+    ));
+
     let call_state = CallRouterState::new(
         call_service.clone(),
         entity_access_service.clone(),

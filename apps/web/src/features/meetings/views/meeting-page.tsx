@@ -3,6 +3,7 @@ import Phone from '@phosphor/phone-call.svg';
 import { Button, ToggleSwitch } from '@ui';
 import {
   type Accessor,
+  batch,
   children,
   createEffect,
   createSignal,
@@ -33,9 +34,15 @@ export function MeetingPage(props: {
   author: Accessor<string>;
   avatar?: JSX.Element;
   startCall?: boolean;
-  url: string;
+  url?: string;
   onCopy: () => Promise<void>;
   onRename?: (title: string) => Promise<void>;
+  /** The host keeps the URL in sync without replacing this session owner. */
+  onCallStateChange?: (connected: boolean) => void;
+  /** Explicit hangup, distinct from losing the connection or cancelling setup. */
+  onLeave?: () => void;
+  /** Supplied only for the creator's New Call setup flow. */
+  renderInvite?: (joining: Accessor<boolean>) => JSX.Element;
   /** Login redirect for channel-linked calls, which are members-only. */
   onSignIn?: () => void;
   renderCall: (onLeave: () => void, name: Accessor<string>) => JSX.Element;
@@ -43,6 +50,7 @@ export function MeetingPage(props: {
   const avatar = children(() => props.avatar);
   const session = createMeetingSession(props.session);
   const [name, setName] = createSignal('');
+  const [leaving, setLeaving] = createSignal(false);
   const media = createMeetingMedia(props.mediaAccess);
   const ready = () => {
     const state = props.source();
@@ -58,10 +66,16 @@ export function MeetingPage(props: {
     props.session.activeCallId() === session.joinedCallId() &&
     props.session.isInCall();
 
+  createEffect(on(inCall, (connected) => props.onCallStateChange?.(connected)));
+
   createEffect(
     on(
       () =>
-        Boolean(ready()) && !membersOnly() && !inCall() && !session.joining(),
+        Boolean(ready()) &&
+        !membersOnly() &&
+        !inCall() &&
+        !session.joining() &&
+        !leaving(),
       (setup) => {
         if (setup) void media.prepare();
         else media.release();
@@ -74,11 +88,20 @@ export function MeetingPage(props: {
     if (videoElement) videoElement.srcObject = stream ?? null;
   });
   const join = () => {
-    if (media.pending()) return;
-    media.release();
+    if (leaving() || media.pending()) return;
+    // The call publishes the preview tracks rather than re-opening the
+    // devices, so the waiting room is the only place permission is asked.
     return session.join(props.authenticated() ? undefined : name(), {
       microphoneEnabled: media.microphoneEnabled(),
       cameraEnabled: media.cameraEnabled(),
+      localTracks: media.handoff(),
+    });
+  };
+  const leave = () => {
+    batch(() => {
+      setLeaving(true);
+      void session.leave();
+      props.onLeave?.();
     });
   };
 
@@ -112,13 +135,23 @@ export function MeetingPage(props: {
             title={ready()?.title || 'Call'}
             onRename={props.onRename}
           />
-          <MeetingCopyButton url={props.url} onCopy={props.onCopy} />
+          <Show when={props.url}>
+            {(url) => <MeetingCopyButton url={url()} onCopy={props.onCopy} />}
+          </Show>
         </Show>
       </header>
       <Switch>
+        <Match when={leaving()}>
+          <div
+            class="flex flex-1 items-center justify-center text-ink-muted"
+            role="status"
+          >
+            Leaving call…
+          </div>
+        </Match>
         <Match when={inCall()}>
           <div class="min-h-0 flex-1">
-            {props.renderCall(() => void session.leave(), displayName)}
+            {props.renderCall(leave, displayName)}
           </div>
         </Match>
         <Match when={props.source().kind === 'loading'}>
@@ -180,11 +213,6 @@ export function MeetingPage(props: {
                   </Show>
                 </div>
               </Show>
-              <p class="text-center text-sm text-ink-muted">
-                {media.pending()
-                  ? 'Allow microphone and camera access to check your setup.'
-                  : 'Only you can see this preview. Start or join when you’re ready.'}
-              </p>
             </div>
             <form
               class="flex flex-col gap-5"
@@ -193,27 +221,29 @@ export function MeetingPage(props: {
                 void join();
               }}
             >
-              <div>
-                <h2 class="text-2xl font-semibold">
-                  {session.hasLeft()
-                    ? 'You left the call'
-                    : props.startCall
-                      ? 'Ready to start?'
-                      : 'Ready to join?'}
-                </h2>
-                <Show when={ready()?.scheduledStart}>
-                  {(start) => (
-                    <p class="mt-2 text-sm text-ink-muted">
-                      {new Date(start()).toLocaleString([], {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                  )}
-                </Show>
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h2 class="text-2xl font-semibold">
+                    {session.hasLeft()
+                      ? 'You left the call'
+                      : props.startCall
+                        ? 'Ready to start?'
+                        : 'Ready to join?'}
+                  </h2>
+                  <Show when={ready()?.scheduledStart}>
+                    {(start) => (
+                      <p class="mt-2 text-sm text-ink-muted">
+                        {new Date(start()).toLocaleString([], {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    )}
+                  </Show>
+                </div>
               </div>
               <Show
                 when={!props.authenticated()}
@@ -272,6 +302,9 @@ export function MeetingPage(props: {
                   You were disconnected. Join again to reconnect.
                 </p>
               </Show>
+              <Show when={props.authenticated() === true && !session.hasLeft()}>
+                {props.renderInvite?.(session.joining)}
+              </Show>
               <Button
                 variant="ghost"
                 size="lg"
@@ -303,7 +336,11 @@ export function MeetingPage(props: {
                 Calls are recorded and transcribed for the organizer and Macro
                 participants.
               </p>
-              <MeetingCopyButton url={props.url} onCopy={props.onCopy} />
+              <Show when={props.url}>
+                {(url) => (
+                  <MeetingCopyButton url={url()} onCopy={props.onCopy} />
+                )}
+              </Show>
             </form>
           </div>
         </Match>

@@ -1,12 +1,10 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCalendarEventFormController } from './create-calendar-event-form-controller';
 import { EventForm } from './EventForm';
-import {
-  defaultEditorInitialValues,
-  type EventEditorConferenceChoice,
-} from './event-form-model';
+import { defaultEditorInitialValues } from './event-form-model';
 
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/MarkdownTextarea',
@@ -22,9 +20,13 @@ vi.mock('../../utils/calendar-description', () => ({
   exportCalendarDescription: () => '',
 }));
 vi.mock('./RecurrenceBuilder', () => ({ RecurrenceBuilder: () => null }));
-vi.mock('./EventPropertyPills', () => ({
+vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
+vi.mock('@property/editors/selectors/PropertyEntitySelector', () => ({
+  PropertyEntitySelector: () => null,
+}));
+vi.mock('./EventPropertyPills', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./EventPropertyPills')>()),
   EventComposerCalendarPill: () => null,
-  EventComposerConferencePill: () => null,
   EventComposerDeclineMessagePill: () => null,
   EventComposerDeclinePill: () => null,
   EventComposerGuestsPill: () => null,
@@ -34,9 +36,34 @@ vi.mock('./EventPropertyPills', () => ({
   EventComposerRemindersPill: () => null,
 }));
 
-afterEach(cleanup);
+class ObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
 
-function setup(conference: EventEditorConferenceChoice = 'none') {
+class WebSocketStub {
+  close() {}
+  send() {}
+  addEventListener() {}
+  removeEventListener() {}
+}
+
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', ObserverStub);
+  vi.stubGlobal('IntersectionObserver', ObserverStub);
+  vi.stubGlobal('WebSocket', WebSocketStub);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+function setup(
+  conference = defaultEditorInitialValues().conference,
+  macroCallsEnabled = true
+) {
   const submit = vi.fn();
   render(() => {
     const controller = createCalendarEventFormController({
@@ -53,6 +80,7 @@ function setup(conference: EventEditorConferenceChoice = 'none') {
     return (
       <EventForm
         controller={controller}
+        macroCallsEnabled={macroCallsEnabled}
         pending={false}
         onCancel={vi.fn()}
         onSubmit={submit}
@@ -63,19 +91,32 @@ function setup(conference: EventEditorConferenceChoice = 'none') {
 }
 
 describe('event composer', () => {
-  it('submits an event without a separate Macro call option', () => {
+  it('submits the default Macro call choice without a separate toggle', () => {
     const submit = setup();
     expect(screen.queryByRole('switch', { name: 'Macro call' })).toBeNull();
     expect(submit).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
     expect(submit).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Planning' }),
+      expect.objectContaining({ title: 'Planning', conferenceChoice: 'macro' }),
       undefined
     );
   });
   it('preserves provider conferencing', () => {
     const submit = setup('google_meet');
     fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    expect(submit.mock.calls[0][0].conference).toBe('google_meet');
+  });
+
+  it('offers only supported providers when its host cannot attach Macro calls', async () => {
+    const user = userEvent.setup();
+    const submit = setup('none', false);
+    await user.click(
+      screen.getByRole('button', { name: /Video conferencing/ })
+    );
+    expect(screen.queryByRole('option', { name: 'Macro call' })).toBeNull();
+    await user.click(screen.getByRole('option', { name: 'Google Meet' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    expect(submit.mock.calls[0][0].conferenceChoice).toBe('google_meet');
     expect(submit.mock.calls[0][0].conference).toBe('google_meet');
   });
 });

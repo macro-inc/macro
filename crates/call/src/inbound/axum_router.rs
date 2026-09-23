@@ -121,6 +121,10 @@ where
             get(meetings::list::<S, Svc, Auth>).post(meetings::create::<S, Svc, Auth>),
         )
         .route(
+            "/meetings/active",
+            get(meetings::list_active::<S, Svc, Auth>),
+        )
+        .route(
             "/meetings/{meeting_id}",
             axum::routing::delete(meetings::cancel::<S, Svc, Auth>)
                 .patch(meetings::update::<S, Svc, Auth>),
@@ -131,7 +135,12 @@ where
         )
         .route(
             "/meetings/invite/{token}",
-            post(meetings::invite::<S, Svc, Auth>),
+            post(meetings::invite::<S, Svc, Auth>)
+                .get(meetings::invite_permissions::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/invite/{token}/users",
+            post(meetings::invite_users::<S, Svc, Auth>),
         )
         .route(
             "/record/{call_id}/link",

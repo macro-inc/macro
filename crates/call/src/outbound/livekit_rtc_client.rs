@@ -268,6 +268,23 @@ impl CallRtcClient for LivekitRtcClient {
         )
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn list_participant_identities(
+        &self,
+        room_name: &str,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        match self.room_client.list_participants(room_name).await {
+            Ok(participants) => Ok(Some(
+                participants
+                    .into_iter()
+                    .map(|participant| participant.identity)
+                    .collect(),
+            )),
+            Err(error) if is_not_found(&error) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
+    }
+
     #[tracing::instrument(err, skip(self, s3_config))]
     async fn start_room_composite_egress(
         &self,
@@ -379,12 +396,12 @@ impl CallRtcClient for LivekitRtcClient {
 fn interpret_remove_participant_result(result: Result<(), ServiceError>) -> anyhow::Result<()> {
     match result {
         Ok(()) => Ok(()),
-        Err(error) if is_participant_already_absent(&error) => Ok(()),
+        Err(error) if is_not_found(&error) => Ok(()),
         Err(error) => Err(error.into()),
     }
 }
 
-fn is_participant_already_absent(error: &ServiceError) -> bool {
+fn is_not_found(error: &ServiceError) -> bool {
     matches!(
         error,
         ServiceError::Twirp(TwirpError::Twirp(code)) if code.code == TwirpErrorCode::NOT_FOUND

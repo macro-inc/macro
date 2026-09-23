@@ -11,7 +11,9 @@ import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
 import { HomePreferencesProvider } from '@app/features/home/home-prefs';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
-import { MeetingRoute } from '@app/features/meetings/meeting-route';
+import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
+import { MeetingRouter } from '@app/features/meetings/meeting-router';
+import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-provider';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
@@ -230,7 +232,7 @@ function OnboardingRoute() {
 }
 
 const ROUTES: RouteDefinition[] = [
-  { path: '/meet/:shareToken', component: MeetingRoute },
+  { path: '/meet/*path', component: MeetingRouter },
   {
     path: '/task-slug/:taskSlug',
     component: TaskRoute,
@@ -526,10 +528,12 @@ function InitialInteractiveOnboardingModal() {
 function AppRouteLayout(props: RouteSectionProps) {
   const location = useLocation();
   return (
-    <Show when={!isMeetingPath(location.pathname)} fallback={props.children}>
-      <Layout {...props} />
-      <InitialInteractiveOnboardingModal />
-    </Show>
+    <IncomingMeetingInvitationsProvider>
+      <Show when={!isMeetingPath(location.pathname)} fallback={props.children}>
+        <Layout {...props} />
+        <InitialInteractiveOnboardingModal />
+      </Show>
+    </IncomingMeetingInvitationsProvider>
   );
 }
 
@@ -581,6 +585,7 @@ export function Root() {
                                 <ChatAttachmentsInit />
                                 <ReactiveFavicon />
                                 <Title>{tabTitle()}</Title>
+                                <MeetingSessionProvider>
                                 {/* Loading boundaries belong inside Layout so
                                     a pending resource cannot detach the app shell. */}
                                 <IsomorphicRouter
@@ -595,6 +600,7 @@ export function Root() {
                                     children: ROUTES,
                                   }}
                                 </IsomorphicRouter>
+                                </MeetingSessionProvider>
                                 <ToastRegion />
                               </SearchProvider>
                             </QuickAccessProvider>

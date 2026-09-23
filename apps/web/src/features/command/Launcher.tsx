@@ -50,6 +50,7 @@ import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
+import { useNavigate } from '@solidjs/router';
 import {
   CommandMenuHotkeyHint,
   CommandMenuList,
@@ -72,6 +73,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { createCallCommand } from './create-call-command';
 import { MobileCreateSheet } from './mobile/MobileCreateSheet';
 import type { CreatableBlock, CreatableName } from './types';
 
@@ -701,6 +703,18 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
 ];
 
+/** Router-backed commands are bound once in each host's component owner. */
+export function useCreateCommands(): CreatableBlock[] {
+  const navigate = useNavigate();
+  return [
+    ...CREATABLE_BLOCKS,
+    createCallCommand({
+      navigate,
+      close: () => setCreateMenuOpen(false, false),
+    }),
+  ];
+}
+
 /**
  * The creatable-block entries a create menu renders, with feature gating
  * applied — the single source of truth shared by the desktop menus and the
@@ -709,8 +723,9 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
  * run it through the same gating.
  */
 export function useCreateMenuBlocks(
-  source: () => CreatableBlock[] = () => CREATABLE_BLOCKS
+  source: () => CreatableBlock[] | undefined = () => undefined
 ): Accessor<CreatableBlock[]> {
+  const commands = useCreateCommands();
   const spreadsheets = useSpreadsheetAccess();
   const snippetsFlag = useFeatureFlag(enableSnippets);
   // Subscribed to rather than left to the block's own `enabled`, which reads
@@ -721,7 +736,7 @@ export function useCreateMenuBlocks(
   return createMemo(() => {
     remindersFlag();
     agentsFlag();
-    return source().filter((block) => {
+    return (source() ?? commands).filter((block) => {
       if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;
       return block.enabled?.() ?? true;
@@ -804,9 +819,7 @@ type LauncherInnerProps = {
 
 export const LauncherInner = (props: LauncherInnerProps) => {
   const hkGroup = createHotkeyGroup();
-  const availableBlocks = useCreateMenuBlocks(
-    () => props.blocks ?? CREATABLE_BLOCKS
-  );
+  const availableBlocks = useCreateMenuBlocks(() => props.blocks);
   const sortedBlocks = createMemo(() => sortLauncherBlocks(availableBlocks()));
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchMode = launcherSearchMode;
@@ -892,16 +905,18 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     }
   });
 
-  registerHotkey({
-    hotkey: 'c',
-    scopeId: launcherScope,
-    description: 'Close Launcher',
-    condition: createMenuOpen,
-    keyDownHandler: () => {
-      setCreateMenuOpen(false);
-      return true;
-    },
-  }).withGroup(hkGroup);
+  if (!availableBlocks().some((item) => item.hotkey === 'c')) {
+    registerHotkey({
+      hotkey: 'c',
+      scopeId: launcherScope,
+      description: 'Close Launcher',
+      condition: createMenuOpen,
+      keyDownHandler: () => {
+        setCreateMenuOpen(false);
+        return true;
+      },
+    }).withGroup(hkGroup);
+  }
 
   const navUpHotkey = registerHotkey({
     hotkey: ['arrowup', 'ctrl+k', 'shift+tab'],

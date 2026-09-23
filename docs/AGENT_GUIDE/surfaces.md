@@ -701,18 +701,6 @@ that path. Calendar navigation defaults to Day on phones and Week on desktop; th
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
-Calendar has `Events` and `Calls` destinations. Wide splits show
-`Create`, navigation, the mini calendar, then calendar sources in a left column.
-The mini calendar's month label is plain text; use its arrows to change months.
-Narrow splits put navigation and `Create` above the content, with source and
-availability controls under `Calendars and availability`. Events can be shown
-as a grid or chronological list using `Show event list` / `Show calendar grid`.
-The sidebar destinations are stored in `calendarView=events|calls` URL parameters;
-reload and browser Back/Forward restore the selected destination.
-The list preserves calendar setup, errors,
-retry, and unsupported-date-range messages. Live calls appear in the sidebar with
-`Join` and `See in Calls`; Quick Calls are not inserted into the calendar grid.
-
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
 Dismissing a changed event still asks before discarding the draft.
@@ -722,96 +710,68 @@ footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
 
-Week view has a `Choose calendar view` menu, prev/next week, `Search events`,
-and `Calendar settings`. Events require connecting a
-Google account (`Connect calendar`). The `Calendar settings` (gear) menu has an `Accounts`
+The calendar header has matching `New event` and `New Call` buttons. Both stay
+available in narrow splits and on phones, where compact icons have accessible
+labels. `New Call` opens call setup; it is no longer in the right side panel.
+Week view also has a `Choose calendar view` menu, prev/next week,
+`Search events`, `Calendar settings`, and a mini month picker in the right side panel.
+The mini calendar's month label opens a month picker; arrows also change months.
+The right side panel has a collapsible `Upcoming events` box.
+Active Quick Calls you created, participated in, or were invited to appear above your
+next five events (including ones in progress), whether or not they have call links.
+The active area is hidden when no calls are active. Event rows show the name and
+time; click one to open its details. An event with a call link shows `Join` while
+it is in progress. Upcoming events follow today's date even when you browse another week;
+hidden calendars, cancelled events, and invitations you declined are omitted.
+`New Call` opens `/app/meet/new` without creating a meeting. The `Invite Teammates`
+button above `Start call` opens the task assignee picker with name search, profile
+pictures and multiple selections, without bots or external contacts. The closed
+button shows up to three stacked selected profile pictures and the total teammate
+count; hover shows selected names, and reopening keeps the same selections. Selection
+stays local until `Start call` creates the Quick Call, connects the creator, and
+rings selected teammates. Microphone and camera are not shared before starting.
+If invitations fail after connecting, `Retry invites` sends them again without
+creating another call. Shared-link join screens do not show the teammate picker.
+Incoming invitations appear in a bottom-left notification with the call name,
+caller initials/name, and `Decline` and `Join` buttons. This stays visible across
+app pages, including call setup, hidden sidebars, narrow splits, and mobile (above
+the bottom dock). The card uses the app's menu surface, with semantic success
+color for `Join` and danger color for `Decline`. A top bar and seconds counter
+show the time remaining before the 30-second dismissal deadline.
+`Join` opens call setup; `Decline` stops ringing across the
+recipient's tabs. Unanswered invitations disappear and stop ringing after 30 seconds.
+Declining or timing out does not remove an invited live call from Channels `Live`.
+The list updates as calls end and new calls start. Calls from other conferencing
+providers open their own join links. A failed upcoming-list request has a `Retry`
+action and does not prevent creating a call.
+Events require connecting a Google account (`Connect calendar`). The
+`Calendar settings` (gear) menu has an `Accounts`
 section listing each connected account with a per-account `Enable` (grant calendar) or
 `Turn off` action, plus `Connect another account` to connect a new Google account
 (email + calendar).
 
-`Create` opens a dropdown styled like Files with `Event` and `Quick Call`.
-While the menu is open, press `E` for Event or `Q` for Quick Call; each item
-shows its shortcut. Escape or `C` closes the menu.
-`Quick Call` creates a reusable link and opens setup. The creator must press
-`Start call`; invitees must press `Join call`. Loading the page or completing
-authentication never joins automatically, including old `?join=true` URLs.
-Setup requests microphone and camera access and offers a local camera preview.
-Permission denial leaves the affected device off and still allows joining.
-`Back to Macro` exits setup. `Copy Meeting Url` keeps its label and shows a
-checkmark for a few seconds after copying, then restores the copy icon.
-
-`Event` opens the original compact composer with All day in the date/time fields.
-Every regular event created here automatically gets a Macro call after the event
-saves. Out-of-office entries do not create calls. There is no separate call toggle
-or Scheduled Call menu option. All-day events get an untimed call link, so setup
-does not display a misleading midnight time. Quick Calls do not create calendar events.
+`New event` opens the compact composer with All day in the date/time fields.
+The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`
+for new events, defaulting to `Macro call` when calls are enabled. Keeping
+that selection creates and attaches a Macro call after the event saves. Selecting
+`Google Meet` or `No meeting link` skips the Macro call. Out-of-office entries do
+not create calls. There is no separate call toggle or Scheduled Call menu option.
+All-day events get an untimed call link, so setup does not display a misleading midnight time.
 A failed link attachment keeps the composer open with a retry message; Save reuses
 the saved event and call instead of creating duplicates. The invitation includes
 the call link in its description and, when no location was entered, its location.
 Event details show a plain icon row with a standard gray `Join Macro call` button
 and `Copy call link`, without an enclosing border or the full URL.
-Editing or rescheduling an owned event retains and updates its call; an owned
-editable event without a call receives one on save. Deleting a calendar event
-does not revoke its reusable call link.
-Guests can use standalone meeting links without a Macro account. Links to
-channel calls only admit signed-in Macro users; visitors without an account
-see a sign-in prompt instead of the guest name form. Inside a channel call,
-the shareable link is created on request via `Get shareable call link`, never
-automatically.
+Editing or rescheduling an owned event retains and updates its selected Macro call.
+Selecting `Macro call` on an owned editable event without one adds a call on save;
+choosing another option removes its generated Macro link from the invitation.
+Removing the link or deleting the calendar event does not revoke the reusable call.
 
-Calendar's Calls view shows a people/email picker, live-call cards, and
-`Recent` / `Upcoming` tabs, with Recent leftmost and selected by default.
-The picker creates a standalone Quick Call and queues direct guest-link email
-invitations for selected recipients. Failed invitations can be retried without
-creating a second link or resending successful invitations. Live cards have
-copy and Join actions. Upcoming calls are grouped by local date, with reusable
-links in `Your links` below the scheduled rows. Link rows offer `Copy link` and
-`Start`; calendar rows and detail cards offer `Join` only between the scheduled
-start and end, or while the call has an active session. Past and future events
-keep their details and copy-link actions. Return to Events using the sidebar.
-The view combines owned call links, active channel calls, saved calls, and
-calendar invitations from the previous 30 days through the next 90 days,
-including other conferencing providers. `Recent` offers `Load older calls`
-when more saved calls are available. Calendar source controls remain in the
-sidebar. Active call notifications, including Quick Calls, appear below the
-sidebar navigation with Join and See in Calls actions, rather than above the
-calendar grid. On narrow layouts, find them under Calls, calendars and
-availability. Participant stacks and details use profile pictures when available.
-The join screen, in-call participant tiles, and incoming direct-call badges use
-profile pictures too; initials are only the fallback when no photo is available.
-The join screen uses the same small switches as the event composer's All day
-control for Microphone and Camera. Join and `Copy Meeting Url` use gray buttons
-matching the sidebar Create button; the copy action includes a copy icon.
-The in-call header uses the same copy button and shows the current local time
-before the call name, with no phone or pencil icon. Owners can click the name to
-rename it, then Save or press Enter; Cancel or Escape discards the edit. Guests
-and other participants see a read-only name.
-The local call previews include sample photos for every participant.
-Hover a row for a details card with join/copy actions, the URL, people and RSVP
-statuses, event links, and privacy information. Click a call title or choose
-`Call details` from its ellipsis menu for the same content in a dialog; the close
-button or dismissing the dialog returns to the list.
-Details offer joining, copying a visible link, opening a recording, and calendar
-backlinks/editing when a matching event is loaded. Owned standalone links can be
-renamed or revoked; revocation asks for confirmation and prevents future joins.
-It does not delete the calendar event. Standalone calls explain that their content
-stays outside team memory, with no override control. Organizers can add guests
-by email from details: calendar calls update the attendee list and send calendar
-invitations; standalone calls queue an email with the direct join URL, requiring
-no Macro account.
-
-Local development previews are mounted at `/app/component/calls-preview`,
-`/app/component/call-join-preview`, and `/app/component/call-preview`.
-They use sample data and simulated media/actions, including guest and signed-in
-joining, leaving/rejoining, call controls, and details. Preview invitations send
-no email and preview controls request no media access.
-
-The `Calendars` section, below the mini calendar, folds each connected account into a collapsible
+The side panel's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
-name, per-calendar checkbox). A single connected account starts expanded; multiple
-accounts start collapsed. Subscribed system calendars (Google holidays, birthdays)
-carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
+name, per-calendar checkbox). Accounts start collapsed. Subscribed system calendars
+(Google holidays, birthdays) carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
 warning icon whose tooltip shows the provider error; the account keeps syncing its other
 calendars and the badge clears on its own once that calendar syncs again.
 
@@ -846,7 +806,7 @@ guest but you — in a split beside the calendar on desktop, as the full-screen 
 touch devices — and is hidden when you are the only guest.
 
 With the `enable-calendar-team-ooo` flag on, teammates' Google Calendar out-of-office events
-overlay the grid as read-only chips titled `<name>: <event title>`. Calendar navigation's
+overlay the grid as read-only chips titled `<name>: <event title>`. The side panel's
 `Team out of office` section (shown only when the user belongs to a team with other members)
 has a checkbox in its header row toggling the whole overlay on or off — all teammates or
 none — and lists the next 90 days of teammate absences; clicking a row navigates the grid to
@@ -866,8 +826,9 @@ byline.
 ## Calls — `/app/component/calls`
 
 Tabs `All` / `Missed` / `Unattended`; `New call` offers `Call a channel or contact`
-and `Manage call links`. Quick-call creation is hidden. Scheduled calls are created
-through Calendar and can be shared with people who do not have a Macro account.
+and `Manage call links`. Create Quick Calls with `New Call` in Calendar's right side
+panel. Scheduled calls are created through Calendar and can be shared with people
+who do not have a Macro account.
 The channel/contact option opens the recipient picker.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
@@ -882,9 +843,9 @@ If a recording fails to play, reload the page to obtain a fresh recording link,
 or use **Open or download recording**. The playback warning does not assume
 that the failure is caused by an unsupported media format.
 
-### Call links and guests — `/app/meet/:shareToken`
+### Call links and guests — `/app/meet/join/:shareToken`
 
-In Calendar, create an event; its Macro call is included automatically.
+In Calendar, create an event with `Macro call` selected (the default).
 Saving creates the call and includes its link in the invitation;
 the room starts on the first join. Use Calendar to edit the event or invite guests.
 
@@ -893,16 +854,68 @@ link`, and `Revoke link`. Revocation prevents new joins; it does not delete cale
 events or disconnect current participants. Each active channel call also shows its
 URL and `Copy link`. A channel call's link stops working when that call ends.
 
-Opening a call link works without signing in. Guests enter `Your name`, choose their
-microphone and camera preferences, and press `Join call`. Setup requests device
+Guests can use standalone meeting links without a Macro account. Links to channel
+calls only admit signed-in Macro users; visitors without an account see a sign-in
+prompt instead of the guest name form. Inside a channel call, the shareable link is
+created on request via `Get shareable call link`.
+
+New calls use `/app/meet/new`; shared links open setup at
+`/app/meet/join/:shareToken`. A successful connection replaces the URL with
+`/app/meet/:shareToken` without restarting the call. Leaving returns to Macro.
+An unexpected disconnection returns to setup so the user can retry.
+Opening or reloading an in-call URL returns to setup and requires a deliberate
+join; existing shared links continue to work.
+
+Guests enter `Your name`, choose their microphone and camera preferences, and
+press `Join call`. Setup requests device
 permissions and previews video locally; sharing starts only after joining.
+Permission denial leaves the affected device off and still allows joining.
+The creator presses `Start call`; invitees press `Join call`. Loading the page or
+completing authentication never joins automatically, including old `?join=true`
+URLs. `Back to Macro` exits setup.
+
 The call page shows a recording/transcription notice. It uses the normal call controls
 for audio, video, device selection, screen sharing, and effects. `Leave call` returns
-to the join screen so guests can rejoin. `Copy Meeting Url` is available during the call.
+to Macro. `Copy Meeting Url` is available during the call.
+Rejoining from a new page waits for the prior page's pending leave cleanup before
+requesting another connection, so a slow leave cannot disconnect the replacement.
+It keeps its label and shows a checkmark for a few seconds after copying, then
+restores the copy icon.
+
 Guest access is limited to the call room; joining does not expose the channel or grant
 anonymous access to saved transcripts and recordings. Guest names are preserved in
 the host's call history. Signed-in attendees receive access to that session's saved
 call without gaining access to the channel.
+
+The join screen, in-call participant tiles, and incoming direct-call badges use
+profile pictures; initials are the fallback when no photo is available.
+The join screen uses small switches for Microphone and Camera. Join and
+`Copy Meeting Url` use gray buttons; the copy action includes a copy icon.
+The in-call header uses the same copy button and shows the current local time
+before the call name. Owners can click the name to rename it, then Save or press
+Enter; Cancel or Escape discards the edit. Guests and other participants see a
+read-only name.
+
+### Local call previews
+
+Local development previews are mounted at `/app/component/calls-preview`,
+`/app/component/call-join-preview`, `/app/component/call-preview`,
+`/app/component/call-incoming-preview`, and `/app/component/call-lifecycle-preview`.
+They use sample data, participant photos, and simulated media/actions, including
+guest and signed-in joining, leaving for Macro, call controls, and details.
+The incoming preview exercises themed invitations and creator-named Live rows.
+The lifecycle preview keeps a simulated teammate in the room across page remounts.
+Join, leave, reopen from Live, then join again with `Hold leave cleanup` checked:
+the second join must wait with one join request until `Finish pending leave` is
+pressed. Live stays available until `End simulated call`.
+Preview invitations send no email or rings and preview controls request no media access.
+
+The calls preview includes a sample create menu, active-call notice, people/email
+picker, and `Recent` / `Upcoming` tabs. Hover a row for its details card; click a
+call title or choose `Call details` to open the details dialog. Join, invite,
+rename, and revoke actions are simulated within the preview; copy actions put
+the sample link on the clipboard.
+
 ### Sharing a call
 
 A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical

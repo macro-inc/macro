@@ -1,35 +1,60 @@
 import { createSignal, onCleanup } from 'solid-js';
 import type {
   MeetingCredentials,
+  MeetingLocalTracks,
   MeetingMediaPreferences,
   MeetingSessionCapabilities,
 } from '../context/meeting-session';
+
+type IssuedMeetingSession = {
+  credentials: MeetingCredentials;
+  shareToken: string;
+};
 
 export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
   const [joining, setJoining] = createSignal(false);
   const [joinedCallId, setJoinedCallId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
   const [hasLeft, setHasLeft] = createSignal(false);
-  let credentials: MeetingCredentials | undefined;
+  let issuedSession: IssuedMeetingSession | undefined;
+  let activeAttempt: AbortController | undefined;
   let generation = 0;
   let disposed = false;
-  let previousAttempt: Promise<unknown> = Promise.resolve();
 
-  async function release(session: MeetingCredentials, shareToken: string) {
+  async function release(session: IssuedMeetingSession) {
     try {
-      await capabilities.release(shareToken, session.token);
+      await capabilities.release(session.shareToken, session.credentials.token);
     } catch (cause) {
       // LiveKit's participant-left webhook also cleans up the session.
       console.error('Failed to release meeting participant', cause);
     }
   }
 
+  /** Handed-off tracks go to `connect` or are stopped; they never leak. */
   async function join(
     displayName: string | undefined,
-    preferences: MeetingMediaPreferences
+    { localTracks, ...preferences }: MeetingMediaPreferences
+  ) {
+    let unclaimed = localTracks;
+    try {
+      await attemptJoin(displayName, preferences, () => {
+        const claimed = unclaimed;
+        unclaimed = undefined;
+        return claimed;
+      });
+    } finally {
+      unclaimed?.microphone?.stop();
+      unclaimed?.camera?.stop();
+    }
+  }
+
+  async function attemptJoin(
+    displayName: string | undefined,
+    preferences: Omit<MeetingMediaPreferences, 'localTracks'>,
+    claimLocalTracks: () => MeetingLocalTracks | undefined
   ) {
     if (joining() || disposed) return;
-    if (capabilities.isInCall()) {
+    if (issuedSession && capabilities.isInCall()) {
       setError('Leave your current call before joining this one.');
       return;
     }
@@ -38,40 +63,56 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
       return;
     }
     const attempt = ++generation;
-    // A cancelled token request may still create the participant server-side.
-    // Finish its release before retrying: authenticated attempts share an RTC
-    // identity, so late cleanup must never remove a newer session.
-    const waitForPreviousAttempt = previousAttempt;
-    let finishAttempt!: () => void;
-    previousAttempt = new Promise<void>((resolve) => {
-      finishAttempt = resolve;
-    });
-    const shareToken = capabilities.shareToken();
+    activeAttempt?.abort();
+    const controller = new AbortController();
+    activeAttempt = controller;
+    // A cancelled token request may still create a participant server-side.
+    // This barrier survives route disposal, so its late cleanup cannot remove
+    // a newer owner's participant with the same RTC identity.
+    const attemptLifecycle = capabilities.lifecycle.begin();
     setJoining(true);
     setError(undefined);
     setHasLeft(false);
     setJoinedCallId(undefined);
-    const previousSession = credentials;
-    credentials = undefined;
-    let issued: MeetingCredentials | undefined;
+    const previousSession = issuedSession;
+    issuedSession = undefined;
+    let issued: IssuedMeetingSession | undefined;
     try {
-      await waitForPreviousAttempt;
-      if (previousSession) await release(previousSession, shareToken);
+      await attemptLifecycle.previous;
+      if (previousSession) await release(previousSession);
       if (disposed || attempt !== generation) return;
-      issued = await capabilities.join(displayName?.trim());
-      if (disposed || attempt !== generation) {
-        await release(issued, shareToken);
+      // A previous owner may still have been disconnecting when Join was
+      // clicked. Check the shared call state after its cleanup has finished.
+      if (capabilities.isInCall()) {
+        setError('Leave your current call before joining this one.');
         return;
       }
-      credentials = issued;
-      await capabilities.connect(issued, preferences);
+      if (capabilities.prepare) {
+        await capabilities.prepare(controller.signal);
+        if (disposed || attempt !== generation) return;
+      }
+      const shareToken = capabilities.shareToken();
+      issued = {
+        credentials: await capabilities.join(displayName?.trim()),
+        shareToken,
+      };
+      if (disposed || attempt !== generation) {
+        await release(issued);
+        return;
+      }
+      issuedSession = issued;
+      const localTracks = claimLocalTracks();
+      await capabilities.connect(
+        issued.credentials,
+        localTracks ? { ...preferences, localTracks } : preferences
+      );
       if (disposed || attempt !== generation) return;
-      setJoinedCallId(issued.callId);
+      setJoinedCallId(issued.credentials.callId);
     } catch (cause) {
-      if (issued && credentials === issued) {
-        credentials = undefined;
+      if (issued && issuedSession === issued) {
+        issuedSession = undefined;
         try {
-          if (capabilities.activeCallId() === issued.callId) {
+          if (capabilities.activeCallId() === issued.credentials.callId) {
             await capabilities.disconnect();
           }
         } catch (disconnectError) {
@@ -80,46 +121,58 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
             disconnectError
           );
         } finally {
-          await release(issued, shareToken);
+          await release(issued);
         }
       }
       if (disposed || attempt !== generation) return;
-      credentials = undefined;
+      issuedSession = undefined;
       setError('Could not join the call. Check your connection and try again.');
       console.error('Failed to join meeting', cause);
     } finally {
-      finishAttempt();
+      // Keep the signal abortable for connected actions such as retrying invites.
+      // A failed attempt has no session left that can own those actions.
+      if (
+        activeAttempt === controller &&
+        (!issued || issuedSession !== issued)
+      ) {
+        controller.abort();
+        activeAttempt = undefined;
+      }
+      attemptLifecycle.complete();
       if (!disposed && attempt === generation) setJoining(false);
     }
   }
 
   async function leave() {
     generation += 1;
-    const session = credentials;
-    credentials = undefined;
+    activeAttempt?.abort();
+    activeAttempt = undefined;
+    const session = issuedSession;
+    issuedSession = undefined;
+    const cleanupLifecycle = capabilities.lifecycle.begin();
     if (!disposed) {
       setJoining(false);
       setJoinedCallId(undefined);
       setHasLeft(true);
     }
-    if (!session) return;
-    let finishLeave!: () => void;
-    const cleanup = new Promise<void>((resolve) => {
-      finishLeave = resolve;
-    });
-    previousAttempt = Promise.all([previousAttempt, cleanup]);
     try {
+      // Cancellation must not wait for the token request it is cancelling.
+      // The shared lifecycle still retains that attempt independently.
+      if (!session) return;
       if (
         capabilities.activeCallId() === null ||
-        capabilities.activeCallId() === session.callId
+        capabilities.activeCallId() === session.credentials.callId
       ) {
         await capabilities.disconnect();
       }
     } catch (cause) {
       console.error('Failed to disconnect meeting', cause);
     } finally {
-      await release(session, capabilities.shareToken());
-      finishLeave();
+      try {
+        if (session) await release(session);
+      } finally {
+        cleanupLifecycle.complete();
+      }
     }
   }
 

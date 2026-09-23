@@ -150,6 +150,22 @@ describe('calendar calls model', () => {
     expect(item.link).toBeUndefined();
   });
 
+  it.each([false, true])(
+    'merges setup URLs with saved legacy calendar links (setup in event: %s)',
+    (setupInEvent) => {
+      const setupUrl = link.url.replace('/meet/', '/meet/join/');
+      const items = buildCalendarCallItems(
+        [{ ...link, url: setupInEvent ? link.url : setupUrl }],
+        [{ ...event, url: setupInEvent ? setupUrl : link.url }],
+        [],
+        now
+      );
+      expect(items).toHaveLength(1);
+      expect(items[0].event?.eventId).toBe(event.eventId);
+      expect(items[0].link?.id).toBe(link.id);
+    }
+  );
+
   it('keeps an external conference separate from a Macro link with the same path', () => {
     const items = buildCalendarCallItems(
       [link],

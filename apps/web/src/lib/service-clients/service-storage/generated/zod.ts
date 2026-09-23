@@ -1963,7 +1963,9 @@ export const meetingListResponse = zod
       )
       .describe('Persistent meeting invitations, most recently created first.'),
   })
-  .describe("The actor's most recent uncancelled standalone meetings.");
+  .describe(
+    'Uncancelled standalone meetings visible in the requested meeting list.'
+  );
 
 /**
  * @summary Handle `POST /call/meetings` through the call domain service.
@@ -2015,6 +2017,82 @@ export const meetingCreateResponse = zod
   );
 
 /**
+ * @summary List the authenticated actor's active quick calls.
+ */
+export const meetingListActiveResponse = zod
+  .object({
+    meetings: zod
+      .array(
+        zod
+          .object({
+            callId: zod
+              .uuid()
+              .nullish()
+              .describe('Currently active call session, if any.'),
+            channelId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Associated channel, for links to existing channel calls only.'
+              ),
+            id: zod.uuid().describe('Persistent meeting identifier.'),
+            scheduledEnd: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Scheduled end, or none for an instant meeting.'),
+            scheduledStart: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Scheduled start, or none for an instant meeting.'),
+            shareToken: zod
+              .string()
+              .describe(
+                "A bearer capability that grants access only to a meeting's RTC room."
+              ),
+            title: zod.string().describe('Human-readable meeting title.'),
+          })
+          .describe(
+            'Persistent meeting metadata. No channel contents or archived media are exposed.'
+          )
+          .and(
+            zod.object({
+              createdBy: zod
+                .string()
+                .describe(
+                  'Creator identity for displaying the caller in the authenticated active list.'
+                ),
+            })
+          )
+          .describe(
+            'Active quick-call metadata available to its authenticated owner or attendees.'
+          )
+      )
+      .describe(
+        'Persistent meeting invitations for currently active sessions.'
+      ),
+  })
+  .describe(
+    "The authenticated actor's active quick calls, including their creators."
+  );
+
+/**
+ * @summary Read the authenticated caller's invitation capability without exposing the creator.
+ */
+export const meetingInvitePermissionsParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingInvitePermissionsResponse = zod
+  .object({
+    canInvite: zod
+      .boolean()
+      .describe('True for the owner of an uncancelled standalone meeting.'),
+  })
+  .describe(
+    'Whether the authenticated caller can invite teammates to this meeting.'
+  );
+
+/**
  * @summary Queue an owner-authorized guest invitation email.
  */
 export const meetingInviteParams = zod.object({
@@ -2028,6 +2106,23 @@ export const meetingInviteBody = zod
       .describe('Recipient email; no Macro account is required.'),
   })
   .describe('A single email recipient for a call invitation.');
+
+/**
+ * @summary Ring registered teammates selected by the standalone meeting owner.
+ */
+export const meetingInviteUsersParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingInviteUsersBody = zod
+  .object({
+    userIds: zod
+      .array(zod.string())
+      .describe(
+        'Human user principals; bot principals and historical bare bot UUIDs are invalid.'
+      ),
+  })
+  .describe('Registered teammates selected for an incoming call invitation.');
 
 /**
  * @summary Handle `POST /call/meetings/join/{token}` through the call domain service.

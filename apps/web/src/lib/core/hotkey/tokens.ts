@@ -265,6 +265,7 @@ export const TOKENS = {
 
   // create menu
   create: {
+    call: 'create.call',
     note: 'create.note',
     noteNewSplit: 'create.noteNewSplit',
     email: 'create.email',

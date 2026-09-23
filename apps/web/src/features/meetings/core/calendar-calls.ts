@@ -85,7 +85,9 @@ export const CALENDAR_CALL_GROUPS: {
 
 function linkKey(url: string) {
   try {
-    return new URL(url).pathname.replace(/\/$/, '');
+    const pathname = new URL(url).pathname.replace(/\/$/, '');
+    const meeting = pathname.match(/^\/(?:app\/)?meet\/(?:join\/)?([^/]+)$/);
+    return meeting ? `meeting:${meeting[1]}` : pathname;
   } catch {
     return url;
   }

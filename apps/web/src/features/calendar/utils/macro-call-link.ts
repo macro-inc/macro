@@ -19,7 +19,9 @@ export function macroCallUrl(value: string): string | undefined {
         url.hostname !== 'dev.macro.com') ||
       url.username ||
       url.password ||
-      !/^\/app\/meet\/[A-Za-z0-9_-]{16,128}\/?$/.test(url.pathname)
+      !/^\/(?:app\/)?meet\/(?:join\/)?[A-Za-z0-9_-]{16,128}\/?$/.test(
+        url.pathname
+      )
     ) {
       return undefined;
     }

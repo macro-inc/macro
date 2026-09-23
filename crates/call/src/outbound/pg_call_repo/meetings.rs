@@ -112,6 +112,95 @@ impl PgCallRepo {
             .collect()
     }
 
+    #[tracing::instrument(err, skip(self))]
+    pub(super) async fn fetch_active_meetings(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<Meeting>, CallError> {
+        let rows = sqlx::query!(
+            r#"SELECT m.id, m.share_token, m.user_id, m.title, m.scheduled_start,
+                      m.scheduled_end, m.channel_id, m.channel_call_id, m.active_call_id
+               FROM call_meetings m
+               JOIN calls c ON c.id = m.active_call_id
+               WHERE m.cancelled_at IS NULL
+                 AND m.channel_id IS NULL
+                 AND m.scheduled_start IS NULL AND m.scheduled_end IS NULL
+                 AND (m.user_id = $1 OR EXISTS (
+                     SELECT 1 FROM call_participants p
+                     WHERE p.call_id = c.id AND p.user_id = $1
+                 ) OR EXISTS (
+                     SELECT 1 FROM call_invitees i
+                     WHERE i.call_id = c.id AND i.user_id = $1
+                 ))
+                 AND (EXISTS (
+                     SELECT 1 FROM call_participants p
+                     WHERE p.call_id = c.id AND p.left_at IS NULL
+                 ) OR EXISTS (
+                     SELECT 1 FROM call_guests g
+                     WHERE g.call_id = c.id AND g.left_at IS NULL
+                 ))
+               ORDER BY m.created_at DESC, m.id DESC"#,
+            user_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(Meeting {
+                    id: row.id,
+                    share_token: MeetingToken::try_from(row.share_token)?,
+                    user_id: row.user_id,
+                    title: row.title,
+                    scheduled_start: row.scheduled_start,
+                    scheduled_end: row.scheduled_end,
+                    channel_id: row.channel_id,
+                    channel_call_id: row.channel_call_id,
+                    call_id: row.active_call_id,
+                })
+            })
+            .collect()
+    }
+
+    #[tracing::instrument(err, skip(self, users))]
+    pub(super) async fn persist_meeting_invitees(
+        &self,
+        meeting_id: &Uuid,
+        call_id: &Uuid,
+        users: &[MacroUserIdStr<'_>],
+    ) -> Result<(), CallError> {
+        let mut tx = self.pool.begin().await?;
+        // Match archival's lock order: call first, then meeting. Keep the session
+        // alive until its invitees commit without ever creating participation.
+        lifecycle::lock_active_call(&mut tx, call_id)
+            .await
+            .map_err(|error| match error {
+                sqlx::Error::RowNotFound => CallError::NotFound("This call has ended".to_string()),
+                error => error.into(),
+            })?;
+        sqlx::query_scalar!(
+            r#"SELECT id FROM call_meetings
+               WHERE id = $1 AND active_call_id = $2 AND cancelled_at IS NULL
+               FOR SHARE"#,
+            meeting_id,
+            call_id,
+        )
+        .fetch_optional(tx.as_mut())
+        .await?
+        .ok_or_else(|| CallError::NotFound("This call has ended".to_string()))?;
+        let user_ids: Vec<String> = users.iter().map(ToString::to_string).collect();
+        sqlx::query!(
+            r#"INSERT INTO call_invitees (call_id, user_id)
+               SELECT $1, unnest($2::text[])
+               ON CONFLICT (call_id, user_id) DO NOTHING"#,
+            call_id,
+            &user_ids,
+        )
+        .execute(tx.as_mut())
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     #[tracing::instrument(err, skip(self, request))]
     pub(super) async fn update_owned_meeting(
         &self,
@@ -262,3 +351,6 @@ impl PgCallRepo {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test;

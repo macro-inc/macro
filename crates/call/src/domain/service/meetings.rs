@@ -215,18 +215,9 @@ impl<
         actor: MacroUserIdStr<'_>,
     ) -> Result<CallTokenResponse, CallError> {
         let meeting = self.resolve_invitation(&token).await?;
-        if let Some((active_call, channel)) = self
-            .repo
-            .find_active_call_for_user(actor.copied())
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?
-            && Some(active_call) != meeting.call_id
-        {
-            return Err(CallError::AlreadyInCall(
-                channel.unwrap_or(active_call).to_string(),
-            ));
-        }
         let call = self.prepare_meeting_call(&meeting).await?;
+        self.leave_other_active_call(actor.copied(), call.id)
+            .await?;
         let rtc_token = self
             .rtc_client
             .generate_token(&call.room_name, actor.copied())
@@ -243,6 +234,8 @@ impl<
             }
             Err(AddParticipantError::Repository(error)) => return Err(CallError::Internal(error)),
         }
+        self.send_meeting_answered_event(meeting.id, actor.copied())
+            .await;
         Ok(CallTokenResponse {
             call_id: call.id,
             channel_id: call.channel_id,
@@ -289,9 +282,7 @@ impl<
                 self.repo
                     .reconcile_guest(&call.id, guest_id, false)
                     .await
-                    .inspect_err(
-                        |e| tracing::error!(error=?e, "failed to release unminted guest"),
-                    )
+                    .inspect_err(|e| tracing::error!(error=?e, "failed to release unminted guest"))
                     .ok();
                 return Err(CallError::Internal(error));
             }
@@ -305,6 +296,48 @@ impl<
             participant_id: guest_id.to_string(),
             share_token: Some(token.into()),
         })
+    }
+
+    /// A user is active in one call at a time, so joining a call switches
+    /// them out of any other: their participation ends, they are removed from
+    /// its RTC room, and it is archived if they were its last participant.
+    #[tracing::instrument(err, skip(self))]
+    pub(super) async fn leave_other_active_call(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        joining: Uuid,
+    ) -> Result<(), CallError> {
+        let Some((other_call_id, _)) = self
+            .repo
+            .find_active_call_for_user(user_id.copied())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+        else {
+            return Ok(());
+        };
+        if other_call_id == joining {
+            return Ok(());
+        }
+        let other = self
+            .repo
+            .get_call_by_id(&other_call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            .ok_or_else(|| CallError::NotFound(other_call_id.to_string()))?;
+        self.repo
+            .remove_participant(&other.id, user_id.copied())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        // Best-effort: a stale participation has no RTC session to end.
+        self.rtc_client
+            .remove_participant(&other.room_name, user_id)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error=?error, "failed to remove participant from previous call room")
+            })
+            .ok();
+        self.finish_empty_call(&other).await?;
+        Ok(())
     }
 
     #[tracing::instrument(err, skip_all)]

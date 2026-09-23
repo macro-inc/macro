@@ -450,6 +450,20 @@ second channel when grouping by drop. Team channels still support these actions.
 Open the same matched channel from two labels and verify keyboard focus remains
 on the chosen row. Check rule edits and persistence after reload.
 
+When calls are enabled, `Live` appears below the rail's toolbar while an active
+quick call is available. It stays visible in both tabs and during conversation
+search, and disappears when no active quick calls remain. Entries are titled
+`Call with <creator's name>`. Clicking a call opens
+its camera/microphone setup at `/app/meet/join/<token>`; it does not join immediately.
+Live rows use the shaking incoming-phone icon, respecting reduced motion.
+The Channels navigation phone indicator appears for active channel calls or
+active quick calls visible to you.
+This list includes calls you own, joined, or were invited to during the current
+live session. Declining or letting the incoming popup expire stops ringing but
+keeps that active call available here. The invitation does not carry forward to
+a later session of the same reusable call link.
+Leaving and rejoining keeps the row available while another participant remains.
+When everyone leaves, the session ends; reopening its link starts a new session.
 If a restored Chat selection is already open in another view, its preview stays
 closed but the saved selection is retained. Close the other view, then select
 the conversation again or reopen Chat to restore its preview. Verify that an
@@ -607,6 +621,10 @@ row to open the call. The search field above the list matches call names and
 transcripts in this channel; queries shorter than 3 characters are not sent.
 Empty copy: `No calls in this channel`. No matches: `No results for "…"`.
 Shorter queries: `Keep typing to search`.
+
+Leaving from the channel's call controls switches to `Messages` immediately.
+Disconnect and server cleanup continue after that switch; slow or failed RTC
+teardown must not leave the channel showing the join screen.
 
 `Participants` tab:
 - `Copy invite link`, participant search box.

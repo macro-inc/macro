@@ -16,17 +16,20 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import ListIcon from '@phosphor/list-bullets.svg';
-import VideoIcon from '@phosphor/video-camera.svg';
+import PhoneIcon from '@phosphor/phone.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { usePager } from '@ui/components/Pager';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { CalendarSearch } from './CalendarSearch';
+import { useOpenEventComposer } from './use-open-event-composer';
 
 const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
   month: 'long',
@@ -61,54 +64,20 @@ function createLocalToday() {
   return today;
 }
 
-export function Header(props: {
-  calls: boolean;
-  list: boolean;
-  onListChange: (list: boolean) => void;
-}) {
-  const today = createLocalToday();
-  return (
-    <Show
-      when={!props.calls}
-      fallback={
-        <SplitHeaderLeft>
-          <HeaderIsland>
-            <VideoIcon class="size-4 text-ink-muted" />
-            <span class="text-base font-semibold text-ink">Calls</span>
-            <span class="ml-2 text-xs text-ink-extra-muted">
-              {today().toLocaleDateString([], {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-              })}
-            </span>
-          </HeaderIsland>
-        </SplitHeaderLeft>
-      }
-    >
-      <EventsHeader list={props.list} onListChange={props.onListChange} />
-    </Show>
-  );
-}
-
-function EventsHeader(props: {
-  list: boolean;
-  onListChange: (list: boolean) => void;
-}) {
+export function Header() {
   const panel = useSplitPanelOrThrow();
   const sidePanel = useSidePanel();
   const calendarPager = useCalendarPager();
   const pager = usePager<CalendarPageId>();
   const calendarView = useCalendarView();
+  const openEventComposer = useOpenEventComposer();
+  const navigate = useNavigate();
   const initialDate = new Date();
   const today = createLocalToday();
 
   useCalendarHotkeys({
     scopeId: panel.splitHotkeyScope,
-    changeView: (view) => {
-      props.onListChange(false);
-      calendarPager.changeView(view);
-    },
+    changeView: calendarPager.changeView,
     previousPeriod: pager.previous,
     nextPeriod: pager.next,
     navigateToToday: calendarPager.navigateToToday,
@@ -159,17 +128,19 @@ function EventsHeader(props: {
             <Show
               when={isMobile()}
               fallback={
-                <Button
-                  variant={isTodayVisible() ? 'ghost' : 'accent'}
-                  size="sm"
-                  class="rounded-lg px-3"
-                  depth={2}
-                  label="Go to today"
-                  hotkey={TOKENS.calendar.period.today}
-                  onClick={calendarPager.navigateToToday}
-                >
-                  Today
-                </Button>
+                <Show when={!isTodayVisible()}>
+                  <Button
+                    variant="accent"
+                    size="sm"
+                    class="rounded-lg px-3"
+                    depth={2}
+                    label="Go to today"
+                    hotkey={TOKENS.calendar.period.today}
+                    onClick={calendarPager.navigateToToday}
+                  >
+                    Today
+                  </Button>
+                </Show>
               }
             >
               <Button
@@ -187,6 +158,29 @@ function EventsHeader(props: {
                 >
                   {today().getDate()}
                 </span>
+              </Button>
+            </Show>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="rounded-lg px-2 @max-[520px]/split-header:size-6 @max-[520px]/split-header:p-1 touch:rounded-full"
+              label="New event"
+              onClick={() => openEventComposer()}
+            >
+              <PlusIcon class="size-3.5" />
+              <span class="@max-[520px]/split-header:hidden">New event</span>
+            </Button>
+            <Show when={ENABLE_CALLS}>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="rounded-lg px-2 @max-[520px]/split-header:size-6 @max-[520px]/split-header:p-1 touch:rounded-full"
+                label="New Call"
+                hotkey={TOKENS.create.call}
+                onClick={() => navigate('/meet/new')}
+              >
+                <PhoneIcon class="size-3.5" />
+                <span class="@max-[520px]/split-header:hidden">New Call</span>
               </Button>
             </Show>
             <Show when={!isMobile()}>
@@ -214,16 +208,6 @@ function EventsHeader(props: {
                 </Button>
               </div>
             </Show>
-            <Button
-              variant={props.list ? 'accent' : 'ghost'}
-              size="icon-sm"
-              class="rounded-lg"
-              label={props.list ? 'Show calendar grid' : 'Show event list'}
-              aria-pressed={props.list}
-              onClick={() => props.onListChange(!props.list)}
-            >
-              <ListIcon class="size-4" />
-            </Button>
             <CalendarSearch />
             <CalendarSettingsDropdown isNarrow={sidePanel?.isNarrow()} />
           </div>

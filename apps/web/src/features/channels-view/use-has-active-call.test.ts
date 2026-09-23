@@ -1,0 +1,99 @@
+import { createRoot, createSignal } from 'solid-js';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { useHasActiveChannelsCall } from './use-has-active-call';
+
+const mocks = vi.hoisted(() => ({
+  enabled: true,
+  userId: (): string | undefined => undefined,
+  channelQuery: vi.fn(),
+  quickCalls: vi.fn(),
+}));
+
+vi.mock('@core/constant/featureFlags', () => ({
+  get ENABLE_CALLS() {
+    return mocks.enabled;
+  },
+}));
+vi.mock('@core/context/user', () => ({ useUserId: () => mocks.userId }));
+vi.mock('@queries/call/call', () => ({
+  useActiveCallsQuery: mocks.channelQuery,
+}));
+vi.mock('../meetings/queries/active-quick-calls', () => ({
+  useActiveQuickCallsSource: mocks.quickCalls,
+}));
+
+const disposers: (() => void)[] = [];
+
+beforeEach(() => {
+  mocks.enabled = true;
+  mocks.channelQuery.mockReset();
+  mocks.quickCalls.mockReset();
+});
+afterEach(() => {
+  for (const dispose of disposers.splice(0)) dispose();
+});
+
+function setup() {
+  const [userId, setUserId] = createSignal<string | undefined>(
+    'macro|viewer@example.com'
+  );
+  const [channelCalls, setChannelCalls] = createSignal<string[]>([]);
+  const [quickCalls, setQuickCalls] = createSignal<string[]>([]);
+  const [pending, setPending] = createSignal(false);
+  mocks.userId = userId;
+  mocks.channelQuery.mockReturnValue({
+    get isPending() {
+      return pending();
+    },
+    get data() {
+      if (pending()) throw new Error('A pending query resource was read');
+      return channelCalls();
+    },
+  });
+  mocks.quickCalls.mockReturnValue({ calls: quickCalls });
+  const active = createRoot((dispose) => {
+    disposers.push(dispose);
+    return useHasActiveChannelsCall();
+  });
+  return { active, setChannelCalls, setQuickCalls, setPending, setUserId };
+}
+
+it('shows the indicator for either call type and clears after both end', () => {
+  const state = setup();
+  expect(state.active()).toBe(false);
+  state.setQuickCalls(['quick']);
+  expect(state.active()).toBe(true);
+  state.setChannelCalls(['channel']);
+  state.setQuickCalls([]);
+  expect(state.active()).toBe(true);
+  state.setChannelCalls([]);
+  expect(state.active()).toBe(false);
+  expect(mocks.quickCalls).toHaveBeenCalledExactlyOnceWith(mocks.userId);
+});
+
+it('can show a quick call without reading pending channel data', () => {
+  const state = setup();
+  state.setPending(true);
+  expect(state.active()).toBe(false);
+  state.setQuickCalls(['quick']);
+  expect(state.active()).toBe(true);
+});
+
+it('hides retained indicators after signing out', () => {
+  const state = setup();
+  state.setChannelCalls(['channel']);
+  state.setQuickCalls(['quick']);
+  expect(state.active()).toBe(true);
+  state.setUserId(undefined);
+  expect(state.active()).toBe(false);
+});
+
+it('does not mount either call query while calls are disabled', () => {
+  mocks.enabled = false;
+  const state = setup();
+  state.setChannelCalls(['channel']);
+  state.setQuickCalls(['quick']);
+  expect(state.active()).toBe(false);
+  expect(mocks.channelQuery).not.toHaveBeenCalled();
+  expect(mocks.quickCalls).not.toHaveBeenCalled();
+});

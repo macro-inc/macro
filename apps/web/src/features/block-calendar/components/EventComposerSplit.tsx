@@ -7,6 +7,7 @@ import {
 import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { onMount } from 'solid-js';
 
@@ -51,6 +52,7 @@ export function EventComposerSplit(props: {
     >
       <EventForm
         controller={controller}
+        macroCallsEnabled={ENABLE_CALLS}
         isEdit={isEdit() || editor.eventCreated()}
         saveError={editor.saveError()}
         disabledFields={editor.disabledFields()}

@@ -10,21 +10,22 @@ import {
   useMeetingQuery,
   useUpdateMeetingMutation,
 } from '@queries/call/meetings';
-import {
-  useLocation,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from '@solidjs/router';
-import { Show, Suspense } from 'solid-js';
+import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
+import { Show } from 'solid-js';
 import type { MeetingPageState } from './context/meeting-session';
+import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
 import { MeetingPage } from './views/meeting-page';
 
-function MeetingRouteContent(props: { shareToken: string }) {
+export function MeetingRouteContent(props: {
+  shareToken: string;
+  onCallStateChange: (connected: boolean) => void;
+  onLeave: () => void;
+}) {
   const [search] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
   const call = useCallContext();
+  const lifecycle = useMeetingSessionLifecycle();
   const authenticated = useIsAuthenticated();
   const author = useAuthor();
   const userId = useUserId();
@@ -61,6 +62,8 @@ function MeetingRouteContent(props: { shareToken: string }) {
   return (
     <MeetingPage
       source={source}
+      onCallStateChange={props.onCallStateChange}
+      onLeave={props.onLeave}
       mediaAccess={{
         request: (constraints) =>
           navigator.mediaDevices.getUserMedia(constraints),
@@ -90,6 +93,7 @@ function MeetingRouteContent(props: { shareToken: string }) {
         navigate(`/login?redirect=${encodeURIComponent(meetingRoute)}`);
       }}
       session={{
+        lifecycle,
         shareToken: () => props.shareToken,
         isInCall: call.isInCall,
         activeCallId: call.activeCallId,
@@ -114,16 +118,5 @@ function MeetingRouteContent(props: { shareToken: string }) {
         />
       )}
     />
-  );
-}
-
-export function MeetingRoute() {
-  const params = useParams<{ shareToken: string }>();
-  return (
-    <Suspense fallback={<div class="p-6 text-ink-muted">Loading call…</div>}>
-      <Show when={params.shareToken} keyed>
-        {(shareToken) => <MeetingRouteContent shareToken={shareToken} />}
-      </Show>
-    </Suspense>
   );
 }

@@ -22,6 +22,9 @@ use notification::domain::service::NotificationIngress;
 use serde_json::json;
 use uuid::Uuid;
 
+mod active_meetings;
+mod meeting_invites;
+
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
@@ -49,6 +52,10 @@ fn user(email: &'static str) -> MacroUserIdStr<'static> {
 struct MockRtcClient {
     tokens: Mutex<HashMap<String, anyhow::Result<String>>>,
     generate_calls: Mutex<Vec<(String, String)>>,
+    /// `(room_name, identity)` for each participant removal.
+    removed: Arc<Mutex<Vec<(String, String)>>>,
+    /// Identities connected per room; a room missing here does not exist.
+    rooms: Mutex<HashMap<String, Vec<String>>>,
 }
 
 impl MockRtcClient {
@@ -56,7 +63,20 @@ impl MockRtcClient {
         Self {
             tokens: Mutex::new(HashMap::new()),
             generate_calls: Mutex::new(Vec::new()),
+            removed: Arc::default(),
+            rooms: Mutex::default(),
         }
+    }
+
+    fn with_room(self, room_name: &str, identities: &[&str]) -> Self {
+        self.rooms.lock().unwrap().insert(
+            room_name.to_string(),
+            identities
+                .iter()
+                .map(|identity| identity.to_string())
+                .collect(),
+        );
+        self
     }
 
     fn set_token(&self, identity: &str, token: anyhow::Result<String>) {
@@ -141,10 +161,21 @@ impl CallRtcClient for MockRtcClient {
 
     async fn remove_participant<'a>(
         &self,
-        _room_name: &str,
-        _participant_identity: MacroUserIdStr<'a>,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'a>,
     ) -> anyhow::Result<()> {
-        unreachable!("remove_participant not exercised by these tests")
+        self.removed.lock().unwrap().push((
+            room_name.to_string(),
+            participant_identity.as_ref().to_string(),
+        ));
+        Ok(())
+    }
+
+    async fn list_participant_identities(
+        &self,
+        room_name: &str,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        Ok(self.rooms.lock().unwrap().get(room_name).cloned())
     }
 
     async fn start_room_composite_egress(
@@ -662,6 +693,227 @@ async fn get_or_create_call_sends_call_answered_to_joining_user() {
             "user_id": user("requester@example.com").as_ref(),
         })
     );
+}
+
+const SWITCHED_FROM_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6e1);
+const SWITCHED_FROM_ROOM: &str = "switched-from-room";
+
+/// Existing-call join where the user is still active in another call that
+/// has `remaining` participants once they leave it.
+fn switching_repo(remaining: i64) -> MockCallRepository {
+    let call = started_event_call(STARTED_EVENT_CREATOR);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_channel_id()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
+    repo.expect_find_active_call_for_user()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Some((SWITCHED_FROM_CALL_ID, None))) }));
+    repo.expect_get_call_by_id().times(1).returning(|call_id| {
+        let other = Call {
+            id: *call_id,
+            channel_id: None,
+            room_name: SWITCHED_FROM_ROOM.to_string(),
+            created_by: STARTED_EVENT_CREATOR.to_string(),
+            created_at: started_event_timestamp(),
+            egress_id: None,
+        };
+        Box::pin(async move { Ok(Some(other)) })
+    });
+    repo.expect_remove_participant()
+        .withf(|call_id, user_id| {
+            *call_id == SWITCHED_FROM_CALL_ID
+                && user_id.as_ref() == user("requester@example.com").as_ref()
+        })
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    repo.expect_get_participant_count()
+        .withf(|call_id| *call_id == SWITCHED_FROM_CALL_ID)
+        .times(1)
+        .returning(move |_| Box::pin(async move { Ok(remaining) }));
+    repo.expect_add_participant()
+        .withf(|call_id, _| *call_id == STARTED_EVENT_CALL_ID)
+        .times(1)
+        .returning(|call_id, user_id| {
+            let participant = CallParticipant {
+                call_id: *call_id,
+                user_id: user_id.as_ref().to_string(),
+                joined_at: started_event_timestamp(),
+            };
+            Box::pin(async move { Ok(participant) })
+        });
+    repo
+}
+
+async fn join_while_in_other_call(
+    repo: MockCallRepository,
+) -> (
+    crate::domain::models::CallTokenResponse,
+    Vec<(String, String)>,
+) {
+    let rtc_client = MockRtcClient::new();
+    let removed = rtc_client.removed.clone();
+    let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
+        repo,
+        rtc_client,
+        StubConnectionService,
+        NoOpEntityAccessService,
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://livekit.example.com",
+    );
+    let response = service
+        .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
+        .await
+        .expect("joining switches calls instead of conflicting");
+    let removed = removed.lock().unwrap().clone();
+    (response, removed)
+}
+
+#[tokio::test]
+async fn joining_a_call_switches_the_user_out_of_their_other_call() {
+    let (response, removed) = join_while_in_other_call(switching_repo(1)).await;
+
+    assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
+    assert_eq!(
+        removed,
+        vec![(
+            SWITCHED_FROM_ROOM.to_string(),
+            user("requester@example.com").as_ref().to_string(),
+        )]
+    );
+}
+
+#[tokio::test]
+async fn switching_out_as_the_last_participant_archives_the_other_call() {
+    let mut repo = switching_repo(0);
+    repo.expect_archive_call_if_empty()
+        .withf(|call_id| *call_id == SWITCHED_FROM_CALL_ID)
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(None) }));
+
+    let (response, _) = join_while_in_other_call(repo).await;
+
+    assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
+}
+
+const RECONCILED_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6f2);
+const RECONCILED_ROOM: &str = "reconciled-room";
+const RECONCILED_GUEST: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6f3);
+
+fn minutes_ago(minutes: i64) -> DateTime<Utc> {
+    Utc::now() - chrono::TimeDelta::minutes(minutes)
+}
+
+/// One active call with a member and a guest, both joined `joined` ago.
+fn reconcile_repo(joined: DateTime<Utc>) -> MockCallRepository {
+    let mut repo = MockCallRepository::new();
+    repo.expect_list_active_calls().times(1).returning(|| {
+        let call = Call {
+            id: RECONCILED_CALL_ID,
+            channel_id: None,
+            room_name: RECONCILED_ROOM.to_string(),
+            created_by: STARTED_EVENT_CREATOR.to_string(),
+            created_at: minutes_ago(30),
+            egress_id: None,
+        };
+        Box::pin(async move { Ok(vec![call]) })
+    });
+    repo.expect_get_participants()
+        .times(1)
+        .returning(move |call_id| {
+            let participant = CallParticipant {
+                call_id: *call_id,
+                user_id: user("requester@example.com").as_ref().to_string(),
+                joined_at: joined,
+            };
+            Box::pin(async move { Ok(vec![participant]) })
+        });
+    repo.expect_get_active_guests()
+        .times(1)
+        .returning(move |_| {
+            Box::pin(async move { Ok(vec![(GuestId::from_uuid(RECONCILED_GUEST), joined)]) })
+        });
+    repo
+}
+
+async fn reconcile(repo: MockCallRepository, rtc_client: MockRtcClient) {
+    let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
+        repo,
+        rtc_client,
+        StubConnectionService,
+        NoOpEntityAccessService,
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://livekit.example.com",
+    );
+    service
+        .reconcile_stale_calls()
+        .await
+        .expect("reconciliation succeeds");
+}
+
+#[tokio::test]
+async fn reconcile_marks_disconnected_people_left_and_archives_the_empty_call() {
+    let mut repo = reconcile_repo(minutes_ago(10));
+    repo.expect_remove_participant()
+        .withf(|call_id, user_id| {
+            *call_id == RECONCILED_CALL_ID
+                && user_id.as_ref() == user("requester@example.com").as_ref()
+        })
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    repo.expect_reconcile_guest()
+        .withf(|call_id, guest_id, joined| {
+            *call_id == RECONCILED_CALL_ID
+                && *guest_id == GuestId::from_uuid(RECONCILED_GUEST)
+                && !joined
+        })
+        .times(1)
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
+    repo.expect_get_participant_count()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(0) }));
+    repo.expect_archive_call_if_empty()
+        .withf(|call_id| *call_id == RECONCILED_CALL_ID)
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(None) }));
+
+    // Only the transcription agent is left in the room.
+    reconcile(
+        repo,
+        MockRtcClient::new().with_room(RECONCILED_ROOM, &["agent-transcriber"]),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn reconcile_keeps_people_still_connected_to_the_room() {
+    let mut repo = reconcile_repo(minutes_ago(10));
+    repo.expect_get_participant_count()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(2) }));
+
+    let guest_identity = GuestId::from_uuid(RECONCILED_GUEST).to_string();
+    reconcile(
+        repo,
+        MockRtcClient::new().with_room(
+            RECONCILED_ROOM,
+            &[user("requester@example.com").as_ref(), &guest_identity],
+        ),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn reconcile_gives_recent_joiners_time_to_connect() {
+    let mut repo = reconcile_repo(minutes_ago(0));
+    repo.expect_get_participant_count()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(2) }));
+
+    // The room is gone, but both people joined moments ago.
+    reconcile(repo, MockRtcClient::new()).await;
 }
 
 const ARCHIVED_EVENT_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6d8);

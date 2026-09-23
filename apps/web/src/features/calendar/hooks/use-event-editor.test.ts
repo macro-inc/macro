@@ -1,6 +1,9 @@
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EventEditorSubmitValues } from '../components/composer/event-form-model';
+import {
+  calendarEventToEditorInitialValues,
+  type EventEditorSubmitValues,
+} from '../components/composer/event-form-model';
 import type { CalendarEvent } from '../types';
 import { useEventEditor } from './use-event-editor';
 
@@ -14,10 +17,8 @@ const mocks = vi.hoisted(() => ({
   fetchMeeting: vi.fn(),
 }));
 
-vi.mock('@channel/Call/call-link', () => ({
-  getMeetingUrl: (token: string) => `https://macro.com/app/meet/${token}`,
-  getMeetingShareToken: (url: string) =>
-    new URL(url).pathname.match(/^\/app\/meet\/([^/]+)\/?$/)?.[1],
+vi.mock('@core/util/webOrigin', () => ({
+  getWebOrigin: () => 'https://macro.com',
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure, alert: mocks.alert },
@@ -55,6 +56,7 @@ const values: EventEditorSubmitValues = {
   },
   location: 'Meeting room',
   description: '<p>Roadmap discussion</p>',
+  conferenceChoice: 'macro',
   guestEmails: ['guest@example.com'],
 };
 
@@ -92,6 +94,185 @@ beforeEach(() => {
 });
 
 describe('scheduling a Macro call', () => {
+  it.each(['none', 'macro'] as const)(
+    'clears legacy provider conferencing when %s is selected on an event carrying both links',
+    async (conferenceChoice) => {
+      const event = {
+        ...savedEvent,
+        conferenceUrl: 'https://meet.google.com/abc-defg-hij',
+        conferenceProvider: 'google_meet' as const,
+      };
+      const [editor, dispose] = createRoot(
+        (dispose) =>
+          [
+            useEventEditor({ event: () => event, onSaved: vi.fn() }),
+            dispose,
+          ] as const
+      );
+      try {
+        await editor.save({ ...values, conferenceChoice });
+        expect(mocks.updateEvent.mock.calls[0][0].patch.conference).toBe(
+          'none'
+        );
+        expect(mocks.createMeeting).not.toHaveBeenCalled();
+        expect(mocks.updateMeeting).toHaveBeenCalledTimes(
+          conferenceChoice === 'macro' ? 1 : 0
+        );
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it('keeps hidden link content untouched when editing an out-of-office event', async () => {
+    const event = { ...savedEvent, eventType: 'out_of_office' as const };
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({ event: () => event, onSaved: vi.fn() }),
+          dispose,
+        ] as const
+    );
+    try {
+      const initial = calendarEventToEditorInitialValues(event);
+      await editor.save({
+        ...values,
+        location: initial.location,
+        description: initial.description,
+        conferenceChoice: 'none',
+      });
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch.location).toBe(
+        event.location
+      );
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toBe('');
+      expect(mocks.createMeeting).not.toHaveBeenCalled();
+      expect(mocks.updateMeeting).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it.each(['none', 'google_meet'] as const)(
+    'does not attach a Macro call when %s is selected',
+    async (conferenceChoice) => {
+      const saved = vi.fn();
+      const [editor, dispose] = createRoot(
+        (dispose) =>
+          [
+            useEventEditor({ event: () => undefined, onSaved: saved }),
+            dispose,
+          ] as const
+      );
+      try {
+        await editor.save({
+          ...values,
+          conferenceChoice,
+          ...(conferenceChoice === 'google_meet'
+            ? { conference: 'google_meet' }
+            : {}),
+        });
+        expect(mocks.createEvent).toHaveBeenCalledOnce();
+        expect(mocks.createEvent.mock.lastCall?.[0].conference).toBe(
+          conferenceChoice === 'google_meet' ? 'google_meet' : undefined
+        );
+        expect(mocks.createMeeting).not.toHaveBeenCalled();
+        expect(mocks.updateEvent).not.toHaveBeenCalled();
+        expect(saved).toHaveBeenCalledOnce();
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it.each(['none', 'google_meet'] as const)(
+    'removes a saved Macro link when changed to %s',
+    async (conferenceChoice) => {
+      const event = {
+        ...savedEvent,
+        description: `<p>Roadmap discussion</p><p>Join Macro call: <a href="${savedEvent.location}">${savedEvent.location}</a></p>`,
+      };
+      const [editor, dispose] = createRoot(
+        (dispose) =>
+          [
+            useEventEditor({ event: () => event, onSaved: vi.fn() }),
+            dispose,
+          ] as const
+      );
+      try {
+        const initial = calendarEventToEditorInitialValues(event);
+        expect(initial.conference).toBe('macro');
+        await editor.save({
+          ...values,
+          location: initial.location,
+          description: initial.description,
+          conferenceChoice,
+          conference: conferenceChoice,
+        });
+        expect(mocks.updateEvent.mock.lastCall?.[0].patch).toEqual(
+          expect.objectContaining({
+            location: '',
+            description: '<p>Roadmap discussion</p>',
+            conference: conferenceChoice,
+          })
+        );
+        expect(mocks.createMeeting).not.toHaveBeenCalled();
+        expect(mocks.updateMeeting).not.toHaveBeenCalled();
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it('adds a Macro call when an event without a call switches to Macro', async () => {
+    const event = { ...savedEvent, location: 'Meeting room' };
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({ event: () => event, onSaved: vi.fn() }),
+          dispose,
+        ] as const
+    );
+    try {
+      expect(editor.initialValues()?.conference).toBe('none');
+      await editor.save({ ...values, conferenceChoice: 'none' });
+      expect(mocks.createMeeting).not.toHaveBeenCalled();
+      await editor.save(values);
+      expect(mocks.createMeeting).toHaveBeenCalledOnce();
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toContain(
+        'Join Macro call'
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('respects switching to no link after a failed Macro attachment', async () => {
+    mocks.updateEvent.mockRejectedValueOnce(new Error('Update unavailable'));
+    const saved = vi.fn();
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({ event: () => undefined, onSaved: saved }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save(values);
+      expect(editor.saveError()).toBeDefined();
+      await editor.save({ ...values, conferenceChoice: 'none' });
+      expect(mocks.createEvent).toHaveBeenCalledOnce();
+      expect(mocks.createMeeting).toHaveBeenCalledOnce();
+      expect(mocks.updateMeeting).not.toHaveBeenCalled();
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toBe(
+        values.description
+      );
+      expect(editor.saveError()).toBeUndefined();
+      expect(saved).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
   it('keeps an all-day call untimed instead of inventing local-midnight times', async () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
@@ -161,6 +342,7 @@ describe('scheduling a Macro call', () => {
         ] as const
     );
     try {
+      expect(editor.disabledFields()?.conference).toBe(true);
       await editor.save(values);
       expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toContain(
         savedEvent.location

@@ -1,10 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildEventTime,
+  calendarSelectionToEditorInitialValues,
   defaultEditorInitialValues,
   type EventEditorInitialValues,
   eventHasEnded,
 } from './event-form-model';
+
+const featureFlags = vi.hoisted(() => ({ enabled: true }));
+vi.mock('@core/constant/featureFlags', () => ({
+  get ENABLE_CALLS() {
+    return featureFlags.enabled;
+  },
+}));
+
+afterEach(() => {
+  featureFlags.enabled = true;
+});
 
 const NOW = new Date('2026-08-25T12:00:00');
 
@@ -18,6 +30,24 @@ function values(
 function localMidnight(date: string): string {
   return new Date(`${date}T00:00`).toISOString();
 }
+
+describe('new event conferencing', () => {
+  it('defaults new events and calendar selections to Macro call', () => {
+    expect(defaultEditorInitialValues(NOW).conference).toBe('macro');
+    expect(
+      calendarSelectionToEditorInitialValues({
+        start: NOW,
+        end: new Date(NOW.getTime() + 60 * 60 * 1000),
+        allDay: false,
+      }).conference
+    ).toBe('macro');
+  });
+
+  it('defaults to no link when calls are unavailable', () => {
+    featureFlags.enabled = false;
+    expect(defaultEditorInitialValues(NOW).conference).toBe('none');
+  });
+});
 
 describe('eventHasEnded', () => {
   it('treats a finished timed range as past', () => {

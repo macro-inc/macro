@@ -453,14 +453,20 @@ export function createCalendarEventFormController(
     const current = state();
     const reminders = reminderUpdate();
     const outOfOffice = submittedOutOfOffice();
+    const providerConference =
+      current.conference === 'macro' ? 'none' : current.conference;
+    const initialProviderConference =
+      initialValue().conference === 'macro'
+        ? 'none'
+        : initialValue().conference;
     const conference =
       isOutOfOffice() ||
-      current.conference === 'existing' ||
-      (current.conference === 'none' && initialValue().conference === 'none') ||
+      providerConference === 'existing' ||
+      (providerConference === 'none' && initialProviderConference === 'none') ||
       (options.isEdit === true &&
-        current.conference === initialValue().conference)
+        providerConference === initialProviderConference)
         ? undefined
-        : current.conference;
+        : providerConference;
     return {
       title: current.title,
       time,
@@ -473,6 +479,7 @@ export function createCalendarEventFormController(
       description: blanksHiddenFields(isOutOfOffice())
         ? ''
         : current.description,
+      conferenceChoice: isOutOfOffice() ? 'none' : current.conference,
       ...(conference ? { conference } : {}),
       ...(reminders ? { reminders } : {}),
       ...(outOfOffice ? { outOfOffice } : {}),

@@ -1,5 +1,6 @@
 import { getMeetingShareToken, getMeetingUrl } from '@channel/Call/call-link';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { recipientEntityMapper, useContacts } from '@core/user';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
@@ -180,13 +181,28 @@ export function useEventEditor(props: UseEventEditorProps) {
     const event = props.event();
     const existingMeetingUrl = event ? calendarMacroCallUrl(event) : undefined;
     const cleanContent = removeCalendarMacroCall(values, existingMeetingUrl);
-    const needsCall =
-      !values.outOfOffice && event?.eventType !== 'out_of_office';
+    const wantsMacroCall =
+      values.conferenceChoice === 'macro' &&
+      !values.outOfOffice &&
+      event?.eventType !== 'out_of_office';
+    const needsCall = ENABLE_CALLS && wantsMacroCall;
     const canManageCall =
       !event ||
       (!event.isReadOnly &&
         editsPrimaryCopy(event) &&
         viewerCanEditGuests(event));
+    // Older events can carry both a generated Macro link and provider
+    // conferencing. Use the saved provider state when clearing either choice.
+    const conference =
+      values.conference ??
+      (canManageCall &&
+      !values.outOfOffice &&
+      event?.eventType !== 'out_of_office' &&
+      event?.conferenceUrl &&
+      (values.conferenceChoice === 'macro' ||
+        values.conferenceChoice === 'none')
+        ? 'none'
+        : undefined);
     let calendarSaved = false;
 
     try {
@@ -203,7 +219,7 @@ export function useEventEditor(props: UseEventEditorProps) {
               ? undefined
               : cleanContent.description,
           attendees: values.guestEmails.map((email) => ({ email })),
-          ...(values.conference ? { conference: values.conference } : {}),
+          ...(conference ? { conference } : {}),
           ...(values.reminders ? { reminders: values.reminders } : {}),
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
         };
@@ -249,13 +265,19 @@ export function useEventEditor(props: UseEventEditorProps) {
 
       const effectiveScope: CalendarUpdateScope = scope ?? 'all';
       const targetsOneOccurrence = effectiveScope === 'this_event';
-      const content = existingMeetingUrl
-        ? attachCalendarMacroCall(
-            cleanContent,
-            existingMeetingUrl,
-            existingMeetingUrl
-          )
-        : cleanContent;
+      const content =
+        event.eventType === 'out_of_office'
+          ? {
+              location: event.location ?? '',
+              description: event.description ?? '',
+            }
+          : existingMeetingUrl && wantsMacroCall
+            ? attachCalendarMacroCall(
+                cleanContent,
+                existingMeetingUrl,
+                existingMeetingUrl
+              )
+            : cleanContent;
 
       // A single occurrence has no recurrence of its own, and the provider
       // rejects a recurrence-carrying patch scoped to one event, so recurrence
@@ -289,7 +311,7 @@ export function useEventEditor(props: UseEventEditorProps) {
                 attendees: values.guestEmails.map((email) => ({ email })),
               }
             : {}),
-          ...(values.conference ? { conference: values.conference } : {}),
+          ...(conference ? { conference } : {}),
           ...(values.reminders ? { reminders: values.reminders } : {}),
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
         },
@@ -347,7 +369,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       return {
         ...EDIT_DISABLED_FIELDS,
         guests: editsOtherCopy || !viewerCanEditGuests(event),
-        conference: editsOtherCopy,
+        conference: editsOtherCopy || !viewerCanEditGuests(event),
         reminders: editsOtherCopy,
       };
     }

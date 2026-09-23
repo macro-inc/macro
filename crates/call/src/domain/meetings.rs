@@ -1,6 +1,7 @@
 //! Persistent meeting links and guest identity validation.
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::CallError;
@@ -184,12 +185,87 @@ impl std::fmt::Display for GuestId {
 #[cfg(test)]
 mod test;
 
-/// The actor's most recent uncancelled standalone meetings.
+/// Uncancelled standalone meetings visible in the requested meeting list.
 #[derive(serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct MeetingsResponse {
     /// Persistent meeting invitations, most recently created first.
     pub meetings: Vec<Meeting>,
+}
+
+/// Active quick-call metadata available to its authenticated owner or attendees.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveMeeting {
+    /// Existing meeting metadata, with the same fields as other meeting responses.
+    #[serde(flatten)]
+    pub meeting: Meeting,
+    /// Creator identity for displaying the caller in the authenticated active list.
+    pub created_by: String,
+}
+
+impl From<Meeting> for ActiveMeeting {
+    fn from(meeting: Meeting) -> Self {
+        Self {
+            created_by: meeting.user_id.clone(),
+            meeting,
+        }
+    }
+}
+
+/// The authenticated actor's active quick calls, including their creators.
+#[derive(serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct ActiveMeetingsResponse {
+    /// Persistent meeting invitations for currently active sessions.
+    pub meetings: Vec<ActiveMeeting>,
+}
+
+/// Whether the authenticated caller can invite teammates to this meeting.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct MeetingInvitePermissions {
+    /// True for the owner of an uncancelled standalone meeting.
+    pub can_invite: bool,
+}
+
+/// Registered teammates selected for an incoming call invitation.
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct InviteMeetingUsersRequest {
+    /// Human user principals; bot principals and historical bare bot UUIDs are invalid.
+    #[cfg_attr(feature = "inbound", schema(value_type = Vec<String>))]
+    pub user_ids: Vec<MacroUserIdStr<'static>>,
+}
+
+impl InviteMeetingUsersRequest {
+    /// Bound the batch, omit the caller, and preserve only distinct recipients.
+    pub fn recipients(
+        self,
+        actor: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, CallError> {
+        const MAX_MEETING_INVITE_RECIPIENTS: usize = 50;
+        if self.user_ids.is_empty() || self.user_ids.len() > MAX_MEETING_INVITE_RECIPIENTS {
+            return Err(CallError::InvalidRequest(format!(
+                "Choose between 1 and {MAX_MEETING_INVITE_RECIPIENTS} teammates"
+            )));
+        }
+        let mut seen = std::collections::HashSet::new();
+        let recipients: Vec<_> = self
+            .user_ids
+            .into_iter()
+            .filter(|user_id| user_id != actor && seen.insert(user_id.clone()))
+            .collect();
+        if recipients.is_empty() {
+            return Err(CallError::InvalidRequest(
+                "Choose at least one other teammate".to_string(),
+            ));
+        }
+        Ok(recipients)
+    }
 }
 
 /// Changes to a meeting's title or scheduled time; omitted values stay unchanged.

@@ -35,6 +35,8 @@ import { RecurrenceBuilder } from './RecurrenceBuilder';
 
 export interface EventFormProps {
   controller: CalendarEventFormController;
+  /** Whether this host can create and attach Macro call links. */
+  macroCallsEnabled: boolean;
   isEdit?: boolean;
   disabledFields?: EventEditorDisabledFields;
   showRecurringEditNotice?: boolean;
@@ -259,6 +261,7 @@ export function EventForm(props: EventFormProps) {
               />
               <EventComposerConferencePill
                 value={state().conference}
+                macroCallsEnabled={props.macroCallsEnabled}
                 canKeepExisting={
                   controller.initialConferenceChoice() === 'existing'
                 }

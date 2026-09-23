@@ -1,6 +1,43 @@
 use super::*;
 
 #[test]
+fn teammate_invitations_reject_bot_and_invalid_principals() {
+    for recipient in [
+        "bot|00000000-0000-0000-0000-00000000a1a1",
+        "00000000-0000-0000-0000-00000000a1a1",
+        "teammate@example.com",
+        "invalid",
+    ] {
+        assert!(
+            serde_json::from_value::<InviteMeetingUsersRequest>(serde_json::json!({
+                "userIds": [recipient]
+            }))
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn teammate_invitation_batches_are_bounded_distinct_and_exclude_self() {
+    let actor = MacroUserIdStr::try_from_email("owner@example.com").unwrap();
+    let teammate = MacroUserIdStr::try_from_email("teammate@example.com").unwrap();
+    let request = |user_ids| InviteMeetingUsersRequest { user_ids };
+    assert!(request(vec![]).recipients(&actor).is_err());
+    assert!(request(vec![actor.clone()]).recipients(&actor).is_err());
+    assert!(
+        request(vec![teammate.clone(); 51])
+            .recipients(&actor)
+            .is_err()
+    );
+    assert_eq!(
+        request(vec![actor.clone(), teammate.clone(), teammate.clone()])
+            .recipients(&actor)
+            .unwrap(),
+        vec![teammate]
+    );
+}
+
+#[test]
 fn capabilities_are_random_valid_and_redacted() {
     let first = MeetingToken::generate();
     let second = MeetingToken::generate();
@@ -31,10 +68,7 @@ fn guest_names_are_bounded_normalized_and_not_identities() {
         assert!(GuestJoinRequest { display_name: name }.validate().is_err());
     }
     let guest = GuestId::generate();
-    assert_eq!(
-        GuestId::parse_rtc_identity(&guest.to_string()),
-        Some(guest)
-    );
+    assert_eq!(GuestId::parse_rtc_identity(&guest.to_string()), Some(guest));
     assert!(GuestId::parse_rtc_identity("macro|a@b.com").is_none());
     assert!(GuestId::parse_rtc_identity("agent-transcriber").is_none());
     assert!(GuestId::parse_rtc_identity("guest:admin").is_none());

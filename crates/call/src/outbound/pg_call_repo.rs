@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use channels::outbound::channel_name::{
     batch_resolve_channel_names, resolve_channel_name_for_viewers,
 };
-use chrono::{SubsecRound, Utc};
+use chrono::{DateTime, SubsecRound, Utc};
 use entity_access::domain::models::AccessLevel;
 use filter_ast::Expr;
 use item_filters::{
@@ -312,13 +312,26 @@ impl CallRepository for PgCallRepo {
         call_id: &Uuid,
         include_cancelled: bool,
     ) -> Result<Option<Meeting>, CallError> {
-        self.fetch_meeting_for_call(call_id, include_cancelled).await
+        self.fetch_meeting_for_call(call_id, include_cancelled)
+            .await
     }
     async fn get_meeting(&self, token: &MeetingToken) -> Result<Option<Meeting>, CallError> {
         self.fetch_meeting(token).await
     }
     async fn list_meetings(&self, user_id: &str) -> Result<Vec<Meeting>, CallError> {
         self.fetch_meetings(user_id).await
+    }
+    async fn list_active_meetings(&self, user_id: &str) -> Result<Vec<Meeting>, CallError> {
+        self.fetch_active_meetings(user_id).await
+    }
+    async fn add_meeting_invitees<'a>(
+        &self,
+        meeting_id: &Uuid,
+        call_id: &Uuid,
+        users: &[MacroUserIdStr<'a>],
+    ) -> Result<(), CallError> {
+        self.persist_meeting_invitees(meeting_id, call_id, users)
+            .await
     }
     async fn update_meeting(
         &self,
@@ -702,6 +715,33 @@ impl CallRepository for PgCallRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn list_active_calls(&self) -> Result<Vec<Call>, Self::Err> {
+        sqlx::query_as!(
+            Call,
+            "SELECT id, channel_id, room_name, created_by, created_at, egress_id FROM calls",
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_active_guests(
+        &self,
+        call_id: &Uuid,
+    ) -> Result<Vec<(GuestId, DateTime<Utc>)>, Self::Err> {
+        let rows = sqlx::query!(
+            "SELECT id, joined_at FROM call_guests WHERE call_id = $1 AND left_at IS NULL",
+            call_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| (GuestId::from_uuid(row.id), row.joined_at))
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]

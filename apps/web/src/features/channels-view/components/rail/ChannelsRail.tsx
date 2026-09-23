@@ -673,6 +673,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       scopeId: panel.splitHotkeyScope,
       scrollHandle: () => scrollHandle,
       enabled: panel.isPanelActive,
+      conditions: {
+        open: () =>
+          !document.activeElement?.closest('[data-live-calls-sidebar]'),
+      },
       navigation: {
         onBeforeMove: ({ direction, current }) => {
           if (props.searchOpen) return true;

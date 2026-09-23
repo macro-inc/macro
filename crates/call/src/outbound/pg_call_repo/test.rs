@@ -1,10 +1,10 @@
 use std::{ops::Deref, sync::Arc, sync::LazyLock};
 
+use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     AddParticipantError, CallRecord, CallRecordPreview, CustomSpeakerAssignment,
     EditCallRecordRepoArgs, TranscriptSegmentRequest,
 };
-use crate::domain::meetings::GuestId;
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
 use chrono::{Duration, SubsecRound, Utc};
@@ -147,7 +147,7 @@ async fn insert_voice(pool: &Pool<Postgres>, voice_id: Uuid, axis: usize) -> any
     Ok(())
 }
 
-async fn insert_user_mapping(
+pub(super) async fn insert_user_mapping(
     pool: &Pool<Postgres>,
     user_id: &MacroUserIdStr<'_>,
     macro_user_id: Uuid,
@@ -2981,7 +2981,10 @@ async fn standalone_meeting_archives_guest_names_and_preserves_invitation(
         None
     );
     assert_eq!(
-        repo.get_meeting_for_call(&call.id, false).await?.unwrap().id,
+        repo.get_meeting_for_call(&call.id, false)
+            .await?
+            .unwrap()
+            .id,
         meeting.id
     );
     let (next, created) = repo

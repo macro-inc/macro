@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
 
+use chrono::{DateTime, Utc};
+
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -21,7 +23,8 @@ use crate::domain::models::{
 };
 
 use super::meetings::{
-    CreateMeetingRequest, GuestId, GuestJoinRequest, Meeting, MeetingToken, UpdateMeetingRequest,
+    ActiveMeeting, CreateMeetingRequest, GuestId, GuestJoinRequest, InviteMeetingUsersRequest,
+    Meeting, MeetingInvitePermissions, MeetingToken, UpdateMeetingRequest,
 };
 
 use super::models::{
@@ -62,6 +65,21 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         user_id: &str,
     ) -> impl Future<Output = Result<Vec<Meeting>, CallError>> + Send;
+    /// List uncancelled, unscheduled standalone meetings owned, attended, or invited to by the actor.
+    /// Only sessions with a connected participant or guest qualify; past attendance
+    /// in that same live session allows rejoining, but earlier sessions do not.
+    fn list_active_meetings(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<Meeting>, CallError>> + Send;
+    /// Persist authorized invitees for this exact live meeting session, independently
+    /// of attendance. Fail if the meeting was cancelled or its active session changed.
+    fn add_meeting_invitees<'a>(
+        &self,
+        meeting_id: &Uuid,
+        call_id: &Uuid,
+        users: &[MacroUserIdStr<'a>],
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
     /// Update metadata when the supplied actor owns the uncancelled invitation.
     fn update_meeting(
         &self,
@@ -178,6 +196,15 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Every call session that has not been archived yet.
+    fn list_active_calls(&self) -> impl Future<Output = Result<Vec<Call>, Self::Err>> + Send;
+
+    /// Guests still marked present in a call, with when they joined.
+    fn get_active_guests(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<(GuestId, DateTime<Utc>)>, Self::Err>> + Send;
 
     /// Get all active participants for a call.
     fn get_participants(
@@ -642,6 +669,13 @@ pub trait CallRtcClient: Send + Sync + 'static {
         participant_identity: MacroUserIdStr<'a>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
+    /// RTC identities connected to a room right now, or `None` when the room
+    /// no longer exists.
+    fn list_participant_identities(
+        &self,
+        room_name: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<String>>>> + Send;
+
     /// Start a room composite egress (recording). Returns the egress ID.
     fn start_room_composite_egress(
         &self,
@@ -687,11 +721,32 @@ pub trait CallService: Send + Sync + 'static {
         email: String,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
+    /// Return whether the actor owns the standalone meeting and can invite teammates.
+    fn get_meeting_invite_permissions<'a>(
+        &self,
+        actor: MacroUserIdStr<'a>,
+        token: MeetingToken,
+    ) -> impl Future<Output = Result<MeetingInvitePermissions, CallError>> + Send;
+
+    /// Ring selected registered teammates, authorized by meeting ownership.
+    /// Inviting does not create an RTC room or join the caller to the meeting.
+    fn invite_users_to_meeting<'a>(
+        &self,
+        actor: MacroUserIdStr<'a>,
+        token: MeetingToken,
+        request: InviteMeetingUsersRequest,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
     /// List the actor's uncancelled meetings.
     fn list_meetings<'a>(
         &self,
         actor: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Vec<Meeting>, CallError>> + Send;
+    /// List active quick calls owned, attended, or invited to by the authenticated actor.
+    fn list_active_meetings<'a>(
+        &self,
+        actor: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Vec<ActiveMeeting>, CallError>> + Send;
     /// Update a meeting owned by the actor.
     fn update_meeting<'a>(
         &self,
@@ -743,6 +798,11 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Option<CallActiveResponse>, CallError>> + Send;
+
+    /// Backstop for missed `participant_left` webhooks: marks participants
+    /// and guests no longer connected to their RTC room as left, and archives
+    /// calls that leaves empty. One call's failure does not stop the rest.
+    fn reconcile_stale_calls(&self) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// List all active calls in channels the user is an active member of,
     /// newest first. Calls with no active participants are excluded.
