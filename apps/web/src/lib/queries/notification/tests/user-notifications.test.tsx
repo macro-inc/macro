@@ -359,6 +359,49 @@ describe('useUserNotificationsQuery transport facade', () => {
     testQueryClient.clear();
   });
 
+  it('defers the full GraphQL feed until a data/status reader needs it, preserving pagination', async () => {
+    createGraphqlQueryMock.mockClear();
+    restUserNotificationsMock.mockClear();
+    const fetchNextPage = vi.fn(async () => {});
+    const refetch = vi.fn(async () => {});
+    createGraphqlQueryMock.mockReturnValue({
+      data: [],
+      error: null,
+      isLoading: false,
+      isFetching: false,
+      isFetchingNextPage: false,
+      hasNextPage: true,
+      fetchNextPage,
+      refetch,
+    });
+    let query!: UserNotificationsQuery;
+    const dispose = renderWithClient(() => {
+      query = useUserNotificationsQuery(() => ({ limit: 500 }));
+      return <div />;
+    });
+    try {
+      expect(query.transport).toBe('graphql');
+      expect(query.isStarted).toBe(false);
+      expect(createGraphqlQueryMock).not.toHaveBeenCalled();
+      expect(restUserNotificationsMock).not.toHaveBeenCalled();
+      expect(query.isLoading).toBe(false);
+      expect(query.isStarted).toBe(true);
+      expect(query.data).toEqual([]);
+      expect(createGraphqlQueryMock).toHaveBeenCalledOnce();
+      expect(query.hasNextPage).toBe(true);
+      await query.fetchNextPage();
+      await query.refetch();
+      expect(fetchNextPage).toHaveBeenCalledOnce();
+      expect(refetch).toHaveBeenCalledWith({
+        requestPolicy: 'network-only',
+        throwOnError: true,
+      });
+      expect(createGraphqlQueryMock).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
   it('reads active notifications from the GraphQL query', () => {
     const graphqlNotification = createMockNotification({ id: 'graphql-1' });
     createGraphqlQueryMock.mockReturnValue({

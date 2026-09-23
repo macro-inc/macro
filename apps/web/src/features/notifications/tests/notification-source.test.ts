@@ -5,6 +5,10 @@ import type { UserUnsubscribe } from '@service-notification/generated/schemas/us
 import { createEffect, createMemo, createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  markNotificationForEntityIdAsRead,
+  markNotificationsForEntityAsDone,
+} from '../notification-helpers';
+import {
   createNotificationSource,
   setDoneOverride,
 } from '../notification-source';
@@ -53,7 +57,18 @@ vi.mock('@queries/notification/user-notifications', () => ({
   optimisticInsertNotification: mocks.optimisticInsertNotification,
   useMarkNotificationsAsDoneMutation: () => mocks.doneMutation,
   useMarkNotificationsAsSeenMutation: () => mocks.seenMutation,
-  useUserNotificationsQuery: () => mocks.notificationsQuery,
+  useUserNotificationsQuery: () => {
+    if (!('isStarted' in mocks.notificationsQuery)) {
+      mocks.notificationsQuery.isStarted = true;
+    }
+    return mocks.notificationsQuery;
+  },
+}));
+
+vi.mock('@queries/client', () => ({ queryClient: {} }));
+vi.mock('@queries/notification/entity-mutations', () => ({
+  toNotificationEntityRef: vi.fn(),
+  updateNotificationsForEntities: vi.fn(),
 }));
 
 vi.mock('@queries/notification/unsubscribes', () => ({
@@ -114,6 +129,140 @@ describe('createNotificationSource', () => {
       isLoading: false,
       refetch: vi.fn(),
     };
+  });
+
+  it('keeps an unused GraphQL feed asleep while delivering realtime and local intent', async () => {
+    const incoming = notification('lazy-notification', 'channel', 'channel');
+    const dataRead = vi.fn(() => [incoming]);
+    const refetch = vi.fn(async () => {});
+    let started = false;
+    mocks.notificationsQuery = {
+      transport: 'graphql',
+      get isStarted() {
+        return started;
+      },
+      get isLoading() {
+        started = true;
+        return false;
+      },
+      get data() {
+        return dataRead();
+      },
+      refetch,
+    };
+    const receive = vi.fn();
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource(
+        {} as ConnectionGatewayWebsocket,
+        receive
+      ),
+      dispose,
+    }));
+    try {
+      expect(source.withLocalOverrides).toBeTypeOf('function');
+      expect(source.mutedEntities()).toEqual([]);
+      mocks.graphqlPatchCallback?.({
+        __typename: 'GraphqlNewNotification',
+        notification: incoming,
+      });
+      await Promise.resolve();
+      expect(receive).toHaveBeenCalledWith(incoming);
+      expect(started).toBe(false);
+      expect(dataRead).not.toHaveBeenCalled();
+      expect(refetch).not.toHaveBeenCalled();
+
+      await source.markAsRead(incoming);
+      expect(
+        source.withLocalState?.({ id: incoming.id, state: 'unseen' })
+      ).toBe('seen');
+      expect(started).toBe(false);
+      expect(source.notifications()[0].state).toBe('seen');
+      expect(source.notificationsByEntity()['channel@channel']).toHaveLength(1);
+      expect(started).toBe(true);
+      expect(dataRead).toHaveBeenCalledOnce();
+      mocks.graphqlPatchCallback?.({
+        __typename: 'GraphqlUpdatedNotification',
+        notification: incoming,
+      });
+      await Promise.resolve();
+      expect(refetch).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it.each(['read', 'done'] as const)(
+    'loads a cold full feed before a bulk %s action',
+    async (operation) => {
+      const row = notification(`lazy-action-${operation}`, 'document', 'doc');
+      let release!: () => void;
+      let loaded = false;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      mocks.notificationsQuery = {
+        transport: 'graphql',
+        isStarted: false,
+        get isLoading() {
+          return !loaded;
+        },
+        get data() {
+          return loaded ? [row] : undefined;
+        },
+        refetch: vi.fn(async () => {
+          await pending;
+          loaded = true;
+        }),
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      try {
+        const action =
+          operation === 'read'
+            ? markNotificationForEntityIdAsRead(source, 'doc')
+            : markNotificationsForEntityAsDone(source, {
+                type: 'document',
+                id: 'doc',
+              });
+        expect(mocks.notificationsQuery.refetch).toHaveBeenCalledOnce();
+        expect(mocks.seenMutation.mutateAsync).not.toHaveBeenCalled();
+        expect(mocks.doneMutation.mutateAsync).not.toHaveBeenCalled();
+        release();
+        await action;
+        expect(
+          (operation === 'read' ? mocks.seenMutation : mocks.doneMutation)
+            .mutateAsync
+        ).toHaveBeenCalledWith({ notificationIds: [row.id] });
+      } finally {
+        setDoneOverride([row.id], undefined);
+        dispose();
+      }
+    }
+  );
+
+  it('does not silently perform an empty bulk action when cold loading fails', async () => {
+    mocks.notificationsQuery = {
+      transport: 'graphql',
+      isStarted: false,
+      isLoading: false,
+      refetch: vi.fn(async () => {
+        throw new Error('offline');
+      }),
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    try {
+      await expect(
+        markNotificationForEntityIdAsRead(source, 'doc')
+      ).rejects.toThrow('offline');
+      expect(mocks.seenMutation.mutateAsync).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
   });
 
   it.each(['array', 'accessor'] as const)(

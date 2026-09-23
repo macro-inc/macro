@@ -21,6 +21,7 @@ import type {
 } from '@service-notification/generated/schemas';
 import { mapGraphqlNotification } from '@service-storage/graphql-soup';
 import { subscribeToGraphqlNotificationPatches } from '@service-storage/graphql-soup-websocket';
+import { createLazyMemo } from '@solid-primitives/memo';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -94,6 +95,11 @@ export type NotificationSource = {
   withLocalOverrides?: (
     notification: UnifiedNotification
   ) => UnifiedNotification;
+
+  /** Apply local intent to an unread witness without fetching full metadata. */
+  withLocalState?: (
+    notification: Pick<UnifiedNotification, 'id' | 'state'>
+  ) => UnifiedNotification['state'];
 
   /** subscribe to new notifications */
   subscribe: (subscribe: SubscribeFn) => UnsubscribeFn;
@@ -191,6 +197,21 @@ function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
     });
 }
 
+/** Applies local intent to a bounded state-only witness without loading the feed. */
+function notificationStateWithLocalOverrides(
+  notification: Pick<UnifiedNotification, 'id' | 'state'>
+): UnifiedNotification['state'] {
+  const override = doneOverrides().get(notification.id);
+  const state = override?.done
+    ? 'done'
+    : override?.reopened
+      ? 'seen'
+      : override
+        ? nextNotificationState(notification.state, 'MARK_UNDONE')
+        : notification.state;
+  return state === 'unseen' && seenOverrides[notification.id] ? 'seen' : state;
+}
+
 function withNotificationOverrides(
   notification: UnifiedNotification
 ): UnifiedNotification {
@@ -201,16 +222,7 @@ function withNotificationOverrides(
   return {
     ...notification,
     get state() {
-      const state = doneOverride?.done
-        ? 'done'
-        : doneOverride?.reopened
-          ? 'seen'
-          : doneOverride
-            ? nextNotificationState(notification.state, 'MARK_UNDONE')
-            : notification.state;
-      return state === 'unseen' && seenOverrides[notification.id]
-        ? 'seen'
-        : state;
+      return notificationStateWithLocalOverrides(notification);
     },
     // Only the affected id's seen state is a dependency of this row.
     get viewed_at() {
@@ -246,7 +258,10 @@ export function createNotificationSource(
   // refetch flips status to error while the cached pages remain, and blanking
   // every unread surface over a transient refetch is worse than showing the
   // cached state.
-  const notifications = createMemo(() => {
+  // A shell that only needs mute state, local overrides, or realtime callbacks
+  // must not instantiate the full GraphQL notification feed at startup.
+  const notifications = createLazyMemo(() => {
+    if (notificationsQuery.isLoading) return [];
     const raw = notificationsQuery.data;
     if (!raw) return [];
     return raw.map(withNotificationOverrides);
@@ -293,7 +308,7 @@ export function createNotificationSource(
     if (toPrune.length > 0) setSeenOverride(toPrune, undefined);
   });
 
-  const notificationsByEntity = createMemo(() => {
+  const notificationsByEntity = createLazyMemo(() => {
     const data = notifications();
     const grouped: NotificationsByEntity = {};
 
@@ -375,6 +390,9 @@ export function createNotificationSource(
   };
 
   const scheduleGraphqlNotificationRefetch = (): void => {
+    // Still dispatch new-notification callbacks below. The first actual feed
+    // reader will fetch current data; a patch must not wake an unused feed.
+    if (!notificationsQuery.isStarted) return;
     graphqlRefetchPending = true;
     if (graphqlRefetchScheduled || graphqlRefetchInFlight) return;
     graphqlRefetchScheduled = true;
@@ -516,6 +534,9 @@ export function createNotificationSource(
     subscribe,
     get withLocalOverrides() {
       return usesGraphql() ? withNotificationOverrides : undefined;
+    },
+    get withLocalState() {
+      return usesGraphql() ? notificationStateWithLocalOverrides : undefined;
     },
   };
 }

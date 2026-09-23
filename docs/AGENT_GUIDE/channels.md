@@ -480,6 +480,17 @@ and return to the list: its top-level notifications should be read, including
 ones older than the global notification feed's loaded page. Notifications for
 separate thread stacks remain unread until that thread is opened.
 
+With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
+channel IDs and at most one unread notification ID/state per channel, with a
+500-channel candidate bound and no history, message previews, or metadata. It
+shares the channel lists' refreshes after notification patches, mark-read, and
+reconnect. Merely rendering that badge, subscribing to realtime notifications,
+or applying local read/done overrides must not start the full `SoupNotifications`
+feed. A data/status reader activates that feed lazily; its full notification
+selection and pagination remain unchanged. Cold bulk actions wait for loading
+and report failures rather than treating pending data as an empty list. The
+Inbox badge still uses its own full Soup query for channel/thread membership.
+
 With GraphQL enabled, channel lists request at most one unread message notification
 per channel through an aliased, filtered `notifications` edge. An empty edge means
 no unread messages; invites and call notifications do not light the dot. Recent
