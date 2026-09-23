@@ -1,11 +1,21 @@
 use crate::domain::model::AgentSessionId;
 use agent_runtime_protocol::domain::action::ActionError;
 use agent_runtime_protocol::domain::ports::TransportError;
+use model_owner::OwnerType;
 use thiserror::Error;
 pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// Invalid link or channel sharing input.
+    #[error("{0}")]
+    InvalidSharing(&'static str),
+    /// Explicit owner-team sharing was rejected by the shared policy.
+    #[error(transparent)]
+    TeamSharing(models_permissions::share_permission::team_share::TeamSharePolicyError),
+    /// Sharing facts changed while an owner update was in flight.
+    #[error("sharing changed; reload and try again")]
+    SharingChanged,
     /// A repository or branch cannot be used by this session.
     #[error("{0}")]
     InvalidRepositorySelection(&'static str),
@@ -21,8 +31,19 @@ pub enum AgentSessionError {
     Disconnected(AgentSessionId),
     #[error("this bot already has a session for this thread")]
     ThreadSessionExists,
+    /// A create named an id a session already holds. Ids are minted by the
+    /// client so a surface can open on the final id before the create
+    /// answers; two creates under one id is a client bug, not a retry.
+    #[error("agent session {0} already exists")]
+    SessionIdTaken(AgentSessionId),
     #[error("the session owner is not a known user")]
     UnknownOwner,
+    /// A path that runs as the session's owner - spending their credentials,
+    /// attributing work to them, granting them access - met an owner that is
+    /// not a user. Every session is user-owned today; this is the boundary
+    /// that says so out loud instead of assuming it.
+    #[error("this path needs a user-owned session, but the owner is a {0}")]
+    OwnerNotUser(OwnerType),
     #[error("expected a GitHub PR URL: https://github.com/owner/repo/pull/number")]
     InvalidPullRequestUrl,
     #[error("invalid agent session name: {0}")]
@@ -39,6 +60,12 @@ pub enum AgentSessionError {
     EmptyQueuedPrompt,
     #[error("agent session {0} has too many queued actions")]
     ControlQueueFull(AgentSessionId),
+    #[error(
+        "agent session {0} has no open permission request with this id; it may already have been answered or cancelled"
+    )]
+    PermissionRequestNotFound(AgentSessionId),
+    #[error("agent session {0} was not offered that permission option")]
+    PermissionOptionUnknown(AgentSessionId),
     #[error(
         "agent session {0} cannot be restored because the agent supports neither session/resume nor session/load"
     )]

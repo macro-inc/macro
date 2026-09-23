@@ -36,6 +36,9 @@ fn database_error(error: sqlx::Error) -> MessageError {
     if let sqlx::Error::Database(ref error) = error {
         match error.code().as_deref() {
             Some("23503") => return MessageError::NotFound,
+            Some("23505") if error.constraint() == Some("comms_messages_pkey") => {
+                return MessageError::Conflict;
+            }
             Some("23505") => {
                 return MessageError::Invalid("a live discussion already uses this anchor");
             }
@@ -454,38 +457,6 @@ impl PgMessageRepository {
 }
 
 impl MessageRepository for PgMessageRepository {
-    async fn referenced_threads(
-        &self,
-        document_id: &str,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<Vec<ReferencedThreadCandidate>, MessageError> {
-        let rows = sqlx::query!(r#"
-            SELECT DISTINCT c.id AS channel_id, c.name AS channel_name, root.id AS root_id, root.created_at
-            FROM comms_entity_mentions mention
-            JOIN comms_messages source ON source.id::text = mention.source_entity_id
-            JOIN comms_messages root ON root.id = COALESCE(source.thread_id, source.id)
-            JOIN comms_message_threads state ON state.root_id = root.id
-            JOIN comms_channels c ON c.id::text = root.parent_entity_id
-            WHERE mention.source_entity_type = 'message'
-                AND mention.entity_type IN ('doc', 'document') AND mention.entity_id = $1
-                AND source.parent_entity_type = 'channel' AND root.parent_entity_type = 'channel'
-                AND source.deleted_at IS NULL AND state.deleted_at IS NULL
-                AND ($2::timestamptz IS NULL OR (root.created_at, root.id) > ($2, $3::uuid))
-            ORDER BY root.created_at, root.id LIMIT $4
-        "#, document_id, cursor.as_ref().map(|c| c.created_at), cursor.as_ref().map(|c| c.id), i64::from(limit))
-        .fetch_all(&self.pool).await.map_err(database_error)?;
-        Ok(rows
-            .into_iter()
-            .map(|row| ReferencedThreadCandidate {
-                channel_id: row.channel_id,
-                root_id: row.root_id,
-                channel_name: row.channel_name,
-                created_at: row.created_at,
-            })
-            .collect())
-    }
-
     async fn replies(
         &self,
         parent: &MessageParent,
@@ -583,7 +554,10 @@ impl MessageRepository for PgMessageRepository {
     }
 
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
-        let id = macro_uuid::generate_uuid_v7();
+        let id = command
+            .input
+            .id
+            .unwrap_or_else(macro_uuid::generate_uuid_v7);
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         if let Some(root_id) = command.input.thread_id {
             // Replies attach to a live root of the same parent. The composite FK

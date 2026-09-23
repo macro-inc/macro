@@ -1,7 +1,11 @@
-/** A permission request, with the outcome (chosen option) as trailing text. */
+/**
+ * Resolved permission outcomes in the transcript. Pending decisions live
+ * above the composer so there is only one place to answer them.
+ */
 
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { ToolCard } from '../../ui';
 
 export function PermissionPart(props: {
@@ -9,25 +13,31 @@ export function PermissionPart(props: {
 }) {
   const outcome = () => {
     const resolved = props.part.outcome;
-    if (!resolved || resolved.kind === 'pending') return undefined;
+    if (resolved.kind === 'pending') {
+      return 'No longer waiting';
+    }
     if (resolved.kind === 'cancelled') return 'Cancelled';
     if (resolved.kind === 'errored') return 'Failed';
     if (resolved.kind === 'unrecognized') return 'Answered';
     const chosen = props.part.options.find(
       (option) => option.id === resolved.optionId
     );
-    return chosen?.name ?? 'Answered';
+    if (!chosen) return 'Answered';
+    return match(chosen.kind)
+      .with('allow_once', () => 'Allowed once')
+      .with('allow_always', () => 'Approval remembered')
+      .with('reject_once', () => 'Denied')
+      .with('reject_always', () => 'Denial remembered')
+      .exhaustive();
   };
 
   return (
-    <ToolCard
-      title="Permission requested"
-      trailing={
-        <Show when={outcome()}>
-          {(label) => <span class="text-ink">{label()}</span>}
-        </Show>
-      }
-      status="completed"
-    />
+    <Show when={props.part.outcome.kind !== 'pending'}>
+      <ToolCard
+        title="Permission"
+        trailing={<span class="text-ink">{outcome()}</span>}
+        status="completed"
+      />
+    </Show>
   );
 }

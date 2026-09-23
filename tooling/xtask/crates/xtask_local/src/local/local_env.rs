@@ -257,6 +257,15 @@ impl InfraEnv {
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
         );
+        // Account deletion awaits both owning services from the auth container.
+        env.insert(
+            "OVERRIDE_AGENT_HARNESS_SERVICE_URL".into(),
+            "http://agent-harness-service:8101".into(),
+        );
+        env.insert(
+            "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL".into(),
+            "http://scheduled-action-service:8080".into(),
+        );
         // Lexical has the same host-vs-container split. The plain
         // `LEXICAL_SERVICE_URL` value does not affect `LexicalServiceUrl`,
         // which only reads the `OVERRIDE_` form.
@@ -277,6 +286,14 @@ impl InfraEnv {
         env.insert(
             "OVERRIDE_EMAIL_SERVICE_URL".into(),
             "http://email-service:8080".into(),
+        );
+        // Same host-vs-container split for calendar: `CalendarServiceUrl`'s
+        // Local default is http://localhost:8088, which inside a container is
+        // the caller itself. In-network callers (the agent calendar tools point
+        // at calendar_service) reach it through this override instead.
+        env.insert(
+            "OVERRIDE_CALENDAR_SERVICE_URL".into(),
+            "http://calendar-service:8080".into(),
         );
         env.insert(
             "OVERRIDE_AUTH_SERVICE_URL".into(),

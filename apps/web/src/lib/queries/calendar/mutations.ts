@@ -1,15 +1,15 @@
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import type { CalendarEvent as CalendarEventEntity } from '@service-calendar/generated/schemas/calendarEvent';
+import type { CreateCalendarEventRequest } from '@service-calendar/generated/schemas/createCalendarEventRequest';
+import type { UpdateCalendarEventRequest } from '@service-calendar/generated/schemas/updateCalendarEventRequest';
 import {
   type CalendarDeletionScope,
   type CalendarRsvpScope,
   type CalendarUpdateScope,
   emailClient,
 } from '@service-email/client';
-import type { CalendarEvent as CalendarEventEntity } from '@service-email/generated/schemas/calendarEvent';
-import type { CreateCalendarEventRequest } from '@service-email/generated/schemas/createCalendarEventRequest';
-import type { UpdateCalendarEventRequest } from '@service-email/generated/schemas/updateCalendarEventRequest';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarEventSourceContent } from '@service-storage/generated/schemas/calendarEventSourceContent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
@@ -25,7 +25,7 @@ import {
 export type {
   CreateCalendarEventRequest,
   UpdateCalendarEventRequest,
-} from '@service-email/generated/schemas';
+} from '@service-calendar/generated/schemas';
 
 type CalendarMutationContext = { rollback: () => void };
 

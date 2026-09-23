@@ -1,8 +1,18 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { isMobile } from '@core/mobile/isMobile';
 import { makePersisted } from '@solid-primitives/storage';
-import { batch, createMemo, createSignal } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  type ParentProps,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
+import {
+  CALENDAR_PREFERENCES_KEY,
+  getPreferredCalendarPeriodView,
+} from '../calendar-preferences';
 import { useCalendarSources } from '../hooks/use-calendar-sources';
 import {
   type CalendarEvent,
@@ -28,25 +38,33 @@ interface CalendarPreferences {
   timeFormat: CalendarTimeFormat;
 }
 
-/** Storage key for calendar display preferences (also read at copy time by
- * the availability feature, which runs outside this context). */
-export const CALENDAR_PREFERENCES_KEY = 'macro:pref:calendar:settings';
+type CalendarViewContextProps = ParentProps<{
+  periodView?: CalendarPeriodView;
+  focusedEventId?: string;
+  onPeriodViewChange?: (periodView: CalendarPeriodView) => void;
+  onFocusedEventIdChange?: (eventId: string | undefined) => void;
+}>;
 
-function createCalendarEventSelection() {
+function createCalendarEventSelection(
+  onFocusedEventIdChange?: (eventId: string | undefined) => void
+) {
   const [event, setEvent] = createSignal<CalendarEvent>();
   const [anchor, setAnchor] = createSignal<HTMLElement>();
 
-  const close = () => {
+  const close = (notify = true) => {
+    const hadSelection = event() !== undefined || anchor() !== undefined;
     batch(() => {
       setEvent(undefined);
       setAnchor(undefined);
     });
+    if (notify && hadSelection) onFocusedEventIdChange?.(undefined);
   };
   const select = (nextEvent: CalendarEvent, nextAnchor: HTMLElement) => {
     batch(() => {
       setEvent(() => nextEvent);
       setAnchor(nextAnchor);
     });
+    onFocusedEventIdChange?.(nextEvent.eventId);
   };
   const refresh = (nextEvent: CalendarEvent) => {
     if (event()?.id === nextEvent.id) setEvent(nextEvent);
@@ -56,89 +74,118 @@ function createCalendarEventSelection() {
 }
 
 export const [CalendarViewContextProvider, useCalendarView] =
-  createAssertedContextProvider('CalendarViewContext', () => {
-    const defaultPreferences: CalendarPreferences = {
-      periodView: isMobile() ? 'timeGridDay' : 'timeGridWeek',
-      hiddenSourceIds: [],
-      showWeekends: true,
-      weekStartsOn: 0,
-      timeFormat: getDefaultCalendarTimeFormat(),
-    };
-    const [preferences, setPreferences] = makePersisted(
-      createStore<CalendarPreferences>(defaultPreferences),
-      {
-        name: CALENDAR_PREFERENCES_KEY,
-        deserialize: (value) => ({
-          ...defaultPreferences,
-          ...(JSON.parse(value) as Partial<CalendarPreferences>),
-        }),
-      }
-    );
-    const { sources, sourceById } = useCalendarSources();
-    // Sources default to visible, so calendars discovered after a
-    // preference was saved (or events whose calendar is still loading)
-    // never silently disappear.
-    const hiddenSourceIds = createMemo(
-      () => new Set(preferences.hiddenSourceIds)
-    );
-    const isSourceVisible = (sourceId: string) =>
-      !hiddenSourceIds().has(sourceId);
-
-    const selection = createCalendarEventSelection();
-    const displaySettings: CalendarDisplaySettings = {
-      get periodView() {
-        return preferences.periodView;
-      },
-      get showWeekends() {
-        return preferences.showWeekends;
-      },
-      get weekStartsOn() {
-        return preferences.weekStartsOn;
-      },
-      get timeFormat() {
-        return preferences.timeFormat;
-      },
-    };
-
-    const closeEventDetails = selection.close;
-
-    const setSourceVisibility = (sourceId: string, visible: boolean) => {
-      setPreferences('hiddenSourceIds', (current) =>
-        visible
-          ? current.filter((id) => id !== sourceId)
-          : current.includes(sourceId)
-            ? current
-            : [...current, sourceId]
+  createAssertedContextProvider(
+    'CalendarViewContext',
+    (props: CalendarViewContextProps) => {
+      const defaultPreferences: CalendarPreferences = {
+        periodView: getPreferredCalendarPeriodView(),
+        hiddenSourceIds: [],
+        showWeekends: true,
+        weekStartsOn: 0,
+        timeFormat: getDefaultCalendarTimeFormat(),
+      };
+      const [preferences, setPreferences] = makePersisted(
+        createStore<CalendarPreferences>(defaultPreferences),
+        {
+          name: CALENDAR_PREFERENCES_KEY,
+          deserialize: (value) => ({
+            ...defaultPreferences,
+            ...(JSON.parse(value) as Partial<CalendarPreferences>),
+          }),
+        }
       );
+      const { sources, sourceById } = useCalendarSources();
+      // Sources default to visible, so calendars discovered after a
+      // preference was saved (or events whose calendar is still loading)
+      // never silently disappear.
+      const hiddenSourceIds = createMemo(
+        () => new Set(preferences.hiddenSourceIds)
+      );
+      const isSourceVisible = (sourceId: string) =>
+        !hiddenSourceIds().has(sourceId);
 
-      const selected = selection.event();
-      if (
-        !visible &&
-        selected &&
-        !isCalendarEventVisible(selected, isSourceVisible)
-      ) {
-        closeEventDetails();
-      }
-    };
+      const selection = createCalendarEventSelection(
+        props.onFocusedEventIdChange
+      );
+      createEffect(() => {
+        const periodView = props.periodView;
+        if (periodView && preferences.periodView !== periodView) {
+          setPreferences('periodView', periodView);
+        }
+      });
+      createEffect(
+        on(
+          () => props.focusedEventId,
+          (focusedEventId, previousEventId) => {
+            const selectedEvent = selection.event();
+            if (
+              previousEventId !== undefined &&
+              focusedEventId !== previousEventId &&
+              selectedEvent &&
+              selectedEvent.eventId !== focusedEventId
+            ) {
+              selection.close(false);
+            }
+          }
+        )
+      );
+      const displaySettings: CalendarDisplaySettings = {
+        get periodView() {
+          return props.periodView ?? preferences.periodView;
+        },
+        get showWeekends() {
+          return preferences.showWeekends;
+        },
+        get weekStartsOn() {
+          return preferences.weekStartsOn;
+        },
+        get timeFormat() {
+          return preferences.timeFormat;
+        },
+      };
 
-    return {
-      displaySettings,
-      sources,
-      sourceById,
-      isSourceVisible,
-      setSourceVisibility,
-      selectedEvent: selection.event,
-      selectedEventAnchor: selection.anchor,
-      setPeriodView: (periodView: CalendarPeriodView) =>
-        setPreferences('periodView', periodView),
-      setShowWeekends: (showWeekends: boolean) =>
-        setPreferences('showWeekends', showWeekends),
-      setWeekStartsOn: (weekStartsOn: CalendarWeekStart) =>
-        setPreferences('weekStartsOn', weekStartsOn),
-      setTimeFormat: (timeFormat: CalendarTimeFormat) =>
-        setPreferences('timeFormat', timeFormat),
-      closeEventDetails,
-      selectEvent: selection.select,
-      refreshSelectedEvent: selection.refresh,
-    };
-  });
+      const closeEventDetails = () => selection.close();
+
+      const setSourceVisibility = (sourceId: string, visible: boolean) => {
+        setPreferences('hiddenSourceIds', (current) =>
+          visible
+            ? current.filter((id) => id !== sourceId)
+            : current.includes(sourceId)
+              ? current
+              : [...current, sourceId]
+        );
+
+        const selected = selection.event();
+        if (
+          !visible &&
+          selected &&
+          !isCalendarEventVisible(selected, isSourceVisible)
+        ) {
+          closeEventDetails();
+        }
+      };
+
+      return {
+        displaySettings,
+        sources,
+        sourceById,
+        isSourceVisible,
+        setSourceVisibility,
+        selectedEvent: selection.event,
+        selectedEventAnchor: selection.anchor,
+        setPeriodView: (periodView: CalendarPeriodView) => {
+          setPreferences('periodView', periodView);
+          props.onPeriodViewChange?.(periodView);
+        },
+        setShowWeekends: (showWeekends: boolean) =>
+          setPreferences('showWeekends', showWeekends),
+        setWeekStartsOn: (weekStartsOn: CalendarWeekStart) =>
+          setPreferences('weekStartsOn', weekStartsOn),
+        setTimeFormat: (timeFormat: CalendarTimeFormat) =>
+          setPreferences('timeFormat', timeFormat),
+        closeEventDetails,
+        selectEvent: selection.select,
+        refreshSelectedEvent: selection.refresh,
+      };
+    }
+  );

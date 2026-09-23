@@ -115,9 +115,10 @@ pub async fn permanently_delete_document_handler(
     }
 
     // Queue document for deletion
+    let owner = document_context.owner.principal_id();
     state
         .sqs_client
-        .enqueue_document_delete(document_context.owner.as_ref(), &document_id)
+        .enqueue_document_delete(&owner, &document_id)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "unable to enqueue document delete");

@@ -421,7 +421,35 @@ async fn the_owner_opens_a_session_for_their_bot() {
     assert_eq!(response.status(), StatusCode::CREATED);
     // The caller owns their own session; no claimed owner needed.
     let opened = opener.opened.lock().unwrap();
-    assert_eq!(opened[0].owner.as_ref(), OWNER);
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == OWNER));
+}
+
+#[tokio::test]
+async fn an_external_session_receives_the_saved_agent_profile() {
+    let opener = Arc::new(RecordingOpener::default());
+    let mut bots = OneBotDirectory::external_agent();
+    bots.facts.managed_profile = Some(crate::domain::ports::ManagedAgentProfile {
+        model: "gpt-5.6-luna".into(),
+        harness: harness_id::MACROD_HARNESS_SLUG.into(),
+        instructions: String::new(),
+        mcp_servers: crate::domain::model::AgentMcpServers::OwnerConnections,
+    });
+    let request = as_harness_for(
+        OWNER,
+        body(Some(BotId::TEST_A.as_uuid()), "/srv/agent", None),
+    );
+    let response = router_for(opener.clone(), bots)
+        .oneshot(request)
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let opened = opener.opened.lock().unwrap();
+    let profile = opened[0]
+        .profile
+        .as_ref()
+        .expect("saved profile is forwarded");
+    assert_eq!(profile.model, "gpt-5.6-luna");
+    assert_eq!(profile.harness, harness_id::MACROD_HARNESS_SLUG);
 }
 
 #[tokio::test]
@@ -468,7 +496,7 @@ async fn a_harness_session_is_owned_by_its_verified_acting_user() {
     assert_eq!(response.status(), StatusCode::CREATED);
     let opened = opener.opened.lock().unwrap();
     assert_eq!(opened[0].bot_id, BotId::TEST_A);
-    assert_eq!(opened[0].owner.as_ref(), STRANGER);
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == STRANGER));
 }
 
 #[tokio::test]
@@ -488,7 +516,7 @@ async fn a_harness_may_not_own_a_session_by_an_unverified_body_claim() {
     assert_eq!(response.status(), StatusCode::CREATED);
     let opened = opener.opened.lock().unwrap();
     assert_eq!(opened[0].bot_id, BotId::TEST_A);
-    assert_eq!(opened[0].owner.as_ref(), OWNER);
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == OWNER));
 }
 
 #[tokio::test]
@@ -793,6 +821,7 @@ async fn an_external_open_carries_its_instructions() {
 }
 
 mod read;
+mod user_cleanup;
 
 /// The client speculates under an id it mints and sends it alongside the
 /// action's own flattened fields, which are tagged under `type`.

@@ -16,6 +16,9 @@ use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
 
+#[cfg(test)]
+mod test;
+
 env_vars! {
     /// Auth key used by the document storage / search / lexical clients.
     pub struct DocumentStorageServiceAuthKey;
@@ -58,6 +61,10 @@ pub struct Config {
     pub document_storage_service_cloudfront_signer_private_key_secret_name:
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
     pub kafka_brokers: KafkaBrokers,
+    /// Enables event-trigger management, Kafka intake, and pending dispatch together.
+    /// Register EVENT_ROUTINES_ENABLED as a raw boolean in Doppler before rollout.
+    #[macro_config_default(false)]
+    pub event_routines_enabled: bool,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
 }

@@ -89,6 +89,8 @@ type ThreadListProps = {
   ) => void;
   /** Follow live messages only when the loaded window includes the latest page. */
   followOnAppend?: boolean;
+  /** Position messages when they do not fill the viewport. Defaults to end. */
+  shortListAlign?: 'start' | 'end';
   /** Keep this thread mounted while its message or reply is being positioned. */
   targetId?: string;
   /**
@@ -365,7 +367,9 @@ export function ThreadList(props: ThreadListProps) {
   }
 
   const shortListOffset = () =>
-    Math.max(0, viewportSize() - virtualizer.getTotalSize());
+    props.shortListAlign === 'start'
+      ? 0
+      : Math.max(0, viewportSize() - virtualizer.getTotalSize());
   // The adapter mutates its store by index. Snapshot those values and let Key
   // own each row's accessor by message ID, including while a row is removed.
   // A lookup into a shared map can disappear before queued row effects run.

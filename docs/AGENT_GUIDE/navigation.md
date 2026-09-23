@@ -8,30 +8,55 @@
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/component/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/component/mail` | Email client |
-| `/app/component/channels` | Channels list |
-| `/app/component/documents` | Files (documents list) |
-| `/app/component/tasks` | Tasks table |
-| `/app/component/agents` | AI chats / agents list |
+| `/app/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
+| `/app/inbox/<block-type>/<uuid>` | Home with a heterogeneous item opened inline; target metadata is stored in `sN.inbox-preview.*` query values |
+| `/app/mail` | Email client |
+| `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
+| `/app/channels` | Channels list |
+| `/app/channels/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channel-detail.*` |
+| `/app/drive` | Files (Drive defaults to My Files) |
+| `/app/drive/<recent-or-shared>` | A Drive tab (`/app/drive/tab/<...>` remains a compatibility alias) |
+| `/app/drive/folder/<uuid>` | A Drive folder; breadcrumbs resolve from current accessible folder data |
+| `/app/drive/<document-type>/<uuid>` | An item opened inline in My Files |
+| `/app/drive/folder/<uuid>/<document-type>/<uuid>` | An item opened inline in its Drive folder; document types include `md`, `task`, `skill`, `snippet`, `canvas`, `pdf`, `code`, `csv`, `image`, `video`, `spreadsheet`, and `unknown` |
+| `/app/tasks` | Tasks table |
+| `/app/tasks/<uuid>` | Tasks with a task document opened inline |
+| `/app/agents` | AI chats / agents list |
 | `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
-| `/app/agent-chats/<uuid>` | Legacy AI chat opened in the Agents workspace |
-| `/app/component/calls` | Calls list |
-| `/app/component/companies` | Customers (CRM; needs a team) |
-| `/app/component/activity` | Activity heatmap + feed |
-| `/app/component/home` | Assistant (AI-first landing) |
-| `/app/calendar/view` | Calendar |
-| `/app/md/<uuid>` | A document |
-| `/app/spreadsheet/<uuid>` | A native Macro spreadsheet |
+| `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
+| `/app/calls` | Calls list |
+| `/app/companies` | Customers (CRM; needs a team) |
+| `/app/activity` | Activity heatmap + feed |
+| `/app/home` | Assistant (AI-first landing) |
+| `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event uses `sN.calendar.eventId` |
+| `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
+| `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
+| `/app/automation/<uuid>` | Cron routine editor; event routines show a backend-managed notice |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 
-Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
-(`/app/<left>/<right>`). Desktop panes expose Close when available and omit
+On touch devices, documents (including tasks) open in legacy blocks rather than
+inline Drive details. Canonical `/app/drive/.../<document-type>/<uuid>` links also
+fall back to legacy document routes. This uses touch detection, not the native-app
+check: in DevTools, enable touch emulation rather than only narrowing the viewport.
+Legacy document URLs upgrade to Drive only when desktop detail rendering is enabled.
+
+Splits: the app is a tiling window manager. Public variable-length routes use
+`~` as the boundary between panes
+(`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`
+pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
+to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
+namespaced query parameters such as `s0.drive.sort=created_at`; route identity
+and breadcrumb nesting remain in the path. Home, Email, Tasks, and Channels
+store the selected tab under `sN.inbox.tab`, `sN.mail.tab`, `sN.tasks.tab`,
+and `sN.channels.tab`, respectively. Channels also stores the phone list
+selection as `sN.channels.mobileTab`. Omitted tab keys mean each view's default;
+changing tabs updates the URL, and browser Back/Forward restores the selection
+independently in each pane. Inline detail links preserve these keys. Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
 
 The app views are referred to as **workspaces**. Expanded workspace sidebars start
@@ -40,7 +65,23 @@ displayed width. Workspace navigation uses shared 32px rows (44px on touch), 16p
 glyphs in aligned 20px icon slots, a 6px text gap, and compact sentence-case section
 headings. Tags and folders have a separate disclosure button on the **right** of
 the row: clicking the label selects the destination; clicking Expand/Collapse
-only opens or closes its children. Long destination names are single-line and
+only opens or closes its children. Selecting a Drive folder or tab closes an
+inline detail into that destination; it does not navigate back to Drive's root.
+Home, Email, Tasks, Channels, and Drive keep their workspace provider mounted
+while typed child routes own the accepted inline detail. Tasks and Email replace
+the list with detail, capturing its focus and scroll state before disposal. Their child
+selection participates in browser Back/Forward independently per pane. Explicit
+return controls navigate to the workspace's list root. Multiple panes navigate
+their child routes and history independently; returning to a list does not
+activate another pane. Opening a resource already displayed in another pane
+still activates its owner through router claim arbitration; the compatibility
+preview guard can instead reject a conflicting embedded preview. On touch, or
+when the new-app-view flag cannot render the detail, Home, Email, Tasks, and
+Channels detail URLs fall back to the existing full-block surface. Legacy email
+and channel message targets are normalized into per-pane search by ingress
+middleware, including external/history navigation; explicit namespaced values win.
+Unavailable documents retain their error/retry UI rather than navigating away.
+Long destination names are single-line and
 expose the full name on hover. Section chevrons point right and stay visible when
 collapsed. Expanded chevrons point down and appear when hovering their section;
 the section heading also brightens on hover. Sections and nested branches briefly
@@ -78,7 +119,7 @@ its existing navigation controls. Block detail panels (including Calendar) have
 the main title when hidden, with separate preferences per block type.
 
 Multiple desktop splits appear as individually bordered, medium-rounded panels with
-6px top, right, and bottom insets and 6px resizable gaps, including preview pairs.
+6px top, right, and bottom insets and 6px resizable gaps.
 The leftmost panel sits flush against the app rail, whose divider is hidden while
 multiple splits are open. A single split stays edge to edge. Touch layouts keep their existing presentation.
 
@@ -97,9 +138,9 @@ Unmodified clicks keep each surface’s default (same split, preview, or new spl
 Existing-content deduplication and split-capacity limits still apply; touch devices
 continue to navigate in place.
 
-A block mounted in an inline preview cannot also open in a split. An attempt
-shows `Content already open.` and keeps the preview in place. Select another
-preview item or leave that view before opening the block in a split. Duplicate
+A block mounted in an inline detail is reused when opened elsewhere. Mentions
+and notifications activate its host without a toast; explicit list or Cmd+K
+selection shows `Content already open` to explain the move. Duplicate
 mounts reached through direct layout paths show the same message instead of a
 second block instance.
 
@@ -135,19 +176,44 @@ Noise does not light either dot. These are presence indicators, not counts; they
 do not fetch additional pages to find every unread item. Opening a view alone does
 not clear its dot — reading or completing the represented items does. The button's
 accessible description is `Unread items` while its dot is active.
+The Home dot stops checking rows at the first eligible unread item, using the
+same Signal membership, channel/thread scoping, and local read/done overrides as
+the list. Check that reading that item keeps the dot lit if another loaded row
+is unread, and that completing the last one clears it. Query bounds and
+pagination are unchanged.
 
 The Agents sidebar mixes chat and coding sessions in one newest-first list.
+New agent sessions use one dot in the left slot for activity and notifications:
+pulsing accent for starting/working, amber for waiting for input, and solid accent
+for an unread dormant session. Read dormant sessions leave that slot empty.
+Hover a row for its full title and activity label. Coding sessions show a second
+line with repository, captured working branch (when available), and linked PR
+number/status; non-coding sessions stay on one line. The starting branch is never
+presented as the working branch. PR states come from synced GitHub data; an
+unsynced PR shows its number without an assumed status. Missing metadata is omitted;
+"Coding agent" is never substituted for a branch. There is no right-side dot in
+Agents; Home keeps its sparkle and trailing unread dot. Only the selected row has
+the selected background. Legacy chat rows keep their chat icon.
+Use **Search conversations** beside the Conversations heading to filter by title.
+Results stay packed at the top with compact spacing, even with only a few matches;
+clearing the search restores the list.
 Its **New conversation** button opens the unified composer with one **Agent**
 selector on the right. Choosing a coding agent reveals the repository drawer;
 there is no Chat/Code switch. New sessions use the selected agent's default model
 and the URL for its kind. Opening an existing row restores its own kind and URL.
+Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
+the other entity actions used on Home.
 
 Home's inner rail starts with a full-width **New chat** plus button that returns
 to Home's starting pane without creating a chat. Email and Tasks use the same
 pill styling and top placement for **New email** and **New task**, replacing
 the sidebar title bars. When multiple desktop splits are open, a **Close** (X)
 button appears beside each sidebar's New button and closes that split. The last
-logical split has no close button; mobile chrome is unchanged.
+logical split has no sidebar close button; mobile chrome is unchanged.
+A lone non-list content split still shows a header X labeled **Return to list**,
+which returns that split to the most recent list in its history, preserving
+that list’s state. If there is no prior list, it replaces the current entry with
+inbox. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
@@ -273,6 +339,13 @@ rows; period, week start, time format, and month choices show trailing checkmark
 All popover splits open as bottom drawers on touch devices and dialogs
 on desktop, including task, calendar event, skill, and agent session composers.
 
+Hovering an `@user` mention or a profile picture on desktop opens the user card:
+the person's name and email above Copy email, Copy name, Open contact (CRM teams
+only), DM, and Assign task. Touch devices have no hover, so tapping the mention
+or the picture opens that same card as a bottom sheet; any action there runs and
+dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
+drops in favour of the card's DM action.
+
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
 Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task and Channel open dialogs.
@@ -289,12 +362,50 @@ Release, cancellation, or dragging outside
 restores the surface. Disabled controls stay still; reduced motion keeps only
 the static highlight.
 
+## Routines (automations)
+
+Create → Automation creates a cron-scheduled routine. Cron routines support
+editing instructions and schedule, Rename, Pause/Resume, Duplicate, Run Now,
+and History links to run chats. Edits autosave; Run Now also works while paused.
+If a background refresh fails, cached cron routines stay listed and their editor
+and queued autosave remain available. An initial load failure without cached data
+shows **Unable to load automation** instead. Cached event routines remain
+backend-managed even after a refresh failure.
+
+Event-triggered routines are backend-managed through the scheduled-action API.
+They do not appear in the frontend's cron-only automation lists. Opening an
+API-created event routine at `/app/automation/<uuid>` shows **Backend-managed
+routine**, not a cron editor. This surface offers no event editing, duplication,
+or run/history controls; manage those through the API. It never replaces an
+event trigger with a cron schedule. There is no event-filter composer yet.
+
 ## Command menu (Ctrl+K)
 
 Opens a dialog with a focused `Search...` textbox and bubble-style category radios
 (All / Command / Agents / Files / Tasks / Channels / People). Type a name, press Enter to open
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
+
+With the local GraphQL cache enabled, Cmd+K and document/channel `@` mentions
+search cached entities without waiting for a server search. Background hydration
+updates an already-open menu. For an empty search, scroll toward the end (or use
+Down); mentions offer **View all** for a category and then load more local pages.
+Counts describe loaded results, not the full server corpus. Scans through
+incomplete or already-visible cache hits are bounded per action; continue
+navigating/scrolling, or narrow the query, to resume from the saved cursor.
+A failed local refresh keeps displayed rows and their continuation available for
+another pagination attempt. A missing item may still be uncached, but should appear after hydration without retyping. Cmd+K's
+local search excludes unsupported email hits before limiting entity results;
+email mentions keep their separate search-service path.
+
+Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
+must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
+mounted and usable while the optional source loads or fails. A failed background
+refresh retains available history/channel items and recently-viewed ordering.
+Placeholder results also remain usable while replacement data loads. A normal cache-worker
+handoff between tabs preserves backfill cursors and watermarks; only a replacement
+that creates or resets stored cache data discards them. Per-lane full-refresh and
+Shared Mail restart rules still apply.
 
 ## Keyboard model (from the in-app guide; verified partially)
 
@@ -349,18 +460,45 @@ create a session before the user sends. Repeating it focuses the existing draft.
 
 ### Content already open
 
+Splits navigate independently. The retired Preview Pair mode no longer creates
+an adjacent viewer, redirects list navigation, or links split sizes and history.
+Inline details in Home, Email, Tasks, Channels, and Drive use typed split-router
+child routes; there is no competing view-local detail stack or persisted selected
+ID. List filters, sidebar preferences, and focused-list state remain view-owned.
+Split back/forward navigation skips entries whose entities are open elsewhere,
+without moving focus or showing a toast. Those entries remain in history and
+become reachable again after their owning view releases them. A direction is
+unavailable when no reachable entries remain. Mobile swipe navigation reuses
+an already-mounted conversation without losing the other pane.
+History controls update when an inline detail claims or releases an entry,
+including when the detail closes.
+Resetting a split clears its previous history and starts at the default view;
+after opening another item, Back returns to that default view.
+
 Entity content can be open in only one split or inline preview/detail view at a
 time. Shell components may have duplicate splits when `allowDuplicate` is enabled.
 An Agents conversation route counts as the same entity as its agent or chat block.
+Following a mention or notification reuses the existing split or inline detail,
+activates its workspace, and navigates to any specified location without a toast.
+Explicit entity selections from lists or Cmd+K also reuse the existing view, but
+show the duplicate-content toast to explain the move. A list whose detail cannot
+claim that entity keeps its previous selection and history.
 Opening an entity already in a split focuses that split when activation is
 requested; the sidebar's **Open in new split** also shows a **Content already open** toast.
 Selecting an entity owned by another view from a detail view leaves the current
-detail and navigation history unchanged and shows a **Content already open**
-toast. Close or navigate away
+detail and navigation history unchanged, focuses the owning view, and shows a
+**Content already open** toast. Close or navigate away
 from the owning view before opening it elsewhere. The same rule applies to mouse
 selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
 never render inline previews or detail views: a tap opens the entity in the
 split, so the toast only appears when the content is genuinely open elsewhere.
+
+Split-router ownership checks use the final redirected destination. Concurrent
+opens of the same claimed resource wait for the first outstanding request rather
+than creating duplicate panes. If pane-history navigation reaches content owned
+by another pane, it focuses that owner without advancing the requesting pane's
+history cursor. Restoring a saved layout preserves existing duplicate panes;
+search-only updates within those panes do not collapse them.
 
 ## Entity action dialogs
 

@@ -97,6 +97,33 @@ describe('NavigationStack', () => {
     expect(snapshots[1]?.map(({ data }) => data)).toEqual(['Task', 'Document']);
   });
 
+  it('reconciles external state without notifying', () => {
+    let state: NavigationStackState<string> | undefined;
+    const onChange = vi.fn();
+
+    function CaptureState() {
+      state = useNavigationStack<string>();
+
+      return null;
+    }
+
+    render(() => (
+      <NavigationStack.Root<string> onChange={onChange}>
+        <CaptureState />
+      </NavigationStack.Root>
+    ));
+
+    state?.reconcile('Document');
+
+    expect(state?.entries.map(({ data }) => data)).toEqual(['Document']);
+    expect(onChange).not.toHaveBeenCalled();
+
+    state?.reconcile();
+
+    expect(state?.entries).toHaveLength(0);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('only handles navigation accepted by the root', () => {
     let state: NavigationStackState<string, { blocked?: boolean }> | undefined;
 

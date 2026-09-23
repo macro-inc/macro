@@ -1,6 +1,7 @@
 import { Popover } from '@kobalte/core/popover';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
+import FolderIcon from '@phosphor/folder-simple.svg';
 import GitBranchIcon from '@phosphor/git-branch.svg';
 import GithubIcon from '@phosphor/github-logo.svg';
 import { Button, createCommandListController } from '@ui';
@@ -15,9 +16,10 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  filterBranches,
   filterRepositories,
+  orderBranches,
   orderRepositories,
-  parseRepositoryInput,
   type ReachableRepository,
   repositoryLabel,
   sameRepository,
@@ -25,23 +27,30 @@ import {
 } from '../core/repository';
 
 /** One row of the repository list. */
-type RepositoryChoice =
-  | { kind: 'automatic' }
-  | { kind: 'listed'; url: string }
-  /** Named by hand rather than listed; the service decides whether it may be used. */
-  | { kind: 'typed'; url: string };
+type RepositoryChoice = { kind: 'automatic' } | { kind: 'listed'; url: string };
+
+/** One row of the branch list. */
+type BranchChoice =
+  | { kind: 'listed'; name: string }
+  /** Named by hand rather than listed; the session starts from this ref. */
+  | { kind: 'typed'; name: string };
 
 /** Explicit, portaled repository/branch controls shared by Home and Agents. */
 export function RepositoryPicker(props: {
   repoUrl?: string;
   branch: string;
-  /** Every repository the signed-in user reaches through Macro's GitHub App. */
+  /** Repositories the signed-in user can hand a coder through Macro's GitHub App. */
   repositories: ReachableRepository[];
   repositoriesLoading: boolean;
   repositoriesError: boolean;
   /** Repositories handed to coders before, newest first; offered ahead of the rest. */
   recentRepositories: string[];
   onRetryRepositories: () => void;
+  /** Branch names on the selected repository, as GitHub listed them. */
+  branches: string[];
+  branchesLoading: boolean;
+  branchesError: boolean;
+  onRetryBranches: () => void;
   /** Where to send someone who reaches no repository yet. */
   onConnectGitHub?: () => void;
   /** `undefined` leaves the choice to the coder. */
@@ -52,8 +61,9 @@ export function RepositoryPicker(props: {
   const [repoOpen, setRepoOpen] = createSignal(false);
   const [branchOpen, setBranchOpen] = createSignal(false);
   const [search, setSearch] = createSignal('');
-  const [branchInput, setBranchInput] = createSignal('');
+  const [branchSearch, setBranchSearch] = createSignal('');
   const [error, setError] = createSignal('');
+  const branchListId = createUniqueId();
 
   const offered = createMemo(() =>
     orderRepositories(props.repositories, props.recentRepositories)
@@ -64,13 +74,6 @@ export function RepositoryPicker(props: {
     const choices: RepositoryChoice[] = text ? [] : [{ kind: 'automatic' }];
     for (const repository of listed) {
       choices.push({ kind: 'listed', url: repository.url });
-    }
-    const typed = parseRepositoryInput(text);
-    if (
-      typed?.startsWith('https://github.com/') &&
-      !listed.some((repository) => sameRepository(repository.url, typed))
-    ) {
-      choices.push({ kind: 'typed', url: typed });
     }
     return choices;
   });
@@ -101,7 +104,6 @@ export function RepositoryPicker(props: {
     match(choice)
       .with({ kind: 'automatic' }, () => 'Choose automatically')
       .with({ kind: 'listed' }, ({ url }) => repositoryLabel(url))
-      .with({ kind: 'typed' }, ({ url }) => `Use ${repositoryLabel(url)}`)
       .exhaustive();
   const nothingReachable = () =>
     !props.repositoriesLoading &&
@@ -109,19 +111,65 @@ export function RepositoryPicker(props: {
     offered().length === 0 &&
     !search().trim();
 
-  const applyBranch = () => {
-    const branch = branchInput().trim();
-    if (!validRepositoryBranch(branch)) {
-      setError(
-        'Enter a valid branch name, for example main or feature/my-change.'
-      );
-      return;
+  const defaultBranch = () => {
+    const url = props.repoUrl;
+    return url
+      ? props.repositories.find((repository) =>
+          sameRepository(repository.url, url)
+        )?.defaultBranch
+      : undefined;
+  };
+  const offeredBranches = createMemo(() => {
+    const listed = orderBranches(props.branches, defaultBranch());
+    // Keep a chosen or default name visible while listing, or when GitHub
+    // has other branches but not this one. An empty successful listing is
+    // an empty repository: offer a typed name instead of inventing one.
+    const keepCurrent =
+      !!props.branch &&
+      validRepositoryBranch(props.branch) &&
+      !listed.includes(props.branch) &&
+      (listed.length > 0 || props.branchesLoading || props.branchesError);
+    return keepCurrent ? [props.branch, ...listed] : listed;
+  });
+  const branchChoices = createMemo<BranchChoice[]>(() => {
+    const text = branchSearch().trim();
+    const listed = filterBranches(offeredBranches(), text);
+    const choices: BranchChoice[] = listed.map((name) => ({
+      kind: 'listed' as const,
+      name,
+    }));
+    if (validRepositoryBranch(text) && !listed.includes(text)) {
+      choices.push({ kind: 'typed', name: text });
     }
-    props.onSelectBranch(branch);
+    return choices;
+  });
+  const chooseBranch = (choice: BranchChoice) => {
+    props.onSelectBranch(choice.name);
     setBranchOpen(false);
   };
+  const branchList = createCommandListController<BranchChoice>({
+    items: branchChoices,
+    onSelect: chooseBranch,
+  });
+  const highlightedBranchId = () =>
+    `${branchListId}-${branchList.selectedIndex()}`;
+  const scrollHighlightedBranchIntoView = () =>
+    document.getElementById(highlightedBranchId())?.scrollIntoView?.({
+      block: 'nearest',
+    });
+  const submitBranch = () => {
+    if (branchList.selectSelected()) return;
+    setError(
+      'Enter a valid branch name, for example main or feature/my-change.'
+    );
+  };
+  const nothingListed = () =>
+    !props.branchesLoading &&
+    !props.branchesError &&
+    offeredBranches().length === 0 &&
+    !branchSearch().trim();
   return (
-    <div class="flex min-w-0 flex-wrap items-center gap-2">
+    <div class="flex min-w-0 w-full items-center gap-2">
       <Popover
         open={repoOpen()}
         onOpenChange={(open) => {
@@ -135,8 +183,11 @@ export function RepositoryPicker(props: {
         placement="top-start"
         gutter={8}
       >
-        <Popover.Trigger class="pill max-w-full" aria-label="Repository">
-          <GithubIcon class="size-4 shrink-0" />
+        <Popover.Trigger
+          class="pill min-w-0 max-w-full text-ink"
+          aria-label="Repository"
+        >
+          <FolderIcon class="size-4 shrink-0" />
           <span class="truncate">
             {props.repoUrl
               ? repositoryLabel(props.repoUrl)
@@ -271,12 +322,19 @@ export function RepositoryPicker(props: {
           onOpenChange={(open) => {
             setBranchOpen(open);
             setError('');
-            if (open) setBranchInput(props.branch);
+            if (open) {
+              setBranchSearch('');
+              const selected = offeredBranches().indexOf(props.branch);
+              branchList.setSelectedIndex(selected >= 0 ? selected : 0);
+            }
           }}
           placement="top-start"
           gutter={8}
         >
-          <Popover.Trigger class="pill max-w-full" aria-label="Branch">
+          <Popover.Trigger
+            class="pill min-w-0 max-w-[45%] text-ink"
+            aria-label="Branch"
+          >
             <GitBranchIcon class="size-4 shrink-0" />
             <span class="truncate">{props.branch}</span>
             <CaretDownIcon class="size-3 shrink-0" />
@@ -289,17 +347,35 @@ export function RepositoryPicker(props: {
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
-                  applyBranch();
+                  submitBranch();
                 }}
                 class="flex flex-col gap-2"
               >
                 <input
-                  aria-label="Starting branch"
-                  placeholder="main or feature/my-change"
-                  value={branchInput()}
+                  role="combobox"
+                  aria-label="Search branches"
+                  aria-expanded="true"
+                  aria-controls={branchListId}
+                  aria-activedescendant={highlightedBranchId()}
+                  aria-autocomplete="list"
+                  autocomplete="off"
+                  placeholder="Search, or type a branch name"
+                  value={branchSearch()}
                   onInput={(event) => {
-                    setBranchInput(event.currentTarget.value);
+                    setBranchSearch(event.currentTarget.value);
                     setError('');
+                    branchList.setSelectedIndex(0);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      branchList.selectNext();
+                      scrollHighlightedBranchIntoView();
+                    } else if (event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      branchList.selectPrevious();
+                      scrollHighlightedBranchIntoView();
+                    }
                   }}
                   class="w-full rounded-lg border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
                 />
@@ -308,10 +384,76 @@ export function RepositoryPicker(props: {
                     {error()}
                   </p>
                 </Show>
-                <Button type="submit" variant="strong">
-                  Use branch
-                </Button>
               </form>
+              <div
+                id={branchListId}
+                role="listbox"
+                aria-label="Branches"
+                class="mt-2 max-h-56 overflow-y-auto"
+              >
+                <For each={branchChoices()}>
+                  {(choice, index) => (
+                    <button
+                      type="button"
+                      role="option"
+                      id={`${branchListId}-${index()}`}
+                      aria-selected={branchList.isSelected(index())}
+                      class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-hover aria-selected:bg-active"
+                      onClick={() => chooseBranch(choice)}
+                      onMouseMove={() =>
+                        branchList.setSelectedIndexFromPointer(index())
+                      }
+                    >
+                      <GitBranchIcon class="size-4 shrink-0" />
+                      <span class="min-w-0 truncate">
+                        {choice.kind === 'typed'
+                          ? `Use ${choice.name}`
+                          : choice.name}
+                      </span>
+                      <Show when={choice.name === defaultBranch()}>
+                        <span class="shrink-0 text-xs text-ink-muted">
+                          {` (default)`}
+                        </span>
+                      </Show>
+                      <Show when={choice.name === props.branch}>
+                        <CheckIcon class="ml-auto size-4 shrink-0" />
+                      </Show>
+                    </button>
+                  )}
+                </For>
+                <Switch>
+                  <Match when={props.branchesError}>
+                    <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
+                      Couldn't load this repository's branches.
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        depth={3}
+                        onClick={() => props.onRetryBranches()}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  </Match>
+                  <Match
+                    when={props.branchesLoading && props.branches.length === 0}
+                  >
+                    <div class="px-2 py-2 text-xs text-ink-muted">
+                      Loading branches…
+                    </div>
+                  </Match>
+                  <Match when={nothingListed()}>
+                    <div class="px-2 py-2 text-xs text-ink-muted">
+                      No branches yet. Type a starting branch to use.
+                    </div>
+                  </Match>
+                  <Match when={branchChoices().length === 0}>
+                    <div class="px-2 py-2 text-xs text-ink-muted">
+                      No branches match “{branchSearch().trim()}”.
+                    </div>
+                  </Match>
+                </Switch>
+              </div>
             </Popover.Content>
           </Popover.Portal>
         </Popover>

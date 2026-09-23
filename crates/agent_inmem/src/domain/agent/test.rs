@@ -13,6 +13,7 @@ use rig_agent::completion::PromptError;
 use super::*;
 use crate::domain::engine::TurnEngine;
 use crate::testing::{HangingEngine, ScriptedEngine};
+use macro_user_id::user_id::MacroUserIdStr;
 
 struct Harness {
     notifications: std::sync::Mutex<Vec<SessionNotification>>,
@@ -60,7 +61,9 @@ where
     );
     let state = Arc::new(AgentState {
         session_id,
-        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
         engine,
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -187,13 +190,9 @@ async fn new_session_advertises_its_slash_commands() {
         .iter()
         .map(|command| command.name.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(names, vec!["compact", "ask"]);
+    assert_eq!(names, vec!["ask"]);
     assert!(
-        advertised.available_commands[0].input.is_none(),
-        "/compact takes no argument, so the composer sends it as-is"
-    );
-    assert!(
-        advertised.available_commands[1].input.is_some(),
+        advertised.available_commands[0].input.is_some(),
         "/ask carries a hint for its question"
     );
 }
@@ -560,7 +559,9 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
     );
     let state = Arc::new(AgentState {
         session_id,
-        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
         engine: Arc::new(ScriptedEngine::new(Vec::new())),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -651,7 +652,9 @@ where
     );
     let state = Arc::new(AgentState {
         session_id,
-        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
         engine,
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),

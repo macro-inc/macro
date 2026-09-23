@@ -5,7 +5,6 @@ import type { MessageCursor } from './generated/schemas/messageCursor';
 import type { MessageParent } from './generated/schemas/messageParent';
 import type { MessageThread } from './generated/schemas/messageThread';
 import type { PostMessage } from './generated/schemas/postMessage';
-import type { ReferencedThreadPage } from './generated/schemas/referencedThreadPage';
 import type { ThreadPatch } from './generated/schemas/threadPatch';
 import type { ThreadState } from './generated/schemas/threadState';
 
@@ -51,14 +50,6 @@ export const entityMessagesClient = {
     return request<MessageTimelinePage>(
       `${path(parent)}?${new URLSearchParams({ selection: JSON.stringify(selection) })}`
     );
-  },
-  references(parent: MessageParent, cursor?: MessageCursor | null) {
-    const query = new URLSearchParams({ limit: '100' });
-    if (cursor) {
-      query.set('created_at', cursor.created_at);
-      query.set('cursor_id', cursor.id);
-    }
-    return request<ReferencedThreadPage>(`${path(parent)}/references?${query}`);
   },
   get(parent: MessageParent, id: string) {
     return request<Message>(`${path(parent)}/items/${encodeURIComponent(id)}`);

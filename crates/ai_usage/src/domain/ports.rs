@@ -64,49 +64,110 @@ pub enum AiFeature {
     AgentSession,
     /// Choosing the repository an agent session's first prompt belongs to.
     AgentRepositoryChoice,
+    /// User-confirmed audio transcription.
+    Dictation,
 }
 
-/// Resolved price for one completion.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, ToSchema)]
-pub struct Price {
-    /// Price per million input tokens (USD).
-    pub price_per_million_in: f32,
-    /// Price per million output tokens (USD).
-    pub price_per_million_out: f32,
-    /// Total cost of the completion (USD).
-    pub total: f32,
+/// The billable quantity for one AI invocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UsageAmount {
+    /// Token-based inference.
+    Tokens {
+        /// Tokens consumed by the input.
+        input: u64,
+        /// Tokens generated in the output.
+        output: u64,
+    },
+    /// Duration-based audio inference.
+    Audio {
+        /// Provider-reported duration of the audio.
+        duration: std::time::Duration,
+    },
 }
 
-impl Price {
-    /// Compute the price of a completion from per-million rates and token counts.
-    pub fn compute(price_per_million_in: f32, price_per_million_out: f32, usage: &Usage) -> Self {
-        let total = (usage.input_tokens as f32 / 1_000_000.0) * price_per_million_in
-            + (usage.output_tokens as f32 / 1_000_000.0) * price_per_million_out;
-        Self {
-            price_per_million_in,
-            price_per_million_out,
-            total,
+/// Rates for a model's billing unit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ModelPricing {
+    /// Prices per million input/output tokens (USD).
+    Tokens {
+        /// Input token rate.
+        input: f32,
+        /// Output token rate.
+        output: f32,
+    },
+    /// Price per minute of audio (USD).
+    Audio {
+        /// Audio minute rate.
+        per_minute: f32,
+    },
+}
+
+impl ModelPricing {
+    /// Reject invalid prices before changing stored pricing or usage totals.
+    pub fn validate(self) -> Result<Self> {
+        let valid = |rate: f32| rate.is_finite() && rate >= 0.0;
+        let is_valid = match self {
+            Self::Tokens { input, output } => valid(input) && valid(output),
+            Self::Audio { per_minute } => valid(per_minute),
+        };
+        if is_valid {
+            Ok(self)
+        } else {
+            Err(UsageError::InvalidPricing)
         }
     }
 }
 
-/// The token usage and resolved cost of a single completion.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+/// Resolved price for one AI call, including the rates applied at record time.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Price {
+    /// Rates matching the usage's billing unit.
+    pub pricing: ModelPricing,
+    /// Total cost (USD).
+    pub total: f32,
+}
+
+impl Price {
+    /// Compute cost only when the rate and usage use the same billing unit.
+    pub fn compute(pricing: ModelPricing, amount: UsageAmount) -> Option<Self> {
+        let total = match (pricing, amount) {
+            (
+                ModelPricing::Tokens { input, output },
+                UsageAmount::Tokens {
+                    input: input_tokens,
+                    output: output_tokens,
+                },
+            ) => {
+                input_tokens as f64 / 1_000_000.0 * f64::from(input)
+                    + output_tokens as f64 / 1_000_000.0 * f64::from(output)
+            }
+            (ModelPricing::Audio { per_minute }, UsageAmount::Audio { duration }) => {
+                duration.as_secs_f64() / 60.0 * f64::from(per_minute)
+            }
+            _ => return None,
+        };
+        Some(Self {
+            pricing,
+            total: total as f32,
+        })
+    }
+}
+
+/// The measured usage and resolved cost of a single AI call.
+#[derive(Debug, Clone)]
 pub struct Usage {
-    /// Tokens consumed by the input.
-    pub input_tokens: u32,
-    /// Tokens generated in the output.
-    pub output_tokens: u32,
+    /// The invocation's billable quantity.
+    pub amount: UsageAmount,
     /// The model api id (e.g. `claude-opus-4-8`).
     pub model: String,
-    /// Resolved price, or `None` when the model had no pricing at record time.
+    /// Resolved price, or `None` when compatible pricing was unavailable.
     pub price: Option<Price>,
-    /// When the completion was recorded.
+    /// When the call was recorded.
     pub created_at: DateTime<Utc>,
 }
 
 /// A recorded completion: who, what feature, optional entity, and the cost.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone)]
 pub struct CompletionUsage {
     /// The feature that performed the completion.
     pub feature: AiFeature,
@@ -115,12 +176,12 @@ pub struct CompletionUsage {
     pub user: MacroUserIdStr<'static>,
     /// The entity the completion related to, if any.
     pub entity: Option<Uuid>,
-    /// Token usage and cost.
+    /// Token/audio usage and cost.
     pub cost: Usage,
 }
 
 /// Usage for a single feature, with its rolled-up dollar total.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone)]
 pub struct FeatureUsage {
     /// The feature.
     pub feature: AiFeature,
@@ -131,7 +192,7 @@ pub struct FeatureUsage {
 }
 
 /// The result of a usage query: per-feature breakdown plus a grand total.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone)]
 pub struct UsageSummary {
     /// Per-feature usage.
     pub entries: Vec<FeatureUsage>,
@@ -152,7 +213,7 @@ pub struct UsageApiParams {
     pub features: Vec<AiFeature>,
 }
 
-/// A usage event handed to a [`UsageRecorder`] by the agent crate. The recorder
+/// A usage event handed to a [`UsageRecorder`] by an AI caller. The recorder
 /// resolves pricing and persists it; callers never see the cost.
 #[derive(Debug, Clone)]
 pub struct UsageEvent {
@@ -164,14 +225,12 @@ pub struct UsageEvent {
     pub entity: Option<Uuid>,
     /// The model api id.
     pub model: String,
-    /// Input tokens for this round-trip.
-    pub input_tokens: u64,
-    /// Output tokens for this round-trip.
-    pub output_tokens: u64,
+    /// The invocation's billable quantity.
+    pub amount: UsageAmount,
 }
 
 /// The constant attributes of a logical completion (everything except the model
-/// and token counts, which are only known once the completion runs).
+/// and measured usage, which are only known once the invocation runs).
 ///
 /// Threaded into agent functions so each call site declares which feature it is
 /// and who it is for.
@@ -218,8 +277,21 @@ impl UsageContext {
             user: self.user,
             entity: self.entity,
             model,
-            input_tokens,
-            output_tokens,
+            amount: UsageAmount::Tokens {
+                input: input_tokens,
+                output: output_tokens,
+            },
+        }
+    }
+
+    /// Build a duration-based event without representing audio as tokens.
+    pub fn into_audio_event(self, model: String, duration: std::time::Duration) -> UsageEvent {
+        UsageEvent {
+            feature: self.feature,
+            user: self.user,
+            entity: self.entity,
+            model,
+            amount: UsageAmount::Audio { duration },
         }
     }
 }
@@ -227,6 +299,12 @@ impl UsageContext {
 /// Errors raised by the cost crate.
 #[derive(Debug, Error)]
 pub enum UsageError {
+    /// The actor cannot administer AI usage or pricing.
+    #[error("admin access required")]
+    Forbidden,
+    /// A rate was negative or non-finite.
+    #[error("prices must be finite and non-negative")]
+    InvalidPricing,
     /// A database error.
     #[error("database error: {0}")]
     Db(rootcause::Report),
@@ -241,20 +319,18 @@ pub type Result<T> = std::result::Result<T, UsageError>;
 /// Outbound storage port.
 pub trait UsageRepo: Send + Sync + 'static {
     /// Persist a fully-priced completion row.
-    // TODO: Consumers should have an easier call to make than this
-    // A consumer shouldn't have to know the pricing of the model the just need to supply (feature, input tokens, output tokens, model name)
     fn insert_usage(&self, usage: &CompletionUsage) -> impl Future<Output = Result<()>> + Send;
 
-    /// Fetch the current per-million `(input, output)` rates for a model, if any.
-    fn get_pricing(&self, model: &str) -> impl Future<Output = Result<Option<(f32, f32)>>> + Send;
+    /// Fetch the current rate for a model's billing unit, if any.
+    fn get_pricing(&self, model: &str)
+    -> impl Future<Output = Result<Option<ModelPricing>>> + Send;
 
     /// Upsert the pricing for a model and recompute the `total` of every
     /// existing `ai_usage` row for that model.
     fn set_pricing(
         &self,
         model: &str,
-        price_per_million_in: f32,
-        price_per_million_out: f32,
+        pricing: ModelPricing,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Query recorded completions matching `params`.
@@ -287,14 +363,15 @@ pub trait UsageService: Send + Sync + 'static {
     /// Summarize recorded usage matching `params`.
     fn get_usage(
         &self,
+        actor: MacroUserIdStr<'static>,
         params: UsageApiParams,
     ) -> impl Future<Output = Result<UsageSummary>> + Send;
 
     /// Set the pricing for a model and recompute all of its recorded rows.
     fn set_pricing(
         &self,
+        actor: MacroUserIdStr<'static>,
         model: String,
-        price_per_million_in: f32,
-        price_per_million_out: f32,
+        pricing: ModelPricing,
     ) -> impl Future<Output = Result<()>> + Send;
 }

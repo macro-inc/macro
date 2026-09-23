@@ -11,8 +11,8 @@ use item_filters::ast::{
     agent_session::AgentSessionLiteral,
     properties::{PropertiesLiteral, properties_filter_matches_propertyless},
 };
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{agent_session::SoupAgentSession, item::SoupItem};
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
@@ -29,6 +29,12 @@ struct AgentSessionRow {
     name: String,
     owner_id: String,
     bot_id: Uuid,
+    harness: String,
+    repo_url: Option<String>,
+    repo_branch: Option<String>,
+    working_branch: Option<String>,
+    pull_request_url: Option<String>,
+    turn_state: Option<String>,
     thread_id: Option<Uuid>,
     status: String,
     status_event_name: Option<String>,
@@ -210,6 +216,12 @@ const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
         s.name,
         s.owner_id,
         s.bot_id,
+        s.harness,
+        s.repo_url,
+        s.repo_branch,
+        s.working_branch,
+        s.pull_request_url,
+        s.turn_state,
         s.thread_id,
         s.status,
         s.status_event_name,
@@ -272,15 +284,13 @@ fn push_filter(builder: &mut QueryBuilder<'_, Postgres>, expression: &Expr<Agent
         }
         Expr::Literal(AgentSessionLiteral::Owner(owner)) => {
             builder.push("s.owner_id = ");
-            builder.push_bind(owner.as_ref().to_string());
+            builder.push_bind(owner.principal_id());
         }
     }
 }
 
 fn row_to_item(row: AgentSessionRow) -> Result<SoupItem<()>, sqlx::Error> {
-    let owner_id = MacroUserIdStr::parse_from_str(&row.owner_id)
-        .map_err(super::type_err)?
-        .into_owned();
+    let owner_id = Owner::from_principal_str(&row.owner_id).map_err(super::type_err)?;
     // Mirror `agent_session::domain::model::SessionStatus`'s wire shape: the
     // event name is the status once one has arrived.
     let status = match row.status.as_str() {
@@ -292,6 +302,14 @@ fn row_to_item(row: AgentSessionRow) -> Result<SoupItem<()>, sqlx::Error> {
         name: row.name,
         owner_id,
         bot_id: row.bot_id,
+        harness: row.harness,
+        repo_url: row.repo_url,
+        repo_branch: row.repo_branch,
+        pull_request_url: row.pull_request_url,
+        working_branch: row.working_branch,
+        pull_request_state: None,
+        pull_request_id: None,
+        turn_state: row.turn_state,
         thread_id: row.thread_id,
         status,
         created_at: row.created_at,

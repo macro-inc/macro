@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT r.action_id, r.event_id, r.configuration_revision, r.event_context, r.admitted_at\n            FROM scheduled_action a\n            CROSS JOIN LATERAL (\n                SELECT action_id, event_id, configuration_revision, event_context, admitted_at, admission_order\n                FROM scheduled_action_event_run\n                WHERE action_id = a.id AND state = 'pending'\n                ORDER BY admission_order LIMIT 1\n            ) r\n            WHERE a.enabled AND a.trigger_type = 'events'\n              AND a.configuration_revision = r.configuration_revision\n              AND (a.claimed IS NULL OR a.claimed < $1)\n              AND NOT EXISTS (SELECT 1 FROM scheduled_action_event_run s WHERE s.action_id = a.id AND s.state = 'started')\n            ORDER BY r.admission_order\n            LIMIT $2 FOR UPDATE OF a SKIP LOCKED\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "action_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "configuration_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_context",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "admitted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "11aaeb83da5085bcd5e67566537f1d780a08b7a15856b2d50226b7e024211aa2"
+}

@@ -66,6 +66,10 @@ use crate::domain::{
     team_repo::TeamRepository,
 };
 
+// Historical thresholds are regression fixtures, not membership policy.
+const FORMER_FREE_MEMBER_LIMIT: i32 = 5;
+const FORMER_IDEA_MEMBER_LIMIT: i32 = 3;
+
 // -- Mock TeamRepository --
 
 #[derive(Clone)]
@@ -2395,7 +2399,7 @@ async fn invite_users_to_team_enterprise_bypasses_billing_and_preserves_side_eff
     team_repo.team_subscription_id = Some("sub_enterprise_sentinel".parse().unwrap());
     team_repo.stripe_customer_id = Some("cus_enterprise_sentinel".parse().unwrap());
     team_repo.team_plan = Some(TeamPlan::Idea);
-    team_repo.seat_count = TeamPlan::Idea.seat_cap() - 1;
+    team_repo.seat_count = FORMER_IDEA_MEMBER_LIMIT - 1;
 
     let enterprise_status_lookup_calls = team_repo.enterprise_status_lookup_calls.clone();
     let payment_status_lookup_calls = team_repo.team_payment_status_lookup_calls.clone();
@@ -2597,7 +2601,7 @@ async fn toggle_allow_non_admin_invites_delegates_to_repository() {
 }
 
 #[tokio::test]
-async fn invite_users_to_team_enterprise_enforces_team_plan_seat_cap() {
+async fn invite_users_to_team_enterprise_allows_invites_past_former_plan_limit() {
     let team_id = uuid::Uuid::from_u128(6010);
     let invite_id = uuid::Uuid::from_u128(6011);
     let invited_by = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
@@ -2611,7 +2615,7 @@ async fn invite_users_to_team_enterprise_enforces_team_plan_seat_cap() {
     team_repo.team_payment_status = false;
     team_repo.team_subscription_id = Some("sub_enterprise_sentinel".parse().unwrap());
     team_repo.team_plan = Some(TeamPlan::Idea);
-    team_repo.seat_count = TeamPlan::Idea.seat_cap();
+    team_repo.seat_count = FORMER_IDEA_MEMBER_LIMIT;
 
     let payment_status_lookup_calls = team_repo.team_payment_status_lookup_calls.clone();
     let subscription_id_lookup_calls = team_repo.team_subscription_id_lookup_calls.clone();
@@ -2637,18 +2641,19 @@ async fn invite_users_to_team_enterprise_enforces_team_plan_seat_cap() {
     let invites = non_empty::NonEmpty::new(invite_emails.as_slice()).unwrap();
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
 
-    let error = service
+    let result = service
         .invite_users_to_team(receipt, invites)
         .await
-        .unwrap_err();
+        .unwrap();
 
-    assert!(matches!(error, InviteUsersToTeamError::NotEnoughOpenSeats));
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].team_invite_id, invite_id);
     assert_eq!(*payment_status_lookup_calls.lock().unwrap(), 0);
     assert_eq!(*subscription_id_lookup_calls.lock().unwrap(), 0);
-    assert_eq!(*invitation_persistence_calls.lock().unwrap(), 0);
-    assert_eq!(notification_ingress.call_count.load(Ordering::SeqCst), 0);
-    assert!(mark_sent_calls.lock().unwrap().is_empty());
-    assert!(analytics_events.lock().unwrap().is_empty());
+    assert_eq!(*invitation_persistence_calls.lock().unwrap(), 1);
+    assert_eq!(notification_ingress.call_count.load(Ordering::SeqCst), 1);
+    assert_eq!(*mark_sent_calls.lock().unwrap(), vec![vec![invite_id]]);
+    assert_eq!(analytics_events.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -4030,7 +4035,7 @@ async fn test_join_team_owner_without_subscription_joins_as_free_team() {
     team_repo.team_payment_status = false;
     team_repo.team_subscription_id = None;
     team_repo.stripe_customer_id = Some("cus_backfill_join".parse().unwrap());
-    team_repo.seat_count = FREE_TEAM_MAX_MEMBERS;
+    team_repo.seat_count = FORMER_FREE_MEMBER_LIMIT;
     team_repo.accepted_invite = Some(make_accepted_invite(team_id, invite_id, &user_id));
     let rollback_accept_calls = team_repo.rollback_accept_calls.clone();
 
@@ -4765,13 +4770,11 @@ async fn test_try_join_team_by_domain_returns_none_when_already_member() {
 }
 
 #[tokio::test]
-async fn test_try_join_team_by_domain_skips_team_at_seat_cap() {
+async fn test_try_join_team_by_domain_paid_team_joins_past_former_plan_limit() {
     let team_id = uuid::Uuid::from_u128(79);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
 
-    // The mock would add the member, so a None result proves the seat-cap
-    // check short-circuited before the membership insert.
     let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
     team_repo.team_id_for_domain = Some(team_id);
     team_repo.add_user_to_team_result = Some(make_team_member(
@@ -4780,7 +4783,8 @@ async fn test_try_join_team_by_domain_skips_team_at_seat_cap() {
         TeamRole::Member,
     ));
     team_repo.team_plan = Some(TeamPlan::Idea);
-    team_repo.seat_count = TeamPlan::Idea.seat_cap();
+    team_repo.seat_count = FORMER_IDEA_MEMBER_LIMIT;
+    team_repo.team_subscription_id = Some("sub_test".parse().unwrap());
 
     let customer_repo = MockCustomerRepository::default();
     let increment_calls = customer_repo.increment_calls.clone();
@@ -4799,9 +4803,18 @@ async fn test_try_join_team_by_domain_skips_team_at_seat_cap() {
 
     let member = service.try_join_team_by_domain(&user_id).await.unwrap();
 
-    assert!(member.is_none());
-    assert!(increment_calls.lock().unwrap().is_empty());
-    assert!(event_broker.events().is_empty());
+    assert_eq!(member.unwrap().team_id, team_id);
+    assert_eq!(
+        *increment_calls.lock().unwrap(),
+        vec![("sub_test".to_string(), 1)]
+    );
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.member_joined");
+    assert_eq!(
+        events[0].envelope["metadata"]["join_method"]["type"],
+        "domain_auto_join"
+    );
 }
 
 #[tokio::test]
@@ -4992,12 +5005,12 @@ async fn try_join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_
 }
 
 #[tokio::test]
-async fn try_join_team_by_domain_enterprise_still_enforces_local_seat_cap() {
+async fn try_join_team_by_domain_enterprise_joins_past_former_plan_limit() {
     let team_id = uuid::Uuid::from_u128(82);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let mut team_repository = make_enterprise_domain_join_team_repository(team_id, &user_id);
     team_repository.team_plan = Some(TeamPlan::Idea);
-    team_repository.seat_count = TeamPlan::Idea.seat_cap();
+    team_repository.seat_count = FORMER_IDEA_MEMBER_LIMIT;
     let customer_repository = MockCustomerRepository::default();
     let channels_repository = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService::default();
@@ -5017,7 +5030,7 @@ async fn try_join_team_by_domain_enterprise_still_enforces_local_seat_cap() {
 
     let member = service.try_join_team_by_domain(&user_id).await.unwrap();
 
-    assert!(member.is_none());
+    assert_eq!(member.unwrap().team_id, team_id);
     assert_eq!(
         *team_repository
             .enterprise_status_lookup_calls
@@ -5025,18 +5038,18 @@ async fn try_join_team_by_domain_enterprise_still_enforces_local_seat_cap() {
             .unwrap(),
         1
     );
-    assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 0);
+    assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 0);
     assert_no_enterprise_join_team_billing_calls(&team_repository, &customer_repository);
-    assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
-    assert!(
-        channels_repository
-            .auto_join_calls
-            .lock()
-            .unwrap()
-            .is_empty()
+    assert_eq!(roles_service.upsert_calls.lock().unwrap().len(), 1);
+    assert_eq!(
+        *channels_repository.auto_join_calls.lock().unwrap(),
+        vec![(team_id, user_id.as_ref().to_string())]
     );
-    assert!(crm_enqueuer.populated.lock().unwrap().is_empty());
+    assert_eq!(
+        *crm_enqueuer.populated.lock().unwrap(),
+        vec![user_id.as_ref().to_string()]
+    );
     assert!(events.lock().unwrap().is_empty());
 }
 
@@ -5698,7 +5711,7 @@ async fn team_contacts_domain_join_does_not_enqueue_for_existing_member() {
 }
 
 #[tokio::test]
-async fn team_contacts_domain_join_does_not_enqueue_at_seat_cap() {
+async fn team_contacts_domain_join_enqueues_past_former_plan_limit() {
     let team_id = uuid::Uuid::from_u128(6013);
     let user_id = MacroUserIdStr::parse_from_str("macro|joining@example.com").unwrap();
     let mut team_repository = MockTeamRepository::new(
@@ -5706,9 +5719,18 @@ async fn team_contacts_domain_join_does_not_enqueue_at_seat_cap() {
         "Contacts Team",
         Arc::new(Mutex::new(Vec::new())),
     );
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    team_repository = team_repository.with_team(Team::new(
+        team_id,
+        "Contacts Team".to_string(),
+        "CONTACTS_TEAM".to_string(),
+        owner.clone().into_owned(),
+        false,
+        true,
+    ));
     team_repository.team_id_for_domain = Some(team_id);
     team_repository.team_plan = Some(TeamPlan::Idea);
-    team_repository.seat_count = TeamPlan::Idea.seat_cap();
+    team_repository.seat_count = FORMER_IDEA_MEMBER_LIMIT;
     team_repository.add_user_to_team_result = Some(make_team_member(
         team_id,
         user_id.as_ref(),
@@ -5728,10 +5750,14 @@ async fn team_contacts_domain_join_does_not_enqueue_at_seat_cap() {
 
     let member = service.try_join_team_by_domain(&user_id).await.unwrap();
 
-    assert!(member.is_none());
-    assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 0);
-    assert_eq!(*team_repository.get_team_by_id_calls.lock().unwrap(), 0);
-    assert!(contacts_enqueuer.batches.lock().unwrap().is_empty());
+    assert_eq!(member.unwrap().team_id, team_id);
+    assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 1);
+    let batches = contacts_enqueuer.batches.lock().unwrap();
+    assert_eq!(batches.len(), 1);
+    assert_eq!(
+        contact_connection_set(&batches[0]),
+        HashSet::from([(user_id.as_ref().to_string(), owner.as_ref().to_string())])
+    );
 }
 
 #[tokio::test]
@@ -5893,7 +5919,7 @@ async fn invite_users_to_team_free_team_under_cap_skips_billing() {
     // A free team: in good standing, no subscription linked.
     team_repo.team_payment_status = true;
     team_repo.team_subscription_id = None;
-    team_repo.seat_count = FREE_TEAM_MAX_MEMBERS - 1;
+    team_repo.seat_count = FORMER_FREE_MEMBER_LIMIT - 1;
 
     let invitation_persistence_calls = team_repo.invite_users_to_team_calls.clone();
 
@@ -5933,7 +5959,7 @@ async fn invite_users_to_team_free_team_under_cap_skips_billing() {
 }
 
 #[tokio::test]
-async fn invite_users_to_team_free_team_enforces_member_cap() {
+async fn invite_users_to_team_free_team_allows_invites_past_former_limit() {
     let team_id = uuid::Uuid::from_u128(7010);
     let invite_id = uuid::Uuid::from_u128(7011);
     let invited_by = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
@@ -5945,13 +5971,16 @@ async fn invite_users_to_team_free_team_enforces_member_cap() {
     );
     team_repo.team_payment_status = true;
     team_repo.team_subscription_id = None;
-    team_repo.seat_count = FREE_TEAM_MAX_MEMBERS;
+    team_repo.seat_count = FORMER_FREE_MEMBER_LIMIT;
 
     let invitation_persistence_calls = team_repo.invite_users_to_team_calls.clone();
 
+    let customer_repo = MockCustomerRepository::default();
+    let increment_calls = customer_repo.increment_calls.clone();
+    let convert_calls = customer_repo.convert_calls.clone();
     let service = TeamServiceImpl::new(
         team_repo,
-        MockCustomerRepository::default(),
+        customer_repo,
         RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
@@ -5967,13 +5996,15 @@ async fn invite_users_to_team_free_team_enforces_member_cap() {
     let invites = non_empty::NonEmpty::new(invite_emails.as_slice()).unwrap();
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
 
-    let result = service.invite_users_to_team(receipt, invites).await;
+    let result = service
+        .invite_users_to_team(receipt, invites)
+        .await
+        .unwrap();
 
-    assert!(matches!(
-        result,
-        Err(InviteUsersToTeamError::NotEnoughOpenSeats)
-    ));
-    assert_eq!(*invitation_persistence_calls.lock().unwrap(), 0);
+    assert_eq!(result.len(), 1);
+    assert_eq!(*invitation_persistence_calls.lock().unwrap(), 1);
+    assert!(increment_calls.lock().unwrap().is_empty());
+    assert!(convert_calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -5986,7 +6017,7 @@ async fn join_team_free_team_skips_billing_and_premium_roles() {
     team_repo.team_payment_status = true;
     team_repo.team_subscription_id = None;
     // Seat count already includes the newly accepted member.
-    team_repo.seat_count = FREE_TEAM_MAX_MEMBERS;
+    team_repo.seat_count = FORMER_FREE_MEMBER_LIMIT;
     team_repo.accepted_invite = Some(make_accepted_invite(team_id, invite_id, &user_id));
     let rollback_accept_calls = team_repo.rollback_accept_calls.clone();
 
@@ -6022,7 +6053,7 @@ async fn join_team_free_team_skips_billing_and_premium_roles() {
 }
 
 #[tokio::test]
-async fn join_team_free_team_over_cap_rolls_back() {
+async fn join_team_free_team_accepts_sixth_member_without_billing_or_premium_roles() {
     let team_id = uuid::Uuid::from_u128(7030);
     let invite_id = uuid::Uuid::from_u128(7031);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
@@ -6030,7 +6061,7 @@ async fn join_team_free_team_over_cap_rolls_back() {
     let mut team_repo = MockTeamRepository::new(Vec::new(), "Free Team", mark_sent_calls);
     team_repo.team_payment_status = true;
     team_repo.team_subscription_id = None;
-    team_repo.seat_count = FREE_TEAM_MAX_MEMBERS + 1;
+    team_repo.seat_count = FORMER_FREE_MEMBER_LIMIT + 1;
     team_repo.accepted_invite = Some(make_accepted_invite(team_id, invite_id, &user_id));
     let rollback_accept_calls = team_repo.rollback_accept_calls.clone();
 
@@ -6049,17 +6080,20 @@ async fn join_team_free_team_over_cap_rolls_back() {
         NoOpTeamCrmSettingsRepository,
     );
 
-    let result = service.join_team(&invite_id, &user_id).await;
+    let member = service.join_team(&invite_id, &user_id).await.unwrap();
 
-    assert!(matches!(result, Err(JoinTeamError::FreeTeamLimitReached)));
-    assert_eq!(*rollback_accept_calls.lock().unwrap(), 1);
+    assert_eq!(member.team_id, team_id);
+    assert_eq!(*rollback_accept_calls.lock().unwrap(), 0);
     assert!(increment_calls.lock().unwrap().is_empty());
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
-    assert!(channels_repo.auto_join_calls.lock().unwrap().is_empty());
+    assert_eq!(
+        *channels_repo.auto_join_calls.lock().unwrap(),
+        vec![(team_id, user_id.as_ref().to_string())]
+    );
 }
 
 #[tokio::test]
-async fn try_join_team_by_domain_free_team_at_cap_skips() {
+async fn try_join_team_by_domain_free_team_adds_sixth_member_without_billing_or_premium_roles() {
     let team_id = uuid::Uuid::from_u128(7040);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
@@ -6072,7 +6106,7 @@ async fn try_join_team_by_domain_free_team_at_cap_skips() {
     team_repo.team_id_for_domain = Some(team_id);
     team_repo.team_payment_status = true;
     team_repo.team_subscription_id = None;
-    team_repo.seat_count = FREE_TEAM_MAX_MEMBERS + 1;
+    team_repo.seat_count = FORMER_FREE_MEMBER_LIMIT + 1;
     team_repo.add_user_to_team_result = Some(member.clone());
     team_repo.removed_member = Some(member);
     let add_user_calls = team_repo.add_user_to_team_calls.clone();
@@ -6081,24 +6115,38 @@ async fn try_join_team_by_domain_free_team_at_cap_skips() {
     let customer_repo = MockCustomerRepository::default();
     let increment_calls = customer_repo.increment_calls.clone();
     let roles_service = MockUserRolesAndPermissionsService::default();
+    let channels = RecordingChannelService::default();
+    let event_broker = RecordingEventBroker::default();
 
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        RecordingChannelService::default(),
+        channels.clone(),
         roles_service.clone(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
         NoOpTeamCrmSettingsRepository,
-    );
+    )
+    .with_event_broker(event_broker.clone());
 
     let result = service.try_join_team_by_domain(&user_id).await.unwrap();
 
-    assert!(result.is_none());
+    assert_eq!(result.unwrap().team_id, team_id);
     assert_eq!(*add_user_calls.lock().unwrap(), 1);
-    assert_eq!(*remove_user_calls.lock().unwrap(), 1);
+    assert_eq!(*remove_user_calls.lock().unwrap(), 0);
     assert!(increment_calls.lock().unwrap().is_empty());
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
+    assert_eq!(
+        *channels.auto_join_calls.lock().unwrap(),
+        vec![(team_id, user_id.as_ref().to_string())]
+    );
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.member_joined");
+    assert_eq!(
+        events[0].envelope["metadata"]["join_method"]["type"],
+        "domain_auto_join"
+    );
 }
 
 #[tokio::test]

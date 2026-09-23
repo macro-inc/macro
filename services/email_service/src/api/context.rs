@@ -13,8 +13,8 @@ use email::{
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
 use email_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
+use email_service::calendar_request_gate::RedisCalendarRequestGate;
 use email_service::calendar_tokens::CalendarTokenProviderAdapter;
-use email_service::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 
 use email_service::config::Config;
 use email_service::outbound::email_api::GmailApi;

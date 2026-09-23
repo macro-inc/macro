@@ -32,6 +32,9 @@ pub enum HarnessOwner {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Harness {
+    /// Whether agents may bypass ACP permission requests on this harness.
+    #[serde(default)]
+    pub allow_permission_bypass: bool,
     /// Harness id.
     pub id: HarnessId,
     /// Runtime kind. Currently always `macrod`.
@@ -94,6 +97,9 @@ impl std::str::FromStr for RequestedHarnessScope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreatePairingRequest {
+    /// Daemon operator consent ceiling. Omitted by older clients; web approval decides.
+    #[serde(default)]
+    pub allow_permission_bypass: Option<bool>,
     /// Requested harness display name (typically the machine's hostname).
     pub name: String,
     /// Display-only description of the machine, e.g. `eric@macbook / darwin`.
@@ -127,6 +133,9 @@ pub struct CreatedPairing {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct PairingDetails {
+    /// Daemon operator consent ceiling; false forbids bypass at approval.
+    #[serde(default)]
+    pub requested_allow_permission_bypass: Option<bool>,
     /// The pairing code, normalized to `XXXX-XXXX`.
     pub code: String,
     /// Harness display name the daemon asked for.
@@ -145,6 +154,9 @@ pub struct PairingDetails {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ApprovePairingRequest {
+    /// Whether agents may bypass ACP permission requests on this harness.
+    #[serde(default)]
+    pub allow_permission_bypass: bool,
     /// Display name override. Defaults to the daemon's requested name.
     pub name: Option<String>,
     /// Owning team. Omit for a private, user-owned harness.

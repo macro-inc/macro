@@ -19,6 +19,10 @@ fn chat() -> Entity<'static> {
     EntityType::Chat.with_entity_string("20000000-0000-0000-0000-000000000003".to_string())
 }
 
+fn agent_session() -> Entity<'static> {
+    EntityType::AgentSession.with_entity_string("20000000-0000-0000-0000-000000000009".to_string())
+}
+
 fn active_call() -> Entity<'static> {
     EntityType::Call.with_entity_string("20000000-0000-0000-0000-000000000005".to_string())
 }
@@ -29,7 +33,7 @@ fn archived_call() -> Entity<'static> {
 
 fn command(facts: &TeamShareFacts, level: Option<AccessLevel>) -> AuthorizedTeamShareCommand {
     authorize_team_share(
-        Some(&facts.owner),
+        facts.owner.as_user(),
         facts,
         TeamShareRequest {
             access_level: Some(level),
@@ -154,6 +158,46 @@ async fn apply_inserts_updates_and_deletes_direct_team_entity_access_for_chat(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("team_share"))
 )]
+async fn apply_inserts_updates_and_deletes_direct_team_entity_access_for_agent_sessions(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    let mut tx = pool.begin().await?;
+    apply_comment_view_and_clear(&mut tx, &agent_session()).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn legacy_session_facts_stay_valid_after_permission_initialization(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    let entity = EntityType::AgentSession
+        .with_entity_string("20000000-0000-0000-0000-000000000010".to_string());
+    let mut tx = pool.begin().await?;
+    let facts = load_facts(&mut tx, &entity).await?;
+    assert_eq!(facts.current, None);
+    assert_eq!(facts.revision, 0);
+    let authorized = command(&facts, Some(AccessLevel::View));
+
+    sqlx::query!(r#"INSERT INTO "SharePermission" (id) VALUES ('initialized-session')"#)
+        .execute(tx.as_mut())
+        .await?;
+    sqlx::query!("UPDATE agent_session SET share_permission_id = 'initialized-session' WHERE id = '20000000-0000-0000-0000-000000000010'")
+        .execute(tx.as_mut())
+        .await?;
+
+    apply(&mut tx, &authorized).await?;
+    let current = load_facts(&mut tx, &entity).await?;
+    assert_eq!(current.revision, 1);
+    assert_eq!(current.current.unwrap().level, TeamShareLevel::View);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
 async fn apply_inserts_updates_and_deletes_direct_team_entity_access_for_calls(
     pool: PgPool,
 ) -> rootcause::Result<()> {
@@ -183,7 +227,7 @@ async fn load_facts_prefers_active_call_over_archived_record_with_same_id(
 
     let facts = load_facts(&mut tx, &active_call()).await?;
 
-    assert_eq!(facts.owner.as_ref(), "macro|owner@example.com");
+    assert_eq!(facts.owner.principal_id(), "macro|owner@example.com");
     assert_eq!(facts.current, None);
     Ok(())
 }
@@ -369,6 +413,69 @@ async fn apply_project_team_share_copies_and_clears_nested_contents(
     .fetch_one(tx.as_mut())
     .await?;
     assert_eq!(remaining, Some(0));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../entity_access/fixtures", scripts("typed_owner_team"))
+)]
+async fn typed_owner_facts_match_sql_audiences_without_owner_escalation(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    use macro_user_id::user_id::MacroUserIdStr;
+    use models_permissions::share_permission::team_share::TeamSharePolicyError;
+
+    let team = Uuid::parse_str("90000000-0000-0000-0000-000000000011")?;
+    let actor = MacroUserIdStr::parse_from_str("macro|typed-owner@example.com")?;
+    let mut tx = pool.begin().await?;
+    for (suffix, has_team) in [
+        (31, true),
+        (32, false),
+        (33, true),
+        (34, true),
+        (35, true),
+        (36, false),
+        (37, false),
+    ] {
+        for kind in [EntityType::Document, EntityType::Project, EntityType::Chat] {
+            let entity = kind.with_entity_string(format!("90000000-0000-0000-0000-{suffix:012}"));
+            let facts = load_facts(&mut tx, &entity).await?;
+            let expected = has_team.then_some(team);
+            assert_eq!(facts.owner_team_id, expected, "{entity:?}");
+            let sql_team = sqlx::query_scalar!(
+                "SELECT team_id FROM owner_team($1)",
+                facts.owner.principal_id()
+            )
+            .fetch_optional(tx.as_mut())
+            .await?
+            .flatten();
+            assert_eq!(sql_team, facts.owner_team_id, "domain/SQL policy parity");
+
+            let request = TeamShareRequest {
+                legacy_enabled: Some(true),
+                ..Default::default()
+            };
+            let authorized =
+                authorize_team_share(Some(&actor), &facts, request, TeamShareLevel::Edit);
+            if suffix == 31 {
+                assert!(authorized?.is_some());
+            } else {
+                assert_eq!(authorized, Err(TeamSharePolicyError::NotOwner));
+            }
+            if suffix == 32 {
+                assert_eq!(
+                    authorize_team_share(
+                        facts.owner.as_user(),
+                        &facts,
+                        request,
+                        TeamShareLevel::Edit
+                    ),
+                    Err(TeamSharePolicyError::MissingTeam)
+                );
+            }
+        }
+    }
     Ok(())
 }
 

@@ -18,7 +18,10 @@ vi.mock('../worker/coordinator-page-adapter', () => ({
   createCacheCoordinatorPageAdapter: adapterFactory,
 }));
 
-import { CACHE_COORDINATOR_PROTOCOL_VERSION } from '../worker/coordinator-protocol';
+import {
+  CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type EngineOpenOutcome,
+} from '../worker/coordinator-protocol';
 import {
   CacheBootstrapExhaustedError,
   COORDINATOR_CONNECT_TIMEOUT_MS,
@@ -116,8 +119,11 @@ class FakePageAdapter {
     this.emit(message as WorkerMessage);
   }
 
-  replace(ownerEpoch: number): void {
-    this.options.onEngineReplaced?.(ownerEpoch);
+  replace(
+    ownerEpoch: number,
+    openOutcome: EngineOpenOutcome = 'opened-existing'
+  ): void {
+    this.options.onEngineReplaced?.(ownerEpoch, openOutcome);
   }
 
   protocolError(error: Error): void {
@@ -1036,6 +1042,64 @@ describe('createWorkerCacheHost', () => {
 
     expect(affected).toEqual([[7, 9], [9], [9, 7]]);
     host.dispose();
+  });
+
+  it.each([
+    ['opened-existing', 'preserved'],
+    ['opened-new', 'reset'],
+    ['reset-incompatible', 'reset'],
+    ['reset-corrupt', 'reset'],
+    ['reset-storage-uncertain', 'reset'],
+  ] as const)(
+    'invalidates engine dependencies but reports %s storage as %s',
+    async (openOutcome, storage) => {
+      const host = createWorkerCacheHost({ scope: 'scope-1' });
+      const generations = vi.fn();
+      const affected = vi.fn();
+      const unsubscribe = host.onCacheGenerationChanged(generations);
+      host.onOpsAffected(affected);
+      await host.readQuery({ opKey: 7, query: 'query Seven { seven }' });
+      const adapter = requireAdapter();
+      adapter.replace(2, openOutcome);
+      await vi.waitFor(() => expect(affected).toHaveBeenCalledWith([7]));
+      expect(generations).toHaveBeenCalledExactlyOnceWith({ storage });
+      expect(adapter.requests.filter((r) => r.kind === 'init')).toHaveLength(2);
+      adapter.replace(2, 'reset-corrupt');
+      adapter.replace(1, 'reset-corrupt');
+      expect(generations).toHaveBeenCalledOnce();
+      unsubscribe();
+      adapter.replace(3, openOutcome);
+      expect(generations).toHaveBeenCalledOnce();
+      host.dispose();
+    }
+  );
+
+  it('delivers hydration only to opted-in subscribers and cleans them up', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const foreground = vi.fn();
+    const quickAccess = vi.fn();
+    const operations = vi.fn();
+    host.onCacheChanged(foreground);
+    host.onOpsAffected(operations);
+    const unsubscribe = host.onCacheChanged(quickAccess, {
+      includeHydration: true,
+    });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.push({ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION });
+    expect(quickAccess).toHaveBeenCalledOnce();
+    expect(foreground).not.toHaveBeenCalled();
+    expect(operations).not.toHaveBeenCalled();
+    adapter.push({ kind: 'cache-changed', revision: INITIAL_CACHE_REVISION });
+    expect(quickAccess).toHaveBeenCalledTimes(2);
+    expect(foreground).toHaveBeenCalledOnce();
+    unsubscribe();
+    adapter.push({ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION });
+    expect(quickAccess).toHaveBeenCalledTimes(2);
+    host.onCacheChanged(quickAccess, { includeHydration: true });
+    host.dispose();
+    adapter.push({ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION });
+    expect(quickAccess).toHaveBeenCalledTimes(2);
   });
 
   it('strictly filters pushes to the exact client operation prefix', async () => {

@@ -913,6 +913,14 @@ export type Content =
     }
   | {
       markdown: MarkdownNode[];
+    }
+  | {
+      download: {
+        /**
+         * Short-lived URL the raw file can be downloaded from.
+         */
+        url: string;
+      };
     };
 /**
  * A single node of a markdown document as seen by the AI.
@@ -946,6 +954,51 @@ export type MarkdownNode =
        */
       id: string;
       type: 'dssImage';
+    };
+/**
+ * Whether a thread is on part of a document or on the document as a whole.
+ */
+export type CommentThreadKind = 'inline' | 'discussion';
+/**
+ * Where a discussion sits in its document.
+ */
+export type CommentAnchor =
+  | {
+      type: 'document';
+    }
+  | {
+      /**
+       * The comment mark in the document.
+       */
+      markId: string;
+      /**
+       * The text the comment is on, as the document reads now; the text
+       * when the comment was written if the document could not be read.
+       */
+      markedText?: string | null;
+      /**
+       * The text when the comment was written, when it differs from now.
+       */
+      originalMarkedText?: string | null;
+      /**
+       * The commented text has since been removed from the document.
+       */
+      removed?: boolean;
+      type: 'text';
+    }
+  | {
+      /**
+       * The highlight annotation.
+       */
+      anchorId: string;
+      type: 'pdfHighlight';
+    }
+  | {
+      /**
+       * The pin annotation.
+       */
+      anchorId: string;
+      type: 'pdfPin';
     };
 /**
  * API-visible content lifecycle state derived from current document metadata.
@@ -5206,7 +5259,7 @@ export interface ChatMessagePreview {
   attachmentIds: string[];
 }
 /**
- * Retrieve a documents content
+ * Retrieve a document's content and its comment threads, including inline comments with the text they are on, Discussion comments, replies and resolved state.
  */
 export interface ReadContent {
   /**
@@ -5217,105 +5270,60 @@ export interface ReadContent {
 export interface ReadContentResponse {
   content: Content;
   /**
-   * Any comments on the document
+   * The comment threads on the document, oldest first: inline comments
+   * with the text they are on, and Discussion comments on the whole
+   * document. Each thread lists its first comment followed by the replies.
    */
-  comments: CommentThread[];
+  comments: DocumentDiscussion[];
 }
 /**
- * A thread bundled together with its ordered comments.
+ * A comment thread on a document: its first comment followed by the replies.
  */
-export interface CommentThread {
-  thread: Thread;
+export interface DocumentDiscussion {
   /**
-   * The comments in the thread, ordered by `createdAt` ASC.
+   * The thread id, which is the id of its first comment. Replies and
+   * resolution address the thread by this id.
    */
-  comments: Comment[];
-}
-/**
- * A comment thread attached to a document.
- */
-export interface Thread {
-  /**
-   * The unique id of the thread.
-   */
-  threadId: number;
-  /**
-   * The user id of the thread owner.
-   */
-  owner: string;
+  id: string;
+  kind: CommentThreadKind;
   /**
    * Whether the thread has been resolved.
    */
   resolved: boolean;
+  anchor: CommentAnchor;
   /**
-   * The document the thread is attached to.
+   * The comments in order, first comment first.
    */
-  documentId: string;
-  /**
-   * When the thread was created.
-   */
-  createdAt?: string | null;
-  /**
-   * When the thread was last updated.
-   */
-  updatedAt?: string | null;
-  /**
-   * When the thread was deleted, if ever.
-   */
-  deletedAt?: string | null;
-  /**
-   * Arbitrary thread metadata.
-   */
-  metadata?: {
-    [k: string]: unknown;
-  };
+  comments: DocumentComment[];
 }
 /**
- * A single comment in a thread.
+ * A single comment in a discussion.
  */
-export interface Comment {
+export interface DocumentComment {
   /**
-   * The unique id of the comment.
+   * The comment id.
    */
-  commentId: number;
+  id: string;
   /**
-   * The thread this comment belongs to.
+   * The user or bot id of the author.
    */
-  threadId: number;
+  author: string;
   /**
-   * Ordering position within the thread.
+   * The author's display name, for bots and comments imported from other documents.
    */
-  order?: number | null;
+  authorName?: string | null;
   /**
-   * The user id of the comment owner.
+   * The comment body in markdown; absent when the comment was deleted.
    */
-  owner: string;
+  content?: string | null;
   /**
-   * Sender display string.
+   * When the comment was written.
    */
-  sender?: string | null;
+  createdAt: string;
   /**
-   * Comment body.
+   * When the comment was last edited.
    */
-  text: string;
-  /**
-   * Arbitrary comment metadata.
-   */
-  metadata?: {
-    [k: string]: unknown;
-  };
-  /**
-   * When the comment was created.
-   */
-  createdAt?: string | null;
-  /**
-   * When the comment was last updated.
-   */
-  updatedAt?: string | null;
-  /**
-   * When the comment was deleted, if ever.
-   */
-  deletedAt?: string | null;
+  editedAt?: string | null;
 }
 /**
  * Retrieve a documents metadata
@@ -5572,6 +5580,74 @@ export interface RenameDocumentResponse {
    * A human-readable result message.
    */
   message: string;
+}
+/**
+ * Reply in a comment thread on a document, or post a new comment in the document's Discussion panel, on behalf of the user. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. Cannot start a new inline comment on selected text.
+ */
+export interface ReplyToDocumentComment {
+  /**
+   * The id of the document the comment is on.
+   */
+  documentId: string;
+  /**
+   * Comment content in macro markdown format. This uses the same syntax as markdown documents.
+   */
+  content: string;
+  /**
+   * The id of the inline or Discussion thread to reply in, from ReadContent. Omit to post a new Discussion comment on the document as a whole.
+   */
+  threadId?: string | null;
+}
+/**
+ * The posted comment.
+ */
+export interface ReplyToDocumentCommentResponse {
+  /**
+   * The document the comment was posted on.
+   */
+  documentId: string;
+  /**
+   * The thread the comment is in; a new Discussion comment starts its own.
+   */
+  threadId: string;
+  /**
+   * The posted comment.
+   */
+  commentId: string;
+}
+/**
+ * Resolve or reopen a comment thread on a document on behalf of the user. Only use this when explicitly asked to resolve or reopen a comment. Thread ids come from the comments ReadContent returns.
+ */
+export interface ResolveDocumentComment {
+  /**
+   * The id of the document the comment is on.
+   */
+  documentId: string;
+  /**
+   * The id of the inline or Discussion thread, from ReadContent.
+   */
+  threadId: string;
+  /**
+   * True to resolve the thread, false to reopen a resolved thread. Defaults to true.
+   */
+  resolved?: boolean;
+}
+/**
+ * The thread's state after the change.
+ */
+export interface ResolveDocumentCommentResponse {
+  /**
+   * The document the thread is on.
+   */
+  documentId: string;
+  /**
+   * The thread that was changed.
+   */
+  threadId: string;
+  /**
+   * Whether the thread is now resolved.
+   */
+  resolved: boolean;
 }
 /**
  * Search the user's skills by name. Skills are markdown documents containing instructions for AI to read and follow; when the user references a skill (or a request matches one), find it with this tool and then read its instructions with ReadContent using the returned document id. This is keyword search against skill names: pass 1-3 targeted keywords that would literally appear in the skill's name, not a natural-language description. Matching defaults to prefix; set matchType to 'exact' for whole-token matching. Only skills the user can access are returned, most recently updated first.
@@ -6080,6 +6156,40 @@ export interface UpdateThreadLabelsResponse {
    * A human-readable summary of the operation.
    */
   summary: string;
+}
+/**
+ * Upload an existing file to Macro from base64-encoded bytes, up to 25 MiB decoded. Use for PDFs, images, Office files, and other files; use CreateDocument for generated text or native Macro spreadsheets. Encode actual file bytes programmatically; never invent or transcribe binary content. Returns a document ID after the bytes are uploaded; preview and indexing may finish asynchronously. Does not read local paths or fetch URLs.
+ */
+export interface UploadFile {
+  /**
+   * Filename including its extension, for example report.pdf. Do not include a directory path.
+   */
+  fileName: string;
+  /**
+   * Standard padded base64 of the exact file bytes (maximum 25 MiB decoded). No data URL prefix or whitespace. Prefer constructing this argument programmatically from the file.
+   */
+  contentBase64: string;
+  /**
+   * Optional destination project (folder) ID. Requires edit access. Omit to upload to the user's top-level files.
+   */
+  projectId?: string | null;
+}
+/**
+ * Metadata for an uploaded file. Does not echo the file contents.
+ */
+export interface UploadFileResponse {
+  /**
+   * ID of the new Macro document.
+   */
+  documentId: string;
+  /**
+   * Uploaded filename, including its extension.
+   */
+  fileName: string;
+  /**
+   * Number of uploaded bytes.
+   */
+  sizeBytes: number;
 }
 /**
  * Fetch the contents of a web page using Claude's built-in web fetch tool.

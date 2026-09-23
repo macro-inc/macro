@@ -315,7 +315,6 @@ export function ChannelThread(props: ThreadProps) {
                   listMeta={props.listMeta}
                   inputMode={props.inputMode}
                   messageEditor={props.messageEditor}
-                  participants={props.participants}
                   onClick={selectThreadMessage}
                   selected={isSelected() && !isThreadFocused()}
                   targeted={
@@ -339,12 +338,15 @@ export function ChannelThread(props: ThreadProps) {
                   button's left edge. Its vertical part starts exactly at the
                   last reply row's bottom (button h-8 + mb-2 + container pb). */}
               <Show
-                when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}
+                when={
+                  !props.monorail &&
+                  (shouldShowCollapsedIndicator() || shouldShowReplyButton())
+                }
               >
                 <Thread.TerminalRail />
               </Show>
               <DebugSuspense name="ChannelThread.replies">
-                <Thread.RepliesContainer>
+                <Thread.RepliesContainer flat={props.monorail}>
                   <DebugSuspense name="ChannelThread.ReplyList">
                     <Thread.ReplyList
                       parent={props.parent()}
@@ -353,7 +355,6 @@ export function ChannelThread(props: ThreadProps) {
                       getMessageActions={props.getMessageActions}
                       inputMode={props.inputMode}
                       messageEditor={props.messageEditor}
-                      participants={props.participants}
                       isNewMessage={props.isNewMessage}
                       onReady={setReplyListHandle}
                       positionTarget={props.targetNavigation?.positionTarget}
@@ -364,6 +365,7 @@ export function ChannelThread(props: ThreadProps) {
                       }
                       isThreadFocused={isThreadFocused}
                       onSelectReply={selectReply}
+                      monorail={props.monorail}
                     />
                   </DebugSuspense>
 
@@ -381,20 +383,22 @@ export function ChannelThread(props: ThreadProps) {
                           composer, so this branch turns at the avatar's
                           center. Once replies exist, it instead joins the
                           composer at its vertical center. */}
-                      <div
-                        class="pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-thread-rail rounded-bl-[14px]"
-                        style={{
-                          left: 'calc(var(--user-icon-width) / 2 + var(--message-padding-x) - var(--thread-shift) - var(--channel-rail-width) / 2)',
-                          width:
-                            'calc(var(--thread-shift) - var(--user-icon-width) / 2 - var(--channel-rail-clearance))',
-                          ...(hasReplies()
-                            ? { bottom: '50%' }
-                            : {
-                                height:
-                                  'calc(var(--message-padding-x) + var(--user-icon-width) / 2)',
-                              }),
-                        }}
-                      />
+                      <Show when={!props.monorail}>
+                        <div
+                          class="pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-thread-rail rounded-bl-[14px]"
+                          style={{
+                            left: 'calc(var(--user-icon-width) / 2 + var(--message-padding-x) - var(--thread-shift) - var(--channel-rail-width) / 2)',
+                            width:
+                              'calc(var(--thread-shift) - var(--user-icon-width) / 2 - var(--channel-rail-clearance))',
+                            ...(hasReplies()
+                              ? { bottom: '50%' }
+                              : {
+                                  height:
+                                    'calc(var(--message-padding-x) + var(--user-icon-width) / 2)',
+                                }),
+                          }}
+                        />
+                      </Show>
                       <Show when={!hasReplies()}>
                         <Thread.ReplyAuthor
                           userId={replyUserId()}

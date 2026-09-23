@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT state, outcome, execution_record_id FROM scheduled_action_event_run WHERE action_id = $1 AND event_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "outcome",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "execution_record_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "59517bccf29ea6e96b86f6a7f28c861c0db7709ab72c68f7a5c27b275f96bc65"
+}

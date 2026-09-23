@@ -17,6 +17,9 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Postgres-backed share-permission adapter for channel message references.
 #[derive(Clone)]
 pub struct PgChannelReferenceSharePermissions<E> {
@@ -79,18 +82,20 @@ async fn ensure_referenced_item_visible_to_channel(
             .context("failed to insert thread share permissions")?;
     }
 
-    // Sessions use direct entity-access rows, not legacy SharePermission rows.
-    if item.entity_type() == ReferencedShareItemType::AgentSession {
+    // Session and calendar event channel grants are canonical entity-access
+    // rows. A reference must preserve explicit sharing and the originating
+    // channel's control grant. Calendar events carry no SharePermission row.
+    if matches!(
+        item.entity_type(),
+        ReferencedShareItemType::AgentSession | ReferencedShareItemType::CalendarEvent
+    ) {
         let mut transaction = db.begin().await?;
-        entity_access_db_utils::update_entity_access_channel_share_permissions(
+        entity_access_db_utils::channel_share::insert_if_absent(
             &mut transaction,
             &entity_id,
-            entity_access_db_utils::EntityType::AgentSession,
-            &[UpdateChannelSharePermission {
-                channel_id: channel_id.to_string(),
-                operation: UpdateOperation::Add,
-                access_level: Some(level),
-            }],
+            entity_access_db_type_for(item.entity_type()),
+            &channel_id,
+            level,
         )
         .await?;
         transaction.commit().await?;
@@ -144,6 +149,7 @@ fn entity_access_type_for(item_type: ReferencedShareItemType) -> EntityType {
         ReferencedShareItemType::Project => EntityType::Project,
         ReferencedShareItemType::EmailThread => EntityType::EmailThread,
         ReferencedShareItemType::Call => EntityType::Call,
+        ReferencedShareItemType::CalendarEvent => EntityType::CalendarEvent,
     }
 }
 
@@ -157,5 +163,6 @@ fn entity_access_db_type_for(
         ReferencedShareItemType::Project => entity_access_db_utils::EntityType::Project,
         ReferencedShareItemType::EmailThread => entity_access_db_utils::EntityType::EmailThread,
         ReferencedShareItemType::Call => entity_access_db_utils::EntityType::Call,
+        ReferencedShareItemType::CalendarEvent => entity_access_db_utils::EntityType::CalendarEvent,
     }
 }

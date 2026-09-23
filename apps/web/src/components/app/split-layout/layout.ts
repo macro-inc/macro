@@ -3,6 +3,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContext } from 'solid-js';
 import { SplitPanelContext } from './context';
 import type {
+  OpenSplitResult,
   OpenWithSplitOptions,
   PopoverSplitOptions,
   ReferredFrom,
@@ -15,21 +16,17 @@ export function useSplitLayout() {
   function openWithSplit(
     content: SplitContent,
     options?: OpenWithSplitOptions
-  ) {
+  ): OpenSplitResult {
     const splitManager = globalSplitManager();
     const preferNewSplit = isTouchDevice() ? false : options?.preferNewSplit;
 
     if (!splitManager) {
       console.error('No split manager found');
-      return;
+      return { status: 'unavailable' };
     }
 
-    // Navigation issued from inside a split panel (links, mentions, references)
-    // carries that panel as its source; callers outside any panel (sidebar,
-    // command menu) stay handle-less, which is what marks "external navigation"
-    // for Preview Pair routing. A popover's SplitPanelContext handle is a stub
-    // whose replace() is a no-op, so treat popover sources as handle-less too
-    // and let same-split navigation fall back to the active split.
+    // Use the source panel for navigation. Popover handles cannot replace
+    // content, so navigation from a popover falls back to the active split.
     const requestedHandle = options?.handle ?? splitPanelContext?.handle;
     const handle = requestedHandle?.isPopover() ? undefined : requestedHandle;
 
@@ -48,7 +45,7 @@ export function useSplitLayout() {
       referredFrom,
       handle: splitPanelContext?.handle,
       activate: true,
-    });
+    }).split;
   }
 
   function replaceSplit(options: {
@@ -63,7 +60,7 @@ export function useSplitLayout() {
       referredFrom,
       handle: splitPanelContext?.handle,
       preferNewSplit: false,
-    });
+    }).split;
   }
 
   function insertSplit(
@@ -76,7 +73,7 @@ export function useSplitLayout() {
       referredFrom,
       preferNewSplit: true,
       ...options,
-    });
+    }).split;
   }
 
   function popoverSplit(

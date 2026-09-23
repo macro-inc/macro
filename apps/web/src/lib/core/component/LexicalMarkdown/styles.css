@@ -615,6 +615,17 @@ mark {
   padding-bottom: 0;
 }
 
+.md-mark.comment[data-comment-resolved] {
+  background: unset;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.md-mark.selected.comment[data-comment-resolved] {
+  border-bottom: 2px dotted oklch(from var(--color-yellow) l c h / 0.5);
+  padding-bottom: 2px;
+}
+
 .md-no-comments {
   .md-mark.comment {
     background: unset !important;

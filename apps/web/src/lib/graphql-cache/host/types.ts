@@ -84,6 +84,16 @@ export interface InitialMutationClaimArgs {
   leaseExpiresAtMs: number;
 }
 
+export type CacheChangeOptions = {
+  /** Also observe background hydration without re-executing foreground queries. */
+  includeHydration?: boolean;
+};
+
+/** Engine replacement is independent of whether durable cache data survived. */
+export type CacheGenerationChange = {
+  storage: 'preserved' | 'reset';
+};
+
 export interface CacheHost {
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
@@ -106,6 +116,7 @@ export interface CacheHost {
    * Stores a background query response and returns only fields not marked
    * `@cacheOnly`. Advances the internal revision for coherent reads without
    * notifying foreground subscribers unless the write resets cache identity.
+   * Cache-only consumers can opt into hydration via onCacheChanged.
    */
   hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
@@ -161,10 +172,16 @@ export interface CacheHost {
   onOpsAffected(cb: (opKeys: number[]) => void): () => void;
 
   /** Subscribes whenever the effective normalized-cache view changes. */
-  onCacheChanged(cb: (revision: CacheRevision) => void): () => void;
+  onCacheChanged(
+    cb: (revision: CacheRevision) => void,
+    options?: CacheChangeOptions
+  ): () => void;
 
-  /** Invalidates revision watermarks before a replacement engine is used. */
-  onCacheGenerationChanged(cb: () => void): () => void;
+  /** Invalidates in-memory revisions/dependencies on every engine replacement.
+   * Durable checkpoints survive replacements that preserve stored records. */
+  onCacheGenerationChanged(
+    cb: (change: CacheGenerationChange) => void
+  ): () => void;
 
   /** Subscribes to final commit, rollback, or supersession events. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;

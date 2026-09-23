@@ -40,7 +40,12 @@ impl<Repo: AgentSessionRepo, Access: EntityAccessService> Authority
                 .map_err(|_| PreviewError::Denied)?;
         Ok(AgentIdentity {
             session: session.id,
-            owner: session.owner_id,
+            // Previews are charged to whoever the session acts as, so a
+            // non-user owner is refused rather than quietly given a quota.
+            owner: session
+                .owner_user()
+                .map_err(|_| PreviewError::Denied)?
+                .clone(),
         })
     }
     async fn viewer(

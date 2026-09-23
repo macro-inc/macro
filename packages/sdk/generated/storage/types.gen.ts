@@ -91,6 +91,11 @@ export type AddPinRequest = {
  */
 export type Agent = {
     /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. `None` means always prompt. Bypass also requires the harness's opt-in.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
      * The bot identity used for mentions and channel participation.
      */
     bot: Bot;
@@ -176,6 +181,11 @@ export type AgentMcpServers = {
 };
 
 /**
+ * Last synchronized state of a session's linked GitHub pull request.
+ */
+export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
+
+/**
  * Filters for agent sessions.
  */
 export type AgentSessionFilters = {
@@ -190,8 +200,9 @@ export type AgentSessionFilters = {
      */
     include?: boolean;
     /**
-     * Filter by session owner. Examples: ['macro|user1@user.com']. Empty to
-     * include every owner.
+     * Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
      */
     owners?: Array<string>;
 };
@@ -1123,6 +1134,10 @@ export type ApiThreadReply = {
  */
 export type ApprovePairingRequest = {
     /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
+    /**
      * Display name override. Defaults to the daemon's requested name.
      */
     name?: string | null;
@@ -1725,13 +1740,19 @@ export type CalendarEventSourceContent = {
 
 /**
  * Meeting-level fields shown in a calendar event mention preview, taken from
- * the requester's own projection of the meeting.
+ * the requester's own projection of the meeting, or — when the requester has
+ * none — from the mentioned projection a channel they belong to was given.
  */
 export type CalendarMentionEvent = {
     /**
-     * Number of attendees on the requester's copy.
+     * Number of attendees on the previewed copy.
      */
     attendeeCount: number;
+    /**
+     * Provider description, plain text or HTML, truncated for the preview.
+     * Clients must sanitize it before rendering.
+     */
+    description?: string | null;
     /**
      * Whether the event repeats.
      */
@@ -1764,14 +1785,17 @@ export type CalendarMentionEvent = {
      */
     title: string;
     /**
-     * Entity update time of the requester's copy.
+     * Entity update time of the previewed copy.
      */
     updatedAt: string;
     /**
      * The requester's own event entity for the mentioned meeting. Differs
      * from the mentioned id when the mention came from another attendee.
+     * Absent when the meeting is on none of the requester's calendars and
+     * they see it only because it was shared with one of their channels:
+     * that preview is read-only and there is no event of theirs to open.
      */
-    viewerEventId: string;
+    viewerEventId?: string | null;
 };
 
 /**
@@ -2307,6 +2331,74 @@ export type ChannelJoinCodeResponse = {
      * Reusable code for joining the channel.
      */
     join_code: string;
+};
+
+/**
+ * A shared or account-private label grouping chat channels in the sidebar.
+ *
+ * `channel_ids` is viewer-relative: it lists only the labelled channels the
+ * requesting user participates in. `channel_count` counts every channel in
+ * the label so clients can warn accurately before a delete.
+ */
+export type ChannelLabel = {
+    /**
+     * All assignments for a manual label; visible matches for a smart tag.
+     */
+    channelCount: number;
+    /**
+     * Channels in this label that the requesting user participates in.
+     */
+    channelIds: Array<string>;
+    /**
+     * When the label was created.
+     */
+    createdAt: string;
+    /**
+     * Stable label id.
+     */
+    id: string;
+    /**
+     * Display name, unique within the scope (case-insensitive).
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
+    /**
+     * Manual ordering value within the scope; lower sorts first.
+     */
+    sortOrder: number;
+    /**
+     * Owning team, or `None` for account-private labels.
+     */
+    teamId?: string | null;
+    /**
+     * When the label was last renamed or reordered.
+     */
+    updatedAt: string;
+};
+
+/**
+ * Case-insensitive, literal substring matching on the channel name.
+ */
+export type ChannelLabelRule = {
+    attribute: 'name';
+    /**
+     * The substring to find anywhere in the name.
+     */
+    contains: string;
+};
+
+/**
+ * The authorized scope's labels in manual order.
+ */
+export type ChannelLabelsList = {
+    /**
+     * Every label of the scope, whether or not the caller sees channels in it.
+     */
+    labels: Array<ChannelLabel>;
+    /**
+     * Team scope, or `None` for private labels.
+     */
+    teamId?: string | null;
 };
 
 /**
@@ -2916,7 +3008,10 @@ export type ChatFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -3077,6 +3172,11 @@ export type CountedReaction = {
  */
 export type CreateAgentRequest = {
     /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
      * Optional avatar URL or data URL.
      */
     avatar_url?: string | null;
@@ -3171,6 +3271,21 @@ export type CreateBulkDocumentResponseData = {
      * Indicates if the document was created successfully
      */
     success: boolean;
+};
+
+/**
+ * Request body for creating a label.
+ */
+export type CreateChannelLabelRequest = {
+    /**
+     * Channels to move into the new label.
+     */
+    channelIds?: Array<string>;
+    /**
+     * Display name; unique within the scope, case-insensitively.
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
 };
 
 /**
@@ -3541,6 +3656,10 @@ export type CreateMarkdownDocumentResponse = {
  * The daemon serializes this, so both derives are used.
  */
 export type CreatePairingRequest = {
+    /**
+     * Daemon operator consent ceiling. Omitted by older clients; web approval decides.
+     */
+    allow_permission_bypass?: boolean | null;
     /**
      * Display-only description of the machine, e.g. `eric@macbook / darwin`.
      */
@@ -4395,7 +4514,7 @@ export type DocumentContentUploadedMetadata = {
     /**
      * The owner of the document (used by the extractor to resolve S3 keys).
      */
-    owner: MacroUserIdStr;
+    owner: string;
 };
 
 /**
@@ -4412,9 +4531,9 @@ export type DocumentCopiedMetadata = {
     document_name: string;
     file_type?: null | FileType;
     /**
-     * The owner of the new copy (the copier).
+     * The principal who owns the new copy.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the copy belongs to, when any.
      */
@@ -4436,7 +4555,8 @@ export type DocumentCopiedMetadata = {
 export type DocumentCreatedMetadata = {
     /**
      * Who mechanically created the document. Absent on events published
-     * before attribution: ingest then treats [`Self::owner`] as the actor.
+     * before attribution: ingest derives a user/bot actor from [`Self::owner`].
+     * Team owners fall back to [`Self::on_behalf_of`], then the system bot.
      */
     actor?: string | null;
     /**
@@ -4454,9 +4574,9 @@ export type DocumentCreatedMetadata = {
     file_type?: null | FileType;
     on_behalf_of?: null | MacroUserIdStr;
     /**
-     * The owner (creator) of the document.
+     * The principal who owns the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the document was created in, when any.
      */
@@ -4511,7 +4631,10 @@ export type DocumentFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -4858,7 +4981,7 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
-     * File type of the sync document (markdown today).
+     * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
     on_behalf_of?: null | MacroUserIdStr;
@@ -4957,7 +5080,7 @@ export type DocumentUpdatedMetadata = {
     /**
      * The owner of the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project id before the update.
      */
@@ -6271,6 +6394,10 @@ export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewe
  */
 export type Harness = {
     /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
+    /**
      * Whether the daemon currently holds a runtime connection.
      */
     connected: boolean;
@@ -7037,6 +7164,12 @@ export type NewThreadAnchor = {
      * Serialized mark identifier.
      */
     mark_id: string;
+    /**
+     * The document text the mark covers, captured by the editor as the
+     * comment is written. Trimmed and bounded before it is stored, so an
+     * oversized or whitespace-only claim cannot reach the thread row.
+     */
+    marked_text?: string | null;
     type: 'markdown';
 } | {
     /**
@@ -7108,6 +7241,10 @@ export type PairingDetails = {
      * Display-only description of the machine.
      */
     host?: string | null;
+    /**
+     * Daemon operator consent ceiling; false forbids bypass at approval.
+     */
+    requested_allow_permission_bypass?: boolean | null;
     /**
      * Harness display name the daemon asked for.
      */
@@ -7439,6 +7576,11 @@ export type PostMessage = {
      */
     content: string;
     /**
+     * Client-minted UUIDv7 for the new message, so an optimistic message
+     * already carries its final id; the server mints one when absent.
+     */
+    id?: string | null;
+    /**
      * Mentions tracked by the editor.
      */
     mentions?: Array<SimpleMention>;
@@ -7662,7 +7804,10 @@ export type ProjectFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -7857,39 +8002,6 @@ export type RecentlyDeletedResponseData = {
 };
 
 /**
- * A source channel thread that mentions the requested document.
- */
-export type ReferencedThread = {
-    /**
-     * Whether this viewer currently has permission to reply in the source channel.
-     */
-    can_reply: boolean;
-    /**
-     * Source channel's current display name, returned only after access checks.
-     */
-    channel_name?: string | null;
-    /**
-     * Source parent used by the common message reader and mutations.
-     */
-    parent: MessageParent;
-    /**
-     * Source root identity; discovery does not copy its message content.
-     */
-    root_id: string;
-};
-
-/**
- * Authorized source threads, deduplicated by root.
- */
-export type ReferencedThreadPage = {
-    next_cursor?: null | MessageCursor;
-    /**
-     * Accessible channel discussions mentioning the document.
-     */
-    threads: Array<ReferencedThread>;
-};
-
-/**
  * A reminder belonging to a user.
  *
  * `user_id` is deliberately absent: a reminder is only ever read by its owner,
@@ -8021,6 +8133,17 @@ export type RemoveParticipantsRequest = {
      * User ids to remove.
      */
     participants: Array<string>;
+};
+
+/**
+ * Request body for renaming a label.
+ */
+export type RenameChannelLabelRequest = {
+    /**
+     * New display name.
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
 };
 
 /**
@@ -8261,6 +8384,16 @@ export type SessionStoppedMetadata = {
 };
 
 /**
+ * Request body for moving a channel between labels.
+ */
+export type SetChannelLabelRequest = {
+    /**
+     * The label to put the channel in, or `null` to remove it from its label.
+     */
+    labelId?: string | null;
+};
+
+/**
  * Replace a channel's picture, or remove it by sending a null file id.
  */
 export type SetChannelPictureRequest = {
@@ -8432,11 +8565,38 @@ export type SimpleMention = {
 };
 
 /**
+ * A channel visible to the caller that matches a smart tag rule.
+ */
+export type SmartTagChannelMatch = {
+    /**
+     * Channel id.
+     */
+    id: string;
+    /**
+     * Channel display name.
+     */
+    name: string;
+};
+
+/**
+ * A bounded preview and the total number of visible channels matching a rule.
+ */
+export type SmartTagPreview = {
+    /**
+     * First matches, in alphabetical order.
+     */
+    channels: Array<SmartTagChannelMatch>;
+    /**
+     * Number of matching channels the caller participates in, including overflow.
+     */
+    totalCount: number;
+};
+
+/**
  * An agent session as displayed in Soup.
  *
- * Mirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent
- * counterpart of a chat, so it carries the same identity, ownership, and
- * recency fields plus the session's last known status.
+ * Includes the persisted runtime and repository metadata needed to render
+ * coding and non-coding sessions without fetching each session separately.
  */
 export type SoupAgentSessionSoupPropertiesField = {
     /**
@@ -8453,6 +8613,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      */
     createdAt: string;
     /**
+     * The runtime snapshotted when the session was created.
+     */
+    harness: string;
+    /**
      * The agent session uuid
      */
     id: string;
@@ -8464,6 +8628,23 @@ export type SoupAgentSessionSoupPropertiesField = {
      * Who the session belongs to
      */
     ownerId: string;
+    /**
+     * The linked pull request's Macro entity, when visible to the viewer.
+     */
+    pullRequestId?: string | null;
+    pullRequestState?: null | AgentPullRequestState;
+    /**
+     * The persisted pull request associated with the session.
+     */
+    pullRequestUrl?: string | null;
+    /**
+     * The starting branch selected for this session, not its current branch.
+     */
+    repoBranch?: string | null;
+    /**
+     * The repository the session works with, when one was selected.
+     */
+    repoUrl?: string | null;
     /**
      * The session's last known status.
      *
@@ -8477,6 +8658,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      */
     threadId?: string | null;
     /**
+     * Last persisted fold turn state. Absent until an older session next runs.
+     */
+    turnState?: string | null;
+    /**
      * The time the session was last modified
      */
     updatedAt: string;
@@ -8484,6 +8669,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The time the session was last viewed by the requesting user
      */
     viewedAt?: string | null;
+    /**
+     * Last captured working branch, when the runtime has reported one.
+     */
+    workingBranch?: string | null;
 };
 
 /**
@@ -9458,7 +9647,7 @@ export type SoupProjectSoupPropertiesField = {
      */
     name: string;
     /**
-     * The user id of who created the project
+     * The owner of the project
      */
     ownerId: string;
     /**
@@ -9794,6 +9983,13 @@ export type ThreadAnchor = {
      * Mark UUID serialized in the document.
      */
     mark_id: string;
+    /**
+     * The marked text as it read when the discussion was created, already
+     * trimmed and bounded. Absent on threads created or imported before
+     * snapshots were captured: the text a mark covers cannot be recovered
+     * from the mark id alone.
+     */
+    marked_text?: string | null;
     type: 'markdown';
 } | {
     /**
@@ -9883,6 +10079,16 @@ export type ThreadState = {
      * User who owns this discussion, including imported discussions.
      */
     user_id: string;
+};
+
+/**
+ * Transcription result.
+ */
+export type TranscribeResponse = {
+    /**
+     * Recognized text.
+     */
+    text: string;
 };
 
 /**
@@ -10091,6 +10297,11 @@ export type UnthreadedPdfUuidRequest = {
  * Request to replace the editable configuration of a persisted AI agent.
  */
 export type UpdateAgentRequest = {
+    /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
     /**
      * Optional avatar URL or data URL.
      */
@@ -11425,6 +11636,157 @@ export type IngestTranscriptResponses = {
      */
     200: unknown;
 };
+
+export type ListChannelLabelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/channel-labels';
+};
+
+export type ListChannelLabelsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelLabelsError = ListChannelLabelsErrors[keyof ListChannelLabelsErrors];
+
+export type ListChannelLabelsResponses = {
+    200: ChannelLabelsList;
+};
+
+export type ListChannelLabelsResponse = ListChannelLabelsResponses[keyof ListChannelLabelsResponses];
+
+export type CreateChannelLabelData = {
+    body: CreateChannelLabelRequest;
+    path?: never;
+    query?: never;
+    url: '/channel-labels';
+};
+
+export type CreateChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateChannelLabelError = CreateChannelLabelErrors[keyof CreateChannelLabelErrors];
+
+export type CreateChannelLabelResponses = {
+    200: ChannelLabel;
+};
+
+export type CreateChannelLabelResponse = CreateChannelLabelResponses[keyof CreateChannelLabelResponses];
+
+export type SetChannelLabelData = {
+    body: SetChannelLabelRequest;
+    path: {
+        /**
+         * The channel id.
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/channels/{channel_id}';
+};
+
+export type SetChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelLabelError = SetChannelLabelErrors[keyof SetChannelLabelErrors];
+
+export type SetChannelLabelResponses = {
+    204: void;
+};
+
+export type SetChannelLabelResponse = SetChannelLabelResponses[keyof SetChannelLabelResponses];
+
+export type PreviewSmartTagData = {
+    body: ChannelLabelRule;
+    path?: never;
+    query?: never;
+    url: '/channel-labels/preview';
+};
+
+export type PreviewSmartTagErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PreviewSmartTagError = PreviewSmartTagErrors[keyof PreviewSmartTagErrors];
+
+export type PreviewSmartTagResponses = {
+    200: SmartTagPreview;
+};
+
+export type PreviewSmartTagResponse = PreviewSmartTagResponses[keyof PreviewSmartTagResponses];
+
+export type DeleteChannelLabelData = {
+    body?: never;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/{label_id}';
+};
+
+export type DeleteChannelLabelErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteChannelLabelError = DeleteChannelLabelErrors[keyof DeleteChannelLabelErrors];
+
+export type DeleteChannelLabelResponses = {
+    204: void;
+};
+
+export type DeleteChannelLabelResponse = DeleteChannelLabelResponses[keyof DeleteChannelLabelResponses];
+
+export type RenameChannelLabelData = {
+    body: RenameChannelLabelRequest;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/{label_id}';
+};
+
+export type RenameChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RenameChannelLabelError = RenameChannelLabelErrors[keyof RenameChannelLabelErrors];
+
+export type RenameChannelLabelResponses = {
+    200: ChannelLabel;
+};
+
+export type RenameChannelLabelResponse = RenameChannelLabelResponses[keyof RenameChannelLabelResponses];
 
 export type CreateChannelData = {
     body: CreateChannelRequest;
@@ -13086,6 +13448,64 @@ export type PutCrmTeamStagesResponses = {
 };
 
 export type PutCrmTeamStagesResponse = PutCrmTeamStagesResponses[keyof PutCrmTeamStagesResponses];
+
+export type TranscribeDictationData = {
+    /**
+     * OpenAPI representation of the raw encoded audio body extracted as `Bytes`.
+     */
+    body: Blob | File;
+    path?: never;
+    query?: {
+        /**
+         * ISO 639-1 language hint
+         */
+        language?: string;
+    };
+    url: '/dictation/transcribe';
+};
+
+export type TranscribeDictationErrors = {
+    /**
+     * Empty, oversized, or malformed request
+     */
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * Only signed-in users may dictate
+     */
+    403: ErrorResponse;
+    /**
+     * Body exceeds 8 MiB
+     */
+    413: unknown;
+    /**
+     * Unsupported audio container
+     */
+    415: ErrorResponse;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * Provider failure
+     */
+    502: ErrorResponse;
+    /**
+     * Transcription capacity exhausted; retry after the Retry-After delay
+     */
+    503: ErrorResponse;
+};
+
+export type TranscribeDictationError = TranscribeDictationErrors[keyof TranscribeDictationErrors];
+
+export type TranscribeDictationResponses = {
+    200: TranscribeResponse;
+};
+
+export type TranscribeDictationResponse = TranscribeDictationResponses[keyof TranscribeDictationResponses];
 
 export type GetUserDocumentsHandlerData = {
     body?: never;
@@ -15150,35 +15570,6 @@ export type EntityMessageLegacyResponses = {
 };
 
 export type EntityMessageLegacyResponse = EntityMessageLegacyResponses[keyof EntityMessageLegacyResponses];
-
-export type EntityMessageReferencesData = {
-    body?: never;
-    path: {
-        parent_type: string;
-        parent_id: string;
-    };
-    query?: {
-        /**
-         * Maximum number of roots.
-         */
-        limit?: number | null;
-        /**
-         * Last root's creation timestamp.
-         */
-        created_at?: string | null;
-        /**
-         * Last root's UUID.
-         */
-        cursor_id?: string | null;
-    };
-    url: '/messages/{parent_type}/{parent_id}/references';
-};
-
-export type EntityMessageReferencesResponses = {
-    200: ReferencedThreadPage;
-};
-
-export type EntityMessageReferencesResponse = EntityMessageReferencesResponses[keyof EntityMessageReferencesResponses];
 
 export type EntityMessageDeleteThreadData = {
     body?: never;

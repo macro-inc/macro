@@ -76,8 +76,6 @@ function closeCallNotification(callId: string) {
 function startCallRinger(callId: string, shouldStop: () => boolean): Ringer {
   stopCallRinger(callId);
 
-  let loop: Ringer | undefined;
-  let isReleasingLoop = false;
   let participation: RingParticipation | undefined;
   const ringer: Ringer = { stop: () => participation?.stop() };
   activeCallRingers.set(callId, ringer);
@@ -86,22 +84,7 @@ function startCallRinger(callId: string, shouldStop: () => boolean): Ringer {
     callId,
     shouldStop,
     maxDurationMs: MAX_RING_DURATION_MS,
-    onAcquire: () => {
-      loop = startRingingLoop(shouldStop, playRingSound(), () => {
-        // The loop stopping on its own (user joined, max duration) also ends
-        // the participation, so this tab stops heartbeating a claim it no
-        // longer rings for. Guarded so a release-triggered stop does not end
-        // the participation — a demoted tab must stay in the election as a
-        // takeover candidate.
-        if (!isReleasingLoop) participation?.stop();
-      });
-    },
-    onRelease: () => {
-      isReleasingLoop = true;
-      loop?.stop();
-      isReleasingLoop = false;
-      loop = undefined;
-    },
+    ring: (end) => startRingingLoop(shouldStop, playRingSound(), end).stop,
     onEnd: () => {
       if (activeCallRingers.get(callId) === ringer) {
         activeCallRingers.delete(callId);

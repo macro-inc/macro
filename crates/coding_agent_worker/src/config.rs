@@ -7,6 +7,7 @@
 
 use harness_id::HarnessId;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 #[cfg(test)]
@@ -108,6 +109,9 @@ impl MacroApi {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Identity {
+    /// Whether the next pairing may enable permission bypass. Requires web approval.
+    #[serde(default)]
+    pub allow_permission_bypass: bool,
     /// Requested harness display name; the approving user may rename it.
     /// Defaults to this machine's hostname.
     #[serde(default)]
@@ -156,6 +160,16 @@ pub struct Harness {
     /// Arguments, e.g. `["acp"]`.
     #[serde(default)]
     pub args: Vec<String>,
+    /// Environment added to the harness process and to every model probe, on
+    /// top of the daemon's own.
+    ///
+    /// ACP adapters distributed on npm bundle their own copy of the CLI they
+    /// wrap and run it unless told otherwise. A bundled CLI older than the
+    /// one the operator installed advertises a different model catalogue, so
+    /// the presets point the adapter at the installed CLI through the
+    /// variable it reads for that - `CODEX_PATH`, `CLAUDE_CODE_EXECUTABLE`.
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
 }
 
 /// The workspace every session runs against.

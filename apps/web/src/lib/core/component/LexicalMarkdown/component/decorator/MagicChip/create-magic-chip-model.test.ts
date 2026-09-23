@@ -8,6 +8,7 @@ import type {
   FoldedMessage,
   FoldedStreamEvent,
   PendingElicitation,
+  PendingInteraction,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -29,6 +30,10 @@ const live = vi.hoisted(() => ({
   listeners: new Set<(events: unknown[]) => void>(),
 }));
 const serviceClient = vi.hoisted(() => ({ get: vi.fn() }));
+
+vi.mock('@queries/agent-session/list-sync', () => ({
+  refreshAgentSessionLists: vi.fn(async () => {}),
+}));
 
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
@@ -134,7 +139,12 @@ const question: PendingElicitation = {
 
 const metadata = (
   pendingElicitation: PendingElicitation | null
-): SessionMetadata => ({ pendingElicitation }) as unknown as SessionMetadata;
+): SessionMetadata =>
+  ({
+    pendingInteractions: pendingElicitation
+      ? [{ kind: 'elicitation', ...pendingElicitation }]
+      : [],
+  }) as unknown as SessionMetadata;
 
 const props = {
   agentSessionId: 'session',
@@ -163,6 +173,127 @@ describe('createMagicChipModel', () => {
       },
     });
     live.issue.mockResolvedValue({ isErr: () => false });
+  });
+
+  it.each([0, '0'])(
+    'offers a permission from metadata before its tool arrives, preserving request id %s',
+    async (requestId) => {
+      const permission: PendingInteraction = {
+        kind: 'permission',
+        requestId,
+        turn: 4,
+        toolCall: 'command',
+        options: [{ id: 'allow', name: 'Proceed', kind: 'allow_once' }],
+      };
+      live.snapshot = {
+        messages: [],
+        metadata: { ...metadata(null), pendingInteractions: [permission] },
+      };
+      let model!: ReturnType<typeof createMagicChipModel>;
+      const dispose = createRoot((dispose) => {
+        model = createModel({ ...props, promptedMessage: null });
+        return dispose;
+      });
+      await settle();
+      expect(model.presentation()).toMatchObject({
+        kind: 'asking',
+        asking: { request: permission, canAnswer: true, answering: false },
+      });
+      onChange([
+        {
+          ...openResponse,
+          turn: 4,
+          parts: [
+            {
+              kind: 'tool_use',
+              id: 'command',
+              name: { kind: 'native', name: 'Terminal' },
+              status: 'pending',
+              detail: {
+                kind: 'terminal',
+                command: 'echo hi',
+                output: null,
+                exitCode: null,
+              },
+            },
+          ],
+        },
+      ]);
+      expect(model.presentation()).toMatchObject({
+        asking: { action: 'Run command', detail: 'echo hi' },
+      });
+      expect(
+        await model.interactions.respond({
+          ...permission,
+          answer: { kind: 'selected', optionId: 'allow' },
+        })
+      ).toBe(true);
+      expect(live.issue).toHaveBeenCalledWith({
+        type: 'respondToPermission',
+        requestId,
+        answer: { kind: 'selected', optionId: 'allow' },
+      });
+      onMetadata(metadata(null));
+      expect(model.presentation().kind).not.toBe('asking');
+      expect(
+        await model.interactions.respond({
+          ...permission,
+          answer: { kind: 'selected', optionId: 'allow' },
+        })
+      ).toBe(false);
+      dispose();
+    }
+  );
+
+  it('does not answer a permission from another turn or a read-only session', async () => {
+    const permission: PendingInteraction = {
+      kind: 'permission',
+      requestId: 'approval',
+      turn: 1,
+      toolCall: 'command',
+      options: [],
+    };
+    live.snapshot = {
+      messages: [prompt, openResponse],
+      metadata: { ...metadata(null), pendingInteractions: [permission] },
+    };
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const dispose = createRoot((dispose) => {
+      model = createModel(props);
+      return dispose;
+    });
+    await settle();
+    expect(model.presentation().kind).not.toBe('asking');
+    expect(
+      await model.interactions.respond({
+        ...permission,
+        answer: { kind: 'cancelled' },
+      })
+    ).toBe(false);
+    serviceClient.get.mockResolvedValue({
+      isOk: () => true,
+      isErr: () => false,
+      value: { canEdit: false },
+    });
+    await invalidateAgentSessionMetadata();
+    await settle();
+    onMetadata({
+      ...metadata(null),
+      pendingInteractions: [{ ...permission, turn: 0 }],
+    });
+    expect(model.presentation()).toMatchObject({
+      kind: 'asking',
+      asking: { canAnswer: false },
+    });
+    expect(
+      await model.interactions.respond({
+        ...permission,
+        turn: 0,
+        answer: { kind: 'cancelled' },
+      })
+    ).toBe(false);
+    expect(live.issue).not.toHaveBeenCalled();
+    dispose();
   });
 
   it.each(['cursor', 'codex-cloud'])(
@@ -228,6 +359,30 @@ describe('createMagicChipModel', () => {
       await handleAgentSessionUpdated({ agentSessionId: 'session' });
       await invalidateAgentSessionMetadata();
       expect(serviceClient.get).toHaveBeenCalledTimes(calls);
+    }
+  );
+
+  it.each(['in-memory', 'macro-inmem', 'sandbox'])(
+    'names the %s session Macro Agent, not Macro Agent Agent',
+    async (harness) => {
+      serviceClient.get.mockResolvedValue({
+        isOk: () => true,
+        isErr: () => false,
+        value: {
+          status: { kind: 'disconnected' },
+          harness,
+          model: '',
+          canEdit: true,
+        },
+      });
+      let model!: ReturnType<typeof createMagicChipModel>;
+      const dispose = createRoot((dispose) => {
+        model = createModel(props);
+        return dispose;
+      });
+      await settle();
+      expect(model.header()?.agent).toBe('Macro Agent');
+      dispose();
     }
   );
 
@@ -303,7 +458,12 @@ describe('createMagicChipModel', () => {
     onMetadata(metadata({ ...question, turn: 4 }));
     expect(model.presentation()).toMatchObject({
       kind: 'asking',
-      asking: { question: { turn: 4 } },
+      asking: {
+        request: {
+          kind: 'elicitation',
+          turn: 4,
+        },
+      },
     });
     dispose();
     expect(live.release).toHaveBeenCalledOnce();
@@ -396,9 +556,22 @@ describe('createMagicChipModel', () => {
     expect(model.presentation()).toEqual({
       kind: 'asking',
       markdown: 'Setting that up.',
-      asking: { question, canAnswer: true },
+      asking: {
+        request: {
+          kind: 'elicitation',
+          ...question,
+        },
+        canAnswer: true,
+        answering: false,
+      },
     });
-    expect(await model.elicitation.respond({ action: 'decline' })).toBe(true);
+    expect(
+      await model.interactions.respond({
+        ...question,
+        kind: 'elicitation',
+        answer: { action: 'decline' },
+      })
+    ).toBe(true);
     // The answer rides the session's optimistic path, not a bare POST.
     expect(live.issue).toHaveBeenCalledWith({
       type: 'respondElicitation',
@@ -436,7 +609,13 @@ describe('createMagicChipModel', () => {
     if (presentation.kind === 'asking') {
       expect(presentation.asking.canAnswer).toBe(false);
     }
-    expect(await model.elicitation.respond({ action: 'decline' })).toBe(false);
+    expect(
+      await model.interactions.respond({
+        ...question,
+        kind: 'elicitation',
+        answer: { action: 'decline' },
+      })
+    ).toBe(false);
     expect(live.issue).not.toHaveBeenCalled();
 
     dispose();

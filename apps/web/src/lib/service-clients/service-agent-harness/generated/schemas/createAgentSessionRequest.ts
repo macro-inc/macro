@@ -5,7 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateAgentSessionRequestBotId } from './createAgentSessionRequestBotId';
+import type { CreateAgentSessionRequestId } from './createAgentSessionRequestId';
 import type { CreateAgentSessionRequestInstructions } from './createAgentSessionRequestInstructions';
+import type { CreateAgentSessionRequestModel } from './createAgentSessionRequestModel';
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
 import type { CreateAgentSessionRequestPrompt } from './createAgentSessionRequestPrompt';
 import type { CreateAgentSessionRequestRepoBranch } from './createAgentSessionRequestRepoBranch';
@@ -35,12 +37,27 @@ default coding persona. On an external request, bot callers may omit it
 (their own identity is used) and must not name another bot; user callers
 must supply a bot they own. */
   botId?: CreateAgentSessionRequestBotId;
+  /** Id to create the session under, minted by the caller. Lets a surface
+open on the session's final id - URL, history row, references - the
+moment the user acts, rather than after this request answers (which
+for a managed sandbox can take a while). Omitted, the service mints
+one. Managed sessions only. Answers 409 if a session already holds
+the id. */
+  id?: CreateAgentSessionRequestId;
   /** Instructions the session's runtime works under, for its whole life.
 
 Recorded on the session whichever runtime serves it. Only the
 in-process one acts on them today; `agent_harness`'s `AgentKind`
 records what each of the others will need to. */
   instructions?: CreateAgentSessionRequestInstructions;
+  /** Model the managed session runs on, overriding the persona's. Managed
+sessions only: an external runtime picks its own.
+
+The session's model from the moment it exists, which is what a caller
+choosing one before the first prompt means. Selecting a model *during*
+a session is a control action instead, and reads as one in its
+transcript. */
+  model?: CreateAgentSessionRequestModel;
   /** The user who owns the session. Ignored for user callers, who always
 own their own sessions, and for harness callers, whose verified acting
 user (owner or confirmed team member) owns the session instead;

@@ -28,14 +28,12 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   Match,
-  onCleanup,
   type Setter,
   Show,
   Suspense,
@@ -81,8 +79,6 @@ export function EmailList(props: EmailListProps) {
     options: {
       event?: MouseEvent;
       openInNewSplit?: boolean;
-      replacePreview?: boolean;
-      mergeHistory?: boolean;
     } = {}
   ) {
     const finishTouchHighlight = options.event
@@ -93,16 +89,8 @@ export function EmailList(props: EmailListProps) {
       splitHandle: panel.handle,
       referredFrom: 'mail',
       openInNewSplit: options.openInNewSplit,
-      replacePreview: options.replacePreview,
-      mergeHistory: options.mergeHistory,
     }).finally(() => finishTouchHighlight?.());
   }
-
-  const previewAfterNavigation = debounce(
-    (entity: EntityData) => openEntity(entity, { mergeHistory: true }),
-    150
-  );
-  onCleanup(() => previewAfterNavigation.clear());
 
   function onActivate({
     item,
@@ -120,15 +108,12 @@ export function EmailList(props: EmailListProps) {
 
     if (sourceRow?.kind !== 'entity') return;
 
-    previewAfterNavigation.clear();
-
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
     if (
       !newSplit &&
       metadata?.event?.altKey !== true &&
-      !panel.handle.isControllerSplit() &&
       openThread(
         { id: sourceRow.entity.id, fallbackName: sourceRow.entity.name },
         { event: metadata?.event }
@@ -139,7 +124,6 @@ export function EmailList(props: EmailListProps) {
     openEntity(sourceRow.entity, {
       event: metadata?.event,
       openInNewSplit: newSplit,
-      replacePreview: metadata?.event?.altKey === true && !newSplit,
     });
   }
 
@@ -246,13 +230,6 @@ export function EmailList(props: EmailListProps) {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
-        previewAfterNavigation.clear();
-
-        const row = event.result?.item;
-        if (row?.kind === 'entity' && panel.handle.isControllerSplit()) {
-          previewAfterNavigation(row.entity);
-        }
-
         if (event.kind !== 'move' || event.direction !== 1) return;
         if (source.isLoadingMore() || !source.hasMore()) return;
 
@@ -340,7 +317,7 @@ export function EmailList(props: EmailListProps) {
   }
 
   // Switching tab or inbox scope is a new list: drop focus, selection, and
-  // the preview, and start from the top.
+  // and start from the top.
   const listScope = () =>
     `${state.tab}|${state.inboxIds === undefined ? '*' : state.inboxIds.join(',')}`;
   let activeScope = listScope();
@@ -349,10 +326,9 @@ export function EmailList(props: EmailListProps) {
     if (nextScope === activeScope) return;
 
     activeScope = nextScope;
-    previewAfterNavigation.clear();
+
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
-    panel.handle.resetPreview();
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
 
@@ -367,10 +343,6 @@ export function EmailList(props: EmailListProps) {
     });
     if (restored) return;
     if (isTouchDevice()) return;
-    if (panel.handle.isControllerSplit()) {
-      panel.handle.resetPreview();
-      return;
-    }
 
     list.focus.first({
       isNavigable: (row) => row.kind === 'entity',
@@ -556,8 +528,6 @@ export function EmailList(props: EmailListProps) {
                                         const openInNewSplit = event.shiftKey;
                                         openEntity(project, {
                                           openInNewSplit,
-                                          replacePreview:
-                                            event.altKey && !openInNewSplit,
                                         });
                                       }}
                                       onChecked={(selected, shiftKey) =>

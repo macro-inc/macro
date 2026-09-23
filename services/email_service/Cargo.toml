@@ -76,7 +76,7 @@ sfs_map = []
 sfs_delete = []
 
 [dependencies]
-calendar_events = { path = "../../crates/calendar_events", features = ["google", "inbound", "postgres"] }
+calendar_events = { path = "../../crates/calendar_events", features = ["google", "postgres"] }
 ammonia = { workspace = true }
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
@@ -110,7 +110,7 @@ gmail_client = { path = "../../crates/gmail_client" }
 google_token = { path = "../../crates/google_token" }
 html-escape = { workspace = true }
 http-body-util = { workspace = true }
-infer = "0.19.0"
+infer = { workspace = true }
 item_filters = { path = "../../crates/item_filters" }
 lol_html = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
@@ -182,7 +182,6 @@ urlencoding = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
-subtle = { workspace = true }
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

@@ -655,7 +655,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     const split = openWithSplit(
       { type: 'component', id: 'loading' },
       { referredFrom: 'launcher', preferNewSplit: true }
-    );
+    ).split;
 
     const createdTask = await createTaskWithProperties(
       taskTitle,

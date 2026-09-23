@@ -2,12 +2,13 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
+import { SplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { ContentLoading } from '@components/app/ContentLoading';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { isSoloSettings } from '@core/constant/SettingsState';
-import { BlockOpenTrackingDelayContext } from '@core/context/blockOpenTracking';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -51,12 +52,6 @@ type SplitPanelProps = {
   index: number;
 };
 
-/**
- * A Preview Pair Viewer displays content passively. Only record it as opened
- * after the user lingers, so keyboard scanning does not mark every row viewed.
- */
-const PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS = 1_500;
-
 export function SplitPanel(props: SplitPanelProps) {
   const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
     `split=${props.split.id}`
@@ -99,7 +94,6 @@ export function SplitPanel(props: SplitPanelProps) {
       });
     },
     isNotUnifiedList,
-    isViewerSplit: () => props.handle.isViewerSplit(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
     canGoForward: () => props.handle.canGoForward(),
@@ -188,24 +182,17 @@ export function SplitPanel(props: SplitPanelProps) {
         goForward: props.handle.goForward,
         canClose: () => {
           const manager = globalSplitManager();
-          return manager
-            ? shouldShowSplitCloseButton(manager, props.handle)
-            : false;
+          return manager ? shouldShowSplitCloseButton(manager) : false;
         },
         close: props.handle.close,
       }}
     >
-      <Suspense>
+      <Suspense fallback={<ContentLoading />}>
         <SoupViewContextProvider soup={nextSoup}>
-          <BlockOpenTrackingDelayContext.Provider
-            value={
-              props.handle.isViewerSplit()
-                ? PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS
-                : 0
-            }
-          >
-            <Dynamic component={props.split.mount.element} />
-          </BlockOpenTrackingDelayContext.Provider>
+          <SplitRouter.Outlet
+            splitId={props.handle.id}
+            fallback={() => <Dynamic component={props.split.mount.element} />}
+          />
         </SoupViewContextProvider>
       </Suspense>
     </SplitPanelControllerProvider>

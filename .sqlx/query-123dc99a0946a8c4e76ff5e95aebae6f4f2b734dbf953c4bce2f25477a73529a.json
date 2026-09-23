@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_thread_client_ids (client_id, link_id, thread_id)\n        VALUES ($1, $2, $3)\n        ON CONFLICT (link_id, client_id)\n            DO UPDATE SET thread_id = EXCLUDED.thread_id, created_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "123dc99a0946a8c4e76ff5e95aebae6f4f2b734dbf953c4bce2f25477a73529a"
+}

@@ -14,6 +14,7 @@ mod share;
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata};
+use model_owner::Owner;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use sqlx::PgPool;
 
@@ -22,9 +23,9 @@ use sqlx::Row;
 
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
-    BranchNameContext, Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    DocumentError, DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome,
-    ImportEmailAttachmentRepoArgs, TeamTaskMetadata, Thread,
+    BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, DocumentError,
+    DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
+    TeamTaskMetadata,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -209,9 +210,8 @@ impl DocumentRepo for PgDocumentRepo {
             Ok(DocumentMetadata {
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
-                owner: MacroUserIdStr::parse_from_str(&row.owner)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                    .into_owned(),
+                owner: Owner::from_principal_str(&row.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_name: row.document_name,
                 file_type: row.file_type,
                 sha: row.sha,
@@ -281,9 +281,8 @@ impl DocumentRepo for PgDocumentRepo {
             Ok(DocumentBasic {
                 document_id: row.document_id,
                 document_name: row.document_name,
-                owner: MacroUserIdStr::parse_from_str(&row.owner)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                    .into_owned(),
+                owner: Owner::from_principal_str(&row.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 file_type: row.file_type,
                 sub_type: row.sub_type,
                 branched_from_id: row.branched_from_id,
@@ -607,7 +606,11 @@ impl DocumentRepo for PgDocumentRepo {
         }
 
         if args.revoke_non_owner_user_access {
-            let owner = edit::get_document_owner(&mut transaction, &args.document_id).await?;
+            let owner = Owner::from_principal_str(
+                &edit::get_document_owner(&mut transaction, &args.document_id).await?,
+            )
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let owner_principal = owner.principal_id();
 
             // SAFETY: document IDs are UUID strings.
             let entity_id = macro_uuid::string_to_uuid(&args.document_id).unwrap();
@@ -616,7 +619,7 @@ impl DocumentRepo for PgDocumentRepo {
                 &mut transaction,
                 &entity_id,
                 EntityType::Document,
-                &owner,
+                &owner_principal,
             )
             .await?;
         }
@@ -998,9 +1001,8 @@ impl DocumentRepo for PgDocumentRepo {
             Ok(DocumentMetadata {
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
-                owner: MacroUserIdStr::parse_from_str(&row.owner)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                    .into_owned(),
+                owner: Owner::from_principal_str(&row.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_name: row.document_name,
                 file_type: row.file_type,
                 sha: row.sha,
@@ -1163,101 +1165,5 @@ impl DocumentRepo for PgDocumentRepo {
         copy::copy_pdf_parts(&mut transaction, new_document_id, original_document_id).await?;
         transaction.commit().await?;
         Ok(())
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_document_comments(
-        &self,
-        document_id: &str,
-    ) -> Result<Vec<CommentThread>, Self::Err> {
-        let threads = sqlx::query!(
-            r#"
-            SELECT
-                t.id as "thread_id!",
-                t.resolved as "resolved!",
-                t."documentId" as "document_id!",
-                t."createdAt"::timestamptz as "created_at",
-                t."updatedAt"::timestamptz as "updated_at",
-                t."deletedAt"::timestamptz as "deleted_at",
-                t.metadata as "metadata",
-                t.owner as "owner!"
-            FROM "Thread" t
-            WHERE t."documentId" = $1 AND t."deletedAt" IS NULL
-            "#,
-            document_id,
-        )
-        .map(|row| Thread {
-            thread_id: row.thread_id,
-            resolved: row.resolved,
-            document_id: row.document_id,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: row.deleted_at,
-            metadata: row.metadata,
-            owner: row.owner,
-        })
-        .fetch_all(&self.pool)
-        .await?;
-
-        let comments = sqlx::query!(
-            r#"
-            SELECT
-                c.id as "comment_id!",
-                c."threadId" as "thread_id!",
-                c.owner as "owner!",
-                c.sender,
-                c.text as "text!",
-                c.metadata,
-                c."createdAt"::timestamptz as "created_at",
-                c."updatedAt"::timestamptz as "updated_at",
-                c."deletedAt"::timestamptz as "deleted_at",
-                c.order
-            FROM "Comment" c
-            JOIN "Thread" t ON c."threadId" = t.id
-            WHERE t."documentId" = $1
-                AND t."deletedAt" IS NULL
-                AND c."deletedAt" IS NULL
-            ORDER BY c."createdAt" ASC
-            "#,
-            document_id,
-        )
-        .map(|row| Comment {
-            comment_id: row.comment_id,
-            thread_id: row.thread_id,
-            owner: row.owner,
-            sender: row.sender,
-            text: row.text,
-            metadata: row.metadata,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: row.deleted_at,
-            order: row.order,
-        })
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut comments_by_thread: std::collections::HashMap<i64, Vec<Comment>> =
-            std::collections::HashMap::new();
-        for comment in comments {
-            comments_by_thread
-                .entry(comment.thread_id)
-                .or_default()
-                .push(comment);
-        }
-
-        let comment_threads = threads
-            .into_iter()
-            .map(|thread| {
-                let thread_comments = comments_by_thread
-                    .remove(&thread.thread_id)
-                    .unwrap_or_default();
-                CommentThread {
-                    thread,
-                    comments: thread_comments,
-                }
-            })
-            .collect();
-
-        Ok(comment_threads)
     }
 }

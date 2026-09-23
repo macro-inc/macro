@@ -14,6 +14,23 @@ use uuid::Uuid;
 
 use super::events::DocumentTopicEvent;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
+
+// Display attribution only: teams cannot act. Prefer the initiating user when
+// known, otherwise represent an unattributed team creation as system activity.
+fn actor_from_owner(
+    owner: &Owner,
+    on_behalf_of: Option<&MacroUserIdStr<'static>>,
+) -> Actor<'static> {
+    match owner {
+        Owner::User(user) => Actor::new_from_user(user.clone()),
+        Owner::Bot(bot_id) => Actor::new_from_bot(*bot_id),
+        Owner::Team(_) => on_behalf_of
+            .cloned()
+            .map(Actor::new_from_user)
+            .unwrap_or_else(|| Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
+    }
+}
 
 /// Attribution for `updated` / `deleted` events. Bot receipts publish `actor`;
 /// user receipts (and events from before attribution) only `actor_user_id`.
@@ -52,10 +69,9 @@ impl ActivitySource for DocumentTopicEvent {
 
         match self {
             DocumentTopicEvent::Created(metadata) => {
-                let actor = metadata
-                    .actor
-                    .clone()
-                    .unwrap_or_else(|| Actor::new_from_user(metadata.owner.clone()));
+                let actor = metadata.actor.clone().unwrap_or_else(|| {
+                    actor_from_owner(&metadata.owner, metadata.on_behalf_of.as_ref())
+                });
                 single(
                     Attribution::new(actor, metadata.on_behalf_of.clone()),
                     CommonAction::Created,
@@ -95,7 +111,7 @@ impl ActivitySource for DocumentTopicEvent {
             }
             // The copy is a new document; its creation is the activity.
             DocumentTopicEvent::Copied(metadata) => single(
-                Attribution::direct(Actor::new_from_user(metadata.owner.clone())),
+                Attribution::direct(actor_from_owner(&metadata.owner, None)),
                 CommonAction::Created,
                 &metadata.document_id,
                 event_time(event_id),

@@ -110,7 +110,11 @@ pub enum Port {
     AgentHarnessEgress = 8102,
     /// Scheduled actions API and dispatcher (default compose port 8099).
     ScheduledAction = 8099,
-    /// Live-preview control API.
+    /// Calendar service API (default compose port 8088). Appended at the end so
+    /// existing per-instance port offsets, which come from declaration order,
+    /// stay stable.
+    Calendar = 8088,
+    /// Live-preview control API. Appended after Calendar for the same reason.
     PreviewControl = 8110,
     /// Stock SSH reverse-tunnel listener.
     PreviewSsh = 2222,

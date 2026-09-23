@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO team_user (user_id, team_id, team_role)\n        VALUES\n            ('user-1', 'dddddddd-dddd-dddd-dddd-000000000001', 'owner'),\n            ('user-3', 'dddddddd-dddd-dddd-dddd-000000000001', 'member'),\n            ('user-2', 'dddddddd-dddd-dddd-dddd-000000000002', 'owner'),\n            ('user-public-access-only', 'dddddddd-dddd-dddd-dddd-000000000002', 'member')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "67c59263594eeadbfd225f2d4134443f9a9044209ec08de331bfb4afbde371ee"
+}

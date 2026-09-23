@@ -3,17 +3,17 @@ use crate::domain::ports::{CalendarEventChange, CalendarEventWriteOutcome, Retir
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
-        CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarCreationTarget,
-        CalendarEvent, CalendarEventMutationTarget, CalendarEventSource, CalendarOccurrence,
-        CalendarSyncStatus, DisconnectedGoogleCalendar, EventReminders, EventStatus, EventTime,
-        EventTransparency, EventType, EventVisibility, GOOGLE_CALENDAR_FULL_SCOPE,
-        GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
-        GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig,
-        ProviderCalendar, StoredGoogleCalendar,
+        CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
+        CalendarCreationTarget, CalendarEvent, CalendarEventMutationTarget, CalendarEventSource,
+        CalendarOccurrence, CalendarSyncStatus, DisconnectedGoogleCalendar, EventReminders,
+        EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+        GOOGLE_CALENDAR_FULL_SCOPE, GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport,
+        GoogleCalendarSyncSnapshot, GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel,
+        GoogleWatchConfig, ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventWrite, CalendarRepository, GoogleCalendarProvider,
-        GoogleEventSyncContext, GoogleProviderError,
+        CalendarBackfillRepository, CalendarEventWrite, CalendarReauthNotifier, CalendarRepository,
+        GoogleCalendarProvider, GoogleEventSyncContext, GoogleProviderError,
     },
 };
 use chrono::{TimeZone, Utc};
@@ -29,6 +29,8 @@ struct FakeRepo {
     sync_retirements: Vec<RetiredCalendarEvent>,
     /// Provider calendars whose isolated sync failure was recorded, in order.
     recorded_sync_errors: Arc<Mutex<Vec<String>>>,
+    /// Calendars recorded as refusing push channels, in order.
+    recorded_watch_unsupported: Arc<Mutex<Vec<Uuid>>>,
 }
 
 impl CalendarRepository for FakeRepo {
@@ -170,6 +172,8 @@ impl CalendarRepository for FakeRepo {
             materialized_range: None,
             synced_at: self.stored_synced_at,
             watch_expires_at: None,
+            watch_unsupported_at: (!self.recorded_watch_unsupported.lock().unwrap().is_empty())
+                .then(Utc::now),
         })
     }
 
@@ -217,6 +221,20 @@ impl CalendarRepository for FakeRepo {
         _calendar_id: Uuid,
         _channel: GoogleWatchChannel,
     ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn record_watch_unsupported(
+        &self,
+        _key: CalendarBackfillJobKey,
+        _lease_token: Uuid,
+        _account_id: Uuid,
+        calendar_id: Uuid,
+    ) -> Result<(), Report> {
+        self.recorded_watch_unsupported
+            .lock()
+            .unwrap()
+            .push(calendar_id);
         Ok(())
     }
 
@@ -718,6 +736,97 @@ impl GoogleCalendarProvider for MixedTotalFailureGoogleProvider {
     ) -> Result<GoogleWatchChannel, GoogleProviderError> {
         unreachable!("watch is disabled in these tests")
     }
+}
+
+/// Syncs one calendar whose watch call Google refuses as push-unsupported.
+#[derive(Clone, Default)]
+struct PushUnsupportedGoogleProvider {
+    watch_calls: Arc<Mutex<usize>>,
+}
+
+impl GoogleCalendarProvider for PushUnsupportedGoogleProvider {
+    async fn list_calendars(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+        Ok(vec![provider_calendar("holidays", false)])
+    }
+
+    async fn sync_events(
+        &self,
+        access_token: &str,
+        context: GoogleEventSyncContext,
+    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+        FakeGoogleProvider.sync_events(access_token, context).await
+    }
+
+    async fn watch_calendar(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+        _provider_calendar_id: &str,
+        _channel_id: Uuid,
+        _config: &GoogleWatchConfig,
+    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+        *self.watch_calls.lock().unwrap() += 1;
+        Err(GoogleProviderError::new(
+            GoogleProviderErrorKind::PushUnsupported,
+            "Push notifications are not supported by this resource.",
+        ))
+    }
+}
+
+#[tokio::test]
+async fn push_unsupported_watch_is_recorded_and_the_account_completes() {
+    let lifecycle = FakeLifecycle::claimed();
+    let repository = FakeRepo::default();
+    let recorded_watch_unsupported = repository.recorded_watch_unsupported.clone();
+    let recorded_sync_errors = repository.recorded_sync_errors.clone();
+    let provider = PushUnsupportedGoogleProvider::default();
+    let watch_calls = provider.watch_calls.clone();
+    let coordinator = GoogleCalendarBackfillCoordinator::new(
+        repository,
+        provider,
+        lifecycle.clone(),
+        NoopMacroEventBroker,
+        Some(GoogleWatchConfig {
+            address: "https://gateway.example.com/calendar/notifications".to_string(),
+            token: "token".to_string(),
+        }),
+    );
+
+    let key = CalendarBackfillJobKey {
+        job_id: Uuid::now_v7(),
+        email_link_id: Uuid::now_v7(),
+    };
+    for _ in 0..2 {
+        let mut report = GoogleBackfillRunReport::default();
+        coordinator
+            .run(
+                key,
+                "macro|calendar@example.com",
+                "secret",
+                OccurrenceRange::maintenance_horizon(Utc::now()),
+                &mut report,
+            )
+            .await
+            .expect("a calendar Google will not push for still syncs by polling");
+    }
+
+    assert_eq!(
+        *recorded_watch_unsupported.lock().unwrap(),
+        vec![Uuid::nil()],
+        "the refusal is recorded once"
+    );
+    assert_eq!(
+        *watch_calls.lock().unwrap(),
+        1,
+        "the recorded refusal stops the next run from re-watching"
+    );
+    assert!(recorded_sync_errors.lock().unwrap().is_empty());
+    assert_eq!(lifecycle.completions.lock().unwrap().len(), 2);
+    assert!(lifecycle.failures.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -1334,4 +1443,133 @@ async fn google_coordinator_keeps_calendar_permission_health_separate_from_gmail
         lifecycle.failures.lock().unwrap().as_slice(),
         &[CalendarBackfillFailureDisposition::CalendarPermissionRequired]
     );
+}
+
+#[derive(Clone, Default)]
+struct FakeReauthNotifier {
+    notified: Arc<Mutex<Vec<Uuid>>>,
+    fail: bool,
+}
+
+impl FakeReauthNotifier {
+    fn failing() -> Self {
+        Self {
+            notified: Arc::default(),
+            fail: true,
+        }
+    }
+}
+
+impl CalendarReauthNotifier for FakeReauthNotifier {
+    async fn notify_reauth_required(&self, email_link_id: Uuid) -> Result<(), Report> {
+        self.notified.lock().unwrap().push(email_link_id);
+        if self.fail {
+            return Err(rootcause::report!("reauth notifier unavailable"));
+        }
+        Ok(())
+    }
+}
+
+fn reauth_outcome(link_reauth_transitioned: bool) -> CalendarBackfillFailureOutcome {
+    CalendarBackfillFailureOutcome {
+        job_transitioned: true,
+        link_reauth_transitioned,
+    }
+}
+
+#[tokio::test]
+async fn reauth_announcer_fires_when_unclaimed_failure_consumed_the_edge() {
+    let notifier = FakeReauthNotifier::default();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+    let link = Uuid::now_v7();
+
+    announcer
+        .announce_unclaimed(link, &reauth_outcome(true))
+        .await;
+
+    assert_eq!(notifier.notified.lock().unwrap().as_slice(), &[link]);
+}
+
+#[tokio::test]
+async fn reauth_announcer_is_silent_when_unclaimed_failure_did_not_transition() {
+    let notifier = FakeReauthNotifier::default();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+
+    announcer
+        .announce_unclaimed(Uuid::now_v7(), &reauth_outcome(false))
+        .await;
+
+    assert!(notifier.notified.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn reauth_announcer_fires_when_run_error_consumed_the_edge() {
+    let notifier = FakeReauthNotifier::default();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+    let link = Uuid::now_v7();
+
+    announcer
+        .announce_run_error(
+            link,
+            &GoogleCalendarBackfillRunError::ReauthRequired {
+                message: "grant revoked".to_string(),
+                link_reauth_transitioned: true,
+            },
+        )
+        .await;
+
+    assert_eq!(notifier.notified.lock().unwrap().as_slice(), &[link]);
+}
+
+#[tokio::test]
+async fn reauth_announcer_is_silent_on_calendar_permission_required() {
+    // A `CalendarPermissionRequired` disposition surfaces as a `ReauthRequired`
+    // run error carrying `link_reauth_transitioned: false`: the calendar scope
+    // is missing but the Gmail grant is healthy, so no inbox edge was consumed.
+    let notifier = FakeReauthNotifier::default();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+
+    announcer
+        .announce_run_error(
+            Uuid::now_v7(),
+            &GoogleCalendarBackfillRunError::ReauthRequired {
+                message: "calendar scope missing".to_string(),
+                link_reauth_transitioned: false,
+            },
+        )
+        .await;
+
+    assert!(notifier.notified.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn reauth_announcer_is_silent_on_non_reauth_run_errors() {
+    let notifier = FakeReauthNotifier::default();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+    let link = Uuid::now_v7();
+
+    for error in [
+        GoogleCalendarBackfillRunError::Permanent("permanent".to_string()),
+        GoogleCalendarBackfillRunError::Retryable("transient".to_string()),
+        GoogleCalendarBackfillRunError::LeaseLost,
+    ] {
+        announcer.announce_run_error(link, &error).await;
+    }
+
+    assert!(notifier.notified.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn reauth_announcer_swallows_a_failing_notifier() {
+    let notifier = FakeReauthNotifier::failing();
+    let announcer = CalendarReauthAnnouncer::new(notifier.clone());
+    let link = Uuid::now_v7();
+
+    // A notifier failure must not surface: the DB edge is already consumed and
+    // the caller's delivery must still ack.
+    announcer
+        .announce_unclaimed(link, &reauth_outcome(true))
+        .await;
+
+    assert_eq!(notifier.notified.lock().unwrap().as_slice(), &[link]);
 }

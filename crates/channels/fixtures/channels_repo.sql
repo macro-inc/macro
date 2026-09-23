@@ -175,7 +175,9 @@ INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at, le
 -- Participants: user-b (owner), user-c (member), user-e (member), left-user (left).
 -- Threads (all rooted by user-b):
 --   t41 (10:00): user-c replied (10:05); left-user replied (10:06); a soft-deleted
---       reply from user-e (10:07) that must NOT make user-e a participant
+--       reply from user-e (10:07) that must NOT make user-e a participant; a
+--       soft-deleted reply from user-b (10:09) that @-mentions user-e, which
+--       likewise must NOT make user-e a participant
 --   t42 (11:00): user-c is @-mentioned in the root message
 --   t43 (12:00): root message contains a group mention (@here), stored as the
 --       client-side expansion: one user mention row per member at send time
@@ -204,6 +206,9 @@ INSERT INTO comms_messages (id, channel_id, thread_id, sender_id, content, creat
   ('00000000-0000-0000-0000-00000000b043', '00000000-0000-0000-0000-000000000c04',
    '00000000-0000-0000-0000-000000000041', 'macro|user-e@test.com', 'deleted reply from user-e',
    '2024-01-02 10:07:00+00', '2024-01-02 10:07:00+00', NULL, '2024-01-02 10:08:00+00'),
+  ('00000000-0000-0000-0000-00000000b045', '00000000-0000-0000-0000-000000000c04',
+   '00000000-0000-0000-0000-000000000041', 'macro|user-b@test.com', '',
+   '2024-01-02 10:09:00+00', '2024-01-02 10:10:00+00', NULL, '2024-01-02 10:10:00+00'),
   -- t42: @-mention determines participants (mention row below)
   ('00000000-0000-0000-0000-000000000042', '00000000-0000-0000-0000-000000000c04', NULL,
    'macro|user-b@test.com', 'mentioning <m-user-mention>{"userId":"macro|user-c@test.com","email":"user-c@test.com"}</m-user-mention>',
@@ -224,6 +229,13 @@ INSERT INTO comms_messages (id, channel_id, thread_id, sender_id, content, creat
 INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at) VALUES
   ('00000000-0000-0000-0000-00000000e042', 'message', '00000000-0000-0000-0000-000000000042',
    'user', 'macro|user-c@test.com', NULL, '2024-01-02 11:00:00+00');
+
+-- user-e was @-mentioned in t41's soft-deleted reply from user-b. Deleting a
+-- message clears its content but leaves its mention rows behind, so the mention
+-- must be ignored through the message's deleted_at.
+INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at) VALUES
+  ('00000000-0000-0000-0000-00000000e045', 'message', '00000000-0000-0000-0000-00000000b045',
+   'user', 'macro|user-e@test.com', NULL, '2024-01-02 10:09:00+00');
 
 -- @here in t43's root message and t44's reply, as sent by the client: expanded into
 -- one user mention row per channel member at send time (left-user had not left yet)

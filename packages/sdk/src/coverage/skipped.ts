@@ -11,6 +11,7 @@
 
 import type { Sdk as AgentHarnessSdk } from '../../generated/agent-harness/sdk.gen';
 import type { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
+import type { Sdk as CalendarSdk } from '../../generated/calendar/sdk.gen';
 import type { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
 import type { Sdk as ConnectionSdk } from '../../generated/connection/sdk.gen';
 import type { Sdk as ContactsSdk } from '../../generated/contacts/sdk.gen';
@@ -33,8 +34,10 @@ export const agentHarnessExcluded = [
   'previewAgentSessions',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
-export const agentHarnessBacklog =
-  [] as const satisfies readonly (keyof AgentHarnessSdk)[];
+export const agentHarnessBacklog = [
+  'getAgentSessionPermissions',
+  'updateAgentSessionPermissions',
+] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const authExcluded = [
   'appleLogin',
@@ -121,6 +124,14 @@ export const authBacklog = [
   'macroApiToken',
 ] as const satisfies readonly (keyof AuthSdk)[];
 
+export const calendarExcluded = [
+  // Health probe is infra, not SDK surface.
+  'healthHandler',
+] as const satisfies readonly (keyof CalendarSdk)[];
+
+export const calendarBacklog =
+  [] as const satisfies readonly (keyof CalendarSdk)[];
+
 export const cognitionExcluded = [
   'addMcpServer',
   'browsePipedreamMcpCatalog',
@@ -199,20 +210,15 @@ export const emailExcluded = [
 export const emailBacklog = [
   'addDraftAttachment',
   'addForwardedAttachment',
-  'createCalendarEvent',
   'createDraft',
-  'deleteCalendarEvent',
   'deleteDraft',
   'deleteEmailFilter',
   'deleteScheduledDraft',
   'getScheduledMessages',
-  'listCalendars',
   'listContacts',
   'listEmailFilters',
   'removeDraftAttachment',
   'removeForwardedAttachment',
-  'rsvpCalendarEvent',
-  'updateCalendarEvent',
   'upsertEmailFilter',
   'upsertScheduledMessage',
 ] as const satisfies readonly (keyof EmailSdk)[];
@@ -322,6 +328,8 @@ export const storageExcluded = [
   'postItemsSoupAstGrouped',
   'removeBotFromChannelByBot',
   'resolveChannelMessage',
+  // Composer dictation is an app-internal, user-only upload flow.
+  'transcribeDictation',
   'uploadExtractFolderHandler',
   'uploadFolderHandler',
   'upsertHistoryHandler',
@@ -359,7 +367,6 @@ export const storageBacklog = [
   'entityMessageLegacy',
   'entityMessagePatchThread',
   'entityMessageReact',
-  'entityMessageReferences',
   'entityMessageTyping',
   'getActivity',
   'getDocumentAnchors',

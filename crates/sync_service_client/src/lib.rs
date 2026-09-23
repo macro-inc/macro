@@ -4,6 +4,7 @@ pub mod exists;
 pub mod get_raw;
 pub mod initialize;
 pub mod metadata;
+pub mod surface;
 pub mod wakeup;
 
 pub(crate) static INTERNAL_ACCESS_HEADER: &str = "x-internal-auth-key";

@@ -89,6 +89,14 @@ export const services: Service[] = [
 		orvalKey: "unfurlService",
 	},
 	{
+		name: "calendar-service",
+		dev: "https://dev-gateway.macro.com/calendar/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/calendar/api-doc/openapi.json",
+		local: "http://localhost:8088/api-doc/openapi.json",
+		output: "../src/lib/service-clients/service-calendar/",
+		orvalKey: "calendarService",
+	},
+	{
 		name: "email-service",
 		dev: "https://dev-gateway.macro.com/email/api-doc/openapi.json",
 		prod: "https://gateway.macro.com/email/api-doc/openapi.json",

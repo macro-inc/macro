@@ -4,20 +4,38 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestId } from './soupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestId';
+import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestState } from './soupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestState';
+import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestUrl } from './soupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestUrl';
+import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoRepoBranch } from './soupAgentSessionSoupPropertiesFieldAllOfTwoRepoBranch';
+import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoRepoUrl } from './soupAgentSessionSoupPropertiesFieldAllOfTwoRepoUrl';
 import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoThreadId } from './soupAgentSessionSoupPropertiesFieldAllOfTwoThreadId';
+import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoTurnState } from './soupAgentSessionSoupPropertiesFieldAllOfTwoTurnState';
 import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoViewedAt } from './soupAgentSessionSoupPropertiesFieldAllOfTwoViewedAt';
+import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoWorkingBranch } from './soupAgentSessionSoupPropertiesFieldAllOfTwoWorkingBranch';
 
 export type SoupAgentSessionSoupPropertiesFieldAllOfTwo = {
   /** The bot running this session */
   botId: string;
   /** The time the session was created */
   createdAt: string;
+  /** The runtime snapshotted when the session was created. */
+  harness: string;
   /** The agent session uuid */
   id: string;
   /** The user-facing name of the session */
   name: string;
   /** Who the session belongs to */
   ownerId: string;
+  /** The linked pull request's Macro entity, when visible to the viewer. */
+  pullRequestId?: SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestId;
+  pullRequestState?: SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestState;
+  /** The persisted pull request associated with the session. */
+  pullRequestUrl?: SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestUrl;
+  /** The starting branch selected for this session, not its current branch. */
+  repoBranch?: SoupAgentSessionSoupPropertiesFieldAllOfTwoRepoBranch;
+  /** The repository the session works with, when one was selected. */
+  repoUrl?: SoupAgentSessionSoupPropertiesFieldAllOfTwoRepoUrl;
   /** The session's last known status.
 
 `no_messages` until the first system event arrives, `disconnected` if
@@ -26,8 +44,12 @@ of the most recent system event (for example `session/end`). */
   status: string;
   /** The channel thread the session was opened from, when any */
   threadId?: SoupAgentSessionSoupPropertiesFieldAllOfTwoThreadId;
+  /** Last persisted fold turn state. Absent until an older session next runs. */
+  turnState?: SoupAgentSessionSoupPropertiesFieldAllOfTwoTurnState;
   /** The time the session was last modified */
   updatedAt: string;
   /** The time the session was last viewed by the requesting user */
   viewedAt?: SoupAgentSessionSoupPropertiesFieldAllOfTwoViewedAt;
+  /** Last captured working branch, when the runtime has reported one. */
+  workingBranch?: SoupAgentSessionSoupPropertiesFieldAllOfTwoWorkingBranch;
 };

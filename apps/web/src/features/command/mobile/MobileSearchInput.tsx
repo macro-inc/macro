@@ -1,4 +1,3 @@
-import { openChatWithMessage } from '@app/features/chat/ChatWithAgentButton';
 import {
   useForegroundMobileView,
   useMobileNavNavigate,
@@ -9,6 +8,7 @@ import XIcon from '@phosphor/x.svg';
 import { cn } from '@ui';
 import { createEffect, on } from 'solid-js';
 import { SearchState } from './mobileSearchState';
+import { openMobileAskAi } from './open-mobile-ask-ai';
 
 // This component only writes the global session state. The active split's
 // bridge effect (see soup-view-context) mirrors the session into its own
@@ -18,13 +18,12 @@ import { SearchState } from './mobileSearchState';
 // session itself (see MobileDockRow's search layout).
 
 /**
- * Sends the current query to a new AI chat and ends the search session.
- * Same wiring as the desktop command menu's "Ask AI about" row.
+ * Sends the current query to a new AI conversation and ends the search session.
  */
 function submitAskAi() {
   const query = SearchState.query().trim();
   if (!query) return;
-  openChatWithMessage(query);
+  openMobileAskAi(query);
   SearchState.close();
 }
 

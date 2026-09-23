@@ -22,6 +22,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import {
+  batch,
   createDeferred,
   createEffect,
   createMemo,
@@ -36,9 +37,10 @@ import {
   untrack,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { usePdfComments } from '../context/pdf-comments-context';
 import { usePdfDocument } from '../context/pdf-document-context';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 import { PageModel } from '../model/Page';
-import { useGoToLinkLocation } from '../signal/location';
 import {
   initializePdfViewer,
   useIsPopup,
@@ -47,7 +49,9 @@ import {
 import { usePdfSaveLocation, useSaveModificationData } from '../signal/save';
 import { useLoadAnnotations } from '../store/annotations';
 import { useSetSelectionHighlights } from '../store/highlight';
+import { PayloadMode } from '../type/placeables';
 import { type IPageOverlayProps, PageOverlay } from './PageOverlay';
+import { RightMarginLayout } from './RightMarginLayout';
 import { SimpleSearch } from './SimpleSearch';
 
 false && observedSize;
@@ -57,12 +61,11 @@ const PDF = 72.0;
 const PDF_TO_CSS_UNITS = CSS / PDF;
 
 function InnerDocument() {
-  const { state } = usePdfDocument();
+  const pdfViewer = usePdfViewer();
   const isPopup = useIsPopup();
-  const getViewer = () =>
-    isPopup ? state.signals.popupViewer[0]() : state.signals.rootViewer[0]();
+  const viewer = isPopup ? pdfViewer.popup : pdfViewer.root;
+  const getViewer = viewer.instance;
 
-  // attach new tab listeners
   const goToLocationHash = useGoToLocationHash();
 
   // TODO (seamus) : Chatted with Rithy. Manual cleanup should not be
@@ -83,9 +86,8 @@ function InnerDocument() {
     cleanupNewTabHandler = () => {};
   });
 
-  // watch the overlays and send the contents to be rendered by PDFViewer
   createEffect(() => {
-    const overlays = state.signals.overlays[0]();
+    const overlays = pdfViewer.overlays();
     if (!overlays || overlays.length === 0) return;
     getViewer()?.setOverlays(overlays);
   });
@@ -94,13 +96,11 @@ function InnerDocument() {
     usePdfCommentEffects();
   }
   const showOverlays = createMemo(
-    () =>
-      (isPopup ? state.derived.popupOpen() : true) &&
-      state.derived.viewerReady()
+    () => (isPopup ? pdfViewer.isPopupOpen() : true) && pdfViewer.root.isReady()
   );
   const overlayViewsChanged = isPopup
-    ? state.signals.overlayViewsChangedPopup[0]
-    : state.signals.overlayViewsChanged[0];
+    ? pdfViewer.popup.overlayViews
+    : pdfViewer.root.overlayViews;
 
   const pageOverlays = () => {
     const pageViews = createMemo<IPageOverlayProps[]>(
@@ -115,7 +115,6 @@ function InnerDocument() {
           const pageViewDiv = view.div;
           const viewport = view.textLayer?.viewport ?? view.viewport;
 
-          // Use the cached page view if it exists and nothing changed
           if (
             cachedPageView &&
             cachedPageView.pageViewDiv === pageViewDiv &&
@@ -147,13 +146,20 @@ function InnerDocument() {
           if (!container) return '';
 
           return (
-            <Portal mount={container}>
-              <PageOverlay
-                pageIndex={pageIndex}
-                viewport={viewport}
-                pageViewDiv={pageViewDiv}
-              />
-            </Portal>
+            <>
+              <Portal mount={container}>
+                <PageOverlay
+                  pageIndex={pageIndex}
+                  viewport={viewport}
+                  pageViewDiv={pageViewDiv}
+                />
+              </Portal>
+              <Show when={!isPopup}>
+                <Portal mount={container}>
+                  <RightMarginLayout pageIndex={pageIndex} />
+                </Portal>
+              </Show>
+            </>
           );
         }}
       </For>
@@ -163,12 +169,10 @@ function InnerDocument() {
   return <Show when={showOverlays()}>{pageOverlays()}</Show>;
 }
 
-/** Shows the document loading spinner without unloading the PDF Viewer */
 function LoadingDocumentSpinnerEffect() {
-  const viewerHasVisiblePages =
-    usePdfDocument().state.signals.viewerHasVisiblePages[0];
+  const hasVisiblePages = usePdfViewer().root.hasVisiblePages;
   return (
-    <Show when={!viewerHasVisiblePages()}>
+    <Show when={!hasVisiblePages()}>
       <div class="flex absolute size-full z-viewer-document-loading-spinner">
         <div class="absolute top-1/2 left-1/2 transform -translate-1/2">
           <LoadingSpinner />
@@ -180,90 +184,24 @@ function LoadingDocumentSpinnerEffect() {
 
 export function Document() {
   const pdf = usePdfDocument();
-  const { signals, stores, derived } = pdf.state;
+  const pdfViewer = usePdfViewer();
+  const comments = usePdfComments();
   const [documentSize, setDocumentSize] = createSignal<DOMRect>();
   const [documentContainerRef, setDocumentContainerRef] =
     createSignal<HTMLDivElement>();
-  const [destroying, setDestroying] = signals.destroying;
-  const [getRootViewer, setRootViewer] = signals.rootViewer;
-  const [getPopupViewer, setPopupViewer] = signals.popupViewer;
-  const disableClick = signals.disableOverlayClick[0];
-  const setIsSelecting = signals.isSelectingViewerText[1];
-  const blockElement = pdf.rootElement;
-
-  const attachViewerSignals = (viewer: PDFViewer, isPopup: boolean) => {
-    if (isPopup) {
-      viewer.event.on('scalechanging', signals.scaleChangingPopup[1]);
-      viewer.event.on('pagechanging', signals.pageChangingPopup[1]);
-      viewer.event.on(
-        'overlayViewsChanged',
-        signals.overlayViewsChangedPopup[1]
-      );
-      viewer.event.on('updateviewarea', signals.visiblePagesChangedPopup[1]);
-      return;
-    }
-
-    viewer.event.on('pagesloaded', signals.pagesLoaded[1]);
-    viewer.event.on('scalechanging', signals.scaleChanging[1]);
-    viewer.event.on('pagechanging', signals.pageChanging[1]);
-    viewer.event.on('overlayViewsChanged', signals.overlayViewsChanged[1]);
-    viewer.event.on(
-      'popupvisibilitychanged',
-      signals.popupVisibilityChanged[1]
-    );
-    viewer.event.on('updateviewarea', signals.visiblePagesChanged[1]);
-    viewer.event.on(
-      'updatefindcontrolstate',
-      signals.updateFindControlState[1]
-    );
-    viewer.event.on(
-      'updatefindmatchescount',
-      signals.updateFindMatchesCount[1]
-    );
+  const [destroying, setDestroying] = createSignal(false);
+  const getRootViewer = pdfViewer.root.instance;
+  const getPopupViewer = pdfViewer.popup.instance;
+  const disableClick = () =>
+    pdf.markup.mode() !== PayloadMode.NoMode || pdfViewer.textSelectionActive();
+  const beginViewerTextSelection = () => {
+    if (pdfViewer.textSelectionActive()) return;
+    batch(() => {
+      comments.clearSelectedThread();
+      pdfViewer.beginTextSelection();
+    });
   };
-
-  const detachViewerSignals = (viewer: PDFViewer, isPopup: boolean) => {
-    if (isPopup) {
-      viewer.event.off('scalechanging', signals.scaleChangingPopup[1]);
-      viewer.event.off('pagechanging', signals.pageChangingPopup[1]);
-      viewer.event.off(
-        'overlayViewsChanged',
-        signals.overlayViewsChangedPopup[1]
-      );
-      viewer.event.off('updateviewarea', signals.visiblePagesChangedPopup[1]);
-      signals.scaleChangingPopup[1](undefined);
-      signals.pageChangingPopup[1](undefined);
-      signals.overlayViewsChangedPopup[1](undefined);
-      signals.visiblePagesChangedPopup[1](undefined);
-      return;
-    }
-
-    viewer.event.off('pagesloaded', signals.pagesLoaded[1]);
-    viewer.event.off('scalechanging', signals.scaleChanging[1]);
-    viewer.event.off('pagechanging', signals.pageChanging[1]);
-    viewer.event.off('overlayViewsChanged', signals.overlayViewsChanged[1]);
-    viewer.event.off(
-      'popupvisibilitychanged',
-      signals.popupVisibilityChanged[1]
-    );
-    viewer.event.off('updateviewarea', signals.visiblePagesChanged[1]);
-    viewer.event.off(
-      'updatefindcontrolstate',
-      signals.updateFindControlState[1]
-    );
-    viewer.event.off(
-      'updatefindmatchescount',
-      signals.updateFindMatchesCount[1]
-    );
-    signals.pagesLoaded[1](undefined);
-    signals.scaleChanging[1](undefined);
-    signals.pageChanging[1](undefined);
-    signals.overlayViewsChanged[1](undefined);
-    signals.popupVisibilityChanged[1](undefined);
-    signals.visiblePagesChanged[1](undefined);
-    signals.updateFindControlState[1](undefined);
-    signals.updateFindMatchesCount[1](undefined);
-  };
+  const blockElement = pdfViewer.rootElement;
 
   let rootViewer: PDFViewer | undefined;
   let popupViewer: PDFViewer | undefined;
@@ -275,11 +213,10 @@ export function Document() {
 
     popupViewer = initializePdfViewer();
     rootViewer = initializePdfViewer(popupViewer);
-    attachViewerSignals(rootViewer, false);
-    attachViewerSignals(popupViewer, true);
-
-    setPopupViewer(popupViewer);
-    setRootViewer(rootViewer);
+    pdfViewer.installPair({
+      root: rootViewer,
+      popup: popupViewer,
+    });
   });
 
   let mountRef: HTMLDivElement | undefined;
@@ -289,7 +226,6 @@ export function Document() {
     const viewer = getRootViewer();
     const size = documentSize();
     if (!size) return;
-    // wait for valid dimensions
     if (size.width === 0 || size.height === 0) {
       return;
     }
@@ -300,14 +236,12 @@ export function Document() {
   onCleanup(() => {
     setDestroying(true);
 
-    popupViewer && detachViewerSignals(popupViewer, true);
-
     if (!rootViewer) {
-      console.warn('unable to detach signals');
+      console.warn('unable to detach viewer listeners');
       return;
     }
 
-    detachViewerSignals(rootViewer, false);
+    pdfViewer.detachListeners();
 
     rootViewer
       .destroy()
@@ -315,8 +249,7 @@ export function Document() {
       .finally(() => {
         popupViewer = undefined;
         rootViewer = undefined;
-        setRootViewer(undefined);
-        setPopupViewer(undefined);
+        pdfViewer.clearPair();
         setDestroying(false);
       });
   });
@@ -325,24 +258,18 @@ export function Document() {
   const canSaveModificationData = pdf.permissions.canEdit;
 
   const loadAnnotations = useLoadAnnotations();
-  const serverModificationData = signals.serverModificationData[0];
-  const hasServerModificationData = () => !!serverModificationData();
   const updateModificationDataOnLoad = () =>
-    canSaveModificationData() && !hasServerModificationData();
+    canSaveModificationData() && !pdf.model.hasServerSnapshot();
 
   createEffect((prevDocumentId) => {
     const rootPdfViewer = getRootViewer();
     const popupPdfViewer = getPopupViewer();
     if (!rootPdfViewer || !popupPdfViewer) return;
 
-    const documentProxy = signals.documentProxy[0]();
-    const modificationData = stores.modificationData[0];
+    const documentProxy = pdf.documentProxy();
 
     if (documentProxy) {
-      const annotationsPromise = loadAnnotations(
-        documentProxy,
-        modificationData
-      );
+      const annotationsPromise = loadAnnotations(documentProxy);
 
       if (updateModificationDataOnLoad()) {
         annotationsPromise.then(saveModificationData);
@@ -370,9 +297,7 @@ export function Document() {
     !selection.getRangeAt(0) ||
     selection.getRangeAt(0).collapsed;
 
-  const isPopupOpen = createMemo(derived.popupOpen);
-  const setGeneralPopupLocation = signals.generalPopupLocation[1];
-  const setLocationStore = stores.location[1];
+  const isPopupOpen = pdfViewer.isPopupOpen;
 
   const handleSelection = async (selection: Selection, pageIndex: number) => {
     const viewer = getRootViewer();
@@ -408,14 +333,11 @@ export function Document() {
 
     const selectionString = selection.toString();
     if (selectionString.trim().length === 0) {
-      setLocationStore('annotation', undefined);
-      setLocationStore('precise', undefined);
+      pdf.setShareLocation(undefined);
       return;
     }
-    // let shouldHandleDefinition = isValidTerm(selectionString);
 
-    setLocationStore('annotation', undefined);
-    setLocationStore('precise', {
+    pdf.setShareLocation({
       type: 'precise',
       pageIndex: pageIndex + 1,
       ...location,
@@ -423,15 +345,14 @@ export function Document() {
 
     setSelectionHighlights(selection);
 
-    // set anchor element for the definition popup
-    setGeneralPopupLocation({ pageIndex, element });
+    pdf.openSelectionMenu({ pageIndex, element });
   };
 
   const selectionHandler: JSX.EventHandler<
     HTMLDivElement,
     MouseEvent | TouchEvent
   > = createCallback((e) => {
-    setIsSelecting(false);
+    pdfViewer.endTextSelection();
 
     if (!(e.target instanceof HTMLElement)) return;
 
@@ -475,12 +396,12 @@ export function Document() {
       case '+':
       case '=':
         e.preventDefault();
-        if (derived.canZoomIn()) viewer.zoomIn();
+        if (pdfViewer.root.canZoomIn()) viewer.zoomIn();
         break;
       case '_':
       case '-':
         e.preventDefault();
-        if (derived.canZoomOut()) viewer.zoomOut();
+        if (pdfViewer.root.canZoomOut()) viewer.zoomOut();
         break;
       case 'PageUp':
       case 'ArrowLeft':
@@ -534,13 +455,13 @@ export function Document() {
     };
 
     const setMouseUp = () => {
-      setIsSelecting(false);
+      pdfViewer.endTextSelection();
       setMouseDown(false);
     };
 
     const selectStartHandler = () => {
       if (!mouseDown()) return;
-      setIsSelecting(true);
+      beginViewerTextSelection();
     };
 
     element.addEventListener('mousedown', mouseDownHandler);
@@ -552,12 +473,6 @@ export function Document() {
       element.removeEventListener('mousemove', selectStartHandler);
       blockElement()?.removeEventListener('mouseup', setMouseUp);
     });
-  });
-
-  const goToLinkLocation = useGoToLinkLocation();
-  createEffect(() => {
-    if (signals.locationChanged[0]() || !derived.viewerReady()) return;
-    goToLinkLocation(pdf.locationParams());
   });
 
   const [initialized, setInitialized] = createSignal(false);
@@ -576,7 +491,7 @@ export function Document() {
         )
           return;
 
-        const currentPage = derived.currentPageNumber();
+        const currentPage = pdfViewer.root.currentPageNumber();
         const pdfDimensions = viewer.pageViewport(currentPage);
         if (!pdfDimensions) return;
 
@@ -608,46 +523,29 @@ export function Document() {
     )
   );
 
-  createEffect(() => {
-    setLocationStore('general', {
-      type: 'general',
-      pageIndex: derived.currentPageNumber(),
-      y: 0,
-    });
-  });
-
   if (ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE && !pdf.isNested()) {
-    const isSaving = createDeferred(signals.isSaving[0]);
-    const currentOperations = createDeferred(signals.numOperations[0]);
-    const [savedOperations, setSavedOperations] = createSignal(0);
-    const setSaveRequired = signals.modificationDataSaveRequired[1];
+    const isSaving = createDeferred(pdf.persistence.isSaving);
+    const currentRevision = createDeferred(pdf.model.revision);
+    const [savedRevision, setSavedRevision] = createSignal(0);
     createEffect(() => {
       if (isSaving()) return;
 
-      const currOps = currentOperations();
-      const savedOps = savedOperations();
-      if (currOps > savedOps) {
-        setSaveRequired(true);
-      } else {
-        setSaveRequired(false);
-        return;
-      }
+      const revision = currentRevision();
+      if (revision <= savedRevision()) return;
 
-      saveModificationData().then(() => setSavedOperations(currOps));
+      saveModificationData().then(() => setSavedRevision(revision));
     });
   }
 
   // TODO: hacky location autosave that works on page refresh
   // without requiring a confirm dialog
   if (ENABLE_PDF_LOCATION_AUTOSAVE && !pdf.isNested()) {
-    const isSaving = createDeferred(signals.isSaving[0]);
-    const viewChanged = createDeferred(signals.visiblePagesChanged[0]);
+    const isSaving = createDeferred(pdf.persistence.isSaving);
+    const viewChanged = createDeferred(pdfViewer.root.viewArea);
     const saveLocation = usePdfSaveLocation();
     const debouncedSaveLocation = debounce(saveLocation, 1000);
 
     createEffect(() => {
-      // listen to root viewer changed view area
-      // e.g. scroll, zoom, go to, etc.
       viewChanged();
 
       if (untrack(isSaving)) return;

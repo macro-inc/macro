@@ -6,6 +6,10 @@ use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
+use agent_session::domain::session::PermissionPolicy;
+
+#[cfg(test)]
+mod test;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -182,6 +186,24 @@ impl AgentKind {
         }
     }
 
+    /// Fixed harness slug for kinds that map one-to-one onto one.
+    ///
+    /// Inverse of [`Self::from_harness`] for Cursor, Codex, and Claude — a
+    /// session of those bots is always stored under that slug, even when the
+    /// open path fell through to a deployment default (`opencode`). The
+    /// sandboxed coder's slug is deployment configuration, in-memory accepts
+    /// both `in-memory` and `macro-inmem`, and an external runtime is whoever
+    /// dialed in; those keep the slug the open path already chose.
+    #[must_use]
+    pub const fn harness_slug(self) -> Option<&'static str> {
+        match self {
+            Self::Cursor => Some("cursor"),
+            Self::CodexCloud => Some("codex-cloud"),
+            Self::ClaudeCloud => Some("claude-cloud"),
+            Self::SandboxedCoder | Self::InMemory | Self::External => None,
+        }
+    }
+
     /// Whether a deployment provisions this kind's runtimes itself.
     ///
     /// Membership is about who provisions, not whether *this* deployment is
@@ -190,6 +212,71 @@ impl AgentKind {
     #[must_use]
     pub fn is_managed(self) -> bool {
         !matches!(self, Self::External)
+    }
+
+    /// How this kind's sessions answer permission requests without a registered
+    /// local harness.
+    ///
+    /// Managed runtimes act inside sandboxes this deployment owns (or, for
+    /// Cursor, never ask), so approving on arrival costs nothing. An external
+    /// runtime is somebody's own machine, where a bot approving its own tool
+    /// calls is exactly what a person should be asked about.
+    #[must_use]
+    pub fn default_permission_policy(self) -> PermissionPolicy {
+        match self {
+            Self::SandboxedCoder
+            | Self::Cursor
+            | Self::CodexCloud
+            | Self::ClaudeCloud
+            | Self::InMemory => PermissionPolicy::AutoAccept,
+            Self::External => PermissionPolicy::Prompt,
+        }
+    }
+}
+
+/// Stored facts used by the domain to choose a session permission policy.
+pub enum PermissionPolicyConfig {
+    /// A fixed system bot with no editable persona configuration.
+    Fixed(AgentKind),
+    /// An editable persona and its harness operator's limit.
+    Persona {
+        /// The runtime serving this persona.
+        kind: AgentKind,
+        /// A registered harness's opt-in. `None` denotes a built-in runtime.
+        harness_allows_bypass: Option<bool>,
+        /// The agent owner's choice for a local harness; absent means prompt.
+        auto_accept_permissions: Option<bool>,
+    },
+}
+
+impl PermissionPolicyConfig {
+    /// Apply local harness consent and agent choice, or the built-in policy.
+    #[must_use]
+    pub fn resolve(self) -> PermissionPolicy {
+        match self {
+            Self::Fixed(kind) => kind.default_permission_policy(),
+            Self::Persona {
+                kind,
+                harness_allows_bypass,
+                auto_accept_permissions,
+            } => match harness_allows_bypass {
+                Some(allowed) => resolve_permission_policy(allowed, auto_accept_permissions),
+                None => kind.default_permission_policy(),
+            },
+        }
+    }
+}
+
+/// Resolve a persona's choice within the harness operator's permission limit.
+#[must_use]
+pub fn resolve_permission_policy(
+    allow_bypass: bool,
+    auto_accept: Option<bool>,
+) -> PermissionPolicy {
+    if allow_bypass && auto_accept == Some(true) {
+        PermissionPolicy::AutoAccept
+    } else {
+        PermissionPolicy::Prompt
     }
 }
 
@@ -232,6 +319,39 @@ pub struct PriorMessage {
     pub sender: String,
     /// Message body.
     pub content: String,
+}
+
+/// Where in a document a comment thread sits. The mark id alone names a
+/// location the agent has no way to resolve: the document body it can read
+/// carries no marks, so the text the comment covers travels with the id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommentAnchor {
+    /// Lexical mark the thread is attached to.
+    pub mark_id: String,
+    /// The marked text as it read when the comment was posted. Absent on
+    /// threads anchored before snapshots were captured.
+    pub marked_text: Option<String>,
+    /// The mark as the document reads now. Absent when the document no longer
+    /// carries it or the lookup failed, leaving the snapshot as the fallback.
+    pub current: Option<MarkedPassage>,
+}
+
+/// A comment mark resolved against the live document, both fields bounded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarkedPassage {
+    /// The text the mark covers.
+    pub marked_text: String,
+    /// The block or blocks containing the mark, windowed around it.
+    pub surrounding_text: String,
+}
+
+/// What the conversation an agent was summoned from contributes to its prompt.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConversationContext {
+    /// The document location, when the prompt came from an anchored comment.
+    pub anchor: Option<CommentAnchor>,
+    /// Untrusted prior messages, oldest first.
+    pub messages: Vec<PriorMessage>,
 }
 
 /// Do something in a session that already exists.
@@ -751,28 +871,5 @@ impl HarnessDefaults {
 impl From<SessionDefaults> for HarnessDefaults {
     fn from(default: SessionDefaults) -> Self {
         Self::new(default)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::SessionRepository;
-
-    /// The URL survives verbatim - it is what a session's row carries, and
-    /// what the egress proxy re-reads - and one that names no repository is
-    /// refused rather than repaired. The shapes themselves are the parser's
-    /// own tests, in `agent_egress`.
-    #[test]
-    fn a_session_repository_keeps_the_url_it_was_read_from() {
-        let repository =
-            SessionRepository::parse("https://github.com/macro-inc/macro.git").expect("a repo");
-        assert_eq!(
-            repository.as_str(),
-            "https://github.com/macro-inc/macro.git"
-        );
-
-        for url in ["", "https://github.com/macro-inc", "not a url"] {
-            assert_eq!(SessionRepository::parse(url), None, "accepted {url}");
-        }
     }
 }

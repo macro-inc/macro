@@ -1,46 +1,33 @@
-import { createBlockMemo, useBlockId, useBlockName } from '@core/block';
-import {
-  enableUnifiedDocumentDiscussions,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
-import {
-  useMessageActions,
-  useMessageRootsQuery,
-} from '@queries/messages/document-messages';
+import { useMessageActions } from '@queries/messages/document-messages';
 import type { PostMessage } from '@service-storage/messages';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
-/** Every root of the document, including tombstones, so marks can be reconciled. */
-export const documentMessagesQuery = createBlockMemo(() => {
-  if (
-    useBlockName() !== 'md' ||
-    !isFeatureEnabled(enableUnifiedDocumentDiscussions)
-  )
-    return;
-  const id = useBlockId();
-  return useMessageRootsQuery(() => ({ type: 'document', id }));
-});
-
-function actions() {
-  const id = useBlockId();
-  return useMessageActions(() => ({ type: 'document', id }));
+function useDocumentMessageActions() {
+  const { documentId } = useMarkdownDocument();
+  return useMessageActions(() => ({
+    type: 'document',
+    id: documentId(),
+  }));
 }
 
 export function useCreateMarkedMessageResource() {
-  const messages = actions();
+  const messages = useDocumentMessageActions();
   return (
     content: string,
     markId: string,
+    markedText: string | undefined,
     mentions?: PostMessage['mentions'],
     attachments?: PostMessage['attachments']
   ) =>
     messages.post({
       content,
-      anchor: { type: 'markdown', mark_id: markId },
+      // The server trims and bounds the snapshot; it is sent as the mark reads.
+      anchor: { type: 'markdown', mark_id: markId, marked_text: markedText },
       mentions,
       attachments,
     });
 }
 
 export function useCreateMessageReplyResource() {
-  return actions().post;
+  return useDocumentMessageActions().post;
 }

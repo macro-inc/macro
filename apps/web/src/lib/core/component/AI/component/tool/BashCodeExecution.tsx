@@ -42,6 +42,8 @@ function CodeFence(props: {
       <Show when={isCollapsible() && needsTruncation()}>
         <button
           type="button"
+          aria-label="Command output"
+          aria-expanded={expanded()}
           class="text-ink-extra-muted hover:text-ink-muted absolute top-1 right-1 p-1"
           onClick={() => setExpanded(!expanded())}
         >

@@ -61,6 +61,8 @@
   "AI/mcp/tools/read-thread",
   "AI/mcp/tools/rename-channel",
   "AI/mcp/tools/rename-document",
+  "AI/mcp/tools/reply-to-document-comment",
+  "AI/mcp/tools/resolve-document-comment",
   "AI/mcp/tools/search-skills",
   "AI/mcp/tools/search-tools",
   "AI/mcp/tools/self-knowledge",
@@ -73,6 +75,7 @@
   "AI/mcp/tools/update-calendar-event",
   "AI/mcp/tools/update-reminder",
   "AI/mcp/tools/update-thread-labels",
+  "AI/mcp/tools/upload-file",
   "AI/mcp/tools/web-fetch",
   "AI/mcp/tools/web-search"
 ]

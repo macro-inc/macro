@@ -56,6 +56,14 @@ export function CallRecordingSplitHeader(props: {
   const callName = () => record().customName ?? record().channelName ?? 'Call';
   const call = useCall(() => record().channelId);
 
+  async function handleJoin() {
+    try {
+      await call.joinCall();
+    } catch (error) {
+      console.error('Failed to join call from recording', error);
+    }
+  }
+
   const shareTool: BlockTool = {
     label: 'Share',
     icon: IconShared,
@@ -144,7 +152,7 @@ export function CallRecordingSplitHeader(props: {
                 size="icon-xs"
                 class="bg-surface"
                 tooltip="Call Again"
-                onClick={() => call.joinCall()}
+                onClick={handleJoin}
               >
                 <PhoneCallIcon class="size-4" />
               </Button>

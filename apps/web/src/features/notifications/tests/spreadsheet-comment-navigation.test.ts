@@ -18,8 +18,11 @@ import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { expect, it, vi } from 'vitest';
 import type { UnifiedNotification } from '../types';
 
-vi.mock('@block-calendar/calendar-range', () => ({
-  createCalendarBlockRange: vi.fn(),
+vi.mock('@app/features/calendar-view/calendar-range', () => ({
+  createCalendarRange: vi.fn(),
+}));
+vi.mock('@app/features/calendar-view/calendar-navigation', () => ({
+  openCalendarView: vi.fn(),
 }));
 vi.mock('@block-channel/utils/link', () => ({
   getChannelParams: vi.fn(),

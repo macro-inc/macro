@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO harnesses (id, name, team_id, created_by)\n        VALUES ($1, 'teams', $2, 'macro|teammate@example.com')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "add9f378c7e48521866ded0797002c33631e171900c9fc99e9c70bfd5e09fb74"
+}

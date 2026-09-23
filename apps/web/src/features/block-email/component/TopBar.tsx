@@ -43,6 +43,7 @@ import NoiseIcon from '@phosphor/waveform.svg';
 import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { queryReadyGate } from '@queries/gate';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 
@@ -66,9 +67,8 @@ export function TopBar(props: {
 
   const isOwnThread = () => {
     const thread = emailCtx.thread();
-    const links = linksQuery.data?.links;
-    if (!thread || !links) return false;
-    return links.some((link) => link.id === thread.link_id);
+    if (!thread || !queryReadyGate(linksQuery)) return false;
+    return linksQuery.data.links.some((link) => link.id === thread.link_id);
   };
 
   const isDone = () => emailCtx.isThreadDone();

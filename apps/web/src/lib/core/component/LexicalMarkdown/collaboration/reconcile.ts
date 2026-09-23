@@ -1,10 +1,13 @@
 import {
   $getNodeById,
   $getPeerId,
+  $liftDraftCommentMarks,
+  $restoreDraftCommentMarks,
   $setLocal,
   isSerializedImageNode,
   isSerializedVideoNode,
   type NodeIdMappings,
+  stripDraftCommentMarks,
 } from '@macro-inc/lexical-core';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -90,20 +93,29 @@ export function $reconcileLexicalState(
 ): void {
   const editor = $getEditor();
 
+  // The local draft comment mark is never synced, so it is lifted out while
+  // the tree is compared with the shared state. Drafts that arrive in the
+  // shared state were left behind by sessions that ended mid-draft.
+  const drafts = $liftDraftCommentMarks();
+  const oldRoot = stripDraftCommentMarks(oldState).root;
+  const newRoot = stripDraftCommentMarks(newState).root;
+
   const newParentMap = new Map<string, string | undefined>();
   const oldParentMap = new Map<string, string | undefined>();
-  buildParentMap(newState.root, undefined, newParentMap);
-  buildParentMap(oldState.root, undefined, oldParentMap);
+  buildParentMap(newRoot, undefined, newParentMap);
+  buildParentMap(oldRoot, undefined, oldParentMap);
 
   $applyChildren(
     editor,
     mapping,
-    oldState.root,
-    newState.root,
+    oldRoot,
+    newRoot,
     oldParentMap,
     newParentMap,
     peerId
   );
+
+  $restoreDraftCommentMarks(drafts);
 }
 
 // Mark incoming tracked peerId nodes with correct local status.

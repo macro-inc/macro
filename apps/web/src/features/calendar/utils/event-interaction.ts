@@ -1,5 +1,5 @@
 import type { EventApi } from '@fullcalendar/core';
-import type { EventTime } from '@service-email/generated/schemas/eventTime';
+import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
 import type { CalendarEvent } from '../types';
 import { formatLocalDate } from './calendar-date';
 

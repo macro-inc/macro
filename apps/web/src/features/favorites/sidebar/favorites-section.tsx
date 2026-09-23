@@ -21,6 +21,7 @@ import {
   MenuSeparator,
 } from '@core/component/ContextMenu';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
+import { toast } from '@core/component/Toast/Toast';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
@@ -393,11 +394,15 @@ const FavoriteRow = (props: {
   };
 
   const openFavorite = (preferNewSplit: boolean) => {
-    const split = layout.openWithSplit(content(), {
+    const result = layout.openWithSplit(content(), {
       referredFrom: 'sidebar',
       activate: true,
       preferNewSplit,
     });
+    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+      toast.alert('Content already open');
+    }
+    const split = result.split;
     globalSplitManager()?.returnFocus();
     return split;
   };

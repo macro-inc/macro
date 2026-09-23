@@ -4,22 +4,28 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CalendarMentionEventDescription } from './calendarMentionEventDescription';
 import type { CalendarMentionEventLocation } from './calendarMentionEventLocation';
 import type { CalendarMentionEventOccurrenceKey } from './calendarMentionEventOccurrenceKey';
 import type { CalendarMentionEventOrganizerEmail } from './calendarMentionEventOrganizerEmail';
 import type { CalendarMentionEventOrganizerName } from './calendarMentionEventOrganizerName';
+import type { CalendarMentionEventViewerEventId } from './calendarMentionEventViewerEventId';
 import type { EventTime } from './eventTime';
 
 /**
  * Meeting-level fields shown in a calendar event mention preview, taken from
-the requester's own projection of the meeting.
+the requester's own projection of the meeting, or — when the requester has
+none — from the mentioned projection a channel they belong to was given.
  */
 export interface CalendarMentionEvent {
   /**
-   * Number of attendees on the requester's copy.
+   * Number of attendees on the previewed copy.
    * @minimum 0
    */
   attendeeCount: number;
+  /** Provider description, plain text or HTML, truncated for the preview.
+Clients must sanitize it before rendering. */
+  description?: CalendarMentionEventDescription;
   /** Whether the event repeats. */
   isRecurring: boolean;
   /** Location label, when set. */
@@ -37,9 +43,12 @@ series start. */
   time: EventTime;
   /** Display title. */
   title: string;
-  /** Entity update time of the requester's copy. */
+  /** Entity update time of the previewed copy. */
   updatedAt: string;
   /** The requester's own event entity for the mentioned meeting. Differs
-from the mentioned id when the mention came from another attendee. */
-  viewerEventId: string;
+from the mentioned id when the mention came from another attendee.
+Absent when the meeting is on none of the requester's calendars and
+they see it only because it was shared with one of their channels:
+that preview is read-only and there is no event of theirs to open. */
+  viewerEventId?: CalendarMentionEventViewerEventId;
 }

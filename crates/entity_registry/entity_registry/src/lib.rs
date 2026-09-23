@@ -29,7 +29,8 @@ pub mod domain;
 pub mod outbound;
 
 pub use domain::models::{EntityRecord, EntityTypeCount};
-pub use domain::ports::{EntityRegistryRepository, EntityRegistryService};
+pub use domain::owner_grant_policy::OwnerGrantPolicy;
+pub use domain::ports::{BotFacts, EntityRegistryRepository, EntityRegistryService};
 pub use domain::service::EntityRegistryServiceImpl;
 pub use shared_entity_registry::{
     EntityRegistryError, EntityRegistryResult, InsertOutcome, NewEntityRecord, Owner,

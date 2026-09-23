@@ -7,6 +7,8 @@ pub mod document_sync;
 pub mod document_bytes_upload;
 #[cfg(feature = "ai_tools")]
 pub mod editing_worker_client;
+#[cfg(feature = "ai_tools")]
+pub mod lexical_comment_marks;
 #[cfg(feature = "markdown_init")]
 pub mod markdown_init;
 #[cfg(feature = "document_create_adapters")]

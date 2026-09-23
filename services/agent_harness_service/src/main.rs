@@ -15,6 +15,7 @@ mod containers;
 mod harness_bindings;
 mod internal_mcp;
 mod model_providers;
+mod permission_policy;
 mod runtime_commands;
 mod trigger;
 
@@ -23,6 +24,12 @@ mod test;
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
+use agent_changes::domain::pull_request::PullRequestChanges;
+use agent_changes::domain::service::{AgentChangesService, CaptureOnTurnEnd};
+use agent_changes::inbound::axum_router::AgentChangesRouterState;
+use agent_changes::outbound::github_pull_request::GithubPullRequestDiff;
+use agent_changes::outbound::postgres::PgChangesetRepo;
+use agent_changes::outbound::s3::S3ChangesetBlobStore;
 use agent_egress::domain::service::EgressServiceImpl;
 use agent_egress::outbound::forwarder::ReqwestForwarder;
 use agent_egress::outbound::github_tokens::GithubAppTokens;
@@ -54,6 +61,7 @@ use agent_harness::outbound::daytona::{
 };
 use agent_harness::outbound::egress::EgressProvisioner;
 use agent_harness::outbound::forward::RedisCommandForwarder;
+use agent_harness::outbound::github_branches::GithubRepositoryBranches;
 use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
@@ -119,6 +127,7 @@ use macro_service_urls::{
     StaticFileServiceUrl,
 };
 use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
+use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
 use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
@@ -474,12 +483,20 @@ async fn run() -> anyhow::Result<()> {
     // Which repositories a session may work on is the owner's question, not
     // the deployment's: the same App credentials the egress proxy mints tokens
     // with, read in the other direction - from the user to their installations.
+    let github_token_config = InstallationTokenConfig {
+        client_id: config.github_sync_app_client_id.clone(),
+        private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
+    };
     let reachable_repositories = Arc::new(GithubReachableRepositories::new(
         ReachableRepositoriesService::new(
-            InstallationTokenConfig {
-                client_id: config.github_sync_app_client_id.clone(),
-                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
-            },
+            github_token_config.clone(),
+            PgGithubSyncRepo::new(pool.clone()),
+            GithubSyncClientImpl::default(),
+        ),
+    ));
+    let repository_branches = Arc::new(GithubRepositoryBranches::new(
+        InstallationTokenService::new(
+            github_token_config,
             PgGithubSyncRepo::new(pool.clone()),
             GithubSyncClientImpl::default(),
         ),
@@ -494,6 +511,17 @@ async fn run() -> anyhow::Result<()> {
                 ),
             ),
         );
+    let session_working_branches: Arc<
+        dyn agent_session::domain::working_branch::SessionWorkingBranches,
+    > = Arc::new(
+        agent_session::domain::working_branch::SessionWorkingBranchService::new(
+            session_repo.clone(),
+            ConnectionGatewayAgentSessionRealtime::new(
+                connection_gateway.clone(),
+                session_audience.clone(),
+            ),
+        ),
+    );
     let internal_mcp = internal_mcp::router(
         Arc::new(session_repo.clone()),
         session_pull_requests.clone(),
@@ -525,7 +553,8 @@ async fn run() -> anyhow::Result<()> {
             ),
         ),
     )
-    .with_pull_requests(session_pull_requests.clone());
+    .with_pull_requests(session_pull_requests.clone())
+    .with_working_branches(session_working_branches);
     let codex_connections: Option<Arc<dyn codex_connection::domain::ConnectionService>> = config
         .codex_oauth_kms_key_id()
         .map(|key| {
@@ -743,9 +772,12 @@ async fn run() -> anyhow::Result<()> {
     );
     let prompt_mentions =
         LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
+    let prompt_context = MessagePromptContextAdapter::new(
+        message_service,
+        Arc::clone(&entity_access),
+        Arc::new(lexical.clone()),
+    );
     let prompt_composer = LexicalAgentPromptComposer::new(lexical);
-    let prompt_context =
-        MessagePromptContextAdapter::new(message_service, Arc::clone(&entity_access));
 
     // One connection per harness, shared by every session of every agent
     // bound to it. Held here because the gateway puts dialed-in sockets into
@@ -778,6 +810,15 @@ async fn run() -> anyhow::Result<()> {
             harness: config.inmem_harness_slug.clone(),
             // Stamped but unused: the in-process agent has no
             // workspace to clone anything into.
+            repo_url: Some(repo_url.clone()),
+        },
+    )
+    .with_bot(
+        bot_id::CURSOR_BOT_ID,
+        SessionDefaults {
+            bot_id: bot_id::CURSOR_BOT_ID,
+            model: config.harness_model.clone(),
+            harness: "cursor".into(),
             repo_url: Some(repo_url),
         },
     )
@@ -827,6 +868,7 @@ async fn run() -> anyhow::Result<()> {
             EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url)
                 .with_external_base_url(config.external_egress_base_url.clone()),
             RedisCommandForwarder::new(redis.clone()),
+            PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
             defaults,
             Arc::clone(&lifecycle_publisher),
             pending_commands,
@@ -837,12 +879,37 @@ async fn run() -> anyhow::Result<()> {
         )
         .with_repositories(open_repositories),
     );
-    // Close the loop: turn ends observed by the session actors drain the
-    // harness's prompt queue.
-    turn_observer.bind(harness.clone());
     let model_probe_timeout = std::time::Duration::from_secs(10);
     let macrod_models =
         MacrodModels::new(Arc::clone(&runtimes), redis.clone(), model_probe_timeout);
+
+    // Capture only the session's linked GitHub pull request, for every harness.
+    let changes_extractor =
+        PullRequestChanges::new(GithubPullRequestDiff::new(InstallationTokenService::new(
+            InstallationTokenConfig {
+                client_id: config.github_sync_app_client_id.clone(),
+                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
+            },
+            PgGithubSyncRepo::new(pool.clone()),
+            GithubSyncClientImpl::default(),
+        )));
+    let changes = AgentChangesService::new(
+        session_repo.clone(),
+        changes_extractor,
+        PgChangesetRepo::new(pool.clone()),
+        S3ChangesetBlobStore::new(
+            macro_aws_config::s3_client().await,
+            config.agent_session_changes_bucket.clone(),
+        ),
+        ConnectionGatewayAgentSessionRealtime::new(
+            connection_gateway.clone(),
+            session_repo.clone(),
+        ),
+    );
+
+    // Close the loop: turn ends observed by the session actors drain the
+    // harness's prompt queue, and capture what the turn changed.
+    turn_observer.bind((harness.clone(), CaptureOnTurnEnd::new(changes.clone())));
     let runtime_command_models = macrod_models.clone();
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
@@ -933,9 +1000,14 @@ async fn run() -> anyhow::Result<()> {
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    let changes_state = AgentChangesRouterState::new(
+        changes,
+        entity_access.clone(),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let control_state = AgentSessionControlState::new(
         harness.clone(),
-        entity_access,
+        entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let bots_directory = Arc::new(PgBotDirectory::new(PgBotsRepo::new(pool.clone())));
@@ -951,6 +1023,7 @@ async fn run() -> anyhow::Result<()> {
     // Served to the app by `GET /agent-repositories`; see `open_repositories`.
     let repositories_state = AgentRepositoriesRouterState::new(
         reachable_repositories,
+        repository_branches,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let http_runtime_commands_readiness = runtime_commands_readiness.clone();
@@ -965,6 +1038,13 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     let http_port = config.port;
+    let sharing = agent_session::inbound::axum_router::sharing::agent_session_sharing_router(
+        AgentSessionRouterState::new(
+            agent_session::domain::sharing::SessionSharingService::new(session_repo.clone()),
+            entity_access,
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
             api::ApiStates::new(
@@ -974,8 +1054,10 @@ async fn run() -> anyhow::Result<()> {
                 gateway_state,
                 model_state,
                 repositories_state,
+                changes_state,
             )
-            .with_claude_auth(claude_auth),
+            .with_claude_auth(claude_auth)
+            .with_sharing(sharing),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),

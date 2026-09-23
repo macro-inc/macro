@@ -195,6 +195,14 @@ type ToolParserMap = {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
   };
+  ReplyToDocumentComment: {
+    call: types.ReplyToDocumentComment;
+    response: types.ReplyToDocumentCommentResponse;
+  };
+  ResolveDocumentComment: {
+    call: types.ResolveDocumentComment;
+    response: types.ResolveDocumentCommentResponse;
+  };
   SearchSkills: {
     call: types.SearchSkills;
     response: types.SearchSkillsResponse;
@@ -234,6 +242,7 @@ type ToolParserMap = {
     call: types.UpdateThreadLabels;
     response: types.UpdateThreadLabelsResponse;
   };
+  UploadFile: { call: types.UploadFile; response: types.UploadFileResponse };
   WebFetch: { call: types.WebFetch; response: types.WebFetchResponse };
   WebSearch: { call: types.WebSearch; response: types.WebSearchResponse };
 };
@@ -450,6 +459,14 @@ const toolParserMap = {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
   },
+  ReplyToDocumentComment: {
+    call: schemas.ReplyToDocumentComment,
+    response: schemas.ReplyToDocumentCommentResponse,
+  },
+  ResolveDocumentComment: {
+    call: schemas.ResolveDocumentComment,
+    response: schemas.ResolveDocumentCommentResponse,
+  },
   SearchSkills: {
     call: schemas.SearchSkills,
     response: schemas.SearchSkillsResponse,
@@ -494,6 +511,10 @@ const toolParserMap = {
   UpdateThreadLabels: {
     call: schemas.UpdateThreadLabels,
     response: schemas.UpdateThreadLabelsResponse,
+  },
+  UploadFile: {
+    call: schemas.UploadFile,
+    response: schemas.UploadFileResponse,
   },
   WebFetch: { call: schemas.WebFetch, response: schemas.WebFetchResponse },
   WebSearch: { call: schemas.WebSearch, response: schemas.WebSearchResponse },
@@ -695,6 +716,14 @@ type ToolDataMap = {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
   };
+  ReplyToDocumentComment: {
+    call: types.ReplyToDocumentComment;
+    response: types.ReplyToDocumentCommentResponse;
+  };
+  ResolveDocumentComment: {
+    call: types.ResolveDocumentComment;
+    response: types.ResolveDocumentCommentResponse;
+  };
   SearchSkills: {
     call: types.SearchSkills;
     response: types.SearchSkillsResponse;
@@ -734,6 +763,7 @@ type ToolDataMap = {
     call: types.UpdateThreadLabels;
     response: types.UpdateThreadLabelsResponse;
   };
+  UploadFile: { call: types.UploadFile; response: types.UploadFileResponse };
   WebFetch: { call: types.WebFetch; response: types.WebFetchResponse };
   WebSearch: { call: types.WebSearch; response: types.WebSearchResponse };
 };

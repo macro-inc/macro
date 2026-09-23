@@ -98,6 +98,12 @@ pub enum ThreadAnchor {
     Markdown {
         /// Mark UUID serialized in the document.
         mark_id: Uuid,
+        /// The marked text as it read when the discussion was created, already
+        /// trimmed and bounded. Absent on threads created or imported before
+        /// snapshots were captured: the text a mark covers cannot be recovered
+        /// from the mark id alone.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        marked_text: Option<String>,
     },
     /// An independently existing PDF highlight.
     PdfHighlight {
@@ -121,6 +127,11 @@ pub enum NewThreadAnchor {
     Markdown {
         /// Serialized mark identifier.
         mark_id: Uuid,
+        /// The document text the mark covers, captured by the editor as the
+        /// comment is written. Trimmed and bounded before it is stored, so an
+        /// oversized or whitespace-only claim cannot reach the thread row.
+        #[serde(default)]
+        marked_text: Option<String>,
     },
     /// Attach an independently existing highlight on this document.
     PdfHighlight {
@@ -144,13 +155,44 @@ pub enum NewThreadAnchor {
     },
 }
 
+/// Longest marked-text snapshot kept with a discussion. A comment marks a
+/// phrase or a paragraph; a longer range is elided so that one highlight
+/// cannot crowd out the rest of an agent prompt.
+pub const MARKED_TEXT_LIMIT: usize = 1000;
+
+/// The storable form of text a mark covers: trimmed, elided at
+/// [`MARKED_TEXT_LIMIT`] characters, and absent when it carries nothing. The
+/// only way a snapshot enters a thread row, so no client claim is stored whole.
+pub fn marked_text_snapshot(text: &str) -> Option<String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let mut snapshot: String = text.chars().take(MARKED_TEXT_LIMIT).collect();
+    // The ellipsis is the whole truncation signal, on the wire and in the row.
+    if text.chars().nth(MARKED_TEXT_LIMIT).is_some() {
+        snapshot.push('\u{2026}');
+    }
+    Some(snapshot)
+}
+
 impl NewThreadAnchor {
     /// Thread-owned reference after annotation geometry has been persisted.
     pub fn reference(&self) -> ThreadAnchor {
-        match *self {
-            Self::Markdown { mark_id } => ThreadAnchor::Markdown { mark_id },
-            Self::PdfHighlight { anchor_id } => ThreadAnchor::PdfHighlight { anchor_id },
-            Self::PdfPlaceable { anchor_id, .. } => ThreadAnchor::PdfPlaceable { anchor_id },
+        match self {
+            Self::Markdown {
+                mark_id,
+                marked_text,
+            } => ThreadAnchor::Markdown {
+                mark_id: *mark_id,
+                marked_text: marked_text.as_deref().and_then(marked_text_snapshot),
+            },
+            Self::PdfHighlight { anchor_id } => ThreadAnchor::PdfHighlight {
+                anchor_id: *anchor_id,
+            },
+            Self::PdfPlaceable { anchor_id, .. } => ThreadAnchor::PdfPlaceable {
+                anchor_id: *anchor_id,
+            },
         }
     }
 }
@@ -391,6 +433,10 @@ pub struct PostMessage {
     #[serde(skip)]
     #[cfg_attr(feature = "schema", schema(ignore))]
     pub notification_policy: PostMessageNotificationPolicy,
+    /// Client-minted UUIDv7 for the new message, so an optimistic message
+    /// already carries its final id; the server mints one when absent.
+    #[serde(default)]
+    pub id: Option<Uuid>,
     /// Macro Markdown body.
     pub content: String,
     /// Root to reply to, if this is a reply.

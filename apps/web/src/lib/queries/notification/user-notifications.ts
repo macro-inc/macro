@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
@@ -26,12 +27,13 @@ import type { GetAllUserNotificationsResponse } from '@service-notification/gene
 import type { NotificationUpdateOperation } from '@service-storage/graphql/generated/graphql';
 import { updateNotifications } from '@service-storage/graphql-notifications';
 import { graphqlCacheEnabled } from '@service-storage/graphql-soup';
+import { createLazyMemo } from '@solid-primitives/memo';
 import {
   type InfiniteData,
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createSignal, untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { z } from 'zod';
 import { queryClient } from '../client';
@@ -185,6 +187,8 @@ export type UserNotificationsQueryOptions = {
 
 /** Query state exposed by the transport-neutral notification facade. */
 export type UserNotificationsQuery = {
+  /** Reactively reports data/status activation of the GraphQL feed (REST is eager). */
+  readonly isStarted: boolean;
   readonly data: UnifiedNotification[] | undefined;
   readonly error: Error | null;
   readonly isLoading: boolean;
@@ -230,14 +234,23 @@ export function useUserNotificationsQuery(
   args: Accessor<UserNotificationsQueryArgs>,
   options?: Accessor<UserNotificationsQueryOptions>
 ): UserNotificationsQuery {
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const queryEnabled = () => options?.().enabled !== false;
 
-  const usesGraphql = () =>
-    isFeatureEnabled(enableGraphqlSoup) && args().done !== true;
+  // Cold-start flags can arrive after the observers mount. Enabling and
+  // reading a transport must react to the same flag, not an imperative snapshot.
+  const usesGraphql = () => graphqlSoupFlag().enabled && args().done !== true;
 
-  const graphqlQuery = createGraphqlNotificationsQuery(args, () => ({
-    enabled: queryEnabled() && usesGraphql(),
-  }));
+  const [graphqlStarted, setGraphqlStarted] = createSignal(false);
+  const graphqlQuery = createLazyMemo(() =>
+    untrack(() => {
+      const query = createGraphqlNotificationsQuery(args, () => ({
+        enabled: queryEnabled() && usesGraphql(),
+      }));
+      setGraphqlStarted(true);
+      return query;
+    })
+  );
 
   const restQuery = useRestUserNotificationsQuery(args, () => ({
     enabled: queryEnabled() && !usesGraphql(),
@@ -245,45 +258,49 @@ export function useUserNotificationsQuery(
 
   const refetch = async () => {
     if (usesGraphql()) {
-      await graphqlQuery.refetch({
+      await graphqlQuery().refetch({
         requestPolicy: 'network-only',
         throwOnError: true,
       });
     } else {
-      await restQuery.refetch();
+      const result = await restQuery.refetch();
+      if (result.error) throw result.error;
     }
   };
 
   return {
+    get isStarted() {
+      return !usesGraphql() || graphqlStarted();
+    },
     get data() {
-      return usesGraphql() ? graphqlQuery.data : restQuery.data;
+      return usesGraphql() ? graphqlQuery().data : restQuery.data;
     },
     get error() {
       return usesGraphql()
-        ? graphqlQuery.error
+        ? graphqlQuery().error
         : ((restQuery.error as Error | null) ?? null);
     },
     get isLoading() {
-      return usesGraphql() ? graphqlQuery.isLoading : restQuery.isLoading;
+      return usesGraphql() ? graphqlQuery().isLoading : restQuery.isLoading;
     },
     get isFetching() {
-      return usesGraphql() ? graphqlQuery.isFetching : restQuery.isFetching;
+      return usesGraphql() ? graphqlQuery().isFetching : restQuery.isFetching;
     },
     get isFetchingNextPage() {
       return usesGraphql()
-        ? graphqlQuery.isFetchingNextPage
+        ? graphqlQuery().isFetchingNextPage
         : restQuery.isFetchingNextPage;
     },
     get hasNextPage() {
       return usesGraphql()
-        ? graphqlQuery.hasNextPage
+        ? graphqlQuery().hasNextPage
         : (restQuery.hasNextPage ?? false);
     },
     get transport() {
       return usesGraphql() ? 'graphql' : 'rest';
     },
     async fetchNextPage() {
-      if (usesGraphql()) await graphqlQuery.fetchNextPage();
+      if (usesGraphql()) await graphqlQuery().fetchNextPage();
       else await restQuery.fetchNextPage();
     },
     refetch,
@@ -925,6 +942,7 @@ function notificationEntityTypeToSoupTag(
     .with('foreign_entity', () => 'foreignEntity' as const)
     .with('reminder', () => 'reminder' as const)
     .with('calendar_event', () => 'calendarEvent' as const)
+    .with('agent_session', () => 'agentSession' as const)
     .with(
       P.union(
         'user',
@@ -935,7 +953,6 @@ function notificationEntityTypeToSoupTag(
         'crm_company',
         'crm_contact',
         'skill',
-        'agent_session',
         'scheduled_action',
         'initiative'
       ),

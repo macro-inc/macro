@@ -1,5 +1,6 @@
 import type {
   AgentAction,
+  AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
   ControlResponse,
@@ -29,6 +30,11 @@ export type CreateManagedSessionOptions = {
   /** Instructions the session's runtime works under, fixed for its life. */
   instructions?: string;
   /**
+   * The model the session runs on, instead of its persona's. The session's
+   * model from creation, read back as {@link AgentSession.model}.
+   */
+  model?: string;
+  /**
    * The repository the session works on, as one of the URLs
    * {@link AgentSession.repositories} lists for the caller. Omitted, the
    * runtime chooses from the prompt. Honored for Cursor sessions.
@@ -51,17 +57,18 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Create a managed session, optionally delivering its first prompt. */
   static async createManaged(
     client: MacroClient,
-    opts?: CreateManagedSessionOptions,
+    opts?: CreateManagedSessionOptions
   ): Promise<AgentSession> {
     const { session } = unwrap(
       await client.agentHarness.createAgentSession({
         body: {
           prompt: opts?.prompt,
           instructions: opts?.instructions,
+          model: opts?.model,
           repoUrl: opts?.repoUrl,
           repoBranch: opts?.repoBranch,
         },
-      }),
+      })
     );
     return new AgentSession(client, session.id, session);
   }
@@ -73,10 +80,10 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * nowhere they reach.
    */
   static async repositories(
-    client: MacroClient,
+    client: MacroClient
   ): Promise<SelectableRepository[]> {
     const { repositories } = unwrap(
-      await client.agentHarness.listAgentRepositories(),
+      await client.agentHarness.listAgentRepositories()
     );
     return repositories.map((repository) => ({
       url: repository.url,
@@ -84,11 +91,29 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     }));
   }
 
+  /**
+   * Branch names on one repository the caller can start a managed session
+   * from, in the order GitHub listed them. Empty when the repository has
+   * no commits yet. `repoUrl` is one of the URLs {@link AgentSession.repositories}
+   * lists.
+   */
+  static async repositoryBranches(
+    client: MacroClient,
+    repoUrl: string
+  ): Promise<string[]> {
+    const { branches } = unwrap(
+      await client.agentHarness.listAgentRepositoryBranches({
+        query: { repoUrl },
+      })
+    );
+    return branches;
+  }
+
   protected async fetch(): Promise<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSession({
         path: { session_id: this.id },
-      }),
+      })
     );
   }
 
@@ -131,7 +156,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.renameAgentSession({
         path: { session_id: this.id },
         body: { name },
-      }),
+      })
     );
   }
 
@@ -141,7 +166,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.putAgentSessionSandboxSize({
         path: { session_id: this.id },
         body: { size },
-      }),
+      })
     );
     return next;
   }
@@ -154,12 +179,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Set the caller's default sandbox size for the next `@coder` mention. */
   static async setDefaultSandboxSize(
     client: MacroClient,
-    size: SandboxSize,
+    size: SandboxSize
   ): Promise<SandboxSize> {
     return unwrap(
       await client.agentHarness.putAgentSandboxSize({
         body: { size },
-      }),
+      })
     ).size;
   }
 
@@ -176,7 +201,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.controlAgentSession({
         path: { session_id: this.id },
         body: action,
-      }),
+      })
     );
   }
 
@@ -189,7 +214,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    */
   prompt(
     text: string,
-    attachments?: PromptAttachment[],
+    attachments?: PromptAttachment[]
   ): Promise<ControlResponse> {
     return this.control({
       type: 'prompt',
@@ -206,10 +231,37 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     const { entries } = unwrap(
       await this.client.agentHarness.getAgentSessionQueue({
         path: { session_id: this.id },
-      }),
+      })
     );
     return entries.map((entry) =>
-      QueuedAction.from(this.client, this.id, entry),
+      QueuedAction.from(this.client, this.id, entry)
+    );
+  }
+
+  /** Read the latest captured GitHub pull request changes and capture status. */
+  async changes(): Promise<AgentSessionChangesResponse> {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionChanges({
+        path: { session_id: this.id },
+      })
+    );
+  }
+
+  /** Read the unified diff of the latest captured changeset. */
+  async changesPatch(): Promise<string> {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionChangesPatch({
+        path: { session_id: this.id },
+      })
+    ).patch;
+  }
+
+  /** Request a fresh capture and return the current state while it runs. */
+  async refreshChanges(): Promise<AgentSessionChangesResponse> {
+    return this.mutate((client) =>
+      client.agentHarness.refreshAgentSessionChanges({
+        path: { session_id: this.id },
+      })
     );
   }
 
@@ -218,7 +270,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionLog({
         path: { session_id: this.id },
-      }),
+      })
     );
   }
 
@@ -227,7 +279,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     await this.mutate((client) =>
       client.agentHarness.deleteAgentSession({
         path: { session_id: this.id },
-      }),
+      })
     );
   }
 }

@@ -108,7 +108,7 @@ impl StubDocumentService {
         DocumentMetadata {
             document_id: document_id.to_string(),
             document_version_id: 1,
-            owner: MacroUserIdStr::try_from_email("test@example.com").unwrap(),
+            owner: "macro|test@example.com".to_string().try_into().unwrap(),
             document_name: "My Task".to_string(),
             file_type: Some("md".to_string()),
             sha: None,
@@ -277,13 +277,6 @@ impl DocumentService for StubDocumentService {
         _query_version_id: Option<i64>,
         _sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
     ) -> Result<DocumentResponse, DocumentError> {
-        unimplemented!()
-    }
-
-    async fn get_document_comments(
-        &self,
-        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<documents::domain::models::CommentThread>, DocumentError> {
         unimplemented!()
     }
 
@@ -944,6 +937,15 @@ impl GithubSyncClient for StubSyncClient {
             .push(access_token.to_string());
 
         Ok(self.open_pull_requests.lock().unwrap().clone())
+    }
+
+    async fn list_repository_branches(
+        &self,
+        _access_token: &str,
+        _owner: &str,
+        _repository: &str,
+    ) -> Result<Vec<String>, GithubError> {
+        unimplemented!("the sync service does not list repository branches")
     }
 }
 

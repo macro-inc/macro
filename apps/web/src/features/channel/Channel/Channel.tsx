@@ -52,6 +52,7 @@ import {
 import { queryClient } from '@queries/client';
 import { queryReadyGate } from '@queries/gate';
 import {
+  newMessageId,
   useDeleteMessageMutation,
   usePatchMessageMutation,
   useSendMessageMutation,
@@ -636,7 +637,7 @@ export function Channel(props: ChannelProps) {
       {
         parent: { type: 'channel', id: props.channelId },
         senderId,
-        optimisticId: crypto.randomUUID(),
+        optimisticId: newMessageId(),
         ...payload,
       },
       {
@@ -808,7 +809,6 @@ export function Channel(props: ChannelProps) {
                                     }
                                     listMeta={listMetaByMessageId()[item.id]}
                                     messageEditor={messageEditor}
-                                    participants={participants.users}
                                     threadActions={{
                                       onDismissNewMessages:
                                         activityTracker.dismissNewMessages,

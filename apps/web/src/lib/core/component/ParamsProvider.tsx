@@ -26,10 +26,12 @@ type ResolvedParams<T extends ParamSchema> = {
  */
 type ParamsContextValue = {
   getParam: (param: string) => Accessor<string | undefined>;
+  getNavigationCount: (param: string) => Accessor<number>;
 };
 
 const ParamsContext = createContext<ParamsContextValue>({
   getParam: () => () => undefined,
+  getNavigationCount: () => () => 0,
 });
 
 function flattenParamValue(
@@ -48,6 +50,7 @@ export function createParamsState() {
       navigationVersions[param];
       return blockParams[param];
     },
+    getNavigationCount: (param: string) => () => navigationVersions[param] ?? 0,
     navigate: (params: Record<string, string>) => {
       batch(() => {
         const paramNames = new Set([
@@ -81,6 +84,7 @@ export function ParamsProvider(
       const blockValue = state.getParam(param);
       return () => blockValue() ?? flattenParamValue(searchParams[param]);
     },
+    getNavigationCount: state.getNavigationCount,
   };
 
   return (
@@ -103,4 +107,12 @@ export function useUrlParams<T extends ParamSchema>(
   return Object.fromEntries(
     Object.entries(schema).map(([key, param]) => [key, params.getParam(param)])
   ) as ResolvedParams<T>;
+}
+
+/**
+ * Counts `goToLocationFromParams` calls that named `param`, including repeats
+ * with the same value. Stays 0 while the value only comes from the URL.
+ */
+export function useParamNavigationCount(param: string): Accessor<number> {
+  return useContext(ParamsContext).getNavigationCount(param);
 }

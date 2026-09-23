@@ -1,0 +1,68 @@
+[package]
+edition = "2024"
+name = "agent_changes"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["inbound", "outbound"]
+# The axum router serving a session's changes over HTTP.
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "entity_access/inbound",
+  "macro_authorization/axum",
+  "schema",
+]
+# Postgres, S3, the GitHub pull request client.
+outbound = [
+  "dep:aws-sdk-s3",
+  "dep:github",
+  "dep:reqwest",
+  "dep:sqlx",
+  "macro_user_id/sqlx",
+]
+# OpenAPI schemas for the router's DTOs.
+schema = ["dep:utoipa"]
+# In-memory port implementations, for crates that test against this one.
+test-utils = []
+
+[dependencies]
+agent_fold = { path = "../agent_fold", default-features = false }
+agent_session = { path = "../agent_session", default-features = false }
+anyhow = { workspace = true }
+aws-sdk-s3 = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true }
+dashmap = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "ports",
+] }
+# `sync` alone does not compile without `outbound` today; mirror agent_harness.
+github = { path = "../github", default-features = false, features = [
+  "outbound",
+  "ports",
+  "sync",
+], optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, optional = true }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+reqwest = { workspace = true, optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["json"], optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+tracing = { workspace = true }
+url = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent_session = { path = "../agent_session", default-features = false, features = ["test-utils"] }
+bot_id = { path = "../bot_id", features = ["test-utils"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

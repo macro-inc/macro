@@ -108,7 +108,7 @@ impl DurableKVStorage {
         &self,
         document_state: &DocumentState,
         op_update: &[u8],
-        attribution: Option<&crate::spreadsheet::SpreadsheetAttribution>,
+        attribution: Option<&crate::domain::document::DocumentAttribution>,
     ) -> Result<Vec<String>> {
         let op_id = self.ids.id();
         let op_key = pending_op_key(&op_id);
@@ -121,7 +121,7 @@ impl DurableKVStorage {
         self.inner.put(&all_op_key(&op_id), op_update).await?;
         if let Some(attribution) = attribution {
             let metadata = serde_json::to_vec(attribution)
-                .context("failed to serialize signed spreadsheet attribution")?;
+                .context("failed to serialize signed document attribution")?;
             self.inner.put(&format!("actor/{op_id}"), metadata).await?;
         }
         Ok(touched_nodes)

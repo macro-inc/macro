@@ -5,13 +5,14 @@ import { toast } from '@core/component/Toast/Toast';
 import { enableTaskDuplicates } from '@core/constant/featureFlags';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import WarningIcon from '@phosphor/warning.svg';
+import { queryReadyGate } from '@queries/gate';
 import {
   useDismissTaskDuplicatesMutation,
   useTaskDuplicatesQuery,
 } from '@queries/storage/task-duplicates';
 import type { TaskDuplicate } from '@service-storage/client';
 import { Button, cn, Dropdown } from '@ui';
-import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
+import { createSignal, For, Show, Suspense } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export function TaskDuplicateMatchPill() {
@@ -82,7 +83,7 @@ function useTaskDuplicateMatches() {
   const matchesQuery = useTaskDuplicatesQuery(() => blockId);
   const dismissMutation = useDismissTaskDuplicatesMutation(() => blockId);
 
-  const matches = createMemo(() => matchesQuery.data ?? []);
+  const matches = () => (queryReadyGate(matchesQuery) ? matchesQuery.data : []);
   const count = () => matches().length;
 
   const dismiss = async (matchesToDismiss: TaskDuplicate[]) => {

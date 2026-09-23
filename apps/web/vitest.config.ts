@@ -33,11 +33,15 @@ export default defineConfig({
       '../../packages/email-renderer/vitest.config.ts',
       '../../packages/collaboration/vitest.collab.config.ts',
       '../../packages/collaboration/vitest.transport.config.ts',
+      '../../packages/machine/vitest.config.ts',
       {
         // Core package tests
         extends: './src/lib/core/vitest.config.ts',
         test: {
-          include: ['src/lib/core/**/*.{test,spec}.{ts,tsx}'],
+          include: [
+            'src/lib/core/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/split-router/**/*.{test,spec}.{ts,tsx}',
+          ],
           name: 'core',
         },
       },

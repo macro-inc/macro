@@ -2,7 +2,7 @@ import type { FindBarController } from '@core/component/createFindBarController'
 import { FindBar } from '@core/component/FindBar';
 import { IS_MAC } from '@core/constant/isMac';
 import { createEffect, createSignal, onCleanup, Show, untrack } from 'solid-js';
-import { usePdfDocument } from '../context/pdf-document-context';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 import {
   useJumpToResult,
   useSearchClose,
@@ -11,19 +11,18 @@ import {
 } from '../signal/search';
 
 export function SimpleSearch() {
-  const pdf = usePdfDocument();
+  const pdfViewer = usePdfViewer();
+  const rootElement = pdfViewer.rootElement;
   const searchStart = useSearchStart();
   const searchResults = useSearchResults();
   const jumpToResult = useJumpToResult();
   const closeSearchBar = useSearchClose();
-  const [locationPending] = pdf.state.signals.searchLocationPending;
+  const locationPending = pdfViewer.searchNavigationPending;
   const [inputEl, setInputEl] = createSignal<HTMLInputElement>();
-
-  const [isOpen, setIsOpen] = pdf.state.signals.isSearchOpen;
-  const [searchText, setSearchText] = pdf.state.signals.search;
+  const [isOpen, setIsOpen] = createSignal(false);
+  const [searchText, setSearchText] = createSignal('');
   const [isPending, setIsPending] = createSignal(false);
 
-  // Re-run the active search when the bar opens (or re-opens with prior text).
   createEffect(() => {
     if (untrack(locationPending)) return;
     const text = untrack(searchText);
@@ -74,8 +73,6 @@ export function SimpleSearch() {
     setIsOpen(false);
   };
 
-  // PDF.js owns the search state (queries, results, cursor). Expose it as a
-  // FindBarController so it can drive the shared <FindBar> UI.
   const controller: FindBarController = {
     isOpen,
     query: searchText,
@@ -114,7 +111,7 @@ export function SimpleSearch() {
   };
 
   createEffect(() => {
-    const element = pdf.rootElement();
+    const element = rootElement();
     if (!element) return;
     element.addEventListener('keydown', handleHotkey);
     onCleanup(() => {

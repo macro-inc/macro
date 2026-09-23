@@ -26,6 +26,7 @@ use model::{
     sync_service::SyncServiceVersionID,
 };
 use model_entity::Entity;
+use model_owner::Owner;
 use model_user::UserContext;
 use rootcause::Report;
 use serde_json::{Value, json};
@@ -43,15 +44,17 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use super::{DocumentRouterState, content_uploaded::content_uploaded_handler, documents_router};
+
+mod sync_content;
 use crate::{
     domain::{
         content::DocumentContent,
         create::DocumentCreator,
         events::InteractionReason,
         models::{
-            CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
-            DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
-            ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
+            CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, DocumentTeamShareResponse,
+            EditDocumentServiceArgs, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+            LocationQueryParams, TaskBranchName,
         },
         ports::{DocumentContentEventService, DocumentService, create::DocumentCreationService},
         response::{
@@ -102,6 +105,13 @@ struct ContentUploadedCall {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+struct SyncContentCall {
+    document_id: String,
+    actor: Option<String>,
+    on_behalf_of: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct TeamSlugCall {
     team_id: String,
     user_id: String,
@@ -121,6 +131,7 @@ struct FakeDocumentService {
     import_calls: Mutex<Vec<ImportEmailAttachmentCall>>,
     upload_snapshot_calls: Mutex<Vec<UploadSnapshotCall>>,
     content_uploaded_calls: Mutex<Vec<ContentUploadedCall>>,
+    sync_content_calls: Mutex<Vec<SyncContentCall>>,
     internal_get_calls: Mutex<Vec<String>>,
     team_slug_calls: Mutex<Vec<TeamSlugCall>>,
     team_slug_result: Mutex<Option<TeamSlugResult>>,
@@ -198,8 +209,7 @@ impl DocumentService for FakeDocumentService {
         Ok(DocumentBasic {
             document_id: document_id.to_string(),
             document_name: "test document".to_string(),
-            owner: MacroUserIdStr::try_from(JWT_USER_ID.to_string())
-                .expect("test user id should be valid"),
+            owner: Owner::from_principal_str(JWT_USER_ID).expect("test user id should be valid"),
             file_type: Some("pdf".to_string()),
             sub_type: None,
             branched_from_id: None,
@@ -278,13 +288,6 @@ impl DocumentService for FakeDocumentService {
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
         panic!("unexpected get_document_text call")
-    }
-
-    async fn get_document_comments(
-        &self,
-        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
-    ) -> Result<Vec<CommentThread>, DocumentError> {
-        panic!("unexpected get_document_comments call")
     }
 
     async fn create_document(
@@ -439,6 +442,23 @@ impl DocumentService for FakeDocumentService {
 }
 
 impl DocumentContentEventService for FakeDocumentService {
+    async fn publish_sync_content_updated(
+        &self,
+        document_id: &str,
+        actor: Option<String>,
+        on_behalf_of: Option<String>,
+    ) -> Result<(), DocumentError> {
+        self.sync_content_calls
+            .lock()
+            .unwrap()
+            .push(SyncContentCall {
+                document_id: document_id.to_string(),
+                actor,
+                on_behalf_of,
+            });
+        Ok(())
+    }
+
     async fn publish_content_uploaded(
         &self,
         document_id: &str,
@@ -501,7 +521,7 @@ fn create_document_response(user_id: MacroUserIdStr<'static>) -> CreateDocumentR
                 DocumentResponseMetadata {
                     document_id: "created-document".to_string(),
                     document_version_id: 1,
-                    owner: user_id,
+                    owner: Owner::User(user_id),
                     document_name: "test document".to_string(),
                     file_type: Some("pdf".to_string()),
                     sha: Some("test-sha".to_string()),
@@ -529,7 +549,7 @@ fn get_document_response(document_id: &str) -> GetDocumentResponseData {
             DocumentMetadata {
                 document_id: document_id.to_string(),
                 document_version_id: 1,
-                owner: MacroUserIdStr::try_from(JWT_USER_ID.to_string())
+                owner: Owner::from_principal_str(JWT_USER_ID)
                     .expect("test user id should be valid"),
                 document_name: "resolved document".to_string(),
                 file_type: Some("pdf".to_string()),
@@ -862,6 +882,16 @@ fn test_router() -> (
         "/{document_id}/content-uploaded",
         axum::routing::post(
             content_uploaded_handler::<
+                FakeDocumentService,
+                FakeEntityAccessService,
+                FakeAuthorizationService,
+            >,
+        ),
+    )
+    .route(
+        "/{document_id}/sync-content-updated",
+        axum::routing::post(
+            super::sync_content_updated::sync_content_updated_handler::<
                 FakeDocumentService,
                 FakeEntityAccessService,
                 FakeAuthorizationService,

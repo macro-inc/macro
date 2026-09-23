@@ -22,12 +22,14 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
   isSnippetEntity,
   type WithNotification,
 } from '@entity';
-import type { NotificationSource } from '@notifications';
+import { notificationIsRead } from '@entity/utils/notification';
+import type { UnifiedNotification } from '@notifications/types';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { startOfDay, subWeeks } from 'date-fns';
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
@@ -79,16 +81,14 @@ function matchesCapabilities(
 }
 
 function matchesTab(
-  entity: WithNotification<EntityData>,
+  entity: EntityData,
   tab: InboxTab,
-  source: NotificationSource
+  notifications: () => UnifiedNotification[]
 ): boolean {
   const notDone = () =>
     entity.type === 'email'
       ? !entity.done
-      : getEntityNotifications(entity, source, {
-          scopeChannelThreads: true,
-        }).some((notification) => notification.state !== 'done');
+      : notifications().some((notification) => notification.state !== 'done');
   return match(tab)
     .with('signal', () => {
       if (!signalFilter(entity) || !notDone()) return false;
@@ -158,11 +158,35 @@ export function useInboxEntitiesQuery(
     };
   });
 
+  const scopedNotifications = (entity: EntityData) =>
+    getEntityNotifications(entity, notificationSource, {
+      scopeChannelThreads: true,
+    });
   const filterEntities = (entities: EntityData[]) => {
     const context = viewContext();
     return entities
       .filter((entity) => matchesCapabilities(entity, context.capabilities))
-      .filter((entity) => matchesTab(entity, context.tab, notificationSource));
+      .filter((entity) =>
+        matchesTab(entity, context.tab, () => scopedNotifications(entity))
+      );
+  };
+
+  /** Badge presence: stop at the first match without transforming the page. */
+  const hasUnreadEntity = (entities: readonly EntityData[]): boolean => {
+    const context = viewContext();
+    return entities.some((entity) => {
+      if (!matchesCapabilities(entity, context.capabilities)) return false;
+      // Cache only within this visit. Membership and unread checks share the
+      // same scoped snapshot, but later calls still observe optimistic changes.
+      let snapshot: UnifiedNotification[] | undefined;
+      const notifications = () => (snapshot ??= scopedNotifications(entity));
+      if (!matchesTab(entity, context.tab, notifications)) return false;
+      return entity.type === 'email'
+        ? !entity.isRead
+        : notifications().some(
+            (notification) => !notificationIsRead(notification)
+          );
+    });
   };
 
   const attachNotifications = (entity: EntityData) =>
@@ -178,6 +202,7 @@ export function useInboxEntitiesQuery(
     filterEntities,
     attachNotifications,
     transformEntities,
+    hasUnreadEntity,
     notificationSource,
   };
 }
@@ -199,6 +224,11 @@ export function useInboxDataSource(
     onCleanup(() => clearInterval(timer));
   });
 
+  // Only desktop Home merges the viewer's own recents into Signal; touch
+  // devices keep Signal a pure notification feed, like the legacy
+  // Notifications view.
+  const mergeRecents = () => state.tab === 'signal' && !isTouchDevice();
+
   // Activity's hydrated own-touch projection includes sent mail and chats even
   // when they have no outstanding notifications. Its endpoint rejects email
   // and channel filter trees, so Home applies its facets after merging.
@@ -212,14 +242,14 @@ export function useInboxDataSource(
       },
       body: {},
     }),
-    () => ({ enabled: state.tab === 'signal' })
+    () => ({ enabled: mergeRecents() })
   );
   const recentEntities = () =>
-    state.tab === 'signal' && !recentQuery.isLoading
+    mergeRecents() && !recentQuery.isLoading
       ? (recentQuery.data?.entities ?? [])
       : [];
   const transformHomeEntities = (entities: EntityData[], recents = entities) =>
-    state.tab === 'signal'
+    mergeRecents()
       ? mergeHomeEntities(
           filterEntities(entities),
           recents.filter((entity) =>
@@ -265,7 +295,7 @@ export function useInboxDataSource(
   }, []);
 
   const homePagination = createMemo(() => {
-    if (state.tab !== 'signal' || search.isSearching()) return undefined;
+    if (!mergeRecents() || search.isSearching()) return undefined;
     return getHomePagination(
       {
         oldestFetchedTimestamp: query.isLoading
@@ -351,7 +381,7 @@ export function useInboxDataSource(
     if (usesServiceSearch()) return search.hasNextPage();
     return (
       (query.hasNextPage && !query.error) ||
-      (state.tab === 'signal' && recentQuery.hasNextPage && !recentQuery.error)
+      (mergeRecents() && recentQuery.hasNextPage && !recentQuery.error)
     );
   };
 
@@ -359,7 +389,7 @@ export function useInboxDataSource(
     if (usesServiceSearch()) return search.isFetchingNextPage();
     return (
       query.isFetchingNextPage ||
-      (state.tab === 'signal' && recentQuery.isFetchingNextPage)
+      (mergeRecents() && recentQuery.isFetchingNextPage)
     );
   };
 
@@ -367,7 +397,7 @@ export function useInboxDataSource(
     let result: InboxDataSourceItem[];
     if (state.groupBy === 'date' && !search.isSearching()) {
       result = buildGroupedSoupRows(
-        state.tab === 'signal'
+        mergeRecents()
           ? groupHomeEntitiesByDate(entities().items, new Date(now()))
           : groupInboxEntitiesByDate(entities().items, viewContext())
       );
@@ -382,8 +412,7 @@ export function useInboxDataSource(
     if (hasNoTypes()) return false;
     if (!search.isSearching()) {
       return (
-        (query.isLoading ||
-          (state.tab === 'signal' && recentQuery.isLoading)) &&
+        (query.isLoading || (mergeRecents() && recentQuery.isLoading)) &&
         entities().items.length === 0
       );
     }
@@ -399,15 +428,14 @@ export function useInboxDataSource(
       if (search.isSettling()) return true;
       return usesServiceSearch()
         ? search.isFetching()
-        : query.isFetching ||
-            (state.tab === 'signal' && recentQuery.isFetching);
+        : query.isFetching || (mergeRecents() && recentQuery.isFetching);
     },
     error: () => {
       if (hasNoTypes()) return undefined;
       if (!usesServiceSearch())
         return entities().items.length === 0 && !hasMore()
           ? (query.error ??
-              (state.tab === 'signal' ? recentQuery.error : undefined) ??
+              (mergeRecents() ? recentQuery.error : undefined) ??
               undefined)
           : undefined;
       return search.error();
@@ -416,7 +444,7 @@ export function useInboxDataSource(
       if (usesServiceSearch() || (entities().items.length === 0 && !hasMore()))
         return undefined;
       if (query.error) return 'Notifications could not be refreshed.';
-      if (state.tab === 'signal' && recentQuery.error)
+      if (mergeRecents() && recentQuery.error)
         return 'Recent activity could not be refreshed.';
       return undefined;
     },
@@ -435,7 +463,7 @@ export function useInboxDataSource(
         (pagination?.loadNotifications ?? true)
           ? query.fetchNextPage()
           : undefined,
-        state.tab === 'signal' &&
+        mergeRecents() &&
         recentQuery.hasNextPage &&
         !recentQuery.error &&
         (pagination?.loadActivity ?? true)
@@ -450,7 +478,7 @@ export function useInboxDataSource(
       }
       await Promise.all([
         query.refresh(),
-        state.tab === 'signal' ? recentQuery.refresh() : undefined,
+        mergeRecents() ? recentQuery.refresh() : undefined,
       ]);
     },
   } satisfies InboxDataSource;

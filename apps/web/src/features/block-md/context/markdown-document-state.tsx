@@ -20,7 +20,6 @@ import type {
   MarkStore,
   ThreadStore,
 } from '../comments/commentType';
-import type { Diff } from '../types';
 
 type MdData = {
   editor?: LexicalEditor;
@@ -83,9 +82,6 @@ export function createMarkdownDocumentState() {
     structuredClone(initialFindAndReplaceState)
   );
 
-  const [rewriting, setRewriting] = createSignal(false);
-  const [revisions, setRevisions] = createSignal<Diff[]>();
-
   const [isGenerating, setIsGenerating] = createSignal(false);
   const [generatedAndWaiting, setGeneratedAndWaiting] = createSignal(false);
   const [completion, setCompletion] = createSignal<Completion>();
@@ -113,12 +109,6 @@ export function createMarkdownDocumentState() {
       setError,
       findAndReplace,
       setFindAndReplace,
-    },
-    rewrite: {
-      rewriting,
-      setRewriting,
-      revisions,
-      setRevisions,
     },
     generation: {
       isGenerating,

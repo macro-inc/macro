@@ -195,7 +195,7 @@ describe('Chat session input', () => {
     expect(screen.getByRole('button', { name: 'Agent' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
   });
-  it('reveals the repository drawer without remounting the editor', () => {
+  it('expands coding mode with repository settings after the input without remounting the editor', () => {
     const [mode, setMode] = createSignal('chat');
     const { container } = render(() => (
       <ChatComposer
@@ -209,13 +209,23 @@ describe('Chat session input', () => {
     ));
     const input = screen.getByTestId('editor');
     const drawer = container.querySelector('.composer-drawer');
+    const layout = container.querySelector('[data-composer-compact]');
+    expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+    expect(
+      (drawer?.compareDocumentPosition(input) ?? 0) &
+        Node.DOCUMENT_POSITION_PRECEDING
+    ).toBeTruthy();
     expect((drawer as HTMLElement).inert).toBe(true);
     expect(drawer?.getAttribute('aria-hidden')).toBe('true');
     setMode('code');
     expect(screen.getByTestId('editor')).toBe(input);
     expect((drawer as HTMLElement).inert).toBe(false);
     expect(drawer?.hasAttribute('data-open')).toBe(true);
+    expect(layout?.getAttribute('data-composer-compact')).toBe('false');
+    expect(editor.clear).not.toHaveBeenCalled();
     setMode('chat');
+    expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+    expect(screen.getByTestId('editor')).toBe(input);
     expect((drawer as HTMLElement).inert).toBe(true);
     const settings = screen.getByRole('group', { name: 'Composer settings' });
     expect(settings.textContent).toBe('Agent');
