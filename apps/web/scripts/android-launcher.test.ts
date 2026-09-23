@@ -50,6 +50,8 @@ describe('Android launcher arguments', () => {
     }
     env = {
       ...process.env,
+      // CI's Nix startup file resets PATH, hiding the fixture's bun/cargo stubs.
+      BASH_ENV: '',
       PATH: `${join(root, 'bin')}:${process.env.PATH}`,
       ANDROID_HOME: join(root, 'sdk'),
       NDK_HOME: join(root, 'ndk'),
@@ -83,7 +85,7 @@ describe('Android launcher arguments', () => {
       expect(result.stderr.toString()).not.toContain(
         'Firebase configuration file not found'
       );
-      expect(result.status).toBe(0);
+      expect(result.status, result.stderr.toString()).toBe(0);
       expect(captured(join(root, 'bun.args'))).toEqual([
         'scripts/android-firebase.ts',
         action,
@@ -107,7 +109,7 @@ describe('Android launcher arguments', () => {
       ],
       { cwd: caller, env }
     );
-    expect(result.status).toBe(0);
+    expect(result.status, result.stderr.toString()).toBe(0);
     expect(captured(join(root, 'bun.args'))[2]).toBe(
       join(caller, 'config files/google-services.json')
     );
