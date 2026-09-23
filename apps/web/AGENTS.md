@@ -67,6 +67,31 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
   feature-specific query orchestration with its owning feature.
 - When adding or changing a feature flag, follow the `define-feature-flag` skill.
 
+### Query callback lifetimes
+
+Query options can remain cached after their UI unmounts, including for disabled
+queries. Callbacks created inside hooks can retain component accessors, Solid
+owners, and detached DOM through shared closure environments—even when a callback
+only references a locally resolved ID. This does not mean every closure captures
+every local variable.
+
+- Create cached callbacks in module-scope query factories accepting resolved IDs,
+  flags, and plain data. Resolve reactive inputs inside the `useQuery` /
+  `useInfiniteQuery` options accessor, e.g. `useQuery(() => itemQueryOptions(id()))`,
+  so inputs still update reactively.
+- Keep pure selectors and polling policies at module scope, or inside those
+  factories. Check **all** retained callbacks: `queryFn`, `select`,
+  `refetchInterval`, pagination, placeholder callbacks, and functions in `meta`.
+- Do not pass component accessors, props getters, or query proxies into the
+  factory. For reactive selection, pass plain snapshots of the needed values
+  (such as channel names or a resolved document ID). Naming a function or copying
+  an ID inside the hook does not isolate its closure from the hook.
+
+Examples: [session query factory](src/lib/queries/agent-session/session.ts) and
+[search query factories](src/lib/queries/soup/search.ts). The
+[GC regression test](src/lib/queries/tests/cached-callbacks.test.ts) checks that
+cached options release their callers; extend it when fixing similar retention.
+
 ### SolidJs
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.
 - Prefer wrapping the setter over `createEffect(() => { if (signal()) sideEffect() })`. When setting focus/selection should also clear another stop, blur a control, or scroll, put that work in the setter (or a named helper the setter calls) so the action is explicit at the call site — not a distant effect watching the signal.
