@@ -40,10 +40,11 @@ permission failures should display a failed tool call without a successful resul
   shows the same three-dot working wave as the transcript in place of the
   leading icon; the row's accessible name appends `Starting` or `Working`.
   Sessions with a linked PR show
-  **View PR #<number> in GitHub** beneath the title; clicking it opens the synced
+  **#<number>** beneath the title (icon colored by open / merged / closed; no
+  status word). Clicking it opens the synced
   GitHub PR entity in a split (the same destination as the session header chip
   and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
-  tab. Either click leaves the session unopened. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
+  tab. Either click leaves the session unopened. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Delete, and the other session actions.
@@ -352,6 +353,12 @@ The agent has workspace tools (it can list your documents, read channels, create
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
+When asked, the agent also answers document comments in place. A reply row reads
+**Replied to a comment on** (or **Commented on** for a new Discussion comment) followed
+by the document, and expands to the posted text; a resolve row reads **Resolved** or
+**Reopened a comment on** the document. The comment is posted as the agent with a
+**from <user>** pill, and needs the user's comment access to the document.
+
 ## Agent sessions asking a question
 
 For manual testing on local or deployed development environments, send
@@ -393,6 +400,9 @@ used in chat and channels; they serialize as mention-chip tags in the prompt
 the agent sees (`<m-document-mention>` for docs/channels/chats/tasks/emails/calendar
 events/skills, `<m-date-mention>` for a day or time, `<m-agent-session-mention>`
 for an agent session, `<m-user-mention>` for a person, and the other chip tags).
+Clicking a chip while it still sits in the composer (Home, the Agents page, or
+an agent session) opens the mentioned item in a new split and leaves the draft
+and caret untouched; it does not send anything.
 Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread). An agent-session chip with
 `"expanded":true` renders as the Magic Chip card that follows the session's
@@ -424,9 +434,11 @@ text stays a link.
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
-sits on top and a footer row holds the model name (left, e.g. `Auto ⌄`) and
-**Send** (right). Tapping the model name opens a bottom sheet listing every
-model with a check on the current one — pick a row to switch. On desktop the
+sits on top and a footer row holds the model (left, as a provider logo and
+name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). Tapping the model opens a
+bottom sheet listing every model the same way, with a check on the current one
+— pick a row to switch. Models read as names even when the runtime reports
+only ids: Macro Agent's `anthropic/claude-sonnet-5` shows as **Sonnet 5**. On desktop the
 transcript and composer use the shared channel message width so expanding **Context** only
 grows vertically; your messages are right-aligned bubbles and the model pill
 sits above the box. Tap the session title

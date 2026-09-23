@@ -83,6 +83,29 @@ fn identity_args_and_web_url_default() {
 }
 
 #[test]
+fn harness_env_is_optional() {
+    // The example carries no `env`, as every config written before it existed.
+    let config: Config = toml::from_str(EXAMPLE).expect("example config parses");
+    assert!(config.harness.env.is_empty());
+
+    let with_env = EXAMPLE.replace(
+        "args = [\"acp\"]\n",
+        "args = [\"acp\"]\nenv = { CODEX_PATH = \"/nix/store/x/bin/codex\", CLAUDE_CODE_EXECUTABLE = \"/bin/claude\" }\n",
+    );
+    let config: Config = toml::from_str(&with_env).expect("harness env parses");
+    assert_eq!(
+        config.harness.env,
+        BTreeMap::from([
+            ("CODEX_PATH".to_owned(), "/nix/store/x/bin/codex".to_owned()),
+            (
+                "CLAUDE_CODE_EXECUTABLE".to_owned(),
+                "/bin/claude".to_owned()
+            ),
+        ])
+    );
+}
+
+#[test]
 fn identity_scope_accepts_team() {
     let team = EXAMPLE.replace("scope = \"private\"", "scope = \"team\"");
     let config: Config = toml::from_str(&team).expect("team scope parses");

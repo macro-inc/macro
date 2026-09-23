@@ -29,6 +29,10 @@ allow_permission_bypass = false
 [harness]
 command = "hermes"
 args = ["acp"]
+# Optional: environment added to the harness and to every model probe. The
+# Codex and Claude Code presets set it to point their npm adapter at the CLI
+# installed on this machine instead of the copy the adapter bundles, e.g.
+# env = { CODEX_PATH = "/usr/local/bin/codex" }
 
 [workspace]
 # Every session this daemon serves runs here.

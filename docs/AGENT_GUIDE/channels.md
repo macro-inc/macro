@@ -479,6 +479,21 @@ and return to the list: its top-level notifications should be read, including
 ones older than the global notification feed's loaded page. Notifications for
 separate thread stacks remain unread until that thread is opened.
 
+With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
+channel IDs and at most one unread notification ID/state per channel, with a
+500-channel candidate bound and no history, message previews, or metadata. It
+shares the channel lists' refreshes after notification patches, mark-read, and
+reconnect. Merely rendering that badge, subscribing to realtime notifications,
+or applying local read/done overrides must not start the full `SoupNotifications`
+feed. Check this with document-mention notifications disabled too (the production
+default): mention cleanup must wait until a real data/status reader activates the
+feed, then continue cleaning up loaded mentions. Full notification selection and
+pagination remain unchanged. Automatic/debounced read markers log failures and
+leave failed reads unread; they must not produce unhandled promise rejections or
+block the separate email read marker. Cold bulk actions wait for loading
+and report failures rather than treating pending data as an empty list. The
+Inbox badge still uses its own full Soup query for channel/thread membership.
+
 With GraphQL enabled, channel lists request at most one unread message notification
 per channel through an aliased, filtered `notifications` edge. An empty edge means
 no unread messages; invites and call notifications do not light the dot. Recent
@@ -494,7 +509,17 @@ open the last selected conversation, not a slower earlier request.
 Check cached Home → Chat navigation, All/Recent/search, and unread state after a
 read, a new notification, deletion, and reconnect. Cache reads remain asynchronous:
 a brief spinner can still appear, but cached rows must not wait for a background
-network refresh. If more unread notifications
+network refresh. Conversely, `cache-and-network` refreshes must start without
+waiting for a busy cache worker. Successful foreground query results display
+before cache persistence finishes; a delayed acknowledgement must not replay old
+rows or overwrite an optimistic update. Check initial and continuation pages with
+a slow cache, overlapping refreshes, and leaving/reopening Chat during a write.
+A cache write failure must not discard successful network rows. Mutations and
+cache-only hydration still wait for their durable/cache-projection work.
+A late cache snapshot must not replace newer network rows. Check a cold offline
+open too: a cache hit arriving
+after the network failure must remain usable without erasing the refresh error.
+If more unread notifications
 remain, the limited edge must refresh to the next one rather than staying empty.
 Refreshing unread indicators while composing must preserve the conversation,
 scroll position, and input focus. The backend must support the new edge arguments

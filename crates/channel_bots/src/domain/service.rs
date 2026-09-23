@@ -450,6 +450,7 @@ where
             .post(
                 access,
                 PostMessage {
+                    id: None,
                     attribution: MessageAttribution::ActingUser,
                     notification_policy: PostMessageNotificationPolicy::Silent,
                     content: THINKING_MESSAGE.to_string(),

@@ -388,6 +388,12 @@ scrolls it into view, and briefly highlights it. For navigation regressions,
 exercise both a recent message and one outside the first page. Open another
 target while loading or highlighting: the previous request must not scroll the
 new thread or clear its highlight. Closing the split cancels pending positioning.
+The load gate and message body share one live thread source in both hosts. Cached
+body rendering should not wait for a second thread fetch, optional References,
+or inbox metadata. Inbox-dependent actions stay gated while ownership is unknown;
+explicit inbox IDs must never silently route to primary while links are loading.
+Background refreshes and older-message loading still update the same thread.
+Verify with API traffic delayed and with previously opened bodies offline.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
@@ -530,7 +536,18 @@ label's font weight matches the file title. The link
 restores the originating Drive view.
 The `Drive` folder row opens the folder overview. Click a folder name to browse
 its contents in the main pane; its separate expand/collapse button reveals child
-folders without navigating. The top bar keeps the full folder and file detail
+folders without navigating. With GraphQL caching enabled and membership metadata
+hydrated, a never-visited folder can immediately show cached documents, chats,
+and subfolders for supported created/modified sorts and filters. Email remains
+server-owned: the full mixed GraphQL query still refreshes in the background,
+keeps loaded email rows, and owns pagination. A non-email projection with no visible
+rows, including when pending deletions hide every cached row, must not show
+`This folder is empty` while that initial request is pending or failed. Verify that
+loading and transport errors remain visible in this case; releasing a failed deletion
+restores cached rows without a refetch.
+Verify with a folder-specific GraphQL response delayed, then navigate to another
+folder before it completes; neither cached rows nor late results may leak across
+folders. The top bar keeps the full folder and file detail
 path in one breadcrumb trail. Folder containment uses `/` separators, while the
 transition to a file detail and nested detail navigation use the default `>`
 separator. Choosing a folder breadcrumb returns to that folder and clears newer
@@ -577,10 +594,12 @@ title and navigation goes through the hamburger overlay. Location, search,
 filters, expanded folders, list focus, and scroll position are restored when
 returning from an opened file.
 
-## Calendar — `/app/calendar/view`
+## Calendar — `/app/calendar/<month-or-week-or-day>`
 
-Calendars default to Day on phones and Week on desktop. The selected view is
-remembered locally on each device.
+The path selects the Month, Week, or Day period, and choosing another period updates
+that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
+recent choice is remembered locally for navigation that does not specify a period. An
+opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
@@ -643,6 +662,16 @@ has a checkbox in its header row toggling the whole overlay on or off — all te
 none — and lists the next 90 days of teammate absences; clicking a row navigates the grid to
 that date. Coverage depends on each teammate having connected their own calendar and using
 Google's out-of-office event type.
+
+A calendar event mentioned in a channel message opens the calendar focused on the viewer's
+own copy of the meeting. When the sender holds the event on their own calendar, the mention
+also shares it read-only with the channel's current members: a member without a copy of their
+own sees the mention's title and time, and its hover card adds a `Shared with you · not on
+your calendar` line with no open action. Clicking such a mention shows that hover card
+instead of opening the calendar. Private and confidential events are never shared this way.
+Every calendar mention's hover card shows the schedule, location, organizer and attendee
+count, plus the first lines of the event description (its links open), and no last-updated
+byline.
 
 ## Calls — `/app/component/calls`
 
@@ -713,6 +742,12 @@ use the standalone contact page.
 Company and contact headers have `Copy link` beside the side-panel toggle.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
+
+Company selection actions **Set owner** and **Set revenue** remain available
+while team deal-stage definitions are loading. **Set stage** waits for the active
+team definition rather than opening an editor with system defaults. Check both
+the entity actions menu and command menu with stage requests delayed; cancel the
+editors without changing hosted data.
 
 `Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
 At narrow widths, `Show CRM navigation` opens the same navigation in a menu.

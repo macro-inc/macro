@@ -40,7 +40,11 @@ vi.mock('@queries/agent-session/queue-sync', () => ({
   subscribeSocketSessionStarted: socket.subscribeSocketSessionStarted,
 }));
 
-import { AgentSession, AgentSessionReleased } from './AgentSession';
+import {
+  AgentSession,
+  AgentSessionAccessDenied,
+  AgentSessionReleased,
+} from './AgentSession';
 import { resetSessionTurns, sessionTurn } from './session-turn';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
@@ -475,6 +479,16 @@ describe('AgentSession', () => {
     live.retract('head-id');
     await settle();
     expect(inputs().at(-1)).toEqual({ kind: 'retracted', actionId: 'head-id' });
+    live.release();
+  });
+
+  it('names a 401 on the session or its log as denied access', async () => {
+    harness.get.mockResolvedValueOnce(err([{ code: 'UNAUTHORIZED' }]));
+    const live = AgentSession.acquire(SESSION);
+    await expect(live.load()).rejects.toBeInstanceOf(AgentSessionAccessDenied);
+
+    harness.getLog.mockResolvedValueOnce(err([{ code: 'FORBIDDEN' }]));
+    await expect(live.load()).rejects.toBeInstanceOf(AgentSessionAccessDenied);
     live.release();
   });
 

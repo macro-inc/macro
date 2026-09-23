@@ -86,15 +86,14 @@ function PopoverSplitModal(props: {
     isSpotLight: () => false,
     isPopover: () => true,
     replace: () => {},
-    // A popover has no URL and no history to rewrite.
+    // A popover has no history to rewrite.
     adoptContentId: () => {},
+    updateCurrentEntry: () => {},
     removeFromHistory: () => {},
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
     previousContent: () => null,
     history: () => [],
-    getUrlSegments: () => [],
-    getUrl: () => '',
     meta: () =>
       props.popover.mount.kind === 'component'
         ? props.popover.mount.meta

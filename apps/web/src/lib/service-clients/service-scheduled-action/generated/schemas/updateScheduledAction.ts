@@ -5,20 +5,12 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { ActionKind } from './actionKind';
-import type { Schedule } from './schedule';
-import type { UpdateScheduledActionTask } from './updateScheduledActionTask';
+import type { ActionConfiguration } from './actionConfiguration';
+import type { LegacyActionConfiguration } from './legacyActionConfiguration';
 
 /**
- * Client-supplied payload for updating a scheduled action. Mirrors the fields
-the repository actually writes — `id`/`owner`/timestamps/`claimed`/
-`next_run_at` are not client-mutable.
+ * Full replacement of client configuration, not of server-owned action state.
  */
-export interface UpdateScheduledAction {
-  enabled: boolean;
-  kind: ActionKind;
-  name: string;
-  schedule: Schedule;
-  task: UpdateScheduledActionTask;
-  timezone: string;
-}
+export type UpdateScheduledAction =
+  | ActionConfiguration
+  | LegacyActionConfiguration;

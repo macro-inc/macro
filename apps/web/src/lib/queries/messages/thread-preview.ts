@@ -64,21 +64,6 @@ export function replaceReplyCreatedAtInThreadPreview(
   return didChange ? { ...thread, preview } : thread;
 }
 
-export function replaceReplyIdInThreadPreview(
-  thread: ThreadPreviewState,
-  optimisticId: string,
-  realId: string
-): ThreadPreviewState {
-  let didChange = false;
-  const preview = thread.preview.map((reply) => {
-    if (reply.id !== optimisticId) return reply;
-    didChange = true;
-    return { ...reply, id: realId };
-  });
-
-  return didChange ? { ...thread, preview } : thread;
-}
-
 export function captureThreadPreviewReplySnapshot(
   thread: ThreadPreviewState,
   replyId: string

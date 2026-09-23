@@ -1,4 +1,16 @@
 import { isListViewID } from '@app/constants/list-views';
+import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
+import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
+import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
+import {
+  calendarFocusedEventSearchKey,
+  calendarPath,
+} from '@app/features/calendar-view/calendar-url';
+import {
+  CALENDAR_VIEW_ID,
+  type CalendarViewTarget,
+} from '@app/features/calendar-view/types';
+import { driveDocumentFromContent } from '@app/features/drive-view/primitives/drive-route';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
@@ -7,11 +19,7 @@ import {
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { createCalendarBlockRange } from '@block-calendar/calendar-range';
-import {
-  CALENDAR_BLOCK_ID,
-  type CalendarBlockProps,
-} from '@block-calendar/types';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
@@ -26,6 +34,7 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
+import { driveSplitContent } from '@components/app/split-layout/split-router/legacy-route';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
@@ -38,6 +47,7 @@ import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
 } from '@core/dom-selectors';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
@@ -68,7 +78,7 @@ import {
 import {
   compositeEntity,
   getChannelNotificationParams,
-  markNotificationsForEntityAsRead,
+  markNotificationsForEntityAsReadInBackground,
   type NotificationSource,
   notificationIsRead,
   setDoneOverride,
@@ -251,7 +261,7 @@ export const openEntityInNewTab = ({
   // Build URL for the entity
   let entityPath: string;
   if (entity.type === 'calendar_event') {
-    entityPath = `/app/calendar/${CALENDAR_BLOCK_ID}`;
+    entityPath = `/app${calendarPath(getPreferredCalendarPeriodView())}`;
   } else if (entity.type === 'document') {
     const { fileType, subType } = entity;
     const blockName = fileTypeToBlockName(subType?.type ?? fileType);
@@ -268,7 +278,15 @@ export const openEntityInNewTab = ({
   // Add location params if present
   let entityUrl = new URL(entityPath, window.location.origin);
 
-  if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
+  if (entity.type === 'calendar_event') {
+    entityUrl.searchParams.set(
+      calendarFocusedEventSearchKey(),
+      calendarViewTargetForEntity(entity).eventId ?? entity.id
+    );
+  } else if (
+    entity.type === 'channel_message' ||
+    entity.type === 'channel_thread'
+  ) {
     entityUrl.searchParams.set(CHANNEL_PARAMS.message, entity.messageId);
     if (entity.threadId) {
       entityUrl.searchParams.set(CHANNEL_PARAMS.thread, entity.threadId);
@@ -528,8 +546,8 @@ export type CalendarPreviewSelection = WithNotification<
   Pick<CalendarEventEntity, 'id' | 'type' | 'time' | 'occurrenceKey'>
 >;
 
-/** Retargets the singleton Calendar block to a calendar event row. */
-export async function navigateCalendarEntityToTarget(
+/** Retargets a legacy calendar preview block to a calendar event row. */
+export async function navigateCalendarPreviewToTarget(
   entity: CalendarPreviewSelection,
   blockOrchestrator: BlockOrchestrator
 ): Promise<void> {
@@ -538,7 +556,7 @@ export async function navigateCalendarEntityToTarget(
     'calendar'
   );
   await calendarHandle?.goToLocationFromParams(
-    calendarBlockParamsForEntity(entity)
+    calendarViewTargetForEntity(entity)
   );
 }
 
@@ -609,34 +627,19 @@ export const openEntityInSplitFromUnifiedList = async (
   }
   if (entity.type === 'foreign') return;
 
-  const blockOrchestrator = splitManager.getOrchestrator();
-
-  // Calendar is a singleton block. Event opens retarget that one instance
-  // with a locator range, including repeat clicks on an already-open split.
   if (entity.type === 'calendar_event') {
     if (!isFeatureEnabled(enableCalendarUi)) return;
-    const params = calendarBlockParamsForEntity(entity);
-    const existing = splitManager.getSplitByContent(
-      'calendar',
-      CALENDAR_BLOCK_ID
-    );
-    if (existing) {
-      existing.activate();
-    } else {
-      splitManager.openWithSplit(
-        { type: 'calendar', id: CALENDAR_BLOCK_ID, params },
-        {
-          activate: true,
-          referredFrom: null,
-          preferNewSplit: openInNewSplit,
-          handle: splitHandle,
-          mergeHistory,
-        }
-      );
-    }
-    await navigateCalendarEntityToTarget(entity, blockOrchestrator);
+    openCalendarView(calendarViewTargetForEntity(entity), {
+      manager: splitManager,
+      handle: splitHandle,
+      openInNewSplit,
+      mergeHistory,
+      referredFrom: options.referredFrom,
+    });
     return;
   }
+
+  const blockOrchestrator = splitManager.getOrchestrator();
 
   if (entity.type === 'channel' && entity.unreadNotifications !== undefined) {
     try {
@@ -685,7 +688,15 @@ export const openEntityInSplitFromUnifiedList = async (
       : undefined;
   const referredFrom = options.referredFrom ?? sourceListView;
 
-  let splitContent: SplitContent = { ...content, params };
+  // Documents are hosted by Drive. Construct the canonical routed content
+  // before opening the split so the layout manager does not mount a legacy
+  // block and immediately replace it during router feedback.
+  const driveDocument = !isTouchDevice()
+    ? driveDocumentFromContent(content)
+    : undefined;
+  let splitContent: SplitContent = driveDocument
+    ? driveSplitContent({ kind: 'tab', tab: 'owned' }, driveDocument)
+    : { ...content, params };
   if (splitHandle && referredFrom && isListViewID(referredFrom)) {
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
@@ -696,7 +707,11 @@ export const openEntityInSplitFromUnifiedList = async (
     preferNewSplit: openInNewSplit,
     handle: splitHandle,
     mergeHistory,
-    allowDuplicate,
+    // Each routed document has a distinct Drive location even though all
+    // Drive splits share the same component identity.
+    allowDuplicate:
+      allowDuplicate ||
+      (splitContent.type === 'component' && splitContent.id === 'documents'),
     reopen:
       entity.type === 'channel' && !location && openChannelAtLatest
         ? 'latest'
@@ -778,7 +793,7 @@ export function markReminderSeenOnOpen(
   // Calendar events share the reminder situation: they open the calendar
   // component split, which has no block to clear the notification either.
   if (entity.type !== 'reminder' && entity.type !== 'calendar_event') return;
-  void markNotificationsForEntityAsRead(notificationSource, {
+  void markNotificationsForEntityAsReadInBackground(notificationSource, {
     type: entity.type,
     id: entity.id,
   });
@@ -792,14 +807,14 @@ export function calendarEventLinkTarget(entity: CalendarPreviewSelection): {
   eventId: string;
   occurrenceKey?: string;
 } {
-  const { eventId, occurrenceKey } = calendarBlockParamsForEntity(entity);
+  const { eventId, occurrenceKey } = calendarViewTargetForEntity(entity);
   return { eventId: eventId ?? entity.id, occurrenceKey };
 }
 
-/** Build singleton calendar block parameters for an event row's occurrence. */
-export function calendarBlockParamsForEntity(
+/** Build a Calendar view focus target for an event row's occurrence. */
+export function calendarViewTargetForEntity(
   entity: CalendarPreviewSelection
-): CalendarBlockProps {
+): CalendarViewTarget {
   const notifications = isWithNotification(entity)
     ? (entity.notifications?.() ?? [])
     : [];
@@ -823,7 +838,7 @@ export function calendarBlockParamsForEntity(
     // A reminder names a precise instance, so it wins; otherwise fall back to
     // whatever resolved the row (search supplies one, soup does not).
     occurrenceKey: content?.occurrenceKey ?? entity.occurrenceKey,
-    range: time ? createCalendarBlockRange(time) : undefined,
+    range: time ? createCalendarRange(time) : undefined,
   };
 }
 
@@ -891,10 +906,10 @@ function getEntitySplitContent(entity: EntityData) {
           id: `reminder-view~${entity.id}`,
         };
       })
-      // Calendar events open the singleton calendar block; the open path
-      // branches before reaching here, so this only serves duplicate checks.
+      // Calendar events open the singleton Calendar application view; the open
+      // path branches before reaching here, so this only serves duplicate checks.
       .with({ type: 'calendar_event' }, () => {
-        return { type: 'calendar' as const, id: CALENDAR_BLOCK_ID };
+        return { type: 'component' as const, id: CALENDAR_VIEW_ID };
       })
       .otherwise((entity) => {
         return { type: entity.type, id: entity.id };

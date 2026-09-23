@@ -80,6 +80,11 @@ pub(crate) enum Mode {
     },
     /// Entering an arbitrary ACP command line.
     CustomAgent { buffer: Input },
+    /// A chosen agent's adapter installing; applied when the install ends.
+    InstallingAgent {
+        agent: DetectedAgent,
+        install: tokio::task::JoinHandle<Result<(), String>>,
+    },
     /// Confirming harness removal.
     ConfirmDelete,
     /// A pairing in flight: code shown, waiting for approval.
@@ -393,6 +398,56 @@ impl App {
             Mode::EditSetting { .. } => self.on_edit_key(key).await,
             Mode::AgentPicker { .. } => self.on_agent_picker_key(key).await,
             Mode::CustomAgent { .. } => self.on_custom_agent_key(key).await,
+            Mode::InstallingAgent { .. } if key.code == KeyCode::Esc => {
+                if let Mode::InstallingAgent { install, .. } =
+                    std::mem::replace(&mut self.mode, Mode::Normal)
+                {
+                    install.abort();
+                }
+                self.ok("install abandoned; the agent was not changed");
+            }
+            Mode::InstallingAgent { .. } => {}
+        }
+    }
+
+    /// Persist `agent` as the harness once its adapter is installed. A missing
+    /// adapter installs in the background so the panel keeps drawing, and
+    /// [`Self::poll_install`] applies the agent when that ends.
+    async fn select_agent(&mut self, agent: DetectedAgent) {
+        let Some(install) = agent.pending_install().cloned() else {
+            return self.apply_agent(&agent).await;
+        };
+        self.ok(format!("installing {}", install.package));
+        self.mode = Mode::InstallingAgent {
+            agent,
+            install: tokio::spawn(async move { install.run().await }),
+        };
+    }
+
+    async fn apply_agent(&mut self, agent: &DetectedAgent) {
+        self.form.apply_agent(agent);
+        self.save_config(ApplyConfig::Now).await;
+    }
+
+    pub(crate) async fn poll_install(&mut self) {
+        let Mode::InstallingAgent { install, .. } = &self.mode else {
+            return;
+        };
+        if !install.is_finished() {
+            return;
+        }
+        let Mode::InstallingAgent { agent, install } =
+            std::mem::replace(&mut self.mode, Mode::Normal)
+        else {
+            return;
+        };
+        match install.await {
+            Ok(Ok(())) => self.apply_agent(&agent).await,
+            Ok(Err(error)) => self.fail(error),
+            Err(error) => self.fail(format!(
+                "installing {} was interrupted: {error}",
+                agent.name
+            )),
         }
     }
 
@@ -454,8 +509,7 @@ impl App {
                     let agent = self.agents.get(*selected).cloned();
                     self.mode = Mode::Normal;
                     if let Some(agent) = agent {
-                        self.form.apply_agent(&agent);
-                        self.save_config(ApplyConfig::Now).await;
+                        self.select_agent(agent).await;
                     }
                 }
             }
@@ -476,8 +530,7 @@ impl App {
             KeyCode::Enter => match agent_catalog::custom(buffer.value()) {
                 Ok(agent) => {
                     self.mode = Mode::Normal;
-                    self.form.apply_agent(&agent);
-                    self.save_config(ApplyConfig::Now).await;
+                    self.apply_agent(&agent).await;
                 }
                 Err(error) => self.fail(error),
             },

@@ -24,6 +24,7 @@ export type NavigationStackState<TData, TNavigateOptions = unknown> = {
   push: (data: TData) => NavigationStackEntry<TData> | undefined;
   replace: (data: TData) => NavigationStackEntry<TData> | undefined;
   reset: (data: TData) => NavigationStackEntry<TData> | undefined;
+  reconcile: (data?: TData) => void;
   pop: () => void;
   popTo: (value: string) => void;
   clear: () => void;
@@ -127,6 +128,16 @@ function Root<TData = unknown, TNavigateOptions = unknown>(
     return entry;
   };
 
+  const reconcile = (data?: TData) => {
+    const entry = data === undefined ? undefined : createEntry(data);
+
+    setEntries(
+      produce((draft) => {
+        draft.splice(0, draft.length, ...(entry ? [entry] : []));
+      })
+    );
+  };
+
   const pop = () => {
     if (entries.length === 0) return;
     if (props.beforeChange?.(entries.at(-2)?.data, 'navigate') === false)
@@ -181,6 +192,7 @@ function Root<TData = unknown, TNavigateOptions = unknown>(
         reset: reset as (
           data: unknown
         ) => NavigationStackEntry<unknown> | undefined,
+        reconcile: reconcile as (data?: unknown) => void,
         pop,
         popTo,
         clear,

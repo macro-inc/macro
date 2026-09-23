@@ -1602,7 +1602,13 @@ export const mentionPreviewsResponse = zod
                   attendeeCount: zod
                     .number()
                     .min(mentionPreviewsResponseItemsItemEventAttendeeCountMin)
-                    .describe("Number of attendees on the requester's copy."),
+                    .describe('Number of attendees on the previewed copy.'),
+                  description: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering.'
+                    ),
                   isRecurring: zod
                     .boolean()
                     .describe('Whether the event repeats.'),
@@ -1663,15 +1669,16 @@ export const mentionPreviewsResponse = zod
                   title: zod.string().describe('Display title.'),
                   updatedAt: zod.iso
                     .datetime({})
-                    .describe("Entity update time of the requester's copy."),
+                    .describe('Entity update time of the previewed copy.'),
                   viewerEventId: zod
                     .uuid()
+                    .nullish()
                     .describe(
-                      "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee."
+                      "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee.\nAbsent when the meeting is on none of the requester's calendars and\nthey see it only because it was shared with one of their channels:\nthat preview is read-only and there is no event of theirs to open."
                     ),
                 })
                 .describe(
-                  "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting."
+                  "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting, or — when the requester has\nnone — from the mentioned projection a channel they belong to was given."
                 ),
             ])
             .optional(),
@@ -28997,6 +29004,12 @@ export const entityMessageCreateBody = zod
       .optional()
       .describe('Initial attachments.'),
     content: zod.string().describe('Macro Markdown body.'),
+    id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Client-minted UUIDv7 for the new message, so an optimistic message\nalready carries its final id; the server mints one when absent.'
+      ),
     mentions: zod
       .array(
         zod

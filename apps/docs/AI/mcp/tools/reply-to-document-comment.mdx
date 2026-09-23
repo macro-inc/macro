@@ -1,0 +1,16 @@
+---
+title: ReplyToDocumentComment
+description: "Reply in a comment thread on a document, or post a new comment in the document's Discussion panel, on behalf of the user. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. Cannot start a new inline comment on selected text."
+---
+
+# ReplyToDocumentComment
+
+Reply in a comment thread on a document, or post a new comment in the document's Discussion panel, on behalf of the user. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. Cannot start a new inline comment on selected text.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `documentId` | string | Yes | The id of the document the comment is on. |
+| `content` | string | Yes | Comment content in macro markdown format. This uses the same syntax as markdown documents. |
+| `threadId` | string | No | The id of the inline or Discussion thread to reply in, from ReadContent. Omit to post a new Discussion comment on the document as a whole. |

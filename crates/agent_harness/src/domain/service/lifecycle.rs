@@ -46,6 +46,33 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
+    async fn delete_user_sessions(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> agent_session::domain::error::Result<()> {
+        loop {
+            let sessions = self
+                .inner
+                .sessions
+                .sessions_for_user_cleanup(&owner)
+                .await?;
+            if sessions.is_empty() {
+                return Ok(());
+            }
+            for session in sessions {
+                // Fail closed if a repository ever returns another principal's row.
+                if !session.owner_id.is_user(&owner) {
+                    return Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                        "account cleanup returned a session owned by another principal"
+                    )));
+                }
+                // Includes replica forwarding and the per-session command queue.
+                // Teardown failure leaves the durable row available for a retry.
+                self.session_deleted(session.id).await?;
+            }
+        }
+    }
+
     async fn session_deleted(
         &self,
         id: AgentSessionId,

@@ -109,7 +109,7 @@ async fn run_quickstart(
             QuickstartAction::Continue => {}
             QuickstartAction::Quit => return Ok(false),
             QuickstartAction::Create => {
-                let Some(agent) = quickstart.selected_agent.as_ref() else {
+                let Some(agent) = quickstart.selected_agent.clone() else {
                     quickstart.status =
                         Some(("Press Enter on Agent to choose one".to_owned(), true));
                     continue;
@@ -129,14 +129,26 @@ async fn run_quickstart(
                     ));
                     continue;
                 }
+                if let Some(install) = agent.pending_install() {
+                    // Drawn before the wait: nothing else repaints until npm
+                    // returns.
+                    quickstart.status = Some((format!("Installing {}...", install.package), false));
+                    terminal
+                        .draw(|frame| ui::render_quickstart(frame, &quickstart, config_path))
+                        .context("failed to draw Quickstart")?;
+                    if let Err(error) = install.run().await {
+                        quickstart.status = Some((error, true));
+                        continue;
+                    }
+                }
                 let saved = if existing_config.is_some() {
                     ConfigForm::load(config_path).and_then(|mut form| {
-                        form.apply_quickstart(agent, &workspace, quickstart.scope);
+                        form.apply_quickstart(&agent, &workspace, quickstart.scope);
                         form.set_permission_bypass(quickstart.allow_permission_bypass);
                         form.save()
                     })
                 } else {
-                    ConfigForm::create(config_path, agent, &workspace).and_then(|()| {
+                    ConfigForm::create(config_path, &agent, &workspace).and_then(|()| {
                         let mut form = ConfigForm::load(config_path)?;
                         form.set_scope(quickstart.scope);
                         form.set_permission_bypass(quickstart.allow_permission_bypass);
@@ -195,6 +207,7 @@ async fn run_loop(
             _ = tick.tick() => {
                 app.spinner = app.spinner.wrapping_add(1);
                 app.poll_pairing().await;
+                app.poll_install().await;
                 if matches!(app.mode, Mode::Normal) {
                     app.maybe_refresh().await;
                 }

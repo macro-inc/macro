@@ -1,6 +1,6 @@
 import type { NavigationStackChangeReason } from '@app/components/navigation-stack/NavigationStack';
 import { toast } from '@core/component/Toast/Toast';
-import { createSignal, onCleanup, useContext } from 'solid-js';
+import { createSignal, onCleanup, untrack, useContext } from 'solid-js';
 import {
   type PreviewPanelSelection,
   previewBlockTarget,
@@ -9,8 +9,18 @@ import type { ContentIdentity } from './split-layout/contentInstanceRegistry';
 import { SplitLayoutContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
-/** Call before changing selection. A rejected selection leaves the current preview intact. */
-export function createPreviewSelectionGuard() {
+type SelectPreview = (
+  selection: PreviewPanelSelection | undefined,
+  reason?: NavigationStackChangeReason
+) => boolean;
+
+export type PreviewSelectionGuard = SelectPreview & {
+  /** Checks a requested selection without claiming it before navigation commits. */
+  canSelect: SelectPreview;
+};
+
+/** Call after changing selection. Use canSelect before cancellable navigation. */
+export function createPreviewSelectionGuard(): PreviewSelectionGuard {
   const layout = useContext(SplitLayoutContext);
   if (!layout) throw new Error('Preview selection requires a split layout');
   const manager = layout.manager;
@@ -25,21 +35,28 @@ export function createPreviewSelectionGuard() {
   });
   onCleanup(unregister);
 
-  return (
-    selection: PreviewPanelSelection | undefined,
-    reason: NavigationStackChangeReason = 'navigate'
-  ) => {
+  const identity = (selection: PreviewPanelSelection | undefined) => {
     const target = selection && previewBlockTarget(selection);
-    const next = target && { type: target.blockType, id: target.blockId };
-    const existing = next && manager.findOpenView(next);
-    if (existing && existing.owner !== owner) {
-      if (reason === 'navigate') {
-        existing.activate?.();
-        toast.alert('Content already open');
+    return target && { type: target.blockType, id: target.blockId };
+  };
+  const canSelect: SelectPreview = (selection, reason = 'navigate') =>
+    untrack(() => {
+      const next = identity(selection);
+      const existing = next && manager.findOpenView(next);
+      if (existing && existing.owner !== owner) {
+        if (reason === 'navigate') {
+          existing.activate?.();
+          toast.alert('Content already open');
+        }
+        return false;
       }
-      return false;
-    }
-    setCurrent(next);
+      return true;
+    });
+  const select: SelectPreview = (selection, reason) => {
+    if (!canSelect(selection, reason)) return false;
+    setCurrent(identity(selection));
     return true;
   };
+
+  return Object.assign(select, { canSelect });
 }

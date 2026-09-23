@@ -333,6 +333,37 @@ check that the inserted company mention points to the correct company. Also chec
 searching by domain and that an open picker updates when companies finish hydrating.
 Discard unsent test drafts rather than sending them.
 
+## Native offline reopening
+
+On native mobile, previously opened Markdown documents/tasks can reopen after an
+app restart using their cached body and last-known permissions. Warm the document
+online first, then restart with API traffic blocked: verify the existing body,
+make a disposable edit, and restart offline again to check local recovery.
+Restoring connectivity must reauthorize synchronization before queued edits reach
+the server; verify the server copy, not just the still-cached editor text.
+Also reconnect after the initial sync's 10-second timeout: a reconnect snapshot
+must release queued edits without requiring the document to reopen. A document
+content-readiness timeout is retryable and must not revoke its cached open
+context; explicit access denial still does.
+The body should not wait for unrelated CRM metadata, references, duplicate-task
+suggestions, closed sharing/tag menus, or disabled mention queries. With those
+requests pending, the cached editor remains visible; optional information can
+appear when its own request finishes.
+
+For a cold deep link or restored split, document loading waits for persisted
+user identity before capturing its offline session; a stalled auth request must
+not delay an identity already restored from IndexedDB. If no identity is cached,
+the normal auth query must succeed first. A previous logout marker is not a
+cached identity: after signing in again, it must trigger fresh authentication,
+not clear the new login cookie. Verify this restart/deep-link flow with a
+disposable account. Logout during the identity wait prevents the old load from
+opening under a subsequent login.
+
+Cached open context is scoped to the signed-in user and invalidated at logout;
+permission tokens are never persisted. A missing body snapshot still requires an
+online open—metadata alone must not produce an editable empty document. This path
+does not imply offline coverage for PDFs, attachments, or other binary files.
+
 ## Reference hover previews
 
 The `@` menu includes `Recent agent sessions` after Channels and before
@@ -498,10 +529,19 @@ editable view removes the retained mark when the document loads. Read-only
 viewers see plain text without a dead comment highlight; the stored document
 and overlapping live comments stay intact.
 
-Unified PDF discussions are deferred: PDFs keep the legacy comment subsystem
-regardless of the flag, so PDF comments (the side-panel `Comments` section,
-anchored margin threads, highlight comments, and placeable comments) behave as
-they do with the flag off. The message-backed PDF path is a follow-up.
+PDFs follow the same flag. With it on, PDF comment threads in the right margin
+use the channel composer (`Leave a comment...`, Enter sends) and the message
+thread controls. Highlight comments come from selecting text and choosing the
+comment button in the selection menu; placeable comments come from the toolbar
+`Comment` tool and a click on the page. Discussions read and post through
+`/dss/messages/document/<id>`; anchor geometry still loads from
+`/dss/annotations/anchors/document/<id>`, and `/dss/annotations/comments/...`
+is not called. Deleting a highlight's discussion keeps the highlight as a plain
+highlight; deleting a placeable's discussion removes the placeable. With the
+flag off, PDFs use the legacy composer (`Add a comment...`). A PDF anchor
+created by the other path is hidden rather than shown as a bare highlight, so a
+comment written on one path does not appear on the other until the comment
+importer runs.
 
 With the flag off, documents behave exactly as described above this section.
 

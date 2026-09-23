@@ -1,4 +1,5 @@
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::collections::HashSet;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use channels::domain::{
@@ -84,16 +85,16 @@ fn patch_entity(patch: &SoupRealtimePatch) -> &Entity<'static> {
 
 #[derive(Clone)]
 struct FlakyService {
-    attempts: Arc<AtomicU32>,
-    failures: u32,
+    attempts: Arc<AtomicUsize>,
+    failures: HashSet<usize>,
     patches: Arc<Mutex<Vec<SoupRealtimePatch>>>,
 }
 
 impl SoupRealtimeService for FlakyService {
-    fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
+    async fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
         self.patches.lock().expect("patches lock").push(patch);
         let attempt = self.attempts.fetch_add(1, Ordering::SeqCst) + 1;
-        if attempt <= self.failures {
+        if self.failures.contains(&attempt) {
             Err(rootcause::report!("temporary fan-out failure"))
         } else {
             Ok(())
@@ -101,10 +102,10 @@ impl SoupRealtimeService for FlakyService {
     }
 }
 
-fn flaky_service(failures: u32) -> FlakyService {
+fn flaky_service(failures: usize) -> FlakyService {
     FlakyService {
-        attempts: Arc::new(AtomicU32::new(0)),
-        failures,
+        attempts: Arc::new(AtomicUsize::new(0)),
+        failures: (1..=failures).collect(),
         patches: Arc::new(Mutex::new(Vec::new())),
     }
 }
@@ -611,18 +612,23 @@ fn deleting_a_root_channel_message_deletes_its_thread_patch() {
     assert_eq!(patches[1].access_source.entity_type, EntityType::Channel);
 }
 
-#[test]
-fn updated_payload_maps_to_document_patch() {
+#[tokio::test]
+async fn updated_payload_maps_to_document_patch_and_commits() {
     let event = DeclaredMacroEvent::DocumentMacroEvent(DocumentMacroEvent::with_event(
         DOCUMENT_ID,
         updated_event(),
     ));
     let service = flaky_service(0);
+    let commits = AtomicUsize::new(0);
 
     assert!(matches!(
-        process_event(&service, &event).expect("processing succeeds"),
+        process_event(&service, &event, || {
+            commits.fetch_add(1, Ordering::SeqCst);
+        })
+        .await,
         EventOutcome::Notified
     ));
+    assert_eq!(commits.load(Ordering::SeqCst), 1);
 
     let patches = service.patches.lock().expect("patches lock");
     assert_eq!(patches.len(), 1);
@@ -644,16 +650,221 @@ fn malformed_and_unknown_events_are_rejected_by_the_declared_collection() {
     assert!(decode_payload(payload).is_err());
 }
 
-#[test]
-fn service_failure_is_returned_without_retry() {
+#[tokio::test(start_paused = true)]
+async fn transient_service_failures_are_retried_before_committing() {
     let event = DeclaredMacroEvent::DocumentMacroEvent(DocumentMacroEvent::with_event(
         DOCUMENT_ID,
         updated_event(),
     ));
-    let service = flaky_service(1);
+    let service = flaky_service(MAX_NOTIFY_ATTEMPTS - 1);
+    let commits = AtomicUsize::new(0);
+    let started = tokio::time::Instant::now();
 
-    assert!(process_event(&service, &event).is_err());
+    let outcome = process_event(&service, &event, || {
+        assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
+        commits.fetch_add(1, Ordering::SeqCst);
+    })
+    .await;
 
+    assert!(matches!(outcome, EventOutcome::Notified));
+    assert_eq!(commits.load(Ordering::SeqCst), 1);
+    assert_eq!(started.elapsed(), Duration::from_secs(15));
+}
+
+#[tokio::test(start_paused = true)]
+async fn exhausted_service_retries_drop_and_commit_the_event() {
+    let event = DeclaredMacroEvent::DocumentMacroEvent(DocumentMacroEvent::with_event(
+        DOCUMENT_ID,
+        updated_event(),
+    ));
+    let service = flaky_service(MAX_NOTIFY_ATTEMPTS);
+    let commits = AtomicUsize::new(0);
+    let started = tokio::time::Instant::now();
+
+    let outcome = process_event(&service, &event, || {
+        assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
+        assert_eq!(started.elapsed(), Duration::from_secs(15));
+        commits.fetch_add(1, Ordering::SeqCst);
+    })
+    .await;
+
+    assert!(matches!(outcome, EventOutcome::Dropped));
+    assert_eq!(commits.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn dropped_event_does_not_prevent_later_events_from_being_processed() {
+    let first_event = reindex_event(vec![Uuid::now_v7()]);
+    let next_event = reindex_event(vec![Uuid::now_v7()]);
+    let service = flaky_service(MAX_NOTIFY_ATTEMPTS);
+    let committed_offsets = Mutex::new(Vec::new());
+
+    let first_outcome = process_event(&service, &first_event, || {
+        assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
+        committed_offsets.lock().expect("offsets lock").push(0);
+    })
+    .await;
+    assert!(matches!(first_outcome, EventOutcome::Dropped));
+
+    let next_outcome = process_event(&service, &next_event, || {
+        assert_eq!(
+            service.attempts.load(Ordering::SeqCst),
+            MAX_NOTIFY_ATTEMPTS + 1
+        );
+        committed_offsets.lock().expect("offsets lock").push(1);
+    })
+    .await;
+    assert!(matches!(next_outcome, EventOutcome::Notified));
+    assert_eq!(*committed_offsets.lock().expect("offsets lock"), vec![0, 1]);
+}
+
+fn reindex_event(thread_ids: Vec<Uuid>) -> DeclaredMacroEvent {
+    DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::threads_reindex_requested(
+        ThreadsReindexRequestedMetadata {
+            link_id: Uuid::now_v7(),
+            owner: user(),
+            thread_ids,
+            reason: ThreadsReindexReason::ContactsChanged,
+        },
+    ))
+}
+
+#[tokio::test(start_paused = true)]
+async fn multi_patch_event_retries_only_the_failed_patch_before_committing() {
+    let thread_ids = vec![Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+    let event = reindex_event(thread_ids.clone());
+    let mut service = flaky_service(0);
+    service.failures.insert(2);
+    let commits = AtomicUsize::new(0);
+
+    let outcome = process_event(&service, &event, || {
+        assert_eq!(service.attempts.load(Ordering::SeqCst), 4);
+        commits.fetch_add(1, Ordering::SeqCst);
+    })
+    .await;
+
+    assert!(matches!(outcome, EventOutcome::Notified));
+    let patches = service.patches.lock().expect("patches lock");
+    let attempts: Vec<_> = patches
+        .iter()
+        .map(|patch| patch_entity(patch).entity_id.as_ref())
+        .collect();
+    let expected: Vec<_> = [thread_ids[0], thread_ids[1], thread_ids[1], thread_ids[2]]
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect();
+    assert_eq!(attempts, expected);
+    assert_eq!(commits.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn partial_event_failure_discards_remaining_patches_and_commits() {
+    let thread_ids = vec![Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+    let event = reindex_event(thread_ids.clone());
+    let mut service = flaky_service(0);
+    service.failures = (2..=MAX_NOTIFY_ATTEMPTS + 1).collect();
+    let commits = AtomicUsize::new(0);
+
+    let outcome = process_event(&service, &event, || {
+        assert_eq!(
+            service.attempts.load(Ordering::SeqCst),
+            MAX_NOTIFY_ATTEMPTS + 1
+        );
+        commits.fetch_add(1, Ordering::SeqCst);
+    })
+    .await;
+
+    assert!(matches!(outcome, EventOutcome::Dropped));
+    assert_eq!(commits.load(Ordering::SeqCst), 1);
+    let patches = service.patches.lock().expect("patches lock");
+    assert_eq!(
+        patch_entity(&patches[0]).entity_id,
+        thread_ids[0].to_string()
+    );
+    assert!(
+        patches[1..]
+            .iter()
+            .all(|patch| { patch_entity(patch).entity_id == thread_ids[1].to_string() })
+    );
+}
+
+#[tokio::test]
+async fn ignored_event_commits_without_notifying() {
+    let event = reindex_event(Vec::new());
+    let service = flaky_service(0);
+    let commits = AtomicUsize::new(0);
+
+    let outcome = process_event(&service, &event, || {
+        commits.fetch_add(1, Ordering::SeqCst);
+    })
+    .await;
+
+    assert!(matches!(outcome, EventOutcome::Ignored));
+    assert_eq!(service.attempts.load(Ordering::SeqCst), 0);
+    assert_eq!(commits.load(Ordering::SeqCst), 1);
+}
+
+struct GatedService(tokio::sync::Semaphore);
+
+impl SoupRealtimeService for GatedService {
+    async fn notify_users(&self, _patch: SoupRealtimePatch) -> Result<(), Report> {
+        self.0.acquire().await.expect("gate remains open").forget();
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn offset_is_committed_only_after_every_patch_finishes() {
+    let event = reindex_event(vec![Uuid::now_v7(), Uuid::now_v7()]);
+    let service = GatedService(tokio::sync::Semaphore::new(0));
+    let commits = AtomicUsize::new(0);
+    let process = process_event(&service, &event, || {
+        commits.fetch_add(1, Ordering::SeqCst);
+    });
+    tokio::pin!(process);
+
+    assert!(futures::poll!(&mut process).is_pending());
+    assert_eq!(commits.load(Ordering::SeqCst), 0);
+    service.0.add_permits(1);
+    assert!(futures::poll!(&mut process).is_pending());
+    assert_eq!(commits.load(Ordering::SeqCst), 0);
+    service.0.add_permits(1);
+    assert!(matches!(process.await, EventOutcome::Notified));
+    assert_eq!(commits.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn cancellation_during_publication_leaves_the_event_uncommitted() {
+    let event = reindex_event(vec![Uuid::now_v7()]);
+    let service = GatedService(tokio::sync::Semaphore::new(0));
+    let commits = AtomicUsize::new(0);
+    {
+        let process = process_event(&service, &event, || {
+            commits.fetch_add(1, Ordering::SeqCst);
+        });
+        tokio::pin!(process);
+        assert!(futures::poll!(&mut process).is_pending());
+    }
+    service.0.add_permits(1);
+    assert_eq!(commits.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn cancellation_during_retry_backoff_leaves_the_event_uncommitted() {
+    let event = reindex_event(vec![Uuid::now_v7()]);
+    let service = flaky_service(MAX_NOTIFY_ATTEMPTS);
+    let commits = AtomicUsize::new(0);
+    {
+        let process = process_event(&service, &event, || {
+            commits.fetch_add(1, Ordering::SeqCst);
+        });
+        tokio::pin!(process);
+        assert!(futures::poll!(&mut process).is_pending());
+        assert_eq!(service.attempts.load(Ordering::SeqCst), 1);
+        assert_eq!(commits.load(Ordering::SeqCst), 0);
+    }
+
+    tokio::time::advance(Duration::from_secs(15)).await;
     assert_eq!(service.attempts.load(Ordering::SeqCst), 1);
-    assert_eq!(service.patches.lock().expect("patches lock").len(), 1);
+    assert_eq!(commits.load(Ordering::SeqCst), 0);
 }

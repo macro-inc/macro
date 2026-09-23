@@ -33,6 +33,7 @@ fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
         actor: USER.to_owned().try_into().unwrap(),
         triggered_by: None,
         input: PostMessage {
+            id: None,
             attribution: Default::default(),
             notification_policy: Default::default(),
             content: content.into(),
@@ -1123,5 +1124,28 @@ async fn legacy_ids_resolve_through_the_import_mapping_tables(pool: PgPool) {
     assert_eq!(
         dangling.as_database_error().unwrap().code().as_deref(),
         Some("23503")
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn client_supplied_ids_are_kept_and_never_reused(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool);
+    let id = macro_uuid::generate_uuid_v7();
+    let mut first = command("message-doc-a", None, "first");
+    first.input.id = Some(id);
+    assert_eq!(repo.create(first).await.unwrap().id, id);
+
+    // A reused id conflicts even on another parent, and never overwrites.
+    let mut second = command("message-doc-b", None, "second");
+    second.input.id = Some(id);
+    assert!(matches!(
+        repo.create(second).await,
+        Err(MessageError::Conflict)
+    ));
+    let parent = MessageParent::parse("document", "message-doc-a").unwrap();
+    assert_eq!(
+        repo.get(&parent, id).await.unwrap().unwrap().content,
+        "first"
     );
 }

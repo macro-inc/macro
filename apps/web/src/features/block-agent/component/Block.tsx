@@ -48,6 +48,7 @@ function AgentBlockContent(props: {
     session,
     sessionId,
     metadata,
+    accessDenied,
     loadFailed,
     loadRetryable,
     pending,
@@ -73,10 +74,21 @@ function AgentBlockContent(props: {
         <Show
           when={startupError()}
           fallback={
-            <LoadErrorPanel
-              title="Unable to load this agent session"
-              onRetry={loadRetryable() ? retryLoad : undefined}
-            />
+            <Show
+              when={accessDenied()}
+              fallback={
+                <LoadErrorPanel
+                  title="Unable to load this agent session"
+                  onRetry={loadRetryable() ? retryLoad : undefined}
+                />
+              }
+            >
+              <EmptyStatePanel
+                centered
+                title="You don't have access to this agent session"
+                description="Ask a participant to share it with you."
+              />
+            </Show>
           }
         >
           {(error) => (

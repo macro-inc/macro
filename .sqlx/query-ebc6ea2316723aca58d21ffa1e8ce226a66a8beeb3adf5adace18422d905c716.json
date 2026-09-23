@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE scheduled_action_event_run r\n                SET state = 'finished', finished_at = $3,\n                    outcome = CASE WHEN r.state = 'started' THEN $4::jsonb\n                        WHEN NOT a.enabled THEN $5::jsonb ELSE $6::jsonb END\n                FROM scheduled_action a\n                WHERE r.action_id = $1 AND r.event_id = $2 AND a.id = r.action_id\n                  AND ((r.state = 'started' AND r.deadline <= $3)\n                    OR (r.state = 'pending' AND (NOT a.enabled OR a.trigger_type <> 'events'\n                        OR a.configuration_revision <> r.configuration_revision)))\n                RETURNING r.claim_token\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "claim_token",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "ebc6ea2316723aca58d21ffa1e8ce226a66a8beeb3adf5adace18422d905c716"
+}

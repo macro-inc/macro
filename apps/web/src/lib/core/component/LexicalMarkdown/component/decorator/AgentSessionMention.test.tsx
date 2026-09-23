@@ -10,11 +10,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: mocks.open }),
 }));
-vi.mock('@core/util/useSplitNavigationHandler', () => ({
-  useSplitNavigationHandler: (onClick: (event: MouseEvent) => void) => ({
-    onClick,
-  }),
-}));
 vi.mock('@queries/agent-session/mentions', () => ({
   useAgentSessionMentionPreview: () => mocks.query,
 }));
@@ -108,6 +103,23 @@ describe('agent session mention rendering', () => {
     ).toBe(true);
     expect(mocks.subscribe).not.toHaveBeenCalled();
     expect(mocks.magic).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Fix mentions'));
+    expect(mocks.open).toHaveBeenCalledWith(
+      { type: 'agent', id: 'session' },
+      expect.anything()
+    );
+  });
+  it('opens from inside an editable editor, whose shell stops click propagation', () => {
+    render(() => (
+      <div on:click={(event) => event.stopPropagation()}>
+        <AgentSessionMention
+          id="session"
+          label="Old title"
+          key="node"
+          theme={{}}
+        />
+      </div>
+    ));
     fireEvent.click(screen.getByText('Fix mentions'));
     expect(mocks.open).toHaveBeenCalledWith(
       { type: 'agent', id: 'session' },

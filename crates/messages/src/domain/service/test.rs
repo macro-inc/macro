@@ -530,6 +530,7 @@ fn view_access_cannot_mint_a_write_receipt() {
 #[test]
 fn only_root_document_messages_can_have_anchors() {
     let mut input = PostMessage {
+        id: None,
         attribution: Default::default(),
         notification_policy: Default::default(),
         content: "test".into(),
@@ -559,6 +560,7 @@ async fn inaccessible_references_are_rejected_before_persistence() {
         height: None,
     };
     let input = PostMessage {
+        id: None,
         attribution: Default::default(),
         notification_policy: Default::default(),
         content: "Look here".into(),
@@ -630,6 +632,7 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
 
 fn post_input() -> PostMessage {
     PostMessage {
+        id: None,
         attribution: Default::default(),
         notification_policy: Default::default(),
         content: "@agent please help".into(),
@@ -1334,4 +1337,31 @@ async fn display_only_mention_kinds_are_stored_without_authorization() {
         *checks.checked.lock().unwrap(),
         vec![(EntityType::AgentSession, Uuid::from_u128(10).to_string())]
     );
+}
+
+#[test]
+fn client_ids_must_be_recent_uuid_v7() {
+    let now = Utc::now();
+    let v7_at = |at: chrono::DateTime<Utc>| {
+        Uuid::new_v7(uuid::Timestamp::from_unix(
+            uuid::NoContext,
+            at.timestamp() as u64,
+            at.timestamp_subsec_nanos(),
+        ))
+    };
+    assert!(validate_client_id(v7_at(now), now).is_ok());
+    assert!(validate_client_id(v7_at(now - chrono::TimeDelta::hours(23)), now).is_ok());
+    assert!(validate_client_id(v7_at(now + chrono::TimeDelta::hours(23)), now).is_ok());
+    assert!(matches!(
+        validate_client_id(v7_at(now - chrono::TimeDelta::hours(25)), now),
+        Err(MessageError::Invalid(_))
+    ));
+    assert!(matches!(
+        validate_client_id(v7_at(now + chrono::TimeDelta::days(30)), now),
+        Err(MessageError::Invalid(_))
+    ));
+    assert!(matches!(
+        validate_client_id(Uuid::new_v4(), now),
+        Err(MessageError::Invalid(_))
+    ));
 }

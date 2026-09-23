@@ -48,6 +48,7 @@ use uuid::Uuid;
 use super::*;
 
 mod agent_metadata;
+mod exclusions;
 
 struct NoopEmailPreviewService;
 

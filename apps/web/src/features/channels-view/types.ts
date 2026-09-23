@@ -12,7 +12,6 @@ export type ChannelsQueryScope = ChannelsGroup | 'recents';
 export type ChannelsViewState = {
   tab: ChannelsTab;
   mobileTab: ChannelsQueryScope;
-  selectedChannelId?: string;
   expandedGroups: Record<ChannelsRailSection, boolean>;
   /**
    * Channel labels this user has collapsed. Labels themselves are team data;

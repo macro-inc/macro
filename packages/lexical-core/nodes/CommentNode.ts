@@ -2,6 +2,7 @@ import { MarkNode, type SerializedMarkNode } from '@lexical/mark';
 import { $dfs } from '@lexical/utils';
 import {
   $applyNodeReplacement,
+  $getNodeByKey,
   $getRoot,
   $isRootOrShadowRoot,
   type EditorConfig,
@@ -10,6 +11,8 @@ import {
   type LexicalUpdateJSON,
   type NodeKey,
   type RangeSelection,
+  type SerializedEditorState,
+  type SerializedLexicalNode,
   type Spread,
 } from 'lexical';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
@@ -272,5 +275,107 @@ export class CommentNode extends MarkNode {
     });
     this.insertAfter(node, restoreSelection);
     return node;
+  }
+}
+
+function isSerializedDraftCommentNode(
+  node: SerializedLexicalNode
+): node is SerializedCommentNode {
+  return (
+    node.type === CommentNode.getType() &&
+    (node as SerializedCommentNode).isDraft === true
+  );
+}
+
+/**
+ * A copy of `node` with every draft comment mark replaced by its content, or
+ * `node` itself when it holds none.
+ */
+function stripDraftCommentMarksFromNode<T extends SerializedLexicalNode>(
+  node: T
+): T {
+  if (!('children' in node) || !Array.isArray(node.children)) return node;
+  let changed = false;
+  const children: SerializedLexicalNode[] = [];
+  for (const child of node.children as SerializedLexicalNode[]) {
+    const stripped = stripDraftCommentMarksFromNode(child);
+    if (isSerializedDraftCommentNode(stripped)) {
+      changed = true;
+      children.push(...stripped.children);
+      continue;
+    }
+    if (stripped !== child) changed = true;
+    children.push(stripped);
+  }
+  return changed ? { ...node, children } : node;
+}
+
+/**
+ * A draft comment mark only anchors the open composer of the editor that
+ * created it, so it must never reach the shared document: a session that
+ * ends before the comment is posted or cancelled would leave it there for
+ * good. Returns `state` itself when it holds no draft marks.
+ */
+export function stripDraftCommentMarks(
+  state: SerializedEditorState
+): SerializedEditorState {
+  const root = stripDraftCommentMarksFromNode(state.root);
+  return root === state.root ? state : { ...state, root };
+}
+
+export type LiftedDraftCommentMark = {
+  mark: CommentNode;
+  childKeys: NodeKey[];
+};
+
+/**
+ * Unwraps every draft comment mark so the live tree matches its
+ * `stripDraftCommentMarks` serialization. Pass the result to
+ * `$restoreDraftCommentMarks` in the same update.
+ */
+export function $liftDraftCommentMarks(): LiftedDraftCommentMark[] {
+  const drafts: CommentNode[] = [];
+  for (const { node } of $dfs($getRoot())) {
+    if ($isCommentNode(node) && node.getIsDraft()) drafts.push(node);
+  }
+  return drafts.map((mark) => {
+    const children = mark.getChildren();
+    for (const child of children) mark.insertBefore(child);
+    mark.remove(true);
+    return { mark, childKeys: children.map((child) => child.getKey()) };
+  });
+}
+
+/**
+ * Wraps the lifted drafts' content again, keeping each original mark node so
+ * the composer anchored to it survives. Content that is gone is left out, and
+ * content that is no longer contiguous is wrapped in one mark per run.
+ */
+export function $restoreDraftCommentMarks(
+  lifted: readonly LiftedDraftCommentMark[]
+): void {
+  // Reverse lift order, so an enclosing draft wraps an inner one already restored.
+  for (const { mark, childKeys } of [...lifted].reverse()) {
+    let run: CommentNode | null = null;
+    let reusedMark = false;
+    for (const key of childKeys) {
+      const child = $getNodeByKey(key);
+      if (!child?.isAttached()) {
+        run = null;
+        continue;
+      }
+      if (run === null || !run.getNextSibling()?.is(child)) {
+        run = reusedMark
+          ? $createCommentNode({
+              ids: mark.getIDs(),
+              threadId: mark.getThreadId(),
+              isDraft: true,
+            })
+          : mark;
+        reusedMark = true;
+        child.insertBefore(run);
+      }
+      run.append(child);
+    }
   }
 }

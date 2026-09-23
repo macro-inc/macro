@@ -36,6 +36,9 @@ fn database_error(error: sqlx::Error) -> MessageError {
     if let sqlx::Error::Database(ref error) = error {
         match error.code().as_deref() {
             Some("23503") => return MessageError::NotFound,
+            Some("23505") if error.constraint() == Some("comms_messages_pkey") => {
+                return MessageError::Conflict;
+            }
             Some("23505") => {
                 return MessageError::Invalid("a live discussion already uses this anchor");
             }
@@ -551,7 +554,10 @@ impl MessageRepository for PgMessageRepository {
     }
 
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
-        let id = macro_uuid::generate_uuid_v7();
+        let id = command
+            .input
+            .id
+            .unwrap_or_else(macro_uuid::generate_uuid_v7);
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         if let Some(root_id) = command.input.thread_id {
             // Replies attach to a live root of the same parent. The composite FK

@@ -58,6 +58,7 @@ impl ChannelMessageCommands for ChannelMessageAdapter {
             .post(
                 access,
                 PostMessage {
+                    id: None,
                     attribution: if req.triggered_by.is_some() {
                         MessageAttribution::ActingUser
                     } else {
@@ -198,6 +199,9 @@ fn shared_message_error(error: MessageError) -> ChannelMutationErr {
         MessageError::NotFound => ChannelMutationErr::NotFound("message not found".into()),
         MessageError::Forbidden => ChannelMutationErr::Unauthorized("message access denied".into()),
         MessageError::Invalid(message) => ChannelMutationErr::BadRequest(message.into()),
+        MessageError::Conflict => {
+            ChannelMutationErr::BadRequest("message id already exists".into())
+        }
         MessageError::Repository(report) => {
             ChannelMutationErr::Repo(anyhow::anyhow!(report.to_string()))
         }

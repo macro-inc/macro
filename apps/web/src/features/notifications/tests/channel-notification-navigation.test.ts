@@ -16,8 +16,11 @@ vi.mock('@core/constant/settingsTabsConfig', () => ({
   settingsTabToSlug: (tab: string) => tab,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { alert: vi.fn() } }));
-vi.mock('@block-calendar/calendar-range', () => ({
-  createCalendarBlockRange: vi.fn(),
+vi.mock('@app/features/calendar-view/calendar-range', () => ({
+  createCalendarRange: vi.fn(),
+}));
+vi.mock('@app/features/calendar-view/calendar-navigation', () => ({
+  openCalendarView: vi.fn(),
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   isBlockAlias: () => false,

@@ -2,6 +2,7 @@ import { ViewShell } from '@app/components/view-shell';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { SplitRouter } from '@app/lib/split-router';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -13,6 +14,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
+  createContext,
   createEffect,
   createMemo,
   createSignal,
@@ -20,6 +22,7 @@ import {
   onMount,
   Show,
   Suspense,
+  useContext,
 } from 'solid-js';
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
@@ -30,6 +33,10 @@ import {
   useChannelByIdQuery,
   useChannelsSources,
 } from './queries';
+
+const ChannelSourcesContext =
+  createContext<ReturnType<typeof useChannelsSources>>();
+
 import type { ChannelsViewStateOptions } from './types';
 
 export type ChannelsViewProps = {
@@ -39,9 +46,7 @@ export type ChannelsViewProps = {
 
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const orchestrator = useGlobalBlockOrchestrator();
-  const notificationSource = useGlobalNotificationSource();
-  const { state, mobileLayout, previewChannelId, setAsideWidth, setMobileTab } =
+  const { state, mobileLayout, setAsideWidth, setMobileTab } =
     useChannelsView();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
@@ -56,91 +61,6 @@ function ChannelsViewRoot() {
     },
     (group) => state.sortBy[group]
   );
-  const loadedChannels = createMemo(() =>
-    deduplicateChannels([
-      sources.channels.items(),
-      sources.direct_messages.items(),
-      sources.recents.items(),
-      sources.search.items(),
-    ])
-  );
-  const loadedSelectedChannel = createMemo(() =>
-    resolveSelectedChannel(previewChannelId(), loadedChannels())
-  );
-  // Only a new selection may request a full edge. Incoming unread updates must
-  // not blank/remount an already-open conversation or steal composer focus.
-  const selectionNeedsFullEdge = createMemo(
-    on(previewChannelId, () => {
-      const loaded = loadedSelectedChannel();
-      return (
-        loaded === undefined || (loaded.unreadNotifications?.length ?? 0) > 0
-      );
-    })
-  );
-  const selectedChannelQuery = useChannelByIdQuery(
-    previewChannelId,
-    () =>
-      !mobileLayout() &&
-      previewChannelId() !== undefined &&
-      (selectionNeedsFullEdge() || loadedSelectedChannel() === undefined)
-  );
-  const selectedChannel = createMemo(
-    (previous: ReturnType<typeof loadedSelectedChannel> | undefined) => {
-      const loaded = loadedSelectedChannel();
-      if (loaded && !selectionNeedsFullEdge()) {
-        return loaded.unreadNotifications === undefined
-          ? loaded
-          : { ...loaded, notifications: () => [] };
-      }
-      if (
-        !selectedChannelQuery.isEnabled ||
-        selectedChannelQuery.isLoading ||
-        selectedChannelQuery.isFetching ||
-        selectedChannelQuery.error
-      ) {
-        return previous?.id === previewChannelId() ? previous : undefined;
-      }
-
-      const full = resolveSelectedChannel(
-        previewChannelId(),
-        [],
-        selectedChannelQuery.data?.entities
-      );
-      return full
-        ? withEntityNotifications(full, notificationSource)
-        : undefined;
-    }
-  );
-
-  const selectionUnavailable = () =>
-    previewChannelId() !== undefined &&
-    (Boolean(selectedChannelQuery.error) ||
-      (selectedChannelQuery.isEnabled &&
-        !selectedChannelQuery.isLoading &&
-        !selectedChannelQuery.isFetching &&
-        selectedChannel() === undefined));
-
-  // Stabilize the identity: metadata updates must not repeat the selection action.
-  const readySelectionId = createMemo(() => selectedChannel()?.id);
-
-  // The bounded unread witness is never passed to a bulk mark-read operation.
-  // Send the complete, thread-scoped selection once the chosen preview is ready.
-  createEffect(
-    on(readySelectionId, () => {
-      const channel = selectedChannel();
-      if (channel && channel.isParticipant !== false)
-        markChannelNotificationsSeenOnOpen(channel, notificationSource);
-    })
-  );
-
-  const retrySelection = async () => {
-    try {
-      await selectedChannelQuery.refresh();
-    } catch {
-      // The query's inline error remains visible so another retry is possible.
-    }
-  };
-
   onMount(() => panel.handle.setDisplayName('Channels'));
 
   return (
@@ -169,52 +89,28 @@ function ChannelsViewRoot() {
                       />
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
-                      <Show
-                        when={selectedChannel()}
-                        fallback={
-                          <>
-                            <ViewShell.TopBar>
-                              <span class="text-sm font-semibold">Chat</span>
-                            </ViewShell.TopBar>
-                            <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
-                              <div class="flex max-w-sm flex-col gap-2">
-                                <h2 class="text-base font-semibold text-ink">
-                                  {selectionUnavailable()
-                                    ? 'Conversation unavailable'
-                                    : previewChannelId()
-                                      ? 'Loading conversation'
-                                      : 'Select a conversation'}
-                                </h2>
-                                <p class="text-sm leading-5 text-ink-muted">
-                                  {selectionUnavailable()
-                                    ? 'Could not load this conversation.'
-                                    : previewChannelId()
-                                      ? 'Preparing the conversation…'
-                                      : 'Choose a channel or person from the sidebar to open the conversation here.'}
-                                </p>
-                                <Show when={selectionUnavailable()}>
-                                  <button
-                                    type="button"
-                                    onClick={retrySelection}
-                                  >
-                                    Retry
-                                  </button>
-                                </Show>
+                      <ChannelSourcesContext.Provider value={sources}>
+                        <SplitRouter.Outlet
+                          fallback={() => (
+                            <>
+                              <ViewShell.TopBar>
+                                <span class="text-sm font-semibold">Chat</span>
+                              </ViewShell.TopBar>
+                              <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+                                <div class="flex max-w-sm flex-col gap-2">
+                                  <h2 class="text-base font-semibold text-ink">
+                                    Select a conversation
+                                  </h2>
+                                  <p class="text-sm leading-5 text-ink-muted">
+                                    Choose a channel or person from the sidebar
+                                    to open the conversation here.
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                          </>
-                        }
-                      >
-                        {(channel) => (
-                          <Suspense>
-                            <PreviewPanel
-                              selectedEntity={channel()}
-                              orchestrator={orchestrator}
-                              splitPanelContext={panel}
-                            />
-                          </Suspense>
-                        )}
-                      </Show>
+                            </>
+                          )}
+                        />
+                      </ChannelSourcesContext.Provider>
                     </ViewShell.Main>
                   </ViewShell.Root>
                 </div>
@@ -243,6 +139,110 @@ function ChannelsViewRoot() {
         </SplitPanel.Root>
       </StaticMarkdownContext>
     </ListEntityMetadataQueryProvider>
+  );
+}
+
+export function ChannelDetailRouteView() {
+  const panel = useSplitPanelOrThrow();
+  const orchestrator = useGlobalBlockOrchestrator();
+  const { selectedChannel } = useChannelsView();
+  const notificationSource = useGlobalNotificationSource();
+  const channelId = () => selectedChannel()?.id;
+  const sources = useContext(ChannelSourcesContext);
+  const loaded = createMemo(() =>
+    resolveSelectedChannel(
+      channelId(),
+      sources
+        ? deduplicateChannels([
+            sources.channels.items(),
+            sources.direct_messages.items(),
+            sources.recents.items(),
+            sources.search.items(),
+          ])
+        : []
+    )
+  );
+  const needsFullEdge = createMemo(
+    on(
+      channelId,
+      () =>
+        loaded() === undefined ||
+        (loaded()?.unreadNotifications?.length ?? 0) > 0
+    )
+  );
+  const query = useChannelByIdQuery(
+    channelId,
+    () =>
+      channelId() !== undefined && (needsFullEdge() || loaded() === undefined)
+  );
+  const hydrated = createMemo((previous: ReturnType<typeof loaded>) => {
+    const selection = selectedChannel();
+    if (!selection || selection.type !== 'channel') return;
+    const cached = loaded();
+    if (cached && !needsFullEdge())
+      return { ...cached, target: selection.target, notifications: () => [] };
+    if (
+      !query.isEnabled ||
+      query.isLoading ||
+      query.isFetching ||
+      query.error
+    ) {
+      return previous?.id === selection.id ? previous : undefined;
+    }
+    const full = resolveSelectedChannel(selection.id, [], query.data?.entities);
+    if (!full) return;
+    return withEntityNotifications(
+      { ...full, target: selection.target },
+      notificationSource
+    );
+  });
+  const unavailable = () =>
+    Boolean(query.error) ||
+    (query.isEnabled && !query.isLoading && !query.isFetching && !hydrated());
+  const retry = async () => {
+    try {
+      await query.refresh();
+    } catch {
+      /* Query state presents the failure. */
+    }
+  };
+  const readyId = createMemo(() => hydrated()?.id);
+  createEffect(
+    on(readyId, () => {
+      const channel = hydrated();
+      if (channel && channel.isParticipant !== false)
+        markChannelNotificationsSeenOnOpen(channel, notificationSource);
+    })
+  );
+
+  return (
+    <Suspense>
+      <Show
+        when={hydrated()}
+        fallback={
+          <div class="flex size-full flex-col items-center justify-center gap-2 text-ink-muted">
+            <h2>
+              {unavailable()
+                ? 'Conversation unavailable'
+                : 'Loading conversation'}
+            </h2>
+            <Show when={unavailable()}>
+              <button type="button" onClick={retry}>
+                Retry
+              </button>
+            </Show>
+          </div>
+        }
+      >
+        {(channel) => (
+          <PreviewPanel
+            selectedEntity={channel()}
+            orchestrator={orchestrator}
+            splitPanelContext={panel}
+          />
+        )}
+      </Show>
+    </Suspense>
   );
 }
 

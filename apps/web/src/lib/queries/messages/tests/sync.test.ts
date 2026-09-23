@@ -27,7 +27,6 @@ vi.mock('@service-storage/messages', async (importOriginal) => ({
 
 import { registerNonce } from '../../nonce';
 import { MessageNonceKeys, messageKeys } from '../keys';
-import { replaceTargetMessageId } from '../reconcile';
 import { applyMessage, applyThreadState, handleMessageEvent } from '../sync';
 import {
   getThreadRepliesQueryKey,
@@ -556,27 +555,6 @@ describe.each(['channel', 'document'] as const)(
 
       // The reply left the preview on delete, so the deferred re-apply skips it.
       expect(threadReplies()).toEqual([]);
-      unsubscribe();
-    });
-    it('keeps an own reply whose id is remapped while the fetch is in flight', async () => {
-      const { settleEmpty, threadReplies, unsubscribe } =
-        await expandThreadWithPendingFetch();
-
-      // An own reply is inserted optimistically, then its id is remapped to the
-      // server id (as the send mutation does) before the fetch settles.
-      applyMessage(message(parent, 'optimistic', 'root'), 'posted');
-      replaceTargetMessageId(
-        parent,
-        { kind: 'thread_reply', messageId: 'optimistic', threadId: 'root' },
-        'server-id'
-      );
-      await settleEmpty();
-
-      // The deferred re-apply matches the reply by its current preview id, so it
-      // lands under the server id rather than being lost to the remap.
-      expect(threadReplies()).toEqual([
-        expect.objectContaining({ id: 'server-id' }),
-      ]);
       unsubscribe();
     });
     it('skips the sender nonce and scopes ephemeral typing to the parent and root', () => {

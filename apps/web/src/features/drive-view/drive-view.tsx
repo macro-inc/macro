@@ -1,7 +1,3 @@
-import {
-  EntityDetailNavigationStack,
-  useEntityDetailNavigationStack,
-} from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { listOwnedSlotName } from '@app/components/list';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import {
@@ -9,29 +5,31 @@ import {
   useSoupListNavigationHotkeys,
 } from '@app/features/soup';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useEntryState } from '@components/app/split-layout/entry-state';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
-import { onCleanup, onMount, Suspense } from 'solid-js';
+import { createEffect, on, onCleanup, onMount, Suspense } from 'solid-js';
 import { DriveProvider } from './context/drive-context';
 import { driveLocationLabel } from './core/location-label';
 import {
-  DRIVE_MOBILE_TABS,
-  DRIVE_TABS,
-  type DriveState,
-  driveMobileTabLocation,
-} from './core/types';
+  DriveDetailNavigationProvider,
+  useDriveDetailNavigation,
+} from './drive-detail-navigation';
 import { createDriveHostActions } from './drive-host-actions';
 import {
   createDriveList,
   parseDriveListSnapshot,
 } from './primitives/drive-list';
+import {
+  createDriveRouteState,
+  createDriveViewState,
+  type DriveRouteState,
+} from './primitives/drive-route-state';
 import { createDriveState } from './primitives/drive-state';
 import { createDriveDataSource } from './queries/drive-data-source';
 import { createDriveSidebarSource } from './queries/drive-sidebar-source';
@@ -39,62 +37,35 @@ import { DriveLoading, DriveWorkspace } from './views/drive-workspace';
 
 export type DriveViewProps = { initialFacets?: FacetSelection };
 
-/** The only place that constructs production sources and app capabilities. */
-function DriveComposition(props: DriveViewProps) {
+/** Constructs production sources and injects app capabilities into the workspace. */
+function DriveComposition(props: { route: DriveRouteState }) {
   const panel = useSplitPanelOrThrow();
-
-  const navigation = useEntityDetailNavigationStack();
-
+  const navigation = useDriveDetailNavigation();
   const userId = useUserId();
-
   const notificationSource = useGlobalNotificationSource();
-
   const tagSets = useTagSets();
-
   const tagSetsReady = useTagSetsReady();
-
-  const [value, setValue] = useEntryState<DriveState>('drive.view.v2', {
-    default: {
-      // Each form factor opens on the first entry of its own tab list.
-      location: isTouchDevice()
-        ? driveMobileTabLocation(DRIVE_MOBILE_TABS[0].id)
-        : { kind: 'tab', tab: DRIVE_TABS[0].id },
-      scope: 'default',
-      sort: 'updated_at',
-      search: '',
-      facets: props.initialFacets ?? {},
-      expandedFolderIds: [],
-      favoritesOpen: true,
-      rootOpen: true,
-      tagsOpen: true,
-    },
-  });
-
+  const view = createDriveViewState(props.route, () => list.reset());
   const sidebar = createDriveSidebarSource();
-
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     createDriveDataSource({
-      selection: value,
+      selection: view.value,
       userId,
       tagSets,
       tagSetsReady,
       notificationSource,
     })
   );
-
   const actions = createDriveHostActions({
     projectId: () => state.projectId(),
-
     selectFolder: (id) => state.selectFolder(id),
   });
-
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
     createDriveList({
       source,
       initial: parseDriveListSnapshot(
         panel.handle.content().state?.['drive.listState']
       ),
-
       onActivate: (row, metadata) =>
         actions.openEntity(
           row.entity,
@@ -104,24 +75,55 @@ function DriveComposition(props: DriveViewProps) {
         ),
     })
   );
-
   const state = createDriveState({
-    state: value,
-    setState: setValue,
+    state: view.value,
+    setState: view.setValue,
     folders: sidebar.folders,
     list,
-
     showList: () => {
       navigation.clear();
     },
   });
 
-  onCleanup(
-    panel.handle.registerEntryStateCaptor('drive.returnLabel', () =>
-      driveLocationLabel(value().location, sidebar.folders())
+  createEffect(
+    on(
+      () => {
+        const location = view.value().location;
+        if (
+          sidebar.foldersLoading() ||
+          sidebar.foldersError() ||
+          location.kind !== 'folder' ||
+          !location.id
+        )
+          return;
+        return sidebar.folders().some((folder) => folder.id === location.id)
+          ? undefined
+          : location.id;
+      },
+      (unavailableFolderId) => {
+        if (!unavailableFolderId) return;
+        view.update(
+          {
+            ...view.value(),
+            location: { kind: 'folder', id: null },
+            scope: 'default',
+            search: '',
+            facets: {},
+          },
+          { replace: true }
+        );
+        toast.alert('Folder unavailable', {
+          subtext: 'It may have moved, been deleted, or no longer be shared.',
+        });
+      }
     )
   );
 
+  onCleanup(
+    panel.handle.registerEntryStateCaptor('drive.returnLabel', () =>
+      driveLocationLabel(view.value().location, sidebar.folders())
+    )
+  );
   onCleanup(
     panel.handle.registerEntryStateCaptor('drive.listState', list.snapshot)
   );
@@ -133,7 +135,6 @@ function DriveComposition(props: DriveViewProps) {
       dataSource: source,
       controller: list.controller,
       handle: panel.handle,
-
       openEntityInSplit: (entity, options) => {
         void openEntityInSplitFromUnifiedList(entity, {
           splitHandle: panel.handle,
@@ -142,7 +143,6 @@ function DriveComposition(props: DriveViewProps) {
       },
     });
   });
-
   onMount(() => panel.handle.setDisplayName('Drive'));
 
   return (
@@ -153,13 +153,14 @@ function DriveComposition(props: DriveViewProps) {
 }
 
 export function DriveView(props: DriveViewProps) {
+  const route = createDriveRouteState(() => props.initialFacets);
   return (
-    <EntityDetailNavigationStack.Root>
+    <DriveDetailNavigationProvider location={route.location}>
       <ListEntityMetadataQueryProvider>
         <Suspense fallback={<DriveLoading />}>
-          <DriveComposition {...props} />
+          <DriveComposition route={route} />
         </Suspense>
       </ListEntityMetadataQueryProvider>
-    </EntityDetailNavigationStack.Root>
+    </DriveDetailNavigationProvider>
   );
 }

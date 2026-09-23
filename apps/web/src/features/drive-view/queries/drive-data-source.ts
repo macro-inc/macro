@@ -93,6 +93,12 @@ export function createDriveDataSource(options: {
 
       return {
         enabled: Boolean(viewer) && facetsReady() && !current.search.trim(),
+        // Folder contents mix email with indexed project members. Seed the
+        // latter locally without narrowing the authoritative server request.
+        graphqlLocalReconciliation:
+          current.location.kind === 'folder' && current.location.id
+            ? 'without-email'
+            : undefined,
         meta: {
           insertFilter: driveInsertFilter(current),
           itemFilter: driveItemFilter(current, viewer, context),

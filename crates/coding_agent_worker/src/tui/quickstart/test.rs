@@ -83,6 +83,7 @@ fn unpaired_config_prefills_recognized_agent_workspace_and_scope() {
     let config = config(Harness {
         command: "hermes".to_owned(),
         args: vec!["acp".to_owned()],
+        env: Default::default(),
     });
     let agents = vec![DetectedAgent {
         kind: AgentKind::Hermes,
@@ -90,8 +91,10 @@ fn unpaired_config_prefills_recognized_agent_workspace_and_scope() {
         launch: agent_catalog::LaunchSpec {
             command: "hermes".to_owned(),
             args: vec!["acp".to_owned()],
+            env: Default::default(),
         },
         note: None,
+        install: None,
     }];
 
     let quickstart = Quickstart::from_config_with_agents(&config, agents);
@@ -107,6 +110,7 @@ fn unpaired_config_prefills_custom_command_with_all_arguments() {
     let config = config(Harness {
         command: "my-agent".to_owned(),
         args: vec!["--mode".to_owned(), "acp bridge".to_owned()],
+        env: Default::default(),
     });
 
     let quickstart = Quickstart::from_config_with_agents(&config, Vec::new());
@@ -141,6 +145,7 @@ fn permission_bypass_defaults_off_and_can_be_toggled() {
         &config(Harness {
             command: "hermes".to_owned(),
             args: vec!["acp".to_owned()],
+            env: Default::default(),
         }),
         Vec::new(),
     );
@@ -157,6 +162,7 @@ fn unpaired_config_prefills_permission_bypass_consent() {
     let mut config = config(Harness {
         command: "hermes".to_owned(),
         args: vec!["acp".to_owned()],
+        env: Default::default(),
     });
     config.identity.allow_permission_bypass = true;
     let setup = Quickstart::from_config_with_agents(&config, Vec::new());
@@ -170,6 +176,7 @@ fn quickstart_renders_permission_consent_and_warning() {
         &config(Harness {
             command: "hermes".to_owned(),
             args: vec!["acp".to_owned()],
+            env: Default::default(),
         }),
         Vec::new(),
     );
