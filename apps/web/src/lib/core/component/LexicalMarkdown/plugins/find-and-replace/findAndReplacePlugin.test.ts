@@ -1,3 +1,4 @@
+import { $createListItemNode, $createListNode } from '@lexical/list';
 import {
   $createDocumentMentionNode,
   $createUserMentionNode,
@@ -6,7 +7,6 @@ import {
   NodeReplacements,
   SupportedNodeTypes,
 } from '@macro-inc/lexical-core/node-list';
-import { $createListItemNode, $createListNode } from '@lexical/list';
 import { markdownToSerializedEditorStateWithIds } from '@macro-inc/lexical-core/utils/markdown-state';
 import {
   $createParagraphNode,
