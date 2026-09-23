@@ -10,7 +10,6 @@ import { EMPTY_TAG_FACET_CONTEXT } from '@app/features/soup/filters/facets/tag-f
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
-import { unreadFilterFn } from '@entity/utils/filter';
 import { notificationIsRead } from '@entity/utils/notification';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
@@ -58,9 +57,7 @@ export function useSidebarUnread() {
   // Re-check cached rows: optimistic read/done changes can leave them in a page.
   const inboxUnread = createMemo(() => {
     if (inbox.query.isLoading) return false;
-    return inbox
-      .transformEntities(inbox.query.data?.entities ?? [])
-      .some(unreadFilterFn);
+    return inbox.hasUnreadEntity(inbox.query.data?.entities ?? []);
   });
   const emailUnread = createMemo(() => {
     if (email.isLoading) return false;

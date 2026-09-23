@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   graphqlFlag: vi.fn(),
   channels: vi.fn(),
   withLocalState: vi.fn(),
+  hasUnreadEntity: vi.fn(),
+  transformEntities: vi.fn(),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -119,10 +121,13 @@ function setup(graphql = false) {
         return { entities: emails() };
       },
     };
+    mocks.hasUnreadEntity.mockImplementation((items: EmailEntity[]) =>
+      items.some((item) => !item.done && !item.isRead)
+    );
     mocks.inbox.mockReturnValue({
       query,
-      transformEntities: (items: EmailEntity[]) =>
-        items.filter((item) => !item.done),
+      hasUnreadEntity: mocks.hasUnreadEntity,
+      transformEntities: mocks.transformEntities,
     });
     mocks.email.mockReturnValue(query);
     mocks.notifications.mockImplementation(notifications);
@@ -144,6 +149,8 @@ describe('sidebar unread presence', () => {
     for (const id of ['inbox', 'mail', 'channels', 'documents', 'agents']) {
       expect(unread(id)).toBe(false);
     }
+    expect(mocks.hasUnreadEntity).not.toHaveBeenCalled();
+    expect(mocks.transformEntities).not.toHaveBeenCalled();
     expect(mocks.inbox).toHaveBeenCalledWith({
       tab: 'signal',
       facets: { read: ['unread'] },
@@ -156,6 +163,8 @@ describe('sidebar unread presence', () => {
     setEmails([unreadEmail]);
     expect(unread('inbox')).toBe(true);
     expect(unread('mail')).toBe(true);
+    expect(mocks.hasUnreadEntity).toHaveBeenLastCalledWith([unreadEmail]);
+    expect(mocks.transformEntities).not.toHaveBeenCalled();
     setEmails([{ ...unreadEmail, isRead: true }]);
     expect(unread('inbox')).toBe(false);
     expect(unread('mail')).toBe(false);
