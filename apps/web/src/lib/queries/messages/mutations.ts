@@ -460,10 +460,18 @@ export function useSendMessageMutation(
         onSuccess(data, variables, context) {
           const threadId = variables.message.thread_id ?? undefined;
           // A server predating client-minted ids ignores `id` and mints its
-          // own; replace the optimistic row so the cache never keeps a dead id.
+          // own. Rebuild the optimistic row under the server id so it keeps
+          // its thread state (including the anchor) and never holds a dead id;
+          // `applyMessage` below then settles it on the server's fields.
           if (data.id !== variables.optimisticId && context?.insert) {
             rollbackInsertChannelMessage(variables.parent, context.insert);
-            applyMessage(data, 'posted');
+            optimisticInsertMessage({
+              parent: variables.parent,
+              optimisticId: data.id,
+              senderId: variables.senderId,
+              optimisticAttachments: variables.optimisticAttachments,
+              ...variables.message,
+            });
           }
 
           // Sending is a `messaged` activity server-side; stamp the touch now

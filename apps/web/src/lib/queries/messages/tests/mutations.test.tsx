@@ -454,10 +454,17 @@ describe('sending', () => {
       senderId: 'macro|a@example.com',
       optimisticId: newMessageId(),
     });
+    // The row keeps its thread state, so a document discussion (which shows
+    // roots with a null anchor) still renders it.
     expect(
       testQueryClient
         .getQueryData<MessageTimelineData>(timelineKey)!
-        .pages[0].items.map((item) => item.id)
-    ).toEqual(['server-id']);
+        .pages[0].items.map((item) => [item.id, item.state])
+    ).toEqual([
+      [
+        'server-id',
+        expect.objectContaining({ root_id: 'server-id', anchor: null }),
+      ],
+    ]);
   });
 });
