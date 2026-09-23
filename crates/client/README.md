@@ -50,10 +50,13 @@ are still rebased for every affected key, even when authority is unchanged.
 
 Local SQL materializes Boolean result sets once, but enumerates a universe only
 within the requested profile and partition. Empty predicates do not enumerate
-cached documents. Negated conjunctions use set difference instead of first building
-a full complement. Optimistic facts use document-leading primary-key probes rather
-than repeatedly scanning the materialized shadow set. These execution choices keep
-the same predicate, ordering, and shadow-suppression semantics.
+cached documents. Conjunctions with an indexable positive term filter one scoped
+candidate set using document-leading fact probes, rather than materializing every
+residual posting list. Other negated conjunctions use set difference instead of
+first building a full complement. Optimistic facts also use document-leading
+primary-key probes rather than repeatedly scanning the materialized shadow set.
+These execution choices keep the same predicate, ordering, missing-fact, and
+shadow-suppression semantics.
 
 ## Tests
 

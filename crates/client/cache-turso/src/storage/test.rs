@@ -1,5 +1,7 @@
 use super::*;
 
+mod conjunction_cost;
+mod conjunction_semantics;
 mod engine_writes;
 mod fact_lookup_cost;
 mod filter_scope_cost;
@@ -2201,13 +2203,8 @@ fn predicate_query_plan_uses_fact_indexes_and_never_scans_record_blobs() {
             .any(|detail| detail.contains("exact_facts_lookup_idx")),
         "{details:#?}"
     );
-    assert!(
-        details
-            .iter()
-            .any(|detail| detail.contains("integer_facts_lookup_idx")),
-        "{details:#?}"
-    );
     for index in [
+        "sqlite_autoindex_integer_facts_1",
         "sqlite_autoindex_optimistic_exact_facts_1",
         "sqlite_autoindex_optimistic_integer_facts_1",
     ] {

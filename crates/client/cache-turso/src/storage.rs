@@ -2583,7 +2583,9 @@ fn compile_predicate_selection(
 // the same child sets (millions of VM steps even on a small local corpus).
 // Probe optimistic facts by their document-leading primary keys: joining a
 // popular fact to the materialized optimistic set otherwise rescans that set
-// for every matching fact. Application predicates remain unchanged in the IR.
+// for every matching fact. Conjunctions keep one scoped positive seed and
+// point-probe residual facts instead of materializing every posting list.
+// Application predicates remain unchanged in the IR.
 struct SqlPredicateCompiler {
     ctes: Vec<String>,
     parameters: Vec<Value>,
@@ -2620,6 +2622,9 @@ impl SqlPredicateCompiler {
     }
 
     fn compile(&mut self, expr: &PredicateExpr, profile: &Profile, partition: &Token) -> String {
+        if let Some((seed, terms)) = conjunction::split(expr) {
+            return self.conjunction(seed, &terms, profile, partition);
+        }
         if matches!(expr, PredicateExpr::Or(_, _))
             && let Some((attribute, values)) = alternatives::exact_alternatives(expr)
         {
@@ -2744,6 +2749,38 @@ impl SqlPredicateCompiler {
                 name
             }
         }
+    }
+
+    fn conjunction(
+        &mut self,
+        seed: &PredicateExpr,
+        terms: &[&PredicateExpr],
+        profile: &Profile,
+        partition: &Token,
+    ) -> String {
+        let seed = self.compile(seed, profile, partition);
+        let mut branches = Vec::new();
+        for (source, table, facts) in [
+            (0, "index_documents", conjunction::FactSource::Authority),
+            (
+                1,
+                "optimistic_index_documents",
+                conjunction::FactSource::Optimistic,
+            ),
+        ] {
+            let condition = terms
+                .iter()
+                .map(|expr| conjunction::condition(expr, facts, &mut self.parameters))
+                .collect::<Vec<_>>()
+                .join(" AND ");
+            branches.push(format!("SELECT {source}, m.document_id FROM {seed} AS m CROSS JOIN {table} AS d ON d.id = m.document_id WHERE m.source = {source} AND ({condition})"));
+        }
+        let name = self.next_name();
+        self.ctes.push(format!(
+            "{name}(source, document_id) AS MATERIALIZED ({})",
+            branches.join(" UNION ALL ")
+        ));
+        name
     }
 
     fn exact(
@@ -4796,6 +4833,7 @@ impl TursoStorage {
 }
 
 mod alternatives;
+mod conjunction;
 mod integrity;
 
 #[cfg(all(test, target_arch = "wasm32"))]
