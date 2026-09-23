@@ -21,7 +21,7 @@ import { refreshAgentSessionLists } from './list-sync';
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.restoreAllMocks());
 
-it('coalesces a metadata burst and refreshes both list transports', async () => {
+it('coalesces a metadata burst into one REST list refresh', async () => {
   await Promise.all([
     refreshAgentSessionLists('first'),
     refreshAgentSessionLists('first'),
@@ -30,7 +30,12 @@ it('coalesces a metadata burst and refreshes both list transports', async () => 
   expect(mocks.rest.mock.calls).toEqual([
     [['first', 'second'], { throwOnError: true }],
   ]);
-  expect(mocks.graphql).toHaveBeenCalledExactlyOnceWith({ throwOnError: true });
+});
+
+it('never network-refreshes the GraphQL soup queries', async () => {
+  await refreshAgentSessionLists('first');
+  await refreshAgentSessionLists();
+  expect(mocks.graphql).not.toHaveBeenCalled();
 });
 
 it('reconnect refreshes all lists to recover missed events', async () => {
@@ -39,7 +44,6 @@ it('reconnect refreshes all lists to recover missed events', async () => {
     refreshAgentSessionLists(),
   ]);
   expect(mocks.rest.mock.calls).toEqual([[undefined, { throwOnError: true }]]);
-  expect(mocks.graphql).toHaveBeenCalledOnce();
 });
 
 it('does not lose metadata committed while a refresh is in flight', async () => {
@@ -53,10 +57,8 @@ it('does not lose metadata committed while a refresh is in flight', async () => 
   const first = refreshAgentSessionLists('first');
   await Promise.resolve();
   const second = refreshAgentSessionLists('second');
-  expect(mocks.graphql).toHaveBeenCalledOnce();
   release();
   await Promise.all([first, second]);
-  expect(mocks.graphql).toHaveBeenCalledTimes(2);
   expect(mocks.rest.mock.calls).toEqual([
     [['first'], { throwOnError: true }],
     [['second'], { throwOnError: true }],
@@ -81,26 +83,6 @@ it('retries a failed batch together with updates queued while it was in flight',
     ['first'],
     ['second', 'first'],
   ]);
-  expect(mocks.graphql).toHaveBeenCalledTimes(2);
-});
-
-it('waits for both transports before retrying after either one fails', async () => {
-  let release!: () => void;
-  mocks.rest.mockRejectedValueOnce(new Error('REST outage'));
-  mocks.graphql.mockImplementationOnce(
-    () =>
-      new Promise<void>((resolve) => {
-        release = resolve;
-      })
-  );
-  const refresh = refreshAgentSessionLists('session');
-  await Promise.resolve();
-  await Promise.resolve();
-  expect(mocks.rest).toHaveBeenCalledOnce();
-  release();
-  await refresh;
-  expect(mocks.rest).toHaveBeenCalledTimes(2);
-  expect(mocks.graphql).toHaveBeenCalledTimes(2);
 });
 
 it('retains failed IDs after a bounded retry for the next refresh', async () => {
@@ -123,9 +105,9 @@ it('retains failed IDs after a bounded retry for the next refresh', async () => 
 });
 
 it('preserves a failed reconnect refresh across later session-specific updates', async () => {
-  const error = new Error('GraphQL offline');
+  const error = new Error('offline');
   const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
-  mocks.graphql.mockRejectedValueOnce(error).mockRejectedValueOnce(error);
+  mocks.rest.mockRejectedValueOnce(error).mockRejectedValueOnce(error);
   await expect(refreshAgentSessionLists()).resolves.toBeUndefined();
 
   await refreshAgentSessionLists('next');

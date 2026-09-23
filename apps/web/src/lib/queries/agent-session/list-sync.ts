@@ -1,4 +1,3 @@
-import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { refreshSoupEntities } from '@queries/soup/refresh';
 
 const changedSessions = new Set<string>();
@@ -14,16 +13,9 @@ async function refreshQueuedLists(resolve: () => void): Promise<void> {
       refreshAll = false;
       changedSessions.clear();
       try {
-        // Wait for both transports before retrying so an older pass cannot
-        // finish after its replacement and restore a stale snapshot.
-        const results = await Promise.allSettled([
-          refreshSoupEntities(all ? undefined : sessions, {
-            throwOnError: true,
-          }),
-          refreshActiveGraphqlSoupQueries({ throwOnError: true }),
-        ]);
-        const failed = results.find((result) => result.status === 'rejected');
-        if (failed?.status === 'rejected') throw failed.reason;
+        await refreshSoupEntities(all ? undefined : sessions, {
+          throwOnError: true,
+        });
       } catch (error) {
         refreshAll ||= all;
         for (const session of sessions) changedSessions.add(session);

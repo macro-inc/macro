@@ -16,9 +16,6 @@ vi.mock('./normalized-cache/normalizer', () => ({
   getSoupNormalizer: () => ({ getDependentQueriesByIds: dependencies }),
   soupNormKey: (id: string) => `soup:${id}`,
 }));
-vi.mock('./graphql/active-queries', () => ({
-  refreshActiveGraphqlSoupQueries: vi.fn(async () => {}),
-}));
 
 import { refreshAgentSessionLists } from '../agent-session/list-sync';
 import { soupKeys } from './keys';
