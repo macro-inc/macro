@@ -10,9 +10,13 @@ pub use entity_access_db_utils::team_share::acquire_guard;
 use entity_access_db_utils::team_share::{
     delete_direct, direct_level, replace_project_contributions, upsert_direct,
 };
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::cowlike::CowLike;
 use macro_uuid::Uuid;
 use model_entity::{Entity, EntityType};
+use model_owner::{
+    Owner,
+    team::{OwnerTeamFacts, owner_team},
+};
 use models_permissions::share_permission::{
     access_level::AccessLevel,
     team_share::{
@@ -64,7 +68,7 @@ pub struct TeamShareCleanupSnapshot {
     /// Explicit sharing root, not a descendant receiving inherited access.
     pub root: Entity<'static>,
     /// Actual owner at snapshot time, for ownership-change eligibility checks.
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// Historical managed team, retained after membership removal.
     pub managed_team_id: Uuid,
     /// Exact historical level.
@@ -97,6 +101,7 @@ fn entity_uuid(entity: &Entity<'_>) -> TeamShareResult<Uuid> {
             | EntityType::Chat
             | EntityType::EmailThread
             | EntityType::Call
+            | EntityType::AgentSession
             | EntityType::Initiative
     ) {
         return Err(report!(TeamShareError::InvalidEntity));
@@ -105,7 +110,7 @@ fn entity_uuid(entity: &Entity<'_>) -> TeamShareResult<Uuid> {
 }
 
 /// Load actual owner, current membership and canonical state under the shared guard.
-/// Threads without permissions read as NULL/revision zero without creating any rows.
+/// Threads and sessions without permissions read as NULL/revision zero without creating rows.
 /// Tasks and snippets use Document, and active calls take precedence during archive.
 pub async fn load_facts(
     transaction: &mut Transaction<'_, Postgres>,
@@ -146,14 +151,21 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
             UNION ALL
             SELECT i.owner_user_id, i.share_permission_id FROM initiative i
             WHERE $2 = 'initiative' AND i.id = $3
+            UNION ALL
+            SELECT s.owner_id, s.share_permission_id FROM agent_session s
+            WHERE $2 = 'agent_session' AND s.id = $3
         )
         SELECT e.owner AS "owner!", e.permission_id,
             sp.id AS "stored_permission_id?",
             sp.team_share_access_level AS "level: AccessLevel",
             sp.team_share_team_id AS team_id, sp.team_share_revision AS "revision?",
-            (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = e.owner
-             ORDER BY tu.team_role DESC LIMIT 1) AS owner_team_id
-        FROM entity e LEFT JOIN "SharePermission" sp ON sp.id = e.permission_id"#,
+            tu.team_id AS "user_team?", b.team_id AS "bot_team?", btu.team_id AS "bot_user_team?"
+        FROM entity e LEFT JOIN "SharePermission" sp ON sp.id = e.permission_id
+        LEFT JOIN team_user tu ON tu.user_id = e.owner
+        LEFT JOIN bots b ON b.id = CASE
+            WHEN e.owner ~ '^bot\|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+            THEN substring(e.owner FROM 5)::uuid END
+        LEFT JOIN team_user btu ON btu.user_id = b.owner_user_id"#,
         entity.entity_id.as_ref(),
         entity.entity_type.as_ref(),
         uuid,
@@ -164,7 +176,11 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
     .ok_or_else(|| report!(TeamShareError::NotFound))?;
 
     if row.stored_permission_id.is_none()
-        && (row.permission_id.is_some() || entity.entity_type != EntityType::EmailThread)
+        && (row.permission_id.is_some()
+            || !matches!(
+                entity.entity_type,
+                EntityType::EmailThread | EntityType::AgentSession
+            ))
     {
         return Err(report!(TeamShareError::InvalidState));
     }
@@ -180,13 +196,20 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
     if revision < 0 {
         return Err(report!(TeamShareError::InvalidState));
     }
+    let owner = Owner::from_principal_str(&row.owner).context(TeamShareError::Infrastructure)?;
+    let owner_team_id = owner_team(
+        &owner,
+        OwnerTeamFacts {
+            user_team: row.user_team,
+            bot_team: row.bot_team,
+            bot_user_team: row.bot_user_team,
+        },
+    );
     Ok(State {
         facts: TeamShareFacts {
             entity: entity.clone().into_owned(),
-            owner: MacroUserIdStr::parse_from_str(&row.owner)
-                .context(TeamShareError::Infrastructure)?
-                .into_owned(),
-            owner_team_id: row.owner_team_id,
+            owner,
+            owner_team_id,
             current,
             revision,
         },

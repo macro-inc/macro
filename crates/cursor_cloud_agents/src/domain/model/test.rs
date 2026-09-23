@@ -126,3 +126,29 @@ fn run_statuses_round_trip_unknown_values() {
     let unknown: RunStatus = serde_json::from_str("\"PAUSED\"").expect("unknown status");
     assert_eq!(unknown, RunStatus::Unknown("PAUSED".to_owned()));
 }
+
+#[test]
+fn native_repository_identity_normalizes_only_equivalent_github_forms() {
+    for repository in [
+        "https://github.com/org/repo",
+        "github.com/org/repo",
+        "HTTPS://GitHub.com/Org/Repo.git/",
+    ] {
+        assert_eq!(
+            RepoUrl::from_git_state(repository).unwrap().as_str(),
+            "https://github.com/org/repo"
+        );
+    }
+    for repository in [
+        "http://github.com/org/repo",
+        "https://other.com/org/repo",
+        "github.com/org/../repo",
+        "github.com/org/repo?token=secret",
+        "github.com/org/repo#ref",
+        "github.com/org/.git",
+        "github.com/org/repo
+",
+    ] {
+        assert_eq!(RepoUrl::from_git_state(repository), None);
+    }
+}

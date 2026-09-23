@@ -3,18 +3,23 @@ import type {
   EmailComposeContext,
   EmailComposeHost,
 } from '../context/compose-capabilities';
-import { createEmailComposer } from '../primitives/email-composer';
+import {
+  createEmailComposer,
+  type EmailComposerOptions,
+} from '../primitives/email-composer';
 import { createEmailEditor, setEmailEditorText } from './editor';
 
 /** A blank, addressed composer with a real editor and the normal initialization callback. */
 export function mountEmailComposer(
   context: EmailComposeContext,
-  host?: EmailComposeHost
+  host?: EmailComposeHost,
+  seed?: Pick<EmailComposerOptions, 'draft' | 'draftId'>
 ) {
   const root = createRoot((dispose) => ({
     dispose,
     state: createEmailComposer({
       ...context,
+      ...seed,
       initialTo: ['colleague@example.com'],
       host,
     }),

@@ -4,6 +4,8 @@ import type { Operation } from '@urql/core';
 import { parse } from 'graphql';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  ChannelListItemFieldsFragment,
+  ChannelListNotificationFieldsFragment,
   GraphqlSoupEntityType,
   SoupItemFieldsFragment,
 } from './graphql/generated/graphql';
@@ -18,6 +20,14 @@ it('maps agent sessions without discarding persona, favorites or notifications',
     sessionName: 'Fix mentions',
     ownerId: 'macro|owner@example.com',
     botId: 'bot',
+    harness: 'cursor',
+    repoUrl: 'https://github.com/macro/macro',
+    repoBranch: 'main',
+    pullRequestUrl: 'https://github.com/macro/macro/pull/6712',
+    workingBranch: 'fix-icons',
+    pullRequestState: 'MERGED',
+    pullRequestId: 'linked-pr',
+    turnState: 'idle',
     bot: {
       id: 'bot',
       name: 'Ada',
@@ -42,6 +52,14 @@ it('maps agent sessions without discarding persona, favorites or notifications',
       id: 'session',
       name: 'Fix mentions',
       bot: { name: 'Ada' },
+      harness: 'cursor',
+      repoUrl: 'https://github.com/macro/macro',
+      repoBranch: 'main',
+      pullRequestUrl: 'https://github.com/macro/macro/pull/6712',
+      workingBranch: 'fix-icons',
+      pullRequestState: 'merged',
+      pullRequestId: 'linked-pr',
+      turnState: 'idle',
       status: 'acp_ready',
       notifications: [],
     },
@@ -244,6 +262,167 @@ vi.mock('@urql/core', () => ({
     };
   },
 }));
+
+it('maps the unread alias without pretending it is the full notification edge', async () => {
+  const { mapGraphqlSoupItem } = await import('./graphql-soup');
+  const item = {
+    __typename: 'GraphqlSoupChannel',
+    id: 'channel',
+    entityType: 'CHANNEL',
+    displayName: 'Channel',
+    channelName: 'Channel',
+    channelType: 'private',
+    ownerId: 'owner',
+    organizationId: null,
+    channelTeamId: null,
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+    viewedAt: null,
+    interactedAt: null,
+    isParticipant: true,
+    participants: [],
+    latestMessage: null,
+    latestNonThreadMessage: null,
+    cacheProjection: null,
+    frecencyScore: null,
+    isFavorited: false,
+    unreadNotifications: [
+      { id: 'one', state: 'UNSEEN', createdAt: '2026-01-01' },
+    ],
+  } satisfies ChannelListItemFieldsFragment;
+  expect(mapGraphqlSoupItem(item)).toMatchObject({
+    tag: 'channel',
+    data: {
+      notifications: undefined,
+      unreadNotifications: [
+        { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
+      ],
+    },
+  });
+});
+
+describe('legacy channel list notifications', () => {
+  const notification = (
+    metadata: ChannelListNotificationFieldsFragment['metadata']
+  ): ChannelListNotificationFieldsFragment => ({
+    id: 'notification',
+    eventType: 'channel_message_send',
+    entityId: 'channel',
+    entityType: 'CHANNEL',
+    state: 'UNSEEN',
+    sent: true,
+    senderId: 'sender',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    viewedAt: null,
+    metadata,
+  });
+
+  it('maps unread sends without inventing missing presentation content', async () => {
+    const { mapGraphqlNotification } = await import('./graphql-soup');
+    const mapped = mapGraphqlNotification(
+      notification({
+        __typename: 'GraphqlChannelMessageSendMetadata',
+        channelMessageSendSender: 'sender',
+        channelMessageSendMessageId: 'message',
+        channelMessageSendChannelType: 'PRIVATE',
+      })
+    );
+    expect(mapped).toMatchObject({
+      id: 'notification',
+      entity_id: 'channel',
+      entity_type: 'channel',
+      state: 'unseen',
+      sender_id: 'sender',
+      notification_metadata: {
+        tag: 'channel_message_send',
+        content: {
+          messageId: 'message',
+          channelType: 'private',
+          sender: 'sender',
+        },
+      },
+    });
+    expect(mapped.notification_metadata.content).not.toHaveProperty(
+      'messageContent',
+      ''
+    );
+    expect(mapped.notification_metadata.content).toHaveProperty(
+      'messageContent',
+      undefined
+    );
+    expect(
+      mapGraphqlNotification({
+        ...notification({
+          __typename: 'GraphqlChannelMessageSendMetadata',
+          channelMessageSendSender: 'sender',
+          channelMessageSendMessageId: 'message',
+          channelMessageSendChannelType: 'PRIVATE',
+        }),
+        state: 'SEEN',
+        viewedAt: '2026-01-02T00:00:00Z',
+      })
+    ).toMatchObject({ state: 'seen', viewed_at: '2026-01-02T00:00:00Z' });
+  });
+
+  it('preserves mention and reply thread membership and message targets', async () => {
+    const { mapGraphqlNotification } = await import('./graphql-soup');
+    const { scopeChannelNotificationsForEntity } = await import(
+      '../../../features/soup/entity-notifications'
+    );
+    const mapped = [
+      notification({
+        __typename: 'GraphqlChannelMessageSendMetadata',
+        channelMessageSendSender: 'sender',
+        channelMessageSendMessageId: 'top-level',
+        channelMessageSendChannelType: 'PRIVATE',
+      }),
+      {
+        ...notification({
+          __typename: 'GraphqlChannelMentionMetadata',
+          channelMentionMessageId: 'mention',
+          channelMentionThreadId: 'thread',
+          channelMentionMessageContent: 'Mention',
+          channelMentionChannelType: 'PRIVATE',
+        }),
+        id: 'mention-notification',
+        eventType: 'channel_mention',
+      },
+      {
+        ...notification({
+          __typename: 'GraphqlChannelReplyMetadata',
+          channelReplyMessageId: 'reply',
+          channelReplyThreadId: 'thread',
+          channelReplyMessageContent: 'Reply',
+          channelReplyChannelType: 'PRIVATE',
+          channelReplyUserId: 'sender',
+          channelReplyThreadParentSenderId: 'parent-sender',
+        }),
+        id: 'reply-notification',
+        eventType: 'channel_message_reply',
+      },
+    ].map(mapGraphqlNotification);
+    expect(
+      scopeChannelNotificationsForEntity({ type: 'channel' }, mapped).map(
+        (n) => n.id
+      )
+    ).toEqual(['notification']);
+    expect(
+      scopeChannelNotificationsForEntity(
+        { type: 'channel_thread', messageId: 'thread' },
+        mapped
+      ).map((n) => n.id)
+    ).toEqual(['mention-notification', 'reply-notification']);
+    expect(mapped[1].notification_metadata).toMatchObject({
+      tag: 'channel_mention',
+      content: { messageId: 'mention', threadId: 'thread' },
+    });
+    expect(mapped[2].notification_metadata).toMatchObject({
+      tag: 'channel_message_reply',
+      content: { messageId: 'reply', threadId: 'thread' },
+    });
+  });
+});
 
 describe('GraphQL Soup chat models', () => {
   it.each(['openai/gpt-5.6', 'anthropic/claude-sonnet-5', null])(

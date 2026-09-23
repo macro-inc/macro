@@ -404,7 +404,7 @@ async fn create_new_chat(
     // the stream on publish errors.
     let event = ChatMacroEvent::created(ChatCreatedMetadata {
         chat_id: new_chat_id.clone(),
-        owner: (**user_id).clone(),
+        owner: model_owner::Owner::User((**user_id).clone()),
         name: DEFAULT_CHAT_NAME.to_string(),
         project_id: None,
     });

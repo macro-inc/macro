@@ -9,7 +9,7 @@ use agent_client_protocol::schema::v1::{
 };
 use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// A complete SSE message, before JSON decoding. IDs are observations, never
 /// local sequence numbers or an assumed remote resume token.
@@ -132,6 +132,11 @@ pub struct ReplayMachine {
     runs: HashMap<CursorRunId, RunState>,
 }
 impl ReplayMachine {
+    /// Latest branches recovered from native results or fallback polling.
+    pub fn working_branches(&self) -> &BTreeMap<String, String> {
+        self.translator.working_branches()
+    }
+
     /// Latest PR recovered from native results or fallback polling.
     pub fn pull_request_url(&self) -> Option<&str> {
         self.translator.pull_request_url()

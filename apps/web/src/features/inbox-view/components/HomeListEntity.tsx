@@ -95,6 +95,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
           {(session) => (
             <AgentSessionListItem
               entity={session()}
+              surface="home"
               active={props.checked || props.highlighted}
               unread={unread()}
               onOpen={(event) => {

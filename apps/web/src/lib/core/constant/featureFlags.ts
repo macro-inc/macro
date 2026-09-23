@@ -628,6 +628,13 @@ export const enableTagTeamSharing = defineFlag({
   default: onInDev,
 });
 
+// Manual and smart channel labels, including their queries and drag/drop UI.
+// Off until PostHog enables them; override with VITE_ENABLE_CHANNEL_TAGS.
+export const enableChannelTags = defineFlag({
+  key: 'enable-channel-tags',
+  env: 'ENABLE_CHANNEL_TAGS',
+});
+
 // The "Activity" section in the entity side panel: the entity's recent
 // activity timeline from the GraphQL activity log (who did what, when).
 // Purely additive — when off, the section never mounts and no activity
@@ -698,6 +705,19 @@ export const enableNotificationSettings = defineFlag({
 export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',
   env: 'ENABLE_SPREADSHEETS',
+});
+
+/**
+ * Speech-to-text in the channel, agent, and AI chat composers. Recordings go
+ * to OpenAI Whisper through DSS and are billed per audio minute, so this
+ * carries a remote kill switch rather than an env-only one. Off hides the
+ * microphone everywhere and never opens the recorder, so no audio is captured
+ * and no request is made. On in dev; production follows PostHog.
+ */
+export const enableDictation = defineFlag({
+  key: 'enable-dictation',
+  env: 'ENABLE_DICTATION',
+  default: onInDev,
 });
 
 /**

@@ -188,6 +188,7 @@ impl NotificationRepository for MockRepo {
         &self,
         _: MacroUserIdStr<'_>,
         entity_refs: Vec<model_entity::Entity<'static>>,
+        _query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> Result<
         std::collections::HashMap<
             model_entity::Entity<'static>,

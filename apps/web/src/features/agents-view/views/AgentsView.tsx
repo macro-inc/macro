@@ -2,7 +2,11 @@ import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { McpConnections } from '@app/features/settings/McpConnections';
-import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -87,6 +91,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
+  const notifications = useGlobalNotificationSource();
   const mode = (): AgentsMode => props.initialRoute?.mode ?? 'chat';
   const dataMode = () => dataModeFor(mode());
   const [page, setPage] = createSignal<AgentsPage>('new');
@@ -144,7 +149,11 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   );
   const conversations = createMemo(() =>
     selectRecentAgentConversations(
-      query.isSuccess ? query.data : [],
+      query.isSuccess
+        ? query.data.map((entity) =>
+            withEntityNotifications(entity, notifications)
+          )
+        : [],
       userId(),
       search()
     )
@@ -429,6 +438,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                           <Suspense fallback={<LoadingComposer />}>
                             <AgentSessionPane
                               id={conversation.id}
+                              notificationSource={notifications}
                               onSessionId={(sessionId) =>
                                 adoptSessionId(conversation.id, sessionId)
                               }

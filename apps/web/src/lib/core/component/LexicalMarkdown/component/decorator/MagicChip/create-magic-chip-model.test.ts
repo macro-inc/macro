@@ -31,6 +31,10 @@ const live = vi.hoisted(() => ({
 }));
 const serviceClient = vi.hoisted(() => ({ get: vi.fn() }));
 
+vi.mock('@queries/agent-session/list-sync', () => ({
+  refreshAgentSessionLists: vi.fn(async () => {}),
+}));
+
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return {
@@ -355,6 +359,30 @@ describe('createMagicChipModel', () => {
       await handleAgentSessionUpdated({ agentSessionId: 'session' });
       await invalidateAgentSessionMetadata();
       expect(serviceClient.get).toHaveBeenCalledTimes(calls);
+    }
+  );
+
+  it.each(['in-memory', 'macro-inmem', 'sandbox'])(
+    'names the %s session Macro Agent, not Macro Agent Agent',
+    async (harness) => {
+      serviceClient.get.mockResolvedValue({
+        isOk: () => true,
+        isErr: () => false,
+        value: {
+          status: { kind: 'disconnected' },
+          harness,
+          model: '',
+          canEdit: true,
+        },
+      });
+      let model!: ReturnType<typeof createMagicChipModel>;
+      const dispose = createRoot((dispose) => {
+        model = createModel(props);
+        return dispose;
+      });
+      await settle();
+      expect(model.header()?.agent).toBe('Macro Agent');
+      dispose();
     }
   );
 

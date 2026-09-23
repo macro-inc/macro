@@ -135,10 +135,12 @@ function CollapsibleSectionHeader(props: {
   focused: boolean;
   focusWithin: boolean;
   class?: string;
+  ref?: (element: HTMLElement) => void;
   children: JSX.Element;
 }) {
   return (
     <WorkspaceSection.Header
+      ref={props.ref}
       class={cn(
         'w-full rounded-lg text-xs leading-5 font-medium text-ink-muted transition-colors group-hover/sidebar-section:text-ink',
         props.focused && 'bg-hover text-ink-muted',

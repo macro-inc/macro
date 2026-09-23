@@ -1,5 +1,6 @@
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { ContentLoading } from '@components/app/ContentLoading';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
@@ -68,7 +69,7 @@ export default function BlockEmail() {
   };
 
   return (
-    <Suspense>
+    <Suspense fallback={<ContentLoading />}>
       <DocumentBlockContainer title={title() ?? 'Email'}>
         <div class="size-full" tabIndex={-1}>
           <EmailThreadLoadGate
@@ -81,7 +82,7 @@ export default function BlockEmail() {
           >
             <Show when={threadId()}>
               {(id) => (
-                <Suspense>
+                <Suspense fallback={<ContentLoading />}>
                   <EmailBlockAdapter title={title()} threadId={id} />
                 </Suspense>
               )}

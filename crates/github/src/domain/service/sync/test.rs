@@ -945,6 +945,15 @@ impl GithubSyncClient for StubSyncClient {
 
         Ok(self.open_pull_requests.lock().unwrap().clone())
     }
+
+    async fn list_repository_branches(
+        &self,
+        _access_token: &str,
+        _owner: &str,
+        _repository: &str,
+    ) -> Result<Vec<String>, GithubError> {
+        unimplemented!("the sync service does not list repository branches")
+    }
 }
 
 fn foreign_entity_id_from_receipt(

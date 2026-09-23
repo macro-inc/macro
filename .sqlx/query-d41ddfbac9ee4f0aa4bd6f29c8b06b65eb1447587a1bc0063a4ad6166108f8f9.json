@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"SharePermission\" (id) VALUES ('initialized-session')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d41ddfbac9ee4f0aa4bd6f29c8b06b65eb1447587a1bc0063a4ad6166108f8f9"
+}

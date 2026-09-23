@@ -9,6 +9,9 @@ use worker::Result;
 
 use crate::error::ResultExt;
 
+#[cfg(test)]
+mod test;
+
 const FROM_CLIENT_TAG: &str = "from_client";
 const FROM_SERVICE_TAG: &str = "from_service";
 const FRONTIERS_ID_SEPERATOR: &str = "|";

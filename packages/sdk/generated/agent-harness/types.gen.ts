@@ -5,6 +5,11 @@ export type ClientOptions = {
 };
 
 /**
+ * Ordered from least to most access top -> bottom
+ */
+export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
+
+/**
  * One thing a caller wants an agent to do.
  */
 export type AgentAction = (AgentPromptAction & {
@@ -108,6 +113,17 @@ export type AgentRepositoriesResponse = {
      * has a claim to.
      */
     repositories: Array<AgentRepositoryDto>;
+};
+
+/**
+ * Response body for `GET /agent-repositories/branches`.
+ */
+export type AgentRepositoryBranchesResponse = {
+    /**
+     * Branch names on the repository, in the order GitHub returned them.
+     * Empty when the repository has no commits yet.
+     */
+    branches: Array<string>;
 };
 
 /**
@@ -518,6 +534,20 @@ export type ChangesetDto = {
 export type ChangesetSourceDto = 'github_pull_request';
 
 /**
+ * The channel share permission
+ */
+export type ChannelSharePermission = {
+    /**
+     * The access level for the channel
+     */
+    access_level: AccessLevel;
+    /**
+     * The channel id
+     */
+    channel_id: string;
+};
+
+/**
  * One-time manual code. Deliberately does not implement Debug.
  */
 export type CompleteRequest = {
@@ -600,6 +630,16 @@ export type CreateAgentSessionRequest = {
      * records what each of the others will need to.
      */
     instructions?: string | null;
+    /**
+     * Model the managed session runs on, overriding the persona's. Managed
+     * sessions only: an external runtime picks its own.
+     *
+     * The session's model from the moment it exists, which is what a caller
+     * choosing one before the first prompt means. Selecting a model *during*
+     * a session is a control action instead, and reads as one in its
+     * transcript.
+     */
+    model?: string | null;
     /**
      * The user who owns the session. Ignored for user callers, who always
      * own their own sessions, and for harness callers, whose verified acting
@@ -777,6 +817,11 @@ export type GitRefDto = {
      */
     sha?: string | null;
 };
+
+/**
+ * Defines who can access an item through its share link.
+ */
+export type LinkShare = 'PUBLIC' | 'TEAM';
 
 /**
  * HTTP request selecting one provider to probe.
@@ -1030,6 +1075,24 @@ export type SessionStatusDto = {
     kind: 'disconnected';
 };
 
+export type SharePermissionV2 = {
+    /**
+     * The channel share permissions for the item
+     */
+    channelSharePermissions?: Array<ChannelSharePermission> | null;
+    /**
+     * The share permission id
+     */
+    id: string;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
+    /**
+     * The owner of the item
+     */
+    owner: string;
+    teamShareAccessLevel?: null | AccessLevel;
+};
+
 /**
  * Public PKCE challenge and attempt handle; contains no verifier or provider tokens.
  */
@@ -1064,6 +1127,31 @@ export type StatusResponse = {
      * Whether reconnecting after service restart is required.
      */
     ephemeral: boolean;
+};
+
+export type UpdateChannelSharePermission = {
+    accessLevel?: null | AccessLevel;
+    /**
+     * The channel id
+     */
+    channelId: string;
+    /**
+     * The type of operation to be performed on the chanel share permission
+     * You can add, remove or replace and existing permission
+     */
+    operation: UpdateOperation;
+};
+
+export type UpdateOperation = 'add' | 'remove' | 'replace';
+
+export type UpdateSharePermissionRequestV2 = {
+    /**
+     * Any channel share permissions to be created/updated/removed
+     */
+    channelSharePermissions?: Array<UpdateChannelSharePermission> | null;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
+    teamShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -1147,6 +1235,46 @@ export type ListAgentRepositoriesResponses = {
 };
 
 export type ListAgentRepositoriesResponse = ListAgentRepositoriesResponses[keyof ListAgentRepositoriesResponses];
+
+export type ListAgentRepositoryBranchesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Canonical https://github.com/owner/name URL
+         */
+        repoUrl: string;
+    };
+    url: '/agent-repositories/branches';
+};
+
+export type ListAgentRepositoryBranchesErrors = {
+    /**
+     * The query did not name a GitHub repository
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * The caller cannot reach this repository
+     */
+    403: unknown;
+    /**
+     * GitHub could not be asked which branches the repository has
+     */
+    502: unknown;
+};
+
+export type ListAgentRepositoryBranchesResponses = {
+    /**
+     * The repository's branches
+     */
+    200: AgentRepositoryBranchesResponse;
+};
+
+export type ListAgentRepositoryBranchesResponse = ListAgentRepositoryBranchesResponses[keyof ListAgentRepositoryBranchesResponses];
 
 export type GetAgentSandboxSizeData = {
     body?: never;
@@ -1446,6 +1574,58 @@ export type RenameAgentSessionResponses = {
 };
 
 export type RenameAgentSessionResponse = RenameAgentSessionResponses[keyof RenameAgentSessionResponses];
+
+export type GetAgentSessionPermissionsData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/permissions';
+};
+
+export type GetAgentSessionPermissionsErrors = {
+    403: string;
+    500: string;
+};
+
+export type GetAgentSessionPermissionsError = GetAgentSessionPermissionsErrors[keyof GetAgentSessionPermissionsErrors];
+
+export type GetAgentSessionPermissionsResponses = {
+    200: SharePermissionV2;
+};
+
+export type GetAgentSessionPermissionsResponse = GetAgentSessionPermissionsResponses[keyof GetAgentSessionPermissionsResponses];
+
+export type UpdateAgentSessionPermissionsData = {
+    body: UpdateSharePermissionRequestV2;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/permissions';
+};
+
+export type UpdateAgentSessionPermissionsErrors = {
+    400: string;
+    403: string;
+    409: string;
+    500: string;
+};
+
+export type UpdateAgentSessionPermissionsError = UpdateAgentSessionPermissionsErrors[keyof UpdateAgentSessionPermissionsErrors];
+
+export type UpdateAgentSessionPermissionsResponses = {
+    200: SharePermissionV2;
+};
+
+export type UpdateAgentSessionPermissionsResponse = UpdateAgentSessionPermissionsResponses[keyof UpdateAgentSessionPermissionsResponses];
 
 export type GetAgentSessionQueueData = {
     body?: never;

@@ -296,6 +296,10 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
 
+`@` opens the mention menu wherever the caret starts a word, including directly
+in front of existing text — the menu opens empty there instead of searching for
+the word ahead of the caret. Typed inside a word (`he@llo`) it stays literal text.
+
 `Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
 text and inline mention chips (tasks, docs, channels, skills, …) by the title
 shown on the chip.
@@ -315,6 +319,19 @@ not allow indentation changes. Losing edit permission during a swipe cancels it.
 To verify nesting, give a list item a child and grandchild, then swipe the
 parent right and left: all three should shift one level together, preserving
 their relative depths and order.
+
+## CRM company mentions
+
+With CRM enabled, type `@` followed by a company name or domain in an editor or
+composer. Companies appear in their own mention bucket. With
+`ENABLE_GRAPHQL_SOUP` enabled, results include cached companies even if they are
+absent from the first 500 companies in the REST Quick Access feed; the REST feed
+remains a fallback. Cache search covers synchronized companies, not the entire CRM.
+
+To verify, search for a cached company absent from that REST page, select it, and
+check that the inserted company mention points to the correct company. Also check
+searching by domain and that an open picker updates when companies finish hydrating.
+Discard unsent test drafts rather than sending them.
 
 ## Reference hover previews
 
@@ -406,7 +423,10 @@ Touch keeps separate `Attach images` and
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
 user. Editing a discussion comment keeps the attachment and send controls, with no
-trash button. On mobile, the new-comment composer is docked above the navigation bar,
+trash button. Deleting a comment's first message deletes the whole discussion —
+the confirmation reads `Delete comment`, the replies under it go too, and an
+anchored comment's highlight clears from the document. Deleting a reply removes
+only that reply. On mobile, the new-comment composer is docked above the navigation bar,
 replacing Ask AI and New when commenting is available in documents and tasks.
 When the comment composer is unavailable, the default Ask AI row appears instead.
 Tap `Leave a comment...`
@@ -468,7 +488,8 @@ thread opens in a drawer with a pinned reply composer; long-press any message
 for edit, delete, copy-link, and reaction actions.
 
 A document thread carries no thread-level controls above it. Deleting the root
-message leaves a tombstone and retains its replies. `Copy link` targets the
+message deletes the whole discussion, replies included, and answers with the
+root's tombstone. `Copy link` targets the
 specific comment with `comment_id=<message id>`. Previously copied numeric links
 still resolve under current document permissions. Deleting an anchored Markdown
 discussion removes its mark while preserving the document text and any

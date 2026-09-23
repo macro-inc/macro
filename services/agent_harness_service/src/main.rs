@@ -61,6 +61,7 @@ use agent_harness::outbound::daytona::{
 };
 use agent_harness::outbound::egress::EgressProvisioner;
 use agent_harness::outbound::forward::RedisCommandForwarder;
+use agent_harness::outbound::github_branches::GithubRepositoryBranches;
 use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
@@ -473,12 +474,20 @@ async fn run() -> anyhow::Result<()> {
     // Which repositories a session may work on is the owner's question, not
     // the deployment's: the same App credentials the egress proxy mints tokens
     // with, read in the other direction - from the user to their installations.
+    let github_token_config = InstallationTokenConfig {
+        client_id: config.github_sync_app_client_id.clone(),
+        private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
+    };
     let reachable_repositories = Arc::new(GithubReachableRepositories::new(
         ReachableRepositoriesService::new(
-            InstallationTokenConfig {
-                client_id: config.github_sync_app_client_id.clone(),
-                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
-            },
+            github_token_config.clone(),
+            PgGithubSyncRepo::new(pool.clone()),
+            GithubSyncClientImpl::default(),
+        ),
+    ));
+    let repository_branches = Arc::new(GithubRepositoryBranches::new(
+        InstallationTokenService::new(
+            github_token_config,
             PgGithubSyncRepo::new(pool.clone()),
             GithubSyncClientImpl::default(),
         ),
@@ -493,6 +502,17 @@ async fn run() -> anyhow::Result<()> {
                 ),
             ),
         );
+    let session_working_branches: Arc<
+        dyn agent_session::domain::working_branch::SessionWorkingBranches,
+    > = Arc::new(
+        agent_session::domain::working_branch::SessionWorkingBranchService::new(
+            session_repo.clone(),
+            ConnectionGatewayAgentSessionRealtime::new(
+                connection_gateway.clone(),
+                session_audience.clone(),
+            ),
+        ),
+    );
     let internal_mcp = internal_mcp::router(
         Arc::new(session_repo.clone()),
         session_pull_requests.clone(),
@@ -524,7 +544,8 @@ async fn run() -> anyhow::Result<()> {
             ),
         ),
     )
-    .with_pull_requests(session_pull_requests.clone());
+    .with_pull_requests(session_pull_requests.clone())
+    .with_working_branches(session_working_branches);
     let codex_connections: Option<Arc<dyn codex_connection::domain::ConnectionService>> = config
         .codex_oauth_kms_key_id()
         .map(|key| {
@@ -973,7 +994,7 @@ async fn run() -> anyhow::Result<()> {
     );
     let control_state = AgentSessionControlState::new(
         harness.clone(),
-        entity_access,
+        entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let bots_directory = Arc::new(PgBotDirectory::new(PgBotsRepo::new(pool.clone())));
@@ -989,6 +1010,7 @@ async fn run() -> anyhow::Result<()> {
     // Served to the app by `GET /agent-repositories`; see `open_repositories`.
     let repositories_state = AgentRepositoriesRouterState::new(
         reachable_repositories,
+        repository_branches,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let http_runtime_commands_readiness = runtime_commands_readiness.clone();
@@ -1003,6 +1025,13 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     let http_port = config.port;
+    let sharing = agent_session::inbound::axum_router::sharing::agent_session_sharing_router(
+        AgentSessionRouterState::new(
+            agent_session::domain::sharing::SessionSharingService::new(session_repo.clone()),
+            entity_access,
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
             api::ApiStates::new(
@@ -1014,7 +1043,8 @@ async fn run() -> anyhow::Result<()> {
                 repositories_state,
                 changes_state,
             )
-            .with_claude_auth(claude_auth),
+            .with_claude_auth(claude_auth)
+            .with_sharing(sharing),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),

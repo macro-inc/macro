@@ -8,9 +8,14 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
 import { useUserId } from '@core/context/user';
+import FileText from '@phosphor/file-text.svg';
+import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
+import PencilSimple from '@phosphor/pencil-simple.svg';
+import Terminal from '@phosphor/terminal.svg';
 import type {
   ElicitationSchema,
   FoldedMessage,
+  MessagePart,
   ModelOption,
   PendingElicitation,
   ToolStatus,
@@ -193,6 +198,237 @@ const FIXTURE_DIFF = {
     'fn fold(log: &[Frame]) -> Vec<Message> {\n    let mut machine = FoldMachine::default();\n    for frame in log {\n        machine.push(frame);\n    }\n    machine.finish()\n}\n',
 };
 
+const TOOL_REPLAY_PARTS: MessagePart[] = [
+  {
+    kind: 'tool_use',
+    id: 'replay-search',
+    name: { kind: 'mcp', server: 'macro', tool: 'SearchSkills' },
+    status: 'completed',
+    detail: {
+      kind: 'macro',
+      input: { name: 'launch checklist' },
+      output: {
+        results: [
+          {
+            documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46',
+            name: 'Launch checklist',
+            updatedAt: null,
+          },
+          {
+            documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e47',
+            name: 'Launch timeline',
+            updatedAt: null,
+          },
+          {
+            documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e48',
+            name: 'Release notes',
+            updatedAt: null,
+          },
+        ],
+      },
+      error: null,
+    },
+  },
+  {
+    kind: 'tool_use',
+    id: 'replay-read',
+    name: { kind: 'native', name: 'Read' },
+    status: 'completed',
+    detail: { kind: 'read', paths: ['Launch checklist'] },
+  },
+  {
+    kind: 'tool_use',
+    id: 'replay-fetch',
+    name: { kind: 'native', name: 'Fetch' },
+    status: 'failed',
+    detail: {
+      kind: 'fetch',
+      output: 'Could not reach status.macro.com/api: connection refused.',
+    },
+  },
+  {
+    kind: 'tool_use',
+    id: 'replay-edit',
+    name: { kind: 'native', name: 'Edit' },
+    status: 'completed',
+    detail: {
+      kind: 'edit',
+      diffs: [{ ...FIXTURE_DIFF, path: 'docs/launch.md' }],
+    },
+  },
+  {
+    kind: 'tool_use',
+    id: 'replay-agent',
+    name: { kind: 'native', name: 'Agent' },
+    status: 'completed',
+    detail: {
+      kind: 'subagent',
+      title: 'Verify changes',
+      description: 'Verify the launch checklist',
+      agentType: 'subagent',
+      prompt: 'Verify changes to docs/launch.md',
+      background: false,
+      children: [],
+      result: {
+        text: 'The launch checklist is consistent.',
+        error: null,
+        agentId: 'replay-review',
+        model: null,
+        durationMs: 3485,
+        tokens: null,
+        toolUses: 1,
+        stats: null,
+      },
+    },
+  },
+  {
+    kind: 'tool_use',
+    id: 'replay-shell',
+    name: { kind: 'native', name: 'Shell' },
+    status: 'completed',
+    detail: {
+      kind: 'terminal',
+      command: 'bun run check',
+      output: 'All checks passed.',
+      exitCode: 0,
+    },
+  },
+];
+
+/** Exercises the production message renderer with both paced and batched calls. */
+function ToolReplayDemo() {
+  const [count, setCount] = createSignal(TOOL_REPLAY_PARTS.length);
+  const [inFlight, setInFlight] = createSignal(false);
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const finish = () => {
+    clearInterval(timer);
+    timer = undefined;
+    setInFlight(false);
+  };
+  const replay = (interval: number) => {
+    finish();
+    setCount(1);
+    setInFlight(true);
+    timer = setInterval(() => {
+      if (count() === TOOL_REPLAY_PARTS.length) finish();
+      else setCount((value) => value + 1);
+    }, interval);
+  };
+  onCleanup(() => clearInterval(timer));
+  const message = (): FoldedMessage => ({
+    agentSessionId: 'tool-replay',
+    requestId: null,
+    pending: false,
+    turn: 0,
+    author: { kind: 'agent' },
+    stop: inFlight() ? null : { kind: 'end_turn' },
+    parts: TOOL_REPLAY_PARTS.slice(0, count()).map((part, index) =>
+      part.kind === 'tool_use' && inFlight() && index === count() - 1
+        ? { ...part, status: 'running' }
+        : part
+    ),
+  });
+  return (
+    <div class="flex flex-col gap-4" data-testid="tool-replay">
+      <div class="flex flex-wrap gap-3 text-xs text-ink-muted">
+        <button
+          type="button"
+          class="rounded border border-edge-muted px-2 py-1"
+          onClick={() => replay(1000)}
+        >
+          Replay tool calls
+        </button>
+        <button
+          type="button"
+          class="rounded border border-edge-muted px-2 py-1"
+          onClick={() => replay(80)}
+        >
+          Replay fast batch
+        </button>
+        <button
+          type="button"
+          class="rounded border border-edge-muted px-2 py-1 disabled:opacity-40"
+          disabled={!inFlight()}
+          onClick={finish}
+        >
+          Finish tool calls
+        </button>
+      </div>
+      <Message message={message()} inFlight={inFlight()} />
+    </div>
+  );
+}
+
+/** A generated view stays visible between collapsed runs, even before a result. */
+function DisplayResultsDemo() {
+  const [pending, setPending] = createSignal(false);
+  const message = (): FoldedMessage => ({
+    agentSessionId: 'display-results-demo',
+    requestId: null,
+    pending: false,
+    turn: 0,
+    author: { kind: 'agent' },
+    stop: pending() ? null : { kind: 'end_turn' },
+    parts: [
+      ...TOOL_REPLAY_PARTS.slice(0, 2),
+      {
+        kind: 'tool_use',
+        id: 'display-results-demo',
+        name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
+        status: pending() ? 'running' : 'completed',
+        detail: {
+          kind: 'macro',
+          input: {
+            view: {
+              title: 'Launch overview',
+              widgets: [
+                {
+                  type: 'md',
+                  markdown:
+                    'The checklist is ready. **Two steps remain before launch.**',
+                },
+                {
+                  type: 'timeline',
+                  events: [
+                    {
+                      time: 'Today',
+                      title: 'Review launch checklist',
+                      description:
+                        'Confirm the release notes and rollout plan.',
+                    },
+                    {
+                      time: 'Tomorrow',
+                      title: 'Launch',
+                      description: 'Publish the release after checks pass.',
+                      future: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          output: null,
+          error: null,
+        },
+      },
+      ...(pending() ? [] : TOOL_REPLAY_PARTS.slice(4)),
+    ],
+  });
+  return (
+    <div class="flex flex-col gap-3" data-testid="display-results-demo">
+      <label class="flex items-center gap-2 text-xs text-ink-muted">
+        <input
+          type="checkbox"
+          checked={pending()}
+          onChange={(event) => setPending(event.currentTarget.checked)}
+        />
+        DisplayResults in progress
+      </label>
+      <Message message={message()} inFlight={pending()} />
+    </div>
+  );
+}
+
 const FIXTURE_MESSAGE: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
@@ -306,8 +542,8 @@ const FIXTURE_MESSAGE: FoldedMessage = {
         error: null,
       },
     },
-    // An MCP call the fold has no model for - a Cursor session reaching
-    // Macro's server, whose exchange is the request and response JSON.
+    // A Macro MCP call whose payload does not fit the registered renderer:
+    // keep its summary visible without exposing the raw exchange.
     {
       kind: 'tool_use',
       id: 'demo-mcp-macro',
@@ -732,6 +968,13 @@ export default function AgentUiGallery() {
     <StaticMarkdownContext>
       <div class="size-full overflow-auto">
         <div class="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8">
+          <Item label="Tool calls (live replay)">
+            <ToolReplayDemo />
+          </Item>
+
+          <Item label="DisplayResults (inline between groups)">
+            <DisplayResultsDemo />
+          </Item>
           <Item label="ElicitationForm (live validation)">
             <ElicitationFormDemo />
           </Item>
@@ -823,57 +1066,59 @@ export default function AgentUiGallery() {
 
           <Item label="ToolCard">
             <ToolCard
-              title="Bash"
+              title="Shell"
+              icon={<Terminal />}
               subtitle="cargo test -p agent_fold"
               status={status()}
             />
             <ToolCard
               title="Read"
+              icon={<FileText />}
               subtitle="crates/agent_fold/src/domain/fold.rs"
               args={{ limit: '200' }}
               status="completed"
             />
             <ToolCard
               title="Edit"
+              icon={<PencilSimple />}
               subtitle={FIXTURE_DIFF.path}
               trailing={<DiffChanges additions={4} deletions={3} />}
               status="completed"
-              defaultOpen
             >
               <PierreDiff diffs={[FIXTURE_DIFF]} />
             </ToolCard>
           </Item>
 
           <Item label="ToolGroup (active / settled)">
-            <ToolGroup
-              count={3}
-              active={pulse()}
-              latest={{ label: 'Bash', detail: 'cargo test -p agent_fold' }}
-            >
+            <ToolGroup count={3} active={pulse()}>
               <ToolCard
                 title="Read"
+                icon={<FileText />}
                 subtitle="crates/agent_fold/src/domain/fold.rs"
                 status="completed"
               />
               <ToolCard
                 title="Edit"
+                icon={<PencilSimple />}
                 subtitle={FIXTURE_DIFF.path}
                 status="completed"
               />
               <ToolCard
-                title="Bash"
+                title="Shell"
+                icon={<Terminal />}
                 subtitle="cargo test -p agent_fold"
                 status={pulse() ? 'running' : 'completed'}
               />
             </ToolGroup>
-            <ToolGroup
-              count={2}
-              active={false}
-              latest={{ label: 'ReadContent' }}
-              defaultOpen
-            >
-              <ToolCard title="NameSearch" subtitle="fold" status="completed" />
-              <ToolCard title="ReadContent" status="completed" />
+            <ToolGroup count={2} active={false} defaultOpen>
+              <ToolCard
+                title="Search"
+                icon={<MagnifyingGlass />}
+                subtitle="fold"
+                status="completed"
+                trailing="3 results"
+              />
+              <ToolCard title="Read" icon={<FileText />} status="completed" />
             </ToolGroup>
           </Item>
 

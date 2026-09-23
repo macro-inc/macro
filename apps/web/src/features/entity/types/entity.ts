@@ -106,6 +106,13 @@ export type ChannelClickTarget =
 
 export type ChannelEntity = EntityBase & {
   type: 'channel';
+  /** Filtered, bounded edge for the unread dot. Undefined denotes a legacy/full
+   * row; an empty array denotes no unread messages. Never use for bulk reads. */
+  unreadNotifications?: {
+    id: string;
+    state: 'unseen' | 'seen' | 'done';
+    createdAt: DateValue;
+  }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   interactedAt?: DateValue | null;
   participantIds?: string[];
@@ -166,6 +173,15 @@ export type ChatEntity = EntityBase & {
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
   botId: string;
+  harness?: string;
+  repoUrl?: string | null;
+  /** Starting branch selected at creation, not the current working branch. */
+  repoBranch?: string | null;
+  pullRequestUrl?: string | null;
+  workingBranch?: string | null;
+  pullRequestState?: 'open' | 'draft' | 'closed' | 'merged' | null;
+  pullRequestId?: string | null;
+  turnState?: string | null;
   bot?: { id: string; name: string; avatarUrl?: string | null } | null;
   threadId?: string | null;
   status: string;

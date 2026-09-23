@@ -5,6 +5,7 @@
 #[cfg(test)]
 mod test;
 
+pub mod channel_share;
 pub mod team_share;
 
 use macro_user_id::user_id::MacroUserIdStr;

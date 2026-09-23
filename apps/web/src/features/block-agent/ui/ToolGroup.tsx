@@ -1,66 +1,62 @@
-/**
- * A run of consecutive tool calls folded to one row: how many, and — while
- * closed — the latest one in a quiet line beneath, so a reader following a
- * long stretch of tool use sees what the agent is on without a card per call.
- *
- * Shaped like `Thought` rather than `ToolCard`: a bare caret row, no surface,
- * because the cards themselves appear once it opens.
- */
+/** Consecutive calls collect in an open group while live, then fold to one row. */
 
+import { Collapsible } from '@kobalte/core/collapsible';
 import CaretRight from '@phosphor/caret-right.svg';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createWritableMemo } from '@solid-primitives/memo';
+import { createScheduled, debounce } from '@solid-primitives/scheduled';
+import { createMemo, type JSX, on, Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';
+
+/** Let a fast result remain readable and bridge brief gaps between calls. */
+const SETTLE_DELAY_MS = 700;
 
 export interface ToolGroupProps {
   count: number;
   /** A call in the run is still in flight: reads "Calling" and shimmers. */
   active: boolean;
-  /** The most recent call: its label and, when it has one, what it touched. */
-  latest: { label: string; detail?: string };
+  /** The live tail can receive calls already completed in the same batch. */
+  live?: boolean;
   defaultOpen?: boolean;
-  /** The calls themselves, shown in place of the latest line once open. */
   children: JSX.Element;
 }
 
 export function ToolGroup(props: ToolGroupProps) {
-  const [expanded, setExpanded] = createSignal(props.defaultOpen ?? false);
+  const settled = createScheduled((callback) =>
+    debounce(callback, SETTLE_DELAY_MS)
+  );
+  const automaticOpen = createMemo((wasOpen: boolean) => {
+    const active = props.active;
+    // Each new call extends the grace period, including completed batches.
+    const live = (props.live ?? active) && props.count > 0;
+    const readyToClose = settled();
+    return active || (!readyToClose && (live || wasOpen));
+  }, false);
+  const [expanded, setExpanded] = createWritableMemo<boolean>(
+    on(automaticOpen, (open, previous) =>
+      previous === undefined ? (props.defaultOpen ?? open) : open
+    )
+  );
   const title = () =>
-    `${props.active ? 'Calling' : 'Called'} ${props.count} tools`;
+    `${props.active ? 'Calling' : 'Called'} ${props.count} ${props.count === 1 ? 'tool' : 'tools'}`;
 
   return (
-    <div class="min-w-0 text-xs leading-5 text-ink-extra-muted">
-      <button
-        type="button"
-        aria-expanded={expanded()}
-        class="flex min-h-7 items-center gap-1 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
-        onClick={() => setExpanded((prev) => !prev)}
-      >
-        <CaretRight
-          class="size-4 shrink-0 transition-transform motion-reduce:transition-none"
-          classList={{ 'rotate-90': expanded() }}
-        />
+    <Collapsible
+      open={expanded()}
+      onOpenChange={setExpanded}
+      class="min-w-0 text-sm leading-6 text-ink-extra-muted"
+    >
+      <Collapsible.Trigger class="group flex min-h-8 items-center gap-2 py-1 text-left text-ink-extra-muted hover:text-ink-muted">
         <TextShimmer text={title()} active={props.active} />
-      </button>
-      <Show
-        when={expanded()}
-        fallback={
-          <div class="flex min-w-0 items-center gap-1.5 pl-5 text-ink-placeholder">
-            <span class="shrink-0">{props.latest.label}</span>
-            <Show when={props.latest.detail}>
-              {(detail) => (
-                <>
-                  <span aria-hidden="true" class="shrink-0">
-                    ·
-                  </span>
-                  <span class="min-w-0 truncate font-mono">{detail()}</span>
-                </>
-              )}
-            </Show>
-          </div>
-        }
-      >
-        <div class="flex min-w-0 flex-col gap-1 pl-5">{props.children}</div>
-      </Show>
-    </div>
+        <CaretRight
+          aria-hidden="true"
+          class="size-4 shrink-0 opacity-0 group-data-expanded:rotate-90 group-hover:opacity-100 group-focus-visible:opacity-100"
+        />
+      </Collapsible.Trigger>
+      <Collapsible.Content class="data-closed:hidden">
+        <Show when={expanded()}>
+          <div class="flex min-w-0 flex-col pl-6">{props.children}</div>
+        </Show>
+      </Collapsible.Content>
+    </Collapsible>
   );
 }

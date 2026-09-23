@@ -234,6 +234,9 @@ pub struct OpenManagedSession {
     /// Ad-hoc instructions for the default managed persona. Ignored when a
     /// persisted persona profile is selected.
     pub instructions: Option<String>,
+    /// Model to run on instead of the persona's own. The session's model from
+    /// creation, so its runtime starts on it and nothing is sent to change it.
+    pub model: Option<String>,
 }
 
 /// Opens sessions, however they are served. Implemented by the harness, which
@@ -512,6 +515,18 @@ pub trait SessionOwnership: Send + Sync + 'static {
 
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionLogRepo: Send + Sync + 'static {
+    /// Append a frame and its authoritative fold projection atomically. A
+    /// supplied claim fences both writes; history boundaries require a claim.
+    /// `turn_state` is supplied only when the fold's state changes, avoiding
+    /// a session-row write for every streamed token.
+    fn create_projected<'a>(
+        &'a self,
+        log: AgentSessionLog,
+        claim: Option<&'a SessionClaim>,
+        boundary: Option<HistoryBoundary>,
+        turn_state: Option<agent_fold::domain::model::TurnState>,
+    ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
+
     /// Append a log entry and project any system event onto the session status.
     fn create(
         &self,
@@ -1060,8 +1075,8 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
 mod test;
 
 /// Current view access to a session, resolved the way a read route resolves
-/// it - including access inherited from the document a session was opened
-/// from, which no access row materializes.
+/// it - including share links and access inherited from the document a session
+/// was opened from, which no access row materializes.
 ///
 /// Object-safe so the service holds it erased, like its turn observer.
 pub trait SessionViewAccess: Send + Sync + 'static {
@@ -1074,7 +1089,7 @@ pub trait SessionViewAccess: Send + Sync + 'static {
 }
 
 /// Only materialized grants count: a process with no entity-access service,
-/// or a test, never discovers inherited access.
+/// or a test, never discovers link or inherited access.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoInheritedSessionAccess;
 

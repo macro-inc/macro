@@ -155,6 +155,8 @@ The compose controllers now assemble these smaller responsibilities:
 | --- | --- |
 | `attachment-persistence.ts` | Upload/remove operations and completion tracking. Receives attachment state and three transport capabilities. A saved attachment ID does not mean its content upload has finished; every save waits for outstanding uploads. |
 | `email-send-schedule.ts` | Confirmed send time, pending changes, unscheduling and archive feedback. Scheduling saves the current draft and waits for its attachments even when a draft ID already exists; each operation retains its selected inbox. |
+| `draft-session.ts` / `draft-persistence.ts` | Shared draft identity, queued-write status, rejection policy, and save/delete ordering. Server identity and a committed latest save are separate facts; REST send, schedule, and uploads wait for a committed save. |
+| `send-readiness.ts` | Why an immediate send must be refused: offline, a draft the server cannot address yet (queued or unconfirmed handle), or an attachment whose upload never finished. Pure checks plus the one failure notice both controllers show. |
 | `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits on disposal, and exposes cancellation and completion for send/discard. |
 | `reply-recipient-fields.ts` | Recipient field expansion, drag/drop and outside interaction. Receives values, a setter and a change callback; it knows nothing about saving or sending. |
 | `reply-composer-focus.ts` | Deferred editor/recipient focus and the forward focus guard. Receives DOM accessors and an editor `focus()` capability. Its timers, animation frames and event listeners end with its owner. |

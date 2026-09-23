@@ -858,7 +858,6 @@ async fn a_restored_session_prompts_its_existing_agent() {
         SessionId::new("cursor-acp-7"),
         Some(CursorAgentId::new("bc-restored")),
         None,
-        None,
     );
     crate::testing::script_legacy_history(&cursor);
     service
@@ -895,7 +894,6 @@ async fn cancel_on_a_restored_session_finds_the_run_from_cursor() {
     service.restore_session(
         SessionId::new("cursor-acp-7"),
         Some(CursorAgentId::new("bc-restored")),
-        None,
         None,
     );
 
@@ -934,7 +932,6 @@ async fn cancel_on_a_restored_session_cancels_every_run_in_progress() {
     service.restore_session(
         SessionId::new("cursor-acp-10"),
         Some(CursorAgentId::new("bc-restored")),
-        None,
         None,
     );
 
@@ -982,7 +979,6 @@ async fn cancel_on_a_restored_session_with_no_run_going_is_a_no_op() {
         SessionId::new("cursor-acp-8"),
         Some(CursorAgentId::new("bc-restored")),
         None,
-        None,
     );
 
     cursor.script_run_listings(vec![RunListing {
@@ -1006,7 +1002,6 @@ async fn new_sessions_never_collide_with_restored_ids() {
         SessionId::new("cursor-acp-1"),
         Some(CursorAgentId::new("bc-restored")),
         None,
-        None,
     );
 
     let fresh = service.new_session(Path::new(""), Vec::new());
@@ -1022,7 +1017,7 @@ async fn new_sessions_never_collide_with_restored_ids() {
 #[tokio::test]
 async fn a_session_restored_without_an_agent_mints_one_on_the_next_prompt() {
     let (service, cursor, _notifier) = service(None);
-    service.restore_session(SessionId::new("cursor-acp-9"), None, None, None);
+    service.restore_session(SessionId::new("cursor-acp-9"), None, None);
     service
         .replay_session(&SessionId::new("cursor-acp-9"))
         .await
@@ -1295,7 +1290,6 @@ async fn restore_recovers_runs_after_the_durable_watermark_once() {
         session.clone(),
         Some(CursorAgentId::new("bc-restored")),
         None,
-        None,
         Some(CursorRunId::new("run-delivered")),
     );
     // The initial load hydrates the run this session delivered before the
@@ -1413,7 +1407,6 @@ async fn restore_without_a_watermark_hydrates_every_run_on_load() {
         Some(CursorAgentId::new("bc-restored")),
         None,
         None,
-        None,
     );
     cursor.script_run_listings(vec![
         RunListing {
@@ -1475,7 +1468,6 @@ async fn restore_waits_for_session_load_before_recovering_runs() {
     service.restore_session_with_watermark(
         session.clone(),
         Some(CursorAgentId::new("bc-restored")),
-        None,
         None,
         Some(CursorRunId::new("run-delivered")),
     );
@@ -1827,7 +1819,7 @@ async fn durable_multiturn_load_replays_full_history_and_supports_continuation()
         journal.clone(),
         NoArtifactStore,
     ));
-    restored.restore_session(id.clone(), Some(CursorAgentId::new("bc-fake")), None, None);
+    restored.restore_session(id.clone(), Some(CursorAgentId::new("bc-fake")), None);
     restored.replay_session(&id).await.unwrap().complete();
     let first = replayed.updates();
     let replay_without_users: Vec<_> = first
@@ -2014,7 +2006,7 @@ async fn partial_capture_reconnect_matches_the_prefix_without_duplicate_content(
 async fn restored_agent_without_provider_history_cannot_commit_empty_replacement() {
     let (service, cursor, notifier) = service(None);
     let id = SessionId::new("restored");
-    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None, None);
+    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None);
     cursor.script_run_listings(vec![]);
 
     assert!(service.replay_session(&id).await.is_err());
@@ -2028,7 +2020,7 @@ async fn restored_agent_without_provider_history_cannot_commit_empty_replacement
 async fn incomplete_legacy_hydration_emits_nothing_and_cannot_enable_sync() {
     let (service, cursor, notifier) = service(None);
     let id = SessionId::new("old");
-    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None, None);
+    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None);
     cursor.script_run_listings(vec![RunListing {
         id: CursorRunId::new("run-old"),
         status: RunStatus::Finished,
@@ -2273,7 +2265,6 @@ async fn capture_backlog_includes_the_run_at_the_delivered_watermark_after_resta
         id.clone(),
         Some(CursorAgentId::new("agent")),
         None,
-        None,
         Some(run.clone()),
     );
     service.replay_session(&id).await.unwrap().complete();
@@ -2494,6 +2485,7 @@ async fn model_resolution_precedes_intent_and_definite_rejection_aborts_it() {
 
 mod artifacts;
 mod fold;
+mod working_branches;
 
 #[tokio::test]
 async fn cancellation_during_pre_prompt_recovery_never_executes_the_pending_prompt() {

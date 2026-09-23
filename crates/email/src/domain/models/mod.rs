@@ -18,7 +18,8 @@ mod tests;
 pub use attachment::{Attachment, AttachmentDraft, AttachmentForwarded, MessageAttachment};
 pub use contact::{Contact, ContactInfo, RecipientType};
 pub use draft::{
-    CreateDraftInput, CreatedDraft, ParsedAddresses, ResolvedDraftInput, SimpleMessageInfo,
+    CreateDraftInput, CreatedDraft, DeletedUserDraft, DraftDeletion, MessageTimestamps,
+    ParsedAddresses, ResolvedDraftInput, SavedUserDraft, SettledDraftIds, SimpleMessageInfo,
     UpsertedContacts, UpsertedRecipient,
 };
 pub use email_filter::{EmailFilter, UpsertEmailFilterInput};
