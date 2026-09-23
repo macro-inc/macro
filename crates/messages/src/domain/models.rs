@@ -433,6 +433,10 @@ pub struct PostMessage {
     #[serde(skip)]
     #[cfg_attr(feature = "schema", schema(ignore))]
     pub notification_policy: PostMessageNotificationPolicy,
+    /// Client-minted UUIDv7 for the new message, so an optimistic message
+    /// already carries its final id; the server mints one when absent.
+    #[serde(default)]
+    pub id: Option<Uuid>,
     /// Macro Markdown body.
     pub content: String,
     /// Root to reply to, if this is a reply.

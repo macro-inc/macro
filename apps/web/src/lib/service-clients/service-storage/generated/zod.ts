@@ -28997,6 +28997,12 @@ export const entityMessageCreateBody = zod
       .optional()
       .describe('Initial attachments.'),
     content: zod.string().describe('Macro Markdown body.'),
+    id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Client-minted UUIDv7 for the new message, so an optimistic message\nalready carries its final id; the server mints one when absent.'
+      ),
     mentions: zod
       .array(
         zod

@@ -16,6 +16,9 @@ pub enum MessageError {
     /// Invalid thread relation or anchor.
     #[error("{0}")]
     Invalid(&'static str),
+    /// A client-supplied message id is already taken.
+    #[error("message id already exists")]
+    Conflict,
     /// Persistence or delivery failed.
     #[error("message operation failed: {0}")]
     Repository(rootcause::Report),
