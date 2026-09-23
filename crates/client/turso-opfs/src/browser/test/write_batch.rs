@@ -45,19 +45,30 @@ pub(super) fn check(file: &Arc<dyn File>) {
         assert_eq!(file.size().unwrap(), 0);
     }
 
-    let buffers = vec![
-        vec![1; MAX_WRITE_BATCH_BYTES - 7],
-        vec![],
-        vec![2; 19],
-        vec![3; MAX_WRITE_BATCH_BYTES + 13],
-    ];
-    let expected = buffers.concat();
-    let before = calls();
-    let completion = write(file, 11, buffers);
-    assert_completion(&completion, Ok(expected.len() as i32));
-    assert_eq!(calls() - before, 3, "bounded coalesced browser writes");
-    assert_eq!(file.size().unwrap(), 11 + expected.len() as u64);
-    read_bytes(file, 11, &expected);
+    for buffers in [
+        vec![
+            vec![1; MAX_WRITE_BATCH_BYTES - 7],
+            vec![],
+            vec![2; 19],
+            vec![3; MAX_WRITE_BATCH_BYTES + 13],
+        ],
+        (0..774)
+            .map(|index| vec![(index % 251) as u8; 4096 + 24])
+            .collect(),
+    ] {
+        clear(file);
+        let expected = buffers.concat();
+        let before = calls();
+        let completion = write(file, 11, buffers);
+        assert_completion(&completion, Ok(expected.len() as i32));
+        assert_eq!(
+            calls() - before,
+            expected.len().div_ceil(MAX_WRITE_BATCH_BYTES),
+            "bounded coalesced browser writes"
+        );
+        assert_eq!(file.size().unwrap(), 11 + expected.len() as u64);
+        read_bytes(file, 11, &expected);
+    }
 
     clear(file);
     REGISTRY.with(|registry| registry.borrow_mut().faults.max_write_chunk = Some(2));
