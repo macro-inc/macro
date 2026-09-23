@@ -53,7 +53,6 @@ function createInitialState(
     selectedChannelId: initial.selectedChannelId,
     expandedGroups: {
       favorites: initial.expandedGroups?.favorites ?? true,
-      unread: initial.expandedGroups?.unread ?? true,
       channels: initial.expandedGroups?.channels ?? true,
       direct_messages: initial.expandedGroups?.direct_messages ?? true,
     },

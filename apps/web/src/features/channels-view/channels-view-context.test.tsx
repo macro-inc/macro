@@ -137,7 +137,11 @@ describe('ChannelsViewProvider preview selection', () => {
     expect(first.context.state.collapsedLabels).toEqual(['enterprise']);
     expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({
       collapsedLabels: ['enterprise'],
-      expandedGroups: expect.objectContaining({ unread: true }),
+      expandedGroups: {
+        favorites: true,
+        channels: true,
+        direct_messages: true,
+      },
     });
     first.unmount();
 
