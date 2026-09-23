@@ -6,6 +6,7 @@ import {
 import { usePageCommentLayout } from '@block-pdf/store/comments/commentLayout';
 import {
   useCreateComment,
+  useCreateMessageComment,
   useDeleteComment,
   useUpdateComment,
 } from '@block-pdf/store/comments/commentOperations';
@@ -14,6 +15,7 @@ import {
   baseCommentTheme,
   CommentsContext,
   type CommentsContextType,
+  noopCommentOperations,
   Thread,
 } from '@core/comments/Thread';
 import { useUserId } from '@core/context/user';
@@ -39,6 +41,25 @@ export function RightMarginLayout(props: { pageIndex: number }) {
   );
 }
 
+function useCommentOperations(): Pick<
+  CommentsContextType,
+  'commentOperations' | 'messageOperations'
+> {
+  if (usePdfDocument().annotations.unified) {
+    return {
+      commentOperations: noopCommentOperations,
+      messageOperations: { createComment: useCreateMessageComment() },
+    };
+  }
+  return {
+    commentOperations: {
+      createComment: useCreateComment(),
+      deleteComment: useDeleteComment(),
+      updateComment: useUpdateComment(),
+    },
+  };
+}
+
 const useCommentsContext = (
   setThreadHeight: CommentsContextType['setThreadHeight']
 ): CommentsContextType => {
@@ -53,9 +74,7 @@ const useCommentsContext = (
     }
   };
 
-  const createComment = useCreateComment();
-  const updateComment = useUpdateComment();
-  const deleteComment = useDeleteComment();
+  const operations = useCommentOperations();
 
   const userId = useUserId();
   const ownedComment = (id: CommentId) => {
@@ -75,11 +94,7 @@ const useCommentsContext = (
     documentId: pdf.documentId(),
     documentType: 'pdf',
     ownedComment,
-    commentOperations: {
-      createComment,
-      deleteComment,
-      updateComment,
-    },
+    ...operations,
     inComment: true,
     highlightedCommentId: () => null,
   };

@@ -6,6 +6,7 @@ import {
   useCreateUnthreadedHighlightResource,
   useDeleteUnthreadedHighlightResource,
 } from './commentsResource';
+import { useDeleteMessageThread } from './messageCommentsResource';
 
 export const useSetSelectionHighlights = () => {
   const pdf = usePdfDocument();
@@ -50,10 +51,18 @@ export const useAddNewHighlights = () => {
 
 export function useRemoveHighlight() {
   const deleteHighlight = useDeleteUnthreadedHighlightResource();
+  const deleteMessageThread = useDeleteMessageThread();
   const pdf = usePdfDocument();
 
-  return (uuid: string) => {
+  return async (uuid: string) => {
     pdf.closeSelectionMenu();
-    deleteHighlight(uuid);
+    // The annotation endpoint deletes only a legacy thread with its highlight,
+    // so a message discussion goes first; the server then detaches the highlight.
+    const rootId = pdf.annotations.unified
+      ? pdf.annotations.anchors()?.find((anchor) => anchor.uuid === uuid)
+          ?.rootId
+      : null;
+    if (rootId) await deleteMessageThread(rootId);
+    await deleteHighlight(uuid);
   };
 }

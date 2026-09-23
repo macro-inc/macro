@@ -12,20 +12,22 @@ export const FreeCommentPlaceable: Component<{
 
   return (
     <CommentIndicator
-      threadId={props.payload.threadId}
       isActive={isActiveThreadSelector(props.payload.threadId)}
       setActive={() => comments.activateThread(props.payload.threadId)}
-      numComments={props.payload.comments.length}
+      numComments={
+        props.payload.replyCount == null
+          ? props.payload.comments.length
+          : 1 + props.payload.replyCount
+      }
     />
   );
 };
 
 export const NewFreeCommentPlaceable: Component = () => {
-  return <CommentIndicator threadId={-1} isActive={true} numComments={1} />;
+  return <CommentIndicator isActive={true} numComments={1} />;
 };
 
 function CommentIndicator(props: {
-  threadId: number;
   numComments: number;
   isActive: boolean;
   setActive?: () => void;

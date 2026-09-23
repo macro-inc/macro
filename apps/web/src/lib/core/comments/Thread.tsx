@@ -148,11 +148,14 @@ type ThreadBodyProps = {
  * renders it directly.
  */
 export function ThreadBody(props: ThreadBodyProps) {
-  // PDF flag-on discussions are deferred, so PDF stays on the legacy path even
-  // when the flag is on; only markdown documents use the message thread.
   const context = useContext(CommentsContext);
-  return isFeatureEnabled(enableUnifiedDocumentDiscussions) &&
-    context.documentType !== 'pdf' ? (
+  // A PDF picks its comment store once, when its annotations load, and passes
+  // message operations exactly when it chose the message API.
+  const unified =
+    context.documentType === 'pdf'
+      ? context.messageOperations != null
+      : isFeatureEnabled(enableUnifiedDocumentDiscussions);
+  return unified ? (
     <MessageThreadBody {...props} />
   ) : (
     <LegacyThreadBody {...props} />

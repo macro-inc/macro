@@ -128,9 +128,12 @@ describe('anchored comment links', () => {
     expect(view.getByText('9')).toBeTruthy();
     expect(view.queryByText('4')).toBeNull();
   });
+  // A document passes message operations exactly when it reads through the
+  // message API, which follows the flag unless a test says otherwise.
   const renderThreadBody = (
     documentType: CommentsContextType['documentType'] = 'md',
-    minimized = false
+    minimized = false,
+    messageApi = mocks.unifiedDiscussions
   ) =>
     render(() => (
       <CommentsContext.Provider
@@ -146,7 +149,9 @@ describe('anchored comment links', () => {
           ownedComment: () => false,
           inComment: true,
           commentOperations: noopCommentOperations,
-          messageOperations: { createComment: async () => null },
+          messageOperations: messageApi
+            ? { createComment: async () => null }
+            : undefined,
         }}
       >
         {minimized ? (
@@ -174,9 +179,16 @@ describe('anchored comment links', () => {
     }
   );
 
-  it('keeps PDF on the legacy path while its flag-on discussion is deferred', () => {
+  it('renders a PDF on the message API through the message thread', () => {
     const view = renderThreadBody('pdf');
-    // The message thread (mocked as the copy-link anchor) is markdown-only.
+    const url = new URL(view.getByRole('link').getAttribute('href')!);
+    expect(url.pathname).toBe('/app/pdf/document');
+  });
+
+  it('keeps a PDF on the legacy path when its annotations did not choose the message API', () => {
+    // The flag is on, but the PDF read it as off when its annotations loaded.
+    const view = renderThreadBody('pdf', false, false);
+    // The message thread is mocked as the copy-link anchor.
     expect(view.queryByRole('link')).toBeNull();
     expect(view.getByText('Comment')).toBeTruthy();
   });
