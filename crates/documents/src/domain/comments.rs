@@ -168,7 +168,13 @@ impl<M: CommentMarks> DocumentCommentReader<M> {
                     },
                 )
                 .await?;
-            roots.extend(page.items);
+            // A deleted first comment with no live replies is not returned,
+            // so it must not count toward the cap.
+            roots.extend(
+                page.items.into_iter().filter(|item| {
+                    item.message.deleted_at.is_none() || item.thread.reply_count > 0
+                }),
+            );
             if roots.len() >= MAX_DISCUSSIONS {
                 tracing::warn!(count = roots.len(), "document discussions truncated");
                 roots.truncate(MAX_DISCUSSIONS);

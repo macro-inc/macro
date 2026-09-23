@@ -472,3 +472,50 @@ fn serializes_ids_kind_and_anchor_for_agents() {
         })
     );
 }
+
+#[tokio::test]
+async fn deleted_threads_do_not_count_toward_the_cap() {
+    let mut messages = MockMessageReader::new();
+    let mut sequence = mockall::Sequence::new();
+    messages
+        .expect_timeline()
+        .times(1)
+        .in_sequence(&mut sequence)
+        .returning(|_, _| {
+            let items = (0..MAX_DISCUSSIONS as u128)
+                .map(|n| {
+                    let mut root = message(2, None, "deleted");
+                    root.id = id(1_000 + n);
+                    root.deleted_at = Some(at(0));
+                    item(root, None, vec![])
+                })
+                .collect();
+            Ok(page(
+                items,
+                Some(MessageCursor {
+                    created_at: at(0),
+                    id: id(1_000),
+                }),
+            ))
+        });
+    messages
+        .expect_timeline()
+        .times(1)
+        .in_sequence(&mut sequence)
+        .returning(|_, _| {
+            Ok(page(
+                vec![item(message(1, None, "live"), None, vec![])],
+                None,
+            ))
+        });
+
+    let discussions = reader(messages, no_marks())
+        .discussions(receipt())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        discussions.iter().map(|d| d.id).collect::<Vec<_>>(),
+        vec![id(1)]
+    );
+}
