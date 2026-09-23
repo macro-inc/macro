@@ -35,6 +35,8 @@ function setup(blockTops: number[]) {
 }
 
 afterEach(() => {
+  Reflect.deleteProperty(document, 'caretRangeFromPoint');
+  Reflect.deleteProperty(Range.prototype, 'getClientRects');
   document.body.replaceChildren();
   getSelection()?.removeAllRanges();
   vi.restoreAllMocks();
@@ -70,6 +72,35 @@ describe('scroll anchor', () => {
     selectionTop = 1120;
     restoreScrollAnchor(scroller, anchor!);
     expect(scroller.scrollTop).toBe(1800);
+  });
+
+  it('anchors text at the viewport top inside a block that starts above it', () => {
+    const { scroller, root, blocks } = setup([-300, 400]);
+    vi.spyOn(blocks[0]!, 'getBoundingClientRect').mockReturnValue(
+      rect(-300, 300)
+    );
+    const text = blocks[0]!.firstChild!;
+    let caretTop = 5;
+    // jsdom has no layout, so caret hit-testing and Range rects are stubbed.
+    document.caretRangeFromPoint = () => {
+      const range = document.createRange();
+      range.setStart(text, 3);
+      return range;
+    };
+    Range.prototype.getClientRects = function (this: Range) {
+      return (this.startContainer === text
+        ? [rect(caretTop, caretTop + 20)]
+        : []) as unknown as DOMRectList;
+    };
+    scroller.scrollTop = 1000;
+
+    const anchor = captureScrollAnchor(scroller, root);
+    expect(anchor?.top).toBe(5);
+
+    // The block rewraps taller while its own top stays put.
+    caretTop = 85;
+    restoreScrollAnchor(scroller, anchor!);
+    expect(scroller.scrollTop).toBe(1080);
   });
 
   it('ignores a selection outside the editor', () => {

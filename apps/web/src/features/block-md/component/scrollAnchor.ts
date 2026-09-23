@@ -12,9 +12,19 @@ function rangeTop(range: Range): number | undefined {
   return rect?.top;
 }
 
+function caretRangeAt(doc: Document, x: number, y: number): Range | undefined {
+  const position = doc.caretPositionFromPoint?.(x, y);
+  if (position) {
+    const range = doc.createRange();
+    range.setStart(position.offsetNode, position.offset);
+    return range;
+  }
+  return doc.caretRangeFromPoint?.(x, y) ?? undefined;
+}
+
 /**
  * Captures the point the reader is looking at: the editor selection when it is
- * on screen, otherwise the first editor block that reaches into the viewport.
+ * on screen, otherwise the first editor text that reaches into the viewport.
  */
 export function captureScrollAnchor(
   scroller: HTMLElement,
@@ -38,6 +48,19 @@ export function captureScrollAnchor(
     const rect = block.getBoundingClientRect();
     if (rect.bottom <= view.top) continue;
     if (rect.top >= view.bottom) return undefined;
+    // A block that starts above the viewport rewraps above it too, so anchor
+    // the text at the viewport's top edge rather than the block's top.
+    if (rect.top < view.top) {
+      const range = caretRangeAt(
+        editorRoot.ownerDocument,
+        rect.left + 1,
+        view.top + 1
+      );
+      if (range && block.contains(range.startContainer)) {
+        const top = rangeTop(range);
+        if (top !== undefined) return { top, measure: () => rangeTop(range) };
+      }
+    }
     return {
       top: rect.top,
       measure: () =>
