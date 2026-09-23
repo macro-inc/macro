@@ -12,6 +12,7 @@
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
+import { openExternalUrl } from '@core/util/url';
 import type {
   FoldedMessage,
   MessagePart,
@@ -24,6 +25,7 @@ import { thoughtIsStreaming } from '../state/thought-streaming';
 import { segmentParts } from '../state/tool-groups';
 import {
   ActionLine,
+  FailureNoticeCard,
   isToolActive,
   Thought,
   ToolGroup,
@@ -266,9 +268,7 @@ export function Message(props: {
 }) {
   const inFlight = () => props.inFlight;
   const failure = () =>
-    props.message.stop?.kind === 'failed'
-      ? props.message.stop.message
-      : undefined;
+    props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
 
   return (
     <Show
@@ -315,14 +315,27 @@ export function Message(props: {
               session, like a model change or a stop — so it reads as one,
               at the foot of whatever the agent managed to say first. The
               line says what to do about it; the runtime's own account of
-              what happened is the detail. */}
+              what happened is the detail. A failure the runtime wrote in the
+              person's terms is theirs to act on, so it gets a card instead. */}
           <Show when={failure()}>
-            {(message) => (
-              <ActionLine
-                label={`${TURN_FAILED_LABEL} — ${message()}`}
-                detail={message()}
-                failed
-              />
+            {(failed) => (
+              <Show
+                when={failed().notice}
+                fallback={
+                  <ActionLine
+                    label={`${TURN_FAILED_LABEL} — ${failed().message}`}
+                    detail={failed().message}
+                    failed
+                  />
+                }
+              >
+                {(notice) => (
+                  <FailureNoticeCard
+                    notice={notice()}
+                    onOpenLink={openExternalUrl}
+                  />
+                )}
+              </Show>
             )}
           </Show>
         </div>

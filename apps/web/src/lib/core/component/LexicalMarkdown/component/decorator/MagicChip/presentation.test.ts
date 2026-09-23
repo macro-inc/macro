@@ -325,6 +325,38 @@ describe('deriveMagicChipPresentation', () => {
     });
   });
 
+  it("shows a classified failure in the runtime's words for the person", () => {
+    const presentation = deriveMagicChipPresentation({
+      persistedStatus: 'acp_ready',
+      response: response({
+        parts: [],
+        stop: {
+          kind: 'failed',
+          message: 'Cursor usage limit reached. Raise the limit.',
+          notice: {
+            kind: 'provider_usage_limit',
+            title: 'Cursor usage limit reached',
+            body: 'Raise the spending limit in your Cursor dashboard, then send it again.',
+            link: {
+              label: 'Manage Cursor usage',
+              url: 'https://www.cursor.com/dashboard?tab=settings',
+            },
+          },
+        },
+      }),
+    });
+
+    expect(presentation).toEqual({
+      kind: 'working',
+      activity: {
+        label: 'Cursor usage limit reached',
+        detail:
+          'Raise the spending limit in your Cursor dashboard, then send it again.',
+        busy: false,
+      },
+    });
+  });
+
   it("shows the runtime's reason under a failed turn", () => {
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'acp_ready',
