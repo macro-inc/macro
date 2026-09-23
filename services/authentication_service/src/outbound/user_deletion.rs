@@ -5,7 +5,10 @@ use std::{sync::Arc, time::Duration};
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_authorization::INTERNAL_API_KEY_HEADER;
 use macro_user_id::user_id::MacroUserIdStr;
-use rootcause::{Report, prelude::ResultExt};
+use rootcause::{
+    Report,
+    prelude::{IntoRootcause, ResultExt},
+};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -85,6 +88,7 @@ impl UserDeletionGateway for UserDeletionAdapter {
         self.documents
             .delete_all_user_items(user.as_ref())
             .await
+            .into_rootcause()
             .context("failed to delete user items")?;
         Ok(())
     }
@@ -103,6 +107,7 @@ impl UserDeletionGateway for UserDeletionAdapter {
     async fn delete_account(&self, account: &Uuid) -> Result<(), Report> {
         macro_db_client::macro_user::delete_macro_user(&self.db, account)
             .await
+            .into_rootcause()
             .context("failed to delete macro user")?;
         Ok(())
     }
