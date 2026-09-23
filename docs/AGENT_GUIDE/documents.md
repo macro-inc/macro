@@ -529,10 +529,19 @@ editable view removes the retained mark when the document loads. Read-only
 viewers see plain text without a dead comment highlight; the stored document
 and overlapping live comments stay intact.
 
-Unified PDF discussions are deferred: PDFs keep the legacy comment subsystem
-regardless of the flag, so PDF comments (the side-panel `Comments` section,
-anchored margin threads, highlight comments, and placeable comments) behave as
-they do with the flag off. The message-backed PDF path is a follow-up.
+PDFs follow the same flag. With it on, PDF comment threads in the right margin
+use the channel composer (`Leave a comment...`, Enter sends) and the message
+thread controls. Highlight comments come from selecting text and choosing the
+comment button in the selection menu; placeable comments come from the toolbar
+`Comment` tool and a click on the page. Discussions read and post through
+`/dss/messages/document/<id>`; anchor geometry still loads from
+`/dss/annotations/anchors/document/<id>`, and `/dss/annotations/comments/...`
+is not called. Deleting a highlight's discussion keeps the highlight as a plain
+highlight; deleting a placeable's discussion removes the placeable. With the
+flag off, PDFs use the legacy composer (`Add a comment...`). A PDF anchor
+created by the other path is hidden rather than shown as a bare highlight, so a
+comment written on one path does not appear on the other until the comment
+importer runs.
 
 With the flag off, documents behave exactly as described above this section.
 

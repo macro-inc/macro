@@ -426,6 +426,53 @@ describe('createPdfAnnotations on the message API', () => {
     dispose();
   });
 
+  it('keeps open comment drafts when the discussion or anchors change', async () => {
+    const { annotations, dispose } = setup('document-1', true);
+    await waitForAnchors(annotations);
+    annotations.commands.applyCreatedAnchor(
+      createServerHighlight('existing-highlight')
+    );
+    await waitFor(() =>
+      expect(annotations.highlightsByUuid()['existing-highlight']).toBeTruthy()
+    );
+    const existing = annotations.highlightsByUuid()['existing-highlight']!;
+    annotations.commands.beginExistingHighlightCommentDraft(existing);
+    annotations.commands.beginNewHighlightCommentDrafts([
+      createHighlight('new-highlight'),
+    ]);
+
+    // Another client posts a discussion and an unrelated anchor arrives.
+    messageRoots.setRoots([root('root-9')]);
+    annotations.commands.applyCreatedAnchor(
+      createServerHighlight('other-highlight')
+    );
+
+    await waitFor(() =>
+      expect(annotations.highlightsByUuid()['other-highlight']).toBeTruthy()
+    );
+    expect({
+      existing:
+        annotations.highlightsByUuid()['existing-highlight']?.hasTempThread,
+      created: annotations.highlightsByUuid()['new-highlight']?.hasTempThread,
+    }).toEqual({ existing: true, created: true });
+
+    // Once the server holds a draft's highlight with its discussion, the
+    // draft gives way to the saved thread.
+    messageRoots.setRoots([root('root-9'), root('root-10')]);
+    annotations.commands.applyCreatedAnchor(
+      createServerHighlight('new-highlight', undefined, 'root-10')
+    );
+    await waitFor(() =>
+      expect(
+        annotations.highlightsByUuid()['new-highlight']?.thread?.threadId
+      ).toBe('root-10')
+    );
+    expect(annotations.highlightsByUuid()['new-highlight']?.hasTempThread).toBe(
+      false
+    );
+    dispose();
+  });
+
   it('binds a posted root to its anchor and releases anchors of a deleted discussion', async () => {
     const { annotations, dispose } = setup('document-1', true);
     await waitForAnchors(annotations);

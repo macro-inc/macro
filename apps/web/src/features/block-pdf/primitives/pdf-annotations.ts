@@ -20,6 +20,7 @@ import {
   createMemo,
   createResource,
   createSignal,
+  untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
 import type { IHighlight } from '../model/Highlight';
@@ -139,10 +140,16 @@ export function createPdfAnnotations(
     );
 
   createEffect(() => {
+    // Rebuilding from the server keeps comment drafts the server has not
+    // superseded: discussions and anchors change under an open composer.
+    const drafts = untrack(() =>
+      Object.values(highlightsByUuid()).filter(
+        (highlight): highlight is IHighlight => !!highlight?.hasTempThread
+      )
+    );
     setHighlightsByPage(reconcile({}));
 
-    const anchors = anchorsResource();
-    if (!anchors || anchors.length === 0) return;
+    const anchors = anchorsResource() ?? [];
 
     const highlightAnchors = anchors.filter(
       (anchor) => anchor.anchorType === 'highlight'
@@ -178,8 +185,17 @@ export function createPdfAnnotations(
       return highlight;
     });
 
+    const mappedByUuid = new Map(
+      mappedAnchors.map((highlight) => [highlight.uuid, highlight])
+    );
+    const keptDrafts = drafts.flatMap((draft) => {
+      const saved = mappedByUuid.get(draft.uuid);
+      if (!saved) return draft.existsOnServer ? [] : [draft];
+      return saved.thread ? [] : [{ ...saved, hasTempThread: true }];
+    });
+
     batch(() => {
-      for (const highlight of mappedAnchors) {
+      for (const highlight of [...mappedAnchors, ...keptDrafts]) {
         setHighlightsByPage(highlight.pageNum, (previous) => ({
           ...previous,
           [highlight.uuid]: highlight,

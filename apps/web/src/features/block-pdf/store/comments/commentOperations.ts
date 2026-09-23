@@ -13,6 +13,7 @@ import {
   type ThreadId,
 } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
+import { toast } from '@core/component/Toast/Toast';
 import type {
   CreateCommentRequest,
   EditCommentRequest,
@@ -209,7 +210,13 @@ export function useDeleteMessageCommentThread() {
       deleteNewComments();
       return false;
     }
-    await deleteThread(String(threadId));
+    try {
+      await deleteThread(String(threadId));
+    } catch (error) {
+      console.error('Unable to delete comment thread', error);
+      toast.failure('Unable to delete comment');
+      return false;
+    }
     analytics.track('comment_delete', { blockType: 'pdf' });
     return true;
   });

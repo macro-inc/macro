@@ -1,4 +1,5 @@
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
+import { toast } from '@core/component/Toast/Toast';
 import { batch } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
 import { Highlight, type IHighlight } from '../model/Highlight';
@@ -62,7 +63,15 @@ export function useRemoveHighlight() {
       ? pdf.annotations.anchors()?.find((anchor) => anchor.uuid === uuid)
           ?.rootId
       : null;
-    if (rootId) await deleteMessageThread(rootId);
-    await deleteHighlight(uuid);
+    try {
+      if (rootId) await deleteMessageThread(rootId);
+      await deleteHighlight(uuid);
+    } catch (error) {
+      console.error('Unable to remove highlight', error);
+      toast.failure('Unable to remove highlight');
+    }
+    // Supersede the reload the discussion delete started, which can
+    // otherwise land after the highlight is gone and restore it.
+    if (rootId) void pdf.annotations.commands.refetchAnchors();
   };
 }
