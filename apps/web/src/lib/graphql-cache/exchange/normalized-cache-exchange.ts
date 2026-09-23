@@ -70,6 +70,7 @@ import {
   isOwnerEpochLostError,
   type QueryRevalidationWire,
 } from '../protocol';
+import { createDeferredQueryRereads } from './deferred-query-rereads';
 import {
   compileEntityResolvers,
   type EntityResolverConfig,
@@ -627,6 +628,23 @@ export function normalizedCacheExchange(
         .catch((error) => options.onCacheError?.(error, operation));
     };
 
+    const affectedRereads = createDeferredQueryRereads(
+      (key, registrationOnly) => {
+        if (!activeOps.has(key)) return;
+        const state = queryStates.get(key);
+        // A request or worker replacement may have started while this read was
+        // deferred. Re-check current state instead of replaying a stale action.
+        if (state?.retainedReplacementFallback) {
+          recoverRetainedReplacementFallback(key);
+        } else if (state && state.networkBoundQueries > 0) {
+          state.deferredAffected = true;
+          if (!state.replacementFallback) emitAffectedWhileNetworkBound(key);
+        } else {
+          reexecuteAffected(key, registrationOnly);
+        }
+      }
+    );
+
     const unsubscribePush = host.onOpsAffected((opKeys) => {
       for (const key of opKeys) {
         if (!activeOps.has(key)) continue;
@@ -637,7 +655,7 @@ export function normalizedCacheExchange(
             !state.replacementFallback &&
             !state.retainedReplacementFallback
           ) {
-            emitAffectedWhileNetworkBound(key);
+            affectedRereads.request(key);
           }
           continue;
         }
@@ -648,7 +666,7 @@ export function normalizedCacheExchange(
           recoverRetainedReplacementFallback(key);
           continue;
         }
-        reexecuteAffected(key, registrationOnly);
+        affectedRereads.request(key, registrationOnly);
       }
     });
 
@@ -684,8 +702,8 @@ export function normalizedCacheExchange(
           if (!replacementRegistrationSatisfied) {
             if (state.retainedReplacementFallback) {
               recoverRetainedReplacementFallback(key);
-            } else {
-              reexecuteAffected(key, true);
+            } else if (activeOps.has(key)) {
+              affectedRereads.request(key, true);
             }
           }
         } else if (replacementFallback) {
@@ -1374,6 +1392,7 @@ export function normalizedCacheExchange(
           if (op.kind === 'teardown') {
             activeOps.delete(op.key);
             queryStates.delete(op.key);
+            affectedRereads.forget(op.key);
             host.teardown(op.key).catch(() => undefined);
           }
         })

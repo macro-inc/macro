@@ -101,10 +101,13 @@ the picker or trigger a success refresh.
 
 For multi-tab status checks, open the same channel/task in several browser tabs
 and change status repeatedly in the visible tab. Hidden tabs defer cache-change
-refreshes for Quick Access searches, its channel list, and history; switching
-back performs one catch-up refresh per reader against the latest cache state.
+refreshes for Quick Access searches, its channel list, and history, plus
+cache-triggered GraphQL query rereads. Switching back catches up each affected
+reader once against the latest cache state; closed readers must not restart.
 Existing rows remain available while hidden. Initial loads, explicit requests,
-saves, and the shared cache worker still run. Verify mention search and history
+saves, realtime cache writes, worker recovery, and the shared cache worker still
+run. A query already fetching from the server must finish normally rather than
+be canceled/reissued on return. Verify task status, mention search, and history
 catch up after switching tabs, including when the cache-owning tab is hidden.
 
 ## Messages as tasks
