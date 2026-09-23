@@ -27,6 +27,10 @@ fn start_runtime(listener: &TcpListener) -> Runtime {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::result_large_err,
+    reason = "the handshake callback's error type is fixed by tungstenite's Callback trait"
+)]
 async fn retries_transient_failure_and_closed_connection_without_triggers() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let runtime = start_runtime(&listener);
@@ -69,6 +73,10 @@ async fn retries_transient_failure_and_closed_connection_without_triggers() {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::result_large_err,
+    reason = "the handshake callback's error type is fixed by tungstenite's Callback trait"
+)]
 async fn refused_credentials_stop_reconnecting() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let runtime = start_runtime(&listener);
