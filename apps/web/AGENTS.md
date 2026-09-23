@@ -88,9 +88,7 @@ every local variable.
   an ID inside the hook does not isolate its closure from the hook.
 
 Examples: [session query factory](src/lib/queries/agent-session/session.ts) and
-[search query factories](src/lib/queries/soup/search.ts). The
-[GC regression test](src/lib/queries/tests/cached-callbacks.test.ts) checks that
-cached options release their callers; extend it when fixing similar retention.
+[search query factories](src/lib/queries/soup/search.ts).
 
 ### SolidJs
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.

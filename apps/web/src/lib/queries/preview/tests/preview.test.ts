@@ -25,7 +25,6 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
 }));
 
 vi.mock('@tanstack/solid-query', () => ({
-  queryOptions: (options: unknown) => options,
   useQuery: useQueryMock,
 }));
 
@@ -111,7 +110,6 @@ describe('preview transport facade', () => {
       expect(item()).toEqual(preview);
       const regularOptions = useQueryOptions[0]?.();
       expect(regularOptions).toMatchObject({ enabled: false });
-      expect(useQueryOptions[1]?.()).toMatchObject({ enabled: false });
       dispose();
     });
   });

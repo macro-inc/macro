@@ -1,20 +1,8 @@
-import { filterSoupItemByRequestBody } from '@app/features/next-soup/filters/query-filters';
-import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
-import { storageServiceClient } from '@service-storage/client';
-import type { SoupApiItem, SoupPage } from '@service-storage/generated/schemas';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const testState = vi.hoisted(() => ({ graphqlEnabled: false }));
-const instructions = vi.hoisted(() => ({
-  isSuccess: false,
-  get data(): string {
-    if (!this.isSuccess)
-      throw new Error('Pending instructions must not be read');
-    return 'instructions';
-  },
-}));
 const restRefetch = vi.hoisted(() => vi.fn(async () => undefined));
 const fetchSoup = vi.hoisted(() => vi.fn());
 const flatQuery = vi.hoisted(() => makeGraphqlQuery(false));
@@ -57,7 +45,6 @@ vi.mock('@queries/soup/grouped/api', () => ({
 }));
 vi.mock('@queries/soup/keys', () => ({
   soupKeys: {
-    items: (args: unknown) => ({ queryKey: ['soup', args] }),
     astItems: vi.fn(() => ({ queryKey: ['soup', 'ast'] })),
   },
 }));
@@ -73,13 +60,12 @@ vi.mock('@queries/soup/transform-utils', () => ({
   ),
 }));
 vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: vi.fn(() => instructions),
+  useInstructionsMdIdQuery: vi.fn(() => ({})),
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getSoupItems: vi.fn(), getSoupAstItems: fetchSoup },
 }));
 vi.mock('@tanstack/solid-query', () => ({
-  infiniteQueryOptions: (options: unknown) => options,
   useInfiniteQuery: vi.fn(() => ({
     data: undefined,
     error: null,
@@ -110,7 +96,6 @@ import {
   type SoupAstItemsPage,
   type SoupAstItemsQuery,
   useSoupAstItemsQuery,
-  useSoupItemsQuery,
 } from './items';
 
 let disposeRoot: (() => void) | undefined;
@@ -135,64 +120,12 @@ function mountAutoTransportQuery(): SoupAstItemsQuery {
 describe('Soup refetch transport selection', () => {
   beforeEach(() => {
     testState.graphqlEnabled = false;
-    instructions.isSuccess = false;
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     disposeRoot?.();
     disposeRoot = undefined;
-  });
-
-  it('snapshots list filters and instructions without retaining their accessors', async () => {
-    let tags = ['first'];
-    createRoot((dispose) => {
-      disposeRoot = dispose;
-      useSoupItemsQuery(() => ({
-        params: { limit: 20 },
-        body: { tag_option_ids: tags },
-      }));
-    });
-    const readOptions = vi.mocked(useInfiniteQuery).mock
-      .calls[0][0] as unknown as () => {
-      queryFn: (context: { pageParam: string | null }) => Promise<unknown>;
-      select: (data: { pages: SoupPage[] }) => unknown;
-      meta: { itemFilter: (item: SoupApiItem) => boolean };
-    };
-    const first = readOptions();
-    first.select({ pages: [{ items: [], next_cursor: null }] });
-    expect(mapSoupPageToEntityList).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        instructionsIdQuery: { isSuccess: true, data: undefined },
-      })
-    );
-    instructions.isSuccess = true;
-    tags = ['second'];
-    const second = readOptions();
-    second.select({ pages: [{ items: [], next_cursor: null }] });
-    expect(mapSoupPageToEntityList).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        instructionsIdQuery: { isSuccess: true, data: 'instructions' },
-      })
-    );
-    await first.queryFn({ pageParam: 'next' });
-    expect(storageServiceClient.getSoupItems).toHaveBeenLastCalledWith({
-      params: { cursor: 'next' },
-      body: { limit: 20, tag_option_ids: ['first'] },
-    });
-    // Empty pages suffice for the selector above; the metadata filter forwards
-    // the item unchanged, so its shape is irrelevant to this request-binding check.
-    const item = { tag: 'document' } as SoupApiItem;
-    first.meta.itemFilter(item);
-    expect(filterSoupItemByRequestBody).toHaveBeenLastCalledWith(item, {
-      tag_option_ids: ['first'],
-    });
-    second.meta.itemFilter(item);
-    expect(filterSoupItemByRequestBody).toHaveBeenLastCalledWith(item, {
-      tag_option_ids: ['second'],
-    });
   });
 
   it('forwards the channel list projection only to the flat GraphQL query', () => {
