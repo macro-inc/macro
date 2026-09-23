@@ -3,12 +3,11 @@
 use std::time::Duration;
 
 use activity::Activity;
+use redis::{ExistenceCheck, SetExpiry, SetOptions};
 use rootcause::Report;
 use uuid::Uuid;
 
 use crate::domain::ports::EditingActivityStore;
-
-const REFRESH_SESSION: &str = include_str!("editing_activity/refresh.lua");
 
 /// Refreshes editing sessions atomically across document-service instances.
 /// This is a best-effort debounce; cache loss starts a new session.
@@ -45,21 +44,31 @@ impl EditingActivityStore for RedisEditingActivityStore {
             return Ok(Vec::new());
         }
 
-        let mut pipeline = redis::pipe();
+        // `SET NX GET` starts a session owned by this event, or returns the
+        // event that owns the current one; `EXPIRE` extends either window.
+        // Requires Redis 7.0+ for `NX` with `GET`.
         let event_id = source_event_id.to_string();
+        let start_session = SetOptions::default()
+            .conditional_set(ExistenceCheck::NX)
+            .get(true)
+            .with_expiration(SetExpiry::EX(idle.as_secs()));
+        let mut pipeline = redis::pipe();
+        pipeline.atomic();
         for activity in activities {
+            let key = session_key(activity)?;
             pipeline
-                .cmd("EVAL")
-                .arg(REFRESH_SESSION)
-                .arg(1)
-                .arg(session_key(activity)?)
-                .arg(&event_id)
-                .arg(idle.as_secs());
+                .set_options(&key, &event_id, start_session.clone())
+                .expire(&key, idle.as_secs() as i64)
+                .ignore();
         }
 
         let mut connection = self.client.get_multiplexed_async_connection().await?;
-        let admitted: Vec<bool> = pipeline.query_async(&mut connection).await?;
-        Ok(admitted)
+        let owners: Vec<Option<String>> = pipeline.query_async(&mut connection).await?;
+        // A new session, or a replay of the event that opened it, is admitted.
+        Ok(owners
+            .into_iter()
+            .map(|owner| owner.is_none_or(|owner| owner == event_id))
+            .collect())
     }
 }
 
