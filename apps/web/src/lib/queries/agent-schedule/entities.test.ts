@@ -6,6 +6,7 @@ import { getCronTrigger } from './triggers';
 
 const query = vi.hoisted(() => ({
   isSuccess: true,
+  isPending: false,
   items: [] as ScheduledAction[],
   get data() {
     return this.items;
@@ -86,6 +87,7 @@ describe('cron-only automation entities', () => {
 
   it('does not read pending query data or suspend a list', () => {
     query.isSuccess = false;
+    query.isPending = true;
     const data = vi.spyOn(query, 'data', 'get').mockImplementation(() => {
       throw new Error('Pending resource read');
     });
@@ -95,5 +97,26 @@ describe('cron-only automation entities', () => {
     });
     data.mockRestore();
     query.isSuccess = true;
+    query.isPending = false;
+  });
+
+  it('retains cached cron entities after a refetch error, excluding event routines', () => {
+    query.isSuccess = false;
+    query.items = [events, cron];
+    createRoot((dispose) => {
+      expect(useAutomationEntities()().map((entity) => entity.id)).toEqual([
+        'cron-id',
+      ]);
+      dispose();
+    });
+  });
+
+  it('returns no entities after an initial failure without cached data', () => {
+    query.isSuccess = false;
+    query.items = [];
+    createRoot((dispose) => {
+      expect(useAutomationEntities()()).toEqual([]);
+      dispose();
+    });
   });
 });

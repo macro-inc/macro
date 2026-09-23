@@ -311,6 +311,10 @@ the static highlight.
 Create → Automation creates a cron-scheduled routine. Cron routines support
 editing instructions and schedule, Rename, Pause/Resume, Duplicate, Run Now,
 and History links to run chats. Edits autosave; Run Now also works while paused.
+If a background refresh fails, cached cron routines stay listed and their editor
+and queued autosave remain available. An initial load failure without cached data
+shows **Unable to load automation** instead. Cached event routines remain
+backend-managed even after a refresh failure.
 
 Event-triggered routines are backend-managed through the scheduled-action API.
 They do not appear in the frontend's cron-only automation lists. Opening an

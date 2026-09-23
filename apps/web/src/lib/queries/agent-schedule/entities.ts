@@ -42,7 +42,7 @@ export function scheduleToEntity(
 export function useAutomationEntities() {
   const schedulesQuery = useSchedulesQuery(() => true);
   return createMemo<AutomationEntity[]>(() => {
-    const data = schedulesQuery.isSuccess ? schedulesQuery.data : undefined;
+    const data = schedulesQuery.isPending ? undefined : schedulesQuery.data;
     if (!data) return [];
     const out: AutomationEntity[] = [];
     for (const schedule of data) {

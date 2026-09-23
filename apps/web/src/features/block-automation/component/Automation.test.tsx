@@ -6,7 +6,7 @@ import { Automation } from './Automation';
 
 const mocks = vi.hoisted(() => ({
   readSchedules: (): ScheduledAction[] => [],
-  status: 'success',
+  status: (): string => 'success',
   update: vi.fn(),
   create: vi.fn(),
   run: vi.fn(),
@@ -100,16 +100,16 @@ vi.mock('@queries/agent-schedule/schedules', () => ({
       return mocks.readSchedules();
     },
     get isSuccess() {
-      return mocks.status === 'success';
+      return mocks.status() === 'success';
     },
     get isPending() {
-      return mocks.status === 'pending';
+      return mocks.status() === 'pending';
     },
     get isError() {
-      return mocks.status === 'error';
+      return mocks.status() === 'error';
     },
     get error() {
-      return mocks.status === 'error' ? new Error('Unavailable') : null;
+      return mocks.status() === 'error' ? new Error('Unavailable') : null;
     },
   }),
   useScheduleHistoryQuery: () => ({
@@ -157,10 +157,11 @@ const events: ScheduledAction = {
   trigger: { type: 'events', filters: [{ events: ['document.updated'] }] },
 };
 let setSchedules: Setter<ScheduledAction[]>;
+let setStatus: Setter<string>;
 beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
-  mocks.status = 'success';
+  [mocks.status, setStatus] = createSignal('success');
   [mocks.readSchedules, setSchedules] = createSignal([cron]);
 });
 afterEach(() => {
@@ -248,7 +249,7 @@ describe('automation editor trigger guards', () => {
   });
 
   it('does not read pending resource data', () => {
-    mocks.status = 'pending';
+    setStatus('pending');
     mocks.readSchedules = () => {
       throw new Error('Pending data read');
     };
@@ -257,11 +258,49 @@ describe('automation editor trigger guards', () => {
   });
 
   it('renders a load error rather than spinning forever', () => {
-    mocks.status = 'error';
+    setStatus('error');
+    setSchedules([]);
     render(() => <Automation />);
     expect(
       screen.getByText('Unable to load automation. Please try again.')
     ).toBeTruthy();
+  });
+
+  it('preserves the cron editor and queued save after a background refetch error', async () => {
+    render(() => <Automation />);
+    const editor = screen.getByRole('textbox', { name: 'Instructions' });
+    fireEvent.input(editor, { target: { value: 'Queued during refetch' } });
+    setStatus('error');
+    expect(screen.getByRole('textbox', { name: 'Instructions' })).toBe(editor);
+    expect(screen.queryByText(/Unable to load automation/)).toBeNull();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        trigger: cron.trigger,
+        task: expect.objectContaining({ user_prompt: 'Queued during refetch' }),
+      }),
+    });
+  });
+
+  it('initializes the editor from cached data even when mounted after a refetch error', () => {
+    setStatus('error');
+    render(() => <Automation />);
+    expect(screen.getByRole('textbox', { name: 'Instructions' })).toBeTruthy();
+  });
+
+  it('keeps cached event routines backend-managed after a refetch error', async () => {
+    render(() => <Automation />);
+    mocks.changePrompt('Queued edit');
+    setSchedules([events]);
+    setStatus('error');
+    expect(screen.getByText('Backend-managed routine')).toBeTruthy();
+    expect(screen.queryByRole('textbox')).toBeNull();
+    mocks.rename('Stale rename');
+    mocks.duplicate();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
   });
 
   it('distinguishes a missing action from a backend-managed event', () => {

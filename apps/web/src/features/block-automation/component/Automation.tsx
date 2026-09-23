@@ -145,7 +145,7 @@ export function Automation() {
 
   const schedulesQuery = useSchedulesQuery(() => true);
   const schedule = createMemo(() =>
-    schedulesQuery.isSuccess
+    !schedulesQuery.isPending
       ? schedulesQuery.data?.find((item) => item.id === scheduleId)
       : undefined
   );
@@ -213,12 +213,14 @@ export function Automation() {
     debouncedSave();
   };
 
-  whenSettled(schedulesQuery, () => {
+  function initializeDraft(): void {
     const current = schedule();
     if (!current) return;
     setRawState(draftFromSchedule(current));
     panel.handle.setDisplayName(current.name);
-  });
+  }
+
+  whenSettled(schedulesQuery, initializeDraft, initializeDraft);
 
   const historyQuery = useScheduleHistoryQuery(
     () => scheduleId,
@@ -297,7 +299,7 @@ export function Automation() {
       fallback={
         <div class="flex size-full flex-col items-center justify-center gap-2 p-3 text-center text-sm text-ink-muted">
           <Switch fallback={<>Automation not found.</>}>
-            <Match when={schedulesQuery.isError}>
+            <Match when={schedulesQuery.isError && !schedule()}>
               Unable to load automation. Please try again.
             </Match>
             <Match when={schedulesQuery.isPending}>Loading…</Match>
