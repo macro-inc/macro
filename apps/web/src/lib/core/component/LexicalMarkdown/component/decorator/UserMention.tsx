@@ -1,9 +1,8 @@
-import { HoverCard } from '@core/component/HoverCard';
-import { UserTooltip } from '@core/component/UserTooltip';
+import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { getDisplayNameParts, macroIdToEmail, tryMacroId } from '@core/user';
 import type { UserMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { cn } from '@ui';
-import { createEffect, createMemo, createSignal, useContext } from 'solid-js';
+import { createEffect, createMemo, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { UPDATE_USER_DISPLAY_NAME_COMMAND } from '../../plugins';
 
@@ -70,14 +69,15 @@ export function UserMention(props: UserMentionDecoratorProps) {
     });
   });
 
-  const [open, setOpen] = createSignal(false);
-
   return (
-    <HoverCard
+    <UserCardTrigger
       placement="top"
-      open={open()}
-      onOpenChange={setOpen}
       triggerAs="span"
+      user={{
+        displayName: tooltipDisplayName() || email() || propEmail(),
+        email: email() || propEmail(),
+        id: userId(),
+      }}
       trigger={
         <span
           class={cn(
@@ -94,14 +94,6 @@ export function UserMention(props: UserMentionDecoratorProps) {
             @{mentionDisplayName()}
           </span>
         </span>
-      }
-      content={
-        <UserTooltip
-          displayName={tooltipDisplayName() || email() || propEmail()}
-          email={email() || propEmail()}
-          id={userId()}
-          onClose={() => setOpen(false)}
-        />
       }
     />
   );

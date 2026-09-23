@@ -212,19 +212,3 @@ export function useChannelRailLabelState(label: Accessor<ChannelLabel>) {
     };
   });
 }
-
-export function useChannelRailUnreadState() {
-  const rail = useChannelsRail();
-
-  return createMemo(() => {
-    const rowId = rowKeyForSection('unread');
-
-    return {
-      items: rail.unreadChannels(),
-      open: rail.isGroupOpen('unread'),
-      focused: rail.list.focus.key() === rowId,
-      containsFocus: rail.list.focus.item()?.group === 'unread',
-      domId: domIdForRow(rail.railId, rowId),
-    };
-  });
-}

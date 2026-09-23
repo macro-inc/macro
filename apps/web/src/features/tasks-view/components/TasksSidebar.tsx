@@ -12,6 +12,7 @@ import {
 } from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { toast } from '@core/component/Toast/Toast';
 import CheckSquareIcon from '@phosphor/check-square.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import NoteIcon from '@phosphor/note-pencil.svg';
@@ -98,10 +99,13 @@ function TaskFavorites(props: {
   ) => {
     if (openTask({ id: favorite.entityId, fallbackName }, { event })) return;
 
-    layout.openWithSplit(favoriteSplitContent(favorite), {
+    const result = layout.openWithSplit(favoriteSplitContent(favorite), {
       referredFrom: 'sidebar',
       preferNewSplit: event.shiftKey,
     });
+    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+      toast.alert('Content already open');
+    }
   };
 
   return (

@@ -13,7 +13,6 @@ import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { LinkedConversationDrawer } from '@core/linked-conversation';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
@@ -23,10 +22,6 @@ import { EmptyStatePanel } from '@ui';
 import { createSignal, Show, useContext } from 'solid-js';
 import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
-import {
-  ORIGIN_THREAD_DRAWER_ID,
-  sessionOriginThread,
-} from '../context/origin-thread';
 import { forgetPendingSession } from '../context/pending-session';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { AgentComposer } from './AgentComposer';
@@ -136,15 +131,6 @@ function AgentBlockContent(props: {
                 </div>
               </FloatRegionOrInline>
             </AgentChangesSplit>
-            <Show when={sessionOriginThread(session())}>
-              {(origin) => (
-                <LinkedConversationDrawer
-                  id={ORIGIN_THREAD_DRAWER_ID}
-                  parent={{ type: 'channel', id: origin().channelId }}
-                  messageId={origin().messageId}
-                />
-              )}
-            </Show>
           </SidePanel.Layout>
         </div>
       </StaticMarkdownContext>

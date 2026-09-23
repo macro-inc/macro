@@ -352,7 +352,7 @@ export function navigateToSidebarView(args: {
     mergeHistory: false,
     allowDuplicate: viewId !== 'calendar',
     referredFrom,
-  });
+  }).split;
 }
 
 export const registerSidebarHotkeys = ({
@@ -1763,14 +1763,17 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       props.onOpenCurrentSplit();
       return;
     }
-
     if (!props.content) return;
 
-    const split = layout.openWithSplit(props.content(), {
+    const result = layout.openWithSplit(props.content(), {
       allowDuplicate: true,
       mergeHistory: false,
       referredFrom: 'sidebar',
     });
+    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+      toast.alert('Content already open');
+    }
+    const split = result.split;
     if (split) props.onOpened?.(split, 'current-split');
   };
 
@@ -1787,12 +1790,17 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
 
     if (!props.content) return;
 
-    const split = manager.createNewSplit({
-      content: props.content(),
+    const result = manager.openWithSplit(props.content(), {
       activate: true,
       allowDuplicate: true,
+      preferNewSplit: true,
+      replaceWhenFull: false,
       referredFrom: 'sidebar',
     });
+    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+      toast.alert('Content already open');
+    }
+    const split = result.split;
     if (split) props.onOpened?.(split, 'new-split');
   };
 

@@ -65,7 +65,6 @@ import type {
   ChannelsRailSection,
   ChannelsTab,
 } from '../../types';
-import { isDirectMessage } from '../../utils';
 import {
   buildChannelRailRows,
   buildChannelSectionRows,
@@ -95,7 +94,6 @@ import { useChannelRailActivity } from './hooks/useChannelRailActivity';
 
 const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
   'favorites',
-  'unread',
   'channels',
   'direct_messages',
 ];
@@ -334,17 +332,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     })
   );
 
-  // The Unread section is channels only; DMs keep their own section.
-  const unreadChannels = createMemo(() =>
-    channelActivity
-      .unreadChannelOrder()
-      .map((id) => channelsById().get(id))
-      .filter(
-        (channel): channel is ChannelEntity =>
-          channel !== undefined && !isDirectMessage(channel)
-      )
-  );
-
   const labelUnreadCount = (label: ChannelLabel) => {
     const unread = channelActivity.unreadChannelIds();
     return filterChannelLabelMembers(label.channelIds, channelsById()).filter(
@@ -370,7 +357,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
       state.expandedGroups,
       {
         favorites: favorites(),
-        unread: unreadChannels(),
         channels: props.sources.channels.items(),
         direct_messages: props.sources.direct_messages.items(),
         recents: props.sources.recents.items(),
@@ -455,13 +441,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
         ? listRoot()
         : row.kind === 'favorite'
           ? sectionScrollRoots().favorites
-          : row.kind === 'unread'
-            ? sectionScrollRoots().unread
-            : row.kind === 'conversation' && row.group
-              ? sectionScrollRoots()[row.group]
-              : state.tab === 'recents'
-                ? listRoot()
-                : undefined;
+          : row.kind === 'conversation' && row.group
+            ? sectionScrollRoots()[row.group]
+            : state.tab === 'recents'
+              ? listRoot()
+              : undefined;
       if (!element || !scrollRoot) return;
 
       const elementBounds = element.getBoundingClientRect();
@@ -648,7 +632,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           previewAfterNavigation.clear();
 
           const row = event.result?.item;
-          if (row?.kind === 'conversation' || row?.kind === 'unread') {
+          if (row?.kind === 'conversation') {
             previewAfterNavigation(row.channel);
           } else if (
             row?.kind === 'favorite' &&
@@ -694,11 +678,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const currentGroup = list.focus.item()?.group;
 
     const sections = CHANNEL_RAIL_SECTIONS.filter((section) =>
-      section === 'favorites'
-        ? favorites().length > 0
-        : section === 'unread'
-          ? unreadChannels().length > 0
-          : true
+      section === 'favorites' ? favorites().length > 0 : true
     );
 
     const currentIndex = currentGroup ? sections.indexOf(currentGroup) : -1;
@@ -1071,7 +1051,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     isLabelOpen,
     toggleLabel: (labelId) => setLabelOpen(labelId, !isLabelOpen(labelId)),
     channelSectionRows,
-    unreadChannels,
     labelUnreadCount,
     createLabel,
     createSmartTag,

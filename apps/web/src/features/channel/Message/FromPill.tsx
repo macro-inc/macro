@@ -1,8 +1,7 @@
-import { HoverCard } from '@core/component/HoverCard';
-import { UserTooltip } from '@core/component/UserTooltip';
+import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { cn } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { useMessage } from './context';
 
 type FromPillProps = {
@@ -28,8 +27,6 @@ export function FromPill(props: FromPillProps) {
   };
   const label = () => displayName() || email() || (triggeredBy() ?? '');
 
-  const [open, setOpen] = createSignal(false);
-
   return (
     <Show when={triggeredBy()}>
       <span
@@ -39,23 +36,18 @@ export function FromPill(props: FromPillProps) {
         )}
       >
         from
-        <HoverCard
+        <UserCardTrigger
           placement="top"
-          open={open()}
-          onOpenChange={setOpen}
           triggerAs="span"
+          user={{
+            displayName: label(),
+            email: email(),
+            id: triggeredBy(),
+          }}
           trigger={
             <span class="cursor-default rounded-md p-0.5 font-medium text-accent hover:bg-accent/20 focus:bg-accent/20">
               {label()}
             </span>
-          }
-          content={
-            <UserTooltip
-              displayName={label()}
-              email={email()}
-              id={triggeredBy()}
-              onClose={() => setOpen(false)}
-            />
           }
         />
       </span>

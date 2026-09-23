@@ -396,8 +396,6 @@ export function Thread(props: {
   theme?: EditorThemeClasses;
   maxHeight?: number;
   handleMouseDown?: (e: MouseEvent) => void;
-  ref?: (el: HTMLDivElement) => void;
-  width?: number;
 }) {
   let measureContainerRef!: HTMLDivElement;
 
@@ -419,32 +417,49 @@ export function Thread(props: {
       threadId={props.comment.threadId}
       maxHeight={props.maxHeight}
       isActive={props.isActive}
-      forceWidth={props.width}
       transition={false}
     >
-      <Layer depth={2}>
-        <div
-          data-comment-thread
-          // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
-          // pointer-events: none vs. all inside the .pdfOverlayInner div.
-          class="shrink-0 border border-edge bg-surface p-2 shadow-md rounded-xl shadow-drop-shadow portal-scope pointer-events-auto pdf-pointer-event-reset"
-          classList={{
-            'transition-transform duration-100': true,
-            '-translate-x-8': props.isActive,
-          }}
-          style={{
-            width: props.width ? `${props.width}px` : 'auto',
-          }}
-          ref={props.ref}
-        >
-          <ThreadBody
-            comment={props.comment}
-            isActive={props.isActive}
-            theme={props.theme}
-            flatComposer
-          />
-        </div>
-      </Layer>
+      <ThreadCard
+        comment={props.comment}
+        isActive={props.isActive}
+        theme={props.theme}
+        shifted={props.isActive}
+      />
     </MeasureContainer>
+  );
+}
+
+/** The floating card around a thread, placed by the margin or by a popover. */
+export function ThreadCard(props: {
+  comment: Root;
+  isActive: boolean;
+  theme?: EditorThemeClasses;
+  width?: number;
+  /** Nudge the active card toward the text it annotates. */
+  shifted?: boolean;
+}) {
+  return (
+    <Layer depth={2}>
+      <div
+        data-comment-thread
+        // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
+        // pointer-events: none vs. all inside the .pdfOverlayInner div.
+        class="shrink-0 border border-edge bg-surface p-2 shadow-md rounded-xl shadow-drop-shadow portal-scope pointer-events-auto pdf-pointer-event-reset"
+        classList={{
+          'transition-transform duration-100': true,
+          '-translate-x-8': props.shifted,
+        }}
+        style={{
+          width: props.width ? `${props.width}px` : 'auto',
+        }}
+      >
+        <ThreadBody
+          comment={props.comment}
+          isActive={props.isActive}
+          theme={props.theme}
+          flatComposer
+        />
+      </div>
+    </Layer>
   );
 }

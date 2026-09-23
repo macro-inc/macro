@@ -69,7 +69,6 @@ function createInitialState(
       initial.mobileTab ?? (initial.tab === 'recents' ? 'recents' : 'channels'),
     expandedGroups: {
       favorites: initial.expandedGroups?.favorites ?? true,
-      unread: initial.expandedGroups?.unread ?? true,
       channels: initial.expandedGroups?.channels ?? true,
       direct_messages: initial.expandedGroups?.direct_messages ?? true,
     },

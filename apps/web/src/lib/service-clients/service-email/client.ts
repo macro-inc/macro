@@ -5,20 +5,25 @@ import {
 } from '@core/util/fetchWithToken';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
+import type {
+  CalendarEvent,
+  CreateCalendarEventRequest,
+  ListCalendarsResponse,
+  RsvpCalendarEventRequest,
+  UpdateCalendarEventRequest,
+} from '@service-calendar/generated/schemas';
+import { CalendarMutationErrorCode } from '@service-calendar/generated/schemas/calendarMutationErrorCode';
 import type { Result } from 'neverthrow';
 import type {
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
   ApiPaginatedThreadCursor,
-  CalendarEvent,
-  CreateCalendarEventRequest,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetThreadResponse,
   ListBackfillJobsResponse,
-  ListCalendarsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
@@ -26,11 +31,9 @@ import type {
   PatchSettingsRequest,
   PatchSettingsResponse,
   ResyncResponse,
-  RsvpCalendarEventRequest,
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
-  UpdateCalendarEventRequest,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -40,7 +43,6 @@ import type {
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './generated/schemas';
-import { CalendarMutationErrorCode } from './generated/schemas/calendarMutationErrorCode';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
