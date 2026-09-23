@@ -39,6 +39,14 @@ make retries incorrectly look unchanged. With no optimistic layers, the changed
 record keys also identify visible changes without duplicate before/after snapshots.
 Pending layers still use full effective-view comparison and rebasing.
 
+## Browser OPFS writes
+
+The OPFS adapter coalesces each Turso vectored write into batches of at most
+1 MiB instead of making one synchronous browser call per WAL frame. Scratch
+space is bounded to the same size. Batching never spans separate I/O operations
+or delays completion/flushes; offset preflight, partial-write retries, and
+first-error propagation retain their existing semantics.
+
 ## Projection refreshes
 
 Hydration folds authoritative index mutations in order and writes only final
