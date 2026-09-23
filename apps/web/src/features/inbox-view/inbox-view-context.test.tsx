@@ -17,6 +17,17 @@ import {
 import { INBOX_ENTRY_STATE_KEY } from './persistence';
 import type { InboxViewStateOptions } from './types';
 
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
 const entry = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
   captors: new Map<string, () => unknown>(),

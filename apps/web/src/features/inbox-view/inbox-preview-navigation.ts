@@ -1,5 +1,5 @@
+import { getChannelEntityTarget } from '@app/features/next-soup/utils';
 import type { CalendarBlockProps } from '@block-calendar/types';
-import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import {
   type PreviewPanelSelection,
   previewBlockTarget,
@@ -33,9 +33,17 @@ function selectionSearch(
   selection: PreviewPanelSelection,
   blockParams: Record<string, unknown> | undefined
 ): InboxPreviewSearchParams {
-  const channelParam = (key: string) => {
-    const value = blockParams?.[key];
-    return typeof value === 'string' ? value : '';
+  const channelTarget =
+    selection.type === 'channel' ||
+    selection.type === 'channel_message' ||
+    selection.type === 'channel_thread'
+      ? getChannelEntityTarget(selection)
+      : undefined;
+  const channelSearch = {
+    targetMessageId:
+      channelTarget?.kind === 'message' ? channelTarget.messageId : '',
+    targetThreadId:
+      channelTarget?.kind === 'message' ? (channelTarget.threadId ?? '') : '',
   };
   const base: InboxPreviewSearchParams = {
     ...inboxPreviewSearch.defaults,
@@ -55,8 +63,7 @@ function selectionSearch(
     case 'channel':
       return {
         ...base,
-        targetMessageId: channelParam(CHANNEL_URL_PARAMS.message),
-        targetThreadId: channelParam(CHANNEL_URL_PARAMS.thread),
+        ...channelSearch,
       };
     case 'channel_message':
     case 'channel_thread':
@@ -64,8 +71,7 @@ function selectionSearch(
         ...base,
         sourceMessageId: selection.messageId,
         sourceThreadId: selection.threadId ?? '',
-        targetMessageId: channelParam(CHANNEL_URL_PARAMS.message),
-        targetThreadId: channelParam(CHANNEL_URL_PARAMS.thread),
+        ...channelSearch,
       };
     case 'calendar_event':
       return {

@@ -1,5 +1,6 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { inboxPreviewNavigation } from '../inbox-view/inbox-preview-navigation';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -456,6 +457,32 @@ describe('Drive document routing', () => {
       );
     }
   );
+});
+
+describe('Inbox channel preview navigation', () => {
+  it('preserves explicit message targets on whole-channel selections', () => {
+    const result = inboxPreviewNavigation({
+      type: 'channel',
+      id: 'channel-1',
+      target: { messageId: 'message-1', threadId: 'thread-1' },
+    });
+    expect(result.params).toEqual({
+      blockType: 'channel',
+      previewId: 'channel-1',
+    });
+    expect(result.search).toMatchObject({
+      targetMessageId: 'message-1',
+      targetThreadId: 'thread-1',
+    });
+  });
+  it('keeps untargeted channels at latest', () => {
+    expect(
+      inboxPreviewNavigation({ type: 'channel', id: 'channel-1' }).search
+    ).toMatchObject({
+      targetMessageId: '',
+      targetThreadId: '',
+    });
+  });
 });
 
 describe('getChannelEntityTarget', () => {
