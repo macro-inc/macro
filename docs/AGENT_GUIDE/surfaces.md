@@ -471,7 +471,7 @@ A presentation or refresh error after successful delivery is not a reason to sen
 again.
 
 Choosing or clearing a send time is local preparation only. The composer remains
-editable and autosaves normally, shows **Send later: ...** to the left of the
+editable and autosaves normally, shows **Scheduled send: ...** to the left of the
 toolbar controls, and performs no schedule, unschedule, archive, or delivery
 request. **Cancel** beside that preview clears the local choice. The clock and
 primary arrow remain icon-sized; the clock turns accent-colored when a time is
@@ -498,7 +498,7 @@ discard, attachment, formatting, the clock, or the primary action. Reply recipie
 cannot be edited or dragged during a confirmed schedule or active delivery mutation.
 
 When verifying, use an intercepted or isolated delivery fixture: choose a time,
-confirm that the editable **Send later** preview makes zero delivery calls, then use
+confirm that the editable **Scheduled send** preview makes zero delivery calls, then use
 the primary button and `Ctrl`/`Cmd`+`Enter separately to confirm exactly one schedule
 call. Reopen a confirmed schedule to exercise proposal/update and explicit cancel.
 If a later lifecycle refresh fails, the confirmed result remains in place; stale

@@ -97,14 +97,7 @@ export function EmailHeader(props: EmailHeaderProps) {
         </div>
       </div>
 
-      <Show
-        when={state.tab !== 'scheduled'}
-        fallback={
-          <p class="text-sm text-ink-muted">
-            Confirmed scheduled messages across the selected inboxes.
-          </p>
-        }
-      >
+      <Show when={state.tab !== 'scheduled'}>
         <div class="flex min-w-0 items-center justify-between gap-3">
           <SearchBar
             ref={(element) => (searchInput = element)}

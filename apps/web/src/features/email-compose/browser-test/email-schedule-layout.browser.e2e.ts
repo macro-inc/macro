@@ -52,6 +52,10 @@ async function expectNoOverlap(toolbar: Locator) {
     summaryBox!.x + summaryBox!.width + 0.5
   );
   expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(cancelBox!.x + 0.5);
+  expect(
+    cancelBox!.x - (labelBox!.x + labelBox!.width),
+    'Cancel must sit beside the time it cancels'
+  ).toBeLessThanOrEqual(8);
 }
 
 test('selected time appears to the left while clock and send stay icon-sized', async ({
@@ -61,9 +65,9 @@ test('selected time appears to the left while clock and send stay icon-sized', a
   await chooseTomorrowAtNine(page);
 
   const toolbar = page.getByTestId('toolbar');
-  await expect(toolbar).toContainText('Send later:');
+  await expect(toolbar).toContainText('Scheduled send:');
   await expect(
-    toolbar.getByRole('button', { name: 'Cancel send time' })
+    toolbar.getByRole('button', { name: 'Clear send time' })
   ).toBeVisible();
 
   const clock = toolbar.getByRole('button', { name: /Send time set to/ });
@@ -77,7 +81,7 @@ test('selected time appears to the left while clock and send stay icon-sized', a
   await expect(clock.locator('svg')).toHaveClass(/text-accent/);
   await expectNoOverlap(toolbar);
 
-  await toolbar.getByRole('button', { name: 'Cancel send time' }).click();
+  await toolbar.getByRole('button', { name: 'Clear send time' }).click();
   const clearedClock = toolbar.getByRole('button', {
     name: 'Choose send time',
   });
@@ -117,7 +121,9 @@ test('pointer schedule shows Undo and exposes the message in Scheduled', async (
   await expect(page.getByRole('heading', { name: 'Scheduled' })).toBeVisible();
   await expect(page.getByText('Quarterly notes')).toBeVisible();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(page.getByTestId('toolbar')).not.toContainText('Send later:');
+  await expect(page.getByTestId('toolbar')).not.toContainText(
+    'Scheduled send:'
+  );
   await expect(
     page.getByRole('button', { name: /Scheduled \(0\)/ })
   ).toBeVisible();
@@ -133,7 +139,9 @@ test('Undo cancels only the confirmed schedule and restores an editable draft', 
     .click();
   await page.getByTestId('toast').getByRole('button', { name: 'Undo' }).click();
 
-  await expect(page.getByTestId('toolbar')).not.toContainText('Send later:');
+  await expect(page.getByTestId('toolbar')).not.toContainText(
+    'Scheduled send:'
+  );
   await expect(
     page.getByRole('button', { name: /Scheduled \(0\)/ })
   ).toBeVisible();

@@ -54,7 +54,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
     hasProposal();
 
   return (
-    <Tooltip label={accessibleLabel()} class="min-w-0 max-w-full">
+    <Tooltip label="Schedule send time" class="min-w-0 max-w-full">
       <div class="min-w-0 max-w-full">
         <DateSelector
           selectedDate={props.selectedTime}
