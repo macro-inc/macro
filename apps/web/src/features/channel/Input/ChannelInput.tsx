@@ -501,7 +501,13 @@ export function ChannelInput(props: ChannelInputProps) {
   };
 
   return (
-    <Input.Root input={inputState.view()} commands={commands}>
+    <Input.Root
+      input={inputState.view()}
+      commands={commands}
+      // An inline reply's bottom margin spaces it from the thread below; a
+      // flat composer's host card already pads it.
+      class={cn(props.flat && 'mb-0')}
+    >
       <Show when={isCollapsed()}>
         {/* File picker opened from the CollapsedInput attach button. */}
         <input

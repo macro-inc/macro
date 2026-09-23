@@ -634,6 +634,21 @@ describe('Input slots', () => {
 
     expect(screen.getByText('Drop files to attach')).toBeTruthy();
   });
+
+  it('drops the inline reply margin from a flat composer', () => {
+    const replyInput: InputData = { ...baseInput, mode: 'reply' };
+    const { container: inline } = render(() => (
+      <ChannelInput input={replyInput} />
+    ));
+    const { container: flat } = render(() => (
+      <ChannelInput input={replyInput} flat />
+    ));
+
+    expect(inline.querySelector('[data-input]')?.classList).toContain('mb-4');
+    const flatRoot = flat.querySelector('[data-input]');
+    expect(flatRoot?.classList).not.toContain('mb-4');
+    expect(flatRoot?.classList).toContain('mb-0');
+  });
 });
 
 /**
