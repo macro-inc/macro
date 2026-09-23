@@ -3,6 +3,7 @@ import {
   driveDocumentFromContent,
   drivePath,
 } from '@app/features/drive-view/primitives/drive-route';
+import { driveDocumentBlockType } from '@app/features/drive-view/primitives/drive-route-schema';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import { EMAIL_DETAIL_SEARCH_NAMESPACE } from '@app/features/email-view/email-route';
 import {
@@ -26,6 +27,20 @@ export function createAppSplitRouterMiddleware(options: {
 }): readonly SplitRouterMiddleware[] {
   return [
     ({ to, redirect }) => {
+      if (
+        to.location.route.matches[0].id === 'drive' &&
+        options.isTouchDevice()
+      ) {
+        const params = routeParams(to.location.route);
+        if (
+          typeof params.documentType === 'string' &&
+          typeof params.documentId === 'string'
+        ) {
+          return redirect(
+            `/${driveDocumentBlockType(params.documentType)}/${encodeURIComponent(params.documentId)}`
+          );
+        }
+      }
       if (to.location.route.matches[0].id !== 'legacy-content') return;
       const params = routeParams(to.location.route);
       const type = typeof params.type === 'string' ? params.type : undefined;

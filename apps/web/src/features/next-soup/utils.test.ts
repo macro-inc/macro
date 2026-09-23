@@ -1,4 +1,9 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: vi.fn(() => false),
+}));
 
 const operationMocks = vi.hoisted(() => {
   const store: Record<string, string> = {};
@@ -108,6 +113,7 @@ import {
 afterEach(() => {
   setGlobalSplitManager(undefined);
   vi.clearAllMocks();
+  vi.mocked(isTouchDevice).mockReturnValue(false);
 });
 
 describe('agent session search navigation', () => {
@@ -353,6 +359,57 @@ describe('calendar block navigation', () => {
 });
 
 describe('Drive document routing', () => {
+  it('keeps task documents as legacy task blocks on touch', async () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const openWithSplit = vi.fn();
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({})),
+      openWithSplit,
+    } as unknown as SplitManager);
+    await openEntityInSplitFromUnifiedList(
+      {
+        type: 'document',
+        id: 'task-1',
+        fileType: 'md',
+        subType: { type: 'task' },
+      } as EntityData,
+      {}
+    );
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'task', id: 'task-1', params: undefined },
+      expect.any(Object)
+    );
+  });
+  it.each([
+    'md',
+    'pdf',
+    'canvas',
+    'code',
+    'image',
+    'video',
+    'spreadsheet',
+    'unknown',
+  ] as const)(
+    'opens %s documents as legacy blocks on touch',
+    async (fileType) => {
+      vi.mocked(isTouchDevice).mockReturnValue(true);
+      const openWithSplit = vi.fn();
+      setGlobalSplitManager({
+        activeSplit: vi.fn(),
+        getOrchestrator: vi.fn(() => ({})),
+        openWithSplit,
+      } as unknown as SplitManager);
+      await openEntityInSplitFromUnifiedList(
+        { type: 'document', id: 'doc-1', fileType } as EntityData,
+        { openInNewSplit: true }
+      );
+      expect(openWithSplit).toHaveBeenCalledWith(
+        { type: fileType, id: 'doc-1', params: undefined },
+        expect.objectContaining({ preferNewSplit: true })
+      );
+    }
+  );
   it.each(['md', 'pdf', 'canvas'] as const)(
     'opens %s documents as canonical Drive content',
     async (fileType) => {

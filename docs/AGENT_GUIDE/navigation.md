@@ -38,6 +38,12 @@
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 
+On touch devices, documents (including tasks) open in legacy blocks rather than
+inline Drive details. Canonical `/app/drive/.../<document-type>/<uuid>` links also
+fall back to legacy document routes. This uses touch detection, not the native-app
+check: in DevTools, enable touch emulation rather than only narrowing the viewport.
+Legacy document URLs upgrade to Drive only when desktop detail rendering is enabled.
+
 Splits: the app is a tiling window manager. Public variable-length routes use
 `~` as the boundary between panes
 (`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`

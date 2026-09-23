@@ -39,6 +39,7 @@ import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
 } from '@core/dom-selectors';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
@@ -672,7 +673,9 @@ export const openEntityInSplitFromUnifiedList = async (
   // Documents are hosted by Drive. Construct the canonical routed content
   // before opening the split so the layout manager does not mount a legacy
   // block and immediately replace it during router feedback.
-  const driveDocument = driveDocumentFromContent(content);
+  const driveDocument = !isTouchDevice()
+    ? driveDocumentFromContent(content)
+    : undefined;
   let splitContent: SplitContent = driveDocument
     ? driveSplitContent({ kind: 'tab', tab: 'owned' }, driveDocument)
     : { ...content, params };

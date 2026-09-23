@@ -411,6 +411,57 @@ describe('layoutManager', () => {
       });
     }
 
+    it.each([
+      ['md', 'md'],
+      ['pdf', 'pdf'],
+      ['canvas', 'canvas'],
+      ['task', 'md'],
+      ['snippet', 'md'],
+      ['skill', 'md'],
+      ['csv', 'code'],
+      ['code', 'code'],
+      ['image', 'image'],
+      ['video', 'video'],
+      ['spreadsheet', 'spreadsheet'],
+      ['unknown', 'unknown'],
+    ])(
+      'preserves legacy %s blocks on touch, including canonical links',
+      async (type, blockType) => {
+        for (const path of [
+          `/${blockType}/doc`,
+          `/drive/${type}/doc`,
+          `/drive/shared/${type}/doc`,
+          `/drive/folder/folder/${type}/doc`,
+        ]) {
+          const { manager, location, router, dispose } = ingressRouter(path, {
+            touch: true,
+          });
+          await router.settled();
+          expect(location.read().pathname).toBe(`/${blockType}/doc`);
+          expect(manager.splits()[0].content).toMatchObject({
+            type: blockType,
+            id: 'doc',
+          });
+          expect(location.history()).toHaveLength(1);
+          router.dispose();
+          dispose();
+        }
+      }
+    );
+
+    it('keeps Drive list routes on touch', async () => {
+      const { location, router, dispose } = ingressRouter(
+        '/drive/~/drive/shared/~/drive/folder/folder',
+        { touch: true }
+      );
+      await router.settled();
+      expect(location.read().pathname).toBe(
+        '/drive/~/drive/shared/~/drive/folder/folder'
+      );
+      router.dispose();
+      dispose();
+    });
+
     it('normalizes legacy search per detail pane without overriding canonical values', async () => {
       const { manager, location, router, dispose } = ingressRouter(
         '/mail/one/~/channels/channel/c1/~/mail/two/~/mail' +
