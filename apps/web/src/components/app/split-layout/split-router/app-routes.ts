@@ -10,18 +10,30 @@ import {
 } from '@core/constant/settingsTabsConfig';
 import { type Component, lazy } from 'solid-js';
 import { z } from 'zod';
-import * as views from './app-views';
+import type * as AppViews from './app-views';
 import { handleLegacySplitPath, legacySplitRoute } from './legacy-route';
+
+type AppViewSelector = (
+  views: typeof AppViews
+) => Component<Record<string, unknown>>;
+
+// URL parsing must not initialize the application views and their dependencies.
+function lazyView(select: AppViewSelector) {
+  return lazy(async () => {
+    const views = await import('./app-views');
+    return { default: views.withLaunchParams(() => select(views)) };
+  });
+}
 
 function viewRoute(
   id: string,
-  view: () => Component<Record<string, unknown>>,
+  view: AppViewSelector,
   externalSearch: string[] = []
 ) {
   return defineRoute({
     id: `view-${id}`,
     path: id,
-    component: views.withLaunchParams(view),
+    component: lazyView(view),
     search: '*',
     externalSearch,
     claim: () => ({ namespace: 'component', id }),
@@ -34,7 +46,7 @@ const agentsSplitRoutes = ['agents', 'coders', 'agent-chats'].map((section) =>
     path: section === 'agent-chats' ? 'agents/chat/:id' : `${section}/:id`,
     aliases: section === 'agent-chats' ? ['agent-chats/:id'] : undefined,
     params: z.object({ id: z.string() }),
-    component: views.withLaunchParams(() => views.AgentsRouteView),
+    component: lazyView((views) => views.AgentsRouteView),
     remountKey: ({ id }) => id,
     claim: ({ id }) => ({
       namespace: section === 'agent-chats' ? 'chat' : 'agent',
@@ -52,12 +64,12 @@ const settingsSplitRoute = defineRoute({
       .refine((tab) => settingsSlugToTab(tab) !== undefined)
       .default(settingsTabToSlug('Account')),
   }),
-  component: views.withLaunchParams(() => views.SettingsView),
+  component: lazyView((views) => views.SettingsView),
   claim: () => ({ namespace: 'component', id: 'settings' }),
   externalSearch: ['pair', 'createAgent'],
 });
 
-const DriveView = views.withLaunchParams(() => views.DriveRouteView);
+const DriveView = lazyView((views) => views.DriveRouteView);
 const DriveDetailView = lazy(async () => ({
   default: (await import('@app/features/drive-view/components/DriveDetailView'))
     .DriveDetailView,
@@ -85,20 +97,20 @@ export const appSplitRoutes: SplitRoutes = {
     withDriveComponents(driveSplitRoute),
     settingsSplitRoute,
     ...agentsSplitRoutes,
-    viewRoute('home', () => views.HomeView),
-    viewRoute('getting-started', () => views.GettingStartedView),
-    viewRoute('inbox', () => views.InboxRouteView),
-    viewRoute('recent', () => views.RecentView),
-    viewRoute('activity', () => views.ActivityView),
-    viewRoute('reminders', () => views.RemindersView),
-    viewRoute('agents', () => views.AgentsRouteView, ['createAgent']),
-    viewRoute('mail', () => views.MailView),
-    viewRoute('tasks', () => views.TasksRouteView),
-    viewRoute('channels', () => views.ChannelsRouteView),
-    viewRoute('calls', () => views.CallsView),
-    viewRoute('companies', () => views.CompaniesView, ['crmView']),
-    viewRoute('folders', () => views.FoldersView),
-    viewRoute('search', () => views.SearchView),
+    viewRoute('home', (views) => views.HomeView),
+    viewRoute('getting-started', (views) => views.GettingStartedView),
+    viewRoute('inbox', (views) => views.InboxRouteView),
+    viewRoute('recent', (views) => views.RecentView),
+    viewRoute('activity', (views) => views.ActivityView),
+    viewRoute('reminders', (views) => views.RemindersView),
+    viewRoute('agents', (views) => views.AgentsRouteView, ['createAgent']),
+    viewRoute('mail', (views) => views.MailView),
+    viewRoute('tasks', (views) => views.TasksRouteView),
+    viewRoute('channels', (views) => views.ChannelsRouteView),
+    viewRoute('calls', (views) => views.CallsView),
+    viewRoute('companies', (views) => views.CompaniesView, ['crmView']),
+    viewRoute('folders', (views) => views.FoldersView),
+    viewRoute('search', (views) => views.SearchView),
     legacySplitRoute,
   ],
   globalSearch: ['referral_code'],
