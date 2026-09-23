@@ -5,14 +5,17 @@ import {
   FileDetailLoadGate,
   type FileDetailShareProps,
 } from '../components/FileDetail';
+import { downloadFileOperation } from '../components/file-detail-operations';
+import { getFileDocumentBlob } from '../queries/file-document';
 import {
   loadVideoDocument,
   type VideoDocumentData,
 } from '../queries/video-document';
+import { documentDownloadName } from '../util/document-download-name';
+import { downloadWithProgress } from '../util/download-with-progress';
+import type { FileDetailContext } from '../util/file-detail-context';
 
-export type VideoDetailContext = {
-  data: VideoDocumentData;
-};
+export type VideoDetailContext = FileDetailContext<VideoDocumentData>;
 
 export function VideoDetailDocument(
   props: FileDetailShareProps & {
@@ -21,6 +24,21 @@ export function VideoDetailDocument(
     children?: (context: VideoDetailContext) => JSX.Element;
   }
 ) {
+  const operations = [
+    downloadFileOperation(() => {
+      const fileName = documentDownloadName(props.data.documentMetadata);
+      void downloadWithProgress(fileName, (onProgress) =>
+        getFileDocumentBlob(
+          {
+            documentId: props.documentId,
+            documentVersionId: props.data.documentMetadata.documentVersionId,
+          },
+          { onProgress }
+        )
+      );
+    }),
+  ];
+
   return (
     <FileDetailLayout
       documentId={props.documentId}
@@ -31,7 +49,12 @@ export function VideoDetailDocument(
       shareOpen={props.shareOpen}
       onShareOpenChange={props.onShareOpenChange}
     >
-      {props.children?.({ data: props.data })}
+      {props.children?.({
+        data: props.data,
+        documentMetadata: props.data.documentMetadata,
+        userAccessLevel: props.data.userAccessLevel,
+        operations,
+      })}
       <VideoContent
         videoUrl={props.data.videoUrl}
         fileType={props.data.documentMetadata.fileType}

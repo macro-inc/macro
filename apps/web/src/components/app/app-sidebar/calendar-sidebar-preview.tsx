@@ -1,8 +1,3 @@
-import { useOpenEventComposer } from '@app/features/block-calendar/components/use-open-event-composer';
-import {
-  CALENDAR_BLOCK_ID,
-  type CalendarBlockProps,
-} from '@app/features/block-calendar/types';
 import type { CalendarGridHandle } from '@app/features/calendar/components/CalendarGrid';
 import { CalendarGridSkeleton } from '@app/features/calendar/components/CalendarGridSkeleton';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
@@ -18,8 +13,9 @@ import {
   formatCalendarTime,
   getDefaultCalendarTimeFormat,
 } from '@app/features/calendar/utils/time-format';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { useSplitLayout } from '@components/app/split-layout/layout';
+import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
+import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
+
 import { HoverCard } from '@core/component/HoverCard';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { openExternalUrl } from '@core/util/url';
@@ -217,7 +213,6 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
   const [timeFormat, setTimeFormat] = createSignal<CalendarTimeFormat>(
     getDefaultCalendarTimeFormat()
   );
-  const layout = useSplitLayout();
   const openEventComposer = useOpenEventComposer();
   const { sourceById, sources } = useCalendarSources();
   const isSourceVisible = (sourceId: string) =>
@@ -247,31 +242,15 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
       setSelectedEventId(undefined);
     }
   };
-  const openEventInCalendar = async (event: CalendarEvent) => {
-    const params: CalendarBlockProps = {
-      eventId: event.eventId,
-      occurrenceKey: event.occurrenceKey,
-      range: range(),
-    };
-    const manager = globalSplitManager();
-    const existing = manager?.getSplitByContent('calendar', CALENDAR_BLOCK_ID);
-    if (existing) {
-      existing.activate();
-    } else {
-      layout.openWithSplit(
-        { type: 'calendar', id: CALENDAR_BLOCK_ID, params },
-        {
-          allowDuplicate: false,
-          mergeHistory: false,
-          referredFrom: 'sidebar',
-        }
-      );
-    }
-
-    const calendarHandle = await manager
-      ?.getOrchestrator()
-      .getBlockHandle(CALENDAR_BLOCK_ID, 'calendar');
-    await calendarHandle?.goToLocationFromParams(params);
+  const openEventInCalendar = (event: CalendarEvent) => {
+    openCalendarView(
+      {
+        eventId: event.eventId,
+        occurrenceKey: event.occurrenceKey,
+        range: range(),
+      },
+      { referredFrom: 'sidebar' }
+    );
   };
 
   return (

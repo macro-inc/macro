@@ -207,6 +207,14 @@ fn emits_in_network_service_url_overrides() {
             "http://document-storage-service:8080",
         ),
         (
+            "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
+            "http://agent-harness-service:8101",
+        ),
+        (
+            "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL",
+            "http://scheduled-action-service:8080",
+        ),
+        (
             "OVERRIDE_STATIC_FILE_SERVICE_URL",
             "http://static-file-service:8080",
         ),

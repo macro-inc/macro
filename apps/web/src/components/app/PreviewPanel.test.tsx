@@ -20,8 +20,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/features/next-soup/utils', () => ({
   getChannelEntityTarget: () => ({ kind: 'latest' }),
   navigateChannelEntityToTarget: mocks.navigateChannel,
-  navigateCalendarEntityToTarget: mocks.navigateCalendar,
-  calendarBlockParamsForEntity: vi.fn(),
+  navigateCalendarPreviewToTarget: mocks.navigateCalendar,
+  calendarViewTargetForEntity: vi.fn(),
   reminderSplitTarget: vi.fn(),
 }));
 vi.mock('@block-calendar/types', () => ({ CALENDAR_BLOCK_ID: 'calendar' }));

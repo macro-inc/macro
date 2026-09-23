@@ -24,6 +24,7 @@ export {
   markNotificationForEntityIdAsRead,
   markNotificationsForEntityAsDone,
   markNotificationsForEntityAsRead,
+  markNotificationsForEntityAsReadInBackground,
   notificationIsOfEntity,
   notificationIsOfEntityType,
   notificationIsRead,

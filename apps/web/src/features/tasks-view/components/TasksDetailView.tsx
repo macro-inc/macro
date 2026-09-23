@@ -1,14 +1,9 @@
-import { EntityDetail } from '@app/components/entity-detail/EntityDetail';
-import { EntityDetailBreadcrumbItem } from '@app/components/entity-detail/EntityDetailBreadcrumbItem';
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
-import {
-  EntityDetailNavigationStack,
-  type EntityDetailNavigationStackEntry,
-  useEntityDetailNavigationStack,
-} from '@app/components/entity-detail/EntityDetailNavigationStack';
+import type { EntityDetailTarget } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list-navigation-hotkeys';
 import { useListDetailNavigation } from '@app/components/list';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { useRouteParams } from '@app/lib/split-router';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -17,37 +12,13 @@ import {
   ShareDialogContext,
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
-import {
-  createSignal,
-  ErrorBoundary,
-  For,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createSignal } from 'solid-js';
+import { taskDetailRoute } from '../route';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskDetailTarget } from '../types';
-import { TaskDetail, TaskDetailBodyState } from './TaskDetail';
+import { TaskDetail } from './TaskDetail';
 
-type EntityDetailEntry = EntityDetailNavigationStackEntry;
-
-function TaskDetailAncestorBreadcrumbs() {
-  const navigationStack = useEntityDetailNavigationStack();
-  const ancestors = () => navigationStack.entries.slice(0, -1);
-
-  return (
-    <For each={ancestors()}>
-      {(entry, index) => (
-        <EntityDetailBreadcrumbItem entry={entry} order={index() + 1} />
-      )}
-    </For>
-  );
-}
-
-function TaskDetailTopBar(props: {
-  documentId: string;
-  showTaskActions: boolean;
-}) {
+function TaskDetailTopBar(props: { documentId: string }) {
   const panel = useSplitPanelOrThrow();
 
   return (
@@ -57,40 +28,21 @@ function TaskDetailTopBar(props: {
         fallback={<EntityDetailBreadcrumbSkeleton />}
       />
       <div class="ml-auto flex shrink-0 items-center gap-2">
-        <Show when={props.showTaskActions}>
-          <ShareTrigger
-            id={props.documentId}
-            blockType="task"
-            hotkeyScope={panel.splitHotkeyScope}
-          />
-        </Show>
+        <ShareTrigger
+          id={props.documentId}
+          blockType="task"
+          hotkeyScope={panel.splitHotkeyScope}
+        />
         <SidePanel.Toggle />
       </div>
     </ViewShell.TopBar>
   );
 }
 
-function StackEntityDetail(props: { entry: EntityDetailEntry; order: number }) {
-  return (
-    <>
-      <EntityDetailBreadcrumbItem entry={props.entry} order={props.order} />
-      <EntityDetail target={props.entry.data} />
-    </>
-  );
-}
-
 export function TasksDetailView(props: { task: TaskDetailTarget }) {
-  const { source, openTask, closeTask } = useTasksView();
-  const navigationStack = useEntityDetailNavigationStack();
+  const { source, openTask, closeTask, selectedTask } = useTasksView();
   const panel = useSplitPanelOrThrow();
   const [shareOpen, setShareOpen] = createSignal(false);
-  const taskEntry = () =>
-    navigationStack.entries.find(
-      (entry) =>
-        entry.data.type === 'document' && entry.data.id === props.task.id
-    );
-  const isTaskActive = () =>
-    navigationStack.active()?.value === taskEntry()?.value;
   const listNavigation = useListDetailNavigation({
     currentId: () => props.task.id,
     source,
@@ -107,8 +59,17 @@ export function TasksDetailView(props: { task: TaskDetailTarget }) {
   });
   useListNavigationHotkeys({
     scopeId: panel.splitHotkeyScope,
-    enabled: () => panel.isPanelActive() && isTaskActive(),
+    enabled: () =>
+      panel.isPanelActive() && selectedTask()?.id === props.task.id,
     navigation: listNavigation,
+  });
+  const breadcrumbValue = () => `task:${props.task.id}`;
+  const metadata = (): EntityDetailTarget => ({
+    type: 'document',
+    id: props.task.id,
+    fileType: 'md',
+    subType: { type: 'task' },
+    fallbackName: props.task.fallbackName,
   });
 
   return (
@@ -119,65 +80,40 @@ export function TasksDetailView(props: { task: TaskDetailTarget }) {
         close: () => setShareOpen(false),
       }}
     >
-      <TaskDetailAncestorBreadcrumbs />
       <SidePanel.Root>
         <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <TaskDetailTopBar
-            documentId={props.task.id}
-            showTaskActions={isTaskActive()}
-          />
+          <TaskDetailTopBar documentId={props.task.id} />
           <div class="relative min-h-0 min-w-0 flex-1">
-            <EntityDetailNavigationStack.Outlet>
-              {(entry, state) => (
-                <Switch>
-                  <Match when={entry.value === taskEntry()?.value}>
-                    <TaskDetail
-                      task={props.task}
-                      shareOpen={shareOpen()}
-                      onShareOpenChange={setShareOpen}
-                    >
-                      {(context) => (
-                        <MarkdownDetailBreadcrumbItem
-                          value={entry.value}
-                          metadata={entry.data}
-                          order={state.entries.length}
-                          documentId={props.task.id}
-                          kind="task"
-                          fallbackName={props.task.fallbackName}
-                          ownerId={context.data.metadata.owner}
-                          projectId={
-                            context.data.metadata.projectId ?? undefined
-                          }
-                          onClose={closeTask}
-                          onDuplicate={(id, name) =>
-                            openTask({ id, fallbackName: name })
-                          }
-                        />
-                      )}
-                    </TaskDetail>
-                  </Match>
-                  <Match when={true}>
-                    <ErrorBoundary
-                      fallback={(error, reset) => (
-                        <TaskDetailBodyState
-                          error={error}
-                          actionLabel="Reset"
-                          onAction={reset}
-                        />
-                      )}
-                    >
-                      <StackEntityDetail
-                        entry={entry}
-                        order={state.entries.length}
-                      />
-                    </ErrorBoundary>
-                  </Match>
-                </Switch>
+            <TaskDetail
+              task={props.task}
+              shareOpen={shareOpen()}
+              onShareOpenChange={setShareOpen}
+            >
+              {(context) => (
+                <MarkdownDetailBreadcrumbItem
+                  value={breadcrumbValue()}
+                  metadata={metadata()}
+                  order={1}
+                  documentId={props.task.id}
+                  kind="task"
+                  fallbackName={props.task.fallbackName}
+                  ownerId={context.data.metadata.owner}
+                  projectId={context.data.metadata.projectId ?? undefined}
+                  onClose={closeTask}
+                  onDuplicate={(id, name) =>
+                    openTask({ id, fallbackName: name })
+                  }
+                />
               )}
-            </EntityDetailNavigationStack.Outlet>
+            </TaskDetail>
           </div>
         </div>
       </SidePanel.Root>
     </ShareDialogContext.Provider>
   );
+}
+
+export function TasksDetailRouteView() {
+  const params = useRouteParams(taskDetailRoute);
+  return <TasksDetailView task={{ id: params.taskId }} />;
 }

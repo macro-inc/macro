@@ -35,8 +35,8 @@ use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAcces
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
-    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserBotOrHarness, UserBotOrHarnessAuthorization,
+    ActingUser, InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserBotOrHarness, UserBotOrHarnessAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -215,6 +215,10 @@ where
             delete(delete_agent_session_handler::<R, Access, Auth>),
         )
         .route(
+            "/user/{user_id}",
+            delete(delete_user_sessions_handler::<R, Access, Auth>),
+        )
+        .route(
             "/{session_id}/control",
             post(control_agent_session_handler::<R, Access, Auth>),
         )
@@ -232,6 +236,21 @@ where
             put(put_agent_session_sandbox_size_handler::<R, Access, Auth>),
         )
         .with_state(state)
+}
+
+/// Account lifecycle endpoint: never grants cleanup authority to a user or harness token.
+async fn delete_user_sessions_handler<R, Access, Auth>(
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(user_id): Path<MacroUserIdStr<'static>>,
+) -> Result<StatusCode, AgentSessionApiError>
+where
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state.recipient.delete_user_sessions(user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Build the caller-default sandbox size router. Mount at `/agent-sandbox-size`.
@@ -1483,6 +1502,14 @@ pub struct CreateAgentSessionRequest {
     /// in-process one acts on them today; `agent_harness`'s `AgentKind`
     /// records what each of the others will need to.
     pub instructions: Option<String>,
+    /// Model the managed session runs on, overriding the persona's. Managed
+    /// sessions only: an external runtime picks its own.
+    ///
+    /// The session's model from the moment it exists, which is what a caller
+    /// choosing one before the first prompt means. Selecting a model *during*
+    /// a session is a control action instead, and reads as one in its
+    /// transcript.
+    pub model: Option<String>,
 }
 
 /// The triggering mention on a create request.
@@ -1810,6 +1837,7 @@ pub async fn create_agent_session_handler<
                 prompt: request.prompt,
                 profile,
                 instructions,
+                model: request.model.filter(|model| !model.trim().is_empty()),
             })
             .await?;
         return Ok((
@@ -1821,8 +1849,9 @@ pub async fn create_agent_session_handler<
     };
 
     // An external runtime sends its own first prompt through the control
-    // endpoint, so accepting one here would silently drop it.
-    if request.prompt.is_some() || request.repo_branch.is_some() {
+    // endpoint, so accepting one here would silently drop it, and it runs on
+    // whatever model its operator configured, which is not ours to set.
+    if request.prompt.is_some() || request.repo_branch.is_some() || request.model.is_some() {
         return Err(CreateSessionApiError::MixedSessionShape);
     }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;

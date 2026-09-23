@@ -423,7 +423,7 @@ async fn create_links_description_document_and_mirrors_member_and_team_grants_as
     assert_eq!(facts.initiative.revision, 1);
     assert_eq!(facts.description.current, grant);
     assert_eq!(facts.description.revision, 1);
-    assert_eq!(facts.description.owner.as_ref(), OWNER);
+    assert_eq!(facts.description.owner.principal_id(), OWNER);
 
     let basic = repo.get_basic(id).await?.expect("created initiative");
     assert_eq!(basic.name, "Launch");

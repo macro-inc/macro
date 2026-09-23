@@ -3,6 +3,11 @@ import {
   useMobileSettings,
 } from '@app/features/settings/context/mobile-settings';
 import {
+  createSplitRouter,
+  type SplitRouterLayoutSnapshot,
+} from '@app/lib/split-router';
+import { createMemorySplitRouterLocation } from '@app/lib/split-router/integrations/memory';
+import {
   setActiveTabId as setSplitActiveTabId,
   activeTabId as splitActiveTabId,
 } from '@core/signal/settingsTab';
@@ -13,6 +18,7 @@ import { useSettingsState } from './SettingsState';
 const mocks = vi.hoisted(() => ({
   mobile: true,
   hasSettingsSplit: false,
+  updateCurrentEntry: vi.fn(),
   removeSplit: vi.fn(),
   openWithSplit: vi.fn(),
   replaceAllSplits: vi.fn(),
@@ -34,6 +40,7 @@ vi.mock('@app/signal/splitLayout', () => ({
           ]
         : [],
     removeSplit: mocks.removeSplit,
+    getSplit: () => ({ updateCurrentEntry: mocks.updateCurrentEntry }),
   }),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
@@ -85,6 +92,55 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('settings entry points', () => {
+  it('routes desktop tab selections without prewriting entries and retains A-B-A history', () => {
+    mocks.mobile = false;
+    mocks.hasSettingsSplit = true;
+    const { state } = mountSettings();
+    let entries: SplitRouterLayoutSnapshot<string>['entries'] = [];
+    const router = createSplitRouter({
+      routes: { definitions: [{ id: 'settings', path: 'settings/:tab' }] },
+      location: createMemorySplitRouterLocation('/settings/account'),
+      layout: {
+        snapshot: () => ({ entries }),
+        reconcile: (next) => {
+          entries = next.map((entry) => ({
+            ...entry,
+            splitId: 'settings-split',
+          }));
+        },
+        open: ({ location }) => {
+          entries = [{ splitId: 'settings-split', location }];
+        },
+        updateCurrentEntry: (id, update) => {
+          entries = entries.map((entry) =>
+            entry.splitId === id ? { ...update(entry), splitId: id } : entry
+          );
+        },
+        activate: () => {},
+        subscribe: () => () => {},
+      },
+    });
+    const navigateTab = (tab: string) => {
+      expect(mocks.updateCurrentEntry).not.toHaveBeenCalled();
+      router.navigate('settings-split', `/settings/${tab.toLowerCase()}`);
+    };
+    state.selectTab('Appearance', navigateTab);
+    state.selectTab('Account', navigateTab);
+    expect(router.history('settings-split')?.entries).toHaveLength(3);
+    router.navigate('settings-split', -1);
+    expect(entries[0].location.route.matches[0].params.tab).toBe('appearance');
+    router.navigate('settings-split', -1);
+    expect(entries[0].location.route.matches[0].params.tab).toBe('account');
+    router.dispose();
+  });
+
+  it('ignores routed navigation when selecting a mobile sheet page', () => {
+    const { state, mobile } = mountSettings();
+    const navigateTab = vi.fn();
+    state.selectTab('Appearance', navigateTab);
+    expect(mobile.page()).toBe('Appearance');
+    expect(navigateTab).not.toHaveBeenCalled();
+  });
   it.each([true, false])(
     'requires the provider when mobile is %s',
     (mobile) => {
@@ -192,10 +248,23 @@ describe('settings entry points', () => {
     expect(mocks.replaceAllSplits).toHaveBeenCalledWith({
       type: 'component',
       id: 'settings',
+      entryMetadata: {
+        route: {
+          matches: [{ id: 'settings', params: { tab: 'billing' } }],
+        },
+      },
     });
     state.openSettingsInSplit('Appearance');
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
-      { type: 'component', id: 'settings' },
+      {
+        type: 'component',
+        id: 'settings',
+        entryMetadata: {
+          route: {
+            matches: [{ id: 'settings', params: { tab: 'appearance' } }],
+          },
+        },
+      },
       expect.objectContaining({ allowDuplicate: false, preferNewSplit: true })
     );
   });

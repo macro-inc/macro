@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod tests;
 
+mod owner_grants;
+
 use crate::domain::{
     models::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,

@@ -89,8 +89,9 @@ type FakeExecution = {
   next(
     data: unknown,
     metadata?: {
-      source: 'live-network' | 'normalized-cache-hit';
+      source: 'live-network' | 'normalized-cache-hit' | 'affected-cache-reread';
       revision?: string;
+      persistence?: Promise<string | undefined>;
     }
   ): void;
 };
@@ -157,6 +158,16 @@ function makeFakeClient(): {
       executeQuery: execute,
     } as unknown as Client,
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 describe('createGraphqlSoupAstItemsQuery', () => {
@@ -1175,6 +1186,270 @@ describe('createGraphqlSoupAstItemsQuery', () => {
           });
       });
     });
+  });
+
+  describe('network publication before persistence', () => {
+    function fixture() {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      let revision = REVISION_0;
+      let notify: (revision: string) => void = () => {};
+      let notifyGeneration: () => void = () => {};
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: typeof notify) => {
+          notify = callback;
+          return () => {};
+        },
+        onCacheGenerationChanged: (callback: typeof notifyGeneration) => {
+          notifyGeneration = callback;
+          return () => {};
+        },
+      });
+      entityFilterMock.mockImplementation(async () => ({
+        kind: 'reconciled',
+        revision,
+        keys: ['GraphqlSoupDocument:item-0'],
+        retainedKeys: [],
+        optimistic: true,
+      }));
+      readRecordsByKeysMock.mockImplementation(async () => ({
+        revision,
+        records: [
+          {
+            recordKey: 'GraphqlSoupDocument:item-0',
+            record: {
+              id: 'item-0',
+              type: 'document',
+              name: `Local ${revision}`,
+            },
+          },
+        ],
+      }));
+      makeGraphqlSoupInputMock.mockImplementation(({ params, cursor }) =>
+        cursor
+          ? { continuation: { cursor } }
+          : {
+              initial: {
+                limit: 50,
+                sortMethod: 'UPDATED_AT',
+                sortDirection: params.sort_direction === 'asc' ? 'ASC' : 'DESC',
+              },
+            }
+      );
+      const root = createRoot((dispose) => {
+        const [sort, setSort] = createSignal<'asc' | 'desc'>('desc');
+        const query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: { sort_direction: sort() }, body: {} }),
+          () => ({ enabled: true })
+        );
+        return { dispose, query, setSort };
+      });
+      return {
+        ...root,
+        fake,
+        names: () => root.query.data()?.entities.map((entity) => entity.name),
+        push: (next: string) => {
+          revision = next;
+          notify(next);
+        },
+        replace: () => {
+          revision = REVISION_0;
+          notifyGeneration();
+        },
+        page: (
+          name: string,
+          next_cursor: string | null = null,
+          id = 'item-0'
+        ) =>
+          graphqlSoupPage({
+            items: [{ id, type: 'document', name }],
+            next_cursor,
+          }),
+      };
+    }
+
+    it('shows network rows immediately and resumes local reconciliation after acknowledgement', async () => {
+      const f = fixture();
+      const write = deferred<string | undefined>();
+      try {
+        f.fake.executions[0].next(f.page('Network'), {
+          source: 'live-network',
+          persistence: write.promise,
+        });
+        expect(f.names()).toEqual(['Network']);
+        expect(f.query.isLoading()).toBe(false);
+        await Promise.resolve();
+        expect(entityFilterMock).not.toHaveBeenCalled();
+        write.resolve(REVISION_1);
+        await Promise.resolve();
+        expect(f.names()).toEqual(['Network']);
+        expect(entityFilterMock).not.toHaveBeenCalled();
+        f.push(REVISION_2);
+        await vi.waitFor(() => expect(f.names()).toEqual(['Local 2']));
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('does not rewind an optimistic revision that arrives before acknowledgement', async () => {
+      const f = fixture();
+      const write = deferred<string | undefined>();
+      try {
+        f.fake.executions[0].next(f.page('Network'), {
+          source: 'live-network',
+          persistence: write.promise,
+        });
+        f.push(REVISION_2);
+        expect(f.names()).toEqual(['Network']);
+        write.resolve(REVISION_1);
+        await vi.waitFor(() => expect(f.names()).toEqual(['Local 2']));
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('does not reassert network authority over a newer affected cache result', async () => {
+      const f = fixture();
+      const write = deferred<string | undefined>();
+      try {
+        f.fake.executions[0].next(f.page('Network'), {
+          source: 'live-network',
+          persistence: write.promise,
+        });
+        f.push(REVISION_2);
+        f.fake.executions[0].next(f.page('Optimistic'), {
+          source: 'affected-cache-reread',
+        });
+        await vi.waitFor(() => expect(f.names()).toEqual(['Local 2']));
+        write.resolve(REVISION_1);
+        await Promise.resolve();
+        expect(f.names()).toEqual(['Local 2']);
+        f.push('3');
+        await vi.waitFor(() => expect(f.names()).toEqual(['Local 3']));
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it.each(['failed', 'rejected'] as const)(
+      'keeps successful network rows when persistence is %s',
+      async (outcome) => {
+        const f = fixture();
+        const write = deferred<string | undefined>();
+        try {
+          f.fake.executions[0].next(f.page('Network'), {
+            source: 'live-network',
+            persistence: write.promise,
+          });
+          if (outcome === 'failed') write.resolve(undefined);
+          else write.reject(new Error('cache unavailable'));
+          await Promise.resolve();
+          f.push(REVISION_1);
+          await Promise.resolve();
+          expect(f.names()).toEqual(['Network']);
+          expect(f.query.isLoading()).toBe(false);
+          expect(entityFilterMock).not.toHaveBeenCalled();
+          f.fake.executions[0].next(f.page('Recovered cache'), {
+            source: 'normalized-cache-hit',
+          });
+          await vi.waitFor(() => expect(f.names()).toEqual(['Local 1']));
+        } finally {
+          f.dispose();
+        }
+      }
+    );
+
+    it('ignores an older acknowledgement while a newer network page is pending', async () => {
+      const f = fixture();
+      const first = deferred<string | undefined>();
+      const second = deferred<string | undefined>();
+      try {
+        f.fake.executions[0].next(f.page('First'), {
+          source: 'live-network',
+          persistence: first.promise,
+        });
+        f.fake.executions[0].next(f.page('Second'), {
+          source: 'live-network',
+          persistence: second.promise,
+        });
+        first.resolve(REVISION_1);
+        f.push(REVISION_1);
+        await Promise.resolve();
+        expect(f.names()).toEqual(['Second']);
+        expect(entityFilterMock).not.toHaveBeenCalled();
+        second.resolve(REVISION_2);
+        f.push(REVISION_2);
+        await Promise.resolve();
+        expect(f.names()).toEqual(['Second']);
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('tracks continuation-page persistence independently of the first page', async () => {
+      const f = fixture();
+      const first = deferred<string | undefined>();
+      const second = deferred<string | undefined>();
+      try {
+        f.fake.executions[0].next(f.page('First', 'next'), {
+          source: 'live-network',
+          persistence: first.promise,
+        });
+        const next = f.query.fetchNextPage();
+        await vi.waitFor(() => expect(f.fake.executions).toHaveLength(2));
+        f.fake.executions[1].next(f.page('Second', null, 'item-1'), {
+          source: 'live-network',
+          persistence: second.promise,
+        });
+        await next;
+        expect(f.names()).toEqual(['First', 'Second']);
+        first.resolve(REVISION_1);
+        f.push(REVISION_1);
+        await Promise.resolve();
+        expect(entityFilterMock).not.toHaveBeenCalled();
+        expect(f.names()).toEqual(['First', 'Second']);
+        second.resolve(REVISION_2);
+        f.push(REVISION_2);
+        await Promise.resolve();
+        expect(f.names()).toEqual(['First', 'Second']);
+        expect(entityFilterMock).not.toHaveBeenCalled();
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it.each(['input', 'generation', 'dispose'] as const)(
+      'fences acknowledgements after a change of %s',
+      async (change) => {
+        const f = fixture();
+        const write = deferred<string | undefined>();
+        try {
+          f.fake.executions[0].next(f.page('Old input'), {
+            source: 'live-network',
+            persistence: write.promise,
+          });
+          if (change === 'dispose') f.dispose();
+          else {
+            if (change === 'input') f.setSort('asc');
+            else f.replace();
+            f.fake.executions.at(-1)!.next(f.page('Current cache'), {
+              source: 'normalized-cache-hit',
+            });
+            await vi.waitFor(() => expect(f.names()).toEqual(['Local 0']));
+          }
+          const calls = entityFilterMock.mock.calls.length;
+          write.resolve(REVISION_1);
+          await Promise.resolve();
+          await Promise.resolve();
+          expect(entityFilterMock).toHaveBeenCalledTimes(calls);
+          if (change !== 'dispose') expect(f.names()).toEqual(['Local 0']);
+        } finally {
+          f.dispose();
+        }
+      }
+    );
   });
 
   it('promotes realtime local revisions without a network rerun and fences stale generations', async () => {

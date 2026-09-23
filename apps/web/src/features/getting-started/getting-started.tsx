@@ -36,6 +36,7 @@ import {
 } from '@theme/signals/themeSignals';
 import { createEffect, createSignal, For, on, onMount, Show } from 'solid-js';
 import { AGENT_EXAMPLES } from './agent-examples';
+import { createGettingStartedChatOpener } from './getting-started-chat';
 import { ActionRow, SectionHeader } from './getting-started-rows';
 import {
   GettingStartedProvider,
@@ -105,14 +106,14 @@ function GettingStartedContent() {
     openContent({ type: 'component', id: 'settings' });
   };
 
-  const openChatPrompt = async (prompt: string): Promise<boolean> => {
+  const startChat = async (prompt: string): Promise<string | undefined> => {
     const result = await createChat(
       { name: deriveChatName(prompt) },
       { source: 'getting-started' }
     );
     if ('error' in result || !result.chatId) {
       toast.failure('Unable to start chat');
-      return false;
+      return undefined;
     }
     // The chat block consumes this on mount and sends immediately. The model
     // must be one this plan may use: a pending send bypasses ChatInput, whose
@@ -124,9 +125,14 @@ function GettingStartedContent() {
       attachments: [],
       model: defaultModelForPlan(hasPaidAccess()),
     });
-    openContent({ type: 'chat', id: result.chatId });
-    return true;
+    return result.chatId;
   };
+
+  const openChatPrompt = createGettingStartedChatOpener({
+    state,
+    startChat,
+    openChat: (id) => openContent({ type: 'chat', id }),
+  });
 
   /**
    * The deterministic id of the how-to guide seeded at signup. Undefined
@@ -223,7 +229,7 @@ function GettingStartedContent() {
         icon: example.icon,
         title: example.title,
         description: example.description,
-        onActivate: () => openChatPrompt(example.prompt),
+        onActivate: () => openChatPrompt(example.id, example.prompt),
       })),
     },
   ];

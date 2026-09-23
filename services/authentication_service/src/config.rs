@@ -156,6 +156,10 @@ pub struct Config {
     ///
     /// All `@macro.com` email addresses are allowed by the Develop policy automatically.
     pub development_signup_allowlist_json: DevelopmentSignupAllowlistJson,
+    /// Whether Develop allows every public signup without reading
+    /// `DEVELOPMENT_SIGNUP_ALLOWLIST_JSON`. Production and Local ignore it.
+    #[macro_config_default(false)]
+    pub development_bypass_signup_allowlist: bool,
     /// Stripe promotion code applied at checkout for accounts that signed up
     /// through a GTM invite link (optional, defaults to `1MF`).
     pub gtm_invite_promo_code: GtmInvitePromoCode,
@@ -241,7 +245,11 @@ impl Config {
         &self,
         environment: Environment,
     ) -> anyhow::Result<SignupPolicy> {
-        resolve_signup_policy(environment, &self.development_signup_allowlist_json)
+        resolve_signup_policy(
+            environment,
+            self.development_bypass_signup_allowlist,
+            &self.development_signup_allowlist_json,
+        )
     }
 
     /// Resolves the offer GTM invite links carry.
@@ -282,10 +290,14 @@ fn resolve_microsoft_credentials(
 
 fn resolve_signup_policy(
     environment: Environment,
+    development_bypass_signup_allowlist: bool,
     development_signup_allowlist_json: &DevelopmentSignupAllowlistJson,
 ) -> anyhow::Result<SignupPolicy> {
     match environment {
         Environment::Production | Environment::Local => Ok(SignupPolicy::allow_all()),
+        Environment::Develop if development_bypass_signup_allowlist => {
+            Ok(SignupPolicy::allow_all())
+        }
         Environment::Develop => {
             let raw_allowlist = nonblank_value(development_signup_allowlist_json.value())
                 .context("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON is required in Develop")?;

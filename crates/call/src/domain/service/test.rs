@@ -35,7 +35,7 @@ use crate::domain::ports::{
 use super::{
     CallServiceImpl, NoopCallSummarizer, derive_preview_key_from_recording_key,
     derive_preview_keys_from_recording_key, exclude_voip_recipients, extract_recording_key,
-    resolve_ring_status,
+    group_recipients_by_channel_name, resolve_ring_status,
 };
 
 #[cfg(feature = "outbound")]
@@ -397,16 +397,8 @@ fn mock_get_or_create_repo(
             repo.expect_create_call()
                 .times(1)
                 .return_once(move |_, _, _, _| Box::pin(async move { Ok(Some(call)) }));
-
-            repo.expect_resolve_channel_name()
-                .times(1)
-                .returning(|_, _| {
-                    Box::pin(async {
-                        Err(anyhow::anyhow!(
-                            "skip push notifications in get_or_create_call tests"
-                        ))
-                    })
-                });
+            // Push notifications are skipped: `NoOpEntityAccessService`
+            // fails recipient lookup before any channel name is resolved.
         }
         GetOrCreateScenario::RaceLoses => {
             let mut sequence = mockall::Sequence::new();
@@ -1599,7 +1591,7 @@ const CREATOR_TEAM_ID: Uuid = Uuid::from_u128(42);
 fn team_share_facts() -> TeamShareFacts {
     TeamShareFacts {
         entity: EntityType::Call.with_entity_string(MUTATED_EVENT_CALL_ID.to_string()),
-        owner: user("creator@example.com"),
+        owner: user("creator@example.com").into(),
         owner_team_id: Some(CREATOR_TEAM_ID),
         current: None,
         revision: 0,
@@ -2685,6 +2677,75 @@ fn derive_preview_keys_from_recording_key_includes_new_and_legacy_mp4_paths() {
             "calls/abc-123/recording/PREVIEW.jpg".to_string(),
             "calls/abc-123/recording.mp4/PREVIEW.jpg".to_string(),
         ]
+    );
+}
+
+#[test]
+fn group_recipients_by_channel_name_uses_each_recipients_own_view_of_a_dm() {
+    // Jacob calls Teo in their DM. Teo sees the DM as "Jacob Beckerman"; the
+    // caller's view ("Teo Nys") must never be what Teo is pushed.
+    let teo = user("teo@example.com");
+    let names = HashMap::from([(teo.clone().into_owned(), "Jacob Beckerman".to_string())]);
+
+    let groups = group_recipients_by_channel_name([teo.clone()], &names);
+
+    assert_eq!(
+        groups,
+        HashMap::from([(Some("Jacob Beckerman".to_string()), HashSet::from([teo]))])
+    );
+}
+
+#[test]
+fn group_recipients_by_channel_name_collapses_a_named_channel_into_one_group() {
+    let alice = user("alice@example.com");
+    let bob = user("bob@example.com");
+    let names = HashMap::from([
+        (alice.clone().into_owned(), "general".to_string()),
+        (bob.clone().into_owned(), "general".to_string()),
+    ]);
+
+    let groups = group_recipients_by_channel_name([alice.clone(), bob.clone()], &names);
+
+    assert_eq!(
+        groups,
+        HashMap::from([(Some("general".to_string()), HashSet::from([alice, bob]))])
+    );
+}
+
+#[test]
+fn group_recipients_by_channel_name_splits_unnamed_group_dm_per_viewer() {
+    let alice = user("alice@example.com");
+    let bob = user("bob@example.com");
+    let names = HashMap::from([
+        (alice.clone().into_owned(), "Bob, Carla".to_string()),
+        (bob.clone().into_owned(), "Alice, Carla".to_string()),
+    ]);
+
+    let groups = group_recipients_by_channel_name([alice.clone(), bob.clone()], &names);
+
+    assert_eq!(
+        groups,
+        HashMap::from([
+            (Some("Bob, Carla".to_string()), HashSet::from([alice])),
+            (Some("Alice, Carla".to_string()), HashSet::from([bob])),
+        ])
+    );
+}
+
+#[test]
+fn group_recipients_by_channel_name_buckets_unresolved_recipients_under_none() {
+    let alice = user("alice@example.com");
+    let bob = user("bob@example.com");
+    let names = HashMap::from([(alice.clone().into_owned(), "general".to_string())]);
+
+    let groups = group_recipients_by_channel_name([alice.clone(), bob.clone()], &names);
+
+    assert_eq!(
+        groups,
+        HashMap::from([
+            (Some("general".to_string()), HashSet::from([alice])),
+            (None, HashSet::from([bob])),
+        ])
     );
 }
 

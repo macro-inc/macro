@@ -5,6 +5,12 @@ import type { UserUnsubscribe } from '@service-notification/generated/schemas/us
 import { createEffect, createMemo, createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  markNotificationForEntityIdAsRead,
+  markNotificationsForEntityAsDone,
+  markNotificationsForEntityAsRead,
+  markNotificationsForEntityAsReadInBackground,
+} from '../notification-helpers';
+import {
   createNotificationSource,
   setDoneOverride,
 } from '../notification-source';
@@ -13,6 +19,7 @@ import type { UnifiedNotification } from '../types';
 const mocks = vi.hoisted(() => ({
   graphqlCacheEnabled: true,
   graphqlEnabled: false,
+  documentMentionsEnabled: true,
   graphqlPatchCallback: undefined as
     | ((patch: Record<string, unknown>) => void)
     | undefined,
@@ -33,7 +40,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_DOCUMENT_MENTION_NOTIFICATIONS: true,
+  get ENABLE_DOCUMENT_MENTION_NOTIFICATIONS() {
+    return mocks.documentMentionsEnabled;
+  },
   enableGraphqlSoup: { key: 'enable-graphql-soup' },
   isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
@@ -53,7 +62,18 @@ vi.mock('@queries/notification/user-notifications', () => ({
   optimisticInsertNotification: mocks.optimisticInsertNotification,
   useMarkNotificationsAsDoneMutation: () => mocks.doneMutation,
   useMarkNotificationsAsSeenMutation: () => mocks.seenMutation,
-  useUserNotificationsQuery: () => mocks.notificationsQuery,
+  useUserNotificationsQuery: () => {
+    if (!('isStarted' in mocks.notificationsQuery)) {
+      mocks.notificationsQuery.isStarted = true;
+    }
+    return mocks.notificationsQuery;
+  },
+}));
+
+vi.mock('@queries/client', () => ({ queryClient: {} }));
+vi.mock('@queries/notification/entity-mutations', () => ({
+  toNotificationEntityRef: vi.fn(),
+  updateNotificationsForEntities: vi.fn(),
 }));
 
 vi.mock('@queries/notification/unsubscribes', () => ({
@@ -104,6 +124,7 @@ describe('createNotificationSource', () => {
   beforeEach(() => {
     mocks.graphqlCacheEnabled = true;
     mocks.graphqlEnabled = false;
+    mocks.documentMentionsEnabled = true;
     mocks.graphqlPatchCallback = undefined;
     mocks.socketCallback = undefined;
     mocks.optimisticInsertNotification.mockReset();
@@ -114,6 +135,271 @@ describe('createNotificationSource', () => {
       isLoading: false,
       refetch: vi.fn(),
     };
+  });
+
+  it.each([true, false])(
+    'keeps an unused GraphQL feed asleep (document mentions enabled=%s)',
+    async (enabled) => {
+      mocks.documentMentionsEnabled = enabled;
+      const incoming = notification(
+        `lazy-notification-${enabled}`,
+        'channel',
+        'channel'
+      );
+      const dataRead = vi.fn(() => [incoming]);
+      const refetch = vi.fn(async () => {});
+      let started = false;
+      mocks.notificationsQuery = {
+        transport: 'graphql',
+        get isStarted() {
+          return started;
+        },
+        get isLoading() {
+          started = true;
+          return false;
+        },
+        get data() {
+          return dataRead();
+        },
+        refetch,
+      };
+      const receive = vi.fn();
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource(
+          {} as ConnectionGatewayWebsocket,
+          receive
+        ),
+        dispose,
+      }));
+      try {
+        expect(source.withLocalOverrides).toBeTypeOf('function');
+        expect(source.mutedEntities()).toEqual([]);
+        mocks.graphqlPatchCallback?.({
+          __typename: 'GraphqlNewNotification',
+          notification: incoming,
+        });
+        await Promise.resolve();
+        expect(receive).toHaveBeenCalledWith(incoming);
+        expect(started).toBe(false);
+        expect(dataRead).not.toHaveBeenCalled();
+        expect(refetch).not.toHaveBeenCalled();
+
+        await source.markAsRead(incoming);
+        expect(
+          source.withLocalState?.({ id: incoming.id, state: 'unseen' })
+        ).toBe('seen');
+        expect(started).toBe(false);
+        expect(source.notifications()[0].state).toBe('seen');
+        expect(source.notificationsByEntity()['channel@channel']).toHaveLength(
+          1
+        );
+        expect(started).toBe(true);
+        expect(dataRead).toHaveBeenCalledOnce();
+        mocks.graphqlPatchCallback?.({
+          __typename: 'GraphqlUpdatedNotification',
+          notification: incoming,
+        });
+        await Promise.resolve();
+        expect(refetch).toHaveBeenCalledOnce();
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it.each(['rest', 'graphql'] as const)(
+    'cleans up disabled document mentions only once the %s feed is active',
+    async (transport) => {
+      mocks.documentMentionsEnabled = false;
+      const [started, setStarted] = createSignal(transport === 'rest');
+      const mention = {
+        ...notification(`disabled-mention-${transport}`, 'document', 'doc'),
+        notification_event_type: 'document_mention',
+      };
+      const [rows, setRows] = createSignal([
+        mention,
+        { ...mention, id: 'already-done', state: 'done' as const },
+        notification('ordinary', 'document', 'doc'),
+      ]);
+      const readData = vi.fn(() => rows());
+      mocks.notificationsQuery = {
+        transport,
+        get isStarted() {
+          return started();
+        },
+        isLoading: false,
+        get data() {
+          return readData();
+        },
+        isFetching: false,
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      try {
+        if (transport === 'graphql') {
+          expect(readData).not.toHaveBeenCalled();
+          expect(mocks.doneMutation.mutateAsync).not.toHaveBeenCalled();
+          setStarted(true);
+        }
+        expect(mocks.doneMutation.mutateAsync).toHaveBeenCalledExactlyOnceWith({
+          notificationIds: [mention.id],
+        });
+        expect(source.notifications()).toHaveLength(3);
+        setRows([{ ...mention, id: `later-${transport}` }]);
+        expect(mocks.doneMutation.mutateAsync).toHaveBeenLastCalledWith({
+          notificationIds: [`later-${transport}`],
+        });
+        await Promise.resolve();
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it('handles document-mention cleanup failures without an unhandled rejection', async () => {
+    mocks.documentMentionsEnabled = false;
+    const failure = new Error('offline');
+    mocks.doneMutation.mutateAsync.mockRejectedValueOnce(failure);
+    mocks.notificationsQuery = {
+      transport: 'graphql',
+      isStarted: true,
+      isLoading: false,
+      data: [
+        {
+          ...notification('cleanup-error', 'document', 'doc'),
+          notification_event_type: 'document_mention',
+        },
+      ],
+    };
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dispose = createRoot((dispose) => {
+      createNotificationSource({} as ConnectionGatewayWebsocket);
+      return dispose;
+    });
+    try {
+      await Promise.resolve();
+      expect(error).toHaveBeenCalledWith(
+        'Failed to discard document mention notifications',
+        failure
+      );
+    } finally {
+      dispose();
+      error.mockRestore();
+    }
+  });
+
+  it('catches background read failures while leaving the awaited helper rejecting', async () => {
+    const failure = new Error('offline');
+    const row = notification('background-failure', 'document', 'doc');
+    mocks.seenMutation.mutateAsync.mockRejectedValue(failure);
+    mocks.notificationsQuery = {
+      transport: 'rest',
+      data: [row],
+      isLoading: false,
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await expect(
+        markNotificationsForEntityAsRead(source, {
+          type: 'document',
+          id: 'doc',
+        })
+      ).rejects.toBe(failure);
+      await expect(
+        markNotificationsForEntityAsReadInBackground(source, {
+          type: 'document',
+          id: 'doc',
+        })
+      ).resolves.toBeUndefined();
+      expect(error).toHaveBeenCalledExactlyOnceWith(
+        'Failed to mark entity notifications as read',
+        failure
+      );
+      expect(source.notifications()[0].state).toBe('unseen');
+    } finally {
+      dispose();
+      error.mockRestore();
+    }
+  });
+
+  it.each(['read', 'done'] as const)(
+    'loads a cold full feed before a bulk %s action',
+    async (operation) => {
+      const row = notification(`lazy-action-${operation}`, 'document', 'doc');
+      let release!: () => void;
+      let loaded = false;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      mocks.notificationsQuery = {
+        transport: 'graphql',
+        isStarted: false,
+        get isLoading() {
+          return !loaded;
+        },
+        get data() {
+          return loaded ? [row] : undefined;
+        },
+        refetch: vi.fn(async () => {
+          await pending;
+          loaded = true;
+        }),
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      try {
+        const action =
+          operation === 'read'
+            ? markNotificationForEntityIdAsRead(source, 'doc')
+            : markNotificationsForEntityAsDone(source, {
+                type: 'document',
+                id: 'doc',
+              });
+        expect(mocks.notificationsQuery.refetch).toHaveBeenCalledOnce();
+        expect(mocks.seenMutation.mutateAsync).not.toHaveBeenCalled();
+        expect(mocks.doneMutation.mutateAsync).not.toHaveBeenCalled();
+        release();
+        await action;
+        expect(
+          (operation === 'read' ? mocks.seenMutation : mocks.doneMutation)
+            .mutateAsync
+        ).toHaveBeenCalledWith({ notificationIds: [row.id] });
+      } finally {
+        setDoneOverride([row.id], undefined);
+        dispose();
+      }
+    }
+  );
+
+  it('does not silently perform an empty bulk action when cold loading fails', async () => {
+    mocks.notificationsQuery = {
+      transport: 'graphql',
+      isStarted: false,
+      isLoading: false,
+      refetch: vi.fn(async () => {
+        throw new Error('offline');
+      }),
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    try {
+      await expect(
+        markNotificationForEntityIdAsRead(source, 'doc')
+      ).rejects.toThrow('offline');
+      expect(mocks.seenMutation.mutateAsync).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
   });
 
   it.each(['array', 'accessor'] as const)(

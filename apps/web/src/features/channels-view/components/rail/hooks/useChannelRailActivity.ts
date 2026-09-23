@@ -48,18 +48,43 @@ export function useChannelRailActivity(
     };
     const latestTargets: Partial<Record<ChannelsGroup, ChannelActivityTarget>> =
       {};
-    const notifications = [...notificationSource.notifications()].sort((a, b) =>
-      compareDateDesc(a.created_at, b.created_at)
-    );
-
-    for (const notification of notifications) {
-      if (
-        notification.entity_type !== 'channel' ||
-        notificationIsRead(notification)
-      ) {
+    const notifications: {
+      id: string;
+      entity_id: string;
+      created_at: DateValue;
+    }[] = [];
+    const legacyChannelIds = new Set<string>();
+    for (const channel of channels()) {
+      if (channel.unreadNotifications === undefined) {
+        legacyChannelIds.add(channel.id);
         continue;
       }
+      for (const notification of channel.unreadNotifications) {
+        if (notification.state !== 'unseen') continue;
+        notifications.push({
+          id: notification.id,
+          entity_id: channel.id,
+          created_at: notification.createdAt,
+        });
+      }
+    }
+    // GraphQL lists use their own bounded edge, not a separately paginated feed.
+    // Keep the existing fallback for REST/search rows without that projection.
+    if (legacyChannelIds.size > 0) {
+      notifications.push(
+        ...notificationSource
+          .notifications()
+          .filter(
+            (notification) =>
+              notification.entity_type === 'channel' &&
+              legacyChannelIds.has(notification.entity_id) &&
+              !notificationIsRead(notification)
+          )
+      );
+    }
+    notifications.sort((a, b) => compareDateDesc(a.created_at, b.created_at));
 
+    for (const notification of notifications) {
       const isFirstUnreadForChannel = !unreadChannelIds.has(
         notification.entity_id
       );

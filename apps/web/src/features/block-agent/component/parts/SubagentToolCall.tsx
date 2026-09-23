@@ -4,6 +4,7 @@
  * same part components), and what it reported back.
  */
 
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import AgentIcon from '@phosphor/sparkle.svg';
 import type {
   MessagePart,
@@ -154,7 +155,9 @@ export function SubagentToolCall(props: {
                 </Show>
                 <Show when={result().model}>
                   {(model) => (
-                    <span class="text-xs text-ink-extra-muted">{model()}</span>
+                    <span class="text-xs text-ink-extra-muted">
+                      {modelLabel(model())}
+                    </span>
                   )}
                 </Show>
                 <Show when={result().tokens != null}>

@@ -72,9 +72,8 @@ pub async fn get_document_access(
                       share_permission."linkShare" = 'TEAM'
                       AND EXISTS (
                           SELECT 1
-                          FROM team_user owner_team
-                          WHERE owner_team.user_id = document.owner
-                            AND owner_team.team_id::text = ANY($2)
+                          FROM owner_team(document.owner) owner_team
+                          WHERE owner_team.team_id::text = ANY($2)
                       )
                   )
               )
@@ -156,9 +155,8 @@ pub async fn get_document_access(
                               sp."linkShare" = 'TEAM'
                               AND EXISTS (
                                   SELECT 1
-                                  FROM team_user tu
-                                  WHERE tu.user_id = parent_doc.owner
-                                    AND tu.team_id::text = ANY($2)
+                                  FROM owner_team(parent_doc.owner) tu
+                                  WHERE tu.team_id::text = ANY($2)
                               )
                           )
                       )
@@ -248,9 +246,8 @@ async fn explain_document_link_shares(
           ON document_permission."documentId" = document.id
         JOIN "SharePermission" share_permission
           ON share_permission.id = document_permission."sharePermissionId"
-        JOIN team_user owner_team
-          ON owner_team.user_id = document.owner
-         AND owner_team.team_id::text = ANY($2)
+        JOIN owner_team(document.owner) owner_team
+          ON owner_team.team_id::text = ANY($2)
         WHERE document.id = $1
           AND share_permission."linkShare" = 'TEAM'
           AND share_permission."linkShareAccessLevel" IS NOT NULL
@@ -372,8 +369,8 @@ pub async fn get_legacy_document_access(
               OR (
                   "linkShare" = 'TEAM'
                   AND EXISTS (
-                      SELECT 1 FROM team_user t
-                      WHERE t.user_id = p.owner AND t.team_id::text = ANY($3)
+                      SELECT 1 FROM owner_team(p.owner) t
+                      WHERE t.team_id::text = ANY($3)
                   )
               )
           )

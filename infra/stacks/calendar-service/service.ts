@@ -72,7 +72,7 @@ export class CalendarService extends pulumi.ComponentResource {
     super('my:components:CalendarService', name, {}, opts);
     this.domain = `https://${
       stack === 'prod' ? '' : `${stack}-`
-    }gateway.${BASE_DOMAIN}/calendar-service`;
+    }gateway.${BASE_DOMAIN}/calendar`;
     this.tags = tags;
     this.cloudStorageClusterName = cloudStorageClusterName;
 
@@ -184,14 +184,10 @@ export class CalendarService extends pulumi.ComponentResource {
         containerPort: serviceContainerPort,
         service: GatewayService.CALENDAR_SERVICE,
         healthCheckPath,
-        // Calendar owns public mutations and internal invitation resolution.
-        // Keep the legacy service prefix reachable during the transition.
-        pathPatterns: [
-          '/calendar',
-          '/calendar/*',
-          '/calendar-service',
-          '/calendar-service/*',
-        ],
+        // calendar-service owns `/calendar` on the shared gateway listener
+        // (GatewayService.CALENDAR_SERVICE, priority 140) — see
+        // infra/packages/shared/src/gateway_priorities.ts.
+        pathPatterns: ['/calendar', '/calendar/*'],
         serviceSecurityGroupId: this.serviceSg.id,
         albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
       },

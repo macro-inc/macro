@@ -4,7 +4,6 @@ import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
-import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import {
   type QueryClient,
   queryOptions,
@@ -15,6 +14,7 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createEffect, onCleanup, type Setter } from 'solid-js';
 import { queryClient } from '../client';
+import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
 import { readCachedGraphqlHistoryItems } from './graphql';
 import { historyKeys } from './keys';
 import { transformHistoryItem, transformHistoryResponse } from './transforms';
@@ -25,7 +25,6 @@ export type { HistoryItem } from './types';
 
 const HISTORY_STALE_TIME = 5 * 60 * 1000;
 const HISTORY_GC_TIME = 10 * 60 * 1000;
-const HISTORY_CACHE_REFRESH_INTERVAL_MS = 250;
 
 type HistoryQueryFnResult = HistoryItem[];
 
@@ -104,22 +103,13 @@ export function useHistoryQuery() {
   createEffect(() => {
     const host = graphqlCacheHost();
     if (!host) return;
-    const refresh = leadingAndTrailing(
-      throttle,
-      () => {
+    onCleanup(
+      subscribeToVisibleCacheChanges(host, () => {
         void activeQueryClient.invalidateQueries({
           queryKey: historyKeys.graphqlList.queryKey,
         });
-      },
-      HISTORY_CACHE_REFRESH_INTERVAL_MS
+      })
     );
-    const unsubscribe = host.onCacheChanged(refresh, {
-      includeHydration: true,
-    });
-    onCleanup(() => {
-      unsubscribe();
-      refresh.clear();
-    });
   });
 
   return useQuery<

@@ -552,7 +552,7 @@ fn chat_event_cases() -> Vec<(ChatTopicEvent, ChatEventDescription<'static>)> {
         (
             ChatTopicEvent::Created(ChatCreatedMetadata {
                 chat_id: CHAT_ID.to_string(),
-                owner: owner.clone(),
+                owner: Owner::User(owner.clone()),
                 name: "Chat".to_string(),
                 project_id: Some(PROJECT_ID.to_string()),
             }),

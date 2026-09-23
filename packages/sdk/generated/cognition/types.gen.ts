@@ -27,7 +27,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'dictation';
 
 /**
  * A structured part within an assistant message.
@@ -400,24 +400,23 @@ export type CompleteOnboardingRequest = {
 };
 
 /**
- * A recorded completion: who, what feature, optional entity, and the cost.
+ * User and feature attribution for one invocation.
  */
 export type CompletionUsage = {
     /**
-     * Token usage and cost.
+     * Measured usage and resolved cost.
      */
     cost: Usage;
     /**
-     * The entity the completion related to, if any.
+     * Related entity, if any.
      */
     entity?: string | null;
     /**
-     * The feature that performed the completion.
+     * Feature that performed the invocation.
      */
     feature: AiFeature;
     /**
-     * The user the completion was performed for (the [system user](SYSTEM_USER_ID)
-     * for background work).
+     * User the invocation was performed for.
      */
     user: MacroUserIdStr;
 };
@@ -537,19 +536,19 @@ export type ErrorResponse = {
 export type Expiry = 'day' | 'week' | 'month';
 
 /**
- * Usage for a single feature, with its rolled-up dollar total.
+ * Recorded invocations and total for one feature.
  */
 export type FeatureUsage = {
     /**
-     * The individual completions recorded for this feature.
+     * Recorded invocations.
      */
     entries: Array<CompletionUsage>;
     /**
-     * The feature.
+     * Feature attribution.
      */
     feature: AiFeature;
     /**
-     * Total cost across `entries` (USD).
+     * Total cost (USD).
      */
     total: number;
 };
@@ -1073,19 +1072,23 @@ export type PipedreamUpdateRequest = {
 };
 
 /**
- * Resolved price for one completion.
+ * Rates applied to an invocation and its resolved dollar cost.
  */
 export type Price = {
     /**
-     * Price per million input tokens (USD).
+     * Price per audio minute (USD), absent for token billing.
+     */
+    price_per_audio_minute?: number | null;
+    /**
+     * Price per million input tokens (USD); zero for audio billing.
      */
     price_per_million_in: number;
     /**
-     * Price per million output tokens (USD).
+     * Price per million output tokens (USD); zero for audio billing.
      */
     price_per_million_out: number;
     /**
-     * Total cost of the completion (USD).
+     * Total cost (USD).
      */
     total: number;
 };
@@ -1263,13 +1266,17 @@ export type SetPricingRequest = {
      */
     model: string;
     /**
-     * New price per million input tokens (USD).
+     * Price per minute of audio (USD), or null for token-only pricing.
      */
-    price_per_mil_in: number;
+    price_per_audio_minute?: number | null;
     /**
-     * New price per million output tokens (USD).
+     * New price per million input tokens (USD). Required for token pricing.
      */
-    price_per_mil_out: number;
+    price_per_mil_in?: number | null;
+    /**
+     * New price per million output tokens (USD). Required for token pricing.
+     */
+    price_per_mil_out?: number | null;
 };
 
 export type SharePermissionV2 = {
@@ -1560,23 +1567,27 @@ export type UpsertProjectionRequest = {
 };
 
 /**
- * The token usage and resolved cost of a single completion.
+ * Measured usage for one invocation.
  */
 export type Usage = {
     /**
-     * When the completion was recorded.
+     * Audio duration in seconds, absent for token billing.
+     */
+    audio_seconds?: number | null;
+    /**
+     * Recording timestamp.
      */
     created_at: string;
     /**
-     * Tokens consumed by the input.
+     * Input tokens; zero for audio billing.
      */
     input_tokens: number;
     /**
-     * The model api id (e.g. `claude-opus-4-8`).
+     * Provider model identifier.
      */
     model: string;
     /**
-     * Tokens generated in the output.
+     * Output tokens; zero for audio billing.
      */
     output_tokens: number;
     price?: null | Price;
@@ -1605,7 +1616,7 @@ export type UsageRequest = {
 };
 
 /**
- * The result of a usage query: per-feature breakdown plus a grand total.
+ * Per-feature breakdown and grand total.
  */
 export type UsageSummary = {
     /**
@@ -1613,7 +1624,7 @@ export type UsageSummary = {
      */
     entries: Array<FeatureUsage>;
     /**
-     * Grand total cost across all features (USD).
+     * Grand total (USD).
      */
     total: number;
 };
@@ -1677,6 +1688,10 @@ export type SetPricingHandlerData = {
 };
 
 export type SetPricingHandlerErrors = {
+    /**
+     * Invalid pricing
+     */
+    400: ErrorBody;
     /**
      * Admin access required
      */

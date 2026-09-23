@@ -95,6 +95,7 @@ onboarding = { path = "../../crates/onboarding" }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_notifications = { path = "../../crates/model_notifications" }
+model_owner = { path = "../../crates/model_owner" }
 models_dcs = { path = "../../crates/models_dcs" }
 models_opensearch = { path = "../../crates/models_opensearch" }
 models_permissions = { path = "../../crates/models_permissions" }

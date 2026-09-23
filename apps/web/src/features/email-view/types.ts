@@ -42,11 +42,6 @@ export type EmailViewState = {
    */
   inboxIds: string[] | undefined;
   facets: FacetSelection;
-  /**
-   * The thread last opened from this view. Restored into the in-view detail on
-   * the next visit, the way the Channels view reopens its selected channel.
-   */
-  openThreadId?: string;
   /** Sidebar sections the user folded away; kept per user, not per visit. */
   collapsedSidebarSectionIds: string[];
 };

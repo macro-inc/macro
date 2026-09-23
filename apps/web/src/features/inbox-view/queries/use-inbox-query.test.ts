@@ -18,6 +18,14 @@ vi.mock('@app/features/soup', async () => ({
     isSettling: () => false,
   }),
 }));
+// Keep data-only query tests independent of unrelated UI barrel dependencies.
+vi.mock('@entity', async () => ({
+  ...(await import('@entity/types/entity')),
+  ...(await import('@entity/utils/notification')),
+  ...(await import('@entity/utils/task-properties')),
+  ...(await import('@entity/utils/company-properties')),
+}));
+vi.mock('@notifications', async () => await import('@notifications/types'));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: true }),
 }));

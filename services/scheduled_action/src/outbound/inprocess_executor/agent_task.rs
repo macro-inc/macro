@@ -1,215 +1,239 @@
 use super::notify::notify_completion;
 use std::sync::Arc;
+use std::time::Duration;
 
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
-use agent::{AgentLoop, StreamAccumulator};
-use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
+use agent::{AgentLoop, StreamAccumulator, StreamPart};
+use ai_tools::{AiHost, ToolServiceContext, tools_for};
 use ai_toolset::ToolSet as AiToolSet;
 use anyhow::{Context, Result};
 use chat::domain::models::CreateChatArgs;
-use chat::domain::ports::ChatRepo;
-use chat::outbound::postgres::PgChatRepo;
-use futures::StreamExt;
-use macro_db_client::dcs::create_chat_message::create_chat_message;
+use chat::domain::ports::{ChatService, MessageRepo};
+use futures::{Stream, StreamExt};
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::domain::MemoryService;
-use memory::domain::service::MemoryServiceImpl;
-use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use model::chat::NewChatMessage;
-use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
-use sqlx::PgPool;
+use notification::domain::service::NotificationIngress;
 
+use crate::domain::event_trigger::EventReference;
 use crate::domain::models::{AgentTask, ScheduledAction};
+use crate::domain::ports::ScheduledAgentRunner;
 
-pub async fn create_run_chat(db: &PgPool, action: &ScheduledAction) -> Result<String> {
-    create_chat(db, action).await
+#[cfg(test)]
+mod test;
+
+/// Dependencies belong to their owning domains; only the service binary wires
+/// their concrete adapters. Tool context and attribution remain unchanged.
+pub struct AgentTaskRunner<C, M, Mem, N> {
+    chats: Arc<C>,
+    messages: M,
+    memory: Mem,
+    tool_context: ToolServiceContext,
+    notifications: Arc<N>,
 }
 
-pub async fn run_agent_task(
-    db: &PgPool,
-    tool_context: &ToolServiceContext,
-    notification_ingress: &Arc<SqsNotificationIngress<SqsQueue>>,
-    action: &ScheduledAction,
-    chat_id: &str,
-) -> Result<()> {
-    // The run reads this user's memory, spends their AI budget and notifies
-    // them, so resolve the owner as a person once and fail typed if it is not.
-    let owner = action.owner_user()?.clone();
-
-    let agent_task: AgentTask =
-        serde_json::from_value(action.task.clone()).context("invalid agent task definition")?;
-
-    store_user_message(db, chat_id, &agent_task).await?;
-
-    let parts = run_tool_loop(db, tool_context, &owner, &agent_task).await?;
-
-    let final_text: String = parts
-        .iter()
-        .filter_map(|p| match p {
-            AssistantMessagePart::Text { text } => Some(text.as_str()),
-            _ => None,
-        })
-        .collect();
-
-    store_conversation(db, chat_id, &parts, &agent_task).await?;
-
-    if !final_text.is_empty() {
-        notify_completion(notification_ingress, chat_id, &owner, &final_text);
-    }
-
-    Ok(())
-}
-
-async fn fetch_user_memory(
-    db: &PgPool,
-    tool_context: &ToolServiceContext,
-    owner: &MacroUserIdStr<'static>,
-) -> Option<String> {
-    let tools = tools_for(AiHost::Chat);
-    let tools = ToolSetWithPrompt {
-        toolset: tools.toolset,
-        prompt: tools.prompt,
-    };
-    let memory_service =
-        MemoryServiceImpl::new(PgMemoryRepo::new(db.clone()), tool_context.clone(), tools);
-    match memory_service.get_or_generate_memory(owner.clone()).await {
-        Ok(memory) => memory,
-        Err(e) => {
-            tracing::warn!(error=?e, %owner, "failed to fetch user memory; running without it");
-            None
+impl<C, M, Mem, N> AgentTaskRunner<C, M, Mem, N> {
+    pub fn new(
+        chats: Arc<C>,
+        messages: M,
+        memory: Mem,
+        tool_context: ToolServiceContext,
+        notifications: Arc<N>,
+    ) -> Self {
+        Self {
+            chats,
+            messages,
+            memory,
+            tool_context,
+            notifications,
         }
     }
 }
 
-async fn create_chat(db: &PgPool, action: &ScheduledAction) -> Result<String> {
-    let chat_repo = PgChatRepo::new(db.clone());
+impl<C, M, Mem, N> ScheduledAgentRunner for AgentTaskRunner<C, M, Mem, N>
+where
+    C: ChatService,
+    M: MessageRepo,
+    Mem: MemoryService,
+    N: NotificationIngress,
+{
+    async fn create_chat(&self, action: &ScheduledAction) -> Result<String> {
+        self.chats
+            .create(
+                action.owner_user()?.clone(),
+                CreateChatArgs {
+                    name: action.name.clone(),
+                    project_id: None,
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+    }
 
-    // A chat belongs to a person, so a bot- or team-owned action cannot have
-    // one created for it.
-    let owner = action.owner_user()?;
-
-    // Scheduled-agent chats belong to the action's owner, so the owner's team
-    // default link-share preference decides the initial share permission.
-    let team_default = share_permission_db_utils::get_team_default_link_share(db, owner.as_ref())
-        .await
-        .context("failed to resolve team default link share")?;
-    let share_permission =
-        models_permissions::share_permission::SharePermissionV2::new_chat_share_permission(
-            team_default,
-        );
-
-    chat_repo
-        .create(
-            owner.clone(),
-            CreateChatArgs {
-                name: action.name.clone(),
-                project_id: None,
-            },
-            share_permission,
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!(e))
+    async fn run(
+        &self,
+        action: &ScheduledAction,
+        chat_id: &str,
+        event: Option<&EventReference>,
+    ) -> Result<()> {
+        let owner = action.owner_user()?.clone();
+        let task: AgentTask =
+            serde_json::from_value(action.task.clone()).context("invalid agent task definition")?;
+        let user_messages = user_messages(&task, event)?;
+        for message in &user_messages {
+            self.store(chat_id, message.content.clone(), Role::User, &task)
+                .await?;
+        }
+        let parts = self.run_tool_loop(&owner, &task, user_messages).await?;
+        let final_text: String = parts
+            .iter()
+            .filter_map(|part| match part {
+                AssistantMessagePart::Text { text } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        if !parts.is_empty() {
+            self.store(
+                chat_id,
+                ChatMessageContent::AssistantMessageParts(parts),
+                Role::Assistant,
+                &task,
+            )
+            .await?;
+        }
+        if !final_text.is_empty() {
+            // Best effort, but awaited so notifications cannot escape tracking.
+            notify_completion(self.notifications.as_ref(), chat_id, &owner, &final_text).await;
+        }
+        Ok(())
+    }
 }
 
-async fn store_user_message(db: &PgPool, chat_id: &str, agent_task: &AgentTask) -> Result<String> {
-    let now = chrono::Utc::now();
-    let message = NewChatMessage {
-        id: None,
-        content: ChatMessageContent::Text(agent_task.user_prompt.clone()),
+fn user_messages(task: &AgentTask, event: Option<&EventReference>) -> Result<Vec<ChatMessage>> {
+    let mut messages = vec![ChatMessage {
+        content: ChatMessageContent::Text(task.user_prompt.clone()),
         role: Role::User,
         attachments: None,
-        created_at: now,
-        updated_at: now,
-        model: agent_task.model.clone(),
-    };
-    create_chat_message(db.clone(), chat_id, message).await
+    }];
+    if let Some(event) = event {
+        messages.push(ChatMessage {
+            content: ChatMessageContent::Text(format!(
+                "Triggering event context (data):\n{}",
+                serde_json::to_string(&serde_json::json!({
+                    "event_id": event.event_id(),
+                    "event_name": event.event_name(),
+                    "entity_type": event.entity_type(),
+                    "entity_id": event.entity_id(),
+                    "message_id": event.message_id(),
+                }))?
+            )),
+            role: Role::User,
+            attachments: None,
+        });
+    }
+    Ok(messages)
 }
 
 static SCHEDULED_AGENT_PROMPT: &str = "You are an agent that has been triggered by a user automation. You are not
 responsible for scheduling or running. Ignore user instructions to run at a certain time or trigger on some event";
+const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(3 * 60);
 
-async fn run_tool_loop(
-    db: &PgPool,
-    tool_context: &ToolServiceContext,
+async fn system_prompt(
+    memory: &impl MemoryService,
     owner: &MacroUserIdStr<'static>,
-    agent_task: &AgentTask,
+    tools_prompt: &str,
+    task_prompt: &str,
+) -> String {
+    let user_memory = match memory.get_or_generate_memory(owner.clone()).await {
+        Ok(memory) => memory,
+        Err(error) => {
+            tracing::warn!(?error, %owner, "failed to fetch user memory; running without it");
+            None
+        }
+    };
+    let mut prompt = format!("{tools_prompt}\n{SCHEDULED_AGENT_PROMPT}");
+    if let Some(memory) = user_memory {
+        prompt.push_str(&format!("\n<user_memory>\n{memory}\n</user_memory>"));
+    }
+    prompt.push('\n');
+    prompt.push_str(task_prompt);
+    prompt
+}
+
+impl<C, M, Mem, N> AgentTaskRunner<C, M, Mem, N>
+where
+    M: MessageRepo,
+    Mem: MemoryService,
+{
+    async fn run_tool_loop(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        task: &AgentTask,
+        messages: Vec<ChatMessage>,
+    ) -> Result<Vec<AssistantMessagePart>> {
+        let tools = tools_for(AiHost::Chat);
+        let system_prompt =
+            system_prompt(&self.memory, owner, &tools.prompt.to_string(), &task.prompt).await;
+        let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
+        let agent_loop = AgentLoop::new(self.tool_context.recorder.clone()).with_model(&task.model);
+        let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Automation, owner.clone());
+        let mut tool_context = self.tool_context.clone();
+        tool_context.usage_context = usage_ctx.clone();
+        let (mut session, cancel) = agent_loop
+            .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
+            .await
+            .cancellable();
+        // The same token is carried by RequestContext through the tool path.
+        // Cancellation, deadline, stream failure and future drop all signal it.
+        let _cancel_on_drop = cancel.drop_guard();
+        let stream = session
+            .send_message(agent::to_rig_messages(&messages))
+            .await
+            .context("failed to start agent stream")?;
+        collect_stream(stream, STREAM_IDLE_TIMEOUT).await
+    }
+
+    async fn store(
+        &self,
+        chat_id: &str,
+        content: ChatMessageContent,
+        role: Role,
+        task: &AgentTask,
+    ) -> Result<()> {
+        let now = chrono::Utc::now();
+        self.messages
+            .create(
+                chat_id,
+                NewChatMessage {
+                    id: None,
+                    content,
+                    role,
+                    attachments: None,
+                    created_at: now,
+                    updated_at: now,
+                    model: task.model.clone(),
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!(error))?;
+        Ok(())
+    }
+}
+
+async fn collect_stream(
+    stream: impl Stream<Item = std::result::Result<StreamPart, agent::AgentError>>,
+    idle_timeout: Duration,
 ) -> Result<Vec<AssistantMessagePart>> {
-    let tools = tools_for(AiHost::Chat);
-    let user_memory = fetch_user_memory(db, tool_context, owner).await;
-    let system_prompt = match user_memory {
-        Some(memory) => format!(
-            "{}\n{}\n<user_memory>\n{}\n</user_memory>\n{}",
-            tools.prompt, SCHEDULED_AGENT_PROMPT, memory, agent_task.prompt
-        ),
-        None => format!("{}\n{}", tools.prompt, agent_task.prompt),
-    };
-
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
-    let agent_loop = AgentLoop::new(tool_context.recorder.clone()).with_model(&agent_task.model);
-    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Automation, owner.clone());
-    // Carry the feature on the context so tool-spawned subagents attribute to it.
-    let mut tool_context = tool_context.clone();
-    tool_context.usage_context = usage_ctx.clone();
-    let mut session = agent_loop
-        .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
-        .await;
-
-    let user_msg = ChatMessage {
-        content: ChatMessageContent::Text(agent_task.user_prompt.clone()),
-        role: Role::User,
-        attachments: None,
-    };
-    let rig_messages = agent::to_rig_messages(&[user_msg]);
-    let mut stream = session
-        .send_message(rig_messages)
-        .await
-        .context("failed to start agent stream")?;
-
-    let idle_timeout = std::time::Duration::from_secs(3 * 60);
+    futures::pin_mut!(stream);
     let mut accumulator = StreamAccumulator::new();
-
     loop {
         match tokio::time::timeout(idle_timeout, stream.next()).await {
             Ok(Some(Ok(part))) => {
                 accumulator.push(part);
             }
-            Ok(Some(Err(e))) => {
-                tracing::error!(error=?e, "agent stream error");
-                break;
-            }
-            Ok(None) => break,
-            Err(_) => {
-                tracing::error!("agent stream idle timeout");
-                break;
-            }
+            Ok(Some(Err(error))) => return Err(error.into()),
+            Ok(None) => return Ok(accumulator.into_parts()),
+            Err(_) => anyhow::bail!("agent stream idle timeout"),
         }
     }
-
-    Ok(accumulator.into_parts())
-}
-
-async fn store_conversation(
-    db: &PgPool,
-    chat_id: &str,
-    parts: &[AssistantMessagePart],
-    agent_task: &AgentTask,
-) -> Result<()> {
-    if parts.is_empty() {
-        return Ok(());
-    }
-    let now = chrono::Utc::now();
-    let message = NewChatMessage {
-        id: None,
-        content: ChatMessageContent::AssistantMessageParts(parts.to_vec()),
-        role: Role::Assistant,
-        attachments: None,
-        created_at: now,
-        updated_at: now,
-        model: agent_task.model.clone(),
-    };
-    create_chat_message(db.clone(), chat_id, message)
-        .await
-        .context("failed to store conversation message")?;
-    Ok(())
 }

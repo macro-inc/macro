@@ -473,24 +473,22 @@ export function createSoupEntityActions(): {
     // selection, Hide / Unhide for a single company.
     const crmItems: SoupEntityActionItem[] = [];
 
-    if (canExecuteAll(setCompanyPropertyAction.canExecute)) {
-      crmItems.push(
-        {
-          id: 'set-stage',
-          label: 'Set stage',
-          onClick: () => setCompanyPropertyAction.execute(entities, 'stage'),
-        },
-        {
-          id: 'set-owner',
-          label: 'Set owner',
-          onClick: () => setCompanyPropertyAction.execute(entities, 'owner'),
-        },
-        {
-          id: 'set-revenue',
-          label: 'Set revenue',
-          onClick: () => setCompanyPropertyAction.execute(entities, 'revenue'),
-        }
-      );
+    for (const [field, label] of [
+      ['stage', 'Set stage'],
+      ['owner', 'Set owner'],
+      ['revenue', 'Set revenue'],
+    ] as const) {
+      if (
+        !canExecuteAll((entity) =>
+          setCompanyPropertyAction.canExecute(entity, field)
+        )
+      )
+        continue;
+      crmItems.push({
+        id: `set-${field}`,
+        label,
+        onClick: () => setCompanyPropertyAction.execute(entities, field),
+      });
     }
 
     const singleEntity = entities.length === 1 ? entities[0] : undefined;

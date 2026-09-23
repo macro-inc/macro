@@ -1,7 +1,7 @@
 import type { AgentModelSelectorProps } from '@app/features/block-agent/ui/AgentModelSelector';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import type { JSX } from 'solid-js';
-import { modelLabel } from './model-label';
 
 export type ModelChoice = {
   id: string;

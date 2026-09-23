@@ -8,7 +8,7 @@ use tracing::Instrument as _;
 
 use crate::domain::{
     models::BotEvent,
-    ports::{AgentResponder, ConversationAccess, TriggerDetector, UserTimeZones},
+    ports::{AgentResponder, CommentMarks, ConversationAccess, TriggerDetector, UserTimeZones},
     service::MacroAiHandler,
 };
 
@@ -50,9 +50,12 @@ where
         responder: Arc<R>,
         detector: Arc<D>,
         time_zones: Arc<Z>,
+        marks: Arc<dyn CommentMarks>,
     ) -> Self {
         Self {
-            macro_ai: Arc::new(MacroAiHandler::new(messages, access, responder, time_zones)),
+            macro_ai: Arc::new(MacroAiHandler::new(
+                messages, access, responder, time_zones, marks,
+            )),
             detector,
         }
     }

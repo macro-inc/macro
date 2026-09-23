@@ -16,11 +16,11 @@ use email::{
 };
 use email_api_client::GmailApiClientRepository;
 use email_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
+use email_service::calendar_request_gate::RedisCalendarRequestGate;
 use email_service::calendar_tokens::CalendarTokenProviderAdapter;
 use email_service::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
 };
-use email_service::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;

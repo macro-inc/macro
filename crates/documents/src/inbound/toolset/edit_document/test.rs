@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 use crate::domain::content::DocumentContent;
 use crate::domain::events::InteractionReason;
 use crate::domain::models::{
-    CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
-    DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
-    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
+    CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, DocumentTeamShareResponse,
+    EditDocumentServiceArgs, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    LocationQueryParams, TaskBranchName,
 };
 use crate::domain::permission_token::decode_permission_token;
 use crate::domain::ports::editing::{EditMode, EditResult, EditingWorkerService};
@@ -45,12 +45,12 @@ fn document_with_file_type(file_type: Option<&str>) -> DocumentBasic {
     }
 }
 
-struct FakeDocumentService {
+pub(in crate::inbound::toolset) struct FakeDocumentService {
     file_type: Option<String>,
 }
 
 impl FakeDocumentService {
-    fn new(file_type: &str) -> Self {
+    pub(in crate::inbound::toolset) fn new(file_type: &str) -> Self {
         Self {
             file_type: Some(file_type.to_string()),
         }
@@ -112,13 +112,6 @@ impl DocumentService for FakeDocumentService {
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
         panic!("unexpected get_document_text call")
-    }
-
-    async fn get_document_comments(
-        &self,
-        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<CommentThread>, DocumentError> {
-        panic!("unexpected get_document_comments call")
     }
 
     async fn create_document(
@@ -280,8 +273,19 @@ impl DocumentCreationService for FakeDocumentService {
     }
 }
 
-#[derive(Clone, Default)]
-struct FakeEntityAccessService;
+/// Grants the user, and bots acting for them, `access_level` on every entity.
+#[derive(Clone)]
+pub(in crate::inbound::toolset) struct FakeEntityAccessService {
+    pub(in crate::inbound::toolset) access_level: AccessLevel,
+}
+
+impl Default for FakeEntityAccessService {
+    fn default() -> Self {
+        Self {
+            access_level: AccessLevel::Owner,
+        }
+    }
+}
 
 impl EntityAccessService for FakeEntityAccessService {
     async fn generate_entity_access_receipt<T: RequiredPermission>(
@@ -299,19 +303,29 @@ impl EntityAccessService for FakeEntityAccessService {
                 entity_type,
             },
             EntityPermission::AccessLevel {
-                access_level: AccessLevel::Owner,
+                access_level: self.access_level,
             },
         )
     }
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _bot_id: BotId,
-        _scope: BotAccessScope,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        bot_id: BotId,
+        scope: BotAccessScope,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        panic!("unexpected generate_bot_entity_access_receipt call")
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            (&scope).into(),
+            entity_access::domain::models::Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            EntityPermission::AccessLevel {
+                access_level: self.access_level,
+            },
+        )
     }
 
     async fn get_access_level(
@@ -392,7 +406,7 @@ impl EntityAccessService for FakeEntityAccessService {
 }
 
 #[derive(Clone, Default)]
-struct FakeEditingWorker {
+pub(in crate::inbound::toolset) struct FakeEditingWorker {
     edit_calls: Arc<Mutex<Vec<String>>>,
     modes: Arc<Mutex<Vec<EditMode>>>,
     tokens: Arc<Mutex<Vec<DocumentPermissionToken>>>,
@@ -449,7 +463,7 @@ fn tool_context(
 ) -> ServiceContext<TestToolContext> {
     ServiceContext(DocumentToolContext::new(
         service,
-        FakeEntityAccessService,
+        FakeEntityAccessService::default(),
         LexicalClient::new(
             "unused-internal-key".to_string(),
             "http://localhost/lexical".to_string(),
@@ -460,6 +474,7 @@ fn tool_context(
         ),
         editing,
         "unused-jwt-secret".to_string(),
+        std::sync::Arc::new(crate::inbound::toolset::comment_test::FakeMessages::default()),
     ))
 }
 

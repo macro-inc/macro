@@ -5,9 +5,9 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContacts } from '@core/user';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
-import { useThreadQuery } from '@queries/email/thread';
+import type { ThreadQueryTransport } from '@queries/email/thread';
 import { onEmailThreadRefresh } from '@queries/email/thread-refresh';
-import { createEffect, createMemo, onCleanup } from 'solid-js';
+import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { useCalendarPreferences } from '../calendar/utils/preferences';
 import { createEmailComposeContext } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
@@ -21,30 +21,36 @@ import {
   type CalendarInvitationOpenTarget,
   EmailCalendarInvitation,
 } from './calendar-invitation';
-import type { EmailThreadContext } from './context/email-thread-context';
-import { createEmailThreadSource } from './queries/thread-source';
+import type {
+  EmailThreadContext,
+  EmailThreadSource,
+} from './context/email-thread-context';
 import { createThreadActionAdapter } from './thread-action-adapter';
 import {
   EmailThreadSurface,
   type EmailThreadSurfaceProps,
 } from './views/email-thread-surface';
 
-export type EmailThreadProps = {
+export type EmailThreadProps = Omit<
+  EmailThreadSurfaceProps,
+  'context' | 'emailRendering'
+> & {
+  source: EmailThreadSource;
+  threadTransport: Accessor<ThreadQueryTransport>;
   openCalendar?: (target: CalendarInvitationOpenTarget) => void;
-} & Omit<EmailThreadSurfaceProps, 'context' | 'emailRendering'>;
+};
 
 /** App-facing composition. Import the surface or primitives for isolated tests. */
 export function EmailThread(props: EmailThreadProps) {
-  const query = useThreadQuery(props.threadId, () => ({
-    enabled: !!props.threadId(),
-  }));
-  const source = createEmailThreadSource(props.threadId, query);
+  // The host's load gate already owns the live query. Reuse its source so
+  // mounting the body does not start a second disk read/network request.
+  const source = props.source;
   const [calendarPreferences] = useCalendarPreferences();
   const contacts = useContacts();
   const viewerEmail = useEmail();
   const user = useUserContext();
   const compose = createEmailComposeContext({
-    threadTransport: () => query.transport,
+    threadTransport: props.threadTransport,
   });
   const threadContext: EmailThreadContext = {
     source,

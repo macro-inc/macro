@@ -1,4 +1,5 @@
 import ClaudeIcon from '@icon/wide-claude.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import GoogleIcon from '@phosphor-fill/google-logo-fill.svg';
 import { type Component, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -52,5 +53,21 @@ export function ProviderIcon(props: {
         {(name) => <Dynamic component={icons[name()]} class="size-full" />}
       </Show>
     </span>
+  );
+}
+
+/**
+ * The logo to show beside a model's name in a picker: its provider's, or a
+ * neutral sparkle for a model whose provider the id does not give away.
+ */
+export function ModelIcon(props: { model?: string | null; class?: string }) {
+  const sizing = () => props.class ?? 'size-4';
+  return (
+    <Show
+      when={modelProvider(props.model)}
+      fallback={<SparkleIcon class={`shrink-0 ${sizing()}`} />}
+    >
+      <ProviderIcon model={props.model} class={sizing()} />
+    </Show>
   );
 }

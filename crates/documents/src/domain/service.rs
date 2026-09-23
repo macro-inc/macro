@@ -60,11 +60,10 @@ use super::events::{
     DocumentInteractionMetadata, DocumentMacroEvent, DocumentUpdatedMetadata, InteractionReason,
 };
 use super::models::{
-    CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    CreateTaskRequest, DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs,
-    EditDocumentServiceArgs, EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest,
-    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
-    TeamTaskMetadata,
+    CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
+    DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs, EditDocumentServiceArgs,
+    EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse,
+    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -1139,16 +1138,6 @@ impl<
     ) -> Result<String, DocumentError> {
         self.repo
             .get_document_text(&entity_access_receipt.entity().entity_id)
-            .await
-            .map_err(|e| DocumentError::Internal(e.into()))
-    }
-
-    async fn get_document_comments(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<CommentThread>, DocumentError> {
-        self.repo
-            .get_document_comments(&entity_access_receipt.entity().entity_id)
             .await
             .map_err(|e| DocumentError::Internal(e.into()))
     }

@@ -1,4 +1,5 @@
 import { LIST_VIEW_PATHS } from '@app/constants/list-views';
+import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
 import BuildingsIcon from '@phosphor/buildings.svg';
@@ -92,7 +93,7 @@ const SIDEBAR_NEXT_NAV_ITEMS = [
   {
     id: 'calendar',
     label: 'Calendar',
-    href: '/calendar',
+    href: calendarPath('timeGridWeek'),
     icon: CalendarBlankIcon,
     iconActive: CalendarBlankFillIcon,
     hotkey: 'r',

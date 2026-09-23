@@ -45,6 +45,7 @@ type ThreadOptions = {
   expanded?: boolean;
   hideReplyInput?: boolean;
   onEditingChange?: (id: string, editing: boolean) => void;
+  monorail?: boolean;
 };
 
 /** Document and source-channel threads compose the existing channel thread and message controls. */
@@ -117,6 +118,7 @@ export function MessageThread(
           setReplyInputHandle={setHandle}
           replyInputFocusRequest={focus}
           isFindBarOpen={() => false}
+          monorail={props.monorail}
           messageListScopeId={scopeId}
           selectedMessageId={() => (props.targetId ? props.data.id : undefined)}
           targetNavigation={{

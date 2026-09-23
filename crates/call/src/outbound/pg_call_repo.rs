@@ -8,7 +8,9 @@ mod test;
 
 use std::collections::{HashMap, HashSet};
 
-use channels::outbound::channel_name::batch_resolve_channel_names;
+use channels::outbound::channel_name::{
+    batch_resolve_channel_names, resolve_channel_name_for_viewers,
+};
 use chrono::{SubsecRound, Utc};
 use entity_access::domain::models::AccessLevel;
 use filter_ast::Expr;
@@ -1772,6 +1774,15 @@ impl CallRepository for PgCallRepo {
     ) -> Result<Option<String>, Self::Err> {
         let mut map = batch_resolve_channel_names(&self.pool, &[*channel_id], user_id).await?;
         Ok(map.remove(channel_id))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resolve_channel_name_for_viewers<'a>(
+        &self,
+        channel_id: &Uuid,
+        viewer_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, Self::Err> {
+        resolve_channel_name_for_viewers(&self.pool, *channel_id, viewer_ids).await
     }
 
     #[tracing::instrument(err, skip(self))]

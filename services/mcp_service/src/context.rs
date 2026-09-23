@@ -29,8 +29,8 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_service_urls::{
-    AiEditingWorkerUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
+    EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
 };
 use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
@@ -263,6 +263,17 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
         macro_event_broker: macro_event_broker.clone(),
     };
+    // Messages sent through MCP tools dispatch the same side effects as the
+    // document-storage message API, so mentions, replies and document comments
+    // notify recipients and stream to connected clients.
+    let side_effect_clients = ai_tools::ChannelSideEffectClients {
+        connection_gateway: Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
+            config.internal_api_key.to_string(),
+            ConnectionGatewayUrl::new()?.to_string(),
+        )),
+        sqs: queue_aws_client,
+        macro_event_broker: macro_event_broker.clone(),
+    };
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
@@ -271,6 +282,11 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         sync_service_client.clone(),
         ReqwestEditingWorkerClient::from_url(ai_editing_worker_url),
         config.document_permission_jwt.to_string(),
+        ai_tools::build_message_service_with_side_effects(
+            db.clone(),
+            lexical_client.clone(),
+            &side_effect_clients,
+        ),
     );
 
     let properties_tool_context = ai_tools::build_properties_tool_context(
@@ -340,20 +356,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
     );
 
-    // Channel messages sent through MCP tools dispatch the same side effects
-    // as the document-storage channel API, so mentions and replies notify
-    // recipients and stream to connected clients.
     let channel_tool_context = ai_tools::build_channel_tool_context_with_side_effects(
         db.clone(),
         lexical_client.clone(),
-        ai_tools::ChannelSideEffectClients {
-            connection_gateway: Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
-                config.internal_api_key.to_string(),
-                ConnectionGatewayUrl::new()?.to_string(),
-            )),
-            sqs: queue_aws_client,
-            macro_event_broker: macro_event_broker.clone(),
-        },
+        &side_effect_clients,
     );
 
     let project_tool_context = ai_tools::build_project_tool_context(
@@ -386,7 +392,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         call_tool_context,
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             db.clone(),
-            email_service_client.url().to_owned(),
+            CalendarServiceUrl::new()?,
             config.internal_api_key.to_string(),
         ),
         notification_tool_context,

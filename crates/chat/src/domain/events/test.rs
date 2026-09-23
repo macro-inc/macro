@@ -16,12 +16,45 @@ fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid user id")
 }
 
+#[test]
+fn created_round_trips_all_owner_kinds_with_the_v1_string_wire_format() {
+    for principal in [
+        "macro|owner@acme.com",
+        "bot|00000000-0000-0000-0000-000000000001",
+        "01998a30-1a2b-7c3d-9e4f-5a6b7c8d9e0f",
+    ] {
+        let payload = json!({
+            "event_id": EVENT_ID,
+            "schema_version": 1,
+            "event_type": "chat.created",
+            "metadata": {
+                "chat_id": CHAT_ID,
+                "owner": principal,
+                "name": "New Chat",
+                "project_id": null,
+            },
+        });
+        let decoded = ChatMacroEvent::decode(CHAT_ID, &serde_json::to_vec(&payload).unwrap())
+            .expect("v1 owner strings decode through the broker");
+        assert_eq!(decoded.event().schema_version, 1);
+        assert_eq!(<ChatTopicEvent as TopicEvent>::SCHEMA_VERSION, 1);
+        let ChatTopicEvent::Created(metadata) = &decoded.event().event else {
+            panic!("expected a created event");
+        };
+        assert_eq!(
+            metadata.owner,
+            Owner::from_principal_str(principal).unwrap()
+        );
+        assert_eq!(serde_json::to_value(decoded.event()).unwrap(), payload);
+    }
+}
+
 fn topic_events() -> Vec<(ChatTopicEvent, Value)> {
     vec![
         (
             ChatTopicEvent::Created(ChatCreatedMetadata {
                 chat_id: CHAT_ID.to_string(),
-                owner: user_id("macro|owner@acme.com"),
+                owner: Owner::User(user_id("macro|owner@acme.com")),
                 name: "New Chat".to_string(),
                 project_id: Some(PROJECT_ID.to_string()),
             }),

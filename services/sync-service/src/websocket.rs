@@ -196,6 +196,11 @@ pub async fn process_message(
     dss: &DocumentSyncSession,
     telemetry: &mut InboundMessageTelemetry,
 ) -> Result<()> {
+    // Loading the document after hibernation can yield to a revocation. Check
+    // the surface grant again immediately before handling any protocol message.
+    if !dss.validate_surface_sockets(Some(ws)).await? {
+        return Ok(());
+    }
     trace!(
         message = tracing::field::display(&message),
         "process websocket message"

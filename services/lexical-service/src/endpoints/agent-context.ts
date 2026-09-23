@@ -10,9 +10,17 @@ const messageParent = z.object({
   id: z.string().min(1),
 });
 
+const commentAnchor = z.object({
+  markId: z.string().min(1),
+  markedText: z.string().optional(),
+  currentMarkedText: z.string().optional(),
+  surroundingText: z.string().optional(),
+});
+
 const agentContextRequest = z.object({
   promptMarkdown: z.string(),
   parent: messageParent.optional(),
+  anchor: commentAnchor.optional(),
   messages: z
     .array(
       z.object({
@@ -31,7 +39,7 @@ export class AgentContextEndpoint extends OpenAPIRoute {
   schema = {
     summary: 'Compose an agent prompt with conversation context',
     description:
-      'Builds internal markdown containing the conversation parent, optional untrusted prior messages, and the user prompt.',
+      'Builds internal markdown containing the conversation parent, the comment anchor it was posted on, optional untrusted prior messages, and the user prompt.',
     request: {
       body: {
         content: {

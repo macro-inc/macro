@@ -1,7 +1,6 @@
 mod calendar_invitations;
 use anyhow::Context;
 use axum::Router;
-use calendar_events::inbound::mutation_router::CalendarMutationRouterState;
 use context::ApiContext;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
@@ -11,7 +10,6 @@ use utoipa_swagger_ui::SwaggerUi;
 // Routes
 mod health;
 
-mod calendar_watch;
 mod email;
 
 // Misc
@@ -68,20 +66,6 @@ fn swagger_ui() -> Router {
 }
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {
-    // Calendar mutations follow the calendar sync kill switch: without sync
-    // a provider write would never be reflected locally.
-    let calendar_router = if state.config.calendar_sync_enabled {
-        calendar_watch::router().merge(
-            calendar_events::inbound::mutation_router::calendar_mutation_router(
-                CalendarMutationRouterState::new(
-                    state.calendar_mutation_service.clone(),
-                    state.authorization_state.clone(),
-                ),
-            ),
-        )
-    } else {
-        calendar_watch::router()
-    };
     Router::new()
         .route(
             "/email/threads/{thread_id}/calendar-invitations",
@@ -90,5 +74,4 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/email", email::router(state))
         .nest("/gmail", gmail::router())
         .nest("/internal", internal::router())
-        .nest("/calendar", calendar_router)
 }

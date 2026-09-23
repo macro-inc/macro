@@ -1,4 +1,10 @@
 import type { AgentInputProps } from '@app/features/block-agent/ui';
+import {
+  DictationButton,
+  DictationFeedback,
+  DictationPanel,
+} from '@app/features/dictation/components/dictation-controls';
+import { createComposerDictation } from '@app/features/dictation/composer-dictation';
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
@@ -112,6 +118,8 @@ export function ChatComposer(props: {
     editor.withSkills();
   }
 
+  const dictation = createComposerDictation(() => editor.lexical);
+
   const { isCompact } = createComposerLayout(editor.buildHandle().lexical, {
     container: layout,
   });
@@ -142,6 +150,7 @@ export function ChatComposer(props: {
     if (
       (!prompt && attachments().length === 0) ||
       hasPendingAttachments() ||
+      dictation.active() ||
       disabled()
     )
       return;
@@ -200,7 +209,12 @@ export function ChatComposer(props: {
                 hint="Drop files here to send them to the agent"
               />
             </Show>
-            <div ref={setContent} data-composer-content>
+            <div
+              ref={setContent}
+              data-composer-content
+              inert={dictation.active()}
+              classList={{ invisible: dictation.active() }}
+            >
               <Input.Attachments kind="media" class="pb-0" />
               <Input.Attachments kind="document" class="pb-0" />
               {/* Expanded text keeps the compact row's vertical inset:
@@ -247,6 +261,10 @@ export function ChatComposer(props: {
                 >
                   <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
                     {props.selector}
+                    <DictationButton
+                      dictation={dictation}
+                      disabled={disabled()}
+                    />
                     <Show
                       when={
                         (props.session?.busy || canSendNext()) &&
@@ -295,7 +313,9 @@ export function ChatComposer(props: {
               </div>
             </div>
           </Input.DropZone>
+          <DictationPanel dictation={dictation} />
         </ComposerSurface>
+        <DictationFeedback dictation={dictation} />
         <Show when={props.drawer}>
           <div
             class="composer-drawer"

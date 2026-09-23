@@ -38,6 +38,8 @@ export type AgentSessionState = {
   /** The folded transcript, ordered by turn, live-following the session. */
   messages: Accessor<FoldedMessage[]>;
   loadFailed: Accessor<boolean>;
+  /** The load failed because the viewer is not a participant (401/403). */
+  accessDenied: Accessor<boolean>;
   /**
    * Retry can re-run the failed load. False when the create itself failed —
    * there is no session to refetch, so offering Retry would do nothing.

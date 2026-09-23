@@ -6,6 +6,7 @@
  */
 import type { CreateAgentSessionRequestBotId } from './createAgentSessionRequestBotId';
 import type { CreateAgentSessionRequestInstructions } from './createAgentSessionRequestInstructions';
+import type { CreateAgentSessionRequestModel } from './createAgentSessionRequestModel';
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
 import type { CreateAgentSessionRequestPrompt } from './createAgentSessionRequestPrompt';
 import type { CreateAgentSessionRequestRepoBranch } from './createAgentSessionRequestRepoBranch';
@@ -41,6 +42,14 @@ Recorded on the session whichever runtime serves it. Only the
 in-process one acts on them today; `agent_harness`'s `AgentKind`
 records what each of the others will need to. */
   instructions?: CreateAgentSessionRequestInstructions;
+  /** Model the managed session runs on, overriding the persona's. Managed
+sessions only: an external runtime picks its own.
+
+The session's model from the moment it exists, which is what a caller
+choosing one before the first prompt means. Selecting a model *during*
+a session is a control action instead, and reads as one in its
+transcript. */
+  model?: CreateAgentSessionRequestModel;
   /** The user who owns the session. Ignored for user callers, who always
 own their own sessions, and for harness callers, whose verified acting
 user (owner or confirmed team member) owns the session instead;

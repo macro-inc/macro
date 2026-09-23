@@ -631,6 +631,16 @@ export type CreateAgentSessionRequest = {
      */
     instructions?: string | null;
     /**
+     * Model the managed session runs on, overriding the persona's. Managed
+     * sessions only: an external runtime picks its own.
+     *
+     * The session's model from the moment it exists, which is what a caller
+     * choosing one before the first prompt means. Selecting a model *during*
+     * a session is a control action instead, and reads as one in its
+     * transcript.
+     */
+    model?: string | null;
+    /**
      * The user who owns the session. Ignored for user callers, who always
      * own their own sessions, and for harness callers, whose verified acting
      * user (owner or confirmed team member) owns the session instead;

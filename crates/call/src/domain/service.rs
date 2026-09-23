@@ -473,6 +473,28 @@ fn exclude_voip_recipients<'a>(
         .collect()
 }
 
+/// Group call recipients by the channel name each of them sees.
+///
+/// A DM is named after the *other* participant, so resolving the channel
+/// name from the caller's perspective would label the incoming call with the
+/// callee's own name. Every recipient is pushed the name they know the
+/// channel by; recipients whose name could not be resolved share a `None`
+/// group. Named channels collapse into a single group.
+fn group_recipients_by_channel_name<'a>(
+    recipient_ids: impl IntoIterator<Item = MacroUserIdStr<'a>>,
+    channel_names_by_recipient: &HashMap<MacroUserIdStr<'static>, String>,
+) -> HashMap<Option<String>, HashSet<MacroUserIdStr<'a>>> {
+    let mut groups: HashMap<Option<String>, HashSet<MacroUserIdStr<'a>>> = HashMap::new();
+    for recipient_id in recipient_ids {
+        let channel_name = channel_names_by_recipient
+            .iter()
+            .find(|(viewer, _)| viewer.as_ref() == recipient_id.as_ref())
+            .map(|(_, name)| name.clone());
+        groups.entry(channel_name).or_default().insert(recipient_id);
+    }
+    groups
+}
+
 /// Producer-side payload for the "call started" notification.
 ///
 /// Shares its wire shape and [`Notification::TYPE_NAME`] (`call_started`) with
@@ -674,12 +696,6 @@ impl<
 
                         // Send push notification and VoIP push to channel members (best-effort).
                         let _: Result<(), anyhow::Error> = async {
-                            let channel_name = self
-                                .repo
-                                .resolve_channel_name(channel_id, user_id.copied())
-                                .await
-                                .map_err(Into::into)?;
-
                             let channel_id_str = channel_id.to_string();
                             let recipient_ids: HashSet<MacroUserIdStr<'_>> = self
                                 .entity_access_service
@@ -688,6 +704,24 @@ impl<
                                 .into_iter()
                                 .filter(|u| u.as_ref() != user_id.as_ref())
                                 .collect();
+                            if recipient_ids.is_empty() {
+                                return Ok(());
+                            }
+
+                            // Resolve the channel name from each recipient's
+                            // perspective: a DM is named after the other
+                            // participant, so the caller's view of the name
+                            // would be the callee's own name.
+                            let recipient_vec: Vec<MacroUserIdStr<'static>> = recipient_ids
+                                .iter()
+                                .cloned()
+                                .map(CowLike::into_owned)
+                                .collect();
+                            let channel_names_by_recipient = self
+                                .repo
+                                .resolve_channel_name_for_viewers(channel_id, &recipient_vec)
+                                .await
+                                .map_err(Into::into)?;
 
                             let sender_profile_picture_url = self
                                 .repo
@@ -707,11 +741,6 @@ impl<
                             // Send VoIP push for the native iOS incoming-call sheet first.
                             // Recipients with successful VoIP delivery do not need the regular
                             // APNS alert banner as well.
-                            let recipient_vec: Vec<MacroUserIdStr<'static>> = recipient_ids
-                                .iter()
-                                .cloned()
-                                .map(CowLike::into_owned)
-                                .collect();
 
                             // Resolve VoIP endpoints before minting tokens:
                             // users without PushKit endpoints should not get
@@ -732,13 +761,6 @@ impl<
                                     Vec::new()
                                 }
                             };
-                            let voip_target_recipient_ids: Vec<MacroUserIdStr<'static>> =
-                                voip_targets
-                                    .iter()
-                                    .map(|target| target.recipient_id.clone())
-                                    .collect();
-
-                            let voip_channel_name = channel_name.clone().unwrap_or_default();
                             let ring_status_url =
                                 self.ring_status_base_url.as_deref().map(|base| {
                                     format!(
@@ -747,24 +769,37 @@ impl<
                                         call.id
                                     )
                                 });
-                            let payloads = self
-                                .rtc_client
-                                .build_voip_push_payloads(VoipPushPayloadRequest {
-                                    recipients: &voip_target_recipient_ids,
-                                    room_name: &call.room_name,
-                                    call_id: call.id,
-                                    channel_id: &channel_id_str,
-                                    channel_name: &voip_channel_name,
-                                    caller_name: &caller_name,
-                                    livekit_server_url: &self.server_url,
-                                    ring_status_url: ring_status_url.as_deref(),
-                                })
-                                .await;
-
+                            // One payload batch per distinct channel name, so
+                            // each recipient's native sheet shows the name they
+                            // know the channel by.
                             let mut payloads_by_recipient: HashMap<
                                 MacroUserIdStr<'static>,
                                 VoipPushPayload,
-                            > = payloads.into_iter().collect();
+                            > = HashMap::new();
+                            let voip_groups = group_recipients_by_channel_name(
+                                voip_targets
+                                    .iter()
+                                    .map(|target| target.recipient_id.clone()),
+                                &channel_names_by_recipient,
+                            );
+                            for (voip_channel_name, voip_group_recipients) in voip_groups {
+                                let voip_group_recipients: Vec<MacroUserIdStr<'static>> =
+                                    voip_group_recipients.into_iter().collect();
+                                let payloads = self
+                                    .rtc_client
+                                    .build_voip_push_payloads(VoipPushPayloadRequest {
+                                        recipients: &voip_group_recipients,
+                                        room_name: &call.room_name,
+                                        call_id: call.id,
+                                        channel_id: &channel_id_str,
+                                        channel_name: voip_channel_name.as_deref().unwrap_or(""),
+                                        caller_name: &caller_name,
+                                        livekit_server_url: &self.server_url,
+                                        ring_status_url: ring_status_url.as_deref(),
+                                    })
+                                    .await;
+                                payloads_by_recipient.extend(payloads);
+                            }
                             // Rejoin resolved endpoints with successfully
                             // minted payloads. A failed token mint skips only
                             // that recipient's VoIP push.
@@ -785,18 +820,26 @@ impl<
 
                             // APNS is the fallback/default path. Recipients
                             // with a successful VoIP delivery skip the regular
-                            // alert to avoid duplicate incoming-call UI.
-                            if !apns_recipient_ids.is_empty() {
+                            // alert to avoid duplicate incoming-call UI. One
+                            // request per distinct channel name, so the alert
+                            // title and stored metadata match what each
+                            // recipient calls the channel.
+                            let apns_groups = group_recipients_by_channel_name(
+                                apns_recipient_ids,
+                                &channel_names_by_recipient,
+                            );
+                            for (channel_name, apns_group_recipients) in apns_groups {
                                 let req = SendNotificationRequestBuilder {
                                     notification_entity: EntityType::Channel
                                         .with_entity_string(channel_id_str.clone()),
                                     secondary_notification_entity: None,
                                     notification: CallStartedNotification {
-                                        sender_profile_picture_url,
-                                        channel_name: channel_name.clone(),
+                                        sender_profile_picture_url: sender_profile_picture_url
+                                            .clone(),
+                                        channel_name,
                                     },
                                     sender_id: Some(user_id.copied()),
-                                    recipient_ids: apns_recipient_ids,
+                                    recipient_ids: apns_group_recipients,
                                 }
                                 .into_request()
                                 .with_apns();

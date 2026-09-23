@@ -1,8 +1,5 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
-import { agentsRouteFromSegments } from '@app/features/agents-view/core/route';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import type { BlockAlias, BlockName } from '@core/block';
-import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   type Accessor,
@@ -19,56 +16,6 @@ import type {
   SplitManager,
 } from './layoutManager';
 import type { CollapsibleItemInput } from './utils/createPriorityCollapser';
-
-export function decodePairs(segments: string[]): SplitContent[] {
-  const pairs: SplitContent[] = [];
-  for (let i = 0; i < segments.length; i += 2) {
-    const type = segments[i];
-    const id = segments[i + 1];
-    if (!type || !id) break;
-    const agentsRoute = agentsRouteFromSegments(type, id);
-
-    if (agentsRoute) {
-      pairs.push({ type: 'component', id: agentsRoute });
-    } else if (type === 'settings') {
-      // `settings/<tab>` is the URL form of the docked settings panel; it maps
-      // to the internal `component/settings` content. The active tab is read
-      // reactively from the URL by SettingsPanelComponentWrapper, so it isn't
-      // threaded through content params. See `contentUrlSegments` in
-      // layoutManager for the matching encode.
-      pairs.push({ type: 'component', id: 'settings' });
-    } else if (type === 'component') {
-      // Ignore placeholders left in URLs saved before Preview Pair removal.
-      if (id === 'preview-empty' || id === 'non-member-channel') continue;
-      pairs.push({ type: 'component', id });
-    } else {
-      const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);
-      if (isBlockAlias(type)) {
-        const content: SplitContent = {
-          type,
-          id,
-          aliasContext: {
-            alias: type,
-            baseType: resolvedType,
-          },
-        };
-        pairs.push(content);
-      } else {
-        const content: SplitContent = { type: resolvedType, id };
-        pairs.push(content);
-      }
-    }
-  }
-  return pairs.length ? pairs : [{ type: 'component', id: LIST_VIEW_ID.inbox }];
-}
-
-function _encodePairs(splits: ReadonlyArray<SplitContent>): string[] {
-  return splits.flatMap((s) => [
-    // Use the alias type if available, otherwise use the base type
-    s.type === 'component' ? s.type : s.aliasContext?.alias || s.type,
-    s.id,
-  ]);
-}
 
 const _isInSplit = createCallback(() => {
   return !!useContext(SplitPanelContext);
@@ -120,6 +67,29 @@ export function useSplitPanel() {
 /** Whether closing this split leaves another split visible. */
 export function shouldShowSplitCloseButton(manager: SplitManager) {
   return manager.getVisibleSplitCount() > 1;
+}
+
+/** Close a visible panel, or return the last one to its most recent list. */
+export function closeSplitOrReturnToList(
+  manager: SplitManager,
+  handle: SplitHandle
+) {
+  if (shouldShowSplitCloseButton(manager)) {
+    handle.close();
+    return;
+  }
+  const content = handle.content();
+  if (content.type === 'component' && isListViewID(content.id)) return;
+  if (
+    handle.goBackTo(
+      (entry) => entry.type === 'component' && isListViewID(entry.id)
+    )
+  )
+    return;
+  handle.replace({
+    next: { type: 'component', id: LIST_VIEW_ID.inbox },
+    mergeHistory: true,
+  });
 }
 
 /** Inline previews stay passive until the user focuses them. */

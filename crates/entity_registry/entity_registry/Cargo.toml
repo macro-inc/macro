@@ -9,6 +9,7 @@ default = []
 postgres = ["dep:sqlx", "model_owner/sqlx"]
 
 [dependencies]
+bot_id = { path = "../../bot_id" }
 chrono = { workspace = true }
 model-entity = { path = "../../model-entity" }
 model_owner = { path = "../../model_owner" }

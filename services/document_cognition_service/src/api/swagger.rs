@@ -219,11 +219,11 @@ use utoipa::OpenApi;
                 ai_usage_api::UsageRequest,
                 ai_usage_api::SetPricingRequest,
                 ai_usage_api::ErrorBody,
-                ai_usage::UsageSummary,
-                ai_usage::FeatureUsage,
-                ai_usage::CompletionUsage,
-                ai_usage::Usage,
-                ai_usage::Price,
+                ai_usage::inbound::models::UsageSummary,
+                ai_usage::inbound::models::FeatureUsage,
+                ai_usage::inbound::models::CompletionUsage,
+                ai_usage::inbound::models::Usage,
+                ai_usage::inbound::models::Price,
                 ai_usage::AiFeature,
 
                 // AI projections

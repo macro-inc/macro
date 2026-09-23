@@ -1,4 +1,5 @@
 use backends::Storage;
+use macro_sync_service_jwt::session::SessionKind;
 use snapshot::SnapshotStorage;
 use tracing::trace;
 use worker::{Env, Error, Result, State};
@@ -14,6 +15,7 @@ pub mod snapshot;
 pub struct SessionStorage {
     snapshot_storage: Storage,
     oplog: DurableKVStorage,
+    kind: SessionKind,
 }
 
 /// Outbound adapter for atomic document updates, sharing the websocket log.
@@ -45,17 +47,20 @@ impl crate::domain::document::DocumentUpdatePort for DocumentUpdateStorage<'_> {
 }
 
 impl SessionStorage {
-    pub fn new(snapshot_storage: Storage, oplog: DurableKVStorage) -> Self {
+    pub fn new(snapshot_storage: Storage, oplog: DurableKVStorage, kind: SessionKind) -> Self {
         Self {
             snapshot_storage,
             oplog,
+            kind,
         }
     }
 
     /// Load document state and apply any pending ops
     pub async fn load_document_state(&self) -> Result<DocumentState> {
         let snapshot = self.get_snapshot().await;
-        let state = match (snapshot, cfg!(feature = "create-default-state")) {
+        let allow_default =
+            self.kind == SessionKind::Document && cfg!(feature = "create-default-state");
+        let state = match (snapshot, allow_default) {
             (Ok(snapshot), _) => DocumentState::try_from_snapshot(snapshot.as_slice()),
             (Err(_e), true) => {
                 let state = DocumentState::new();

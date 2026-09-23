@@ -90,7 +90,7 @@ async fn native_no_pr_branch_facts_survive_live_capture_and_durable_replay() {
         journal,
         NoArtifactStore,
     ));
-    restored.restore_session(id.clone(), Some(CursorAgentId::new("bc-fake")), None, None);
+    restored.restore_session(id.clone(), Some(CursorAgentId::new("bc-fake")), None);
     let before = cursor.calls();
     restored.replay_session(&id).await.unwrap().complete();
     assert_eq!(replayed.working_branches(), branches("cursor/renamed-work"));
@@ -106,12 +106,7 @@ async fn native_no_pr_branch_facts_survive_live_capture_and_durable_replay() {
 async fn hydrated_no_pr_history_reports_latest_branch_for_every_repository() {
     let (service, cursor, notifier) = service(None);
     let id = SessionId::new("restored-cursor");
-    service.restore_session(
-        id.clone(),
-        Some(CursorAgentId::new("bc-restored")),
-        None,
-        None,
-    );
+    service.restore_session(id.clone(), Some(CursorAgentId::new("bc-restored")), None);
     cursor.script_run_listings(vec![
         RunListing {
             id: CursorRunId::new("run-latest"),
@@ -187,7 +182,7 @@ async fn replay_retains_only_latest_branch_across_repository_url_aliases() {
         journal,
         NoArtifactStore,
     );
-    restored.restore_session(id.clone(), Some(CursorAgentId::new("bc-fake")), None, None);
+    restored.restore_session(id.clone(), Some(CursorAgentId::new("bc-fake")), None);
     restored.replay_session(&id).await.unwrap().complete();
     assert_eq!(replayed.working_branches(), branches("cursor/latest"));
 }

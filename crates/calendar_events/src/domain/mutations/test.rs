@@ -297,6 +297,16 @@ impl CalendarRepository for FakeRepo {
         unreachable!()
     }
 
+    async fn record_watch_unsupported(
+        &self,
+        _key: CalendarBackfillJobKey,
+        _lease_token: Uuid,
+        _account_id: Uuid,
+        _calendar_id: Uuid,
+    ) -> Result<(), rootcause::Report> {
+        unreachable!()
+    }
+
     async fn find_watch_target(
         &self,
         _channel_id: &str,

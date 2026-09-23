@@ -17,6 +17,7 @@ import {
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => true,
 }));
+vi.mock('@core/util/cookies', () => ({ hasLoginCookie: () => true }));
 
 function createMockStore(): PerQueryPersistence & {
   entries: Map<string, PersistedQueryEntry>;
@@ -314,6 +315,112 @@ describe('setupQueryPersistence', () => {
     expect(store.remove).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { id: '', authenticated: false },
+    { id: 'viewer', authenticated: false },
+    { id: '', authenticated: true },
+    { authenticated: true },
+    { id: 42, authenticated: true },
+    null,
+  ])(
+    'does not hydrate a non-identity native user-info record: %j',
+    async (data) => {
+      const queryClient = new QueryClient();
+      const store = createMockStore();
+      const queryKey = authKeys.userInfo.queryKey;
+      const queryHash = JSON.stringify(queryKey);
+      const scope = createQueryPersistenceScopes('test').find((scope) =>
+        scope.shouldPersist(queryKey)
+      )!;
+      store.entries.set(queryHash, {
+        queryHash,
+        queryKey,
+        data,
+        dataUpdatedAt: Date.now(),
+        persistedAt: Date.now(),
+        buster: 'test',
+      });
+      const persistence = setupQueryPersistence({
+        queryClient,
+        scopes: [{ ...scope, store }],
+      });
+      await persistence.restoreQuery(queryKey);
+      expect(queryClient.getQueryData(queryKey)).toBeUndefined();
+      expect(store.remove).toHaveBeenCalledWith(queryHash);
+      expect(store.set).not.toHaveBeenCalled();
+      persistence.dispose();
+      queryClient.clear();
+    }
+  );
+
+  it('persists logout over the previous identity but treats that marker as a cache miss on restart', async () => {
+    const store = createMockStore();
+    const queryKey = authKeys.userInfo.queryKey;
+    const queryHash = JSON.stringify(queryKey);
+    const scope = {
+      ...createQueryPersistenceScopes('test').find((scope) =>
+        scope.shouldPersist(queryKey)
+      )!,
+      store,
+    };
+    const firstClient = new QueryClient();
+    const first = setupQueryPersistence({
+      queryClient: firstClient,
+      scopes: [scope],
+    });
+    firstClient.setQueryData(queryKey, {
+      id: 'old-viewer',
+      authenticated: true,
+    });
+    firstClient.setQueryData(queryKey, { id: '', authenticated: false });
+    expect(store.entries.get(queryHash)?.data).toEqual({
+      id: '',
+      authenticated: false,
+    });
+    first.dispose();
+    firstClient.clear();
+    const queryClient = new QueryClient();
+    const restarted = setupQueryPersistence({ queryClient, scopes: [scope] });
+    await restarted.restoreQuery(queryKey);
+    expect(queryClient.getQueryData(queryKey)).toBeUndefined();
+    expect(store.entries.has(queryHash)).toBe(false);
+    restarted.dispose();
+    queryClient.clear();
+  });
+
+  it('does not remove a new identity when an old logout marker finishes restoring', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const read = Promise.withResolvers<PersistedQueryEntry | undefined>();
+    store.get.mockReturnValue(read.promise);
+    const queryKey = authKeys.userInfo.queryKey;
+    const queryHash = JSON.stringify(queryKey);
+    const scope = createQueryPersistenceScopes('test').find((scope) =>
+      scope.shouldPersist(queryKey)
+    )!;
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [{ ...scope, store }],
+    });
+    const restored = persistence.restoreQuery(queryKey);
+    const identity = { id: 'new-viewer', authenticated: true };
+    queryClient.setQueryData(queryKey, identity);
+    read.resolve({
+      queryHash,
+      queryKey,
+      data: { id: '', authenticated: false },
+      dataUpdatedAt: Date.now(),
+      persistedAt: Date.now(),
+      buster: 'test',
+    });
+    await restored;
+    expect(queryClient.getQueryData(queryKey)).toEqual(identity);
+    expect(store.entries.get(queryHash)?.data).toEqual(identity);
+    expect(store.remove).not.toHaveBeenCalled();
+    persistence.dispose();
+    queryClient.clear();
+  });
+
   it('configures only native user-info persistence without an expiry', () => {
     const scopes = createQueryPersistenceScopes('test');
     const userInfoScope = scopes.find((scope) =>
@@ -362,7 +469,7 @@ describe('setupQueryPersistence', () => {
     const store = createMockStore();
     const scope = createScope(['channel'], store);
 
-    const unsubscribe = setupQueryPersistence({
+    const persistence = setupQueryPersistence({
       queryClient,
       scopes: [scope],
     });
@@ -370,10 +477,123 @@ describe('setupQueryPersistence', () => {
     queryClient.setQueryData(['channel', 'a'], { value: 1 });
     expect(store.set).toHaveBeenCalledTimes(1);
 
-    unsubscribe();
+    persistence.dispose();
 
     queryClient.setQueryData(['channel', 'b'], { value: 2 });
     expect(store.set).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares an awaitable restore without starting or waiting for a network fetch', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const read = Promise.withResolvers<PersistedQueryEntry | undefined>();
+    store.get.mockReturnValue(read.promise);
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['identity'], store)],
+    });
+    const queryKey = ['identity', 'user'];
+    const first = persistence.restoreQuery(queryKey);
+    const second = persistence.restoreQuery(queryKey);
+    expect(first).toBe(second);
+    expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe('idle');
+    void queryClient.prefetchQuery({
+      queryKey,
+      queryFn: () => new Promise(() => {}),
+    });
+    read.resolve({
+      queryHash: JSON.stringify(queryKey),
+      queryKey,
+      data: { id: 'viewer' },
+      dataUpdatedAt: Date.now(),
+      persistedAt: Date.now(),
+      buster: 'test',
+    });
+    await first;
+    expect(store.get).toHaveBeenCalledOnce();
+    expect(queryClient.getQueryData(queryKey)).toEqual({ id: 'viewer' });
+    expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe('fetching');
+    persistence.dispose();
+    queryClient.clear();
+  });
+
+  it.each([
+    'removed',
+    'recreated',
+    'disposed',
+    'logged-out',
+    'denied',
+  ] as const)(
+    'fences a pending restore when the query is %s',
+    async (change) => {
+      const queryClient = new QueryClient();
+      const store = createMockStore();
+      const read = Promise.withResolvers<PersistedQueryEntry | undefined>();
+      store.get
+        .mockReturnValueOnce(read.promise)
+        .mockImplementation(() => new Promise(() => {}));
+      let allowed = true;
+      const persistence = setupQueryPersistence({
+        queryClient,
+        scopes: [
+          createScope(['identity'], store, { shouldRestore: () => allowed }),
+        ],
+      });
+      const queryKey = ['identity', 'user'];
+      const pending = persistence.restoreQuery(queryKey);
+      if (change === 'removed' || change === 'recreated')
+        queryClient.removeQueries({ queryKey });
+      if (change === 'recreated')
+        queryClient.getQueryCache().build(queryClient, { queryKey });
+      if (change === 'disposed') persistence.dispose();
+      if (change === 'logged-out')
+        queryClient.setQueryData(queryKey, { authenticated: false });
+      if (change === 'denied') allowed = false;
+      read.resolve({
+        queryHash: JSON.stringify(queryKey),
+        queryKey,
+        data: { id: 'old-viewer' },
+        dataUpdatedAt: Date.now(),
+        persistedAt: Date.now(),
+        buster: 'test',
+      });
+      await pending;
+      expect(queryClient.getQueryData(queryKey)).toEqual(
+        change === 'logged-out' ? { authenticated: false } : undefined
+      );
+      expect(store.set).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: { id: 'old-viewer' } })
+      );
+      persistence.dispose();
+      queryClient.clear();
+    }
+  );
+
+  it('does not remove a newer persisted value when an old read has the wrong buster', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const read = Promise.withResolvers<PersistedQueryEntry | undefined>();
+    store.get.mockReturnValue(read.promise);
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['identity'], store)],
+    });
+    const queryKey = ['identity', 'user'];
+    const pending = persistence.restoreQuery(queryKey);
+    queryClient.setQueryData(queryKey, { id: 'new-viewer' });
+    read.resolve({
+      queryHash: JSON.stringify(queryKey),
+      queryKey,
+      data: { id: 'old-viewer' },
+      dataUpdatedAt: 1,
+      persistedAt: 1,
+      buster: 'old-buster',
+    });
+    await pending;
+    expect(queryClient.getQueryData(queryKey)).toEqual({ id: 'new-viewer' });
+    expect(store.remove).not.toHaveBeenCalled();
+    persistence.dispose();
+    queryClient.clear();
   });
 
   it('removes entry from store on query removal', () => {

@@ -22,9 +22,11 @@ import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
 import {
+  createComputed,
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -45,6 +47,11 @@ import {
   MarkdownOutline,
   useMarkdownOutline,
 } from './MarkdownOutline';
+import {
+  captureScrollAnchor,
+  restoreScrollAnchor,
+  type ScrollAnchor,
+} from './scrollAnchor';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
 import {
@@ -135,14 +142,48 @@ export function Notebook(props: {
   // comment drawer is the only comment surface. CommentMargin stays mounted
   // inside the hidden wrapper — it hosts the drawer.
   const showComments = () => hasComment() && !history.isOpen() && !isMobile();
-  const layoutMode = (): CommentLayoutMode => {
+  const layoutMode = createMemo((): CommentLayoutMode => {
     if (!showComments() || width() === undefined) {
       return CommentLayoutMode.none;
     }
     if (commentBreakpoints.lg()) return CommentLayoutMode.lg;
     if (commentBreakpoints.md()) return CommentLayoutMode.md;
     return CommentLayoutMode.xs;
-  };
+  });
+
+  // Switching layout mode resizes the text column and reflows the document
+  // under an unchanged scrollTop; the first comment on a document would
+  // otherwise scroll its own anchor text out of view. Browser scroll anchoring
+  // is suppressed because the switch changes the column's padding and margins.
+  // The computed captures the anchor before the new classes are applied, the
+  // effect restores it after.
+  let scrollAnchor: ScrollAnchor | undefined;
+  createComputed(
+    on(
+      layoutMode,
+      () => {
+        const scroller = md.scrollContainer;
+        const editorRoot = md.editor?.getRootElement();
+        scrollAnchor =
+          scroller && editorRoot
+            ? captureScrollAnchor(scroller, editorRoot)
+            : undefined;
+      },
+      { defer: true }
+    )
+  );
+  createEffect(
+    on(
+      layoutMode,
+      () => {
+        const anchor = scrollAnchor;
+        const scroller = md.scrollContainer;
+        scrollAnchor = undefined;
+        if (anchor && scroller) restoreScrollAnchor(scroller, anchor);
+      },
+      { defer: true }
+    )
+  );
 
   const currentEditorState = () => {
     const editor = md.editor;

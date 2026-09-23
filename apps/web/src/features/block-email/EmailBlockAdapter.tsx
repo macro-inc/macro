@@ -1,4 +1,7 @@
-import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
+import type {
+  EmailThreadHost,
+  EmailThreadSource,
+} from '@app/features/email-thread/context/email-thread-context';
 import { URL_PARAMS } from '@app/features/email-thread/core/location';
 import {
   useCanAutofocusSplitContent,
@@ -16,13 +19,18 @@ import { blockHandleSignal } from '@core/signal/load';
 import { useSearchParams } from '@solidjs/router';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import { TopBar } from './component/TopBar';
-import { EmailThreadHostView } from './EmailThreadHostView';
+import {
+  EmailThreadHostView,
+  type EmailThreadHostViewProps,
+} from './EmailThreadHostView';
 import { useEmailListNavigation } from './use-email-list-navigation';
 import { registerEmailHotkeys } from './util/emailHotkeys';
 
 export function EmailBlockAdapter(props: {
   title: string;
   threadId: Accessor<string>;
+  source: EmailThreadSource;
+  threadTransport: EmailThreadHostViewProps['threadTransport'];
 }) {
   const [params] = useSearchParams();
   const rawTarget = params[URL_PARAMS.messageId];
@@ -80,6 +88,8 @@ export function EmailBlockAdapter(props: {
     <EmailThreadHostView
       title={props.title}
       threadId={props.threadId}
+      source={props.source}
+      threadTransport={props.threadTransport}
       host={host}
       topBar={({ createTask }) => (
         <TopBar

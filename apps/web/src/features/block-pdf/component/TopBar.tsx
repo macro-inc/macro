@@ -5,8 +5,11 @@ import {
 } from '@app/features/chat/ChatWithAgentButton';
 import { useHasModificationData } from '@block-pdf/signal/save';
 import { useHasComments } from '@block-pdf/store/comments/commentStore';
-import { doPrint } from '@block-pdf/util/printUtil';
-import { exportPdf } from '@block-pdf/websocket/export';
+import {
+  downloadDocxDocument,
+  downloadPdfDocument,
+  printPdfDocument,
+} from '@block-pdf/util/pdf-file-actions';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
@@ -30,15 +33,10 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { platformFetch } from '@core/util/platformFetch';
-import { downloadFile } from '@filesystem/download';
 import DownloadIcon from '@phosphor/download-simple.svg';
 import Printer from '@phosphor/printer.svg';
 import IconShared from '@phosphor/share.svg';
-import {
-  blockNameToItemType,
-  storageServiceClient,
-} from '@service-storage/client';
+import { blockNameToItemType } from '@service-storage/itemType';
 import { createCallback } from '@solid-primitives/rootless';
 import { usePdfDocument } from '../context/pdf-document-context';
 import { LocationType, useCreateShareUrl } from '../signal/location';
@@ -68,83 +66,36 @@ export function TopBar() {
     toast.success('Link copied to clipboard');
   };
 
-  const printFile = createCallback(async () => {
-    if (!isAuth()) return openLoginModal();
-
-    const proxy = documentProxy();
-    if (!proxy) return;
-
-    const data = (await proxy.getData()) as Uint8Array<ArrayBuffer>;
-    const blob = new Blob([data], { type: 'application/pdf' });
-
-    return doPrint(blob);
+  const fileActionAuth = () => ({
+    isAuthenticated: !!isAuth(),
+    openLogin: openLoginModal,
   });
 
-  const download = createCallback(async () => {
-    if (!isAuth()) return openLoginModal();
+  const printFile = createCallback(() =>
+    printPdfDocument({
+      ...fileActionAuth(),
+      documentProxy: documentProxy(),
+    })
+  );
 
-    const proxy = documentProxy();
-    if (!proxy) return toast.failure('Unable to download file');
+  const download = createCallback(() =>
+    downloadPdfDocument({
+      ...fileActionAuth(),
+      documentProxy: documentProxy(),
+      hasModifications: hasModificationData(),
+      hasComments: hasComments(),
+      documentId,
+      fileName: fileName(),
+    })
+  );
 
-    const data = (await proxy.getData()) as Uint8Array<ArrayBuffer>;
-    const blob = new Blob([data], { type: 'application/pdf' });
-
-    const fileNameWithExtension = `${fileName()}.pdf`;
-
-    try {
-      // No need to export if there are no modifications
-      // comments are outside of the modification data so handled separately
-      if (!hasModificationData() && hasComments() === false)
-        return downloadFile(blob, fileNameWithExtension);
-
-      // Attempt to export and download
-      const exportFile = await exportPdf({
-        documentId,
-        fileName: fileName(),
-      });
-      downloadFile(exportFile, fileNameWithExtension);
-    } catch (_) {
-      try {
-        downloadFile(blob, fileNameWithExtension);
-      } catch (_) {
-        toast.failure('Unable to download file');
-      }
-    }
-  });
-
-  const downloadDocx = createCallback(async () => {
-    if (!isAuth()) return openLoginModal();
-
-    const data = await storageServiceClient.exportDocument({ documentId });
-    if (data.isErr()) {
-      return toast.failure('Unable to download file');
-    }
-
-    const fileNameWithExtension = `${fileName()}.docx`;
-
-    try {
-      // Fetch the file from the presigned URL
-      const response = await platformFetch(data.value.presigned_url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      // Get the file data as array buffer
-      const arrayBuffer = await response.arrayBuffer();
-
-      // Create blob with proper MIME type for DOCX
-      const blob = new Blob([arrayBuffer], {
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      });
-
-      downloadFile(blob, fileNameWithExtension);
-
-      toast.success('File downloaded successfully');
-    } catch (error) {
-      console.error('Download failed:', error);
-      toast.failure('Failed to download file');
-    }
-  });
+  const downloadDocx = createCallback(() =>
+    downloadDocxDocument({
+      ...fileActionAuth(),
+      documentId,
+      fileName: fileName(),
+    })
+  );
 
   const ops: FileOperation[] = [
     { op: 'rename' },

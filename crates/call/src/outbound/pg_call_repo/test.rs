@@ -2921,3 +2921,135 @@ async fn patch_call_transcript_custom_speakers_unknown_diarized_id_is_noop(
     assert_eq!(record.transcript[2].speaker_id, "macro|user-b@test.com");
     Ok(())
 }
+
+// -- resolve_channel_name_for_viewers -----------------------------------------
+
+const DM_CHANNEL: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000d01);
+
+async fn insert_named_user(
+    pool: &Pool<Postgres>,
+    user_id: &MacroUserIdStr<'_>,
+    macro_user_id: Uuid,
+    first_name: &str,
+    last_name: &str,
+) -> anyhow::Result<()> {
+    insert_user_mapping(pool, user_id, macro_user_id).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO macro_user_info (macro_user_id, first_name, last_name)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (macro_user_id) DO UPDATE
+        SET first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name
+        "#,
+        macro_user_id,
+        first_name,
+        last_name,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn insert_dm_channel(
+    pool: &Pool<Postgres>,
+    channel_id: Uuid,
+    participants: &[&MacroUserIdStr<'_>],
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channels (id, name, channel_type, org_id, owner_id, created_at, updated_at)
+        VALUES ($1, NULL, 'direct_message', NULL, $2, now(), now())
+        "#,
+        channel_id,
+        participants[0].as_ref(),
+    )
+    .execute(pool)
+    .await?;
+    for participant in participants {
+        sqlx::query!(
+            r#"
+            INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at)
+            VALUES ($1, $2, 'member', now())
+            "#,
+            channel_id,
+            participant.as_ref(),
+        )
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn resolve_channel_name_for_viewers_names_a_dm_after_the_other_participant(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_named_user(&pool, USER_A.deref(), MACRO_USER_A, "Jacob", "Beckerman").await?;
+    insert_named_user(&pool, USER_B.deref(), MACRO_USER_B, "Teo", "Nys").await?;
+    insert_dm_channel(&pool, DM_CHANNEL, &[USER_A.deref(), USER_B.deref()]).await?;
+    let repo = repo(pool);
+
+    // User A (Jacob) starts the call; user B (Teo) is the only recipient.
+    let names = repo
+        .resolve_channel_name_for_viewers(&DM_CHANNEL, &[USER_B.deref().copied()])
+        .await?;
+
+    assert_eq!(
+        names.get(USER_B.deref()).map(String::as_str),
+        Some("Jacob Beckerman"),
+        "the callee must see the caller's name, not their own"
+    );
+
+    // The caller's own view, which the old code pushed to everyone, is the
+    // callee's name.
+    assert_eq!(
+        repo.resolve_channel_name(&DM_CHANNEL, USER_A.deref().copied())
+            .await?
+            .as_deref(),
+        Some("Teo Nys")
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn resolve_channel_name_for_viewers_uses_the_stored_name_for_every_viewer(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let names = repo
+        .resolve_channel_name_for_viewers(&CH1, &[USER_B.deref().copied(), USER_C.deref().copied()])
+        .await?;
+
+    assert_eq!(names.len(), 2);
+    assert!(
+        names.values().all(|name| name == "call-test-channel"),
+        "named channels read the same to everyone: {names:?}"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn resolve_channel_name_for_viewers_is_empty_for_unknown_channel_or_no_viewers(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let unknown = repo
+        .resolve_channel_name_for_viewers(&Uuid::now_v7(), &[USER_B.deref().copied()])
+        .await?;
+    assert!(unknown.is_empty());
+
+    let no_viewers = repo.resolve_channel_name_for_viewers(&CH1, &[]).await?;
+    assert!(no_viewers.is_empty());
+    Ok(())
+}

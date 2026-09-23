@@ -24,6 +24,8 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
+pub mod team;
+
 const USER_PRINCIPAL_PREFIX: &str = "macro|";
 const BOT_PRINCIPAL_PREFIX: &str = "bot|";
 const TEAM_UUID_HYPHENATED_LEN: usize = 36;
@@ -151,6 +153,12 @@ impl Display for Owner {
             Self::Bot(bot_id) => Display::fmt(&bot_id.into_storage_id(), f),
             Self::Team(team_id) => write!(f, "{}", team_id.hyphenated()),
         }
+    }
+}
+
+impl From<MacroUserIdStr<'static>> for Owner {
+    fn from(user: MacroUserIdStr<'static>) -> Self {
+        Self::User(user)
     }
 }
 

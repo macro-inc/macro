@@ -381,7 +381,9 @@ fn provider_response_error(
                 .collect()
         })
         .unwrap_or_default();
-    let kind = if status == StatusCode::GONE || reasons.contains(&"fullSyncRequired") {
+    let kind = if reasons.contains(&"pushNotSupportedForRequestedResource") {
+        GoogleProviderErrorKind::PushUnsupported
+    } else if status == StatusCode::GONE || reasons.contains(&"fullSyncRequired") {
         GoogleProviderErrorKind::SyncTokenExpired
     } else if reasons.contains(&"insufficientPermissions") {
         GoogleProviderErrorKind::ReauthRequired
@@ -560,7 +562,7 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
         })
     }
 
-    #[tracing::instrument(skip(self, access_token, config), err)]
+    #[tracing::instrument(skip(self, access_token, config))]
     async fn watch_calendar(
         &self,
         access_token: &str,
@@ -1540,7 +1542,9 @@ fn non_retryable_after_write(error: GoogleProviderError) -> GoogleProviderError 
                 ),
             )
         }
-        GoogleProviderErrorKind::Permanent | GoogleProviderErrorKind::ReauthRequired => error,
+        GoogleProviderErrorKind::Permanent
+        | GoogleProviderErrorKind::ReauthRequired
+        | GoogleProviderErrorKind::PushUnsupported => error,
     }
 }
 

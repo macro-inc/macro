@@ -89,6 +89,11 @@ export type CacheChangeOptions = {
   includeHydration?: boolean;
 };
 
+/** Engine replacement is independent of whether durable cache data survived. */
+export type CacheGenerationChange = {
+  storage: 'preserved' | 'reset';
+};
+
 export interface CacheHost {
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
@@ -172,8 +177,11 @@ export interface CacheHost {
     options?: CacheChangeOptions
   ): () => void;
 
-  /** Invalidates revision watermarks before a replacement engine is used. */
-  onCacheGenerationChanged(cb: () => void): () => void;
+  /** Invalidates in-memory revisions/dependencies on every engine replacement.
+   * Durable checkpoints survive replacements that preserve stored records. */
+  onCacheGenerationChanged(
+    cb: (change: CacheGenerationChange) => void
+  ): () => void;
 
   /** Subscribes to final commit, rollback, or supersession events. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;

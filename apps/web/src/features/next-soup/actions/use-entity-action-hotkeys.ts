@@ -721,7 +721,12 @@ export const useEntityActionHotkeys = (
       keyDownHandler: () => {
         const entities = getEntitiesForAction();
         if (entities.length === 0) return false;
-        if (!entities.every(setCompanyPropertyAction.canExecute)) return false;
+        if (
+          !entities.every((entity) =>
+            setCompanyPropertyAction.canExecute(entity, field)
+          )
+        )
+          return false;
         setCompanyPropertyAction.execute(entities, field);
         return true;
       },
@@ -730,7 +735,9 @@ export const useEntityActionHotkeys = (
         const entities = getEntitiesForAction();
         return (
           entities.length > 0 &&
-          entities.every(setCompanyPropertyAction.canExecute)
+          entities.every((entity) =>
+            setCompanyPropertyAction.canExecute(entity, field)
+          )
         );
       },
       scopeId,

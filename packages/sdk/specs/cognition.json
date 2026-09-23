@@ -30,6 +30,16 @@
           "200": {
             "description": "Pricing updated"
           },
+          "400": {
+            "description": "Invalid pricing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Admin access required",
             "content": {
@@ -2132,7 +2142,8 @@
           "ai_editing",
           "import",
           "agent_session",
-          "agent_repository_choice"
+          "agent_repository_choice",
+          "dictation"
         ]
       },
       "AssistantMessagePart": {
@@ -2806,25 +2817,25 @@
       },
       "CompletionUsage": {
         "type": "object",
-        "description": "A recorded completion: who, what feature, optional entity, and the cost.",
+        "description": "User and feature attribution for one invocation.",
         "required": ["feature", "user", "cost"],
         "properties": {
           "cost": {
             "$ref": "#/components/schemas/Usage",
-            "description": "Token usage and cost."
+            "description": "Measured usage and resolved cost."
           },
           "entity": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "The entity the completion related to, if any."
+            "description": "Related entity, if any."
           },
           "feature": {
             "$ref": "#/components/schemas/AiFeature",
-            "description": "The feature that performed the completion."
+            "description": "Feature that performed the invocation."
           },
           "user": {
             "$ref": "#/components/schemas/MacroUserIdStr",
-            "description": "The user the completion was performed for (the [system user](SYSTEM_USER_ID)\nfor background work)."
+            "description": "User the invocation was performed for."
           }
         }
       },
@@ -3006,7 +3017,7 @@
       },
       "FeatureUsage": {
         "type": "object",
-        "description": "Usage for a single feature, with its rolled-up dollar total.",
+        "description": "Recorded invocations and total for one feature.",
         "required": ["feature", "entries", "total"],
         "properties": {
           "entries": {
@@ -3014,16 +3025,16 @@
             "items": {
               "$ref": "#/components/schemas/CompletionUsage"
             },
-            "description": "The individual completions recorded for this feature."
+            "description": "Recorded invocations."
           },
           "feature": {
             "$ref": "#/components/schemas/AiFeature",
-            "description": "The feature."
+            "description": "Feature attribution."
           },
           "total": {
             "type": "number",
             "format": "float",
-            "description": "Total cost across `entries` (USD)."
+            "description": "Total cost (USD)."
           }
         }
       },
@@ -4087,23 +4098,28 @@
       },
       "Price": {
         "type": "object",
-        "description": "Resolved price for one completion.",
+        "description": "Rates applied to an invocation and its resolved dollar cost.",
         "required": ["price_per_million_in", "price_per_million_out", "total"],
         "properties": {
+          "price_per_audio_minute": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per audio minute (USD), absent for token billing."
+          },
           "price_per_million_in": {
             "type": "number",
             "format": "float",
-            "description": "Price per million input tokens (USD)."
+            "description": "Price per million input tokens (USD); zero for audio billing."
           },
           "price_per_million_out": {
             "type": "number",
             "format": "float",
-            "description": "Price per million output tokens (USD)."
+            "description": "Price per million output tokens (USD); zero for audio billing."
           },
           "total": {
             "type": "number",
             "format": "float",
-            "description": "Total cost of the completion (USD)."
+            "description": "Total cost (USD)."
           }
         }
       },
@@ -4312,21 +4328,26 @@
       "SetPricingRequest": {
         "type": "object",
         "description": "Request body for [`set_pricing_handler`].",
-        "required": ["model", "price_per_mil_in", "price_per_mil_out"],
+        "required": ["model"],
         "properties": {
           "model": {
             "type": "string",
             "description": "The model api id to (re)price."
           },
-          "price_per_mil_in": {
-            "type": "number",
+          "price_per_audio_minute": {
+            "type": ["number", "null"],
             "format": "float",
-            "description": "New price per million input tokens (USD)."
+            "description": "Price per minute of audio (USD), or null for token-only pricing."
+          },
+          "price_per_mil_in": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "New price per million input tokens (USD). Required for token pricing."
           },
           "price_per_mil_out": {
-            "type": "number",
+            "type": ["number", "null"],
             "format": "float",
-            "description": "New price per million output tokens (USD)."
+            "description": "New price per million output tokens (USD). Required for token pricing."
           }
         }
       },
@@ -4790,28 +4811,33 @@
       },
       "Usage": {
         "type": "object",
-        "description": "The token usage and resolved cost of a single completion.",
+        "description": "Measured usage for one invocation.",
         "required": ["input_tokens", "output_tokens", "model", "created_at"],
         "properties": {
+          "audio_seconds": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "Audio duration in seconds, absent for token billing."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
-            "description": "When the completion was recorded."
+            "description": "Recording timestamp."
           },
           "input_tokens": {
             "type": "integer",
-            "format": "int32",
-            "description": "Tokens consumed by the input.",
+            "format": "int64",
+            "description": "Input tokens; zero for audio billing.",
             "minimum": 0
           },
           "model": {
             "type": "string",
-            "description": "The model api id (e.g. `claude-opus-4-8`)."
+            "description": "Provider model identifier."
           },
           "output_tokens": {
             "type": "integer",
-            "format": "int32",
-            "description": "Tokens generated in the output.",
+            "format": "int64",
+            "description": "Output tokens; zero for audio billing.",
             "minimum": 0
           },
           "price": {
@@ -4821,7 +4847,7 @@
               },
               {
                 "$ref": "#/components/schemas/Price",
-                "description": "Resolved price, or `None` when the model had no pricing at record time."
+                "description": "Applied pricing, if known."
               }
             ]
           }
@@ -4859,7 +4885,7 @@
       },
       "UsageSummary": {
         "type": "object",
-        "description": "The result of a usage query: per-feature breakdown plus a grand total.",
+        "description": "Per-feature breakdown and grand total.",
         "required": ["entries", "total"],
         "properties": {
           "entries": {
@@ -4872,7 +4898,7 @@
           "total": {
             "type": "number",
             "format": "float",
-            "description": "Grand total cost across all features (USD)."
+            "description": "Grand total (USD)."
           }
         }
       },

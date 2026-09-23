@@ -1,4 +1,5 @@
 use anyhow::Context;
+pub use dictation::outbound::OpenaiApiKey;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
@@ -34,10 +35,6 @@ env_vars! {
     pub struct LivekitServerUrl;
     pub struct LivekitApiKey;
     pub struct LivekitApiSecret;
-    /// OpenAI API key used to generate task-dedup embeddings. Required —
-    /// injected as `OPENAI_API_KEY` from the `openai-key` secret by the
-    /// infra stack, the same way `document_cognition_service` consumes it.
-    pub struct OpenaiApiKey;
     /// Cohere API key used by the task-dedup reranker. Required — injected
     /// as `COHERE_API_KEY`, following the same pattern as `OPENAI_API_KEY`.
     pub struct CohereApiKey;
@@ -108,6 +105,7 @@ pub struct Config {
     pub livekit_server_url: LivekitServerUrl,
     pub livekit_api_key: LivekitApiKey,
     pub livekit_api_secret: LivekitApiSecret,
+    /// Shared server credential for task embeddings and Whisper, supplied by Doppler.
     pub openai_api_key: OpenaiApiKey,
     pub cohere_api_key: CohereApiKey,
     pub github_webhook_secret_key: LocalOrRemoteSecret<GithubWebhookSecretKey>,

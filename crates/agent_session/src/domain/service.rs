@@ -33,7 +33,7 @@ use agent_client_protocol::schema::v1::{
     RequestId, Response, SessionId, SetSessionConfigOptionResponse,
 };
 use agent_fold::domain::lifecycle::LifecycleFold;
-use agent_fold::domain::model::TurnState;
+use agent_fold::domain::model::{Author, FoldedMessage, MessagePart, TurnState};
 use agent_fold::domain::model_selection::model_selection;
 use agent_fold::domain::ports::FoldedMessageRepo;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, AgentSetModelAction};
@@ -75,6 +75,8 @@ use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
 const COMMAND_BUFFER: usize = 1028;
+/// Bound memory usage while draining all sessions during account cleanup.
+const USER_CLEANUP_BATCH_SIZE: std::num::NonZeroUsize = std::num::NonZeroUsize::new(100).unwrap();
 /// Persistence may delay lifecycle teardown, but never indefinitely.
 const SESSION_PERSIST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 /// How long a command may sit queued behind the ACP handshake
@@ -173,6 +175,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
         access: &EntityAccessReceipt<OwnerAccessLevel>,
         name: &str,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// A bounded batch of sessions owned by this user, including inactive sessions.
+    /// Used by account cleanup, not access-based discovery.
+    fn sessions_for_user_cleanup(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
 
     /// Delete an agent session by id.
     fn delete_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
@@ -751,6 +760,15 @@ where
         self.repo.find_for_thread(thread_id, bot_id).await
     }
 
+    async fn sessions_for_user_cleanup(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<AgentSession>> {
+        self.repo
+            .recent_for_owner(owner, USER_CLEANUP_BATCH_SIZE)
+            .await
+    }
+
     async fn delete_session(&self, id: AgentSessionId) -> Result<()> {
         let (stopped, marker) = self.begin_stop(id, true);
         Self::wait_stopped(stopped).await;
@@ -937,8 +955,11 @@ where
     let AgentAction::Prompt(prompt) = action else {
         return None;
     };
+    // Whether anyone has *spoken* here yet, rather than whether the log has
+    // opened a turn: controls take turns of their own, so a session whose
+    // model was set before its first prompt would otherwise never be named.
     folds
-        .next_turn_id(id)
+        .messages(id)
         .await
         .inspect_err(|error| {
             tracing::warn!(
@@ -948,8 +969,19 @@ where
             );
         })
         .ok()
-        .filter(|turn| *turn == MessageId::first(AuthorKind::User).turn)
+        .filter(|messages| !messages.iter().any(is_user_prompt))
         .map(|_| prompt.name_source().to_owned())
+}
+
+/// A message a user wrote, as opposed to a control they issued.
+fn is_user_prompt(message: &FoldedMessage) -> bool {
+    matches!(message.author, Author::User { .. })
+        && message.parts.iter().any(|part| {
+            matches!(
+                part,
+                MessagePart::Text { .. } | MessagePart::Attachment { .. }
+            )
+        })
 }
 
 fn spawn_initial_agent_session_rename<R, Rt, Namer>(

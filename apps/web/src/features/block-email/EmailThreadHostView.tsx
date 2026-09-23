@@ -1,13 +1,19 @@
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
-import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
+import type {
+  EmailThreadHost,
+  EmailThreadSource,
+} from '@app/features/email-thread/context/email-thread-context';
 import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
-import { EmailThread } from '@app/features/email-thread/email-thread';
+import {
+  EmailThread,
+  type EmailThreadProps,
+} from '@app/features/email-thread/email-thread';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { buildMentionMarkdownString } from '@macro-inc/lexical-core';
 import type { Accessor, JSX } from 'solid-js';
 import { Show } from 'solid-js';
-import { openCalendarEventSplit } from '../block-calendar/open-calendar-event';
 import { EmailTaskButton } from './component/EmailTaskButton';
 import { ModalsProvider } from './component/ModalsProvider';
 import { EmailSidePanelSections } from './component/sidepanel/EmailSidePanelSections';
@@ -19,6 +25,8 @@ export type EmailThreadHostViewContext = {
 export type EmailThreadHostViewProps = {
   title: string;
   threadId: Accessor<string>;
+  source: EmailThreadSource;
+  threadTransport: EmailThreadProps['threadTransport'];
   host: EmailThreadHost;
   topBar?: (context: EmailThreadHostViewContext) => JSX.Element;
   sidePanelHeaderToggle?: boolean;
@@ -55,6 +63,8 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
     <EmailThread
       title={props.title}
       threadId={props.threadId}
+      source={props.source}
+      threadTransport={props.threadTransport}
       host={props.host}
       openCalendar={(target) => {
         void openCalendarEventSplit({

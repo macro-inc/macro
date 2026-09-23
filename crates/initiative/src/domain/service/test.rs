@@ -124,7 +124,7 @@ fn share_update() -> UpdateSharePermissionRequestV2 {
 fn team_facts(entity_type: EntityType, entity_id: String, owner: &str) -> TeamShareFacts {
     TeamShareFacts {
         entity: entity_type.with_entity_string(entity_id),
-        owner: user(owner),
+        owner: user(owner).into(),
         owner_team_id: Some(uuid::Uuid::from_u128(7)),
         current: None,
         revision: 0,

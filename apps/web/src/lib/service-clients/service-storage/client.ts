@@ -45,12 +45,16 @@ import type { CalendarMentionPreviewResponse } from './generated/schemas/calenda
 import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
 import type { CallRecordPreview } from './generated/schemas/callRecordPreview';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
+import type { ChannelLabel } from './generated/schemas/channelLabel';
+import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
+import type { ChannelLabelsList } from './generated/schemas/channelLabelsList';
 import { ChannelType } from './generated/schemas/channelType';
 import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
+import type { CreateChannelLabelRequest } from './generated/schemas/createChannelLabelRequest';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
@@ -139,14 +143,17 @@ import type { Project } from './generated/schemas/project';
 import type { Reminder } from './generated/schemas/reminder';
 import type { RemindersList } from './generated/schemas/remindersList';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
+import type { RenameChannelLabelRequest } from './generated/schemas/renameChannelLabelRequest';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
+import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
+import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
@@ -2364,6 +2371,42 @@ export const storageServiceClient = {
     },
   },
 
+  channelLabels: {
+    async preview(rule: ChannelLabelRule, signal?: AbortSignal) {
+      return await dssFetch<SmartTagPreview>('/channel-labels/preview', {
+        method: 'POST',
+        body: JSON.stringify(rule),
+        signal,
+      });
+    },
+    /** Every label of the caller's team; `channelIds` is limited to channels the caller is in. */
+    async list() {
+      return await dssFetch<ChannelLabelsList>('/channel-labels');
+    },
+    async create(params: CreateChannelLabelRequest) {
+      return await dssFetch<ChannelLabel>('/channel-labels', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    },
+    async rename(labelId: string, params: RenameChannelLabelRequest) {
+      return await dssFetch<ChannelLabel>(
+        `/channel-labels/${encodeURIComponent(labelId)}`,
+        { method: 'PATCH', body: JSON.stringify(params) }
+      );
+    },
+    async remove(labelId: string) {
+      return await dssFetch(`/channel-labels/${encodeURIComponent(labelId)}`, {
+        method: 'DELETE',
+      });
+    },
+    async setChannelLabel(channelId: string, params: SetChannelLabelRequest) {
+      return await dssFetch(
+        `/channel-labels/channels/${encodeURIComponent(channelId)}`,
+        { method: 'PUT', body: JSON.stringify(params) }
+      );
+    },
+  },
   favorites: {
     async getFavorites(params?: ListFavoritesParams) {
       const query = new URLSearchParams();

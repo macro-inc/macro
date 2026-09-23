@@ -6,6 +6,7 @@
 pub mod device_registration;
 pub mod digest_batcher;
 pub mod email;
+mod entity_notifications;
 /// Notification status update fanout across multiple realtime publishers.
 pub mod fanout_notification_realtime;
 /// Realtime notification fanout across multiple delivery adapters.

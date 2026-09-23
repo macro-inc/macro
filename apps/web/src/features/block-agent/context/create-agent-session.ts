@@ -10,6 +10,7 @@
 
 import {
   AgentSession,
+  AgentSessionAccessDenied,
   type IssueResult,
 } from '@core/agent-session/AgentSession';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
@@ -50,6 +51,8 @@ export type AgentSessionHandle = {
   /** The folded transcript, ordered by turn (prompt before reply). */
   messages: Accessor<FoldedMessage[]>;
   loadFailed: Accessor<boolean>;
+  /** The load failed because the viewer is not a participant (401/403). */
+  accessDenied: Accessor<boolean>;
   /** Re-runs a failed load. */
   retry: () => void;
   /**
@@ -281,8 +284,17 @@ export function createAgentSession(
   );
 
   // A first fetch would suspend; see `openedPending`.
-  const session = () =>
-    openedPending && resource.state === 'pending' ? undefined : resource.latest;
+  //
+  // Once the load has failed, `resource.latest` rethrows the error on every
+  // read. Nothing above the block catches it, so the throw escapes Solid's
+  // update queue before the enclosing `<Suspense>` swaps its fallback back
+  // out, and the block shows a spinner forever instead of its error panel.
+  // The failure is reported through `loadFailed`; absent is what the row is.
+  const session = () => {
+    if (resource.error !== undefined) return undefined;
+    if (openedPending && resource.state === 'pending') return undefined;
+    return resource.latest;
+  };
 
   return {
     session,
@@ -290,6 +302,7 @@ export function createAgentSession(
     metadata,
     messages: () => list,
     loadFailed: () => resource.error !== undefined,
+    accessDenied: () => resource.error instanceof AgentSessionAccessDenied,
     retry: () => void refetch(),
     issue: (action) => live()?.issue(action, { userId: options.userId() }),
     expect: (actionId, action) =>

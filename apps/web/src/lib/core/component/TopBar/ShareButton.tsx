@@ -151,6 +151,8 @@ interface IShareDialogContext {
   isOpen: Accessor<boolean>;
   open: () => void;
   close: () => void;
+  /** Override the entity-only URL with a host view's contextual URL. */
+  copyLink?: () => void;
 }
 
 export const ShareDialogContext = createContext<IShareDialogContext>();
@@ -703,6 +705,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
 export function ShareModal(props: ShareModalProps) {
   const navigate = useNavigate();
   const analytics = useAnalytics();
+  const shareContext = useContext(ShareDialogContext);
   const currentTeamQuery = useCurrentTeamQuery();
   const callRecordQuery = useCallRecordQuery(() =>
     props.itemType === 'call' ? props.id : ''
@@ -744,6 +747,9 @@ export function ShareModal(props: ShareModalProps) {
   const referralCode = useReferralCode();
 
   const copyLink = createCallback(() => {
+    const contextualCopyLink = shareContext?.copyLink;
+    if (contextualCopyLink) return contextualCopyLink();
+
     const params: Record<string, string> = {};
     const code = referralCode();
     if (code) {
@@ -1550,6 +1556,7 @@ export function ShareTrigger(props: {
 
   const copyLink = createCallback(() => {
     if (props.copyLink) return props.copyLink();
+    if (shareCtx.copyLink) return shareCtx.copyLink();
     navigator.clipboard.writeText(defaultUrl());
     analytics.track('copy_share_link', { blockType: blockType() });
     toast.success('Link copied to clipboard.', {

@@ -4,6 +4,7 @@ import {
   useFavoriteDisplayName,
 } from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { toast } from '@core/component/Toast/Toast';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { registerScope } from '@core/hotkey/utils';
 import Star from '@phosphor/star.svg';
@@ -36,9 +37,12 @@ export function FavoritesCommands() {
   const { openWithSplit } = useSplitLayout();
 
   const openFavorite = (favorite: Favorite) => {
-    openWithSplit(favoriteSplitContent(favorite), {
+    const result = openWithSplit(favoriteSplitContent(favorite), {
       referredFrom: 'kommand-menu',
     });
+    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+      toast.alert('Content already open');
+    }
     // Close the menu and clear the query once a favorite is opened.
     CommandState.close();
     CommandState.setQuery('');

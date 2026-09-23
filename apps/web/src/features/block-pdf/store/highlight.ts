@@ -1,4 +1,5 @@
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
+import { toast } from '@core/component/Toast/Toast';
 import { batch } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
 import { Highlight, type IHighlight } from '../model/Highlight';
@@ -6,6 +7,7 @@ import {
   useCreateUnthreadedHighlightResource,
   useDeleteUnthreadedHighlightResource,
 } from './commentsResource';
+import { useDeleteMessageThread } from './messageCommentsResource';
 
 export const useSetSelectionHighlights = () => {
   const pdf = usePdfDocument();
@@ -50,10 +52,26 @@ export const useAddNewHighlights = () => {
 
 export function useRemoveHighlight() {
   const deleteHighlight = useDeleteUnthreadedHighlightResource();
+  const deleteMessageThread = useDeleteMessageThread();
   const pdf = usePdfDocument();
 
-  return (uuid: string) => {
+  return async (uuid: string) => {
     pdf.closeSelectionMenu();
-    deleteHighlight(uuid);
+    // The annotation endpoint deletes only a legacy thread with its highlight,
+    // so a message discussion goes first; the server then detaches the highlight.
+    const rootId = pdf.annotations.unified
+      ? pdf.annotations.anchors()?.find((anchor) => anchor.uuid === uuid)
+          ?.rootId
+      : null;
+    try {
+      if (rootId) await deleteMessageThread(rootId);
+      await deleteHighlight(uuid);
+    } catch (error) {
+      console.error('Unable to remove highlight', error);
+      toast.failure('Unable to remove highlight');
+    }
+    // Supersede the reload the discussion delete started, which can
+    // otherwise land after the highlight is gone and restore it.
+    if (rootId) void pdf.annotations.commands.refetchAnchors();
   };
 }

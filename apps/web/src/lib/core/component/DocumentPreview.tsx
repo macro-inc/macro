@@ -1,12 +1,12 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
-import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   type CalendarMentionTarget,
   copyCalendarEventMentionTarget,
-} from '@block-calendar/copy-event-mention';
-import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
+} from '@app/features/calendar-view/copy-event-mention';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
+import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
@@ -503,8 +503,8 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     props.collapseInfo?.handleCollapse();
   };
 
-  // The calendar is a singleton block: a mentioned event opens it aimed at
-  // the viewer's own copy of the meeting rather than a per-id split.
+  // Calendar is a singleton application view: a mentioned event opens it aimed
+  // at the viewer's own copy of the meeting rather than a per-id split.
   const calendarOpenTarget = () => {
     const i = item();
     if (isCalendarEventPreviewItem(i)) {
@@ -515,9 +515,8 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
       };
     }
     // Preview not (yet) accessible — e.g. the recent-mention fallback for a
-    // just-created event. Still route through the singleton opener with the
-    // mentioned id; a generic `{type:'calendar', id:<event-id>}` split would
-    // be rejected by the calendar block's load.
+    // just-created event. Still route through the singleton Calendar opener
+    // with the mentioned id so it resolves through the event preview API.
     if (targetBlockType() === 'calendar') {
       return {
         eventId: props.documentInfo.id,
@@ -636,7 +635,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     const splitManager = globalSplitManager();
     if (!splitManager) return false;
     if (calendarOpenTarget()) {
-      return !!splitManager.getSplitByContent('calendar', CALENDAR_BLOCK_ID);
+      return !!splitManager.getSplitByContent('component', CALENDAR_VIEW_ID);
     }
     return !!splitManager.getSplitByContent(
       targetBlockType(),

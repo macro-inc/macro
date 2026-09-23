@@ -1,3 +1,4 @@
+import { ContentLoading } from '@components/app/ContentLoading';
 import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
 import { SplitPanel } from '../components/SplitPanel';
 import type {
@@ -10,7 +11,7 @@ import { createMobileSplitMotion } from './createMobileSplitMotion';
 import type { MobileSwipeLayout } from './createMobileSwipeLayout';
 
 export type MobileSplitContainerProps = {
-  splitManager: SplitManager;
+  splitManager: Pick<SplitManager, 'getSplit'>;
   mobileSwipeLayout: MobileSwipeLayout;
   splits: Accessor<ReadonlyArray<SplitState>>;
   panelRefs: Map<SplitId, HTMLDivElement>;
@@ -71,7 +72,7 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
              */}
             <Show when={a().split.id} keyed>
               {(_splitId) => (
-                <Suspense>
+                <Suspense fallback={<ContentLoading />}>
                   <SplitPanel
                     split={a().split}
                     handle={a().handle}
@@ -100,7 +101,7 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
           >
             <Show when={b().split.id} keyed>
               {(_splitId) => (
-                <Suspense>
+                <Suspense fallback={<ContentLoading />}>
                   <SplitPanel
                     split={b().split}
                     handle={b().handle}

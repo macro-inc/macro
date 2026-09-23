@@ -38,6 +38,8 @@ pub mod thread_access;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod typed_owner_test;
 
 /// Type safety for source ids for entity_access table
 #[derive(Debug, Clone)]

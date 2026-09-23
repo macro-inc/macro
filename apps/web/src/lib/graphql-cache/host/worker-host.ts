@@ -50,6 +50,7 @@ import {
   type CacheCoordinatorPageAdapter,
   createCacheCoordinatorPageAdapter,
 } from '../worker/coordinator-page-adapter';
+import type { EngineOpenOutcome } from '../worker/coordinator-protocol';
 import {
   CacheBootstrapExhaustedError,
   COORDINATOR_CONNECT_ATTEMPTS,
@@ -59,6 +60,7 @@ import {
 import { createNoopCacheHost } from './noop-host';
 import type {
   CacheChangeOptions,
+  CacheGenerationChange,
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
@@ -204,7 +206,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
   const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
   const hydrationSubscribers = new Set<(revision: CacheRevision) => void>();
-  const generationChangeSubscribers = new Set<() => void>();
+  const generationChangeSubscribers = new Set<
+    (change: CacheGenerationChange) => void
+  >();
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
   >();
@@ -345,7 +349,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     for (const cb of affectedSubscribers) cb(opKeys);
   }
 
-  function onEngineReplaced(ownerEpoch: number): void {
+  function onEngineReplaced(
+    ownerEpoch: number,
+    openOutcome: EngineOpenOutcome
+  ): void {
     if (state === 'failed' || state === 'disposing' || state === 'disposed') {
       return;
     }
@@ -353,7 +360,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     latestReplacementEpoch = ownerEpoch;
     // Initial readiness completes the already-running first handshake.
     if (state === 'initializing' && !recoveryInProgress) return;
-    for (const cb of generationChangeSubscribers) cb();
+    const change: CacheGenerationChange = {
+      storage: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
+    };
+    for (const cb of generationChangeSubscribers) cb(change);
     if (state === 'ready') {
       beginRecoveryGeneration();
       // No old response put this host into recovery. Requests still pending at
@@ -1198,7 +1208,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       };
     },
 
-    onCacheGenerationChanged(cb: () => void): () => void {
+    onCacheGenerationChanged(
+      cb: (change: CacheGenerationChange) => void
+    ): () => void {
       generationChangeSubscribers.add(cb);
       return () => generationChangeSubscribers.delete(cb);
     },

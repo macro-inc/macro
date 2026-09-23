@@ -34,6 +34,7 @@ activity = { path = "../activity", default-features = false }
 agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
+bot_id = { path = "../bot_id" }
 attachment = { path = "../attachment" }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }

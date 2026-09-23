@@ -170,8 +170,6 @@ struct RestoredCursorSession {
     acp_session: SessionId,
     /// The Cursor agent, when one was ever minted.
     agent: Option<CursorAgentId>,
-    /// The model id the session last reported, from the projected column.
-    model_id: Option<String>,
     /// The last Cursor run whose output reached Macro's session log.
     last_run: Option<CursorRunId>,
 }
@@ -413,9 +411,6 @@ where
                 },
             ));
         }
-        // The user's chosen model seeds the session as its default: a fresh
-        // session starts on it, and a resumed one still prefers whatever it
-        // was actually last using (carried in `restore.model_id`) over this.
         let chooser = HaikuRepositoryChooser::new(
             Arc::clone(&self.repositories),
             self.sessions.clone(),
@@ -431,7 +426,12 @@ where
                 journal,
                 self.artifacts.clone(),
             )
-            .with_default_model(default_model_id),
+            .with_default_model(default_model_id)
+            // The session's own model outranks the account default: what its
+            // owner picked for it when they opened it, what they switched it
+            // to since, or - for a session that never picked - the slug this
+            // harness seeded the record with, which resolves to no opinion.
+            .with_host_model(Some(session.model.clone())),
         );
         if let Some(restored) = restore {
             service.restore_session_with_watermark(
@@ -442,7 +442,6 @@ where
                 // deployment default to fall back on, and a restored session
                 // must land on the repository its agent was minted against.
                 session.repo_url.as_deref().and_then(CursorRepoUrl::parse),
-                restored.model_id,
                 restored.last_run,
             );
         }
@@ -621,12 +620,6 @@ where
                 Some(RestoredCursorSession {
                     acp_session: acp.clone(),
                     agent,
-                    // The projected model column. It round-trips a picked
-                    // model back into the wrapper — and for a session that
-                    // never picked, it still holds the deployment slug the
-                    // harness seeded it with, which the wrapper resolves to
-                    // "no opinion" rather than trusting.
-                    model_id: Some(stored.model.clone()),
                     last_run: external
                         .and_then(|external| external.last_run_id)
                         .map(CursorRunId::new),

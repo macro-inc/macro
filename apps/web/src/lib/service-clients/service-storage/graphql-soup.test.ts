@@ -4,6 +4,7 @@ import type { Operation } from '@urql/core';
 import { parse } from 'graphql';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  ChannelListItemFieldsFragment,
   ChannelListNotificationFieldsFragment,
   GraphqlSoupEntityType,
   SoupItemFieldsFragment,
@@ -262,7 +263,45 @@ vi.mock('@urql/core', () => ({
   },
 }));
 
-describe('channel list notifications', () => {
+it('maps the unread alias without pretending it is the full notification edge', async () => {
+  const { mapGraphqlSoupItem } = await import('./graphql-soup');
+  const item = {
+    __typename: 'GraphqlSoupChannel',
+    id: 'channel',
+    entityType: 'CHANNEL',
+    displayName: 'Channel',
+    channelName: 'Channel',
+    channelType: 'private',
+    ownerId: 'owner',
+    organizationId: null,
+    channelTeamId: null,
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+    viewedAt: null,
+    interactedAt: null,
+    isParticipant: true,
+    participants: [],
+    latestMessage: null,
+    latestNonThreadMessage: null,
+    cacheProjection: null,
+    frecencyScore: null,
+    isFavorited: false,
+    unreadNotifications: [
+      { id: 'one', state: 'UNSEEN', createdAt: '2026-01-01' },
+    ],
+  } satisfies ChannelListItemFieldsFragment;
+  expect(mapGraphqlSoupItem(item)).toMatchObject({
+    tag: 'channel',
+    data: {
+      notifications: undefined,
+      unreadNotifications: [
+        { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
+      ],
+    },
+  });
+});
+
+describe('legacy channel list notifications', () => {
   const notification = (
     metadata: ChannelListNotificationFieldsFragment['metadata']
   ): ChannelListNotificationFieldsFragment => ({

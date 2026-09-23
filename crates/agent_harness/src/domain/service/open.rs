@@ -190,6 +190,9 @@ where
                 AgentMcpServers::OwnerConnections,
             ),
         };
+        // A caller's pick outranks the persona's: choosing a model on the way
+        // in is choosing what this session runs on, for its whole life.
+        let model = request.model.unwrap_or(model);
         let kind = AgentKind::for_session(bot_id, &harness);
         let harness = kind.harness_slug().map_or(harness, str::to_owned);
         if kind == AgentKind::CodexCloud {

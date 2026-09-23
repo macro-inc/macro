@@ -763,9 +763,12 @@ async fn run() -> anyhow::Result<()> {
     );
     let prompt_mentions =
         LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
+    let prompt_context = MessagePromptContextAdapter::new(
+        message_service,
+        Arc::clone(&entity_access),
+        Arc::new(lexical.clone()),
+    );
     let prompt_composer = LexicalAgentPromptComposer::new(lexical);
-    let prompt_context =
-        MessagePromptContextAdapter::new(message_service, Arc::clone(&entity_access));
 
     // One connection per harness, shared by every session of every agent
     // bound to it. Held here because the gateway puts dialed-in sockets into

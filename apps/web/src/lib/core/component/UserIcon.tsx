@@ -5,6 +5,7 @@ import { isMacroCoderId } from '@core/constant/macroCoder';
 import { isMacroNewId } from '@core/constant/macroNew';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import {
   getDisplayName,
@@ -19,16 +20,8 @@ import RobotIcon from '@phosphor/robot.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { Avatar, type AvatarSize, cn } from '@ui';
-import {
-  createMemo,
-  createSignal,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
-import { HoverCard } from './HoverCard';
-import { UserTooltip } from './UserTooltip';
+import { createMemo, Match, Show, Switch } from 'solid-js';
+import { UserCardTrigger } from './UserCardTrigger';
 
 export type UserIconSize = AvatarSize;
 
@@ -172,6 +165,11 @@ export function UserIcon(props: UserIconProps) {
   const showTooltip = () => props.showTooltip !== false;
   const hasTooltipContent = () => displayName() || email();
 
+  // On touch the tap belongs to the user card, which offers the DM as one of
+  // its actions rather than jumping straight into a conversation.
+  const avatarMouseDown = () =>
+    props.suppressClick || isTouchDevice() ? undefined : getOrCreateDm;
+
   const triggerClass = () =>
     size() === 'fill' ? 'size-full' : 'inline-flex shrink-0';
 
@@ -229,13 +227,23 @@ export function UserIcon(props: UserIconProps) {
 
       <Match when={macroId()} keyed>
         {(id) => (
-          <UserAvatarWithTooltip
+          <UserCardTrigger
+            placement="left"
+            triggerAs="div"
             triggerClass={triggerClass()}
-            avatar={
+            triggerTabIndex={isTouchDevice() ? 0 : -1}
+            user={{
+              displayName: displayName() || email() || '',
+              email: email(),
+              id,
+              isDeleted: props.isDeleted,
+              photoUrl: props.photoUrl,
+            }}
+            trigger={
               <Avatar
                 size={size()}
                 class={props.class}
-                onMouseDown={props.suppressClick ? undefined : getOrCreateDm}
+                onMouseDown={avatarMouseDown()}
               >
                 <UserIconContent
                   id={id}
@@ -245,28 +253,27 @@ export function UserIcon(props: UserIconProps) {
                 />
               </Avatar>
             }
-            renderContent={(close) => (
-              <UserTooltip
-                displayName={displayName() || email() || ''}
-                email={email()}
-                id={id}
-                isDeleted={props.isDeleted}
-                photoUrl={props.photoUrl}
-                onClose={close}
-              />
-            )}
           />
         )}
       </Match>
 
       <Match when={email()}>
-        <UserAvatarWithTooltip
+        <UserCardTrigger
+          placement="left"
+          triggerAs="div"
           triggerClass={triggerClass()}
-          avatar={
+          triggerTabIndex={isTouchDevice() ? 0 : -1}
+          user={{
+            displayName: email() || '',
+            email: email(),
+            isDeleted: props.isDeleted,
+            photoUrl: props.photoUrl,
+          }}
+          trigger={
             <Avatar
               size={size()}
               class={props.class}
-              onMouseDown={props.suppressClick ? undefined : getOrCreateDm}
+              onMouseDown={avatarMouseDown()}
             >
               <UserIconContent
                 id={props.id}
@@ -276,41 +283,8 @@ export function UserIcon(props: UserIconProps) {
               />
             </Avatar>
           }
-          renderContent={(close) => (
-            <UserTooltip
-              displayName={email() || ''}
-              email={email()}
-              isDeleted={props.isDeleted}
-              photoUrl={props.photoUrl}
-              onClose={close}
-            />
-          )}
         />
       </Match>
     </Switch>
-  );
-}
-
-/**
- * Local wrapper that owns the controlled-open state needed to let
- * `<UserTooltip>`'s internal close button dismiss the surrounding card.
- */
-function UserAvatarWithTooltip(props: {
-  triggerClass: string;
-  avatar: JSX.Element;
-  renderContent: (close: () => void) => JSX.Element;
-}) {
-  const [open, setOpen] = createSignal(false);
-  return (
-    <HoverCard
-      placement="left"
-      open={open()}
-      onOpenChange={setOpen}
-      triggerAs="div"
-      triggerClass={props.triggerClass}
-      triggerTabIndex={-1}
-      trigger={props.avatar}
-      content={props.renderContent(() => setOpen(false))}
-    />
   );
 }

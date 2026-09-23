@@ -3,6 +3,8 @@ import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { calendarPath } from '@app/features/calendar-view/calendar-url';
+import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { ChannelsRecentWidget } from '@app/features/channel/sidebar/channels-recent-widget';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
@@ -26,7 +28,6 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
 import {
@@ -253,7 +254,7 @@ const SIDEBAR_LINKS = [
   {
     id: 'calendar',
     label: 'Calendar',
-    href: '/calendar',
+    href: calendarPath('timeGridWeek'),
     icon: getIconConfig('calendar').icon,
     hotkey: 'r',
     hotkeyToken: TOKENS.sidebar.goTo.calendar,
@@ -310,9 +311,11 @@ export function sidebarContent(
   viewId: SidebarItem['id'],
   params?: SidebarItem['params']
 ): SplitContent {
-  return viewId === 'calendar'
-    ? { type: 'calendar', id: CALENDAR_BLOCK_ID }
-    : { type: 'component', id: viewId, params };
+  return {
+    type: 'component',
+    id: viewId === 'calendar' ? CALENDAR_VIEW_ID : viewId,
+    params,
+  };
 }
 
 /**
@@ -352,7 +355,7 @@ export function navigateToSidebarView(args: {
     mergeHistory: false,
     allowDuplicate: viewId !== 'calendar',
     referredFrom,
-  });
+  }).split;
 }
 
 export const registerSidebarHotkeys = ({
@@ -1724,7 +1727,7 @@ type SidebarOpenAction = 'current-split' | 'new-split' | 'fullscreen';
 
 interface SidebarOpenInSplitMenuProps {
   /** The content the menu's actions open. */
-  content: () => SplitContent;
+  content?: () => SplitContent;
   /**
    * Runs once an action has placed the content in a split — e.g. the Email
    * account rows scope the freshly opened mail list to their inbox.
@@ -1732,6 +1735,7 @@ interface SidebarOpenInSplitMenuProps {
   onOpened?: (split: SplitHandle, action: SidebarOpenAction) => void;
   /** View-owned navigation for rows that select a location inside this split. */
   onOpenCurrentSplit?: () => void;
+  onOpenNewSplit?: () => void;
   onOpenFullscreen?: () => void;
   onOpenChange?: (open: boolean) => void;
   /**
@@ -1762,11 +1766,17 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       props.onOpenCurrentSplit();
       return;
     }
-    const split = layout.openWithSplit(props.content(), {
+    if (!props.content) return;
+
+    const result = layout.openWithSplit(props.content(), {
       allowDuplicate: true,
       mergeHistory: false,
       referredFrom: 'sidebar',
     });
+    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+      toast.alert('Content already open');
+    }
+    const split = result.split;
     if (split) props.onOpened?.(split, 'current-split');
   };
 
@@ -1776,12 +1786,24 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
 
     analytics.track('split_created', { from: 'sidebar' });
 
-    const split = manager.createNewSplit({
-      content: props.content(),
+    if (props.onOpenNewSplit) {
+      props.onOpenNewSplit();
+      return;
+    }
+
+    if (!props.content) return;
+
+    const result = manager.openWithSplit(props.content(), {
       activate: true,
       allowDuplicate: true,
+      preferNewSplit: true,
+      replaceWhenFull: false,
       referredFrom: 'sidebar',
     });
+    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+      toast.alert('Content already open');
+    }
+    const split = result.split;
     if (split) props.onOpened?.(split, 'new-split');
   };
 
@@ -1791,6 +1813,9 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       globalSplitManager()?.returnFocus();
       return;
     }
+
+    if (!props.content) return;
+
     const split = layout.replaceAllSplits(props.content(), {
       referredFrom: 'sidebar',
     });

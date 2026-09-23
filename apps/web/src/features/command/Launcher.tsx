@@ -165,20 +165,15 @@ const createBlock = async (spec: {
 
   setCreateMenuOpen(false, false);
 
-  // WORKAROUND: On mobile, the navigation interceptor in createMobileSwipeLayout
-  // consumes openWithSplit calls and returns undefined instead of a SplitHandle.
-  // This means we can't show a loading spinner then replace it via split.replace(),
-  // because we never get a handle back. Instead, on mobile we skip the loading state
-  // and navigate directly to the created block after the async creation completes.
-  // If the mobile navigation interceptor is refactored to return handles, this
-  // workaround can be removed and both paths can use the loading-then-replace flow.
+  // On mobile, navigate directly after creation instead of showing an
+  // intermediate loading pane during the swipe transition.
   const showLoadingFirst = loading && !isMobile();
 
   const split = showLoadingFirst
     ? openWithSplit(
         { type: 'component', id: 'loading' },
         { referredFrom: 'launcher', preferNewSplit: spec.shouldInsert }
-      )
+      ).split
     : undefined;
 
   const id = await createFn();

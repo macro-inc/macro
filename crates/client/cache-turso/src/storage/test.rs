@@ -1,6 +1,13 @@
 use super::*;
 
+mod conjunction_cost;
+mod conjunction_semantics;
+mod engine_writes;
+mod fact_lookup_cost;
+mod filter_scope_cost;
+mod filter_scope_semantics;
 mod predicate_cost;
+mod projection_writes;
 mod startup;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;
@@ -2196,19 +2203,16 @@ fn predicate_query_plan_uses_fact_indexes_and_never_scans_record_blobs() {
             .any(|detail| detail.contains("exact_facts_lookup_idx")),
         "{details:#?}"
     );
-    assert!(
-        details
-            .iter()
-            .any(|detail| detail.contains("integer_facts_lookup_idx")),
-        "{details:#?}"
-    );
     for index in [
-        "optimistic_exact_facts_lookup_idx",
-        "optimistic_integer_facts_lookup_idx",
+        "sqlite_autoindex_integer_facts_1",
+        "sqlite_autoindex_optimistic_exact_facts_1",
+        "sqlite_autoindex_optimistic_integer_facts_1",
     ] {
         assert!(
-            details.iter().any(|detail| detail.contains(index)),
-            "missing {index}: {details:#?}"
+            details.iter().any(|detail| {
+                detail.contains(index) && detail.contains("(document_id=? AND attribute=?")
+            }),
+            "missing document-key fact lookup {index}: {details:#?}"
         );
     }
     for index in [

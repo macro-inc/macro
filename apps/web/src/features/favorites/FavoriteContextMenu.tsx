@@ -30,7 +30,7 @@ export function FavoriteContextMenu(props: FavoriteContextMenuProps) {
       referredFrom: 'sidebar',
       activate: true,
       preferNewSplit,
-    });
+    }).split;
     globalSplitManager()?.returnFocus();
     return split;
   };

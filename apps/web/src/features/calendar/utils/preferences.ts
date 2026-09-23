@@ -1,7 +1,10 @@
-import { isMobile } from '@core/mobile/isMobile';
 import { createSharedRoot } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
 import { createStore } from 'solid-js/store';
+import {
+  CALENDAR_PREFERENCES_KEY,
+  getPreferredCalendarPeriodView,
+} from '../calendar-preferences';
 import type {
   CalendarPeriodView,
   CalendarTimeFormat,
@@ -17,13 +20,10 @@ interface CalendarPreferences {
   timeFormat: CalendarTimeFormat;
 }
 
-/** Storage key for calendar display preferences (also read at copy time by
- * the availability feature, which runs outside this context). */
-export const CALENDAR_PREFERENCES_KEY = 'macro:pref:calendar:settings';
-
+/** One persisted store, so preference changes reach invitation cards outside the calendar. */
 export const useCalendarPreferences = createSharedRoot(() => {
   const defaultPreferences: CalendarPreferences = {
-    periodView: isMobile() ? 'timeGridDay' : 'timeGridWeek',
+    periodView: getPreferredCalendarPeriodView(),
     hiddenSourceIds: [],
     showWeekends: true,
     weekStartsOn: 0,

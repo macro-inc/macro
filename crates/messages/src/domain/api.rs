@@ -60,7 +60,7 @@ pub trait MessageCommands: Send + Sync + 'static {
         id: Uuid,
         input: MessagePatch,
     ) -> Result<Message, MessageError>;
-    /// Tombstone a message under the common authorship and moderation policy.
+    /// Tombstone a message, or delete the whole discussion when it is a root.
     async fn delete(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -254,7 +254,7 @@ mockall::mock! {
     ) -> Result<Message, MessageError>;
     /// Apply partial body, mention, and attachment changes under the common policy.
     async fn patch(&self, access: EntityAccessReceipt<MessageWrite>, id: Uuid, input: MessagePatch) -> Result<Message, MessageError>;
-    /// Tombstone a message under the common authorship and moderation policy.
+    /// Tombstone a message, or delete the whole discussion when it is a root.
     async fn delete(
         &self,
         access: EntityAccessReceipt<MessageWrite>,

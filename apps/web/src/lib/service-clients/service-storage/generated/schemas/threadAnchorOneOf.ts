@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ThreadAnchorOneOfMarkedText } from './threadAnchorOneOfMarkedText';
 import type { ThreadAnchorOneOfType } from './threadAnchorOneOfType';
 
 /**
@@ -12,5 +13,10 @@ import type { ThreadAnchorOneOfType } from './threadAnchorOneOfType';
 export type ThreadAnchorOneOf = {
   /** Mark UUID serialized in the document. */
   mark_id: string;
+  /** The marked text as it read when the discussion was created, already
+trimmed and bounded. Absent on threads created or imported before
+snapshots were captured: the text a mark covers cannot be recovered
+from the mark id alone. */
+  marked_text?: ThreadAnchorOneOfMarkedText;
   type: ThreadAnchorOneOfType;
 };

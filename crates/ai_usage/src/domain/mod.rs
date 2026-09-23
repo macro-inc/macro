@@ -4,8 +4,8 @@ pub mod ports;
 pub mod service;
 
 pub use ports::{
-    AiFeature, CompletionUsage, FeatureUsage, NoOpUsageRecorder, Price, Result, SYSTEM_USER_ID,
-    Usage, UsageApiParams, UsageContext, UsageError, UsageEvent, UsageRecorder, UsageRepo,
-    UsageService, UsageSummary,
+    AiFeature, CompletionUsage, FeatureUsage, ModelPricing, NoOpUsageRecorder, Price, Result,
+    SYSTEM_USER_ID, Usage, UsageAmount, UsageApiParams, UsageContext, UsageError, UsageEvent,
+    UsageRecorder, UsageRepo, UsageService, UsageSummary,
 };
 pub use service::UsageServiceImpl;

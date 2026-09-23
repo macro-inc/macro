@@ -1,9 +1,7 @@
 import {
   createPdfDraftThreadId,
   type PdfComment,
-  type PdfReply,
   type PdfRoot,
-  type ViewerCommentType,
 } from '@block-pdf/type/comments';
 import {
   type IThreadPlaceable,
@@ -13,7 +11,7 @@ import { useUserId } from '@core/context/user';
 import { createMemo } from 'solid-js';
 import { usePdfDocument } from '../../context/pdf-document-context';
 import { usePdfViewer } from '../../context/pdf-viewer-context';
-import { sortComments } from '../commentsResource';
+import { anchoredThread } from './anchoredThread';
 
 export { isThreadPlaceable };
 
@@ -22,52 +20,6 @@ const getThreadPlaceablePos = (
   scaledPageHeight: number
 ) => placeable.position.yPct * scaledPageHeight;
 
-const getFreeCommentThread = (
-  commentPlaceable: IThreadPlaceable
-): { root: PdfRoot; replies: PdfReply[] } | null => {
-  const commentType: ViewerCommentType = 'free';
-
-  const thread = commentPlaceable.payload;
-  if (!thread) return null;
-
-  const comments = [...thread.comments].sort(sortComments);
-
-  const rootComment = comments[0];
-
-  const commentBase = {
-    type: commentType,
-    isNew: false,
-    threadId: rootComment.threadId,
-    rootId: rootComment.commentId,
-    anchorId: commentPlaceable.internalId,
-  };
-
-  const replies: PdfReply[] = [];
-  for (let i = 1; i < comments.length; i++) {
-    const comment = comments[i];
-    replies.push({
-      ...commentBase,
-      id: comment.commentId,
-      createdAt: comment.createdAt,
-      owner: comment.owner,
-      author: comment.sender || comment.owner,
-      text: comment.text,
-    });
-  }
-
-  const root: PdfRoot = {
-    ...commentBase,
-    id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
-    owner: rootComment.owner,
-    author: rootComment.sender || rootComment.owner,
-    text: rootComment.text,
-    children: replies.map((r) => r.id),
-  };
-
-  return { root, replies };
-};
-
 const useServerCommentPlaceables = () => {
   const annotations = usePdfDocument().annotations;
 
@@ -75,21 +27,14 @@ const useServerCommentPlaceables = () => {
     const anchorsData = annotations.anchors();
     if (!anchorsData || anchorsData.length === 0) return [];
 
-    const commentThreadsData = annotations.commentThreads();
-    if (!commentThreadsData || commentThreadsData.length === 0) return [];
-
     const freeCommentAnchors = anchorsData.filter(
       (a) => a.anchorType === 'placeable'
     );
 
     return freeCommentAnchors.flatMap((a) => {
-      const commentThread = commentThreadsData.find(
-        (ct) => ct.thread.threadId === a.threadId
-      );
-      if (!commentThread) {
-        console.error('Comment thread not found for free comment anchor', a);
-        return [];
-      }
+      // A comment placeable exists for its discussion; render once that has loaded.
+      const thread = annotations.anchorThread(a);
+      if (!thread) return [];
 
       // TODO: deprecate unneeded fields
       const placeable: IThreadPlaceable = {
@@ -104,14 +49,7 @@ const useServerCommentPlaceables = () => {
           heightPct: a.heightPct,
           rotation: 0,
         },
-        payload: {
-          threadId: commentThread.thread.threadId,
-          rootId: commentThread.comments[0].commentId,
-          anchorId: a.uuid,
-          page: a.page,
-          comments: commentThread.comments,
-          isResolved: commentThread.thread.resolved,
-        },
+        payload: thread,
         allowableEdits: a.allowableEdits as any,
         wasEdited: a.wasEdited,
         wasDeleted: a.wasDeleted,
@@ -169,8 +107,8 @@ export const useFreeComments = () => {
         originalYPosition,
       };
 
-      const isNew = commentPlaceable.payload == null;
-      if (isNew) {
+      const thread = commentPlaceable.payload;
+      if (!thread) {
         const currentUserId = userId();
         if (!currentUserId) {
           console.error('User ID not found');
@@ -197,7 +135,7 @@ export const useFreeComments = () => {
         continue;
       }
 
-      const freeCommentThread = getFreeCommentThread(commentPlaceable);
+      const freeCommentThread = anchoredThread('free', thread);
       if (!freeCommentThread) continue;
 
       const { root, replies } = freeCommentThread;

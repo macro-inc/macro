@@ -113,6 +113,11 @@ try {
   report.noEagerConstructor =
     sharedWorkerConstructions === 0 && engineWorkers.length === 0;
 
+  const replacementStorage: string[] = [];
+  host.onCacheGenerationChanged(({ storage }) =>
+    replacementStorage.push(storage)
+  );
+  report.replacementStorage = replacementStorage;
   const order: string[] = [];
   const replacementActiveKeys: number[][] = [];
   let replacementRead: Promise<unknown> | undefined;

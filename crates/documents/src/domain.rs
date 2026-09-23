@@ -3,6 +3,9 @@
 /// Event-to-activity mappings for this domain.
 pub mod activity;
 pub mod branch_name;
+/// A document's comment threads, read through the shared message service.
+#[cfg(feature = "ai_tools")]
+pub mod comments;
 pub mod content;
 /// Unified entity-mutation capability impls.
 #[cfg(feature = "service")]

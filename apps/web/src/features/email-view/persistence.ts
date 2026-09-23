@@ -31,7 +31,6 @@ const emailEntryStateSchemaWithDefaults = z.object({
   tab: emailTabSchema.default('important'),
   search: z.string().default(''),
   facets: emailFacetsSchema.default({}),
-  openThreadId: z.string().optional(),
 });
 
 type EmailEntryState = z.infer<typeof emailEntryStateSchemaWithDefaults>;
@@ -86,7 +85,6 @@ function createEmailEntryStorage(options: {
         tab: restored.tab,
         search: restored.search,
         facets: normalizeFacetSelection(restored.facets),
-        openThreadId: restored.openThreadId,
       };
     },
     select: (state): EmailEntryState => ({
@@ -94,23 +92,18 @@ function createEmailEntryStorage(options: {
       tab: state.tab,
       search: state.search,
       facets: normalizeFacetSelection(state.facets),
-      ...(state.openThreadId === undefined
-        ? {}
-        : { openThreadId: state.openThreadId }),
     }),
   });
 }
 
-// Split entry state is gone after a reload, so the parts of the view worth
-// coming back to — tab, inbox scope, filters, and the open thread — are also
-// kept per user, the way the Channels view keeps its selected channel. The
-// search text is deliberately per visit.
+// Split entry state is gone after a reload, so tab, inbox scope, and filters
+// are also kept per user. Detail selection belongs to the route, while search
+// text remains deliberately scoped to one visit.
 const emailLocalStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
   tab: emailTabSchema.default('important'),
   inboxIds: inboxIdsEntrySchema,
   facets: emailFacetsSchema.default({}),
-  openThreadId: z.string().optional(),
 });
 
 type EmailLocalState = z.infer<typeof emailLocalStateSchemaWithDefaults>;
@@ -127,9 +120,6 @@ function selectLocalState(state: EmailViewState): EmailLocalState {
     tab: state.tab,
     ...(state.inboxIds === undefined ? {} : { inboxIds: [...state.inboxIds] }),
     facets: normalizeFacetSelection(state.facets),
-    ...(state.openThreadId === undefined
-      ? {}
-      : { openThreadId: state.openThreadId }),
   };
 }
 
@@ -158,7 +148,6 @@ function createEmailLocalStateStorage(options: {
           tab: restored.tab,
           inboxIds: restored.inboxIds,
           facets: normalizeFacetSelection(restored.facets),
-          openThreadId: restored.openThreadId,
         };
       } catch {
         return undefined;

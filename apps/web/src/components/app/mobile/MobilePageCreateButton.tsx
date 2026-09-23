@@ -1,10 +1,10 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import {
   setCreateMenuOpen,
   useCreateMenuBlocks,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
-import { useOpenEventComposer } from '@block-calendar/components/use-open-event-composer';
 import { hapticImpact } from '@core/mobile/haptics';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CalendarIcon from '@phosphor/calendar-blank.svg';

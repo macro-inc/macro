@@ -275,6 +275,7 @@ struct StoredCalendarRow {
     materialized_end_date: Option<NaiveDate>,
     synced_at: Option<DateTime<Utc>>,
     watch_expires_at: Option<DateTime<Utc>>,
+    watch_unsupported_at: Option<DateTime<Utc>>,
 }
 
 struct OccurrenceJoinRow {
@@ -1492,6 +1493,7 @@ impl CalendarRepository for PgCalendarRepository {
             SET watch_channel_id = $3,
                 watch_resource_id = $4,
                 watch_expires_at = $5,
+                watch_unsupported_at = NULL,
                 updated_at = now()
             WHERE id = $1
               AND account_id = $2
@@ -1502,6 +1504,34 @@ impl CalendarRepository for PgCalendarRepository {
             channel.channel_id.to_string(),
             channel.resource_id,
             channel.expires_at,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        tx.commit().await.map_err(report)
+    }
+
+    #[tracing::instrument(skip(self), fields(job_id = %key.job_id), err)]
+    async fn record_watch_unsupported(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_id: Uuid,
+    ) -> Result<(), Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
+        sqlx::query!(
+            r#"
+            UPDATE calendars
+            SET watch_unsupported_at = now(),
+                updated_at = now()
+            WHERE id = $1
+              AND account_id = $2
+              AND NOT is_deleted
+            "#,
+            calendar_id,
+            account_id,
         )
         .execute(&mut *tx)
         .await
@@ -2312,7 +2342,8 @@ async fn upsert_calendar_tx(
             materialized_start_date,
             materialized_end_date,
             synced_at,
-            watch_expires_at
+            watch_expires_at,
+            watch_unsupported_at
         "#,
         Uuid::now_v7(),
         account_id,
@@ -2364,6 +2395,7 @@ fn stored_google_calendar(row: StoredCalendarRow) -> Result<StoredGoogleCalendar
         materialized_range,
         synced_at: row.synced_at,
         watch_expires_at: row.watch_expires_at,
+        watch_unsupported_at: row.watch_unsupported_at,
     })
 }
 

@@ -1,4 +1,4 @@
-import type { OutOfOfficeProperties } from '@service-email/generated/schemas/outOfOfficeProperties';
+import type { OutOfOfficeProperties } from '@service-calendar/generated/schemas/outOfOfficeProperties';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import {
   buildReminderOverrides,

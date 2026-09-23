@@ -6,7 +6,7 @@ import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type {
   InitialSync,
   LiveSyncSource,
-  TimeoutError,
+  SyncError,
 } from '@macro-inc/collaboration/collab/source';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
@@ -353,7 +353,7 @@ interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {
   md: DocumentBlockData &
     DssFileData & {
       syncSource: LiveSyncSource;
-      doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
+      doInitialSync: () => ResultAsync<InitialSync, SyncError>;
     };
   code: DocumentBlockData;
   project: ProjectBlockData;

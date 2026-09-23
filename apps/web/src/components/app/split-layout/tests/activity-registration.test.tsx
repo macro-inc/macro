@@ -40,22 +40,40 @@ vi.mock('@app/features/activity/open-entity-in-split', () => ({
 }));
 
 // Quarantine unrelated registered views and their module-load side effects.
+// Route/preview codecs otherwise pull the full block-definition graph into this test.
+vi.mock('@app/features/inbox-view/inbox-route', () => ({}));
 vi.mock('@app/features/agents-view/views/AgentsView', () => ({}));
-vi.mock('@app/features/channels-view/channels-view', () => ({}));
+vi.mock('@app/features/channels-view/channels-view', () => ({
+  ChannelDetailRouteView: () => null,
+}));
 vi.mock('@app/features/drive-view/drive-view', () => ({}));
+vi.mock('@app/features/drive-view/components/DriveDetailView', () => ({
+  DriveDetailView: () => null,
+}));
 vi.mock('@app/features/email-compose/email-compose', () => ({}));
 vi.mock('@app/features/email-view/email-view', () => ({}));
+vi.mock('@app/features/email-view/components/EmailDetailView', () => ({
+  EmailDetailRouteView: () => null,
+}));
 vi.mock('@app/features/getting-started', () => ({}));
 vi.mock('@app/features/home', () => ({}));
-vi.mock('@app/features/inbox-view/inbox-view', () => ({}));
+vi.mock('@app/features/inbox-view/inbox-view', () => ({
+  InboxDetailRouteView: () => null,
+}));
 vi.mock('@app/features/next-soup/filters/filter-store', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));
 vi.mock('@app/features/next-soup/use-recent-view-flag', () => ({}));
 vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({}));
-vi.mock('@app/features/settings/Settings', () => ({}));
+vi.mock('@app/features/settings/Settings', () => ({
+  SettingsPanelComponentWrapper: () => null,
+}));
+vi.mock('@app/features/settings/McpConnections', () => ({}));
 vi.mock('@app/features/tasks-view/tasks-view', () => ({}));
+vi.mock('@app/features/tasks-view/components/TasksDetailView', () => ({
+  TasksDetailRouteView: () => null,
+}));
 vi.mock('@app/signal/splitLayout', () => ({}));
 vi.mock('@block-calendar/components/EventComposerSplit', () => ({}));
 vi.mock('@block-channel/component/Compose', () => ({}));
@@ -63,7 +81,9 @@ vi.mock('@block-md/component/ComposeSkill', () => ({}));
 vi.mock('@block-md/component/ComposeTask', () => ({}));
 vi.mock('@companies/crm/saved-views', () => ({}));
 vi.mock('@core/context/user', () => ({}));
-vi.mock('@core/mobile/isTouchDevice', () => ({}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => false,
+}));
 vi.mock('@queries/agent-schedule/entities', () => ({}));
 vi.mock('@ui', () => ({}));
 

@@ -1,175 +1,282 @@
-mod agent_task;
+pub mod agent_task;
 mod notify;
 
-use std::sync::Arc;
+#[cfg(test)]
+mod test;
 
-use ai_tools::ToolServiceContext;
-use anyhow::Result;
-use chrono::Utc;
-use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
+use std::{sync::Arc, time::Duration};
+
+use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use serde_json::Value;
-use sqlx::PgPool;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
+use crate::domain::event_runs::{
+    ClaimedEventRun, EventExecutionResult, EventExecutor, EventRunOutcome,
+};
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, AlreadyRunningError, InProgressExecution, MAX_ACTION_TIME,
-    ScheduledAction, ScheduledActionUpdate,
+    ActionExecutionRecord, InProgressExecution, MAX_ACTION_TIME, ScheduledAction,
+    ScheduledActionUpdate,
 };
 use crate::domain::ports::{
-    ScheduledActionExecutor, ScheduledActionLiveUpdate, ScheduledActionRepo,
+    ScheduledActionExecutor, ScheduledActionLiveUpdate, ScheduledActionRepo, ScheduledAgentRunner,
 };
 
-pub struct InProcessExecutor<Rpo: ScheduledActionRepo, Live: ScheduledActionLiveUpdate> {
+/// Shared execution path. Cron/manual calls return after tracked chat creation;
+/// event workers await it and own atomic event/history finalization and release.
+pub struct InProcessExecutor<Rpo, Live, Runner> {
     repo: Arc<Rpo>,
-    db: PgPool,
-    tool_context: ToolServiceContext,
-    notification_ingress: Arc<SqsNotificationIngress<SqsQueue>>,
     live_updates: Arc<Live>,
+    runner: Arc<Runner>,
+    tracker: TaskTracker,
+    cancellation: CancellationToken,
 }
 
-impl<Rpo: ScheduledActionRepo, Live: ScheduledActionLiveUpdate> InProcessExecutor<Rpo, Live> {
+impl<Rpo, Live, Runner> Clone for InProcessExecutor<Rpo, Live, Runner> {
+    fn clone(&self) -> Self {
+        Self {
+            repo: self.repo.clone(),
+            live_updates: self.live_updates.clone(),
+            runner: self.runner.clone(),
+            tracker: self.tracker.clone(),
+            cancellation: self.cancellation.clone(),
+        }
+    }
+}
+
+impl<Rpo, Live, Runner> InProcessExecutor<Rpo, Live, Runner>
+where
+    Rpo: ScheduledActionRepo,
+    Live: ScheduledActionLiveUpdate,
+    Runner: ScheduledAgentRunner,
+{
     pub fn new(
         repo: Arc<Rpo>,
-        db: PgPool,
-        tool_context: ToolServiceContext,
-        notification_ingress: Arc<SqsNotificationIngress<SqsQueue>>,
+        runner: Arc<Runner>,
         live_updates: Arc<Live>,
+        tracker: TaskTracker,
+        cancellation: CancellationToken,
     ) -> Self {
         Self {
             repo,
-            db,
-            tool_context,
-            notification_ingress,
+            runner,
             live_updates,
+            tracker,
+            cancellation,
         }
     }
-}
 
-fn try_claim(action: &ScheduledAction) -> Result<()> {
-    if let Some(claimed_at) = action.claimed {
-        let elapsed = Utc::now() - claimed_at;
-        if elapsed < MAX_ACTION_TIME {
-            return Err(anyhow::Error::new(AlreadyRunningError {
-                action_id: *action.id.as_ref().unwrap(),
-            }));
-        }
-    }
-    Ok(())
-}
-
-impl<Rpo, Live> ScheduledActionExecutor for InProcessExecutor<Rpo, Live>
-where
-    Rpo: ScheduledActionRepo + Send + Sync + 'static,
-    Live: ScheduledActionLiveUpdate,
-{
-    async fn execute_action(&self, action: ScheduledAction) -> Result<InProgressExecution> {
-        // A run acts as the owner throughout - it opens a chat in their
-        // account and spends their AI budget - so refuse a bot- or team-owned
-        // action here, before the claim, rather than part-way through.
-        let owner_user = action.owner_user()?.clone();
-        try_claim(&action)?;
-
-        let id = *action.id.as_ref().unwrap();
-        self.repo.claim_action(&id).await?;
-
-        // Create the chat up front so the caller gets a chat_id synchronously
-        // and the eventual execution record can link back to it.
-        let chat_id = match action.kind {
-            ActionKind::Agent => agent_task::create_run_chat(&self.db, &action).await?,
-        };
-
+    async fn prepare(
+        &self,
+        action: &ScheduledAction,
+        chat_id: &mut Option<String>,
+    ) -> Result<String> {
+        let owner = action.owner_user()?.clone();
+        let action_id = action.id.context("persisted action required")?;
+        let created = self.runner.create_chat(action).await?;
+        // Retain the chat link even if publishing Started stalls or is cancelled.
+        *chat_id = Some(created.clone());
         self.live_updates
             .publish_update(ScheduledActionUpdate::Started {
-                owner: owner_user.clone(),
-                action_id: id,
-                chat_id: chat_id.clone(),
+                owner,
+                action_id,
+                chat_id: created.clone(),
             })
             .await;
+        Ok(created)
+    }
 
-        let execution = InProgressExecution {
-            action_id: id,
-            chat_id: Some(chat_id.clone()),
-        };
-
-        let repo = Arc::clone(&self.repo);
-        let db = self.db.clone();
-        let tool_context = self.tool_context.clone();
-        let notification_ingress = Arc::clone(&self.notification_ingress);
-        let live_updates = Arc::clone(&self.live_updates);
-        let start_time = Utc::now();
-        let record_resource_id = chat_id.clone();
-        tokio::spawn(async move {
-            let result =
-                run_job(&db, &tool_context, &notification_ingress, &action, &chat_id).await;
-            let end_time = Utc::now();
-            let is_success = result.is_ok();
-
-            let record = ActionExecutionRecord {
-                id: None,
-                action_id: id,
-                resource_id: Some(record_resource_id.clone()),
-                start_time,
-                end_time,
-                is_success,
-                result: match &result {
-                    Ok(_) => Value::Null,
-                    Err(e) => Value::String(e.to_string()),
-                },
-                created_at: end_time,
-            };
-
-            if let Err(e) = repo.create_execution_record(record).await {
-                tracing::error!(error=?e, action_id=?id, "failed to save execution record");
-            }
-
-            if let Err(e) = repo.update_last_executed(&id, end_time).await {
-                tracing::error!(error=?e, action_id=?id, "failed to update last executed time");
-            }
-
-            // Recompute next_run_at based on the cron, so the UI shows the
-            // upcoming run after the one we just completed. The repo fetches
-            // the current schedule + timezone itself and skips the update if
-            // there's no future fire time.
-            if let Err(e) = repo.update_next_run_at(&id).await {
-                tracing::error!(error=?e, action_id=?id, "failed to update next_run_at");
-            }
-
-            if let Err(e) = repo.release_action(&id).await {
-                tracing::error!(error=?e, action_id=?id, "failed to release action claim");
-            }
-
-            // Fire the stop event after release so that any follow-up "run
-            // now" the UI issues in response will not race the claim.
-            live_updates
+    async fn stopped(&self, action: &ScheduledAction, chat_id: &str, is_success: bool) {
+        if let (Ok(owner), Some(action_id)) = (action.owner_user(), action.id) {
+            self.live_updates
                 .publish_update(ScheduledActionUpdate::Stopped {
-                    owner: owner_user,
-                    action_id: id,
-                    chat_id: record_resource_id.clone(),
+                    owner: owner.clone(),
+                    action_id,
+                    chat_id: chat_id.to_owned(),
                     is_success,
                 })
                 .await;
-
-            if let Err(e) = &result {
-                tracing::error!(error=?e, action_id=?id, "scheduled action execution failed");
-            }
-        });
-
-        Ok(execution)
+        }
     }
 }
 
-async fn run_job(
-    db: &PgPool,
-    tool_context: &ToolServiceContext,
-    notification_ingress: &Arc<SqsNotificationIngress<SqsQueue>>,
+const BOOKKEEPING_TIMEOUT: Duration = Duration::from_secs(10);
+
+#[derive(Debug, thiserror::Error)]
+#[error("scheduled action cancelled")]
+struct ExecutionCancelled;
+
+/// Bound every execution operation (including chat preparation) by the claim's
+/// original deadline. Cancellation drops the runner, whose session guard cancels
+/// the request context used by tools, including detached cooperative tool work.
+async fn bounded<T>(
+    deadline: DateTime<Utc>,
+    cancellation: impl Future<Output = ()> + Send,
+    operation: impl Future<Output = Result<T>> + Send,
+) -> Result<T> {
+    let remaining = (deadline - Utc::now()).to_std().unwrap_or_default();
+    anyhow::ensure!(!remaining.is_zero(), "scheduled action deadline exceeded");
+    tokio::select! {
+        biased;
+        _ = cancellation => Err(ExecutionCancelled.into()),
+        _ = tokio::time::sleep(remaining) => anyhow::bail!("scheduled action deadline exceeded"),
+        result = operation => result,
+    }
+}
+
+fn execution_record(
     action: &ScheduledAction,
-    chat_id: &str,
-) -> Result<()> {
-    match action.kind {
-        ActionKind::Agent => {
-            agent_task::run_agent_task(db, tool_context, notification_ingress, action, chat_id)
-                .await?;
-            Ok(())
+    chat_id: Option<String>,
+    started_at: DateTime<Utc>,
+    result: &Result<()>,
+) -> ActionExecutionRecord {
+    let end_time = Utc::now();
+    ActionExecutionRecord {
+        id: None,
+        action_id: action.id.expect("claimed actions are persisted"),
+        resource_id: chat_id,
+        start_time: started_at,
+        end_time,
+        is_success: result.is_ok(),
+        result: match result {
+            Ok(()) => Value::Null,
+            Err(error) => Value::String(error.to_string()),
+        },
+        created_at: end_time,
+    }
+}
+
+impl<Rpo, Live, Runner> ScheduledActionExecutor for InProcessExecutor<Rpo, Live, Runner>
+where
+    Rpo: ScheduledActionRepo,
+    Live: ScheduledActionLiveUpdate,
+    Runner: ScheduledAgentRunner,
+{
+    async fn execute_action(&self, action: ScheduledAction) -> Result<InProgressExecution> {
+        action.owner_user()?;
+        anyhow::ensure!(!self.cancellation.is_cancelled(), "executor is stopping");
+        let id = action.id.context("persisted action required")?;
+        let start_time = Utc::now();
+        let deadline = start_time + MAX_ACTION_TIME;
+
+        // Track preparation too: cancellation of an HTTP request must not leak
+        // a claim or abandon a run after creating its chat.
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let executor = self.clone();
+        self.tracker.spawn(async move {
+            let claim = bounded(
+                deadline,
+                executor.cancellation.cancelled(),
+                executor.repo.claim_action(&id),
+            )
+            .await;
+            let token = match claim {
+                Ok(token) => token,
+                Err(error) => {
+                    let _ = ready_tx.send(Err(error));
+                    return;
+                }
+            };
+            let mut ready_tx = Some(ready_tx);
+            let mut chat_id = None;
+            let result = bounded(deadline, executor.cancellation.cancelled(), async {
+                let created = executor.prepare(&action, &mut chat_id).await?;
+                if let Some(ready_tx) = ready_tx.take() {
+                    let _ = ready_tx.send(Ok(InProgressExecution {
+                        action_id: id,
+                        chat_id: Some(created.clone()),
+                    }));
+                }
+                executor.runner.run(&action, &created, None).await
+            })
+            .await;
+            let record = execution_record(&action, chat_id.clone(), start_time, &result);
+            let end_time = record.end_time;
+            let bookkeeping = async {
+                let _ = executor.repo.create_execution_record(record).await.inspect_err(|error| {
+                    tracing::error!(?error, action_id=?id, "failed to save execution record");
+                });
+                let _ = executor.repo.update_last_executed(&id, end_time).await.inspect_err(|error| {
+                    tracing::error!(?error, action_id=?id, "failed to update last executed time");
+                });
+                let _ = executor.repo.update_next_run_at(&id).await.inspect_err(|error| {
+                    tracing::error!(?error, action_id=?id, "failed to update next run time");
+                });
+            };
+            if tokio::time::timeout(BOOKKEEPING_TIMEOUT, bookkeeping).await.is_err() {
+                tracing::error!(action_id=?id, "execution bookkeeping timed out");
+            }
+            // Always attempt fenced release, even after failed preparation or
+            // stalled history persistence. Never retry model/tool execution.
+            let release = executor.repo.release_action(&id, token);
+            match tokio::time::timeout(BOOKKEEPING_TIMEOUT, release).await {
+                Ok(Ok(())) => {},
+                Ok(Err(error)) => tracing::error!(?error, action_id=?id, "failed to release action claim"),
+                Err(error) => tracing::error!(?error, action_id=?id, "claim release timed out"),
+            }
+            if let Some(chat_id) = chat_id {
+                let _ = tokio::time::timeout(
+                    BOOKKEEPING_TIMEOUT,
+                    executor.stopped(&action, &chat_id, result.is_ok()),
+                )
+                .await;
+            }
+            if let Err(error) = result {
+                tracing::error!(?error, action_id=?id, "scheduled action execution failed");
+                if let Some(ready_tx) = ready_tx {
+                    let _ = ready_tx.send(Err(error));
+                }
+            }
+        });
+        ready_rx
+            .await
+            .context("failed to prepare scheduled action chat")?
+    }
+}
+
+impl<Rpo, Live, Runner> EventExecutor for InProcessExecutor<Rpo, Live, Runner>
+where
+    Rpo: ScheduledActionRepo,
+    Live: ScheduledActionLiveUpdate,
+    Runner: ScheduledAgentRunner,
+{
+    async fn execute(
+        &self,
+        run: &ClaimedEventRun,
+        cancellation: impl Future<Output = ()> + Send,
+    ) -> EventExecutionResult {
+        let mut chat_id = None;
+        let shutdown = async {
+            tokio::select! {
+                _ = self.cancellation.cancelled() => {},
+                _ = cancellation => {},
+            }
+        };
+        let deadline = run.deadline.min(run.started_at + MAX_ACTION_TIME);
+        let result = bounded(deadline, shutdown, async {
+            let created = self.prepare(&run.action, &mut chat_id).await?;
+            self.runner
+                .run(&run.action, &created, Some(&run.run.pending.event))
+                .await
+        })
+        .await;
+        let record = execution_record(&run.action, chat_id.clone(), run.started_at, &result);
+        if let Some(chat_id) = chat_id {
+            let _ = tokio::time::timeout(
+                BOOKKEEPING_TIMEOUT,
+                self.stopped(&run.action, &chat_id, result.is_ok()),
+            )
+            .await;
+        }
+        // No claim/release or history writes here: the worker finalizes with
+        // run.token in the same transaction as the terminal queue transition.
+        EventExecutionResult {
+            outcome: match &result {
+                Ok(()) => EventRunOutcome::Succeeded,
+                Err(error) if error.is::<ExecutionCancelled>() => EventRunOutcome::Interrupted,
+                Err(_) => EventRunOutcome::Failed,
+            },
+            record: Some(record),
         }
     }
 }

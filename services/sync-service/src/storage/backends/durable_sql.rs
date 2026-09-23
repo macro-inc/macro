@@ -103,7 +103,6 @@ impl DurableSQLStorage {
     }
 
     /// Delete a key and all its chunks
-    #[expect(unused, reason = "We could use this in place of DO KV")]
     pub fn delete(&self, key: &str) -> Result<bool> {
         let cursor = self.storage.sql().exec(
             "DELETE FROM kv_store WHERE id = ?1",
@@ -206,6 +205,11 @@ impl SnapshotStorage for DurableSQLStorage {
             Err(e) => Err(e)?,
         }
     }
+    async fn delete_snapshot(&self) -> worker::Result<()> {
+        self.delete(&self.document_id)?;
+        Ok(())
+    }
+
     /// Checks if a snapshot exists in the storage
     async fn has_snapshot(&self) -> worker::Result<bool> {
         self.exists(&self.document_id)

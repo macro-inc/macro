@@ -224,18 +224,17 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       type: 'component' as const,
       id: agentsRouteId({ mode: targetMode, conversation }),
     };
-    if (event?.shiftKey) {
-      layout.openWithSplit(next, {
-        preferNewSplit: true,
-        referredFrom: 'agents',
-      });
-      return;
-    }
-    if (panel.handle.content().id === next.id) {
+    if (!event?.shiftKey && panel.handle.content().id === next.id) {
       setSelected({ conversation, activeConversationId: conversation.id });
       return;
     }
-    panel.handle.replace({ next, referredFrom: 'agents' });
+    const result = layout.openWithSplit(next, {
+      preferNewSplit: event?.shiftKey,
+      referredFrom: 'agents',
+    });
+    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+      toast.alert('Content already open');
+    }
   };
   const startConversation = (start: StartConversation) => {
     const id = startPendingSession({

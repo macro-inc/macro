@@ -8,6 +8,7 @@ import {
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CoordinatorToTabEnvelope,
+  type EngineOpenOutcome,
   isCacheRequest,
   type PageToEngineEnvelope,
   type TabToCoordinatorEnvelope,
@@ -42,7 +43,10 @@ export interface CacheCoordinatorPageAdapterOptions {
     ownerEpoch: number
   ) => DedicatedWorkerLike;
   lockManager?: Pick<LockManager, 'request'>;
-  onEngineReplaced?: (ownerEpoch: number) => void;
+  onEngineReplaced?: (
+    ownerEpoch: number,
+    openOutcome: EngineOpenOutcome
+  ) => void;
   onStartupProgress?: (
     progress: Extract<CoordinatorToTabEnvelope, { kind: 'engine-startup' }>
   ) => void;
@@ -71,7 +75,7 @@ interface CoordinatorConnection {
 
 const DEFAULT_GRACEFUL_TIMEOUT_MS = 10_000;
 
-const withVersion = <T extends { coordinatorVersion: 3 }>(
+const withVersion = <T extends { coordinatorVersion: 4 }>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({
@@ -573,7 +577,10 @@ export class CacheCoordinatorPageAdapter {
           this.highestOwnerEpochSeen,
           message.ownerEpoch
         );
-        this.options.onEngineReplaced?.(message.ownerEpoch);
+        this.options.onEngineReplaced?.(
+          message.ownerEpoch,
+          message.openOutcome
+        );
         break;
       case 'protocol-error': {
         const error = new Error(message.error);

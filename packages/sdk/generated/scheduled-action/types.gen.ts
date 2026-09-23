@@ -4,6 +4,19 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+/**
+ * Canonical client configuration. Ownership and execution state are server-owned.
+ */
+export type ActionConfiguration = {
+    enabled: boolean;
+    kind: ActionKind;
+    name: string;
+    task: {
+        [key: string]: unknown;
+    };
+    trigger: ActionTrigger;
+};
+
 export type ActionExecutionRecord = {
     action_id: string;
     created_at: string;
@@ -23,6 +36,18 @@ export type ActionExecutionRecord = {
 
 export type ActionKind = 'Agent';
 
+/**
+ * Exactly one trigger per action. Existing cron validation is reused.
+ */
+export type ActionTrigger = {
+    schedule: Schedule;
+    timezone: string;
+    type: 'cron';
+} | {
+    filters: EventFilters;
+    type: 'events';
+};
+
 export type AgentTask = {
     model: string;
     prompt: string;
@@ -30,20 +55,9 @@ export type AgentTask = {
 };
 
 /**
- * Client-supplied payload for creating a scheduled action. The server fills
- * in `id`, `owner` (from the authenticated user), timestamps, `claimed`, and
- * `next_run_at` (derived from the cron).
+ * Exactly one representation is accepted, even if mixed fields agree or are null.
  */
-export type CreateScheduledAction = {
-    enabled: boolean;
-    kind: ActionKind;
-    name: string;
-    schedule: Schedule;
-    task: {
-        [key: string]: unknown;
-    };
-    timezone: string;
-};
+export type CreateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -52,29 +66,69 @@ export type EmptyResponse = {
     [key: string]: unknown;
 };
 
+/**
+ * An event name AND an entity ID must match within the same filter.
+ */
+export type EventFilter = {
+    events: Array<EventName>;
+    ids?: Array<string> | null;
+};
+
+/**
+ * Bounded nonempty OR of filters, canonicalized to remove duplicates.
+ */
+export type EventFilters = Array<EventFilter>;
+
+/**
+ * Closed allowlist: unknown names, deletions and ambiguous attribution are not
+ * selectors. Adding a broker variant does not automatically enable routines.
+ */
+export type EventName = 'document.created' | 'document.updated' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created';
+
 export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
+};
+
+/**
+ * Deprecated cron-only input, accepted during the compatibility rollout.
+ */
+export type LegacyActionConfiguration = {
+    enabled: boolean;
+    kind: ActionKind;
+    name: string;
+    schedule: Schedule;
+    task: {
+        [key: string]: unknown;
+    };
+    timezone: string;
 };
 
 export type Schedule = string;
 
 export type ScheduledAction = {
     claimed?: string | null;
+    /**
+     * Independent of execution bookkeeping in `updated_at`.
+     */
+    configuration_revision: number;
     created_at: string;
     /**
-     * When false, the cron dispatcher skips this schedule. `run_now` remains
+     * When false, automatic dispatch skips this action. `run_now` remains
      * available regardless.
      */
     enabled: boolean;
+    /**
+     * Event publication boundary; absent for cron actions.
+     */
+    event_activated_at?: string | null;
     id?: string | null;
     kind: ActionKind;
     name: string;
     /**
-     * Time of the next scheduled firing (derived from the cron on write). UI
-     * uses this to render "next run" without having to parse the cron itself.
+     * Next cron firing, absent for event-triggered actions.
      */
-    next_run_at: string;
+    next_run_at?: string | null;
     /**
      * Who the action belongs to. Every action is user-owned today, but the
      * type no longer says so: the principal string on the wire and in the
@@ -82,12 +136,30 @@ export type ScheduledAction = {
      * rather than failing to parse.
      */
     owner: string;
-    schedule: Schedule;
     task: {
         [key: string]: unknown;
     };
-    timezone: string;
+    trigger: ActionTrigger;
     updated_at: string;
+};
+
+/**
+ * Canonical trigger plus deprecated cron fields for existing clients. Event
+ * responses omit legacy fields rather than inventing a schedule or timezone.
+ */
+export type ScheduledActionResponse = ScheduledAction & {
+    /**
+     * Deprecated: use `trigger.schedule`. Present only for cron actions.
+     *
+     * @deprecated
+     */
+    schedule?: string | null;
+    /**
+     * Deprecated: use `trigger.timezone`. Present only for cron actions.
+     *
+     * @deprecated
+     */
+    timezone?: string | null;
 };
 
 /**
@@ -112,20 +184,9 @@ export type ScheduledActionUpdate = {
 };
 
 /**
- * Client-supplied payload for updating a scheduled action. Mirrors the fields
- * the repository actually writes — `id`/`owner`/timestamps/`claimed`/
- * `next_run_at` are not client-mutable.
+ * Full replacement of client configuration, not of server-owned action state.
  */
-export type UpdateScheduledAction = {
-    enabled: boolean;
-    kind: ActionKind;
-    name: string;
-    schedule: Schedule;
-    task: {
-        [key: string]: unknown;
-    };
-    timezone: string;
-};
+export type UpdateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
 
 export type ScheduledActionHealthData = {
     body?: never;
@@ -146,11 +207,17 @@ export type ScheduledActionHealthResponse = ScheduledActionHealthResponses[keyof
 export type ListScheduledActionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Backend clients must opt in to event actions; defaults to false (cron-only).
+         */
+        include_events?: boolean | null;
+    };
     url: '/scheduled-actions';
 };
 
 export type ListScheduledActionsErrors = {
+    400: string;
     401: string;
     500: string;
 };
@@ -158,7 +225,7 @@ export type ListScheduledActionsErrors = {
 export type ListScheduledActionsError = ListScheduledActionsErrors[keyof ListScheduledActionsErrors];
 
 export type ListScheduledActionsResponses = {
-    200: Array<ScheduledAction>;
+    200: Array<ScheduledActionResponse>;
 };
 
 export type ListScheduledActionsResponse = ListScheduledActionsResponses[keyof ListScheduledActionsResponses];
@@ -171,6 +238,7 @@ export type CreateScheduledActionData = {
 };
 
 export type CreateScheduledActionErrors = {
+    400: string;
     401: string;
     500: string;
 };
@@ -178,7 +246,7 @@ export type CreateScheduledActionErrors = {
 export type CreateScheduledActionError = CreateScheduledActionErrors[keyof CreateScheduledActionErrors];
 
 export type CreateScheduledActionResponses = {
-    201: ScheduledAction;
+    201: ScheduledActionResponse;
 };
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
@@ -222,15 +290,20 @@ export type UpdateScheduledActionData = {
 };
 
 export type UpdateScheduledActionErrors = {
+    400: string;
     401: string;
     404: string;
+    /**
+     * Configuration changed or execution is active
+     */
+    409: string;
     500: string;
 };
 
 export type UpdateScheduledActionError = UpdateScheduledActionErrors[keyof UpdateScheduledActionErrors];
 
 export type UpdateScheduledActionResponses = {
-    200: ScheduledAction;
+    200: ScheduledActionResponse;
 };
 
 export type UpdateScheduledActionResponse = UpdateScheduledActionResponses[keyof UpdateScheduledActionResponses];
@@ -248,6 +321,7 @@ export type ExecuteScheduledActionNowData = {
 };
 
 export type ExecuteScheduledActionNowErrors = {
+    400: string;
     401: string;
     404: string;
     /**

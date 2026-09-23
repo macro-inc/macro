@@ -223,9 +223,12 @@ export const ListNav = (props: ListNavProps) => {
           when={props.activeCall}
           fallback={<SidebarUnreadDot active={props.unread} />}
         >
+          {/* Sits outside the button box: the glyph is inset from the
+              corner, so a badge flush to it lands on the icon. The rail's
+              horizontal padding absorbs the overhang. */}
           <span
             aria-hidden="true"
-            class="pointer-events-none absolute top-0 right-0 flex size-3.5 items-center justify-center text-accent"
+            class="pointer-events-none absolute -top-0.5 -right-0.5 flex size-3 items-center justify-center text-accent"
           >
             <PhoneCallIcon class="size-full" />
           </span>

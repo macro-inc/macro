@@ -1,5 +1,4 @@
-# Channels render their latest-message preview, not every historical send's
-# content/avatar/name. Keep all notifications for unread state and thread scoping.
+# The aliased selection is unread evidence, never a complete list for bulk reads.
 query ChannelListSoup($input: SoupInput!) {
 	user {
 		id
@@ -13,9 +12,22 @@ query ChannelListSoup($input: SoupInput!) {
 
 fragment ChannelListItemFields on GraphqlSoupEntity {
 	...SoupItemPreviewFields
-	notifications { ...ChannelListNotificationFields }
+	... on GraphqlSoupChannel {
+		unreadNotifications: notifications(
+			filter: {
+				states: [UNSEEN]
+				eventTypes: ["channel_mention", "channel_message_send", "channel_message_reply", "document_mention"]
+			}
+			limit: 1
+		) {
+			id
+			state
+			createdAt
+		}
+	}
 }
 
+# Retained for decoding legacy notification projections, not used by the bounded list.
 fragment ChannelListNotificationFields on GraphqlNotification {
 	...SoupNotificationStateFields
 	metadata { ...SoupNotificationNavigationMetadataFields }

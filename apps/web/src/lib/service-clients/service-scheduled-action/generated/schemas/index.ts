@@ -6,21 +6,40 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './actionConfiguration';
+export * from './actionConfigurationTask';
 export * from './actionExecutionRecord';
 export * from './actionExecutionRecordId';
 export * from './actionExecutionRecordResourceId';
 export * from './actionExecutionRecordResult';
 export * from './actionKind';
+export * from './actionTrigger';
+export * from './actionTriggerOneOf';
+export * from './actionTriggerOneOfThree';
+export * from './actionTriggerOneOfThreeType';
+export * from './actionTriggerOneOfType';
 export * from './agentTask';
 export * from './createScheduledAction';
-export * from './createScheduledActionTask';
 export * from './emptyResponse';
+export * from './eventFilter';
+export * from './eventFilterIds';
+export * from './eventFilters';
+export * from './eventName';
 export * from './inProgressExecution';
 export * from './inProgressExecutionChatId';
+export * from './legacyActionConfiguration';
+export * from './legacyActionConfigurationTask';
+export * from './listScheduledActionsParams';
 export * from './schedule';
 export * from './scheduledAction';
 export * from './scheduledActionClaimed';
+export * from './scheduledActionEventActivatedAt';
 export * from './scheduledActionId';
+export * from './scheduledActionNextRunAt';
+export * from './scheduledActionResponse';
+export * from './scheduledActionResponseAllOf';
+export * from './scheduledActionResponseAllOfSchedule';
+export * from './scheduledActionResponseAllOfTimezone';
 export * from './scheduledActionTask';
 export * from './scheduledActionUpdate';
 export * from './scheduledActionUpdateOneOf';
@@ -28,4 +47,3 @@ export * from './scheduledActionUpdateOneOfThree';
 export * from './scheduledActionUpdateOneOfThreeType';
 export * from './scheduledActionUpdateOneOfType';
 export * from './updateScheduledAction';
-export * from './updateScheduledActionTask';

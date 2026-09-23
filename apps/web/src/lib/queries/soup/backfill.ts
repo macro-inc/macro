@@ -583,8 +583,8 @@ const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
 /**
  * Runs the checkpointed backfill Effect while this tab owns leadership.
  * Interrupting the fiber cancels cache readiness waits, active fetches, and
- * inter-page sleeps. A replacement cache generation resets the external
- * cursors before restarting so they can never point past wiped cache data.
+ * inter-page sleeps. Engine handoffs resume durable checkpoints; only loss of
+ * stored cache data resets cursors so they cannot point past wiped records.
  */
 export function useSoupBackfills(userId: string): void {
   const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
@@ -615,8 +615,8 @@ export function useSoupBackfills(userId: string): void {
     const host = cacheHost();
     if (!host) return;
 
-    const unsubscribe = host.onCacheGenerationChanged(() => {
-      resetDefaultSoupBackfillCheckpoints(userId);
+    const unsubscribe = host.onCacheGenerationChanged(({ storage }) => {
+      if (storage === 'reset') resetDefaultSoupBackfillCheckpoints(userId);
       setCacheGeneration((generation) => generation + 1);
     });
     onCleanup(unsubscribe);

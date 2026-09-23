@@ -3,7 +3,7 @@ import {
   type EntityActionViewContext,
   makeAddTagAction,
 } from '@app/features/next-soup/actions';
-import { ContextMenuContent } from '@core/component/ContextMenu';
+import { ContextMenuContent, MenuSeparator } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
@@ -20,6 +20,7 @@ import {
   type Accessor,
   createSignal,
   type FlowComponent,
+  type JSX,
   Match,
   Show,
   Switch,
@@ -36,6 +37,11 @@ interface SoupEntityContextMenuProps {
   /** Use a div trigger when the row already renders its own button. */
   as?: 'div';
   onOpenChange?: (open: boolean) => void;
+  /**
+   * View-specific items appended after the entity actions, separated from
+   * them. Desktop only: the mobile long-press drawer shows the actions alone.
+   */
+  extraItems?: JSX.Element;
 }
 
 function RowTagPicker(props: {
@@ -134,6 +140,10 @@ export const SoupEntityContextMenu: FlowComponent<
                       : undefined
                   }
                 />
+                <Show when={props.extraItems}>
+                  <MenuSeparator />
+                  {props.extraItems}
+                </Show>
               </ContextMenuContent>
             </Show>
           </ContextMenu.Portal>

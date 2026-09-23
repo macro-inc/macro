@@ -44,7 +44,7 @@ class FakeEndpoint extends EventTarget {
 }
 
 const message = {
-  coordinatorVersion: 3,
+  coordinatorVersion: 4,
   kind: 'disconnect-tab',
   tabId: 'tab-a',
   reason: 'test',
@@ -90,7 +90,7 @@ describe('cache coordinator runtime', () => {
 
     expect(() =>
       ports[0]?.postMessage({
-        coordinatorVersion: 3,
+        coordinatorVersion: 4,
         kind: 'protocol-error',
         error: 'test',
       } satisfies CoordinatorToTabEnvelope)

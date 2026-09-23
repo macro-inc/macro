@@ -25,11 +25,15 @@ export function createGettingStartedState(
   const [collapsed, setCollapsed] = createSignal<ReadonlySet<string>>(
     new Set(snapshot?.collapsedSectionIds)
   );
+  const [chatIds, setChatIds] = createSignal<ReadonlyMap<string, string>>(
+    new Map(Object.entries(snapshot?.chatIdsByAction ?? {}))
+  );
 
   const persist = () => {
     store.save(userId, {
       completedActionIds: [...completed()],
       collapsedSectionIds: [...collapsed()],
+      chatIdsByAction: Object.fromEntries(chatIds()),
     });
   };
 
@@ -50,6 +54,11 @@ export function createGettingStartedState(
   };
 
   return {
+    chatIdForAction: (actionId: string) => chatIds().get(actionId),
+    rememberChat: (actionId: string, chatId: string) => {
+      setChatIds((previous) => new Map(previous).set(actionId, chatId));
+      persist();
+    },
     isPersistedComplete: (actionId: string) => completed().has(actionId),
     markCompleted,
     isCollapsed: (sectionId: string) => collapsed().has(sectionId),

@@ -33,6 +33,10 @@ import { createTagHandler } from './CreateTag';
 import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
+import {
+  replyToDocumentCommentHandler,
+  resolveDocumentCommentHandler,
+} from './DocumentComments';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
 import { getThreadHandler } from './GetThread';
@@ -167,6 +171,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadProject: readProjectHandler,
   RenameChannel: renameChannelHandler,
   RenameDocument: renameDocumentHandler,
+  ReplyToDocumentComment: replyToDocumentCommentHandler,
+  ResolveDocumentComment: resolveDocumentCommentHandler,
   SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,
   SelfKnowledge: selfKnowledgeHandler,

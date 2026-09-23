@@ -1,22 +1,22 @@
 import { UnknownContent } from '@block-unknown/component/UnknownContent';
 import { toast } from '@core/component/Toast/Toast';
 import { downloadFile } from '@filesystem/download';
-import { formatDocumentName } from '@service-storage/util/filename';
 import { createSignal, type JSX } from 'solid-js';
 import {
   FileDetailLayout,
   FileDetailLoadGate,
   type FileDetailShareProps,
 } from '../components/FileDetail';
+import { downloadFileOperation } from '../components/file-detail-operations';
 import { getFileDocumentBlob } from '../queries/file-document';
 import {
   loadUnknownDocument,
   type UnknownDocumentData,
 } from '../queries/unknown-document';
+import { documentDownloadName } from '../util/document-download-name';
+import type { FileDetailContext } from '../util/file-detail-context';
 
-export type UnknownDetailContext = {
-  data: UnknownDocumentData;
-};
+export type UnknownDetailContext = FileDetailContext<UnknownDocumentData>;
 
 export function UnknownDetailDocument(
   props: FileDetailShareProps & {
@@ -31,12 +31,7 @@ export function UnknownDetailDocument(
     props.onShareOpenChange?.(open);
     if (props.shareOpen === undefined) setLocalShareOpen(open);
   };
-  const downloadName = () =>
-    formatDocumentName(
-      props.data.documentMetadata.documentName || 'download',
-      props.data.documentMetadata.fileType,
-      { caseInsensitiveSuffix: true }
-    );
+  const downloadName = () => documentDownloadName(props.data.documentMetadata);
 
   const downloadDocument = async () => {
     try {
@@ -50,6 +45,7 @@ export function UnknownDetailDocument(
       toast.failure('Error downloading file');
     }
   };
+  const operations = [downloadFileOperation(() => void downloadDocument())];
 
   return (
     <FileDetailLayout
@@ -61,7 +57,12 @@ export function UnknownDetailDocument(
       shareOpen={shareOpen()}
       onShareOpenChange={setShareOpen}
     >
-      {props.children?.({ data: props.data })}
+      {props.children?.({
+        data: props.data,
+        documentMetadata: props.data.documentMetadata,
+        userAccessLevel: props.data.userAccessLevel,
+        operations,
+      })}
       <UnknownContent
         fileName={props.data.documentMetadata.documentName}
         onShare={() => setShareOpen(true)}

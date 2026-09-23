@@ -106,6 +106,13 @@ export type ChannelClickTarget =
 
 export type ChannelEntity = EntityBase & {
   type: 'channel';
+  /** Filtered, bounded edge for the unread dot. Undefined denotes a legacy/full
+   * row; an empty array denotes no unread messages. Never use for bulk reads. */
+  unreadNotifications?: {
+    id: string;
+    state: 'unseen' | 'seen' | 'done';
+    createdAt: DateValue;
+  }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   interactedAt?: DateValue | null;
   participantIds?: string[];

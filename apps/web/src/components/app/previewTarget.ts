@@ -1,7 +1,7 @@
 import {
   type CalendarPreviewSelection,
   type ChannelPreviewSelection,
-  calendarBlockParamsForEntity,
+  calendarViewTargetForEntity,
   getChannelEntityTarget,
   type ReminderPreviewSelection,
   reminderSplitTarget,
@@ -124,7 +124,7 @@ export function previewBlockTarget(
       blockType: 'calendar',
       blockId: CALENDAR_BLOCK_ID,
       aliasContext: undefined,
-      params: untrack(() => calendarBlockParamsForEntity(calendarEvent)),
+      params: untrack(() => calendarViewTargetForEntity(calendarEvent)),
     }))
     .with({ type: 'reminder' }, (reminder) => {
       const reminderTarget = reminderSplitTarget(reminder);

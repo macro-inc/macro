@@ -93,7 +93,10 @@ describe('a placeholder', () => {
     });
   });
 
-  it('applies a model override before delivering the first prompt', async () => {
+  // A model chosen before the session exists is what the session is created
+  // on, not something switched afterwards: the first prompt is the only thing
+  // sent, so it opens the session's first turn and the session gets a name.
+  it('creates the session on the chosen model', async () => {
     create.control.mockResolvedValue({
       isErr: () => false,
       value: { actionId: 'action-1', status: 'accepted' },
@@ -107,6 +110,7 @@ describe('a placeholder', () => {
     });
     expect(agentHarnessServiceClient.create).toHaveBeenLastCalledWith({
       botId: 'persona-1',
+      model: 'model-2',
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/home',
     });
@@ -117,30 +121,9 @@ describe('a placeholder', () => {
       await flush();
 
       expect(create.control.mock.calls).toEqual([
-        ['session-10', { type: 'setModel', model: 'model-2' }],
         ['session-10', { type: 'prompt', prompt: 'Fix the tests' }],
       ]);
       expect(resolved.sessionId()).toBe('session-10');
-      dispose();
-    });
-  });
-
-  it('shows a model failure without sending the prompt on the wrong model', async () => {
-    create.control.mockResolvedValue({
-      isErr: () => true,
-      error: [{ code: 'HTTP_ERROR', message: 'Model is unavailable.' }],
-    });
-    const placeholder = startPendingSession({
-      modelOverride: 'missing',
-      prompt: 'Hello',
-    });
-    await createRoot(async (dispose) => {
-      const resolved = resolveSessionId(() => placeholder);
-      create.resolve?.('session-model-error');
-      await flush();
-      expect(resolved.error()).toBe('Model is unavailable.');
-      expect(resolved.pending()).toBe(false);
-      expect(create.control).toHaveBeenCalledTimes(1);
       dispose();
     });
   });

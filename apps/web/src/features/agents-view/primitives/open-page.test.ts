@@ -8,7 +8,11 @@ describe('openAgentsPage', () => {
     const replace = vi.fn(({ next }: { next: SplitContent }) => {
       content = next;
     });
-    const openWithSplit = vi.fn(() => ({ content: () => content, replace }));
+    const openWithSplit = vi.fn(() => ({
+      status: 'reused',
+      owner: 'agents',
+      split: { content: () => content, replace },
+    }));
     // Only the navigation handle's content and replace capabilities are exercised.
     const layout = { openWithSplit } as unknown as Parameters<
       typeof openAgentsPage
@@ -26,7 +30,10 @@ describe('openAgentsPage', () => {
 
   it('allows navigation to be intercepted', () => {
     expect(() =>
-      openAgentsPage({ openWithSplit: () => undefined }, 'connections')
+      openAgentsPage(
+        { openWithSplit: () => ({ status: 'unavailable' }) },
+        'connections'
+      )
     ).not.toThrow();
   });
 });

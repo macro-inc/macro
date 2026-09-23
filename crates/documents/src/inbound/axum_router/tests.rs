@@ -52,9 +52,9 @@ use crate::{
         create::DocumentCreator,
         events::InteractionReason,
         models::{
-            CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
-            DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
-            ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
+            CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, DocumentTeamShareResponse,
+            EditDocumentServiceArgs, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+            LocationQueryParams, TaskBranchName,
         },
         ports::{DocumentContentEventService, DocumentService, create::DocumentCreationService},
         response::{
@@ -288,13 +288,6 @@ impl DocumentService for FakeDocumentService {
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
         panic!("unexpected get_document_text call")
-    }
-
-    async fn get_document_comments(
-        &self,
-        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
-    ) -> Result<Vec<CommentThread>, DocumentError> {
-        panic!("unexpected get_document_comments call")
     }
 
     async fn create_document(

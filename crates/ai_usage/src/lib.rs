@@ -4,7 +4,7 @@
 //!
 //! The crate follows the hexagonal layout used elsewhere in this workspace:
 //! - [`domain`] holds the cost model, ports, and the service that computes
-//!   cost from a model id and token counts.
+//!   cost from a model id and token counts or audio duration.
 //! - [`outbound`] holds the Postgres storage adapter.
 //! - [`inbound`] holds the axum router mounted in the document cognition
 //!   service (DCS).
@@ -17,8 +17,9 @@ pub mod inbound;
 pub mod outbound;
 
 pub use domain::{
-    AiFeature, CompletionUsage, FeatureUsage, NoOpUsageRecorder, Price, SYSTEM_USER_ID, Usage,
-    UsageApiParams, UsageContext, UsageEvent, UsageRecorder, UsageRepo, UsageService, UsageSummary,
+    AiFeature, CompletionUsage, FeatureUsage, ModelPricing, NoOpUsageRecorder, Price,
+    SYSTEM_USER_ID, Usage, UsageAmount, UsageApiParams, UsageContext, UsageEvent, UsageRecorder,
+    UsageRepo, UsageService, UsageSummary,
 };
 
 use std::sync::Arc;
