@@ -231,6 +231,7 @@ export function UserIcon(props: UserIconProps) {
             placement="left"
             triggerAs="div"
             triggerClass={triggerClass()}
+            triggerTabIndex={isTouchDevice() ? 0 : -1}
             user={{
               displayName: displayName() || email() || '',
               email: email(),
@@ -261,6 +262,7 @@ export function UserIcon(props: UserIconProps) {
           placement="left"
           triggerAs="div"
           triggerClass={triggerClass()}
+          triggerTabIndex={isTouchDevice() ? 0 : -1}
           user={{
             displayName: email() || '',
             email: email(),

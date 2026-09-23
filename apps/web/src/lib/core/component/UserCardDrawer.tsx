@@ -2,7 +2,11 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { UserIcon } from './UserIcon';
-import { type UserCardTarget, useUserCardActions } from './userCardActions';
+import {
+  type UserCardAction,
+  type UserCardTarget,
+  useUserCardActions,
+} from './userCardActions';
 
 const [target, setTarget] = createSignal<UserCardTarget>();
 const [isOpen, setIsOpen] = createSignal(false);
@@ -21,7 +25,11 @@ export function openUserCard(user: UserCardTarget) {
  * mention inside an editor doesn't carry a sheet of its own.
  */
 export function UserCardDrawer() {
-  const close = () => setIsOpen(false);
+  const [restoreFocus, setRestoreFocus] = createSignal(true);
+  const close = (restoreFocus = true) => {
+    setRestoreFocus(restoreFocus);
+    setIsOpen(false);
+  };
 
   return (
     <MobileDrawer
@@ -31,7 +39,7 @@ export function UserCardDrawer() {
       closeOnOutsidePointerStrategy="pointerdown"
       preventScroll={false}
       preventScrollbarShift={false}
-      restoreFocus
+      restoreFocus={restoreFocus()}
       noOutsidePointerEvents={false}
     >
       <MobileDrawer.Portal>
@@ -41,7 +49,13 @@ export function UserCardDrawer() {
           {/* The target outlives the close so the sheet animates out with its
               contents rather than emptying first. */}
           <Show when={target()}>
-            {(user) => <UserCardBody user={user()} onAction={close} />}
+            {(user) => (
+              <UserCardBody
+                user={user()}
+                // Navigation owns focus in its destination; copying stays here.
+                onAction={(action) => close(action.copies === true)}
+              />
+            )}
           </Show>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
@@ -49,7 +63,10 @@ export function UserCardDrawer() {
   );
 }
 
-function UserCardBody(props: { user: UserCardTarget; onAction: () => void }) {
+function UserCardBody(props: {
+  user: UserCardTarget;
+  onAction: (action: UserCardAction) => void;
+}) {
   const actions = useUserCardActions(() => props.user);
 
   const avatarProps = () => {
@@ -103,7 +120,7 @@ function UserCardBody(props: { user: UserCardTarget; onAction: () => void }) {
                       // The action reports the failure; keep the sheet open.
                       return;
                     }
-                    props.onAction();
+                    props.onAction(action);
                   }}
                 >
                   <span class="flex size-5 shrink-0 items-center justify-center">
