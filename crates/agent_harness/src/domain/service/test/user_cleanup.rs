@@ -5,7 +5,7 @@ use model_owner::Owner;
 async fn delete_user_sessions_cleans_live_and_inactive_sessions_only_for_the_owner() {
     let (service, repo, containers, _, _) = harness();
     let live = AgentSessionId::new();
-    live_session(&service, &containers, live).await;
+    live_sandboxed_coder_session(&service, &containers, live).await;
     // More than one cleanup batch, including disconnected sessions.
     let mut owned = vec![live];
     for _ in 0..101 {
