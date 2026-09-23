@@ -7,6 +7,8 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
+import { MarkdownImage } from '@core/component/LexicalMarkdown/component/decorator/MarkdownImage';
+import { MarkdownVideo } from '@core/component/LexicalMarkdown/component/decorator/MarkdownVideo';
 import { useUserId } from '@core/context/user';
 import FileText from '@phosphor/file-text.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
@@ -1227,6 +1229,47 @@ export default function AgentUiGallery() {
 
           <Item label="AgentMessage (end-to-end)">
             <Message message={FIXTURE_MESSAGE} inFlight={false} />
+          </Item>
+
+          <Item label="AgentMessage (multi-artifact loading)">
+            <p class="text-xs text-ink-muted">
+              Walkthrough files without a known size reserve a 16:9 card each,
+              named from the file, instead of a stack of floating spinners.
+            </p>
+            <div class="max-w-xl text-base">
+              <p class="mb-1 text-sm text-ink-muted">Thoughted</p>
+              <p class="mb-2">Done and looking good.</p>
+              <MarkdownImage
+                key="artifact-image-1"
+                srcType="url"
+                id=""
+                url=""
+                alt="walkthrough.png"
+                width={0}
+                height={0}
+                scale={1}
+              />
+              <MarkdownImage
+                key="artifact-image-2"
+                srcType="url"
+                id=""
+                url=""
+                alt="agents_list.png"
+                width={0}
+                height={0}
+                scale={1}
+              />
+              <MarkdownVideo
+                key="artifact-video"
+                srcType="url"
+                id=""
+                url=""
+                controls
+                width={0}
+                height={0}
+                scale={1}
+              />
+            </div>
           </Item>
 
           <Item label="AgentMessage (Cursor turn in flight)">
