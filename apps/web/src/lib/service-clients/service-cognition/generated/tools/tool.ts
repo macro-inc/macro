@@ -195,6 +195,14 @@ type ToolParserMap = {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
   };
+  ReplyToDocumentComment: {
+    call: types.ReplyToDocumentComment;
+    response: types.ReplyToDocumentCommentResponse;
+  };
+  ResolveDocumentComment: {
+    call: types.ResolveDocumentComment;
+    response: types.ResolveDocumentCommentResponse;
+  };
   SearchSkills: {
     call: types.SearchSkills;
     response: types.SearchSkillsResponse;
@@ -451,6 +459,14 @@ const toolParserMap = {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
   },
+  ReplyToDocumentComment: {
+    call: schemas.ReplyToDocumentComment,
+    response: schemas.ReplyToDocumentCommentResponse,
+  },
+  ResolveDocumentComment: {
+    call: schemas.ResolveDocumentComment,
+    response: schemas.ResolveDocumentCommentResponse,
+  },
   SearchSkills: {
     call: schemas.SearchSkills,
     response: schemas.SearchSkillsResponse,
@@ -699,6 +715,14 @@ type ToolDataMap = {
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
+  };
+  ReplyToDocumentComment: {
+    call: types.ReplyToDocumentComment;
+    response: types.ReplyToDocumentCommentResponse;
+  };
+  ResolveDocumentComment: {
+    call: types.ResolveDocumentComment;
+    response: types.ResolveDocumentCommentResponse;
   };
   SearchSkills: {
     call: types.SearchSkills;

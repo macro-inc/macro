@@ -269,17 +269,18 @@ pub async fn build_tool_service_context_from_env(
     // broker events that drive live search indexing), so agent-sent messages
     // notify mentioned users and stream to connected clients instead of landing
     // silently.
+    let side_effect_clients = ChannelSideEffectClients {
+        connection_gateway: Arc::new(ConnectionGatewayClient::new(
+            env.internal_api_key.to_string(),
+            connection_gateway_url,
+        )),
+        sqs: aws_sqs_client,
+        macro_event_broker: macro_event_broker.clone(),
+    };
     let channel_tool_context = crate::tool_context::build_channel_tool_context_with_side_effects(
         pool.clone(),
         Arc::new(lexical_client.clone()),
-        ChannelSideEffectClients {
-            connection_gateway: Arc::new(ConnectionGatewayClient::new(
-                env.internal_api_key.to_string(),
-                connection_gateway_url,
-            )),
-            sqs: aws_sqs_client,
-            macro_event_broker: macro_event_broker.clone(),
-        },
+        &side_effect_clients,
     );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
@@ -305,7 +306,11 @@ pub async fn build_tool_service_context_from_env(
         sync_client.as_ref().clone(),
         ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new())),
         env.document_permission_jwt.to_string(),
-        crate::tool_context::message_reader(pool.clone()),
+        crate::tool_context::build_message_service_with_side_effects(
+            pool.clone(),
+            Arc::new(lexical_client.clone()),
+            &side_effect_clients,
+        ),
     );
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(

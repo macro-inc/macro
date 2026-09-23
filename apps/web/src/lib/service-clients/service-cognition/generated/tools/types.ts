@@ -5582,6 +5582,74 @@ export interface RenameDocumentResponse {
   message: string;
 }
 /**
+ * Reply in a comment thread on a document, or post a new comment in the document's Discussion panel, on behalf of the user. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. Cannot start a new inline comment on selected text.
+ */
+export interface ReplyToDocumentComment {
+  /**
+   * The id of the document the comment is on.
+   */
+  documentId: string;
+  /**
+   * Comment content in macro markdown format. This uses the same syntax as markdown documents.
+   */
+  content: string;
+  /**
+   * The id of the inline or Discussion thread to reply in, from ReadContent. Omit to post a new Discussion comment on the document as a whole.
+   */
+  threadId?: string | null;
+}
+/**
+ * The posted comment.
+ */
+export interface ReplyToDocumentCommentResponse {
+  /**
+   * The document the comment was posted on.
+   */
+  documentId: string;
+  /**
+   * The thread the comment is in; a new Discussion comment starts its own.
+   */
+  threadId: string;
+  /**
+   * The posted comment.
+   */
+  commentId: string;
+}
+/**
+ * Resolve or reopen a comment thread on a document on behalf of the user. Only use this when explicitly asked to resolve or reopen a comment. Thread ids come from the comments ReadContent returns.
+ */
+export interface ResolveDocumentComment {
+  /**
+   * The id of the document the comment is on.
+   */
+  documentId: string;
+  /**
+   * The id of the inline or Discussion thread, from ReadContent.
+   */
+  threadId: string;
+  /**
+   * True to resolve the thread, false to reopen a resolved thread. Defaults to true.
+   */
+  resolved?: boolean;
+}
+/**
+ * The thread's state after the change.
+ */
+export interface ResolveDocumentCommentResponse {
+  /**
+   * The document the thread is on.
+   */
+  documentId: string;
+  /**
+   * The thread that was changed.
+   */
+  threadId: string;
+  /**
+   * Whether the thread is now resolved.
+   */
+  resolved: boolean;
+}
+/**
  * Search the user's skills by name. Skills are markdown documents containing instructions for AI to read and follow; when the user references a skill (or a request matches one), find it with this tool and then read its instructions with ReadContent using the returned document id. This is keyword search against skill names: pass 1-3 targeted keywords that would literally appear in the skill's name, not a natural-language description. Matching defaults to prefix; set matchType to 'exact' for whole-token matching. Only skills the user can access are returned, most recently updated first.
  */
 export interface SearchSkills {

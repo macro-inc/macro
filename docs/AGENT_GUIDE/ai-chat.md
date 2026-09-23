@@ -353,6 +353,12 @@ The agent has workspace tools (it can list your documents, read channels, create
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
+When asked, the agent also answers document comments in place. A reply row reads
+**Replied to a comment on** (or **Commented on** for a new Discussion comment) followed
+by the document, and expands to the posted text; a resolve row reads **Resolved** or
+**Reopened a comment on** the document. The comment is posted as the agent with a
+**from <user>** pill, and needs the user's comment access to the document.
+
 ## Agent sessions asking a question
 
 For manual testing on local or deployed development environments, send

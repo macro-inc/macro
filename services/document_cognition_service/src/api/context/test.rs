@@ -287,7 +287,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         sync_service_client.as_ref().clone(),
         test_editing_client,
         "test-jwt-secret".to_string(),
-        ai_tools::message_reader(pool.clone()),
+        ai_tools::build_message_service_without_side_effects(
+            pool.clone(),
+            std::sync::Arc::new(test_lexical_client.clone()),
+        ),
     );
 
     let search_service_client = Arc::new(search_service_client);

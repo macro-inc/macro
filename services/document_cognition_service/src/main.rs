@@ -319,6 +319,19 @@ async fn main() -> anyhow::Result<()> {
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
         macro_event_broker.clone(),
     );
+    // Messages sent by AI tools (chat, agents) dispatch the same side effects
+    // as the document-storage message API, so mentions, replies and document
+    // comments notify recipients and stream to connected clients.
+    let channels_connection_gateway =
+        Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
+            internal_api_key.clone(),
+            ConnectionGatewayUrl::new()?.to_string(),
+        ));
+    let side_effect_clients = ai_tools::ChannelSideEffectClients {
+        connection_gateway: channels_connection_gateway.clone(),
+        sqs: aws_sdk_sqs::Client::new(&aws_config),
+        macro_event_broker: macro_event_broker.clone(),
+    };
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
@@ -330,7 +343,11 @@ async fn main() -> anyhow::Result<()> {
             std::sync::Arc::new(reqwest::Client::new()),
         ),
         config.document_permission_jwt.as_ref().to_string(),
-        ai_tools::message_reader(db.clone()),
+        ai_tools::build_message_service_with_side_effects(
+            db.clone(),
+            lexical_client.clone(),
+            &side_effect_clients,
+        ),
     );
 
     tracing::info!("initialized document tool context");
@@ -431,22 +448,10 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized chat tool context");
 
-    // Channel messages sent by AI tools (chat, agents) dispatch the same side
-    // effects as the document-storage channel API, so mentions and replies
-    // notify recipients and stream to connected clients.
-    let channels_connection_gateway =
-        Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
-            internal_api_key.clone(),
-            ConnectionGatewayUrl::new()?.to_string(),
-        ));
     let channel_tool_context = ai_tools::build_channel_tool_context_with_side_effects(
         db.clone(),
         lexical_client.clone(),
-        ai_tools::ChannelSideEffectClients {
-            connection_gateway: channels_connection_gateway.clone(),
-            sqs: aws_sdk_sqs::Client::new(&aws_config),
-            macro_event_broker: macro_event_broker.clone(),
-        },
+        &side_effect_clients,
     );
     let recorder = ai_usage::pg_recorder(db.clone());
 

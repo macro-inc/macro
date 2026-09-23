@@ -5087,6 +5087,30 @@ export const RenameDocumentResponse = z.object({
   message: z.string(),
 });
 
+export const ReplyToDocumentComment = z.object({
+  documentId: z.string().uuid(),
+  content: z.string(),
+  threadId: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const ReplyToDocumentCommentResponse = z.object({
+  documentId: z.string().uuid(),
+  threadId: z.string().uuid(),
+  commentId: z.string().uuid(),
+});
+
+export const ResolveDocumentComment = z.object({
+  documentId: z.string().uuid(),
+  threadId: z.string().uuid(),
+  resolved: z.boolean().optional(),
+});
+
+export const ResolveDocumentCommentResponse = z.object({
+  documentId: z.string().uuid(),
+  threadId: z.string().uuid(),
+  resolved: z.boolean(),
+});
+
 export const SearchSkills = z.object({
   name: z.string(),
   matchType: z
