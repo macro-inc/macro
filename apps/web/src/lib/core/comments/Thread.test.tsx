@@ -85,8 +85,8 @@ vi.mock(
   })
 );
 vi.mock('@ui', () => ({
-  Button: (props: ParentProps<{ onClick?: () => void }>) => (
-    <button onClick={() => props.onClick?.()}>{props.children}</button>
+  Button: (props: ParentProps<{ onClick?: (e: MouseEvent) => void }>) => (
+    <button onClick={(e) => props.onClick?.(e)}>{props.children}</button>
   ),
   Layer: (props: ParentProps) => props.children,
   cn: (...values: string[]) => values.join(' '),
@@ -220,6 +220,39 @@ describe('anchored comment links', () => {
     fireEvent.click(confirm);
     expect(mocks.confirmed).toHaveBeenCalledTimes(1);
     expect(card(view).hasAttribute('data-expanded')).toBe(true);
+  });
+
+  it('folds an expanded minimized comment back to its badge once resolved', async () => {
+    const [resolved, setResolved] = createSignal(false);
+    const view = render(() => (
+      <CommentsContext.Provider
+        value={{
+          documentId: 'document',
+          documentType: 'md',
+          canComment: () => true,
+          isDocumentOwner: () => true,
+          highlightedCommentId: () => null,
+          setActiveThread: () => {},
+          setThreadHeight: () => {},
+          getCommentById: () => undefined,
+          ownedComment: () => false,
+          inComment: true,
+          commentOperations: noopCommentOperations,
+        }}
+      >
+        <MinimizedThread
+          comment={{ ...comment, resolved: resolved() }}
+          layout={{ calculatedYPos: 0 }}
+          isActive={false}
+        />
+      </CommentsContext.Provider>
+    ));
+    fireEvent.click(view.getByText('1'));
+    expect(card(view).hasAttribute('data-expanded')).toBe(true);
+    setResolved(true);
+    await waitFor(() =>
+      expect(card(view).hasAttribute('data-expanded')).toBe(false)
+    );
   });
 
   it('dismisses an expanded minimized comment on a press outside it', async () => {

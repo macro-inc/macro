@@ -181,8 +181,9 @@ function MessageThreadBody(props: ThreadBodyProps) {
       rootId: String(props.comment.threadId),
       patch: { resolved: value },
     });
-  // A resolved thread folds to one line whenever it is not the active thread.
-  const collapsed = () => resolved() && !props.isActive && !targetId();
+  // A resolved thread folds to one line unless it is the active thread (a
+  // comment link activates its thread, so linked threads open too).
+  const collapsed = () => resolved() && !props.isActive;
 
   return (
     <StaticMarkdownContext theme={props.theme ?? baseCommentTheme}>
@@ -217,22 +218,6 @@ function MessageThreadBody(props: ThreadBodyProps) {
             />
           }
         >
-          <Show when={resolved()}>
-            <div class="mb-1 flex items-center gap-1.5 rounded-lg bg-success-bg px-2 py-1 text-xs text-success">
-              <CheckCircle class="size-3.5 shrink-0" />
-              <span class="flex-1">Resolved</span>
-              <Show when={context.canComment()}>
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => setResolved(false)}
-                >
-                  <ArrowCounterClockwise />
-                  Reopen
-                </Button>
-              </Show>
-            </div>
-          </Show>
           <MessageThreadById
             parent={parent()}
             rootId={String(props.comment.threadId)}
@@ -247,12 +232,30 @@ function MessageThreadBody(props: ThreadBodyProps) {
               )
             }
           />
+          <Show when={resolved()}>
+            <div class="mt-1 flex items-center gap-1.5 text-xs text-success">
+              <CheckCircle class="size-3.5 shrink-0" />
+              <span class="flex-1">Resolved</span>
+              <Show when={context.canComment()}>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => setResolved(false)}
+                >
+                  <ArrowCounterClockwise />
+                  Reopen
+                </Button>
+              </Show>
+            </div>
+          </Show>
           <Show when={!resolved() && props.isActive && context.canComment()}>
             <div class="mt-1 flex justify-end">
               <Button
                 size="xs"
                 variant="ghost"
-                onClick={() => {
+                onClick={(e: MouseEvent) => {
+                  // The card's container re-activates the thread on click.
+                  e.stopPropagation();
                   setResolved(true);
                   context.setActiveThread(null);
                 }}

@@ -3,7 +3,7 @@ import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import CheckCircle from '@phosphor/check-circle.svg';
 import { cn, Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
-import { createEffect, createSignal, Show, useContext } from 'solid-js';
+import { createEffect, createSignal, on, Show, useContext } from 'solid-js';
 import type { Layout, Root } from './commentType';
 import { MeasureContainer } from './MeasureContainer';
 import { CommentsContext, ThreadCard } from './Thread';
@@ -31,6 +31,16 @@ export function MinimizedThread(props: {
   }
 
   const { highlightedCommentId, setActiveThread } = useContext(CommentsContext);
+  // Resolving from the expanded card folds the thread back to its badge.
+  createEffect(
+    on(
+      () => props.comment.resolved,
+      (resolved) => {
+        if (resolved) setExpanded(false);
+      },
+      { defer: true }
+    )
+  );
   createEffect(() => {
     if (!expandable()) return;
     const hId = highlightedCommentId();
