@@ -36,6 +36,72 @@ const cacheResources = (urls: string[]) => ({
   ],
 });
 
+test('Cache reconnects in place across persisted page lifecycle events', async ({
+  page,
+}, testInfo) => {
+  const scope = `cache-restore-${crypto.randomUUID()}`;
+  await page.goto(
+    `${harnessPath(testInfo.project.name)}?treatment=true&scope=${scope}`
+  );
+  await expect(page.locator('#result')).toHaveAttribute('data-status', 'ready');
+  await page.evaluate(async () => {
+    await window.cacheLifecycleHarness.startSingle();
+    await window.cacheLifecycleHarness.write('before-navigation');
+    await window.cacheLifecycleHarness.watchNavigation();
+    const editor = document.createElement('textarea');
+    editor.id = 'unsaved-editor';
+    editor.value = 'unsaved local text';
+    document.body.append(editor);
+  });
+  const original = await page.evaluate(() =>
+    window.cacheLifecycleHarness.navigationState()
+  );
+  for (let cycle = 0; cycle < 2; cycle += 1) {
+    const result = await page.evaluate(async () => {
+      dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      let cancellation: string | undefined;
+      try {
+        await window.cacheLifecycleHarness.write('must-not-write');
+      } catch (error) {
+        cancellation = (error as Error).name;
+      }
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      return { cancellation, read: await window.cacheLifecycleHarness.read() };
+    });
+    expect(result.cancellation).toBe('CacheNavigationError');
+    expect(isHit(result.read)).toBe(true);
+    expect(JSON.stringify(result.read)).not.toContain('must-not-write');
+    await page.evaluate(
+      (cycle) => window.cacheLifecycleHarness.write(`after-restore-${cycle}`),
+      cycle
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.cacheLifecycleHarness.navigationState().cacheChanges
+        )
+      )
+      .toBeGreaterThan(original.cacheChanges + cycle);
+    const restored = await page.evaluate(() =>
+      window.cacheLifecycleHarness.navigationState()
+    );
+    expect(restored.clientId).toBe(original.clientId);
+    expect(restored.affectedOperations).toContainEqual([4242]);
+    expect(restored.restoredGenerations).toContain('reset');
+    expect(await page.locator('#unsaved-editor').inputValue()).toBe(
+      'unsaved local text'
+    );
+    // Re-register like the urql affected-query handler before the next cycle.
+    await page.evaluate(() => window.cacheLifecycleHarness.watchNavigation());
+  }
+  expect(
+    await page.evaluate(() =>
+      window.cacheLifecycleHarness.hostConstructionCount()
+    )
+  ).toBe(1);
+  await page.evaluate(() => window.cacheLifecycleHarness.dispose());
+});
+
 test('Cache exact host stays navigation-lazy, preserves offline handoff, resets identity, and wipes abrupt loss', async ({
   context,
   page,

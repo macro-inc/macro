@@ -33,6 +33,14 @@ let owner: CacheHost | undefined;
 let standby: CacheHost | undefined;
 let unregisterOwner: (() => void) | undefined;
 let hostConstructionCount = 0;
+const restoredGenerations: string[] = [];
+const affectedOperations: number[][] = [];
+let cacheChanges = 0;
+let pageRestores = 0;
+let watchingNavigation = false;
+addEventListener('pageshow', (event) => {
+  if (event.persisted) pageRestores += 1;
+});
 
 const query = (
   operationName: string
@@ -121,6 +129,32 @@ const api = {
   },
   async startSingle(): Promise<void> {
     await startOwner();
+  },
+  async watchNavigation(): Promise<void> {
+    const host = requireOwner();
+    if (!watchingNavigation) {
+      watchingNavigation = true;
+      host.onCacheGenerationChanged(({ storage }) =>
+        restoredGenerations.push(storage)
+      );
+      host.onOpsAffected((keys) => affectedOperations.push(keys));
+      host.onCacheChanged(() => (cacheChanges += 1));
+    }
+    await host.readQuery({
+      opKey: 4242,
+      query: query('CacheLifecycleQuery'),
+      operationName: 'CacheLifecycleQuery',
+      variables: variables(1),
+    });
+  },
+  navigationState() {
+    return {
+      clientId: requireOwner().clientId,
+      restoredGenerations: [...restoredGenerations],
+      affectedOperations: [...affectedOperations],
+      cacheChanges,
+      pageRestores,
+    };
   },
   async startLogoutHost(): Promise<void> {
     await startOwner(true);

@@ -1722,6 +1722,41 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('revalidates reads attempted while suspended instead of counting them as replacement registrations', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const affected = vi.fn();
+    host.onOpsAffected(affected);
+    await host.readQuery({ opKey: 7, query: 'query Seven { seven }' });
+    dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    for (const opKey of [7, 9]) {
+      await expect(
+        host.readQuery({ opKey, query: 'query Value { value }' })
+      ).rejects.toBeInstanceOf(CacheNavigationError);
+    }
+    dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    await host.currentRevision();
+    expect(affected).toHaveBeenCalledWith([7, 9]);
+    host.dispose();
+  });
+
+  it('fences a pre-navigation write waiting to be admitted across immediate restoration', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    const stale = host.writeQuery({
+      query: 'query Value { value }',
+      data: { value: 'stale' },
+    });
+    const rejected = expect(stale).rejects.toBeInstanceOf(CacheNavigationError);
+    dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    await rejected;
+    await host.currentRevision();
+    expect(requireAdapter().requests.some(({ kind }) => kind === 'write')).toBe(
+      false
+    );
+    host.dispose();
+  });
+
   it('never replays an uncertain enqueue after restoration', async () => {
     const host = createWorkerCacheHost({ scope: 'scope-1' });
     await host.currentRevision();

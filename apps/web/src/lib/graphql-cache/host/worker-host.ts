@@ -1045,6 +1045,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     return await request(msg, opKey);
   }
 
+  function trackActiveOperation(opKey: number): void {
+    activeOpKeys.add(opKey);
+    if (state === 'suspended') lostRegisteredOpKeys.add(opKey);
+    else if (recoveryInProgress) replacementReadOpKeys.add(opKey);
+  }
+
   const opId = (opKey: number) => `${clientId}:${opKey}`;
 
   return {
@@ -1057,10 +1063,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     },
 
     async readQuery(args: CacheReadArgs): Promise<ReadResult> {
-      if (args.opKey !== undefined) {
-        activeOpKeys.add(args.opKey);
-        if (recoveryInProgress) replacementReadOpKeys.add(args.opKey);
-      }
+      if (args.opKey !== undefined) trackActiveOperation(args.opKey);
       return (await initializedRequest(
         {
           kind: 'read',
@@ -1106,8 +1109,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
       if (args.registerDependencies && args.opKey !== undefined) {
-        activeOpKeys.add(args.opKey);
-        if (recoveryInProgress) replacementReadOpKeys.add(args.opKey);
+        trackActiveOperation(args.opKey);
       }
       return (await initializedRequest(
         {

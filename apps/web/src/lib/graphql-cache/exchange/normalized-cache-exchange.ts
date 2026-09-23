@@ -767,6 +767,9 @@ export function normalizedCacheExchange(
         }
       >();
       const subscriptionEffectChains = new Map<number, Promise<void>>();
+      // Teardown invalidates queued effects, including when the same operation
+      // is immediately resubscribed after a back/forward-cache restore.
+      const subscriptionGenerations = new Map<number, object>();
       let attemptInFlight = false;
       let drainRunning = false;
       let deferredUntil: number | undefined;
@@ -1145,9 +1148,11 @@ export function normalizedCacheExchange(
       /** Applies operation cache effects serially and isolates every failure. */
       async function applyOperationCacheEffects(
         op: Operation,
-        effects: CacheEffect[]
+        effects: CacheEffect[],
+        isCurrent: () => boolean = () => true
       ): Promise<void> {
         for (const effect of effects) {
+          if (!isCurrent()) return;
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
@@ -1268,8 +1273,15 @@ export function normalizedCacheExchange(
           // result after its effects settle.
           const previousEffects =
             subscriptionEffectChains.get(op.key) ?? Promise.resolve();
+          const generation = subscriptionGenerations.get(op.key);
           const effects = previousEffects.then(() =>
-            applyOperationCacheEffects(op, operationCacheEffects(result.data))
+            applyOperationCacheEffects(
+              op,
+              operationCacheEffects(result.data),
+              () =>
+                generation !== undefined &&
+                subscriptionGenerations.get(op.key) === generation
+            )
           );
           subscriptionEffectChains.set(op.key, effects);
           try {
@@ -1492,7 +1504,11 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind !== 'query' && op.kind !== 'mutation'),
         tap((op) => {
+          if (op.kind === 'subscription') {
+            subscriptionGenerations.set(op.key, {});
+          }
           if (op.kind === 'teardown') {
+            subscriptionGenerations.delete(op.key);
             activeOps.delete(op.key);
             queryStates.delete(op.key);
             affectedRereads.forget(op.key);

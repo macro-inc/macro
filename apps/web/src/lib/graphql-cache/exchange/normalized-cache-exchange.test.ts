@@ -836,6 +836,53 @@ describe('normalizedCacheExchange', () => {
     expect(cacheContainsDocument).toBe(false);
   });
 
+  it('cancels queued subscription effects on teardown even when the same key resubscribes', async () => {
+    const firstWrite = deferred<WriteResult>();
+    const write = vi
+      .spyOn(host, 'writeQuery')
+      .mockImplementationOnce(() => firstWrite.promise);
+    const remove = vi.spyOn(host, 'deleteRecords');
+    const { ops, network } = controlledQueryHarness(host);
+    const operation = makeSubscriptionOp(24);
+    ops.next(operation);
+    network.next(
+      queryResult(operation, {
+        soupUpdates: [
+          {
+            __typename: 'SoupUpdated',
+            item: { __typename: 'GraphqlSoupDocument', id: 'one' },
+          },
+          {
+            __typename: 'GraphqlCacheDeletion',
+            graphqlTypeName: 'GraphqlSoupDocument',
+            entityId: 'one',
+          },
+        ],
+      })
+    );
+    network.next(
+      queryResult(operation, {
+        soupUpdates: [{ id: 'queued-before-navigation' }],
+      })
+    );
+    await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
+
+    ops.next(makeOperation('teardown', operation, operation.context));
+    ops.next(operation);
+    const fresh = { soupUpdates: [{ id: 'after-restore' }] };
+    network.next(queryResult(operation, fresh));
+    firstWrite.resolve({
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    });
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+    expect(write.mock.calls[1]?.[0].data).toBe(fresh);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
   it('reports cache failures without dropping subscription results or later patches', async () => {
     const error = new Error('subscription cache write failed');
     vi.spyOn(host, 'writeQuery').mockRejectedValueOnce(error);
