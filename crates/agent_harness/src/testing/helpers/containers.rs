@@ -204,6 +204,7 @@ pub struct MockContainerManager {
     resize_unsupported: Arc<AtomicBool>,
     resumes: Arc<AtomicUsize>,
     teardowns: Arc<AtomicUsize>,
+    teardown_error: Arc<AtomicBool>,
     /// Signalled on every spawn, so a test waits for a sandbox instead of
     /// spinning on [`Self::spawned`].
     spawned_signal: Arc<tokio::sync::Notify>,
@@ -269,6 +270,11 @@ impl MockContainerManager {
     #[must_use]
     pub fn resumed(&self) -> usize {
         self.resumes.load(Ordering::Relaxed)
+    }
+
+    /// Fail the next teardown before removing its container.
+    pub fn fail_next_teardown(&self) {
+        self.teardown_error.store(true, Ordering::Relaxed);
     }
 
     /// How many sandboxes have been destroyed.
@@ -401,6 +407,9 @@ impl ContainerManager for MockContainerManager {
     }
 
     async fn teardown(&self, session: AgentSessionId) -> Result<(), HarnessError> {
+        if self.teardown_error.swap(false, Ordering::Relaxed) {
+            return Err(HarnessError::Container("injected teardown failure".into()));
+        }
         self.teardowns.fetch_add(1, Ordering::Relaxed);
         self.lock().remove(&session);
         Ok(())

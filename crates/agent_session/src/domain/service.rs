@@ -75,6 +75,8 @@ use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
 const COMMAND_BUFFER: usize = 1028;
+/// Bound memory usage while draining all sessions during account cleanup.
+const USER_CLEANUP_BATCH_SIZE: std::num::NonZeroUsize = std::num::NonZeroUsize::new(100).unwrap();
 /// Persistence may delay lifecycle teardown, but never indefinitely.
 const SESSION_PERSIST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 /// How long a command may sit queued behind the ACP handshake
@@ -173,6 +175,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
         access: &EntityAccessReceipt<OwnerAccessLevel>,
         name: &str,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// A bounded batch of sessions owned by this user, including inactive sessions.
+    /// Used by account cleanup, not access-based discovery.
+    fn sessions_for_user_cleanup(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
 
     /// Delete an agent session by id.
     fn delete_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
@@ -749,6 +758,15 @@ where
         bot_id: Option<BotId>,
     ) -> Result<ThreadSession> {
         self.repo.find_for_thread(thread_id, bot_id).await
+    }
+
+    async fn sessions_for_user_cleanup(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<AgentSession>> {
+        self.repo
+            .recent_for_owner(owner, USER_CLEANUP_BATCH_SIZE)
+            .await
     }
 
     async fn delete_session(&self, id: AgentSessionId) -> Result<()> {

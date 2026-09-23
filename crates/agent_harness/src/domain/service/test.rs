@@ -2,6 +2,8 @@
 //! with in-memory persistence, mock containers, a fake agent, and a
 //! recording announcer. Only the edges are doubles.
 
+mod user_cleanup;
+
 use messages::domain::models::MessageParent;
 use std::sync::{Arc, Mutex};
 

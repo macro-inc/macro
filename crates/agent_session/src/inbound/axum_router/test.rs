@@ -821,6 +821,7 @@ async fn an_external_open_carries_its_instructions() {
 }
 
 mod read;
+mod user_cleanup;
 
 /// The client speculates under an id it mints and sends it alongside the
 /// action's own flattened fields, which are tagged under `type`.

@@ -81,6 +81,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
 }
 
 pub trait ScheduledActionService: Send + Sync + 'static {
+    /// Delete all of a user's actions before account deletion, including disabled
+    /// and claimed actions. Repeating a completed cleanup succeeds.
+    fn delete_user_actions(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     fn create_action(
         &self,
         input: CreateScheduledAction,

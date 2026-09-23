@@ -497,6 +497,18 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
+    let document_storage_service_client = Arc::new(document_storage_service_client);
+    let user_deletion = Arc::new(
+        authentication_service::outbound::user_deletion::UserDeletionAdapter::new(
+            db.clone(),
+            document_storage_service_client.clone(),
+            internal_api_key.to_string(),
+            macro_service_urls::AgentHarnessServiceUrl::new()?.to_string(),
+            macro_service_urls::ScheduledActionServiceUrl::new()?.to_string(),
+        )
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+    );
+
     let server_result = api::setup_and_serve(
         ApiContext {
             db,
@@ -507,7 +519,8 @@ async fn main() -> anyhow::Result<()> {
             codex_connection,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
-            document_storage_service_client: Arc::new(document_storage_service_client),
+            document_storage_service_client,
+            user_deletion,
             email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),
             notification_ingress_service,

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -94,6 +94,25 @@ where
     Rpo: ScheduledActionRepo,
     Exe: ScheduledActionExecutor + Send + Sync + 'static,
 {
+    async fn delete_user_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<()> {
+        // Use the repository list, not the legacy cron-only service list, so
+        // event-triggered actions are also removed regardless of rollout gates.
+        for action in self.repo.get_actions(user_id.clone()).await? {
+            if !action.owner.is_user(&user_id) {
+                bail!("account cleanup returned an action owned by another principal");
+            }
+            let Some(id) = action.id else {
+                bail!("cannot delete action without id");
+            };
+            // Reserve before deleting: a stopped dispatcher must not leave us
+            // reporting failure after losing the row needed to retry its event.
+            let permit = self.dispatcher_tx.reserve().await?;
+            self.repo.delete_action(&id, user_id.clone()).await?;
+            permit.send(DispatchEvent::Delete(action));
+        }
+        Ok(())
+    }
+
     async fn create_action(
         &self,
         input: CreateScheduledAction,
