@@ -68,6 +68,7 @@ export const EmailScheduleSummary: VoidComponent<EmailScheduleSummaryProps> = (
             </Show>
           </div>
           <Button
+            variant="accent"
             size="xs"
             aria-label={value().accessibleActionLabel}
             tooltip={value().accessibleActionLabel}
