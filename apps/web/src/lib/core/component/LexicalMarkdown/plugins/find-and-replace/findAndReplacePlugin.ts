@@ -74,7 +74,8 @@ function escapeRegExp(str: string) {
 
 /**
  * Flattens the tree into one string and records where each leaf node's text
- * sits in it. Blocks are separated by a newline that belongs to no node, so a
+ * sits in it. Blocks, including ones nested after inline text such as a
+ * sublist, are separated by a newline that belongs to no node, so a
  * match can never span two blocks.
  */
 function collectTextSegments(root: ElementNode): {
@@ -86,8 +87,10 @@ function collectTextSegments(root: ElementNode): {
   const visit = (node: LexicalNode) => {
     if (shouldIgnoreNodeType(node.getType())) return;
     if ($isElementNode(node)) {
+      const isBlock = !node.isInline();
+      if (isBlock && text.length > 0 && !text.endsWith('\n')) text += '\n';
       for (const child of node.getChildren()) visit(child);
-      if (!node.isInline()) text += '\n';
+      if (isBlock) text += '\n';
       return;
     }
     const content = node.getTextContent();

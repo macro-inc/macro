@@ -6,6 +6,7 @@ import {
   NodeReplacements,
   SupportedNodeTypes,
 } from '@macro-inc/lexical-core/node-list';
+import { $createListItemNode, $createListNode } from '@lexical/list';
 import { markdownToSerializedEditorStateWithIds } from '@macro-inc/lexical-core/utils/markdown-state';
 import {
   $createParagraphNode,
@@ -201,5 +202,35 @@ describe('findAndReplacePlugin multi-line blocks', () => {
 
   it('does not match across block boundaries', () => {
     expect(searchMarkdown('first\n\nsecond', 'firstsecond')).toEqual([]);
+  });
+});
+
+describe('findAndReplacePlugin nested blocks', () => {
+  it('separates inline text from a block nested after it', () => {
+    const { editor, getListOffset } = createSearchEditor();
+
+    editor.update(
+      () => {
+        const parent = $createListItemNode();
+        parent.append(
+          $createTextNode('parent'),
+          $createListNode('bullet').append(
+            $createListItemNode().append($createTextNode('child'))
+          )
+        );
+        $getRoot().clear().append($createListNode('bullet').append(parent));
+      },
+      { discrete: true }
+    );
+
+    editor.getEditorState().read(() => {
+      editor.dispatchCommand(DO_SEARCH_COMMAND, 'parentchild');
+    });
+    expect(getListOffset()).toEqual([]);
+
+    editor.getEditorState().read(() => {
+      editor.dispatchCommand(DO_SEARCH_COMMAND, 'child');
+    });
+    expect(getListOffset()).toHaveLength(1);
   });
 });
