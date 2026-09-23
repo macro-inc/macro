@@ -11,21 +11,34 @@ import {
 import type { InboxPreviewRouteParams } from './inbox-route-schema';
 
 function calendarSearch(
-  params: CalendarBlockProps | undefined
+  params: CalendarBlockProps | undefined,
+  time: Extract<PreviewPanelSelection, { type: 'calendar_event' }>['time']
 ): Partial<InboxPreviewSearchParams> {
   const range = params?.range;
   return {
     eventId: params?.eventId ?? '',
     occurrenceKey: params?.occurrenceKey ?? '',
-    ...(range
+    ...(time?.kind === 'allDay'
       ? {
-          calendarTimeKind: 'timed',
-          startsAt: range.start,
-          endsAt: range.end,
-          startDate: range.startDate,
-          endDate: range.endDate,
+          calendarTimeKind: 'allDay',
+          startDate: time.startDate,
+          endDate: time.endDate ?? range?.endDate ?? '',
         }
-      : {}),
+      : time?.kind === 'timed'
+        ? {
+            calendarTimeKind: 'timed',
+            startsAt: time.startsAt,
+            endsAt: time.endsAt ?? range?.end ?? '',
+          }
+        : range
+          ? {
+              calendarTimeKind: 'timed',
+              startsAt: range.start,
+              endsAt: range.end,
+              startDate: range.startDate,
+              endDate: range.endDate,
+            }
+          : {}),
   };
 }
 
@@ -76,7 +89,10 @@ function selectionSearch(
     case 'calendar_event':
       return {
         ...base,
-        ...calendarSearch(blockParams as CalendarBlockProps | undefined),
+        ...calendarSearch(
+          blockParams as CalendarBlockProps | undefined,
+          selection.time
+        ),
       };
     case 'reminder':
       return {

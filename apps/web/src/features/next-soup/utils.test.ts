@@ -1,6 +1,7 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { inboxPreviewNavigation } from '../inbox-view/inbox-preview-navigation';
+import { inboxPreviewSelection } from '../inbox-view/inbox-route';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -457,6 +458,29 @@ describe('Drive document routing', () => {
       );
     }
   );
+});
+
+describe('Inbox calendar preview navigation', () => {
+  it.each([
+    { kind: 'allDay' as const, startDate: '2025-01-01', endDate: '2025-01-03' },
+    {
+      kind: 'timed' as const,
+      startsAt: '2025-01-01T12:00:00.000Z',
+      endsAt: '2025-01-01T13:00:00.000Z',
+    },
+  ])('round-trips $kind event times', (time) => {
+    const result = inboxPreviewNavigation({
+      type: 'calendar_event',
+      id: 'event-1',
+      time,
+    });
+    expect(result.search.calendarTimeKind).toBe(time.kind);
+    expect(inboxPreviewSelection(result.params, result.search)).toMatchObject({
+      type: 'calendar_event',
+      id: 'event-1',
+      time,
+    });
+  });
 });
 
 describe('Inbox channel preview navigation', () => {
