@@ -59,7 +59,7 @@ pub enum CommentAnchor {
         #[serde(skip_serializing_if = "Option::is_none")]
         original_marked_text: Option<String>,
         /// The commented text has since been removed from the document.
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         removed: bool,
     },
     /// A comment on a PDF highlight.

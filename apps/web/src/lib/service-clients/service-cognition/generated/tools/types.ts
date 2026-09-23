@@ -956,6 +956,51 @@ export type MarkdownNode =
       type: 'dssImage';
     };
 /**
+ * Whether a thread is on part of a document or on the document as a whole.
+ */
+export type CommentThreadKind = 'inline' | 'discussion';
+/**
+ * Where a discussion sits in its document.
+ */
+export type CommentAnchor =
+  | {
+      type: 'document';
+    }
+  | {
+      /**
+       * The comment mark in the document.
+       */
+      markId: string;
+      /**
+       * The text the comment is on, as the document reads now; the text
+       * when the comment was written if the document could not be read.
+       */
+      markedText?: string | null;
+      /**
+       * The text when the comment was written, when it differs from now.
+       */
+      originalMarkedText?: string | null;
+      /**
+       * The commented text has since been removed from the document.
+       */
+      removed?: boolean;
+      type: 'text';
+    }
+  | {
+      /**
+       * The highlight annotation.
+       */
+      anchorId: string;
+      type: 'pdfHighlight';
+    }
+  | {
+      /**
+       * The pin annotation.
+       */
+      anchorId: string;
+      type: 'pdfPin';
+    };
+/**
  * API-visible content lifecycle state derived from current document metadata.
  */
 export type DocumentContentState = 'unknown' | 'pending' | 'ready';
@@ -5214,7 +5259,7 @@ export interface ChatMessagePreview {
   attachmentIds: string[];
 }
 /**
- * Retrieve a documents content
+ * Retrieve a document's content and its comment threads, including inline comments with the text they are on, Discussion comments, replies and resolved state.
  */
 export interface ReadContent {
   /**
@@ -5225,105 +5270,60 @@ export interface ReadContent {
 export interface ReadContentResponse {
   content: Content;
   /**
-   * Any comments on the document
+   * The comment threads on the document, oldest first: inline comments
+   * with the text they are on, and Discussion comments on the whole
+   * document. Each thread lists its first comment followed by the replies.
    */
-  comments: CommentThread[];
+  comments: DocumentDiscussion[];
 }
 /**
- * A thread bundled together with its ordered comments.
+ * A comment thread on a document: its first comment followed by the replies.
  */
-export interface CommentThread {
-  thread: Thread;
+export interface DocumentDiscussion {
   /**
-   * The comments in the thread, ordered by `createdAt` ASC.
+   * The thread id, which is the id of its first comment. Replies and
+   * resolution address the thread by this id.
    */
-  comments: Comment[];
-}
-/**
- * A comment thread attached to a document.
- */
-export interface Thread {
-  /**
-   * The unique id of the thread.
-   */
-  threadId: number;
-  /**
-   * The user id of the thread owner.
-   */
-  owner: string;
+  id: string;
+  kind: CommentThreadKind;
   /**
    * Whether the thread has been resolved.
    */
   resolved: boolean;
+  anchor: CommentAnchor;
   /**
-   * The document the thread is attached to.
+   * The comments in order, first comment first.
    */
-  documentId: string;
-  /**
-   * When the thread was created.
-   */
-  createdAt?: string | null;
-  /**
-   * When the thread was last updated.
-   */
-  updatedAt?: string | null;
-  /**
-   * When the thread was deleted, if ever.
-   */
-  deletedAt?: string | null;
-  /**
-   * Arbitrary thread metadata.
-   */
-  metadata?: {
-    [k: string]: unknown;
-  };
+  comments: DocumentComment[];
 }
 /**
- * A single comment in a thread.
+ * A single comment in a discussion.
  */
-export interface Comment {
+export interface DocumentComment {
   /**
-   * The unique id of the comment.
+   * The comment id.
    */
-  commentId: number;
+  id: string;
   /**
-   * The thread this comment belongs to.
+   * The user or bot id of the author.
    */
-  threadId: number;
+  author: string;
   /**
-   * Ordering position within the thread.
+   * The author's display name, for bots and comments imported from other documents.
    */
-  order?: number | null;
+  authorName?: string | null;
   /**
-   * The user id of the comment owner.
+   * The comment body in markdown; absent when the comment was deleted.
    */
-  owner: string;
+  content?: string | null;
   /**
-   * Sender display string.
+   * When the comment was written.
    */
-  sender?: string | null;
+  createdAt: string;
   /**
-   * Comment body.
+   * When the comment was last edited.
    */
-  text: string;
-  /**
-   * Arbitrary comment metadata.
-   */
-  metadata?: {
-    [k: string]: unknown;
-  };
-  /**
-   * When the comment was created.
-   */
-  createdAt?: string | null;
-  /**
-   * When the comment was last updated.
-   */
-  updatedAt?: string | null;
-  /**
-   * When the comment was deleted, if ever.
-   */
-  deletedAt?: string | null;
+  editedAt?: string | null;
 }
 /**
  * Retrieve a documents metadata

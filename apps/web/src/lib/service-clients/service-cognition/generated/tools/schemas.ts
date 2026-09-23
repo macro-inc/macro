@@ -4834,38 +4834,66 @@ export const ReadContentResponse = z.object({
   }),
   comments: z.array(
     z.object({
-      thread: z.object({
-        threadId: z.number().int(),
-        owner: z.string(),
-        resolved: z.boolean(),
-        documentId: z.string(),
-        createdAt: z
-          .union([z.string().datetime({ offset: true }), z.null()])
-          .optional(),
-        updatedAt: z
-          .union([z.string().datetime({ offset: true }), z.null()])
-          .optional(),
-        deletedAt: z
-          .union([z.string().datetime({ offset: true }), z.null()])
-          .optional(),
-        metadata: z.any().optional(),
+      id: z.string().uuid(),
+      kind: z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('inline'), z.literal('discussion')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      resolved: z.boolean(),
+      anchor: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.object({ type: z.literal('document') }),
+          z.object({
+            markId: z.string().uuid(),
+            markedText: z.union([z.string(), z.null()]).optional(),
+            originalMarkedText: z.union([z.string(), z.null()]).optional(),
+            removed: z.boolean().optional(),
+            type: z.literal('text'),
+          }),
+          z.object({
+            anchorId: z.string().uuid(),
+            type: z.literal('pdfHighlight'),
+          }),
+          z.object({ anchorId: z.string().uuid(), type: z.literal('pdfPin') }),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
       }),
       comments: z.array(
         z.object({
-          commentId: z.number().int(),
-          threadId: z.number().int(),
-          order: z.union([z.number().int(), z.null()]).optional(),
-          owner: z.string(),
-          sender: z.union([z.string(), z.null()]).optional(),
-          text: z.string(),
-          metadata: z.any().optional(),
-          createdAt: z
-            .union([z.string().datetime({ offset: true }), z.null()])
-            .optional(),
-          updatedAt: z
-            .union([z.string().datetime({ offset: true }), z.null()])
-            .optional(),
-          deletedAt: z
+          id: z.string().uuid(),
+          author: z.string(),
+          authorName: z.union([z.string(), z.null()]).optional(),
+          content: z.union([z.string(), z.null()]).optional(),
+          createdAt: z.string().datetime({ offset: true }),
+          editedAt: z
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
         })
