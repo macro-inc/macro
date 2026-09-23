@@ -113,7 +113,7 @@ pub async fn build_tool_service_context_from_env(
     let document_storage_service_url = DocumentStorageServiceUrl::new()?.to_string();
     let sync_service_url = SyncServiceUrl::new()?.to_string();
     let email_service_url = EmailServiceUrl::new()?.to_string();
-    let calendar_service_url = CalendarServiceUrl::new()?.to_string();
+    let calendar_service_url = CalendarServiceUrl::new()?;
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
     let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
     let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();

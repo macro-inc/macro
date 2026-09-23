@@ -363,13 +363,13 @@ pub type ToolCalendarToolContext =
 /// `calendar_service_url` with the shared internal API key.
 pub fn build_calendar_tool_context(
     pool: sqlx::PgPool,
-    calendar_service_url: String,
+    calendar_service_url: macro_service_urls::CalendarServiceUrl,
     internal_api_key: String,
 ) -> ToolCalendarToolContext {
     CalendarToolContext::new(
         Arc::new(
             calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations::new(
-                calendar_service_url,
+                calendar_service_url.to_string(),
                 internal_api_key,
             ),
         ),

@@ -34,8 +34,8 @@ use macro_authorization::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::{
-    ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
-    StaticFileServiceUrl, SyncServiceUrl,
+    CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+    LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
@@ -601,7 +601,7 @@ async fn main() -> anyhow::Result<()> {
         call_tool_context: call_tool_context.clone(),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             db.clone(),
-            EmailServiceUrl::new()?.to_string(),
+            CalendarServiceUrl::new()?,
             internal_api_key.clone(),
         ),
         notification_tool_context: notification_tool_context.clone(),
