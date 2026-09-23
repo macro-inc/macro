@@ -261,10 +261,6 @@ export function ChatComposer(props: {
                 >
                   <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
                     {props.selector}
-                    <DictationButton
-                      dictation={dictation}
-                      disabled={disabled()}
-                    />
                     <Show
                       when={
                         (props.session?.busy || canSendNext()) &&
@@ -308,6 +304,10 @@ export function ChatComposer(props: {
                         />
                       </Show>
                     </Show>
+                    <DictationButton
+                      dictation={dictation}
+                      disabled={disabled()}
+                    />
                   </div>
                 </div>
               </div>

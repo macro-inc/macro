@@ -114,7 +114,6 @@ export function CollapsedInput(props: CollapsedInputProps) {
             <span>{attachmentCount()}</span>
           </Button>
         </Show>
-        {props.trailingAction}
         <Show when={!isMobile() || !props.disabled}>
           <SendButton
             appearance="composer"
@@ -127,6 +126,9 @@ export function CollapsedInput(props: CollapsedInputProps) {
             data-collapsed-input-send
           />
         </Show>
+        {/* Last in the row so it keeps the same spot when the send button
+            comes and goes with the draft. */}
+        {props.trailingAction}
       </ComposerSurface>
     </Layer>
   );

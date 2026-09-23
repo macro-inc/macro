@@ -314,10 +314,10 @@ export function ChatInput(props: ChatInputComponentProps) {
         onLocked={() => showPaywall(PaywallKey.O1_LIMIT)}
         compact={compactSelector()}
       />
-      <DictationButton dictation={dictation} />
       <Show when={generating() && props.onStop} fallback={<SendButton />}>
         <StopButton />
       </Show>
+      <DictationButton dictation={dictation} />
     </div>
   );
 
