@@ -76,13 +76,11 @@ vi.mock('../ui', () => ({
   ToolGroup: (props: {
     count: number;
     active: boolean;
-    live: boolean;
     children: JSX.Element;
   }) => (
     <div
       data-active={String(props.active)}
       data-count={props.count}
-      data-live={String(props.live)}
       data-testid="group"
     >
       {props.children}
@@ -152,7 +150,6 @@ describe('Message tool grouping', () => {
     const group = view.getByTestId('group');
     expect(group.dataset.count).toBe('3');
     expect(group.dataset.active).toBe('false');
-    expect(group.dataset.live).toBe('false');
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',
@@ -273,7 +270,6 @@ describe('Message tool grouping', () => {
     );
     expect(view.getByTestId('group')).toBe(group);
     expect(group.dataset.count).toBe('3');
-    expect(group.dataset.live).toBe('true');
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',
@@ -315,14 +311,6 @@ describe('Message tool grouping', () => {
     expect(view.getAllByTestId('tool')[2].dataset.status).toBe('running');
   });
 
-  it('marks a completed batch as live so its arrivals remain visible briefly', () => {
-    const view = render(() => (
-      <Message message={message([tool('a'), tool('b')], null)} inFlight />
-    ));
-    expect(view.getByTestId('group').dataset.live).toBe('true');
-    expect(view.getByTestId('group').dataset.active).toBe('false');
-  });
-
   it('preserves unfinished call status when another part follows the group', () => {
     const view = render(() => (
       <Message
@@ -334,7 +322,6 @@ describe('Message tool grouping', () => {
       />
     ));
     expect(view.getByTestId('group').dataset.active).toBe('true');
-    expect(view.getByTestId('group').dataset.live).toBe('false');
     expect(view.getAllByTestId('tool').map((row) => row.dataset.live)).toEqual([
       'true',
       'true',

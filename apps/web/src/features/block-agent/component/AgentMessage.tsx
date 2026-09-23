@@ -121,7 +121,6 @@ function ToolGroupPart(props: {
   const parts = () => props.message.parts.slice(props.start, props.end);
   const calls = () =>
     parts().filter((part): part is ToolUsePart => part.kind === 'tool_use');
-  const live = () => props.inFlight && props.end === props.message.parts.length;
   // A call the log left running in a finished turn is over (see
   // `settledToolStatus`), so a settled turn's run is never "Calling".
   const active = () =>
@@ -141,7 +140,7 @@ function ToolGroupPart(props: {
 
   return (
     <Show when={calls().length > 0} fallback={renderParts()}>
-      <ToolGroup count={calls().length} active={active()} live={live()}>
+      <ToolGroup count={calls().length} active={active()}>
         {renderParts()}
       </ToolGroup>
     </Show>

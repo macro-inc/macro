@@ -453,15 +453,14 @@ Only tools with a supported result view can expand. Unknown tools, unsupported
 drafts, and payloads that do not fit their renderer stay as summary rows with
 no caret. Tool arguments and results never fall back to raw JSON.
 
-Consecutive calls collect under an expanded **Calling N tools** group while
-running. Rows appear as calls arrive; after the calls finish, the group briefly
-settles and collapses to **Called N tools**. Group growth and collapse happen
-immediately, without animation, including fast batches. Completed groups in
-history start collapsed and can be reopened. The group caret sits immediately
-after its label and appears on hover or keyboard focus. Expand an edit row to
-view its diffs. Result bodies load only when their row opens; syntax highlighting
-may appear after the diff text. Opening a session or expanding a group should
-leave the app responsive, even when the session contains many file edits.
+Consecutive calls collect under a collapsed **Calling N tools** group while
+running. The header count updates as calls arrive; after they finish it reads
+**Called N tools**. Groups stay collapsed until opened, including live runs and
+completed history. The group caret sits immediately after its label and appears
+on hover or keyboard focus. Expand an edit row to view its diffs. Result bodies
+load only when their row opens; syntax highlighting may appear after the diff
+text. Opening a session or expanding a group should leave the app responsive,
+even when the session contains many file edits.
 
 `DisplayResults` renders its dynamic view directly in the reply and stays visible
 without opening a tool row. It breaks tool groups before and after itself,
@@ -476,12 +475,12 @@ server do not currently receive this tool.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
-rows accumulate, completed calls stop shimmering, the group collapses after
-completion without height animation, and its carets still expand the results.
-Check that rich result controls still work and `DisplayResults` stays visible
-between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
-and confirm unknown tools have no individual disclosure or JSON payload. Repeat
-at a narrow viewport width.
+the group stays collapsed as calls arrive, the header count and Calling/Called
+label update, completed calls stop shimmering, and expanding the group still
+shows the result rows. Check that rich result controls still work and
+`DisplayResults` stays visible between surrounding groups. In **AgentMessage
+(end-to-end)**, expand the group and confirm unknown tools have no individual
+disclosure or JSON payload. Repeat at a narrow viewport width.
 
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**

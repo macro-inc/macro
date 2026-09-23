@@ -1,41 +1,20 @@
-/** Consecutive calls collect in an open group while live, then fold to one row. */
+/** Consecutive calls fold to one collapsed row; expand to see the run. */
 
 import { Collapsible } from '@kobalte/core/collapsible';
 import CaretRight from '@phosphor/caret-right.svg';
-import { createWritableMemo } from '@solid-primitives/memo';
-import { createScheduled, debounce } from '@solid-primitives/scheduled';
-import { createMemo, type JSX, on, Show } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';
-
-/** Let a fast result remain readable and bridge brief gaps between calls. */
-const SETTLE_DELAY_MS = 700;
 
 export interface ToolGroupProps {
   count: number;
   /** A call in the run is still in flight: reads "Calling" and shimmers. */
   active: boolean;
-  /** The live tail can receive calls already completed in the same batch. */
-  live?: boolean;
   defaultOpen?: boolean;
   children: JSX.Element;
 }
 
 export function ToolGroup(props: ToolGroupProps) {
-  const settled = createScheduled((callback) =>
-    debounce(callback, SETTLE_DELAY_MS)
-  );
-  const automaticOpen = createMemo((wasOpen: boolean) => {
-    const active = props.active;
-    // Each new call extends the grace period, including completed batches.
-    const live = (props.live ?? active) && props.count > 0;
-    const readyToClose = settled();
-    return active || (!readyToClose && (live || wasOpen));
-  }, false);
-  const [expanded, setExpanded] = createWritableMemo<boolean>(
-    on(automaticOpen, (open, previous) =>
-      previous === undefined ? (props.defaultOpen ?? open) : open
-    )
-  );
+  const [expanded, setExpanded] = createSignal(props.defaultOpen ?? false);
   const title = () =>
     `${props.active ? 'Calling' : 'Called'} ${props.count} ${props.count === 1 ? 'tool' : 'tools'}`;
 
