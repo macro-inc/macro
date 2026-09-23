@@ -4,9 +4,9 @@ import { services } from '../services';
 
 // Services whose OpenAPI spec is copied from apps/web's service-clients package,
 // where `apps/web`'s `gen-api` writes each Rust service's spec. `calendar` is not
-// among them: it has no service-client in apps/web (the web app reaches calendar
-// through the hand-written email client), so its spec is generated here directly
-// from the Rust `calendar_service_openapi` binary. See `syncCalendarSpec`.
+// among them: its paths need the `/calendar` prefix stripped (see
+// `stripCalendarPrefix`), so its spec is generated here directly from the Rust
+// `calendar_service_openapi` binary. See `syncCalendarSpec`.
 const serviceClientDirectories = {
   'agent-harness': 'service-agent-harness',
   auth: 'service-auth',

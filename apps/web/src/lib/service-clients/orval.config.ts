@@ -14,6 +14,19 @@ export default defineConfig({
       target: './service-auth/openapi.json',
     },
   },
+  calendarService: {
+    output: {
+      client: 'fetch',
+      target: './service-calendar/generated/client.ts',
+      schemas: './service-calendar/generated/schemas',
+      override: {
+        useDates: false,
+      },
+    },
+    input: {
+      target: './service-calendar/openapi.json',
+    },
+  },
   cognitionService: {
     output: {
       client: 'fetch',

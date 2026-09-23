@@ -6366,7 +6366,6 @@ dependencies = [
  "sqs_worker",
  "static_file_service_client",
  "strum_macros 0.27.2",
- "subtle",
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
