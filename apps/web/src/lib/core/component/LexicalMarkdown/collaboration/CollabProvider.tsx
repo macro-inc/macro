@@ -553,9 +553,7 @@ export function CollabProvider(props: CollabProviderProps) {
           startSync();
           // Remove drafts that earlier sessions left in the shared document.
           if (hasAbandonedDrafts && !readOnly()) {
-            syncEngine.syncStateToLoro(
-              loroSyncState(props.editor.getEditorState()) as any
-            );
+            props.editor.dispatchCommand(FORCE_SYNC_COMMAND, undefined);
           }
           props.setEditorReady(true);
           const documentId = syncSource()!.documentId;
