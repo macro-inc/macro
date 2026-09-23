@@ -68,7 +68,6 @@ async fn connected_probe_is_bounded() {
     assert!(matches!(error, ProbeError::Timeout(_)));
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn subprocess_probe_uses_configured_command_arguments_and_cwd() {
     let cwd = tempfile::tempdir().expect("temporary cwd");
