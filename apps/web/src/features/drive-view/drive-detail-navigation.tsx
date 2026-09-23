@@ -18,6 +18,7 @@ import {
   createContext,
   createEffect,
   createMemo,
+  on,
   type ParentProps,
   useContext,
 } from 'solid-js';
@@ -114,9 +115,7 @@ export function DriveDetailNavigationProvider(
   const selectPreview = createPreviewSelectionGuard();
   const activeTarget = createMemo(() => targetFromParams(params));
 
-  createEffect(() => {
-    selectPreview(activeTarget());
-  });
+  createEffect(on(activeTarget, (target) => selectPreview(target)));
 
   const entries = createMemo<DriveDetailHistoryEntry[]>(() => {
     const snapshot = history();

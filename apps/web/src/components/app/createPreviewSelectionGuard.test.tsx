@@ -4,7 +4,13 @@ import {
 } from '@app/components/navigation-stack/NavigationStack';
 import { toast } from '@core/component/Toast/Toast';
 import { render } from '@solidjs/testing-library';
-import { createMemo, createRoot, type ParentProps } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createRoot,
+  createSignal,
+  type ParentProps,
+} from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createPreviewSelectionGuard } from './createPreviewSelectionGuard';
 import type { PreviewPanelSelection } from './previewTarget';
@@ -182,6 +188,35 @@ it('blocks breadcrumbs back to content opened elsewhere without changing history
   first.stack.pop();
   expect(first.stack.active()?.data.id).toBe('one');
   first.unmount();
+});
+
+it('does not subscribe a calling effect to its internal claim', () => {
+  let setSelection!: (selection: PreviewPanelSelection | undefined) => void;
+  let runs = 0;
+
+  function App() {
+    const selectPreview = createPreviewSelectionGuard();
+    const [selection, set] = createSignal<PreviewPanelSelection>();
+    setSelection = set;
+    createEffect(() => {
+      runs += 1;
+      selectPreview(selection());
+    });
+    return null;
+  }
+
+  const view = render(() => (
+    <Layout>
+      <App />
+    </Layout>
+  ));
+  expect(runs).toBe(1);
+
+  const channel = { type: 'channel', id: 'channel' } as const;
+  setSelection(channel);
+  expect(runs).toBe(2);
+  expect(manager.findOpenView(channel)).toBeDefined();
+  view.unmount();
 });
 
 it('preflights without claiming the requested selection', () => {
