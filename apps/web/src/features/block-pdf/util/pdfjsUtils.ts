@@ -192,6 +192,31 @@ function textNodeRects(inputRange: Range) {
   return result;
 }
 
+/**
+ * Bounding rect of the selected glyphs that fall within `pageRect`. Text layer
+ * spans are padded out to the page edges to widen their selection hit area, so
+ * the span's own rect covers far more than the words it holds.
+ */
+export function selectedTextBounds(
+  range: Range,
+  pageRect: DOMRect
+): DOMRect | null {
+  const rects = textNodeRects(range).filter(
+    (rect) =>
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom > pageRect.top &&
+      rect.top < pageRect.bottom
+  );
+  if (rects.length === 0) return null;
+
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const right = Math.max(...rects.map((rect) => rect.right));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  return new DOMRect(left, top, right - left, bottom - top);
+}
+
 function rangeToHighlightByPageIndex(
   range: Range,
   text: string,
