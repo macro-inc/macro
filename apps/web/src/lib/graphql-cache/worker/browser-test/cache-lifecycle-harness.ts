@@ -38,7 +38,7 @@ const affectedOperations: number[][] = [];
 let cacheChanges = 0;
 let pageRestores = 0;
 let watchingNavigation = false;
-addEventListener('pageshow', (event) => {
+addEventListener('pageshow', (event: PageTransitionEvent) => {
   if (event.persisted) pageRestores += 1;
 });
 

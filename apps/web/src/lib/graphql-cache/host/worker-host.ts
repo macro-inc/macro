@@ -788,11 +788,19 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     finishTelemetry();
   }
 
+  async function resumeAfterNavigation(): Promise<void> {
+    try {
+      // Keep the host and all its subscribers alive; only the page transport is
+      // replaced. Initialization waits for the suspended startup to unwind.
+      await startInitialization();
+    } catch {
+      // Non-navigation failures already invoke the normal product fallback.
+    }
+  }
+
   function onPageshow(event: PageTransitionEvent): void {
     if (!event.persisted || state !== 'suspended') return;
-    // Keep the host and all its subscribers alive; only the page transport is
-    // replaced. startInitialization waits for the suspended startup to unwind.
-    void startInitialization().catch(() => undefined);
+    void resumeAfterNavigation();
   }
 
   function navigationError(): CacheNavigationError | undefined {
