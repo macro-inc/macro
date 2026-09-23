@@ -14,10 +14,6 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import {
-  taskDetailRoute,
-  tasksSplitRoute,
-} from '@components/app/split-layout/split-router/app-routes';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -45,6 +41,7 @@ import {
   type TasksDataSourceItem,
   useTasksDataSource,
 } from './queries/use-tasks-query';
+import { taskDetailRoute, tasksSplitRoute } from './route';
 import type {
   TaskDetailTarget,
   TaskSortId,

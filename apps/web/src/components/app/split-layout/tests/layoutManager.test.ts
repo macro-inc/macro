@@ -1,11 +1,17 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
 import { driveDestination } from '@app/features/drive-view/drive-route-navigation';
+import { driveSplitRoute } from '@app/features/drive-view/route';
+import {
+  emailSplitRoute,
+  emailThreadRoute,
+} from '@app/features/email-view/route';
 import {
   getListNavigationSource,
   listNavigationSourceId,
   registerListNavigationSource,
   withListNavigationSource,
 } from '@app/features/soup/collection/list-navigation-source';
+import { taskDetailRoute } from '@app/features/tasks-view/route';
 import { createMemorySplitRouterLocation } from '@app/lib/split-router/integrations/memory';
 import { createSplitRouter } from '@app/lib/split-router/router';
 import { createRoutesManifest } from '@app/lib/split-router/routes';
@@ -25,13 +31,7 @@ import {
 } from '../layoutUtils';
 import { createMobileSwipeLayout } from '../mobile/createMobileSwipeLayout';
 import { createAppSplitRouterMiddleware } from '../split-router/app-middleware';
-import {
-  appSplitRoutes,
-  driveSplitRoute,
-  emailSplitRoute,
-  emailThreadRoute,
-  taskDetailRoute,
-} from '../split-router/app-routes';
+import { appSplitRoutes } from '../split-router/app-routes';
 import { createAppSplitRouterLayout } from '../splitRouterLayout';
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -896,7 +896,7 @@ describe('layoutManager', () => {
 
     it('normalizes legacy search per detail pane without overriding canonical values', async () => {
       const { manager, location, router, dispose } = ingressRouter(
-        '/mail/one/~/channels/channel/c1/~/mail/two/~/mail' +
+        '/mail/one/~/channels/c1/~/mail/two/~/mail' +
           '?email_message_id=legacy&channel_message_id=first&channel_message_id=last' +
           '&channel_thread_id=thread&s0.email-detail.messageId=explicit' +
           '&s0.email-detail.extra=keep&s2.email-detail.messageId=&referral_code=code#focus'

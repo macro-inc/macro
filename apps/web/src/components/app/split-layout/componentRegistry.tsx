@@ -1,9 +1,27 @@
+import { ActivityRouteView } from '@app/features/activity/route';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
+import { AgentsRouteView } from '@app/features/agents-view/route';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { ChannelsRouteView } from '@app/features/channels-view/route';
+import { CompaniesRouteView } from '@app/features/companies/route';
+import { DriveRouteView } from '@app/features/drive-view/route';
 import { EmailCompose } from '@app/features/email-compose/email-compose';
+import { MailRouteView } from '@app/features/email-view/route';
+import { GettingStartedRouteView } from '@app/features/getting-started/route';
+import { HomeRouteView } from '@app/features/home/route';
+import { InboxRouteView } from '@app/features/inbox-view/route';
+import {
+  CallsRouteView,
+  FoldersRouteView,
+  RecentRouteView,
+  SearchRouteView,
+} from '@app/features/next-soup/route';
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
+import { RemindersRouteView } from '@app/features/reminders/route';
+import { SettingsRouteView } from '@app/features/settings/route';
+import { TasksRouteView } from '@app/features/tasks-view/route';
 import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeSkill } from '@block-md/component/ComposeSkill';
@@ -12,12 +30,11 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
 import { type JSXElement, lazy, Show } from 'solid-js';
-import * as views from './split-router/app-views';
 import {
   RedirectSplit,
   usePageViewTracking,
   withAuth,
-} from './split-router/app-views';
+} from './split-router/app-route-shell';
 
 type ComponentParams = Record<string, unknown>;
 
@@ -107,27 +124,21 @@ registerComponent('unified-list', () => (
 
 // Compatibility factories for restored content and hosts outside a route outlet.
 // App views themselves are composed by the application route layer.
-registerComponent('home', (params) => <views.HomeView {...params} />);
-registerComponent('getting-started', (params) => (
-  <views.GettingStartedView {...params} />
-));
-registerComponent('inbox', (params) => <views.InboxRouteView {...params} />);
-registerComponent('recent', (params) => <views.RecentView {...params} />);
-registerComponent('activity', (params) => <views.ActivityView {...params} />);
-registerComponent('reminders', (params) => <views.RemindersView {...params} />);
-registerComponent('agents', (params) => <views.AgentsRouteView {...params} />);
-registerComponent('mail', (params) => <views.MailView {...params} />);
-registerComponent('documents', (params) => (
-  <views.DriveRouteView {...params} />
-));
-registerComponent('tasks', (params) => <views.TasksRouteView {...params} />);
-registerComponent('channels', (params) => (
-  <views.ChannelsRouteView {...params} />
-));
-registerComponent('calls', (params) => <views.CallsView {...params} />);
-registerComponent('companies', (params) => <views.CompaniesView {...params} />);
-registerComponent('folders', (params) => <views.FoldersView {...params} />);
-registerComponent('search', (params) => <views.SearchView {...params} />);
+registerComponent('home', () => <HomeRouteView />);
+registerComponent('getting-started', () => <GettingStartedRouteView />);
+registerComponent('inbox', () => <InboxRouteView />);
+registerComponent('recent', () => <RecentRouteView />);
+registerComponent('activity', () => <ActivityRouteView />);
+registerComponent('reminders', () => <RemindersRouteView />);
+registerComponent('agents', () => <AgentsRouteView />);
+registerComponent('mail', () => <MailRouteView />);
+registerComponent('documents', () => <DriveRouteView />);
+registerComponent('tasks', () => <TasksRouteView />);
+registerComponent('channels', () => <ChannelsRouteView />);
+registerComponent('calls', () => <CallsRouteView />);
+registerComponent('companies', () => <CompaniesRouteView />);
+registerComponent('folders', () => <FoldersRouteView />);
+registerComponent('search', () => <SearchRouteView />);
 registerComponent('firehose', () => (
   <RedirectSplit to={{ type: 'component', id: 'activity' }} />
 ));
@@ -199,7 +210,7 @@ registerComponent(
   'import-linear',
   lazy(() => import('@app/features/integrations/import-linear/ImportLinear'))
 );
-registerComponent('settings', () => <views.SettingsView />);
+registerComponent('settings', () => <SettingsRouteView />);
 
 if (LOCAL_ONLY) {
   registerComponent(

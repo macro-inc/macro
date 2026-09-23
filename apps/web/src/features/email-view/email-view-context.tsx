@@ -16,10 +16,6 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import {
-  emailSplitRoute,
-  emailThreadRoute,
-} from '@components/app/split-layout/split-router/app-routes';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -47,6 +43,7 @@ import {
   type EmailDataSourceItem,
   useEmailDataSource,
 } from './queries/use-email-query';
+import { emailSplitRoute, emailThreadRoute } from './route';
 import type {
   EmailTab,
   EmailThreadTarget,

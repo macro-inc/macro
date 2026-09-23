@@ -41,7 +41,6 @@ vi.mock('@app/features/activity/open-entity-in-split', () => ({
 
 // Quarantine unrelated registered views and their module-load side effects.
 // Route/preview codecs otherwise pull the full block-definition graph into this test.
-vi.mock('../split-router/app-routes', () => ({}));
 vi.mock('@app/features/inbox-view/inbox-route', () => ({}));
 vi.mock('@app/features/agents-view/views/AgentsView', () => ({}));
 vi.mock('@app/features/channels-view/channels-view', () => ({

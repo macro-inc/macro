@@ -68,7 +68,7 @@ export function createAppSplitRouterMiddleware(options: {
         return redirect(`/mail/${encodeURIComponent(content.id)}`);
       }
       if (content.type === 'channel') {
-        return redirect(`/channels/channel/${encodeURIComponent(content.id)}`);
+        return redirect(`/channels/${encodeURIComponent(content.id)}`);
       }
       if (type === 'task') {
         return redirect(`/tasks/${encodeURIComponent(content.id)}`);

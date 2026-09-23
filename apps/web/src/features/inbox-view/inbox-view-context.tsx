@@ -8,10 +8,6 @@ import {
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import type { PreviewPanelSelection } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import {
-  inboxPreviewRoute,
-  inboxSplitRoute,
-} from '@components/app/split-layout/split-router/app-routes';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
@@ -34,6 +30,7 @@ import {
   createInboxViewPersistence,
   normalizeInboxFacets,
 } from './persistence';
+import { inboxPreviewRoute, inboxSplitRoute } from './route';
 import type {
   InboxGroupBy,
   InboxTab,

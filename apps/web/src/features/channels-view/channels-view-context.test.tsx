@@ -155,7 +155,7 @@ describe('ChannelsViewProvider route selection', () => {
   });
   it('derives accepted selection from a direct detail route', () => {
     const { context } = mountProvider(
-      '/channels/channel/c1?s0.channel-detail.messageId=m1&s0.channel-detail.threadId=t1'
+      '/channels/c1?s0.channel-detail.messageId=m1&s0.channel-detail.threadId=t1'
     );
 
     expect(context.selectedChannel()).toEqual({
@@ -178,7 +178,7 @@ describe('ChannelsViewProvider route selection', () => {
     ).toBe(true);
     await router.settled();
     expect(location.read()).toMatchObject({
-      pathname: '/channels/channel/c1',
+      pathname: '/channels/c1',
       search: '?s0.channel-detail.messageId=m1&s0.channel-detail.threadId=t1',
     });
     expect(context.selectedChannel()?.id).toBe('c1');
@@ -190,24 +190,20 @@ describe('ChannelsViewProvider route selection', () => {
   });
 
   it('keeps the accepted route when compatibility preflight refuses a request', async () => {
-    const { context, location, router } = mountProvider(
-      '/channels/channel/current'
-    );
+    const { context, location, router } = mountProvider('/channels/current');
     guard.allow = false;
 
     expect(context.setSelectedChannel({ type: 'channel', id: 'blocked' })).toBe(
       false
     );
     await router.settled();
-    expect(location.read().pathname).toBe('/channels/channel/current');
+    expect(location.read().pathname).toBe('/channels/current');
     expect(context.selectedChannel()?.id).toBe('current');
   });
 
   it('replaces a directly loaded incompatible preview with the list route', async () => {
     guard.allow = false;
-    const { context, location, router } = mountProvider(
-      '/channels/channel/blocked'
-    );
+    const { context, location, router } = mountProvider('/channels/blocked');
 
     await router.settled();
     expect(location.read().pathname).toBe('/channels');

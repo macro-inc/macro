@@ -10,10 +10,6 @@ import {
 } from '@app/lib/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import {
-  channelDetailRoute,
-  channelsSplitRoute,
-} from '@components/app/split-layout/split-router/app-routes';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -31,6 +27,7 @@ import {
   clampChannelsRailWidth,
 } from './constants';
 import { createChannelsViewPersistence } from './persistence';
+import { channelDetailRoute, channelsSplitRoute } from './route';
 import type {
   ChannelListSort,
   ChannelsGroup,
