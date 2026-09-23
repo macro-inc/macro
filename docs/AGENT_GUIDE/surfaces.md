@@ -652,6 +652,13 @@ none — and lists the next 90 days of teammate absences; clicking a row navigat
 that date. Coverage depends on each teammate having connected their own calendar and using
 Google's out-of-office event type.
 
+A calendar event mentioned in a channel message opens the calendar focused on the viewer's
+own copy of the meeting. When the sender holds the event on their own calendar, the mention
+also shares it read-only with the channel's current members: a member without a copy of their
+own sees the mention's title and time, and its hover card adds a `Shared with you · not on
+your calendar` line with no open action. Clicking such a mention shows that hover card
+instead of opening the calendar. Private and confidential events are never shared this way.
+
 ## Calls — `/app/component/calls`
 
 Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, transcriptions

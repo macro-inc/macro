@@ -4110,7 +4110,7 @@ async fn mention_previews_resolve_through_the_shared_uid(pool: PgPool) {
     let CalendarMentionPreview::Accessible(own) = &previews[0] else {
         panic!("author preview should be accessible: {:?}", previews[0]);
     };
-    assert_eq!(own.viewer_event_id, author_event_id);
+    assert_eq!(own.viewer_event_id, Some(author_event_id));
     assert_eq!(own.title, "Smart Macro Discussion");
     assert!(own.is_recurring);
     assert_eq!(own.attendee_count, 1);
@@ -4133,9 +4133,190 @@ async fn mention_previews_resolve_through_the_shared_uid(pool: PgPool) {
     let CalendarMentionPreview::Accessible(resolved) = &previews[0] else {
         panic!("attendee preview should be accessible: {:?}", previews[0]);
     };
-    assert_eq!(resolved.viewer_event_id, attendee_event_id);
+    assert_eq!(resolved.viewer_event_id, Some(attendee_event_id));
     assert_eq!(previews[1], CalendarMentionPreview::NoAccess);
     assert_eq!(previews[2], CalendarMentionPreview::DoesNotExist);
+}
+
+async fn share_with_channel(pool: &PgPool, event_id: Uuid, channel_id: Uuid) {
+    sqlx::query(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'calendar_event', $2::uuid::text, 'channel', 'view')
+        "#,
+    )
+    .bind(event_id)
+    .bind(channel_id)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn insert_channel(pool: &PgPool, owner_id: &str, members: &[&str]) -> Uuid {
+    let channel_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'private', $2)",
+    )
+    .bind(channel_id)
+    .bind(owner_id)
+    .execute(pool)
+    .await
+    .unwrap();
+    for member in members {
+        sqlx::query(
+            "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member')",
+        )
+        .bind(channel_id)
+        .bind(*member)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    channel_id
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mention_previews_fall_back_to_a_channel_shared_projection(pool: PgPool) {
+    let author_id = "macro|shared-author@example.com";
+    let attendee_id = "macro|shared-attendee@example.com";
+    let member_id = "macro|shared-member@example.com";
+    let former_id = "macro|shared-former@example.com";
+    let stranger_id = "macro|shared-stranger@example.com";
+    let author_link = insert_link(&pool, author_id).await;
+    let attendee_link = insert_link(&pool, attendee_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let author_provider = provider_ids(&repo, author_link).await;
+    let attendee_provider = provider_ids(&repo, attendee_link).await;
+
+    let author_copy = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "shared@example.com",
+        "Pilates",
+        1,
+    );
+    let shared_event_id = author_copy.event.id;
+    repo.upsert_event_fixture(author_copy).await.unwrap();
+    let attendee_copy = timed_upsert(
+        attendee_id,
+        attendee_link,
+        attendee_provider,
+        "shared@example.com",
+        "Pilates",
+        1,
+    );
+    let attendee_event_id = attendee_copy.event.id;
+    repo.upsert_event_fixture(attendee_copy).await.unwrap();
+    let mut private_copy = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "shared-private@example.com",
+        "Doctor",
+        1,
+    );
+    private_copy.event.visibility = EventVisibility::Private;
+    let private_event_id = private_copy.event.id;
+    repo.upsert_event_fixture(private_copy).await.unwrap();
+    let unshared_copy = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "unshared@example.com",
+        "Unshared",
+        1,
+    );
+    let unshared_event_id = unshared_copy.event.id;
+    repo.upsert_event_fixture(unshared_copy).await.unwrap();
+
+    let channel_id = insert_channel(
+        &pool,
+        author_id,
+        &[author_id, attendee_id, member_id, former_id],
+    )
+    .await;
+    sqlx::query(
+        "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
+    )
+    .bind(channel_id)
+    .bind(former_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    share_with_channel(&pool, shared_event_id, channel_id).await;
+    share_with_channel(&pool, private_event_id, channel_id).await;
+
+    let now = Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap();
+    let request = |event_id| CalendarMentionRequestItem {
+        event_id,
+        occurrence_key: None,
+    };
+
+    // A member without a copy sees the shared projection read-only.
+    let previews = repo
+        .mention_previews(
+            member_id,
+            vec![
+                request(shared_event_id),
+                request(private_event_id),
+                request(unshared_event_id),
+            ],
+            now,
+        )
+        .await
+        .unwrap();
+    let CalendarMentionPreview::Accessible(shared) = &previews[0] else {
+        panic!("member preview should be accessible: {:?}", previews[0]);
+    };
+    assert_eq!(shared.viewer_event_id, None);
+    assert_eq!(shared.title, "Pilates");
+    assert!(shared.occurrence_key.is_some());
+    // Private events stay hidden despite the grant, and a grant covers only
+    // the event it names.
+    assert_eq!(previews[1], CalendarMentionPreview::NoAccess);
+    assert_eq!(previews[2], CalendarMentionPreview::NoAccess);
+
+    // A member with their own copy keeps resolving to it.
+    let previews = repo
+        .mention_previews(attendee_id, vec![request(shared_event_id)], now)
+        .await
+        .unwrap();
+    let CalendarMentionPreview::Accessible(own) = &previews[0] else {
+        panic!("attendee preview should be accessible: {:?}", previews[0]);
+    };
+    assert_eq!(own.viewer_event_id, Some(attendee_event_id));
+
+    // So does the owner, who can open the private event they shared.
+    let previews = repo
+        .mention_previews(author_id, vec![request(private_event_id)], now)
+        .await
+        .unwrap();
+    let CalendarMentionPreview::Accessible(owned) = &previews[0] else {
+        panic!("owner preview should be accessible: {:?}", previews[0]);
+    };
+    assert_eq!(owned.viewer_event_id, Some(private_event_id));
+
+    // Nonparticipants and people who left the channel get nothing.
+    for outsider in [stranger_id, former_id] {
+        let previews = repo
+            .mention_previews(outsider, vec![request(shared_event_id)], now)
+            .await
+            .unwrap();
+        assert_eq!(previews[0], CalendarMentionPreview::NoAccess, "{outsider}");
+    }
+
+    // A cancelled event no longer previews for anyone.
+    sqlx::query("UPDATE calendar_events SET status = 'cancelled' WHERE id = $1")
+        .bind(shared_event_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let previews = repo
+        .mention_previews(member_id, vec![request(shared_event_id)], now)
+        .await
+        .unwrap();
+    assert_eq!(previews[0], CalendarMentionPreview::DoesNotExist);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -1740,11 +1740,12 @@ export type CalendarEventSourceContent = {
 
 /**
  * Meeting-level fields shown in a calendar event mention preview, taken from
- * the requester's own projection of the meeting.
+ * the requester's own projection of the meeting, or — when the requester has
+ * none — from the mentioned projection a channel they belong to was given.
  */
 export type CalendarMentionEvent = {
     /**
-     * Number of attendees on the requester's copy.
+     * Number of attendees on the previewed copy.
      */
     attendeeCount: number;
     /**
@@ -1779,14 +1780,17 @@ export type CalendarMentionEvent = {
      */
     title: string;
     /**
-     * Entity update time of the requester's copy.
+     * Entity update time of the previewed copy.
      */
     updatedAt: string;
     /**
      * The requester's own event entity for the mentioned meeting. Differs
      * from the mentioned id when the mention came from another attendee.
+     * Absent when the meeting is on none of the requester's calendars and
+     * they see it only because it was shared with one of their channels:
+     * that preview is read-only and there is no event of theirs to open.
      */
-    viewerEventId: string;
+    viewerEventId?: string | null;
 };
 
 /**

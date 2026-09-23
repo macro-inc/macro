@@ -242,6 +242,7 @@ export * from './calendarMentionEventLocation';
 export * from './calendarMentionEventOccurrenceKey';
 export * from './calendarMentionEventOrganizerEmail';
 export * from './calendarMentionEventOrganizerName';
+export * from './calendarMentionEventViewerEventId';
 export * from './calendarMentionPreviewItem';
 export * from './calendarMentionPreviewItemEvent';
 export * from './calendarMentionPreviewKind';

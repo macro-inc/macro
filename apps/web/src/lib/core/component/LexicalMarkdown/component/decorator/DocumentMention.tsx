@@ -1,4 +1,5 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
@@ -539,24 +540,25 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return props.blockName;
   });
 
+  const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
+
   const open = createCallback((e: MouseEvent | KeyboardEvent | null) => {
     // The calendar is a singleton block: open it aimed at the viewer's own
-    // copy of the meeting, which the preview resolved through the shared
-    // iCalendar UID.
+    // copy of the meeting. A meeting shared through the channel but absent
+    // from the viewer's calendars has nothing to open, so its read-only
+    // preview card is shown instead.
     if (verifyBlockName(props.blockName) === 'calendar') {
-      const i = item();
-      const event = isCalendarEventPreviewItem(i) ? i.event : undefined;
-      const paramKey = props.blockParams?.occurrenceKey;
+      const target = calendarMentionOpen(
+        item(),
+        props.documentId,
+        props.blockParams?.occurrenceKey
+      );
+      if (target.kind === 'read_only') {
+        setPreviewCardOpen(true);
+        return;
+      }
       openCalendarEventSplit({
-        eventId: event?.viewerEventId ?? props.documentId,
-        occurrenceKey: paramKey ?? event?.occurrenceKey ?? undefined,
-        // The preview's time only locates the instance it previewed; a
-        // mention aimed at a different instance derives its range from the
-        // occurrence key instead.
-        time:
-          !paramKey || paramKey === event?.occurrenceKey
-            ? event?.time
-            : undefined,
+        ...target.target,
         openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
       });
       return;
@@ -647,6 +649,8 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
 
   return (
     <HoverCard
+      open={previewCardOpen()}
+      onOpenChange={setPreviewCardOpen}
       trigger={
         <span class="relative">
           <span

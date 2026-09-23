@@ -321,7 +321,8 @@ struct OccurrenceJoinRow {
 
 struct MentionPreviewRow {
     mention_exists: bool,
-    viewer_event_id: Option<Uuid>,
+    resolved_event_id: Option<Uuid>,
+    is_channel_shared: Option<bool>,
     title: Option<String>,
     location: Option<String>,
     organizer_email: Option<String>,
@@ -1132,14 +1133,17 @@ impl CalendarRepository for PgCalendarRepository {
         // The viewer lateral resolves the mentioned meeting to the
         // requester's own projection through the shared iCalendar UID,
         // preferring an owned copy over a delegated one and the mentioned
-        // row itself among ties, so the preview only ever reads rows the
-        // requester could already see on their calendar.
+        // row itself among ties. Only without such a copy does it fall back
+        // to the mentioned row, and only when that row was shared with a
+        // channel the requester currently belongs to and is still neither
+        // private nor confidential — the same rule entity access applies.
         let rows = sqlx::query_as!(
             MentionPreviewRow,
             r#"
             SELECT
                 (mentioned.id IS NOT NULL) AS "mention_exists!",
-                viewer_event.id AS "viewer_event_id?",
+                viewer_event.id AS "resolved_event_id?",
+                viewer_event.is_channel_shared AS "is_channel_shared?",
                 viewer_event.title AS "title?",
                 viewer_event.location AS "location?",
                 viewer_event.organizer_email AS "organizer_email?",
@@ -1163,36 +1167,72 @@ impl CalendarRepository for PgCalendarRepository {
                 ON mentioned.id = requested.event_id
                AND mentioned.status <> 'cancelled'
             LEFT JOIN LATERAL (
-                SELECT
-                    candidate.id,
-                    candidate.title,
-                    candidate.location,
-                    candidate.organizer_email,
-                    candidate.organizer_name,
-                    candidate.recurrence_lines,
-                    candidate.starts_at,
-                    candidate.ends_at,
-                    candidate.start_date,
-                    candidate.end_date,
-                    candidate.time_zone,
-                    candidate.updated_at
-                FROM calendar_events candidate
-                WHERE candidate.ical_uid = mentioned.ical_uid
-                  AND candidate.status <> 'cancelled'
-                  AND (
-                        candidate.owner_id = $1
-                        OR EXISTS (
+                SELECT resolved.*
+                FROM (
+                    SELECT
+                        candidate.id,
+                        false AS is_channel_shared,
+                        (candidate.owner_id = $1) AS is_owned,
+                        (candidate.id = mentioned.id) AS is_mentioned,
+                        candidate.title,
+                        candidate.location,
+                        candidate.organizer_email,
+                        candidate.organizer_name,
+                        candidate.recurrence_lines,
+                        candidate.starts_at,
+                        candidate.ends_at,
+                        candidate.start_date,
+                        candidate.end_date,
+                        candidate.time_zone,
+                        candidate.updated_at
+                    FROM calendar_events candidate
+                    WHERE candidate.ical_uid = mentioned.ical_uid
+                      AND candidate.status <> 'cancelled'
+                      AND (
+                            candidate.owner_id = $1
+                            OR EXISTS (
+                                SELECT 1
+                                FROM macro_user_links link
+                                WHERE link.link_id = candidate.source_link_id
+                                  AND link.primary_macro_id = $1
+                            )
+                      )
+                    UNION ALL
+                    SELECT
+                        mentioned.id,
+                        true,
+                        false,
+                        true,
+                        mentioned.title,
+                        mentioned.location,
+                        mentioned.organizer_email,
+                        mentioned.organizer_name,
+                        mentioned.recurrence_lines,
+                        mentioned.starts_at,
+                        mentioned.ends_at,
+                        mentioned.start_date,
+                        mentioned.end_date,
+                        mentioned.time_zone,
+                        mentioned.updated_at
+                    WHERE mentioned.visibility IN ('default', 'public')
+                      AND EXISTS (
                             SELECT 1
-                            FROM macro_user_links link
-                            WHERE link.link_id = candidate.source_link_id
-                              AND link.primary_macro_id = $1
-                        )
-                  )
+                            FROM entity_access grant_row
+                            JOIN comms_channel_participants participant
+                              ON participant.channel_id::text = grant_row.source_id
+                             AND participant.user_id = $1
+                             AND participant.left_at IS NULL
+                            WHERE grant_row.entity_id = mentioned.id
+                              AND grant_row.entity_type = 'calendar_event'
+                              AND grant_row.source_type = 'channel'
+                      )
+                ) resolved
                 ORDER BY
-                    (candidate.owner_id = $1) DESC,
-                    (candidate.id = mentioned.id) DESC,
-                    candidate.updated_at DESC,
-                    candidate.id
+                    resolved.is_channel_shared,
+                    resolved.is_owned DESC,
+                    resolved.is_mentioned DESC,
+                    resolved.updated_at DESC,
+                    resolved.id
                 LIMIT 1
             ) viewer_event ON true
             LEFT JOIN LATERAL (
@@ -3966,9 +4006,10 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
     if !row.mention_exists {
         return Ok(CalendarMentionPreview::DoesNotExist);
     }
-    let Some(viewer_event_id) = row.viewer_event_id else {
+    let Some(resolved_event_id) = row.resolved_event_id else {
         return Ok(CalendarMentionPreview::NoAccess);
     };
+    let is_channel_shared = row.is_channel_shared.unwrap_or_default();
     let time = if row.occurrence_key.is_some() {
         row_time(
             row.occurrence_starts_at,
@@ -3990,7 +4031,7 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
     };
     Ok(CalendarMentionPreview::Accessible(Box::new(
         CalendarMentionEvent {
-            viewer_event_id,
+            viewer_event_id: (!is_channel_shared).then_some(resolved_event_id),
             title: row.title.unwrap_or_default(),
             time,
             occurrence_key: row.occurrence_key,

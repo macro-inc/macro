@@ -319,6 +319,8 @@ fn soup_entity_type_from_channel_reference(entity_type: &str) -> Option<EntityTy
         ReferencedShareItemType::Project => Some(EntityType::Project),
         ReferencedShareItemType::EmailThread => Some(EntityType::EmailThread),
         ReferencedShareItemType::Call => Some(EntityType::Call),
+        // A shared event is previewed in place, never listed in the soup.
+        ReferencedShareItemType::CalendarEvent => None,
     }
 }
 
