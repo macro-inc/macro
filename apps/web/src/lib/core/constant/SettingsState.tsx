@@ -218,11 +218,20 @@ export const useSettingsState = () => {
   };
 
   // Mobile selection belongs to the sheet, including while it is closed.
-  // Desktop selection drives the split's URL through `contentUrlSegments`.
-  const selectTab = (tab: SettingsTab) => {
+  // Routed panels supply navigation so the router owns the entry/history write.
+  // Other entry points retain the legacy manager path until they are migrated.
+  const selectTab = (
+    tab: SettingsTab,
+    navigateTab?: (tab: SettingsTab) => void
+  ) => {
     if (isMobile()) {
       mobileSettings.selectPage(tab);
 
+      return;
+    }
+
+    if (navigateTab) {
+      navigateTab(tab);
       return;
     }
 

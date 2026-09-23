@@ -161,10 +161,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
   });
 
   const selectRoutedTab = (tab: SettingsTab) => {
-    selectTab(tab);
-    if (!isMobile()) {
-      splitNavigate(`/settings/${settingsTabToSlug(tab)}`);
-    }
+    selectTab(tab, (next) => {
+      splitNavigate(`/settings/${settingsTabToSlug(next)}`);
+    });
   };
 
   // Helper to navigate to a tab by index
