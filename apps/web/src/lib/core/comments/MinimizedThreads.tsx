@@ -101,7 +101,12 @@ export function MinimizedThread(props: {
           document's scroll and clipping like the badge it opens from. */}
       <Popover
         open={expanded()}
-        onOpenChange={setExpanded}
+        onOpenChange={(open) => {
+          setExpanded(open);
+          // Discard a dismissed draft in the same tick; waiting for the
+          // editor's selection change paints its badge and highlight a frame.
+          if (!open && props.comment.isNew) setActiveThread(null);
+        }}
         anchorRef={badge}
         placement="left-start"
         gutter={4}

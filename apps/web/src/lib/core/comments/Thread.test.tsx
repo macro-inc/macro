@@ -224,6 +224,37 @@ describe('anchored comment links', () => {
     );
   });
 
+  it('discards a draft as soon as a press outside dismisses it', async () => {
+    const setActiveThread = vi.fn();
+    render(() => (
+      <CommentsContext.Provider
+        value={{
+          documentId: 'document',
+          documentType: 'md',
+          canComment: () => true,
+          isDocumentOwner: () => true,
+          highlightedCommentId: () => null,
+          setActiveThread,
+          setThreadHeight: () => {},
+          getCommentById: () => undefined,
+          ownedComment: () => false,
+          inComment: true,
+          commentOperations: noopCommentOperations,
+          messageOperations: { createComment: async () => null },
+        }}
+      >
+        <MinimizedThread
+          comment={{ ...comment, isNew: true }}
+          layout={{ calculatedYPos: 0 }}
+          isActive
+        />
+      </CommentsContext.Provider>
+    ));
+    await new Promise((resolve) => setTimeout(resolve));
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => expect(setActiveThread).toHaveBeenCalledWith(null));
+  });
+
   it.each(['md', 'task', 'snippet', 'skill', 'pdf'] as const)(
     'copies legacy %s root and reply links without a block provider',
     async (documentType) => {
