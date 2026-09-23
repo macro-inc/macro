@@ -154,6 +154,13 @@ async fn pricing_resolves_provider_qualified_ids(pool: PgPool) {
             output: 10.0
         })
     );
+    assert_eq!(
+        repo.get_pricing("openai/gpt-6-astra").await.unwrap(),
+        Some(ModelPricing::Tokens {
+            input: 10.0,
+            output: 50.0
+        })
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
