@@ -105,7 +105,9 @@ export function MinimizedThread(props: {
           setExpanded(open);
           // Discard a dismissed draft in the same tick; waiting for the
           // editor's selection change paints its badge and highlight a frame.
-          if (!open && props.comment.isNew) setActiveThread(null);
+          // A thread activated by the same press keeps its selection.
+          if (!open && props.comment.isNew && props.isActive)
+            setActiveThread(null);
         }}
         anchorRef={badge}
         placement="left-start"

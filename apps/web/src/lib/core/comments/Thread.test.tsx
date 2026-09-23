@@ -224,9 +224,12 @@ describe('anchored comment links', () => {
     );
   });
 
-  it('discards a draft as soon as a press outside dismisses it', async () => {
+  it.each([
+    [true, 'discards a draft as soon as a press outside dismisses it'],
+    [false, 'keeps a thread the dismissing press activated'],
+  ])('%#: %s', async (isActive) => {
     const setActiveThread = vi.fn();
-    render(() => (
+    const view = render(() => (
       <CommentsContext.Provider
         value={{
           documentId: 'document',
@@ -246,13 +249,20 @@ describe('anchored comment links', () => {
         <MinimizedThread
           comment={{ ...comment, isNew: true }}
           layout={{ calculatedYPos: 0 }}
-          isActive
+          isActive={isActive}
         />
       </CommentsContext.Provider>
     ));
     await new Promise((resolve) => setTimeout(resolve));
     fireEvent.pointerDown(document.body);
-    await waitFor(() => expect(setActiveThread).toHaveBeenCalledWith(null));
+    await waitFor(() =>
+      expect(
+        view.container.ownerDocument
+          .querySelector('[data-comment-thread]')!
+          .parentElement!.hasAttribute('data-expanded')
+      ).toBe(false)
+    );
+    expect(setActiveThread.mock.calls).toEqual(isActive ? [[null]] : []);
   });
 
   it.each(['md', 'task', 'snippet', 'skill', 'pdf'] as const)(
