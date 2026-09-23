@@ -87,9 +87,10 @@ jobs:
 
         # The action joins its plain-text output with spaces and no trailing
         # newline, which `while read` never yields a line from, so read the
-        # JSON list and split it one path per line.
+        # JSON list and split it one path per line. `all_modified_files`,
+        # unlike `all_changed_files`, includes deletions.
         changed_files=.github/outputs/changed_files.txt
-        jq -r '.[]' .github/outputs/all_changed_files.json > "$changed_files"
+        jq -r '.[]' .github/outputs/all_modified_files.json > "$changed_files"
 
         # Read service config
         config=$(cat .github/services-config.json)
