@@ -379,7 +379,18 @@ export function createEmailComposeContext(
           },
           headerId(inboxId)
         );
-        publishDraftLifecycleChange(draftId, inboxId);
+        try {
+          publishDraftLifecycleChange(draftId, inboxId);
+          void queryClient
+            .invalidateQueries({
+              queryKey: emailKeys.scheduledMessages._def,
+            })
+            .catch(reportError);
+        } catch (error) {
+          // Cache and cross-tab notifications are post-commit UI work. A
+          // failure here must not make a successful schedule retryable.
+          reportError(error);
+        }
       },
       archive: async ({ threadId, value }, inboxId) => {
         await archiveEmailThread({ id: threadId, value }, headerId(inboxId));

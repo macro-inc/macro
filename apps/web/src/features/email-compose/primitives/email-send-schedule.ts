@@ -222,12 +222,13 @@ export function createEmailSendSchedule(options: {
     if (options.draftId() === input.draftId) applyEditing();
     try {
       await options.onScheduleUndone?.(input);
+      notices.feedback.success('Schedule cancelled.');
     } catch (error) {
       notices.reportError(error);
+      notices.feedback.alert(
+        'Schedule cancelled, but the draft could not be reopened. Check Drafts.'
+      );
     }
-    notices.feedback.success(
-      'Schedule cancelled. This email is editable again.'
-    );
   };
 
   const submit = async (): Promise<'scheduled' | 'updated' | false> => {

@@ -308,7 +308,7 @@ export function createReplyComposer(
       (currentDraftId !== undefined && currentDraftId !== snapshot.draftId)
     ) {
       props.notices.feedback.alert(
-        'Schedule cancelled. Your newer reply was kept; the cancelled message is available in Drafts.'
+        'Your newer reply was kept. The earlier message was not reopened.'
       );
       props.setShowReply?.(true);
       return;
@@ -366,7 +366,7 @@ export function createReplyComposer(
     sentThreadId: string | undefined,
     inboxId: string | undefined
   ) => {
-    const snapshot = replyUndo.take(draftId);
+    const snapshot = replyUndo.peek(draftId);
 
     // Reconcile the actual message thread, which can differ from the host when
     // replying from another inbox. The host's undoKey still owns local recovery.
@@ -380,6 +380,9 @@ export function createReplyComposer(
     });
 
     if (snapshot) {
+      // Keep the recovery snapshot available if restoring the server draft
+      // fails. Consume it only after the authoritative restore succeeds.
+      replyUndo.take(draftId);
       // Resolve the live registration after cache updates and unmounts settle.
       setTimeout(() => replyUndo.restore(undoKey, snapshot), 0);
       props.setShowReply?.(true);

@@ -494,6 +494,44 @@ describe('send and schedule ordering', () => {
     }
   });
 
+  it('keeps a newer reply when undoing an immediate send without schedule wording', async () => {
+    const context = createComposeContext();
+    vi.mocked(context.delivery.sendMessage).mockResolvedValueOnce({
+      draftId: 'draft',
+      threadId: 'thread',
+      inboxId: 'inbox',
+    });
+    vi.mocked(context.delivery.undoSend).mockImplementation(
+      async ({ onUndone }) => {
+        await onUndone();
+      }
+    );
+    const state = mountReplyComposer(context);
+    try {
+      state.edit('Earlier reply');
+      await state.sendEmail();
+      const sentNotice = vi
+        .mocked(context.notices.feedback.success)
+        .mock.calls.find(([text]) => text === 'Email sent');
+
+      state.edit('Newer reply that must survive');
+      sentNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
+        'Newer reply that must survive'
+      );
+      expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+        'Your newer reply was kept. The earlier message was not reopened.'
+      );
+      expect(context.notices.feedback.alert).not.toHaveBeenCalledWith(
+        expect.stringContaining('Schedule cancelled')
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
   it('undoes mark-done while the post-send refresh is still pending', async () => {
     const composeContext = createComposeContext();
     const { promise: refresh, resolve: finish } = Promise.withResolvers<void>();
@@ -609,6 +647,38 @@ describe('send and schedule ordering', () => {
     }
   });
 
+  it('reports a partial undo when the cancelled draft cannot be reopened', async () => {
+    const composeContext = createComposeContext();
+    const restoreFailure = new Error('Draft restore failed');
+    vi.mocked(composeContext.drafts.restoreDraft).mockRejectedValueOnce(
+      restoreFailure
+    );
+    const state = mountReplyComposer(composeContext);
+    try {
+      state.edit('Keep this scheduled reply');
+      state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      await state.sendEmail();
+      const scheduledNotice = vi
+        .mocked(composeContext.notices.feedback.success)
+        .mock.calls.find(([text]) => text.startsWith('Email scheduled for'));
+
+      scheduledNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(composeContext.notices.reportError).toHaveBeenCalledWith(
+        restoreFailure
+      );
+      expect(composeContext.notices.feedback.alert).toHaveBeenCalledWith(
+        'Schedule cancelled, but the draft could not be reopened. Check Drafts.'
+      );
+      expect(composeContext.notices.feedback.success).not.toHaveBeenCalledWith(
+        'Schedule cancelled.'
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
   it('keeps a newer reply when undoing an older scheduled reply', async () => {
     const composeContext = createComposeContext();
     const state = mountReplyComposer(composeContext);
@@ -628,7 +698,10 @@ describe('send and schedule ordering', () => {
         'Newer reply that must survive'
       );
       expect(composeContext.notices.feedback.alert).toHaveBeenCalledWith(
-        'Schedule cancelled. Your newer reply was kept; the cancelled message is available in Drafts.'
+        'Your newer reply was kept. The earlier message was not reopened.'
+      );
+      expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
+        'Schedule cancelled.'
       );
     } finally {
       state.dispose();
@@ -660,7 +733,7 @@ describe('send and schedule ordering', () => {
 
       expect(newer.savedDraftId()).toBe('newer-draft');
       expect(composeContext.notices.feedback.alert).toHaveBeenCalledWith(
-        'Schedule cancelled. Your newer reply was kept; the cancelled message is available in Drafts.'
+        'Your newer reply was kept. The earlier message was not reopened.'
       );
     } finally {
       newer.dispose();
