@@ -99,7 +99,7 @@ it during that delay should not let the earlier save close the new picker.
 A failed save uses the mutation's rollback/error handling; it must not reopen
 the picker or trigger a success refresh.
 
-For multi-tab status checks, open the same channel/task in several browser tabs
+For multi-tab status checks, open the same task in several browser tabs
 and change status repeatedly in the visible tab. Hidden tabs defer cache-change
 refreshes for Quick Access searches, its channel list, and history, plus
 cache-triggered GraphQL query rereads. Switching back catches up each affected
