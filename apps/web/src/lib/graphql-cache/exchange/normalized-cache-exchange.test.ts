@@ -1120,7 +1120,7 @@ describe('normalizedCacheExchange', () => {
     expect(forwarded).toHaveLength(1);
   });
 
-  it('fences affected reads that finish after an authoritative cache write', async () => {
+  it('preserves optimistic rereads that finish after network persistence', async () => {
     const write = deferred<WriteResult>();
     const affectedRead = deferred<ReadResult>();
     const originalWrite = host.writeQuery;
@@ -1144,11 +1144,39 @@ describe('normalizedCacheExchange', () => {
       reset: false,
     });
     await tick();
-    affectedRead.resolve({ kind: 'hit', data: { from: 'before write' } });
+    affectedRead.resolve({ kind: 'hit', data: { from: 'optimistic layer' } });
     await tick();
 
-    expect(results.map((result) => result.data)).toEqual([{ from: 'network' }]);
+    expect(results.map((result) => result.data)).toEqual([
+      { from: 'network' },
+      { from: 'optimistic layer' },
+    ]);
     expect(forwarded).toHaveLength(1);
+  });
+
+  it('discards an affected reread across teardown and remount', async () => {
+    const affectedRead = deferred<ReadResult>();
+    host.readQuery = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: 'miss' })
+      .mockImplementationOnce(() => affectedRead.promise)
+      .mockResolvedValueOnce({ kind: 'hit', data: { from: 'remount' } });
+    const { ops, results, forwarded } = controlledQueryHarness(host);
+    const first = makeOp(1, 'cache-and-network');
+    ops.next(first);
+    await tick();
+    host.pushAffected([1]);
+    ops.next(teardownOf(first));
+    ops.next(makeOp(1, 'cache-only'));
+    await tick();
+    affectedRead.resolve({
+      kind: 'hit',
+      data: { from: 'old optimistic layer' },
+    });
+    await tick();
+
+    expect(results.map((result) => result.data)).toEqual([{ from: 'remount' }]);
+    expect(forwarded.map((op) => op.kind)).toEqual(['query', 'teardown']);
   });
 
   it('network-only registers dependencies without reading the cache', async () => {

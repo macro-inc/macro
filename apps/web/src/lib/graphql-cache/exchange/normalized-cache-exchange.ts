@@ -619,7 +619,11 @@ export function normalizedCacheExchange(
     const emitAffectedWhileNetworkBound = (key: number): void => {
       const operation = activeOps.get(key);
       if (!operation) return;
-      const isCurrentRead = beginCacheRead(key);
+      const state = queryState(key);
+      // Supersede the initial cache snapshot. An affected reread carries newer
+      // local/optimistic state, so let it complete even if network persistence
+      // finishes first; only teardown/remount may discard that update.
+      state.cacheReadVersion += 1;
       void host
         .readQuery({
           opKey: operation.key,
@@ -631,7 +635,8 @@ export function normalizedCacheExchange(
         })
         .then((read) => {
           const active = activeOps.get(key);
-          if (read.kind !== 'hit' || !active || !isCurrentRead()) return;
+          if (read.kind !== 'hit' || !active || queryStates.get(key) !== state)
+            return;
           // Preserve the authoritative request while immediately surfacing the
           // newer local view. Its eventual result still gets the deferred
           // cache reread below when it could not register fresh dependencies.
