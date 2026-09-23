@@ -560,6 +560,43 @@ describe('runSoupBackfills', () => {
     }
   );
 
+  it('transfers leadership between runners without refetching committed pages', async () => {
+    const [firstLeader, setFirstLeader] = createSignal(true);
+    const [secondLeader, setSecondLeader] = createSignal(false);
+    leaderMocks.createTabLeaderSignal
+      .mockReturnValueOnce(firstLeader)
+      .mockReturnValueOnce(secondLeader);
+    graphqlMocks.hydrateGraphqlSoup
+      .mockResolvedValueOnce({ nextCursor: 'committed-page-cursor' })
+      .mockImplementation(() => new Promise(() => {}));
+    const first = render(() => <BackfillRunner userId="user-1" />);
+    const second = render(() => <BackfillRunner userId="user-1" />);
+    try {
+      await vi.waitFor(() =>
+        expect(
+          loadSoupBackfillCheckpoint('user-1', 'core-entities')
+        ).toMatchObject({
+          nextCursor: 'committed-page-cursor',
+          pagesFetched: 1,
+        })
+      );
+      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce();
+      setFirstLeader(false);
+      setSecondLeader(true);
+      await vi.waitFor(() =>
+        expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledTimes(2)
+      );
+      expect(graphqlMocks.hydrateGraphqlSoup.mock.calls[1][1]).toMatchObject({
+        input: { continuation: { cursor: 'committed-page-cursor' } },
+      });
+      expect(cacheGenerationCallbacks.size).toBe(1);
+    } finally {
+      first.unmount();
+      second.unmount();
+    }
+    expect(cacheGenerationCallbacks.size).toBe(0);
+  });
+
   it('cancels the current backfill and starts a new one when the user changes', async () => {
     const fetchSignals: AbortSignal[] = [];
     graphqlMocks.hydrateGraphqlSoup.mockImplementation(
