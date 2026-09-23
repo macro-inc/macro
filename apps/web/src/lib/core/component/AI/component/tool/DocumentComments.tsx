@@ -34,7 +34,7 @@ export const replyToDocumentCommentHandler = createToolRenderer({
       <BaseTool
         icon={ChatCircle}
         renderContext={ctx.renderContext}
-        type={ctx.response ? 'response' : 'call'}
+        type="call"
         response={
           expanded() ? (
             <p class="whitespace-pre-wrap break-words rounded-lg border border-edge-muted bg-ink/[0.02] p-3 text-xs text-ink">
@@ -71,7 +71,7 @@ export const resolveDocumentCommentHandler = createToolRenderer({
       <BaseTool
         icon={resolving() ? CheckCircle : ArrowCounterClockwise}
         renderContext={ctx.renderContext}
-        type={ctx.response ? 'response' : 'call'}
+        type="call"
       >
         <div class="min-w-0 flex-1">
           {verb()} a comment on{' '}
