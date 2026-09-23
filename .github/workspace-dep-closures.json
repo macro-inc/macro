@@ -546,7 +546,9 @@
     ],
     "agent_preview": [
       "crates/agent",
+      "crates/agent_fold",
       "crates/agent_preview",
+      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",

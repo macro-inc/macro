@@ -61,19 +61,22 @@ and every 30 seconds, so missed events and gateway restarts recover automaticall
   every ten seconds; 1,000 retained leases/accounts per gateway.
 - One-hour leases; 15 minutes without a browser HTTP request expires a lease.
   WebSocket pings alone do not keep it alive.
-- Per owner: 100 HTTP requests/second, shared 5 MiB/second traffic pacing and
-  1 GiB traffic budget per hour. Replacing or stopping a preview does not reset
-  its owner's current budget. Existing leases retain their original budget at
-  an hourly rollover.
-- Per preview: 32 HTTP streams and eight WebSockets; 16 MiB request bodies,
-  30-second upstream response-header timeout. Traffic is streamed.
+- Traffic itself is unmetered. Request-rate, byte-pacing and total-byte ceilings
+  were all tried and all severed live previews: a dev server's cold load is
+  thousands of modules and tens of MB, and a per-owner byte total that outlived
+  lease replacement accumulated across reloads until every stream was cut.
+  Expiry, idle timeout and one-preview-per-session are the controls that bound
+  cost.
+- Per preview: 512 concurrent HTTP streams and eight WebSockets; 16 MiB request
+  bodies, 30-second upstream response-header timeout. Traffic is streamed.
 - 1,024 SSH connections, bounded SSH authentication time, 128 concurrent control
   requests, 64 KiB control bodies, 15-second control timeout. Tickets and browser
   credentials also have bounded registries and expiry.
 
 These are basic abuse/cost controls, not a hard cloud-spend ceiling. Load
-balancer traffic is still billable before application admission. Gateway restart
-closes previews and clears all credentials and budgets; agents must share again.
+balancer traffic is still billable before application admission, and nothing
+here bounds bytes. Gateway restart closes previews and clears all credentials;
+agents must share again.
 
 ## Deployment
 

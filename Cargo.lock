@@ -474,6 +474,7 @@ dependencies = [
 name = "agent_preview"
 version = "0.1.0"
 dependencies = [
+ "agent_fold",
  "ai_toolset",
  "async-trait",
  "axum",

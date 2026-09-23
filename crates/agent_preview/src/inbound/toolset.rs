@@ -4,7 +4,6 @@ use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };
 use axum::Router;
-use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
     ServerHandler,
     model::{
@@ -265,8 +264,7 @@ impl ServerHandler for Mcp {
             request.arguments.unwrap_or_default(),
         ))
         .map_err(|_| rmcp::ErrorData::invalid_params("expected {port: 1..65535}", None))?;
-        let user = MacroUserIdStr::try_from(identity.owner.clone())
-            .map_err(|_| rmcp::ErrorData::internal_error("session owner invalid", None))?;
+        let user = identity.owner.clone();
         let result = tool
             .call(
                 ServiceContext(PreviewToolContext {

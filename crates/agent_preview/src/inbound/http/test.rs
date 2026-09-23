@@ -228,14 +228,16 @@ async fn non_upgraded_stream_holds_permit_and_rechecks_viewer_permission() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let mut body = response.into_body();
+    // The point is that the slot is held across the body, not the pool's size.
+    let idle = lease.requests.available_permits() + 1;
     body.frame().await.unwrap().unwrap();
-    assert_eq!(lease.requests.available_permits(), 31);
+    assert_eq!(lease.requests.available_permits(), idle - 1);
     authority
         .0
         .store(false, std::sync::atomic::Ordering::SeqCst);
     tokio::time::advance(Duration::from_secs(31)).await;
     tokio::task::yield_now().await;
     assert!(body.frame().await.is_none_or(|frame| frame.is_err()));
-    assert_eq!(lease.requests.available_permits(), 32);
+    assert_eq!(lease.requests.available_permits(), idle);
     upstream.abort();
 }

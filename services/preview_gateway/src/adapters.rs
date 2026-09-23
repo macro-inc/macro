@@ -14,7 +14,6 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use macro_uuid::Uuid;
 use std::sync::Arc;
 
 pub struct MacroAuthority<Repo, Access> {
@@ -22,12 +21,9 @@ pub struct MacroAuthority<Repo, Access> {
     pub access: Arc<Access>,
 }
 impl<Repo: AgentSessionRepo, Access> MacroAuthority<Repo, Access> {
-    async fn session(&self, session: &str) -> Result<AgentSession, PreviewError> {
-        let id = AgentSessionId::new_from_uuid(
-            session.parse::<Uuid>().map_err(|_| PreviewError::Denied)?,
-        );
+    async fn session(&self, session: AgentSessionId) -> Result<AgentSession, PreviewError> {
         self.sessions
-            .get(id)
+            .get(session)
             .await
             .map_err(|_| PreviewError::Denied)
     }
@@ -43,24 +39,27 @@ impl<Repo: AgentSessionRepo, Access: EntityAccessService> Authority
                 .await
                 .map_err(|_| PreviewError::Denied)?;
         Ok(AgentIdentity {
-            session: session.id.to_string(),
-            owner: session.owner_id.to_string(),
+            session: session.id,
+            owner: session.owner_id,
         })
     }
-    async fn viewer(&self, session: &str, user: &str) -> Result<(), PreviewError> {
-        let user = MacroUserIdStr::parse_from_str(user).map_err(|_| PreviewError::Denied)?;
+    async fn viewer(
+        &self,
+        session: AgentSessionId,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<(), PreviewError> {
         self.access
             .generate_entity_access_receipt::<ViewAccessLevel>(
-                &user,
+                user,
                 None,
-                session,
+                &session.to_string(),
                 EntityType::AgentSession,
             )
             .await
             .map_err(|_| PreviewError::Denied)?;
         self.active(session).await
     }
-    async fn active(&self, session: &str) -> Result<(), PreviewError> {
+    async fn active(&self, session: AgentSessionId) -> Result<(), PreviewError> {
         // Runtime disconnection is transient (Cursor deliberately detaches idle ACP pipes).
         // Deletion revokes the capability; explicit preview stop and SSH closure end the lease.
         self.session(session).await.map(|_| ())
@@ -70,7 +69,11 @@ impl<Repo: AgentSessionRepo, Access: EntityAccessService> Authority
 pub struct Realtime(pub connection_gateway_client::ConnectionGatewayClient);
 #[async_trait]
 impl Events for Realtime {
-    async fn changed(&self, preview: &Preview, viewers: &[String]) -> Result<(), PreviewError> {
+    async fn changed(
+        &self,
+        preview: &Preview,
+        viewers: &[MacroUserIdStr<'static>],
+    ) -> Result<(), PreviewError> {
         if viewers.is_empty() {
             return Ok(());
         }
@@ -81,7 +84,7 @@ impl Events for Realtime {
                 serde_json::json!({"agentSessionId": preview.agent_session_id}),
                 viewers
                     .iter()
-                    .map(|user| model_entity::EntityType::User.with_entity_str(user))
+                    .map(|user| model_entity::EntityType::User.with_entity_str(user.as_ref()))
                     .collect(),
             )
             .await

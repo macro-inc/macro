@@ -5,6 +5,9 @@ edition = "2024"
 publish = false
 
 [dependencies]
+# The agent-session id vocabulary only. `default-features = false` drops the
+# fold's developer binaries, which want clap and tokio; the newtype does not.
+agent_fold = { path = "../agent_fold", default-features = false }
 ai_toolset = { path = "../ai_toolset" }
 async-trait = { workspace = true }
 axum = { workspace = true, features = ["ws", "form"] }

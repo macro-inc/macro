@@ -1,4 +1,4 @@
-use crate::domain::{Budget, Lease, PreviewError, PreviewService, ports::Stream};
+use crate::domain::{Lease, PreviewError, PreviewId, PreviewService};
 use axum::{
     Router,
     body::Body,
@@ -9,15 +9,7 @@ use axum::{
 };
 use http_body_util::Limited;
 use hyper_util::rt::TokioIo;
-use std::{
-    future::Future,
-    io,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-    time::Duration,
-};
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use std::{sync::Arc, time::Duration};
 
 const COOKIE: &str = "__Host-macro-preview";
 const AUTH_PATH: &str = "/.macro-preview/auth";
@@ -62,11 +54,7 @@ async fn handle(
     } else {
         format!(".{}:{}", settings.domain, settings.https_port)
     };
-    let id = host
-        .strip_suffix(&suffix)
-        .filter(|s| s.len() == 32 && s.bytes().all(|b| b.is_ascii_hexdigit()))
-        .ok_or(PreviewError::Invalid)?
-        .to_owned();
+    let id = PreviewId::parse(host.strip_suffix(&suffix).ok_or(PreviewError::Invalid)?)?;
     let origin = settings.origin(&id);
     if request.uri().path() == AUTH_PATH {
         if request.method() != Method::POST
@@ -187,12 +175,6 @@ async fn handle(
         None
     };
     let stream = lease.tunnel()?.open().await?;
-    let stream = Metered {
-        inner: stream,
-        budget: lease.budget.clone(),
-        read_wait: None,
-        write_wait: None,
-    };
     let (mut sender, connection) = hyper::client::conn::http1::Builder::new()
         .max_headers(64)
         .max_buf_size(32 * 1024)
@@ -408,66 +390,6 @@ fn clean_response(headers: &mut HeaderMap, origin: &str, upstream: &str, upgrade
         "x-content-type-options",
         HeaderValue::from_static("nosniff"),
     );
-}
-struct Metered {
-    inner: Stream,
-    budget: Arc<Budget>,
-    read_wait: Option<Pin<Box<tokio::time::Sleep>>>,
-    write_wait: Option<Pin<Box<tokio::time::Sleep>>>,
-}
-fn wait(wait: &mut Option<Pin<Box<tokio::time::Sleep>>>, cx: &mut Context<'_>) -> Poll<()> {
-    if let Some(sleep) = wait
-        && sleep.as_mut().poll(cx).is_pending()
-    {
-        return Poll::Pending;
-    }
-    *wait = None;
-    Poll::Ready(())
-}
-impl AsyncRead for Metered {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        if wait(&mut self.read_wait, cx).is_pending() {
-            return Poll::Pending;
-        }
-        let before = buf.filled().len();
-        let result = Pin::new(&mut self.inner).poll_read(cx, buf);
-        if matches!(result, Poll::Ready(Ok(()))) {
-            match self.budget.bytes(buf.filled().len() - before) {
-                Ok(delay) => self.read_wait = Some(Box::pin(tokio::time::sleep(delay))),
-                Err(_) => return Poll::Ready(Err(io::Error::other("preview byte limit"))),
-            }
-        }
-        result
-    }
-}
-impl AsyncWrite for Metered {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        if wait(&mut self.write_wait, cx).is_pending() {
-            return Poll::Pending;
-        }
-        let result = Pin::new(&mut self.inner).poll_write(cx, &buf[..buf.len().min(32 * 1024)]);
-        if let Poll::Ready(Ok(count)) = result {
-            match self.budget.bytes(count) {
-                Ok(delay) => self.write_wait = Some(Box::pin(tokio::time::sleep(delay))),
-                Err(_) => return Poll::Ready(Err(io::Error::other("preview byte limit"))),
-            }
-        }
-        result
-    }
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.inner).poll_flush(cx)
-    }
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.inner).poll_shutdown(cx)
-    }
 }
 /// Readiness probe traverses the actual forwarded HTTP server, without following redirects.
 pub(super) async fn probe(lease: &Arc<Lease>) -> Result<(), PreviewError> {

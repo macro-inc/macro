@@ -1,11 +1,13 @@
 use super::{
-    Budget,
+    PreviewId,
     ports::{Authority, Events, Tunnel},
 };
+use agent_fold::domain::log::AgentSessionId;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, EntityType, RequiredPermission, ViewAccessLevel,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use rand::RngCore;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -26,18 +28,18 @@ const TICKET_TTL: Duration = Duration::from_secs(30);
 #[derive(Clone)]
 pub struct AgentIdentity {
     /// Agent-session entity ID.
-    pub session: String,
+    pub session: AgentSessionId,
     /// Account whose preview quota is charged.
-    pub owner: String,
+    pub owner: MacroUserIdStr<'static>,
 }
 /// Public state of one preview; contains no credentials.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Preview {
     /// Opaque routing ID, not an authorization credential.
-    pub id: String,
+    pub id: PreviewId,
     /// Agent-session entity that controls visibility.
-    pub agent_session_id: String,
+    pub agent_session_id: AgentSessionId,
     /// Clean HTTPS origin, with no application path prefix.
     pub url: String,
     /// Current state of the lease.
@@ -128,7 +130,13 @@ impl Settings {
             || self.domain == "macro.com"
             || self.domain.ends_with(".macro.com")
             || self.domain == app_host
+            // Neither may sit under the other: every non-gateway cookie is
+            // forwarded upstream, so a shared parent hands the app's cookies to
+            // agent-controlled code. The local stack is the deliberate exception
+            // (`preview.localhost` under `localhost`), where the app origin is
+            // cleartext loopback and sets nothing worth stealing.
             || app_host.ends_with(&format!(".{}", self.domain))
+            || (!local && self.domain.ends_with(&format!(".{app_host}")))
             || (app.scheme() != "https" && !local)
             || (self.local_ssh_fallback && !local)
             || self
@@ -147,7 +155,7 @@ impl Settings {
         Ok(())
     }
     /// Public origin for a routing ID.
-    pub fn origin(&self, id: &str) -> String {
+    pub fn origin(&self, id: &PreviewId) -> String {
         let port = if self.https_port == 443 {
             String::new()
         } else {
@@ -174,35 +182,34 @@ pub struct Launch {
     pub ticket: String,
 }
 struct Credential {
-    preview: String,
-    user: String,
+    preview: PreviewId,
+    /// Absent on an SSH token: it authenticates the agent's tunnel, not a viewer.
+    user: Option<MacroUserIdStr<'static>>,
     expires: Instant,
 }
+/// Per-owner creation pacing. Traffic itself is unmetered: a shared dev server
+/// moves tens of MB per cold load, and every ceiling we tried severed it.
 struct AccountBudget {
-    budget: Arc<Budget>,
-    started: Instant,
     last_created: Instant,
 }
 struct Registry {
-    sessions: HashMap<String, Arc<Lease>>,
-    accounts: HashMap<String, AccountBudget>,
+    sessions: HashMap<AgentSessionId, Arc<Lease>>,
+    accounts: HashMap<MacroUserIdStr<'static>, AccountBudget>,
     ssh_tokens: HashMap<[u8; 32], Credential>,
     tickets: HashMap<[u8; 32], Credential>,
     browsers: HashMap<[u8; 32], Credential>,
-    watchers: HashMap<String, HashMap<String, Instant>>,
+    watchers: HashMap<AgentSessionId, HashMap<MacroUserIdStr<'static>, Instant>>,
 }
-/// Live lease, with cancellation and budgets shared by every request/upgrade.
+/// Live lease, with cancellation and stream slots shared by every request/upgrade.
 pub struct Lease {
     preview: Mutex<Preview>,
-    owner: String,
+    owner: MacroUserIdStr<'static>,
     port: u16,
     expires: Instant,
     activity: Mutex<Instant>,
     tunnel: Mutex<Option<Arc<dyn Tunnel>>>,
     /// Cancellation closes existing HTTP and WebSocket traffic on revocation.
     pub cancel: CancellationToken,
-    /// Shared traffic ceilings.
-    pub budget: Arc<Budget>,
     /// Total HTTP streams, held until response completion.
     pub requests: Arc<Semaphore>,
     /// Upgraded streams, separately capped.
@@ -278,17 +285,12 @@ impl PreviewService {
         if port == 0 {
             return Err(PreviewError::Invalid);
         }
-        self.authority.active(&identity.session).await?;
-        let id = random();
-        // DNS labels are case insensitive: hex is unambiguous and carries 128 bits.
-        let id = digest(&id)[..16]
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect::<String>();
+        self.authority.active(identity.session).await?;
+        let id = PreviewId::generate();
         let token = random();
         let preview = Preview {
             id: id.clone(),
-            agent_session_id: identity.session.clone(),
+            agent_session_id: identity.session,
             url: self.settings.origin(&id),
             status: PreviewStatus::Starting,
             expires_at: (SystemTime::now()
@@ -297,7 +299,7 @@ impl PreviewService {
                 + LEASE)
                 .as_millis() as u64,
         };
-        let budget = {
+        {
             let mut registry = self.registry.lock().expect("registry mutex");
             if registry.accounts.len() >= 1000 && !registry.accounts.contains_key(&identity.owner) {
                 return Err(PreviewError::Limited);
@@ -306,20 +308,13 @@ impl PreviewService {
                 .accounts
                 .entry(identity.owner.clone())
                 .or_insert_with(|| AccountBudget {
-                    budget: Arc::new(Budget::default()),
-                    started: Instant::now(),
                     last_created: Instant::now() - TOKEN_TTL,
                 });
             if account.last_created.elapsed() < Duration::from_secs(10) {
                 return Err(PreviewError::Limited);
             }
-            if account.started.elapsed() >= LEASE {
-                account.budget = Arc::new(Budget::default());
-                account.started = Instant::now();
-            }
             account.last_created = Instant::now();
-            account.budget.clone()
-        };
+        }
         let lease = Arc::new(Lease {
             preview: Mutex::new(preview.clone()),
             owner: identity.owner,
@@ -328,8 +323,7 @@ impl PreviewService {
             activity: Mutex::new(Instant::now()),
             tunnel: Mutex::new(None),
             cancel: CancellationToken::new(),
-            budget,
-            requests: Arc::new(Semaphore::new(32)),
+            requests: Arc::new(Semaphore::new(512)),
             upgrades: Arc::new(Semaphore::new(8)),
         });
         let old = {
@@ -361,7 +355,7 @@ impl PreviewService {
                 digest(&token),
                 Credential {
                     preview: id,
-                    user: String::new(),
+                    user: None,
                     expires: Instant::now() + TOKEN_TTL,
                 },
             );
@@ -385,14 +379,14 @@ impl PreviewService {
         let session = session_id(&receipt)?;
         let mut registry = self.registry.lock().expect("registry mutex");
         if let Some(user) = receipt.acting_user_id()
-            && (registry.watchers.len() < 4096 || registry.watchers.contains_key(session))
+            && (registry.watchers.len() < 4096 || registry.watchers.contains_key(&session))
         {
-            let watchers = registry.watchers.entry(session.to_owned()).or_default();
-            if watchers.len() < 256 || watchers.contains_key(user.as_ref()) {
-                watchers.insert(user.to_string(), Instant::now());
+            let watchers = registry.watchers.entry(session).or_default();
+            if watchers.len() < 256 || watchers.contains_key(user) {
+                watchers.insert(user.clone(), Instant::now());
             }
         }
-        Ok(registry.sessions.get(session).map(|l| l.preview()))
+        Ok(registry.sessions.get(&session).map(|l| l.preview()))
     }
     /// Stop requires entity edit permission; viewing never grants control.
     pub async fn stop(
@@ -404,7 +398,7 @@ impl PreviewService {
             .lock()
             .expect("registry mutex")
             .sessions
-            .get(session_id(&receipt)?)
+            .get(&session_id(&receipt)?)
             .cloned();
         if let Some(lease) = lease {
             self.finish(&lease, PreviewStatus::Stopped).await;
@@ -419,11 +413,11 @@ impl PreviewService {
         let user = receipt
             .get_authenticated_user()
             .map_err(|_| PreviewError::Denied)?
-            .to_string();
+            .clone();
         let mut registry = self.registry.lock().expect("registry mutex");
         let lease = registry
             .sessions
-            .get(session_id(&receipt)?)
+            .get(&session_id(&receipt)?)
             .cloned()
             .ok_or(PreviewError::Offline)?;
         if !lease.live() || lease.preview().status != PreviewStatus::Ready {
@@ -439,7 +433,7 @@ impl PreviewService {
             digest(&ticket),
             Credential {
                 preview: preview.id,
-                user,
+                user: Some(user),
                 expires: Instant::now() + TICKET_TTL,
             },
         );
@@ -512,14 +506,14 @@ impl PreviewService {
         self.publish(&preview).await;
     }
     /// Exchange a host-bound, one-use ticket for a host-only browser credential.
-    pub async fn redeem(&self, id: &str, ticket: &str) -> Result<String, PreviewError> {
+    pub async fn redeem(&self, id: &PreviewId, ticket: &str) -> Result<String, PreviewError> {
         let credential = {
             let mut registry = self.registry.lock().expect("registry mutex");
             let credential = registry
                 .tickets
                 .get(&digest(ticket))
                 .ok_or(PreviewError::Denied)?;
-            if credential.preview != id || credential.expires <= Instant::now() {
+            if &credential.preview != id || credential.expires <= Instant::now() {
                 return Err(PreviewError::Denied);
             }
             registry
@@ -527,9 +521,11 @@ impl PreviewService {
                 .remove(&digest(ticket))
                 .ok_or(PreviewError::Denied)?
         };
+        // A ticket is only ever minted for an authenticated viewer.
+        let user = credential.user.ok_or(PreviewError::Denied)?;
         let lease = self.by_id(id)?;
         self.authority
-            .viewer(&lease.preview().agent_session_id, &credential.user)
+            .viewer(lease.preview().agent_session_id, &user)
             .await?;
         let cookie = random();
         let mut registry = self.registry.lock().expect("registry mutex");
@@ -540,8 +536,8 @@ impl PreviewService {
         registry.browsers.insert(
             digest(&cookie),
             Credential {
-                preview: id.to_owned(),
-                user: credential.user,
+                preview: id.clone(),
+                user: Some(user),
                 expires: lease.expires,
             },
         );
@@ -550,7 +546,7 @@ impl PreviewService {
     /// Authenticate every HTTP request. WebSockets call this periodically too.
     pub async fn viewer(
         &self,
-        id: &str,
+        id: &PreviewId,
         cookie: &str,
         activity: bool,
     ) -> Result<Arc<Lease>, PreviewError> {
@@ -560,16 +556,16 @@ impl PreviewService {
                 .browsers
                 .get(&digest(cookie))
                 .ok_or(PreviewError::Denied)?;
-            if credential.preview != id || credential.expires <= Instant::now() {
+            if &credential.preview != id || credential.expires <= Instant::now() {
                 return Err(PreviewError::Denied);
             }
-            (find(&registry, id)?, credential.user.clone())
+            let user = credential.user.clone().ok_or(PreviewError::Denied)?;
+            (find(&registry, id)?, user)
         };
         if !lease.live() {
             return Err(PreviewError::Offline);
         }
         let _authorization_slot = if activity {
-            lease.budget.request()?;
             Some(
                 lease
                     .requests
@@ -581,14 +577,14 @@ impl PreviewService {
             None
         };
         self.authority
-            .viewer(&lease.preview().agent_session_id, &user)
+            .viewer(lease.preview().agent_session_id, &user)
             .await?;
         if activity {
             *lease.activity.lock().expect("activity mutex") = Instant::now();
         }
         Ok(lease)
     }
-    fn by_id(&self, id: &str) -> Result<Arc<Lease>, PreviewError> {
+    fn by_id(&self, id: &PreviewId) -> Result<Arc<Lease>, PreviewError> {
         let lease = find(&self.registry.lock().expect("registry mutex"), id)?;
         if !lease.live() {
             return Err(PreviewError::Offline);
@@ -610,7 +606,7 @@ impl PreviewService {
                 && (!lease.live()
                     || self
                         .authority
-                        .active(&lease.preview().agent_session_id)
+                        .active(lease.preview().agent_session_id)
                         .await
                         .is_err())
             {
@@ -637,7 +633,7 @@ impl PreviewService {
     async fn publish(&self, preview: &Preview) {
         let candidates = {
             let registry = self.registry.lock().expect("registry mutex");
-            let mut users: Vec<String> = registry
+            let mut users: Vec<MacroUserIdStr<'static>> = registry
                 .watchers
                 .get(&preview.agent_session_id)
                 .map(|w| w.keys().cloned().collect())
@@ -645,7 +641,7 @@ impl PreviewService {
             if let Some(lease) = registry.sessions.get(&preview.agent_session_id) {
                 users.push(lease.owner.clone());
             }
-            users.sort();
+            users.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
             users.dedup();
             users
         };
@@ -653,7 +649,7 @@ impl PreviewService {
         for user in candidates {
             if self
                 .authority
-                .viewer(&preview.agent_session_id, &user)
+                .viewer(preview.agent_session_id, &user)
                 .await
                 .is_ok()
             {
@@ -667,20 +663,21 @@ impl PreviewService {
             .inspect_err(|error| tracing::warn!(error = ?error, "preview notification failed"));
     }
 }
+/// The agent session a receipt authorizes, rejecting receipts for anything else.
 fn session_id<T: RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
-) -> Result<&str, PreviewError> {
+) -> Result<AgentSessionId, PreviewError> {
     let entity = receipt.entity();
     if entity.entity_type != EntityType::AgentSession {
         return Err(PreviewError::Denied);
     }
-    Ok(&entity.entity_id)
+    entity.entity_id.parse().map_err(|_| PreviewError::Denied)
 }
-fn find(registry: &Registry, id: &str) -> Result<Arc<Lease>, PreviewError> {
+fn find(registry: &Registry, id: &PreviewId) -> Result<Arc<Lease>, PreviewError> {
     registry
         .sessions
         .values()
-        .find(|l| l.preview().id == id)
+        .find(|l| &l.preview().id == id)
         .cloned()
         .ok_or(PreviewError::Offline)
 }

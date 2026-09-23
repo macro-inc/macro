@@ -1,6 +1,8 @@
 //! Capabilities needed to expose an authenticated preview.
 use super::{AgentIdentity, Preview, PreviewError};
+use agent_fold::domain::log::AgentSessionId;
 use async_trait::async_trait;
+use macro_user_id::user_id::MacroUserIdStr;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 /// Duplex byte stream; independent of its SSH transport.
@@ -24,14 +26,22 @@ pub trait Authority: Send + Sync {
     /// Authenticate an agent's existing session token.
     async fn agent(&self, token: &str) -> Result<AgentIdentity, PreviewError>;
     /// Recheck view access and whether the session is still open.
-    async fn viewer(&self, session: &str, user: &str) -> Result<(), PreviewError>;
+    async fn viewer(
+        &self,
+        session: AgentSessionId,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<(), PreviewError>;
     /// Whether the originating agent session remains open.
-    async fn active(&self, session: &str) -> Result<(), PreviewError>;
+    async fn active(&self, session: AgentSessionId) -> Result<(), PreviewError>;
 }
 
 /// Publish preview state changes to the existing connection gateway.
 #[async_trait]
 pub trait Events: Send + Sync {
     /// Notify subscribed viewers; the read endpoint remains authoritative.
-    async fn changed(&self, preview: &Preview, viewers: &[String]) -> Result<(), PreviewError>;
+    async fn changed(
+        &self,
+        preview: &Preview,
+        viewers: &[MacroUserIdStr<'static>],
+    ) -> Result<(), PreviewError>;
 }

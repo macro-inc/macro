@@ -31,7 +31,7 @@ async fn direct_mcp_credentials_follow_revocation_while_established_previews_sur
         authority.agent(token.as_str()).await,
         Err(PreviewError::Denied)
     ));
-    assert!(authority.active(&id.to_string()).await.is_ok());
+    assert!(authority.active(id).await.is_ok());
     assert!(matches!(
         authority.agent("unknown").await,
         Err(PreviewError::Denied)

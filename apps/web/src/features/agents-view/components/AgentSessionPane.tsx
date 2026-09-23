@@ -1,4 +1,5 @@
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
+import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { agentSessionTitle } from '@app/features/block-agent/component/AgentSplitHeader';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
@@ -209,6 +210,7 @@ function SessionContent(props: { onDeleted: () => void }) {
                   />
                 }
               >
+                <AgentPreviewBanner />
                 <div class="transcript-host">
                   <Transcript />
                 </div>

@@ -1,14 +1,24 @@
 use crate::domain::{ports::*, *};
+use agent_fold::domain::log::AgentSessionId;
 use async_trait::async_trait;
 use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
 pub const SESSION: &str = "00000000-0000-0000-0000-000000000001";
 pub const USER: &str = "macro|viewer@example.com";
+/// The session every fixture receipt and identity refers to.
+pub fn session() -> AgentSessionId {
+    SESSION.parse().unwrap()
+}
+/// The user every fixture receipt and identity refers to.
+pub fn user() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(USER.to_owned()).unwrap()
+}
 pub struct TestAuthority(pub AtomicBool);
 #[async_trait]
 impl Authority for TestAuthority {
@@ -18,10 +28,14 @@ impl Authority for TestAuthority {
         }
         Ok(identity())
     }
-    async fn viewer(&self, _: &str, _: &str) -> Result<(), PreviewError> {
-        self.active(SESSION).await
+    async fn viewer(
+        &self,
+        session: AgentSessionId,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<(), PreviewError> {
+        self.active(session).await
     }
-    async fn active(&self, _: &str) -> Result<(), PreviewError> {
+    async fn active(&self, _: AgentSessionId) -> Result<(), PreviewError> {
         if self.0.load(Ordering::SeqCst) {
             Ok(())
         } else {
@@ -32,19 +46,23 @@ impl Authority for TestAuthority {
 pub struct TestEvents;
 #[async_trait]
 impl Events for TestEvents {
-    async fn changed(&self, _: &Preview, _: &[String]) -> Result<(), PreviewError> {
+    async fn changed(
+        &self,
+        _: &Preview,
+        _: &[MacroUserIdStr<'static>],
+    ) -> Result<(), PreviewError> {
         Ok(())
     }
 }
 pub fn identity() -> AgentIdentity {
     AgentIdentity {
-        session: SESSION.into(),
-        owner: USER.into(),
+        session: session(),
+        owner: user(),
     }
 }
 pub fn receipt<T: RequiredPermission>(level: AccessLevel) -> EntityAccessReceipt<T> {
     EntityAccessReceipt::try_new_authenticated_user(
-        macro_user_id::user_id::MacroUserIdStr::try_from(USER.to_owned()).unwrap(),
+        user(),
         Entity {
             entity_id: SESSION.into(),
             entity_type: EntityType::AgentSession,

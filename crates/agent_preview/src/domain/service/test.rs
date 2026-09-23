@@ -44,7 +44,7 @@ async fn browser_tickets_are_host_bound_single_use_and_permissions_rechecked() {
     let launch = service.launch(receipt(AccessLevel::View)).unwrap();
     assert!(
         service
-            .redeem("different-preview", &launch.ticket)
+            .redeem(&PreviewId::generate(), &launch.ticket)
             .await
             .is_err()
     );
@@ -60,7 +60,7 @@ async fn browser_tickets_are_host_bound_single_use_and_permissions_rechecked() {
     );
     assert!(
         service
-            .viewer("different-preview", &cookie, true)
+            .viewer(&PreviewId::generate(), &cookie, true)
             .await
             .is_err()
     );
@@ -120,9 +120,9 @@ async fn expiry_stop_and_token_timeout_close_access() {
 async fn quotas_bound_sessions_and_request_loops() {
     let (service, _, _) = fixture(2222);
     assert!(service.share(identity(), 0).await.is_err());
-    for number in 0..5 {
+    for _ in 0..5 {
         let mut identity = identity();
-        identity.session = format!("session-{number}");
+        identity.session = AgentSessionId::new();
         service
             .registry
             .lock()
@@ -143,12 +143,6 @@ async fn quotas_bound_sessions_and_request_loops() {
         service.share(identity(), 3000).await,
         Err(PreviewError::Limited)
     ));
-    let budget = Budget::default();
-    for _ in 0..100 {
-        budget.request().unwrap();
-    }
-    assert!(budget.request().is_err());
-    assert!(budget.bytes(1024 * 1024 * 1024 + 1).is_err());
 }
 #[test]
 fn isolated_domains_and_shell_fields_are_validated() {
@@ -160,6 +154,10 @@ fn isolated_domains_and_shell_fields_are_validated() {
         "bad;hostname",
         "UPPERCASE.test",
         "macro.test",
+        // Nested either way: the app under the preview domain, and the preview
+        // domain under the app.
+        "test",
+        "preview.macro.test",
     ] {
         settings.domain = domain.into();
         assert!(settings.validate().is_err());
@@ -167,16 +165,20 @@ fn isolated_domains_and_shell_fields_are_validated() {
 }
 
 #[tokio::test]
-async fn replacing_or_stopping_a_preview_does_not_reset_account_budget() {
+async fn stopping_a_preview_does_not_bypass_the_creation_interval() {
     let (service, _, _) = fixture(2222);
-    let first = service.share(identity(), 3000).await.unwrap();
-    let lease = service.authenticate_ssh(&first.token).unwrap();
-    assert!(lease.budget.bytes(1024 * 1024 * 1024).is_ok());
+    service.share(identity(), 3000).await.unwrap();
     assert!(matches!(
         service.share(identity(), 3000).await,
         Err(PreviewError::Limited)
     ));
+    // Stopping releases the session slot but not the owner's pacing: otherwise
+    // a stop/share loop is an unbounded lease mint.
     service.stop(receipt(AccessLevel::Edit)).await.unwrap();
+    assert!(matches!(
+        service.share(identity(), 3000).await,
+        Err(PreviewError::Limited)
+    ));
     service
         .registry
         .lock()
@@ -184,10 +186,7 @@ async fn replacing_or_stopping_a_preview_does_not_reset_account_budget() {
         .accounts
         .values_mut()
         .for_each(|a| a.last_created = Instant::now() - TOKEN_TTL);
-    let second = service.share(identity(), 3000).await.unwrap();
-    let next = service.authenticate_ssh(&second.token).unwrap();
-    assert!(Arc::ptr_eq(&lease.budget, &next.budget));
-    assert!(next.budget.bytes(1).is_err());
+    service.share(identity(), 3000).await.unwrap();
 }
 #[test]
 fn only_local_stack_accepts_loopback_http_handoff_and_docker_ssh_fallback() {

@@ -21,7 +21,7 @@ async fn script(service: &PreviewService) -> String {
         service: service.clone(),
         identity: identity(),
     });
-    let user = MacroUserIdStr::try_from(identity().owner).unwrap();
+    let user = identity().owner;
     let value = SharePreview { port: 5173 }
         .call(context, RequestContext::new(user))
         .await

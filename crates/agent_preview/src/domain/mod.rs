@@ -1,7 +1,7 @@
-//! Preview leases, authorization and resource budgets.
-mod budget;
+//! Preview leases and authorization.
+mod ids;
 /// Capabilities supplied by the application composition root.
 pub mod ports;
 mod service;
-pub use budget::Budget;
+pub use ids::PreviewId;
 pub use service::*;

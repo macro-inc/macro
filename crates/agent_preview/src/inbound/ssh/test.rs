@@ -1,5 +1,5 @@
 use super::*;
-use crate::{outbound::ssh_tunnel::SshTunnel, testing::*};
+use crate::{domain::PreviewId, outbound::ssh_tunnel::SshTunnel, testing::*};
 use axum::{
     Router,
     extract::ws::{Message, WebSocketUpgrade},
@@ -7,6 +7,7 @@ use axum::{
     routing::get,
 };
 use entity_access::domain::models::AccessLevel;
+use macro_user_id::user_id::MacroUserIdStr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::test]
@@ -74,7 +75,8 @@ async fn stock_openssh_forwards_http_and_websockets_and_stop_closes_them() {
     assert!(result.get("error").is_none());
     let output: serde_json::Value =
         serde_json::from_str(result["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
-    let preview_id = output["preview"]["id"].as_str().unwrap();
+    let preview_id = output["preview"]["id"].as_str().unwrap().to_owned();
+    let preview = PreviewId::parse(&preview_id).unwrap();
     let dir = tempfile::tempdir().unwrap();
     let script = dir.path().join("connect.sh");
     std::fs::write(&script, output["script"].as_str().unwrap()).unwrap();
@@ -101,8 +103,8 @@ async fn stock_openssh_forwards_http_and_websockets_and_stop_closes_them() {
     .await
     .unwrap();
     let ticket = service.launch(receipt(AccessLevel::View)).unwrap();
-    let cookie = service.redeem(preview_id, &ticket.ticket).await.unwrap();
-    let lease = service.viewer(preview_id, &cookie, true).await.unwrap();
+    let cookie = service.redeem(&preview, &ticket.ticket).await.unwrap();
+    let lease = service.viewer(&preview, &cookie, true).await.unwrap();
     let mut stream = lease.tunnel().unwrap().open().await.unwrap();
     stream
         .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
@@ -236,8 +238,8 @@ async fn gateway_refuses_outbound_relay_and_shell() {
     //    The token is single-use, and a second share for the same owner would hit
     //    the creation rate limit, so charge it to another account.
     let other = crate::domain::AgentIdentity {
-        session: "00000000-0000-0000-0000-000000000002".into(),
-        owner: "macro|other@example.com".into(),
+        session: "00000000-0000-0000-0000-000000000002".parse().unwrap(),
+        owner: MacroUserIdStr::try_from("macro|other@example.com".to_owned()).unwrap(),
     };
     let share2 = service.share(other, 3000).await.unwrap();
     let relay = TcpListener::bind("127.0.0.1:0").await.unwrap();
