@@ -138,25 +138,37 @@ describe('CoordinatorCore', () => {
     'reset-incompatible',
     'reset-corrupt',
     'reset-storage-uncertain',
-  ] as const)('reports actual %s storage outcome, not the requested open action', (openOutcome) => {
-    const core = new CoordinatorCore('scope');
-    core.registerTab('tab-a');
-    core.registerTab('tab-b');
-    ready(core, 'tab-a', 1, 'opened-existing');
-    core.beginGracefulDeparture('tab-a', 1);
-    const handoff = core.engineDrained('tab-a', 1);
-    expect(action(handoff, 'elect-owner').databaseAction).toBe('open-existing');
-    core.beginEngineOpen('tab-b', 2);
-    const actions = core.engineReady({
-      tabId: 'tab-b', ownerEpoch: 2, ownerLockName: OWNER_LOCK,
-      expectedOwnerLockName: OWNER_LOCK, ownerLockHeld: true,
-      databaseActionProof: openOutcome.startsWith('reset-') ? 'wiped-before-open' : 'opened-existing',
-      openOutcome,
-    });
-    expect(action(actions, 'broadcast-engine-replaced')).toEqual({
-      kind: 'broadcast-engine-replaced', ownerEpoch: 2, openOutcome,
-    });
-  });
+  ] as const)(
+    'reports actual %s storage outcome, not the requested open action',
+    (openOutcome) => {
+      const core = new CoordinatorCore('scope');
+      core.registerTab('tab-a');
+      core.registerTab('tab-b');
+      ready(core, 'tab-a', 1, 'opened-existing');
+      core.beginGracefulDeparture('tab-a', 1);
+      const handoff = core.engineDrained('tab-a', 1);
+      expect(action(handoff, 'elect-owner').databaseAction).toBe(
+        'open-existing'
+      );
+      core.beginEngineOpen('tab-b', 2);
+      const actions = core.engineReady({
+        tabId: 'tab-b',
+        ownerEpoch: 2,
+        ownerLockName: OWNER_LOCK,
+        expectedOwnerLockName: OWNER_LOCK,
+        ownerLockHeld: true,
+        databaseActionProof: openOutcome.startsWith('reset-')
+          ? 'wiped-before-open'
+          : 'opened-existing',
+        openOutcome,
+      });
+      expect(action(actions, 'broadcast-engine-replaced')).toEqual({
+        kind: 'broadcast-engine-replaced',
+        ownerEpoch: 2,
+        openOutcome,
+      });
+    }
+  );
 
   it('rejects unregistered and retiring-tab requests', () => {
     const core = new CoordinatorCore('scope');

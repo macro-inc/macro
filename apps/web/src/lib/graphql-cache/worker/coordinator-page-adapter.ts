@@ -577,7 +577,10 @@ export class CacheCoordinatorPageAdapter {
           this.highestOwnerEpochSeen,
           message.ownerEpoch
         );
-        this.options.onEngineReplaced?.(message.ownerEpoch, message.openOutcome);
+        this.options.onEngineReplaced?.(
+          message.ownerEpoch,
+          message.openOutcome
+        );
         break;
       case 'protocol-error': {
         const error = new Error(message.error);

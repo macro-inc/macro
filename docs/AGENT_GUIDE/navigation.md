@@ -324,6 +324,13 @@ another pagination attempt. A missing item may still be uncached, but should app
 local search excludes unsupported email hits before limiting entity results;
 email mentions keep their separate search-service path.
 
+Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
+must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
+mounted and usable while the optional source loads or fails. A normal cache-worker
+handoff between tabs preserves backfill cursors and watermarks; only a replacement
+that creates or resets stored cache data discards them. Per-lane full-refresh and
+Shared Mail restart rules still apply.
+
 ## Keyboard model (from the in-app guide; verified partially)
 
 - `Ctrl/Cmd+K` — jump to anything by name.

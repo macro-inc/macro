@@ -8,13 +8,23 @@ import type {
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { HistoryItem } from '@queries/history/types';
 import { render } from '@solidjs/testing-library';
-import { QueryClient, QueryClientProvider, useQuery, type UseQueryResult } from '@tanstack/solid-query';
-import { createComponent, createRenderEffect, createRoot, createSignal } from 'solid-js';
+import {
+  QueryClient,
+  QueryClientProvider,
+  type UseQueryResult,
+  useQuery,
+} from '@tanstack/solid-query';
+import {
+  createComponent,
+  createRenderEffect,
+  createRoot,
+  createSignal,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MAX_BROWSE_PAGES_PER_LOAD } from './projected-list';
-import { createQuickAccessValue } from './QuickAccessSource';
-import { QuickAccessProvider } from './QuickAccessProvider';
 import { useQuickAccess } from './context';
+import { MAX_BROWSE_PAGES_PER_LOAD } from './projected-list';
+import { QuickAccessProvider } from './QuickAccessProvider';
+import { createQuickAccessValue } from './QuickAccessSource';
 import {
   BUCKET_COMBINATIONS,
   type Bucket,
@@ -32,7 +42,12 @@ const mocks = vi.hoisted(() => ({
   companies: [] as CrmCompanyEntity[],
   crmEnabled: (): boolean => true,
   cacheEnabled: true,
-  queries: {} as Partial<Record<'history' | 'channels' | 'recently-viewed', () => UseQueryResult<never[]>>>,
+  queries: {} as Partial<
+    Record<
+      'history' | 'channels' | 'recently-viewed',
+      () => UseQueryResult<never[]>
+    >
+  >,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
@@ -53,24 +68,26 @@ vi.mock('@core/user', () => ({
   useIsConnectedSecondaryInbox: () => () => false,
 }));
 vi.mock('@queries/channel/channels', () => ({
-  useCachedGraphqlChannelsQuery: () => mocks.queries.channels?.() ?? ({
-    data: [],
-    isSuccess: true,
-    isLoading: false,
-    refetch: mocks.channelRefetch,
-  }),
+  useCachedGraphqlChannelsQuery: () =>
+    mocks.queries.channels?.() ?? {
+      data: [],
+      isSuccess: true,
+      isLoading: false,
+      refetch: mocks.channelRefetch,
+    },
 }));
 vi.mock('@queries/channel/graphql', () => ({
   materializeCachedGraphqlChannels: async () => [],
 }));
 vi.mock('@queries/gate', () => ({ queryReadyGate: () => true }));
 vi.mock('@queries/history/history', () => ({
-  useHistoryQuery: () => mocks.queries.history?.() ?? ({
-    data: mocks.history,
-    isSuccess: true,
-    isLoading: false,
-    refetch: vi.fn(),
-  }),
+  useHistoryQuery: () =>
+    mocks.queries.history?.() ?? {
+      data: mocks.history,
+      isSuccess: true,
+      isLoading: false,
+      refetch: vi.fn(),
+    },
 }));
 vi.mock('@queries/history/graphql', () => ({
   materializeCachedGraphqlHistoryItems: async (
@@ -103,7 +120,8 @@ vi.mock('@queries/soup/quick-access-snippets', () => ({
   useQuickAccessSnippetsQuery: () => ({ query: {}, snippets: () => [] }),
 }));
 vi.mock('@queries/soup/recently-viewed', () => ({
-  useRecentlyViewedSoupQuery: () => mocks.queries['recently-viewed']?.() ?? ({ data: [], isSuccess: true }),
+  useRecentlyViewedSoupQuery: () =>
+    mocks.queries['recently-viewed']?.() ?? { data: [], isSuccess: true },
 }));
 vi.mock('@queries/storage/instructions-md', () => ({
   useInstructionsMdIdQuery: () => ({ data: undefined }),
@@ -201,40 +219,63 @@ const restCompany: CrmCompanyEntity = {
 };
 
 describe('Quick Access source integration', () => {
-  it.each((['history', 'channels', 'recently-viewed'] as const).flatMap(source =>
-    (['resolve', 'reject'] as const).map(settlement => ({ source, settlement }))
-  ))(
+  it.each(
+    (['history', 'channels', 'recently-viewed'] as const).flatMap((source) =>
+      (['resolve', 'reject'] as const).map((settlement) => ({
+        source,
+        settlement,
+      }))
+    )
+  )(
     'keeps the same app shell mounted while $source is pending and after $settlement',
     async ({ source, settlement }) => {
       let resolve!: (items: never[]) => void;
       let reject!: (error: Error) => void;
-      const pending = new Promise<never[]>((finish, fail) => { resolve = finish; reject = fail; });
+      const pending = new Promise<never[]>((finish, fail) => {
+        resolve = finish;
+        reject = fail;
+      });
       let query: UseQueryResult<never[]> | undefined;
-      mocks.queries[source] = () => query = useQuery(() => ({
-        queryKey: ['shell-regression', source], queryFn: () => pending,
-        retry: false, throwOnError: false,
-      }));
+      mocks.queries[source] = () =>
+        (query = useQuery(() => ({
+          queryKey: ['shell-regression', source],
+          queryFn: () => pending,
+          retry: false,
+          throwOnError: false,
+        })));
       const client = new QueryClient();
       const Shell = () => {
         const list = useQuickAccess().useList();
         const node = document.createElement('main');
         node.dataset.testid = 'app-shell';
-        createRenderEffect(() => { node.textContent = `Items: ${list.totalCount()}`; });
+        createRenderEffect(() => {
+          node.textContent = `Items: ${list.totalCount()}`;
+        });
         return node;
       };
-      const rendered = render(() => createComponent(QueryClientProvider, {
-        client,
-        get children() { return createComponent(QuickAccessProvider, {
-          get children() { return createComponent(Shell, {}); },
-        }); },
-      }));
+      const rendered = render(() =>
+        createComponent(QueryClientProvider, {
+          client,
+          get children() {
+            return createComponent(QuickAccessProvider, {
+              get children() {
+                return createComponent(Shell, {});
+              },
+            });
+          },
+        })
+      );
       try {
         await vi.waitFor(() => expect(query?.isPending).toBe(true));
         const shell = rendered.getByTestId('app-shell');
         expect(shell.textContent).toBe('Items: 0');
         if (settlement === 'resolve') resolve([]);
         else reject(new Error('cache lookup failed'));
-        await vi.waitFor(() => expect(settlement === 'resolve' ? query?.isSuccess : query?.isError).toBe(true));
+        await vi.waitFor(() =>
+          expect(
+            settlement === 'resolve' ? query?.isSuccess : query?.isError
+          ).toBe(true)
+        );
         expect(rendered.getByTestId('app-shell')).toBe(shell);
       } finally {
         rendered.unmount();
