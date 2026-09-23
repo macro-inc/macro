@@ -6,6 +6,14 @@ We use the [bun](https://bun.sh/) as a javascript package manager and runtime fo
 
 The production application is compiled down to a static javascript bundle using a traditional SPA-like architecture.
 
+## Production analytics configuration
+
+For local production builds, set `VITE_POSTHOG_API_KEY` in the ignored
+`apps/web/.env.production.local`. Vite loads this file automatically; use the
+existing build commands. The shared value is stored in Doppler `web-release/prd`.
+CI continues to inject the GitHub `POSTHOG_API_KEY` secret. Keep the value out of
+tracked env files.
+
 ### Toolchain Management
 
 If you have the [nix](https://nixos.org/learn/) package manager installed on your system then you can drop into a nix shell where everything you need is installed for you.
