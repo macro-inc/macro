@@ -705,10 +705,14 @@ export function createGraphqlSoupAstItemsQuery(
       local.withoutEmail !== (options().localReconciliation === 'without-email')
     )
       return undefined;
-    // An empty partial projection cannot prove that a folder is empty (it
-    // could contain only email). Keep initial loading/errors until the server
-    // establishes membership, rather than publishing a false empty success.
-    if (local.withoutEmail && local.data.entities.length === 0 && !query.data)
+    // A partial projection with no visible rows after pending deletes cannot
+    // prove that a folder is empty (it could contain only email). Keep initial
+    // loading/errors until the server establishes membership.
+    if (
+      local.withoutEmail &&
+      !query.data &&
+      local.data.entities.every((entity) => pendingDeleteIds().has(entity.id))
+    )
       return undefined;
     const keys = serverRecordKeys();
     for (const key of local.baselineKeys) {

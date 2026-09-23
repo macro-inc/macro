@@ -540,8 +540,11 @@ folders without navigating. With GraphQL caching enabled and membership metadata
 hydrated, a never-visited folder can immediately show cached documents, chats,
 and subfolders for supported created/modified sorts and filters. Email remains
 server-owned: the full mixed GraphQL query still refreshes in the background,
-keeps loaded email rows, and owns pagination. An empty non-email projection must
-not show `This folder is empty` while that initial request is pending or failed.
+keeps loaded email rows, and owns pagination. A non-email projection with no visible
+rows, including when pending deletions hide every cached row, must not show
+`This folder is empty` while that initial request is pending or failed. Verify that
+loading and transport errors remain visible in this case; releasing a failed deletion
+restores cached rows without a refetch.
 Verify with a folder-specific GraphQL response delayed, then navigate to another
 folder before it completes; neither cached rows nor late results may leak across
 folders. The top bar keeps the full folder and file detail

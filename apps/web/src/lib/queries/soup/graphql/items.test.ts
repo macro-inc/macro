@@ -372,6 +372,89 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       }
     );
 
+    it.each([false, true])(
+      'requires visible local rows before suppressing loading/errors unless server data exists: %s',
+      async (hasServerData) => {
+        const f = fixture();
+        const deletion = createGraphqlSoupDeletion(['cached-document']);
+        const pending = deferred<void>();
+        const mutation = queryClient.getMutationCache().build(queryClient, {
+          mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+          onMutate: () => ({ graphqlDeletion: deletion }),
+          mutationFn: () => pending.promise,
+          onSettled: () => deletion.release(),
+        });
+        let completion: Promise<void> | undefined;
+        try {
+          await vi.waitFor(() => expect(f.ids()).toEqual(['cached-document']));
+          if (hasServerData) {
+            f.fake.executions[0].next(
+              graphqlSoupPage({
+                items: [item('cached-document')],
+                next_cursor: null,
+              }),
+              { source: 'normalized-cache-hit' }
+            );
+          }
+          completion = mutation.execute(undefined);
+          await vi.waitFor(() =>
+            expect(mutation.state.context?.graphqlDeletion).toBe(deletion)
+          );
+          await vi.waitFor(() =>
+            expect(f.ids()).toEqual(hasServerData ? [] : undefined)
+          );
+          expect(f.query.isLoading()).toBe(!hasServerData);
+
+          const error = new CombinedError({
+            networkError: new Error('offline'),
+          });
+          f.fake.executions[0].fail(error);
+          expect(f.query.error()).toBe(hasServerData ? undefined : error);
+          expect(f.ids()).toEqual(hasServerData ? [] : undefined);
+
+          // Releasing the deletion makes the cached projection usable again.
+          deletion.release();
+          await vi.waitFor(() => expect(f.ids()).toEqual(['cached-document']));
+          expect(f.query.error()).toBeUndefined();
+          expect(f.query.isLoading()).toBe(false);
+        } finally {
+          pending.resolve();
+          await completion;
+          deletion.release();
+          f.dispose();
+        }
+      }
+    );
+
+    it('keeps a partial projection usable when only some cached rows are pending deletion', async () => {
+      const f = fixture([item('deleted'), item('visible')]);
+      const deletion = createGraphqlSoupDeletion(['deleted']);
+      const pending = deferred<void>();
+      const mutation = queryClient.getMutationCache().build(queryClient, {
+        mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+        onMutate: () => ({ graphqlDeletion: deletion }),
+        mutationFn: () => pending.promise,
+        onSettled: () => deletion.release(),
+      });
+      let completion: Promise<void> | undefined;
+      try {
+        await vi.waitFor(() => expect(f.ids()).toEqual(['deleted', 'visible']));
+        completion = mutation.execute(undefined);
+        await vi.waitFor(() => expect(f.ids()).toEqual(['visible']));
+        expect(f.query.isLoading()).toBe(false);
+        f.fake.executions[0].fail(
+          new CombinedError({ networkError: new Error('offline') })
+        );
+        expect(f.query.error()).toBeUndefined();
+        expect(f.ids()).toEqual(['visible']);
+      } finally {
+        pending.resolve();
+        await completion;
+        deletion.release();
+        f.dispose();
+      }
+    });
+
     it('does not leak local members across folders while a new projection is pending', async () => {
       const f = fixture();
       const pending = deferred<unknown>();
