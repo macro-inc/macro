@@ -148,6 +148,7 @@ export function createGraphqlSoupAstItemsQuery(
     displayedKeys: ReadonlySet<string>;
     data: SoupAstItemsData;
     mail?: {
+      pageCount: number;
       nextCursor: string | null;
       revision: CacheRevision;
       records: GraphqlSoupItem[];
@@ -252,6 +253,7 @@ export function createGraphqlSoupAstItemsQuery(
     const queryOptions = options();
     const host = getGraphqlSoupCacheHost();
     const records = serverRecords();
+    const loadedServerPageCount = serverPageCount();
     const requestId = ++localRequest;
     const requestGeneration = cacheGeneration;
     if (input !== previousInitialInput) {
@@ -263,7 +265,8 @@ export function createGraphqlSoupAstItemsQuery(
       existing?.mail &&
       existing.input === input &&
       existing.generation === cacheGeneration &&
-      existing.mail.revision === revision
+      existing.mail.revision === revision &&
+      existing.mail.pageCount >= loadedServerPageCount
     )
       return;
     if (
@@ -300,6 +303,10 @@ export function createGraphqlSoupAstItemsQuery(
     }
     const sortDirection = initial.sortDirection ?? 'DESC';
     const limit = initial.limit ?? 20;
+    const mailPageCount = Math.max(
+      loadedServerPageCount,
+      existing?.mail?.pageCount ?? 1
+    );
 
     if (localEvaluationRunning) {
       localEvaluationPending = true;
@@ -326,6 +333,47 @@ export function createGraphqlSoupAstItemsQuery(
             limit,
             ...(mailView ? { mail: { view: mailView } } : { baseline }),
           });
+          // Rebuild the loaded extent with bounded requests. Mail cursors belong
+          // to one revision, so a concurrent change restarts the whole chain.
+          if (mailView && result.kind === 'mail-page') {
+            for (
+              let page = 1;
+              page < mailPageCount && result.nextCursor;
+              page += 1
+            ) {
+              const next = await host.entityFilter({
+                filters,
+                sortMethod,
+                sortDirection,
+                limit,
+                mail: { view: mailView, cursor: result.nextCursor },
+              });
+              if (next.kind !== 'mail-page') {
+                result = next;
+                break;
+              }
+              if (next.revision !== result.revision) {
+                result = { kind: 'stale-cursor', revision: next.revision };
+                break;
+              }
+              result = {
+                ...next,
+                keys: [...result.keys, ...next.keys],
+                sortTimestamps: [
+                  ...result.sortTimestamps,
+                  ...next.sortTimestamps,
+                ],
+                optimistic: result.optimistic || next.optimistic,
+              };
+            }
+          }
+          if (result.kind === 'stale-cursor') {
+            discarded = true;
+            retryCount += 1;
+            expectedRevision = result.revision;
+            setCurrentCacheRevision(result.revision);
+            continue;
+          }
           if (
             mailView &&
             (result.kind === 'unsupported' || result.kind === 'incomplete')
@@ -416,6 +464,7 @@ export function createGraphqlSoupAstItemsQuery(
             ...(result.kind === 'mail-page'
               ? {
                   mail: {
+                    pageCount: mailPageCount,
                     nextCursor: result.nextCursor,
                     revision: result.revision,
                     records: reconciledRecords,
@@ -573,6 +622,10 @@ export function createGraphqlSoupAstItemsQuery(
       ? (query.data?.records() ?? []).map((record) => ({ ...record }))
       : []
   );
+  const serverPageCount = () =>
+    baselineGeneration() === cacheGeneration
+      ? (query.data?.pageParams.length ?? 1)
+      : 1;
 
   const serverRecordKeys = createMemo(
     () => new Set(serverRecords().map(soupItemKey))
@@ -707,7 +760,9 @@ export function createGraphqlSoupAstItemsQuery(
         });
         if (displayLocalProjection() !== local) return;
         if (result.kind === 'stale-cursor') {
-          setLocalProjection(undefined);
+          // Keep the current rows and loaded depth until a complete replacement
+          // at the new revision is ready, including before its change broadcast.
+          setCurrentCacheRevision(result.revision);
           setLocalEvaluationTrigger((value) => value + 1);
           return;
         }
@@ -718,12 +773,13 @@ export function createGraphqlSoupAstItemsQuery(
           result.keys
         );
         const currentRevision = await host.currentRevision();
+        if (displayLocalProjection() !== local) return;
         if (
-          displayLocalProjection() !== local ||
           result.revision !== local.mail.revision ||
           selected.revision !== result.revision ||
           currentRevision !== result.revision
         ) {
+          setCurrentCacheRevision(currentRevision);
           setLocalEvaluationTrigger((value) => value + 1);
           return;
         }
@@ -753,6 +809,7 @@ export function createGraphqlSoupAstItemsQuery(
           ...local,
           displayedKeys: new Set(keys),
           mail: {
+            pageCount: local.mail.pageCount + 1,
             nextCursor: result.nextCursor,
             revision: result.revision,
             records,

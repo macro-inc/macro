@@ -328,8 +328,11 @@ retain their Inbox scope, so archived mail is found using All + Done.
 
 A `Showing cached mail` notice identifies results over synchronized metadata, not a
 claim of complete mailbox coverage. These lists paginate locally beyond the first
-page without a server cursor. Filter, revision, or engine-generation changes restart
-the local page chain; online server results take over again when available. After
+page without a server cursor. A cache revision rebuilds the number of pages already
+loaded, with new cursors from that revision; unchanged matching emails remain
+visible while removed or nonmatching emails disappear. Filter changes, explicit
+page resets, and engine-generation changes return to the first page. Online server
+results take over again when available. After
 reconnecting, `Load more` follows the same server page chain as the displayed rows,
 not a leftover local cursor. Account choices are cached in the viewer-scoped GraphQL catalog. Timestamp ordering and date
 headers use the selected Mail view's indexed timestamps, not a preview cached from
