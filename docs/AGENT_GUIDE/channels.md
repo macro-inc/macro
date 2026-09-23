@@ -486,8 +486,12 @@ channel IDs and at most one unread notification ID/state per channel, with a
 shares the channel lists' refreshes after notification patches, mark-read, and
 reconnect. Merely rendering that badge, subscribing to realtime notifications,
 or applying local read/done overrides must not start the full `SoupNotifications`
-feed. A data/status reader activates that feed lazily; its full notification
-selection and pagination remain unchanged. Cold bulk actions wait for loading
+feed. Check this with document-mention notifications disabled too (the production
+default): mention cleanup must wait until a real data/status reader activates the
+feed, then continue cleaning up loaded mentions. Full notification selection and
+pagination remain unchanged. Automatic/debounced read markers log failures and
+leave failed reads unread; they must not produce unhandled promise rejections or
+block the separate email read marker. Cold bulk actions wait for loading
 and report failures rather than treating pending data as an empty list. The
 Inbox badge still uses its own full Soup query for channel/thread membership.
 

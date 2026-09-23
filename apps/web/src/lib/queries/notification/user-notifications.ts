@@ -33,7 +33,7 @@ import {
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
-import { type Accessor, untrack } from 'solid-js';
+import { type Accessor, createSignal, untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { z } from 'zod';
 import { queryClient } from '../client';
@@ -187,7 +187,7 @@ export type UserNotificationsQueryOptions = {
 
 /** Query state exposed by the transport-neutral notification facade. */
 export type UserNotificationsQuery = {
-  /** Whether a data/status reader has activated the GraphQL feed (REST is eager). */
+  /** Reactively reports data/status activation of the GraphQL feed (REST is eager). */
   readonly isStarted: boolean;
   readonly data: UnifiedNotification[] | undefined;
   readonly error: Error | null;
@@ -241,13 +241,14 @@ export function useUserNotificationsQuery(
   // reading a transport must react to the same flag, not an imperative snapshot.
   const usesGraphql = () => graphqlSoupFlag().enabled && args().done !== true;
 
-  let graphqlStarted = false;
+  const [graphqlStarted, setGraphqlStarted] = createSignal(false);
   const graphqlQuery = createLazyMemo(() =>
     untrack(() => {
-      graphqlStarted = true;
-      return createGraphqlNotificationsQuery(args, () => ({
+      const query = createGraphqlNotificationsQuery(args, () => ({
         enabled: queryEnabled() && usesGraphql(),
       }));
+      setGraphqlStarted(true);
+      return query;
     })
   );
 
@@ -269,7 +270,7 @@ export function useUserNotificationsQuery(
 
   return {
     get isStarted() {
-      return !usesGraphql() || graphqlStarted;
+      return !usesGraphql() || graphqlStarted();
     },
     get data() {
       return usesGraphql() ? graphqlQuery().data : restQuery.data;

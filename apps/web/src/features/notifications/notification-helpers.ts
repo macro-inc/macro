@@ -227,6 +227,18 @@ export async function markNotificationsForEntityAsRead(
   );
 }
 
+/** Best-effort read marker for navigation/timer callers with no awaiting UI. */
+export async function markNotificationsForEntityAsReadInBackground(
+  notificationSource: NotificationSource,
+  entity: Entity
+): Promise<void> {
+  try {
+    await markNotificationsForEntityAsRead(notificationSource, entity);
+  } catch (error) {
+    console.error('Failed to mark entity notifications as read', error);
+  }
+}
+
 /**
  * Returns a boolean indicating whether notifications for an entity are muted
  * @param notificationSource

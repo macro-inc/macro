@@ -345,15 +345,26 @@ export function createNotificationSource(
   // TODO(dev-rb/notifications): Verify whether document-mention suppression is
   // still required, and remove this source-based cleanup when it is not.
   if (!ENABLE_DOCUMENT_MENTION_NOTIFICATIONS) {
+    const discardDocumentMentions = async (notificationIds: string[]) => {
+      try {
+        await markNotificationsAsDoneMutation.mutateAsync({ notificationIds });
+      } catch (error) {
+        console.error(
+          'Failed to discard document mention notifications',
+          error
+        );
+      }
+    };
     createEffect(() => {
+      // This flag defaults off in production. Cleanup may observe an activated
+      // feed, but must not become the reader that wakes it during startup.
+      if (!notificationsQuery.isStarted) return;
       const toDiscard = notifications().filter(
         (n) =>
           n.notification_event_type === 'document_mention' && n.state !== 'done'
       );
       if (toDiscard.length === 0) return;
-      void markNotificationsAsDoneMutation.mutateAsync({
-        notificationIds: toDiscard.map((n) => n.id),
-      });
+      void discardDocumentMentions(toDiscard.map((n) => n.id));
     });
   }
 
