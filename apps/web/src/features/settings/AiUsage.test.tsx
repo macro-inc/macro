@@ -35,7 +35,7 @@ describe('AiUsageMeter', () => {
   it('shows a team member their own allowance and shared billing balances', () => {
     render(() => <AiUsageMeter snapshot={snapshot(5)} />);
 
-    expect(screen.getByText('$10')).toBeTruthy();
+    expect(screen.getAllByText('$10')).toHaveLength(2);
     expect(screen.getByText(/of \$40 included/)).toBeTruthy();
     expect(screen.queryByText(/across 5 seats/)).toBeNull();
     expect(screen.getByText(/Team credits:/)).toBeTruthy();
