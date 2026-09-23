@@ -1,14 +1,29 @@
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
+import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
 
 /** Provider operations used by email's production adapters alongside shared mutations. */
 export const scheduleEmailMessage = (
   ...args: Parameters<typeof emailClient.scheduleMessage>
 ) => throwOnErr(() => emailClient.scheduleMessage(...args));
-export const archiveEmailThread = (
+/** REST archive writes must revalidate the separate GraphQL list cache, also
+ * for undo/redo and failures whose server outcome may be uncertain. */
+export async function archiveEmailThread(
   ...args: Parameters<typeof emailClient.flagArchived>
-) => throwOnErr(() => emailClient.flagArchived(...args));
+) {
+  try {
+    return await throwOnErr(() => emailClient.flagArchived(...args));
+  } finally {
+    if (isFeatureEnabled(enableGraphqlSoup)) {
+      await refreshActiveGraphqlSoupQueries();
+    }
+  }
+}
 export const unscheduleEmailMessage = (
   ...args: Parameters<typeof emailClient.unscheduleMessage>
 ) => emailClient.unscheduleMessage(...args);

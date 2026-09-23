@@ -42,6 +42,7 @@ import {
   fetchGraphqlEmailThread,
   mapGraphqlThreadError,
 } from './graphql/thread';
+import { archiveEmailThread } from './integration';
 import { emailKeys } from './keys';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
@@ -487,12 +488,9 @@ export async function trackExternalThreadArchive(
 async function replayThreadArchive(params: ArchiveThreadParams): Promise<void> {
   const { previousData } = await threadArchiveOnMutate(params);
   try {
-    await throwOnErr(
-      async () =>
-        await emailClient.flagArchived(
-          { id: params.threadId, value: params.archive },
-          params.linkId
-        )
+    await archiveEmailThread(
+      { id: params.threadId, value: params.archive },
+      params.linkId
     );
   } catch (err) {
     if (previousData) {
@@ -531,15 +529,9 @@ export function useUndoableArchiveThreadMutation(options: {
     ArchiveThreadContext
   >(() => ({
     mutationFn: async (params: ArchiveThreadParams) => {
-      await throwOnErr(
-        async () =>
-          await emailClient.flagArchived(
-            {
-              id: params.threadId,
-              value: params.archive,
-            },
-            params.linkId
-          )
+      await archiveEmailThread(
+        { id: params.threadId, value: params.archive },
+        params.linkId
       );
     },
     onMutate: async (params) => await threadArchiveOnMutate(params),

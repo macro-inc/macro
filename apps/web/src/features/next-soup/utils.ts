@@ -86,6 +86,7 @@ import {
 } from '@notifications';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
+import { archiveEmailThread } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
 import { fetchAndCacheThread } from '@queries/email/thread';
 import {
@@ -1017,7 +1018,7 @@ async function _archiveEmail(
   }
 
   try {
-    await emailClient.flagArchived({ value: options.archive, id });
+    await archiveEmailThread({ value: options.archive, id });
   } catch (_err) {
     soupTxn.rollback();
     for (const [key, data] of previousEmail) {
@@ -1581,11 +1582,7 @@ export async function executeMarkEntitiesDone(args: {
 
   let authoritativeNotificationIds: string[] = [];
   const results = await Promise.allSettled([
-    ...emailIds.map((id) =>
-      throwOnErr(
-        async () => await emailClient.flagArchived({ value: true, id })
-      )
-    ),
+    ...emailIds.map((id) => archiveEmailThread({ value: true, id })),
     notificationIds.length > 0
       ? bulkMarkNotificationsAsDone(notificationIds)
       : Promise.resolve(),
@@ -1653,11 +1650,7 @@ export async function executeMarkEntitiesUndone(args: {
   ]);
 
   const results = await Promise.allSettled([
-    ...emailIds.map((id) =>
-      throwOnErr(
-        async () => await emailClient.flagArchived({ value: false, id })
-      )
-    ),
+    ...emailIds.map((id) => archiveEmailThread({ value: false, id })),
     notificationIds.length > 0
       ? bulkMarkNotificationsAsUndone(notificationIds)
       : Promise.resolve(),

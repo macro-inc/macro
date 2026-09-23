@@ -323,7 +323,10 @@ active flat and grouped lists, including loaded continuation pages. Once replay
 commits (even after a reload), those queries refresh from the server; they should
 not refetch over the optimistic state merely because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
-The GraphQL-disabled REST path is unchanged.
+The GraphQL-disabled REST path is unchanged. Archive-based Mark Done, Mark Not
+Done, and Undo/Redo revalidate mounted GraphQL lists after the REST archive write
+settles (including uncertain failures). Check Signal/Noise removal and All's done
+indicator, then Undo; success on the archive endpoint alone is not sufficient.
 
 ### Cached Mail filtering
 
