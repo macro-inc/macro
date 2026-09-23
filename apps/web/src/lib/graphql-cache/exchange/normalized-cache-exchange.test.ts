@@ -991,6 +991,37 @@ describe('normalizedCacheExchange', () => {
     expect(host.reads).toHaveLength(1);
   });
 
+  it('shows a cache hit while the network response is still being persisted', async () => {
+    const read = deferred<ReadResult>();
+    const write = deferred<WriteResult>();
+    host.readQuery = vi.fn(() => read.promise);
+    host.writeQuery = vi.fn(() => write.promise);
+    const { ops, results, forwarded } = harness(host);
+    ops.next(makeOp(1, 'cache-and-network'));
+    await tick();
+    expect(forwarded).toHaveLength(1);
+    expect(host.writeQuery).toHaveBeenCalledOnce();
+    expect(results).toHaveLength(0);
+
+    read.resolve({ kind: 'hit', data: { from: 'cache' } });
+    await tick();
+    expect(results.map((result) => [result.data, result.stale])).toEqual([
+      [{ from: 'cache' }, true],
+    ]);
+    write.resolve({
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    });
+    await tick();
+    expect(results.map((result) => [result.data, result.stale])).toEqual([
+      [{ from: 'cache' }, true],
+      [{ from: 'network' }, false],
+    ]);
+  });
+
   it.each(['hit', 'miss', 'error'] as const)(
     'ignores a late cache %s after a cache-and-network response',
     async (outcome) => {
@@ -1410,6 +1441,55 @@ describe('normalizedCacheExchange', () => {
       source: 'affected-cache-reread',
     });
   });
+
+  it.each(['read', 'write'] as const)(
+    'recovers owner loss reported by a concurrent %s without another API request',
+    async (failureSource) => {
+      const read = deferred<ReadResult>();
+      const write = deferred<WriteResult>();
+      host.readQuery = vi.fn(() => read.promise);
+      const originalWrite = host.writeQuery;
+      host.writeQuery = vi
+        .fn()
+        .mockImplementationOnce(() => write.promise)
+        .mockImplementation(originalWrite);
+      const { ops, forwarded, results, client } = harness(host);
+      ops.next(makeOp(1, 'cache-and-network'));
+      await tick();
+      expect(host.writeQuery).toHaveBeenCalledOnce();
+
+      const ownerLost = Object.assign(new Error('old owner lost'), {
+        errorCode: 'owner-epoch-lost',
+      });
+      if (failureSource === 'read') {
+        read.reject(ownerLost);
+        await tick();
+        write.reject(new Error('replacement not ready'));
+      } else {
+        write.reject(ownerLost);
+      }
+      await tick();
+      host.pushAffected([1]);
+      await tick();
+      if (failureSource === 'write') {
+        read.reject(ownerLost);
+        await tick();
+      }
+
+      expect(host.writeQuery).toHaveBeenCalledTimes(2);
+      expect(host.writeQuery).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          opKey: 1,
+          data: { from: 'network' },
+          registerDependencies: true,
+        })
+      );
+      expect(host.readQuery).toHaveBeenCalledOnce();
+      expect(forwarded).toHaveLength(1);
+      expect(results).toHaveLength(1);
+      expect(client.reexecuteOperation).not.toHaveBeenCalled();
+    }
+  );
 
   it('registers a slow fallback write without a replacement reread', async () => {
     let readCount = 0;

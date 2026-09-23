@@ -1179,7 +1179,6 @@ export function normalizedCacheExchange(
           }
         } else if (op.kind === 'query') {
           const readState = queryState(op.key);
-          if (result.data != null) readState.cacheReadVersion += 1;
           const releaseTurn = await acquireQueryResultTurn(op.key);
           try {
             const state = queryState(op.key);
@@ -1205,8 +1204,7 @@ export function normalizedCacheExchange(
               const retained: RetainedReplacementFallback | undefined =
                 result.error === undefined &&
                 result.hasNext !== true &&
-                activeOps.has(op.key) &&
-                state.replacementFallback
+                activeOps.has(op.key)
                   ? {
                       version: resultVersion,
                       writeArgs,
@@ -1215,7 +1213,7 @@ export function normalizedCacheExchange(
                       invalidated: false,
                     }
                   : undefined;
-              if (retained) {
+              if (retained && state.replacementFallback) {
                 // Install before the first write: replacement-ready pushes can
                 // arrive synchronously while the cache attempt is settling.
                 state.retainedReplacementFallback = retained;
@@ -1233,6 +1231,18 @@ export function normalizedCacheExchange(
                 }
               } catch (error) {
                 options.onCacheError?.(error, op);
+                // With concurrent reads the old-owner failure can arrive after
+                // this write started. Retain the successful API payload then,
+                // too, so replacement readiness registers it without a refetch.
+                if (
+                  retained &&
+                  activeOps.has(op.key) &&
+                  queryStates.get(op.key) === state &&
+                  (state.replacementFallback || isOwnerEpochLostError(error))
+                ) {
+                  state.replacementFallback = true;
+                  state.retainedReplacementFallback = retained;
+                }
               }
             }
             state.networkError = result.error;
