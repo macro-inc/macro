@@ -68,8 +68,7 @@ where
                             error = ?e,
                             attempts = RECORD_RETRY_BACKOFF.len() + 1,
                             model = %event.model,
-                            input_tokens = event.input_tokens,
-                            output_tokens = event.output_tokens,
+                            amount = ?event.amount,
                             "failed to record ai usage; giving up"
                         );
                         return;
