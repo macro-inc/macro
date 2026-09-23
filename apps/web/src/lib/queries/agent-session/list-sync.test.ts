@@ -69,8 +69,8 @@ it('does not lose metadata committed while a refresh is in flight', async () => 
   await Promise.all([first, second]);
   expect(mocks.graphql).toHaveBeenCalledTimes(2);
   expect(mocks.rest.mock.calls).toEqual([
-    [['first'], { throwOnError: true }],
-    [['second'], { throwOnError: true }],
+    [['first'], { throwOnError: true, agentSessionListsOnly: true }],
+    [['second'], { throwOnError: true, agentSessionListsOnly: true }],
   ]);
 });
 

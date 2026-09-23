@@ -6,7 +6,10 @@ it.each([
   ['an AST body without an agent-session filter', { df: { l: 'task' } }],
   ['the AST nil-id exclusion', { asf: { l: { id: NIL_UUID } } }],
   ['a legacy body without agent-session filters', { document_filters: {} }],
-  ['the legacy nil-id exclusion', { agent_session_filters: { ids: [NIL_UUID] } }],
+  [
+    'the legacy nil-id exclusion',
+    { agent_session_filters: { ids: [NIL_UUID] } },
+  ],
   ['request params', { sort_method: 'viewed_at', limit: 50 }],
   ['a key segment that is not an object', 'soup'],
 ])('excludes %s', (_name, body) => {

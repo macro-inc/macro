@@ -97,7 +97,11 @@ it('leaves unrelated loaded REST lists alone for a known session', async () => {
 
 it('leaves REST lists that exclude agent sessions alone for an unknown session', async () => {
   const excluded = [
-    [...soupKeys.items._def, {}, { agent_session_filters: { ids: [NIL_UUID] } }],
+    [
+      ...soupKeys.items._def,
+      {},
+      { agent_session_filters: { ids: [NIL_UUID] } },
+    ],
     [...soupKeys.astItems._def, {}, { asf: { l: { id: NIL_UUID } } }],
     [...soupKeys.astItems._def, {}, { df: { l: 'task' } }],
   ];

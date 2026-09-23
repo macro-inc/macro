@@ -32,6 +32,7 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, onCleanup } from 'solid-js';
 import { queryClient } from '../client';
+import { bodyMayContainAgentSessions } from './agent-session-scope';
 import { registerActiveGraphqlSoupQuery } from './graphql/active-queries';
 import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
@@ -418,6 +419,7 @@ export function useSoupAstItemsQuery(
   onCleanup(
     registerActiveGraphqlSoupQuery({
       isEnabled: () => usesGraphql() && activeGraphqlQuery().isEnabled(),
+      mayContainAgentSessions: () => bodyMayContainAgentSessions(args().body),
       refresh: async () => {
         activeGraphqlQuery().resetToInitialPage();
         options?.().onBeforeGraphqlRefresh?.();

@@ -39,6 +39,7 @@ export function createChannelUnreadQuery(
   onCleanup(
     registerActiveGraphqlSoupQuery({
       isEnabled: enabled,
+      mayContainAgentSessions: () => false,
       refresh: async () => {
         await query.refetch({
           requestPolicy: 'network-only',
