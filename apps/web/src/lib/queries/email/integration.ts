@@ -5,24 +5,37 @@ import {
 import { throwOnErr } from '@core/util/result';
 import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
-import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
+import { setGraphqlEmailThreadArchived } from '@service-storage/graphql-email-archive-state';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getActiveGraphqlSoupRevalidations,
+  refreshActiveGraphqlSoupQueries,
+} from '../soup/graphql/active-queries';
 
 /** Provider operations used by email's production adapters alongside shared mutations. */
 export const scheduleEmailMessage = (
   ...args: Parameters<typeof emailClient.scheduleMessage>
 ) => throwOnErr(() => emailClient.scheduleMessage(...args));
-/** REST archive writes must revalidate the separate GraphQL list cache, also
- * for undo/redo and failures whose server outcome may be uncertain. */
+/** Shared archive path for Done, Not Done, send completion, and Undo/Redo.
+ * GraphQL owns optimistic state and durable replay; queued writes must not
+ * refetch the server's pre-write membership over the optimistic update. */
 export async function archiveEmailThread(
   ...args: Parameters<typeof emailClient.flagArchived>
 ) {
-  try {
-    return await throwOnErr(() => emailClient.flagArchived(...args));
-  } finally {
-    if (isFeatureEnabled(enableGraphqlSoup)) {
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    const [{ id, value }] = args;
+    const disposition = await setGraphqlEmailThreadArchived(
+      getGraphqlSoupClient(),
+      id,
+      value,
+      getActiveGraphqlSoupRevalidations()
+    );
+    if (disposition === 'committed') {
       await refreshActiveGraphqlSoupQueries();
     }
+    return;
   }
+  return await throwOnErr(() => emailClient.flagArchived(...args));
 }
 export const unscheduleEmailMessage = (
   ...args: Parameters<typeof emailClient.unscheduleMessage>

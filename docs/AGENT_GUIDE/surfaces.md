@@ -323,10 +323,24 @@ active flat and grouped lists, including loaded continuation pages. Once replay
 commits (even after a reload), those queries refresh from the server; they should
 not refetch over the optimistic state merely because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
-The GraphQL-disabled REST path is unchanged. Archive-based Mark Done, Mark Not
-Done, and Undo/Redo revalidate mounted GraphQL lists after the REST archive write
-settles (including uncertain failures). Check Signal/Noise removal and All's done
-indicator, then Undo; success on the archive endpoint alone is not sufficient.
+The GraphQL-disabled REST path is unchanged. With GraphQL enabled, archive-based
+Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
+updates optimistically in the normalized cache, and each reversal is a distinct
+ordered queue entry. The server resolves the thread's owning/delegated inbox;
+no client INBOX-label lookup is needed. Confirmed writes revalidate mounted lists,
+including continuation pages; queued writes retain those descriptors for replay
+without refetching over optimism. Permanent failures roll back the failed intent.
+Check Signal/Noise removal and All's done indicator, then Undo/Redo, including an
+offline action followed by reconnect. Sent-only threads cannot be unarchived.
+
+Email mutation replies use an uncached primary-backed reader. GraphQL email lists
+and realtime hydration also use primary-backed email previews, so an immediate
+refresh cannot overwrite the reply with replica-stale read/archive state. REST
+Soup and the other entity domains keep their existing readers. A post-commit
+reply-load failure is retryable; it must not discard the queued intent. Deploy
+the backend schema containing `setEmailThreadArchived` before this client.
+Browser WASM and native cache builds must include the regenerated schema metadata;
+native offline archive support therefore requires a full app build, not just OTA.
 
 ### Cached Mail filtering
 

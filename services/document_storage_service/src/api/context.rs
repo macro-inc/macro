@@ -587,6 +587,8 @@ pub(crate) struct ApiContext {
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
+    /// GraphQL reader with primary-backed email facts for read-after-write consistency.
+    pub graphql_soup_service: Arc<DssSoupService>,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,

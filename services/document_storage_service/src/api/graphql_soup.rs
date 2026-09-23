@@ -14,7 +14,7 @@ use axum::{
 use axum_extra::extract::Cached;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use complete_graph::GraphqlRequestParts;
-use graphql_soup::soup_item_loader;
+use graphql_soup::{email_mutation_thread_loader, soup_item_loader};
 use macro_authorization::{
     OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
 };
@@ -147,7 +147,7 @@ fn insert_graphql_context_data(
         state.entity_access_service.clone(),
     );
     let soup_item_loader = soup_item_loader(
-        state.soup_router_state.service(),
+        state.graphql_soup_service.clone(),
         state.soup_router_state.email_service(),
     );
     data.insert(macro_user_id.clone());
@@ -167,6 +167,11 @@ fn insert_graphql_context_data(
     data.insert(state.soup_router_state.email_service());
     data.insert(state.entity_access_service.clone());
     data.insert(soup_item_loader);
+    // Mutation replies must read their committed state from the primary email
+    // service. Ordinary Soup lists and subscriptions retain their own reader.
+    data.insert(email_mutation_thread_loader(
+        state.soup_router_state.email_service(),
+    ));
     data.insert(complete_graph::agent_session_bot_loader(PgBotsRepo::new(
         state.readonly_db.0.clone(),
     )));
