@@ -187,7 +187,7 @@ export function createMagicChipModel(props: MagicChipData): {
               tool.detail.kind === 'terminal'
                 ? 'Run command'
                 : toolLabel(tool.name),
-            detail: toolCallDetail(tool),
+            detail: toolCallDetail(tool, session()?.workspace),
           }
         : {}),
     };

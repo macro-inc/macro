@@ -11,6 +11,7 @@
 
 import { hasToolRenderer } from '@core/component/AI/component/tool/handler';
 import { type JSX, Match, Show, Switch } from 'solid-js';
+import { useOptionalAgentSession } from '../../context/AgentSessionContext';
 import { rendersOwnView } from '../../state/tool-groups';
 import { settledToolStatus } from '../../ui';
 import { DisplayResultsToolCall } from './DisplayResultsToolCall';
@@ -36,6 +37,7 @@ export function ToolCallPart(props: {
   /** Where the part sits, for the chat components Macro tools render with. */
   context?: ToolCallContext;
 }): JSX.Element {
+  const session = useOptionalAgentSession();
   const failed = () => props.part.status === 'failed';
   // A call the log still has running once its turn is over is not running
   // (see `settledToolStatus`). Without a turn to place it in there is no
@@ -56,6 +58,7 @@ export function ToolCallPart(props: {
           status() === 'completed'
         ? 'Stopped'
         : undefined,
+    workspace: session?.session()?.workspace,
   });
 
   // Non-keyed matches preserve the disclosure when a streamed update replaces

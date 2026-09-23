@@ -14,7 +14,7 @@ export function SearchToolCall(props: {
     <ToolCard
       icon={<SearchIcon class="size-4" />}
       title={props.common.label}
-      subtitle={pathsSubtitle(props.detail.paths)}
+      subtitle={pathsSubtitle(props.detail.paths, props.common.workspace)}
       status={props.common.status}
       muted={props.common.muted}
       trailing={props.common.trailing}
