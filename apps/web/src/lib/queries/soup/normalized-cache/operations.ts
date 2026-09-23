@@ -771,6 +771,10 @@ export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
  * `refreshGraphql` also network-refreshes mounted GraphQL Soup operations.
  * REST's normalized entity insertion cannot change GraphQL list or grouped-bin
  * membership, so creation callers must request this transport revalidation.
+ *
+ * `created` marks an entity that did not exist a moment ago, so it sorts first
+ * in newest-first lists. It is inserted into the REST lists whose filters admit
+ * it, without refetching any list, in either transport.
  */
 export async function refetchSoupEntity(
   entityId: string,
@@ -779,6 +783,7 @@ export async function refetchSoupEntity(
     includeRoot?: boolean;
     ownTouch?: boolean;
     refreshGraphql?: boolean;
+    created?: boolean;
   }
 ): Promise<void> {
   if (options?.refreshGraphql) {
@@ -790,6 +795,7 @@ export async function refetchSoupEntity(
   // feed stays on REST.
   if (
     !options?.ownTouch &&
+    !options?.created &&
     isFeatureEnabled(enableGraphqlSoup) &&
     !hasSoupEntity(entityId)
   ) {
@@ -825,6 +831,7 @@ export async function refetchSoupEntity(
       optimisticUpdateSoupEntity(item);
     } else {
       insertSoupEntity(item);
+      if (options?.created) continue;
       if (options?.ownTouch) {
         invalidateAllSoupExceptTouched();
       } else {

@@ -352,6 +352,20 @@ describe('refetchSoupEntity', () => {
       expect(getSoupItemsMock).toHaveBeenCalledOnce();
     });
 
+    it('inserts a just-created entity into REST lists without refetching them', async () => {
+      seedSoupQuery(mockSoupCache([[mockDocumentItem('d-1')]]));
+
+      await refetchSoupEntity('doc-new', 'document', { created: true });
+
+      expect(getSoupQuery()?.pages[0].items.map(getSoupItemId)).toEqual([
+        'doc-new',
+        'd-1',
+      ]);
+      expect(testQueryClient.getQueryState(soupSeedKey)?.isInvalidated).toBe(
+        false
+      );
+    });
+
     it('still inserts own-touch creations into REST lists', async () => {
       seedSoupQuery(mockSoupCache([[mockDocumentItem('d-1')]]));
 
