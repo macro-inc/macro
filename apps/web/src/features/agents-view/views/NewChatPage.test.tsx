@@ -127,6 +127,10 @@ vi.mock('../components/ChatComposer', () => ({
   ),
 }));
 
+beforeEach(() => {
+  localStorage.clear();
+});
+
 function page(connected = true, agents: PersistedAgentLike[] = []) {
   const onStart = vi.fn();
   render(() => (
@@ -253,6 +257,17 @@ describe('agent-led new conversation', () => {
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/home',
     });
+  });
+  it('restores an unsent draft after the page remounts', () => {
+    page();
+    fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Keep this prompt' },
+    });
+    cleanup();
+    page();
+    expect(
+      (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
+    ).toBe('Keep this prompt');
   });
   it('starts a new conversation on Choose repository, not the last used one', async () => {
     mocks.recentIds = [CURSOR_BOT_ID];

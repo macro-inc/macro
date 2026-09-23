@@ -14,6 +14,10 @@ import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
 import { defaultBranchFor } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
+import {
+  createPersistedComposerDraft,
+  NEW_CONVERSATION_ATTACHMENTS_KEY,
+} from '../primitives/composer-draft';
 import { createRecentRepositories } from '../primitives/recent-repositories';
 import { createReachableRepositories } from '../queries/reachable-repositories';
 import { createRepositoryBranches } from '../queries/repository-branches';
@@ -52,10 +56,12 @@ export function NewChatPage(props: {
   const [modelOverride, setModelOverride] = createSignal<string>();
   // A new conversation starts on Automatic until the caller picks a repository.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
-  const [localDraft, setLocalDraft] = createSignal('');
-  const draft = () => props.draft ?? localDraft();
+  const persistedDraft = createPersistedComposerDraft();
+  const draft = () => props.draft ?? persistedDraft.draft();
   const setDraft = (text: string) =>
-    props.onDraftChange ? props.onDraftChange(text) : setLocalDraft(text);
+    props.onDraftChange
+      ? props.onDraftChange(text)
+      : persistedDraft.setDraft(text);
   const [branchOverride, setBranchOverride] = createSignal<string>();
   const selected = createMemo(() => {
     const wanted =
@@ -95,7 +101,12 @@ export function NewChatPage(props: {
     if (agent.harness === 'cursor') openSettings('Harness');
   };
 
-  const attachmentTracker = createInputAttachmentTracker();
+  const attachmentTracker = createInputAttachmentTracker({
+    // Home owns the draft in memory; Agents remounts this page per route.
+    persistenceKey: props.onDraftChange
+      ? undefined
+      : NEW_CONVERSATION_ATTACHMENTS_KEY,
+  });
   const attachFiles = (files: File[]) =>
     void uploadInputAttachments({
       files,
