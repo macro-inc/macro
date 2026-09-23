@@ -228,8 +228,10 @@ export function selectedTextBounds(
   if (!pageRange) return null;
 
   const textLayerRect = textLayer.getBoundingClientRect();
-  const rects = sortAndFilterDOMRects(textNodeRects(pageRange)).filter(
-    (rect) => !isPaddingBounds(textLayerRect, rect)
+  const rects = sortAndFilterDOMRects(
+    textNodeRects(pageRange).filter(
+      (rect) => !isPaddingBounds(textLayerRect, rect)
+    )
   );
   if (rects.length === 0) return null;
 
