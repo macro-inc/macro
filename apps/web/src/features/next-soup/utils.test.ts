@@ -1,3 +1,4 @@
+import { previewBlockTarget } from '@components/app/previewTarget';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { inboxPreviewNavigation } from '../inbox-view/inbox-preview-navigation';
@@ -111,6 +112,7 @@ import type { NotificationSource, UnifiedNotification } from '@notifications';
 import {
   executeMarkEntitiesDone,
   getChannelEntityTarget,
+  getDocumentCommentTarget,
   getRowClickFallbackLocation,
   markChannelNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
@@ -862,6 +864,126 @@ describe('getChannelEntityTarget', () => {
   it('returns undefined for non-channel entities', () => {
     const entity = { type: 'email', id: 'e1' } as unknown as EntityData;
     expect(getChannelEntityTarget(entity)).toBeUndefined();
+  });
+});
+
+const commentNotification = (
+  id: string,
+  commentId: string,
+  overrides: Partial<UnifiedNotification> = {}
+) =>
+  ({
+    id,
+    entity_id: 'doc-1',
+    entity_type: 'document',
+    state: 'unseen',
+    notification_metadata: {
+      tag: 'mentioned_in_document_comment',
+      content: {
+        documentName: 'Plan',
+        fileType: 'md',
+        commentId,
+        threadId: 'thread-1',
+        text: 'hey @you',
+      },
+    },
+    ...overrides,
+  }) as unknown as UnifiedNotification;
+
+const documentRow = (notifications: UnifiedNotification[]) =>
+  ({
+    type: 'document',
+    id: 'doc-1',
+    fileType: 'md',
+    notifications: () => notifications,
+  }) as unknown as EntityData;
+
+describe('getDocumentCommentTarget', () => {
+  it('targets the newest unread comment notification', () => {
+    expect(
+      getDocumentCommentTarget(
+        documentRow([
+          commentNotification('older', 'comment-older', {
+            created_at: '2026-09-20T00:00:00Z',
+          }),
+          commentNotification('read', 'comment-read', {
+            state: 'seen',
+            created_at: '2026-09-23T00:00:00Z',
+          }),
+          commentNotification('done', 'comment-done', {
+            state: 'done',
+            created_at: '2026-09-23T00:00:00Z',
+          }),
+          commentNotification('newest', 'comment-newest', {
+            created_at: '2026-09-22T00:00:00Z',
+          }),
+        ])
+      )?.params
+    ).toEqual({ comment_id: 'comment-newest' });
+  });
+
+  it('opens a document normally once its comment notifications are read', () => {
+    expect(
+      getDocumentCommentTarget(
+        documentRow([commentNotification('n1', 'comment-1', { state: 'seen' })])
+      )
+    ).toBeUndefined();
+  });
+
+  it('ignores documents without notifications', () => {
+    expect(
+      getDocumentCommentTarget({ type: 'document', fileType: 'md' })
+    ).toBeUndefined();
+  });
+
+  it('opens the row at its comment like a comment link', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    const goToLocationFromParams = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      documentRow([commentNotification('n1', 'comment-1')]),
+      {}
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'md', id: 'doc-1', params: { comment_id: 'comment-1' } },
+      expect.objectContaining({ activate: true })
+    );
+    expect(getBlockHandle).toHaveBeenCalledWith('doc-1', 'md');
+    expect(goToLocationFromParams).toHaveBeenCalledWith({
+      comment_id: 'comment-1',
+    });
+  });
+
+  it('carries the comment through the Inbox preview route', () => {
+    const result = inboxPreviewNavigation(
+      documentRow([commentNotification('n1', 'comment-1')]) as never
+    );
+    expect(result.search.targetCommentId).toBe('comment-1');
+    const selection = inboxPreviewSelection(result.params, result.search);
+    expect(selection).toMatchObject({
+      type: 'document',
+      id: 'doc-1',
+      commentTarget: { commentId: 'comment-1' },
+    });
+    expect(previewBlockTarget(selection!).params).toEqual({
+      comment_id: 'comment-1',
+    });
+  });
+
+  it('passes the comment to a document preview', () => {
+    expect(
+      previewBlockTarget(
+        documentRow([commentNotification('n1', 'comment-1')]) as never
+      ).params
+    ).toEqual({ comment_id: 'comment-1' });
   });
 });
 

@@ -1,6 +1,8 @@
 import {
+  getDocumentCommentTarget,
   navigateCalendarPreviewToTarget,
   navigateChannelEntityToTarget,
+  navigateDocumentEntityToComment,
 } from '@app/features/next-soup/utils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
@@ -103,6 +105,13 @@ function PreviewPanelContent(
         entity.target?.threadId,
       ]);
     }
+    if (entity.type === 'document') {
+      return JSON.stringify([
+        entity.type,
+        entity.id,
+        getDocumentCommentTarget(entity)?.commentId,
+      ]);
+    }
     return entity;
   });
 
@@ -119,6 +128,8 @@ function PreviewPanelContent(
         void navigateChannelEntityToTarget(entity, props.orchestrator);
       } else if (entity.type === 'calendar_event') {
         void navigateCalendarPreviewToTarget(entity, props.orchestrator);
+      } else if (entity.type === 'document') {
+        void navigateDocumentEntityToComment(entity, props.orchestrator);
       }
     })
   );

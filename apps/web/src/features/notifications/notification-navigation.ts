@@ -171,6 +171,49 @@ function resolveBlockCommentParamName(type: BlockName | BlockAlias) {
   if (resolved === 'pdf') return PDF_URL_PARAMS.annotationId;
 }
 
+type DocumentCommentLocation = {
+  blockName: BlockName | BlockAlias;
+  commentId: string;
+  params?: Record<string, string>;
+};
+
+/**
+ * The block and params that open a document at one of its comments, the same
+ * target a copied comment link resolves to.
+ */
+export function documentCommentLocation(
+  commentId: string,
+  document: NotificationEntityOverride
+): DocumentCommentLocation {
+  const blockName = safeDocumentContentToBlockName(document);
+  const commentParamName = resolveBlockCommentParamName(blockName);
+  return {
+    blockName,
+    commentId,
+    params: commentParamName ? { [commentParamName]: commentId } : undefined,
+  };
+}
+
+/** {@link documentCommentLocation} for a document comment notification. */
+export function getDocumentCommentLocation(
+  notification: UnifiedNotification,
+  entity?: NotificationEntityOverride
+): DocumentCommentLocation | undefined {
+  const meta = notification.notification_metadata;
+  if (
+    meta.tag !== 'mentioned_in_document_comment' &&
+    meta.tag !== 'replied_to_document_comment_thread' &&
+    meta.tag !== 'commented_on_document'
+  ) {
+    return undefined;
+  }
+
+  return documentCommentLocation(meta.content.commentId.toString(), {
+    fileType: entity?.fileType ?? meta.content.fileType,
+    subType: entity?.subType ?? meta.content.subType,
+  });
+}
+
 type NotSupportedError = {
   tag: 'NotSupportedError';
   notificationType: NotificationType;
@@ -301,63 +344,24 @@ function getSupportedHandler(
           openExternalUrl(url);
         };
       })
-      .with('mentioned_in_document_comment', () => {
-        const meta = notification.notification_metadata;
-        if (meta.tag !== 'mentioned_in_document_comment') return null;
+      .with(
+        P.union(
+          'mentioned_in_document_comment',
+          'replied_to_document_comment_thread',
+          'commented_on_document'
+        ),
+        () => {
+          const location = getDocumentCommentLocation(notification, entity);
+          if (!location) return null;
 
-        const blockName = safeDocumentContentToBlockName(meta.content, entity);
-        const commentParamName = resolveBlockCommentParamName(blockName);
-        const params = commentParamName
-          ? {
-              [commentParamName]: meta.content.commentId.toString(),
-            }
-          : undefined;
-
-        return async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
-            newSplit,
-            params,
-            sourceHandle,
-          });
-      })
-      .with('replied_to_document_comment_thread', () => {
-        const meta = notification.notification_metadata;
-        if (meta.tag !== 'replied_to_document_comment_thread') return null;
-
-        const blockName = safeDocumentContentToBlockName(meta.content, entity);
-        const commentParamName = resolveBlockCommentParamName(blockName);
-        const params = commentParamName
-          ? {
-              [commentParamName]: meta.content.commentId.toString(),
-            }
-          : undefined;
-
-        return async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
-            newSplit,
-            params,
-            sourceHandle,
-          });
-      })
-      .with('commented_on_document', () => {
-        const meta = notification.notification_metadata;
-        if (meta.tag !== 'commented_on_document') return null;
-
-        const blockName = safeDocumentContentToBlockName(meta.content, entity);
-        const commentParamName = resolveBlockCommentParamName(blockName);
-        const params = commentParamName
-          ? {
-              [commentParamName]: meta.content.commentId.toString(),
-            }
-          : undefined;
-
-        return async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
-            newSplit,
-            params,
-            sourceHandle,
-          });
-      })
+          return async (lm: SplitManager, newSplit: boolean = false) =>
+            openSplitIfNotOpen(lm, location.blockName, notification.entity_id, {
+              newSplit,
+              params: location.params,
+              sourceHandle,
+            });
+        }
+      )
       .with('reminder', () => {
         // The notification points at the reminder itself, so there is nothing to
         // open until the reminder is fetched and its referenced entity read. A

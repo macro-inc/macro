@@ -3,6 +3,7 @@ import {
   type ChannelPreviewSelection,
   calendarViewTargetForEntity,
   getChannelEntityTarget,
+  getDocumentCommentTarget,
   type ReminderPreviewSelection,
   reminderSplitTarget,
 } from '@app/features/next-soup/utils';
@@ -15,7 +16,11 @@ import type {
 } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
-import type { DocumentEntity, ForeignEntity } from '@entity';
+import type {
+  DocumentCommentTarget,
+  DocumentEntity,
+  ForeignEntity,
+} from '@entity';
 import { untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 
@@ -35,7 +40,7 @@ type IdOnlyPreviewSelection = {
 type DocumentPreviewSelection = Pick<
   DocumentEntity,
   'id' | 'type' | 'fileType' | 'subType'
->;
+> & { commentTarget?: DocumentCommentTarget };
 
 type ForeignPreviewSelection = Pick<
   ForeignEntity,
@@ -57,6 +62,9 @@ type PreviewBlockTarget = {
   params?: BlockComponentProps[BlockName];
 };
 
+const documentCommentParams = (document: DocumentPreviewSelection) =>
+  untrack(() => getDocumentCommentTarget(document)?.params);
+
 export function previewBlockTarget(
   entity: PreviewPanelSelection
 ): PreviewBlockTarget {
@@ -71,6 +79,7 @@ export function previewBlockTarget(
           alias: 'task',
           baseType: 'md',
         } satisfies BlockAliasContext,
+        params: documentCommentParams(task),
       })
     )
     .with(
@@ -82,12 +91,14 @@ export function previewBlockTarget(
           alias: 'snippet',
           baseType: 'md',
         } satisfies BlockAliasContext,
+        params: documentCommentParams(snippet),
       })
     )
     .with({ type: 'document' }, (document) => ({
       blockType: fileTypeToResolvedBlockName(document.fileType),
       blockId: document.id,
       aliasContext: undefined,
+      params: documentCommentParams(document),
     }))
     .with({ type: P.union('channel_message', 'channel_thread') }, (message) => {
       const channelTarget = untrack(() => getChannelEntityTarget(message));
