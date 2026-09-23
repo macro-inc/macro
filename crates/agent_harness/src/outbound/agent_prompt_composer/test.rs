@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::model::{CommentAnchor, PriorMessage};
+use crate::domain::model::{CommentAnchor, MarkedPassage, PriorMessage};
 use axum::{Json, Router, routing::post};
 use std::sync::{Arc, Mutex};
 
@@ -57,6 +57,10 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
                 anchor: Some(CommentAnchor {
                     mark_id: "mark-1".to_owned(),
                     marked_text: Some("the marked phrase".to_owned()),
+                    current: Some(MarkedPassage {
+                        marked_text: "the edited phrase".to_owned(),
+                        surrounding_text: "Around the edited phrase.".to_owned(),
+                    }),
                 }),
                 messages: vec![PriorMessage {
                     sender: "alice".to_owned(),
@@ -69,6 +73,11 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
     let body = received.lock().unwrap().clone().unwrap();
     assert_eq!(body["anchor"]["markId"], "mark-1");
     assert_eq!(body["anchor"]["markedText"], "the marked phrase");
+    assert_eq!(body["anchor"]["currentMarkedText"], "the edited phrase");
+    assert_eq!(
+        body["anchor"]["surroundingText"],
+        "Around the edited phrase."
+    );
     assert_eq!(body["messages"][0]["sender"], "alice");
 
     // A thread anchored before snapshots existed still names its mark.
@@ -80,6 +89,7 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
                 anchor: Some(CommentAnchor {
                     mark_id: "mark-2".to_owned(),
                     marked_text: None,
+                    current: None,
                 }),
                 messages: vec![],
             }),
@@ -89,5 +99,6 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
     let body = received.lock().unwrap().clone().unwrap();
     assert_eq!(body["anchor"]["markId"], "mark-2");
     assert!(body["anchor"].get("markedText").is_none());
+    assert!(body["anchor"].get("currentMarkedText").is_none());
     server.abort();
 }

@@ -56,6 +56,62 @@ export function $getCommentMarkText(markId: string): string {
   return blocks.join('\n').trim();
 }
 
+/** Where a comment mark sits in a document, bounded for an agent prompt. */
+export type CommentMarkContext = {
+  /** The text the mark covers. */
+  markedText: string;
+  /** The block or blocks containing the mark, windowed around it. */
+  surroundingText: string;
+};
+
+const ELLIPSIS = '\u2026';
+
+function clip(text: string, limit: number): string {
+  return text.length > limit ? text.slice(0, limit) + ELLIPSIS : text;
+}
+
+/** A window of `text` at most `limit` long, centred on `focus` when it fits. */
+function windowAround(text: string, focus: string, limit: number): string {
+  if (text.length <= limit) return text;
+  const at = Math.max(0, text.indexOf(focus));
+  const pad = Math.floor((limit - Math.min(focus.length, limit)) / 2);
+  const start = Math.max(0, Math.min(at - pad, text.length - limit));
+  const end = start + limit;
+  return (
+    (start > 0 ? ELLIPSIS : '') +
+    text.slice(start, end) +
+    (end < text.length ? ELLIPSIS : '')
+  );
+}
+
+/**
+ * The live text a comment mark covers and the blocks around it, or null when
+ * no node in the document carries the mark. Both are bounded so that one
+ * highlight over a long section cannot dominate an agent prompt. Must run
+ * inside an editor read or update.
+ */
+export function $getCommentMarkContext(
+  markId: string,
+  { markedLimit = 1000, surroundingLimit = 2000 } = {}
+): CommentMarkContext | null {
+  const blocks = new Map<NodeKey, ElementNode>();
+  for (const { node } of $dfs($getRoot())) {
+    if (!$isCommentNode(node) || !node.getIDs().includes(markId)) continue;
+    const block = node.getTopLevelElement();
+    if (block && !blocks.has(block.getKey())) blocks.set(block.getKey(), block);
+  }
+  if (blocks.size === 0) return null;
+  const markedText = $getCommentMarkText(markId);
+  const surrounding = [...blocks.values()]
+    .map((block) => block.getTextContent())
+    .join('\n')
+    .trim();
+  return {
+    markedText: clip(markedText, markedLimit),
+    surroundingText: windowAround(surrounding, markedText, surroundingLimit),
+  };
+}
+
 export class CommentNode extends MarkNode {
   __threadId: number | undefined;
   __isDraft: boolean;

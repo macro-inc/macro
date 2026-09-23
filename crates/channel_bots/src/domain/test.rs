@@ -1,4 +1,5 @@
-use super::ports::ConversationAccess;
+use super::models::MarkedPassage;
+use super::ports::{CommentMarks, ConversationAccess};
 use async_trait::async_trait;
 use entity_access::domain::models::{
     AccessLevel, BotReceiptScope, EntityAccessReceipt, EntityPermission, EntityType,
@@ -85,6 +86,24 @@ pub(super) fn configure_reads(
         assert_eq!(id, history.root.id);
         Ok(history.clone())
     });
+}
+/// Live mark lookups answering one fixed result.
+pub(super) struct Marks(pub Result<Option<MarkedPassage>, &'static str>);
+impl Marks {
+    pub fn none() -> Arc<Self> {
+        Arc::new(Self(Ok(None)))
+    }
+}
+#[async_trait]
+impl CommentMarks for Marks {
+    async fn resolve(
+        &self,
+        document_id: &str,
+        _mark_id: Uuid,
+    ) -> anyhow::Result<Option<MarkedPassage>> {
+        assert_eq!(document_id, "discussion-document");
+        self.0.clone().map_err(|error| anyhow::anyhow!(error))
+    }
 }
 #[derive(Default)]
 pub(super) struct Access {

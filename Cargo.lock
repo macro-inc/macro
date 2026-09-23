@@ -3502,6 +3502,7 @@ dependencies = [
  "chrono-tz",
  "entity_access",
  "futures",
+ "lexical_client",
  "macro_user_id",
  "messages",
  "prompt",
