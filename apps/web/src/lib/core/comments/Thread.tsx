@@ -4,13 +4,19 @@ import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
+import { UserIcon } from '@core/component/UserIcon';
 import {
   enableUnifiedDocumentDiscussions,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { MessageThreadById } from '@core/messages/MessageThread';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import { Layer } from '@ui';
+import { markdownToPlainText } from '@macro-inc/lexical-core';
+import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
+import Check from '@phosphor/check.svg';
+import CheckCircle from '@phosphor/check-circle.svg';
+import { usePatchThreadMutation } from '@queries/messages/mutations';
+import { Button, Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import {
   type Accessor,
@@ -167,6 +173,17 @@ function MessageThreadBody(props: ThreadBodyProps) {
     const highlighted = context.highlightedCommentId();
     return typeof highlighted === 'string' ? highlighted : null;
   };
+  const patchThread = usePatchThreadMutation();
+  const resolved = () => !!props.comment.resolved;
+  const setResolved = (value: boolean) =>
+    patchThread.mutate({
+      parent: parent(),
+      rootId: String(props.comment.threadId),
+      patch: { resolved: value },
+    });
+  // A resolved thread folds to one line whenever it is not the active thread.
+  const collapsed = () => resolved() && !props.isActive && !targetId();
+
   return (
     <StaticMarkdownContext theme={props.theme ?? baseCommentTheme}>
       <Show
@@ -191,22 +208,97 @@ function MessageThreadBody(props: ThreadBodyProps) {
           />
         }
       >
-        <MessageThreadById
-          parent={parent()}
-          rootId={String(props.comment.threadId)}
-          canWrite={context.canComment()}
-          hideReplyInput={props.hideReplyInput}
-          onEditingChange={context.setMessageEditing}
-          targetId={targetId()}
-          buildLink={(message) =>
-            buildSimpleEntityUrl(
-              { type: context.documentType, id: context.documentId },
-              { [MD_URL_PARAMS.commentId]: message.id }
-            )
+        <Show
+          when={!collapsed()}
+          fallback={
+            <ResolvedThreadSummary
+              comment={props.comment}
+              onOpen={() => context.setActiveThread(props.comment.threadId)}
+            />
           }
-        />
+        >
+          <Show when={resolved()}>
+            <div class="mb-1 flex items-center gap-1.5 rounded-lg bg-success-bg px-2 py-1 text-xs text-success">
+              <CheckCircle class="size-3.5 shrink-0" />
+              <span class="flex-1">Resolved</span>
+              <Show when={context.canComment()}>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => setResolved(false)}
+                >
+                  <ArrowCounterClockwise />
+                  Reopen
+                </Button>
+              </Show>
+            </div>
+          </Show>
+          <MessageThreadById
+            parent={parent()}
+            rootId={String(props.comment.threadId)}
+            canWrite={context.canComment()}
+            hideReplyInput={props.hideReplyInput}
+            onEditingChange={context.setMessageEditing}
+            targetId={targetId()}
+            buildLink={(message) =>
+              buildSimpleEntityUrl(
+                { type: context.documentType, id: context.documentId },
+                { [MD_URL_PARAMS.commentId]: message.id }
+              )
+            }
+          />
+          <Show when={!resolved() && props.isActive && context.canComment()}>
+            <div class="mt-1 flex justify-end">
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => {
+                  setResolved(true);
+                  context.setActiveThread(null);
+                }}
+              >
+                <Check />
+                Resolve
+              </Button>
+            </div>
+          </Show>
+        </Show>
       </Show>
     </StaticMarkdownContext>
+  );
+}
+
+/** The one-line stand-in for a resolved thread: who started it and how it began. */
+function ResolvedThreadSummary(props: { comment: Root; onOpen: () => void }) {
+  const preview = createMemo(() =>
+    markdownToPlainText(props.comment.text).trim().replace(/\s+/g, ' ')
+  );
+  const replyCount = () =>
+    props.comment.replyCount ?? props.comment.children.length;
+  return (
+    <button
+      type="button"
+      class="flex w-full min-w-0 items-center gap-2 rounded-lg px-1 py-0.5 text-left text-xs text-ink-extra-muted hover:bg-hover"
+      aria-label="Show resolved comment"
+      onClick={(e) => {
+        e.stopPropagation();
+        props.onOpen();
+      }}
+    >
+      <CheckCircle class="size-4 shrink-0 text-success" />
+      <UserIcon
+        id={props.comment.owner}
+        size="sm"
+        suppressClick
+        isDeleted={false}
+      />
+      <span class="min-w-0 flex-1 truncate">{preview()}</span>
+      <Show when={replyCount() > 0}>
+        <span class="shrink-0 tabular-nums">
+          {`${replyCount()} ${replyCount() > 1 ? 'replies' : 'reply'}`}
+        </span>
+      </Show>
+    </button>
   );
 }
 

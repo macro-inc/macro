@@ -1,8 +1,9 @@
 import { Popover } from '@kobalte/core/popover';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
+import CheckCircle from '@phosphor/check-circle.svg';
 import { cn, Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
-import { createEffect, createSignal, useContext } from 'solid-js';
+import { createEffect, createSignal, Show, useContext } from 'solid-js';
 import type { Layout, Root } from './commentType';
 import { MeasureContainer } from './MeasureContainer';
 import { CommentsContext, ThreadCard } from './Thread';
@@ -87,7 +88,17 @@ export function MinimizedThread(props: {
                 'bg-comment/10 group-hover:bg-comment/20': props.isActive,
               })}
             >
-              <ChatTeardrop class="size-4" onClick={clickHandler} />
+              <Show
+                when={props.comment.resolved}
+                fallback={
+                  <ChatTeardrop class="size-4" onClick={clickHandler} />
+                }
+              >
+                <CheckCircle
+                  class="size-4 text-success"
+                  onClick={clickHandler}
+                />
+              </Show>
               <div class="flex items-center px-1 h-6">
                 <span class="text-xs text-center">{commentCount()}</span>
               </div>

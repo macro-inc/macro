@@ -705,9 +705,22 @@ export function usePatchThreadMutation() {
       applyThreadState(input.parent, state);
       return state;
     },
-    onError: () => toast.failure('Could not update discussion'),
+    // Resolving collapses the card at once; a failure restores the prior state.
+    onMutate: (input) => {
+      const { resolved } = input.patch;
+      if (resolved == null) return;
+      const previous = getCachedThreadState(input.parent, input.rootId);
+      if (!previous || previous.resolved === resolved) return;
+      applyThreadState(input.parent, { ...previous, resolved });
+      return { previous };
+    },
+    onError: (_error, input, context) => {
+      if (context?.previous) applyThreadState(input.parent, context.previous);
+      toast.failure('Could not update discussion');
+    },
   }));
 }
+
 export function useDeleteThreadMutation() {
   return useMutation(() => ({
     mutationFn: async (input: { parent: MessageParent; rootId: string }) => {

@@ -615,6 +615,12 @@ mark {
   padding-bottom: 0;
 }
 
+.md-mark.comment[data-comment-resolved]:not(.selected) {
+  background: unset;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
 .md-no-comments {
   .md-mark.comment {
     background: unset !important;

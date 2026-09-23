@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let testQueryClient: QueryClient;
-const mocks = vi.hoisted(() => ({ delete: vi.fn() }));
+const mocks = vi.hoisted(() => ({ delete: vi.fn(), patchThread: vi.fn() }));
 vi.mock('../../client', () => ({
   get queryClient() {
     return testQueryClient;
@@ -22,7 +22,7 @@ vi.mock('@service-storage/messages', () => ({ entityMessagesClient: mocks }));
 vi.mock('../subscription', () => ({ useMessageSubscription: () => {} }));
 
 import { messageKeys } from '../keys';
-import { useDeleteMessageMutation } from '../mutations';
+import { useDeleteMessageMutation, usePatchThreadMutation } from '../mutations';
 import { handleMessageEvent, onThreadStateUpdated } from '../sync';
 import { getThreadRepliesQueryKey } from '../thread-replies';
 import {
@@ -52,6 +52,7 @@ function message(
 
 beforeEach(() => {
   mocks.delete.mockReset();
+  mocks.patchThread.mockReset();
   testQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -280,5 +281,89 @@ describe('root deletion', () => {
     )!;
     expect(thread.state.deleted_at).toBeUndefined();
     expect(thread.replies).toHaveLength(1);
+  });
+});
+
+describe('thread resolution', () => {
+  const parent: MessageParent = { type: 'document', id: 'doc' };
+  const state = {
+    root_id: 'root',
+    user_id: 'macro|a@example.com',
+    resolved: false,
+    created_at: time,
+    updated_at: time,
+    anchor: { type: 'markdown' as const, mark_id: 'mark' },
+  };
+  const timelineKey = getMessageTimelineQueryKey(parent);
+  const threadKey = getThreadRepliesQueryKey(parent, 'root');
+  const cachedResolved = () => ({
+    timeline:
+      testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
+        .items[0].state.resolved,
+    thread:
+      testQueryClient.getQueryData<MessageThread>(threadKey)!.state.resolved,
+  });
+
+  function setup() {
+    const root: MessageListItem = {
+      ...message(parent, 'root'),
+      state,
+      thread: { reply_count: 0, preview: [], latest_reply_at: null },
+    };
+    testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
+      pageParams: [null],
+      pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+    });
+    testQueryClient.setQueryData<MessageThread>(threadKey, {
+      state,
+      root,
+      replies: [],
+    });
+    let mutation!: ReturnType<typeof usePatchThreadMutation>;
+    function Harness() {
+      mutation = usePatchThreadMutation();
+      return null;
+    }
+    render(() => (
+      <QueryClientProvider client={testQueryClient}>
+        <Harness />
+      </QueryClientProvider>
+    ));
+    return mutation;
+  }
+
+  it('shows the resolution before the server confirms it', async () => {
+    let confirm!: () => void;
+    mocks.patchThread.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          confirm = () => resolve({ ...state, resolved: true });
+        })
+    );
+    const mutation = setup();
+    const pending = mutation.mutateAsync({
+      parent,
+      rootId: 'root',
+      patch: { resolved: true },
+    });
+    await vi.waitFor(() =>
+      expect(cachedResolved()).toEqual({ timeline: true, thread: true })
+    );
+    confirm();
+    await pending;
+    expect(cachedResolved()).toEqual({ timeline: true, thread: true });
+  });
+
+  it('restores the prior state when resolving fails', async () => {
+    mocks.patchThread.mockRejectedValue(new Error('offline'));
+    const mutation = setup();
+    await expect(
+      mutation.mutateAsync({
+        parent,
+        rootId: 'root',
+        patch: { resolved: true },
+      })
+    ).rejects.toThrow('offline');
+    expect(cachedResolved()).toEqual({ timeline: false, thread: false });
   });
 });

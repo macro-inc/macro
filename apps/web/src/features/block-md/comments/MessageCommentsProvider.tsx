@@ -183,7 +183,27 @@ export const MessageCommentsProvider: VoidComponent<{
       );
     });
     element.toggleAttribute('data-comment-inactive', inactive);
+    // Resolved discussions keep their range but drop the highlight; an
+    // overlapping open or unloaded discussion keeps it.
+    const resolved = node.getIDs().every((id) => {
+      const live = threads.filter(
+        (thread) =>
+          thread.state.anchor?.type === 'markdown' &&
+          thread.state.anchor.mark_id === id &&
+          !thread.state.deleted_at
+      );
+      return live.length > 0 && live.every((thread) => thread.state.resolved);
+    });
+    element.toggleAttribute('data-comment-resolved', resolved);
   };
+
+  const refreshMarkPresentation = (markId: string) =>
+    editor.getEditorState().read(() => {
+      for (const [key, element] of Object.entries(mountedMarks[markId] ?? {})) {
+        const node = $getNodeByKey<CommentNode>(key);
+        if (node && element) updateMarkPresentation(node, element);
+      }
+    });
 
   const removeThreadPlacement = (state: MessageThread['state']) => {
     if (!state.deleted_at && state.anchor !== null) return;
@@ -460,6 +480,7 @@ export const MessageCommentsProvider: VoidComponent<{
         element?.classList.remove('draft');
         element?.removeAttribute('data-comment-inactive');
       }
+      untrack(() => refreshMarkPresentation(anchor.id));
       setMarks(anchor.id, anchor);
     }
 

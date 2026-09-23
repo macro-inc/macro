@@ -21,7 +21,12 @@ import {
 const mocks = vi.hoisted(() => ({
   unifiedDiscussions: true,
   confirmed: vi.fn(),
+  patchThread: vi.fn(),
 }));
+vi.mock('@queries/messages/mutations', () => ({
+  usePatchThreadMutation: () => ({ mutate: mocks.patchThread }),
+}));
+vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@core/util/url', () => ({
   buildSimpleEntityUrl: (
     entity: { type: string; id: string },
@@ -80,6 +85,9 @@ vi.mock(
   })
 );
 vi.mock('@ui', () => ({
+  Button: (props: ParentProps<{ onClick?: () => void }>) => (
+    <button onClick={() => props.onClick?.()}>{props.children}</button>
+  ),
   Layer: (props: ParentProps) => props.children,
   cn: (...values: string[]) => values.join(' '),
 }));
@@ -90,6 +98,7 @@ vi.mock('./MeasureContainer', () => ({
 const writeText = vi.fn();
 beforeEach(() => {
   mocks.unifiedDiscussions = true;
+  mocks.patchThread.mockReset();
   writeText.mockReset();
   vi.stubGlobal('navigator', { clipboard: { writeText } });
 });
@@ -246,4 +255,83 @@ describe('anchored comment links', () => {
       }
     }
   );
+});
+
+describe('resolved discussions', () => {
+  const renderThread = (props: { resolved: boolean; isActive: boolean }) => {
+    const setActiveThread = vi.fn();
+    const view = render(() => (
+      <CommentsContext.Provider
+        value={{
+          documentId: 'document',
+          documentType: 'md',
+          canComment: () => true,
+          isDocumentOwner: () => true,
+          highlightedCommentId: () => null,
+          setActiveThread,
+          setThreadHeight: () => {},
+          getCommentById: () => undefined,
+          ownedComment: () => false,
+          inComment: true,
+          commentOperations: noopCommentOperations,
+          messageOperations: { createComment: async () => null },
+        }}
+      >
+        <ThreadBody
+          comment={{
+            ...comment,
+            text: 'Fix the\n\nintro',
+            replyCount: 2,
+            resolved: props.resolved,
+          }}
+          isActive={props.isActive}
+        />
+      </CommentsContext.Provider>
+    ));
+    return { view, setActiveThread };
+  };
+
+  it('folds an inactive resolved thread to a one-line summary that opens it', () => {
+    const { view, setActiveThread } = renderThread({
+      resolved: true,
+      isActive: false,
+    });
+    expect(view.queryByRole('link')).toBeNull();
+    expect(view.getByText('Fix the intro')).toBeTruthy();
+    expect(view.getByText('2 replies')).toBeTruthy();
+    fireEvent.click(
+      view.getByRole('button', { name: 'Show resolved comment' })
+    );
+    expect(setActiveThread).toHaveBeenCalledWith('comment-root');
+  });
+
+  it('reopens an active resolved thread', () => {
+    const { view } = renderThread({ resolved: true, isActive: true });
+    expect(view.getByRole('link')).toBeTruthy();
+    fireEvent.click(view.getByRole('button', { name: 'Reopen' }));
+    expect(mocks.patchThread).toHaveBeenCalledWith({
+      parent: { type: 'document', id: 'document' },
+      rootId: 'comment-root',
+      patch: { resolved: false },
+    });
+  });
+
+  it('resolves an active open thread and releases focus so it folds', () => {
+    const { view, setActiveThread } = renderThread({
+      resolved: false,
+      isActive: true,
+    });
+    fireEvent.click(view.getByRole('button', { name: 'Resolve' }));
+    expect(mocks.patchThread).toHaveBeenCalledWith({
+      parent: { type: 'document', id: 'document' },
+      rootId: 'comment-root',
+      patch: { resolved: true },
+    });
+    expect(setActiveThread).toHaveBeenCalledWith(null);
+  });
+
+  it('offers no resolve action on an inactive open thread', () => {
+    const { view } = renderThread({ resolved: false, isActive: false });
+    expect(view.queryByRole('button', { name: 'Resolve' })).toBeNull();
+  });
 });
