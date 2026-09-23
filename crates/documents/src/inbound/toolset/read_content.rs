@@ -4,7 +4,8 @@ use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use std::str::FromStr;
 
 use crate::domain::{
-    models::{CommentThread, LocationQueryParams},
+    comments::DocumentDiscussion,
+    models::LocationQueryParams,
     ports::{DocumentService, create::DocumentCreationService, editing::EditingWorkerService},
     response::LocationResponseV3,
 };
@@ -88,13 +89,18 @@ const MAX_INLINE_TEXT_BYTES: usize = 512 * 1024;
 pub struct ReadContentResponse {
     /// The content of the document
     pub content: Content,
-    /// Any comments on the document
-    pub comments: Vec<CommentThread>,
+    /// The comment threads on the document, oldest first: inline comments
+    /// with the text they are on, and Discussion comments on the whole
+    /// document. Each thread lists its first comment followed by the replies.
+    pub comments: Vec<DocumentDiscussion>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
 #[serde(rename_all = "camelCase")]
-#[schemars(title = "ReadContent", description = "Retrieve a documents content")]
+#[schemars(
+    title = "ReadContent",
+    description = "Retrieve a document's content and its comment threads, including inline comments with the text they are on, Discussion comments, replies and resolved state."
+)]
 pub struct ReadContent {
     #[schemars(description = "The id of the document you want to retrieve content for.")]
     pub document_id: Uuid,
@@ -239,8 +245,8 @@ where
         };
 
         let comments = service_context
-            .service
-            .get_document_comments(entity_access_receipt)
+            .comments
+            .discussions(entity_access_receipt)
             .await
             .map_err(|e| ToolCallError {
                 description: "unable to get document comments".to_string(),

@@ -271,6 +271,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         sync_service_client.clone(),
         ReqwestEditingWorkerClient::from_url(ai_editing_worker_url),
         config.document_permission_jwt.to_string(),
+        ai_tools::message_reader(db.clone()),
     );
 
     let properties_tool_context = ai_tools::build_properties_tool_context(

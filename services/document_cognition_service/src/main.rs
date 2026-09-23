@@ -330,6 +330,7 @@ async fn main() -> anyhow::Result<()> {
             std::sync::Arc::new(reqwest::Client::new()),
         ),
         config.document_permission_jwt.as_ref().to_string(),
+        ai_tools::message_reader(db.clone()),
     );
 
     tracing::info!("initialized document tool context");

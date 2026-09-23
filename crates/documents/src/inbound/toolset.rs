@@ -12,6 +12,7 @@ mod upload_file;
 mod test;
 
 use crate::{
+    domain::comments::{DocumentCommentReader, DocumentComments},
     domain::create::DocumentCreator,
     domain::ports::DocumentService,
     domain::ports::create::DocumentCreationService,
@@ -28,7 +29,7 @@ use crate::{
     },
     outbound::{
         document_bytes_upload::ReqwestDocumentBytesUploader,
-        markdown_init::LexicalSyncMarkdownInitializer,
+        lexical_comment_marks::LexicalCommentMarks, markdown_init::LexicalSyncMarkdownInitializer,
     },
 };
 use activity::{Actor, Attribution};
@@ -37,6 +38,7 @@ use bot_id::BotId;
 use entity_access::domain::ports::EntityAccessService;
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::api::MessageReader;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 
@@ -71,6 +73,9 @@ pub struct DocumentToolContext<
     /// Editing worker service for the EditDocument tool.
     pub editing: Arc<EDSvc>,
 
+    /// A document's comment threads, read by the ReadContent tool.
+    pub comments: Arc<dyn DocumentComments>,
+
     /// Permission-scoped deterministic spreadsheet workflows.
     pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<DSvc, EDSvc>>,
 
@@ -100,6 +105,7 @@ impl<
             sync_service_client: self.sync_service_client.clone(),
             creator: self.creator.clone(),
             editing: self.editing.clone(),
+            comments: self.comments.clone(),
             spreadsheet: self.spreadsheet.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             recorder: self.recorder.clone(),
@@ -122,6 +128,7 @@ impl<
         sync_service_client: SyncServiceClient,
         editing: EDSvc,
         document_permission_jwt_secret: String,
+        messages: Arc<dyn MessageReader>,
     ) -> Self {
         let service = Arc::new(service);
         let lexical_client = Arc::new(lexical_client);
@@ -135,6 +142,10 @@ impl<
             ReqwestDocumentBytesUploader::default(),
             NoOpDocumentMentionTracker,
         );
+        let comments = Arc::new(DocumentCommentReader::new(
+            messages,
+            LexicalCommentMarks::new(lexical_client.clone()),
+        ));
         let editing = Arc::new(editing);
         let spreadsheet = Arc::new(crate::domain::spreadsheet::SpreadsheetService::new(
             service.clone(),
@@ -149,6 +160,7 @@ impl<
             sync_service_client,
             creator,
             editing,
+            comments,
             spreadsheet,
             document_permission_jwt_secret,
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),

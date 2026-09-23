@@ -209,6 +209,16 @@ pub fn build_channel_tool_context_without_side_effects(
     )
 }
 
+/// Read-only view of the shared message tables for tools that only read
+/// conversations, such as a document's comments. It publishes no events, so it
+/// is exposed only through [`messages::domain::api::MessageReader`].
+pub fn message_reader(pool: sqlx::PgPool) -> Arc<dyn messages::domain::api::MessageReader> {
+    Arc::new(messages::domain::service::MessageService::new(
+        messages::outbound::pg_message_repo::PgMessageRepository::new(pool),
+        messages::domain::ports::NoMessageEventPublisher,
+    ))
+}
+
 /// Shared message service used by agent tools: the same persistence, reference
 /// authorization, and group-mention policy as the channel HTTP API, over the
 /// delivery `effects` a host composed.

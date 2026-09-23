@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 use crate::domain::content::DocumentContent;
 use crate::domain::events::InteractionReason;
 use crate::domain::models::{
-    CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
-    DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
-    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
+    CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, DocumentTeamShareResponse,
+    EditDocumentServiceArgs, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    LocationQueryParams, TaskBranchName,
 };
 use crate::domain::permission_token::decode_permission_token;
 use crate::domain::ports::editing::{EditMode, EditResult, EditingWorkerService};
@@ -112,13 +112,6 @@ impl DocumentService for FakeDocumentService {
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
         panic!("unexpected get_document_text call")
-    }
-
-    async fn get_document_comments(
-        &self,
-        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<CommentThread>, DocumentError> {
-        panic!("unexpected get_document_comments call")
     }
 
     async fn create_document(
@@ -460,6 +453,7 @@ fn tool_context(
         ),
         editing,
         "unused-jwt-secret".to_string(),
+        std::sync::Arc::new(messages::domain::api::MockMessageReader::new()),
     ))
 }
 

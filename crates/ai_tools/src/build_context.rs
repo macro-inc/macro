@@ -305,6 +305,7 @@ pub async fn build_tool_service_context_from_env(
         sync_client.as_ref().clone(),
         ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new())),
         env.document_permission_jwt.to_string(),
+        crate::tool_context::message_reader(pool.clone()),
     );
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(

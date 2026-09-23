@@ -280,13 +280,6 @@ impl DocumentService for StubDocumentService {
         unimplemented!()
     }
 
-    async fn get_document_comments(
-        &self,
-        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<documents::domain::models::CommentThread>, DocumentError> {
-        unimplemented!()
-    }
-
     async fn handle_task_properties(
         &self,
         _user_id: MacroUserIdStr<'static>,
