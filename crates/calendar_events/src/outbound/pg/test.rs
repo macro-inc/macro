@@ -4188,7 +4188,7 @@ async fn mention_previews_fall_back_to_a_channel_shared_projection(pool: PgPool)
     let author_provider = provider_ids(&repo, author_link).await;
     let attendee_provider = provider_ids(&repo, attendee_link).await;
 
-    let author_copy = timed_upsert(
+    let mut author_copy = timed_upsert(
         author_id,
         author_link,
         author_provider,
@@ -4196,6 +4196,7 @@ async fn mention_previews_fall_back_to_a_channel_shared_projection(pool: PgPool)
         "Pilates",
         1,
     );
+    author_copy.event.description = Some("Bring a mat".to_string());
     let shared_event_id = author_copy.event.id;
     repo.upsert_event_fixture(author_copy).await.unwrap();
     let attendee_copy = timed_upsert(
@@ -4271,6 +4272,7 @@ async fn mention_previews_fall_back_to_a_channel_shared_projection(pool: PgPool)
     };
     assert_eq!(shared.viewer_event_id, None);
     assert_eq!(shared.title, "Pilates");
+    assert_eq!(shared.description.as_deref(), Some("Bring a mat"));
     assert!(shared.occurrence_key.is_some());
     // Private events stay hidden despite the grant, and a grant covers only
     // the event it names.

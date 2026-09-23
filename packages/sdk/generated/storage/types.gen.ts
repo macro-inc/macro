@@ -1749,6 +1749,11 @@ export type CalendarMentionEvent = {
      */
     attendeeCount: number;
     /**
+     * Provider description, plain text or HTML, truncated for the preview.
+     * Clients must sanitize it before rendering.
+     */
+    description?: string | null;
+    /**
      * Whether the event repeats.
      */
     isRecurring: boolean;

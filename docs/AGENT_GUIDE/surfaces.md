@@ -669,6 +669,9 @@ also shares it read-only with the channel's current members: a member without a 
 own sees the mention's title and time, and its hover card adds a `Shared with you · not on
 your calendar` line with no open action. Clicking such a mention shows that hover card
 instead of opening the calendar. Private and confidential events are never shared this way.
+Every calendar mention's hover card shows the schedule, location, organizer and attendee
+count, plus the first lines of the event description (its links open), and no last-updated
+byline.
 
 ## Calls — `/app/component/calls`
 
