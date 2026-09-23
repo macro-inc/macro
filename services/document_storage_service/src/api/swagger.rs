@@ -57,6 +57,12 @@ use crate::{
         },
     },
 };
+use channel_labels::domain::models::{
+    ChannelLabel, ChannelLabelRule, ChannelLabelsList, SmartTagChannelMatch, SmartTagPreview,
+};
+use channel_labels::inbound::axum_router::{
+    CreateChannelLabelRequest, RenameChannelLabelRequest, SetChannelLabelRequest,
+};
 use channels::inbound::axum_router::{
     ApiActivity, ApiAttachmentChannelReference, ApiAttachmentEntityReference,
     ApiAttachmentGenericReference, ApiChannelAttachment, ApiChannelAttachmentsPage,
@@ -150,6 +156,7 @@ use utoipa::OpenApi;
         terms_of_service = "https://macro.com/terms",
     ),
     paths(
+        dictation::inbound::axum_router::transcribe_handler,
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
         calendar_events::inbound::axum_router::mention_previews,
@@ -348,6 +355,13 @@ use utoipa::OpenApi;
         favorites::inbound::axum_router::add_favorite_handler,
         favorites::inbound::axum_router::remove_favorite_by_entity_handler,
         favorites::inbound::axum_router::reorder_favorites_handler,
+        // channel labels
+        channel_labels::inbound::axum_router::list_channel_labels_handler,
+        channel_labels::inbound::axum_router::preview_smart_tag_handler,
+        channel_labels::inbound::axum_router::create_channel_label_handler,
+        channel_labels::inbound::axum_router::rename_channel_label_handler,
+        channel_labels::inbound::axum_router::delete_channel_label_handler,
+        channel_labels::inbound::axum_router::set_channel_label_handler,
 
         // user api keys
         user_api_key::inbound::axum_router::create_user_api_key_handler,
@@ -520,6 +534,14 @@ use utoipa::OpenApi;
             AddFavoriteRequest,
             FavoriteEntityRef,
             ReorderFavoritesRequest,
+            ChannelLabel,
+            ChannelLabelsList,
+            ChannelLabelRule,
+            SmartTagChannelMatch,
+            SmartTagPreview,
+            CreateChannelLabelRequest,
+            RenameChannelLabelRequest,
+            SetChannelLabelRequest,
             Reminder,
             RemindersList,
             ReminderSchedule,
@@ -717,6 +739,7 @@ use utoipa::OpenApi;
             webhook::domain::models::WebhookFilter,
             webhook::domain::models::WebhookStatus,
             webhook::domain::models::WebhookValidationTestEvent,
+            dictation::inbound::axum_router::TranscribeResponse,
 
             DocumentSubType,
 

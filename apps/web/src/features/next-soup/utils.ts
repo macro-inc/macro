@@ -26,6 +26,7 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
+import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
@@ -73,6 +74,7 @@ import {
   setDoneOverride,
   type UnifiedNotification,
 } from '@notifications';
+import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { fetchAndCacheThread } from '@queries/email/thread';
@@ -631,6 +633,19 @@ export const openEntityInSplitFromUnifiedList = async (
     }
     await navigateCalendarEntityToTarget(entity, blockOrchestrator);
     return;
+  }
+
+  if (entity.type === 'channel' && entity.unreadNotifications !== undefined) {
+    try {
+      entity = await hydrateChannelNotificationSelection(
+        entity,
+        options.notificationSource?.withLocalOverrides
+      );
+    } catch (error) {
+      console.error('Failed to load conversation notifications', error);
+      toast.failure('Unable to open conversation. Please try again.');
+      return;
+    }
   }
 
   const content = getEntitySplitContent(entity);

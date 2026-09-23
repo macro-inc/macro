@@ -205,6 +205,107 @@ fn copied_maps_to_a_created_activity_for_the_new_document() {
 }
 
 #[test]
+fn creation_and_copy_derive_user_bot_and_team_actors() {
+    let user = user("macro|creator@example.com");
+    let bot = bot_id::MACRO_AI_BOT_ID;
+    let system = Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID);
+    for (owner, expected_actor) in [
+        (Owner::User(user.clone()), Actor::new_from_user(user)),
+        (Owner::Bot(bot), Actor::new_from_bot(bot)),
+        (Owner::Team(Uuid::from_u128(1)), system),
+    ] {
+        let events = [
+            DocumentTopicEvent::Created(DocumentCreatedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                owner: owner.clone(),
+                actor: None,
+                on_behalf_of: None,
+                document_name: "notes".to_string(),
+                file_type: None,
+                project_id: None,
+                sub_type: None,
+                created_at: None,
+            }),
+            DocumentTopicEvent::Copied(DocumentCopiedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                source_document_id: "source-document".to_string(),
+                source_version_id: None,
+                owner,
+                document_name: "copy".to_string(),
+                file_type: None,
+                project_id: None,
+                sub_type: None,
+            }),
+        ];
+        for event in events {
+            let event = envelope(event);
+            let activity = single_activity(event.event.ingest(event.event_id));
+            assert_eq!(activity.action, Action::Created);
+            assert_eq!(activity.actor, expected_actor);
+            assert_eq!(activity.subject_id, expected_actor.as_ref());
+            assert_eq!(activity.entity_id, DOCUMENT_ID);
+            assert_eq!(activity.occurred_at, event_time(event.event_id));
+        }
+    }
+}
+
+#[test]
+fn team_creation_prefers_explicit_actor_then_on_behalf_of_then_system() {
+    let initiating_user = user("macro|creator@example.com");
+    let user_actor = Actor::new_from_user(initiating_user.clone());
+    let bot_actor = Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+    let system_actor = Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID);
+    for (actor, on_behalf_of, expected_actor, expected_subject) in [
+        (
+            Some(bot_actor.clone()),
+            Some(initiating_user.clone()),
+            bot_actor.clone(),
+            initiating_user.to_string(),
+        ),
+        (
+            Some(bot_actor.clone()),
+            None,
+            bot_actor.clone(),
+            bot_actor.as_ref().to_string(),
+        ),
+        (
+            Some(user_actor.clone()),
+            None,
+            user_actor.clone(),
+            initiating_user.to_string(),
+        ),
+        (
+            None,
+            Some(initiating_user.clone()),
+            user_actor,
+            initiating_user.to_string(),
+        ),
+        (
+            None,
+            None,
+            system_actor.clone(),
+            system_actor.as_ref().to_string(),
+        ),
+    ] {
+        let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+            owner: Owner::Team(Uuid::from_u128(1)),
+            actor,
+            on_behalf_of,
+            document_name: "team notes".to_string(),
+            file_type: None,
+            project_id: None,
+            sub_type: None,
+            created_at: None,
+        }));
+        let activity = single_activity(event.event.ingest(event.event_id));
+        assert_eq!(activity.action, Action::Created);
+        assert_eq!(activity.actor, expected_actor);
+        assert_eq!(activity.subject_id, expected_subject);
+    }
+}
+
+#[test]
 fn purge_requests_entity_deletion() {
     let event = envelope(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
         document_id: DOCUMENT_ID.to_string(),

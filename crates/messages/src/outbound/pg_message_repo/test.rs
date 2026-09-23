@@ -166,19 +166,45 @@ async fn thread_identity_tombstones_and_parent_isolation(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_deleted_discussion_reads_back_as_a_root_tombstone_without_replies(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let parent = MessageParent::parse("document", "message-doc-a").unwrap();
+    let root = repo
+        .create(command("message-doc-a", None, "root"))
+        .await
+        .unwrap();
+    repo.create(command("message-doc-a", Some(root.id), "reply"))
+        .await
+        .unwrap();
+    repo.delete_thread(&parent, root.id).await.unwrap();
+    // Deleting a root reads the message back after the teardown to answer the
+    // caller; that read is the tombstone, not the live root it started from.
+    let tombstone = repo.get(&parent, root.id).await.unwrap().unwrap();
+    assert!(tombstone.deleted_at.is_some());
+    assert!(tombstone.content.is_empty());
+    assert!(repo.replies(&parent, root.id).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleted_markdown_threads_keep_paged_cleanup_identity(pool: PgPool) {
     setup(&pool).await;
     let repo = PgMessageRepository::new(pool.clone());
     let mark_id = Uuid::from_u128(102);
     let mut create = command("message-doc-a", None, "removed discussion");
-    create.input.anchor = Some(NewThreadAnchor::Markdown { mark_id });
+    create.input.anchor = Some(NewThreadAnchor::Markdown {
+        mark_id,
+        marked_text: None,
+    });
     let deleted = repo.create(create).await.unwrap();
     let state = repo
         .delete_thread(&deleted.parent, deleted.id)
         .await
         .unwrap();
     assert!(state.deleted_at.is_some());
-    assert!(matches!(state.anchor, Some(ThreadAnchor::Markdown { mark_id: id }) if id == mark_id));
+    assert!(
+        matches!(state.anchor, Some(ThreadAnchor::Markdown { mark_id: id, .. }) if id == mark_id)
+    );
     let live = repo
         .create(command("message-doc-a", None, "live discussion"))
         .await
@@ -221,7 +247,7 @@ async fn deleted_markdown_threads_keep_paged_cleanup_identity(pool: PgPool) {
     assert!(older.items[0].message.content.is_empty());
     assert!(older.items[0].state.deleted_at.is_some());
     assert!(
-        matches!(older.items[0].state.anchor, Some(ThreadAnchor::Markdown { mark_id: id }) if id == mark_id)
+        matches!(older.items[0].state.anchor, Some(ThreadAnchor::Markdown { mark_id: id, .. }) if id == mark_id)
     );
     assert!(older.next_cursor.is_none());
     let other_parent = MessageParent::parse("document", "message-doc-b").unwrap();
@@ -241,12 +267,34 @@ async fn deleted_markdown_threads_keep_paged_cleanup_identity(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_markdown_anchor_stores_the_marked_text_beside_its_mark(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool);
+    let mark_id = Uuid::from_u128(150);
+    let mut create = command("message-doc-a", None, "what does this mean?");
+    create.input.anchor = Some(NewThreadAnchor::Markdown {
+        mark_id,
+        marked_text: Some("  the marked phrase  ".to_owned()),
+    });
+    let root = repo.create(create).await.unwrap();
+    let state = repo.thread(&root.parent, root.id).await.unwrap().unwrap();
+    assert_eq!(
+        state.anchor,
+        Some(ThreadAnchor::Markdown {
+            mark_id,
+            marked_text: Some("the marked phrase".to_owned()),
+        })
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn reactions_attachments_and_resolution_use_shared_message_data(pool: PgPool) {
     setup(&pool).await;
     let repo = PgMessageRepository::new(pool);
     let mut create = command("message-doc-a", None, "message");
     create.input.anchor = Some(NewThreadAnchor::Markdown {
         mark_id: Uuid::from_u128(100),
+        marked_text: None,
     });
     create.input.attachments.push(NewAttachment {
         entity_type: "document".into(),
@@ -301,6 +349,7 @@ async fn detaching_a_mark_retains_the_complete_thread_and_makes_it_unanchored(po
     let mut create = command("message-doc-a", None, "anchored root");
     create.input.anchor = Some(NewThreadAnchor::Markdown {
         mark_id: Uuid::from_u128(101),
+        marked_text: None,
     });
     let root = repo.create(create).await.unwrap();
     let reply = repo
@@ -534,12 +583,13 @@ async fn roots_get_thread_rows_without_the_bookkeeping_trigger(pool: PgPool) {
     let mut create = command("message-doc-a", None, "root without trigger");
     create.input.anchor = Some(NewThreadAnchor::Markdown {
         mark_id: Uuid::from_u128(202),
+        marked_text: None,
     });
     let root = repo.create(create).await.unwrap();
     let state = repo.thread(&root.parent, root.id).await.unwrap().unwrap();
     assert_eq!(state.user_id, USER);
     assert!(
-        matches!(state.anchor, Some(ThreadAnchor::Markdown { mark_id }) if mark_id == Uuid::from_u128(202))
+        matches!(state.anchor, Some(ThreadAnchor::Markdown { mark_id, .. }) if mark_id == Uuid::from_u128(202))
     );
     let reply = repo
         .create(command("message-doc-a", Some(root.id), "reply"))
@@ -638,6 +688,7 @@ async fn a_mark_identifies_one_live_discussion_per_document(pool: PgPool) {
         let mut request = command(document, None, "Anchored");
         request.input.anchor = Some(NewThreadAnchor::Markdown {
             mark_id: Uuid::from_u128(77),
+            marked_text: None,
         });
         request
     };

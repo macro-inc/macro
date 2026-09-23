@@ -125,6 +125,26 @@ describe('ChannelsViewProvider preview selection', () => {
     expect(context.previewChannelId()).toBeUndefined();
   });
 
+  it('persists collapsed labels per user and restores them', () => {
+    const storageKey = 'macro:channels:view-state:v1:alice';
+    const first = mountProvider();
+
+    first.context.setLabelOpen('enterprise', false);
+    first.context.setLabelOpen('smb', false);
+    first.context.setLabelOpen('enterprise', false);
+    expect(first.context.state.collapsedLabels).toEqual(['enterprise', 'smb']);
+    first.context.setLabelOpen('smb', true);
+    expect(first.context.state.collapsedLabels).toEqual(['enterprise']);
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({
+      collapsedLabels: ['enterprise'],
+      expandedGroups: expect.objectContaining({ unread: true }),
+    });
+    first.unmount();
+
+    const second = mountProvider();
+    expect(second.context.state.collapsedLabels).toEqual(['enterprise']);
+  });
+
   it('keeps touch selections out of the preview registry', () => {
     touch.value = true;
     guard.allow = false;

@@ -82,6 +82,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
+import { ContentLoading } from './ContentLoading';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
@@ -495,7 +496,9 @@ function LayoutInner(props: RouteSectionProps) {
       </Show> */}
 
       <Show when={paywallOpen()}>
-        <Paywall />
+        <Suspense>
+          <Paywall />
+        </Suspense>
       </Show>
       <Show when={usageLimitOpen()}>
         <AiUsageLimitDialog />
@@ -541,7 +544,8 @@ function LayoutInner(props: RouteSectionProps) {
           </Show>
 
           <div class="flex-1 w-full min-h-0 font-sans text-ink caret-current">
-            {props.children}
+            {/* Route loading must not detach the shell or mobile navigation. */}
+            <Suspense fallback={<ContentLoading />}>{props.children}</Suspense>
           </div>
         </ItemDndProvider>
       </div>

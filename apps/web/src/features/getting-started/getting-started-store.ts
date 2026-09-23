@@ -5,6 +5,7 @@ export type GettingStartedSnapshot = {
   /** Actions completed by clicking or by an observed event (not derived state). */
   completedActionIds: string[];
   collapsedSectionIds: string[];
+  chatIdsByAction: Record<string, string>;
 };
 
 /** Persistence seam for user-scoped Getting Started progress. */
@@ -18,6 +19,16 @@ const storage = createUserScopedStorage('macro:getting-started');
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === 'string');
+}
+
+function chatIdsByAction(value: unknown): Record<string, string> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([, chatId]) => typeof chatId === 'string' && chatId.length > 0
+    )
+  );
 }
 
 /**
@@ -36,6 +47,7 @@ export function parseGettingStartedSnapshot(
     return {
       completedActionIds: stringArray(record.completedActionIds),
       collapsedSectionIds: stringArray(record.collapsedSectionIds),
+      chatIdsByAction: chatIdsByAction(record.chatIdsByAction),
     };
   } catch {
     return null;

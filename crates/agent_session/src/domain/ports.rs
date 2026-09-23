@@ -234,6 +234,9 @@ pub struct OpenManagedSession {
     /// Ad-hoc instructions for the default managed persona. Ignored when a
     /// persisted persona profile is selected.
     pub instructions: Option<String>,
+    /// Model to run on instead of the persona's own. The session's model from
+    /// creation, so its runtime starts on it and nothing is sent to change it.
+    pub model: Option<String>,
 }
 
 /// Opens sessions, however they are served. Implemented by the harness, which

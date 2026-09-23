@@ -291,6 +291,19 @@ export function replaceTargetMessageId(
   );
 }
 
+/** Find a root's cached thread state without inventing a partial one. */
+export function getCachedThreadState(
+  parent: MessageParent,
+  rootId: string
+): MessageThread['state'] | undefined {
+  return (
+    queryClient.getQueryData<MessageThread>(
+      getThreadRepliesQueryKey(parent, rootId)
+    )?.state ??
+    findTopLevelMessageSnapshotInMessageTimeline(parent, rootId)?.message.state
+  );
+}
+
 /** Find a cached message without inventing a partial message representation. */
 export function getTargetMessage(
   parent: MessageParent,

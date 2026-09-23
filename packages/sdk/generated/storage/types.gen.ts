@@ -2325,6 +2325,74 @@ export type ChannelJoinCodeResponse = {
 };
 
 /**
+ * A shared or account-private label grouping chat channels in the sidebar.
+ *
+ * `channel_ids` is viewer-relative: it lists only the labelled channels the
+ * requesting user participates in. `channel_count` counts every channel in
+ * the label so clients can warn accurately before a delete.
+ */
+export type ChannelLabel = {
+    /**
+     * All assignments for a manual label; visible matches for a smart tag.
+     */
+    channelCount: number;
+    /**
+     * Channels in this label that the requesting user participates in.
+     */
+    channelIds: Array<string>;
+    /**
+     * When the label was created.
+     */
+    createdAt: string;
+    /**
+     * Stable label id.
+     */
+    id: string;
+    /**
+     * Display name, unique within the scope (case-insensitive).
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
+    /**
+     * Manual ordering value within the scope; lower sorts first.
+     */
+    sortOrder: number;
+    /**
+     * Owning team, or `None` for account-private labels.
+     */
+    teamId?: string | null;
+    /**
+     * When the label was last renamed or reordered.
+     */
+    updatedAt: string;
+};
+
+/**
+ * Case-insensitive, literal substring matching on the channel name.
+ */
+export type ChannelLabelRule = {
+    attribute: 'name';
+    /**
+     * The substring to find anywhere in the name.
+     */
+    contains: string;
+};
+
+/**
+ * The authorized scope's labels in manual order.
+ */
+export type ChannelLabelsList = {
+    /**
+     * Every label of the scope, whether or not the caller sees channels in it.
+     */
+    labels: Array<ChannelLabel>;
+    /**
+     * Team scope, or `None` for private labels.
+     */
+    teamId?: string | null;
+};
+
+/**
  * Metadata for [`ChannelTopicEvent::Mentioned`].
  */
 export type ChannelMentionedMetadata = {
@@ -3194,6 +3262,21 @@ export type CreateBulkDocumentResponseData = {
      * Indicates if the document was created successfully
      */
     success: boolean;
+};
+
+/**
+ * Request body for creating a label.
+ */
+export type CreateChannelLabelRequest = {
+    /**
+     * Channels to move into the new label.
+     */
+    channelIds?: Array<string>;
+    /**
+     * Display name; unique within the scope, case-insensitively.
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
 };
 
 /**
@@ -4439,7 +4522,7 @@ export type DocumentCopiedMetadata = {
     document_name: string;
     file_type?: null | FileType;
     /**
-     * The owner of the new copy (the copier).
+     * The principal who owns the new copy.
      */
     owner: string;
     /**
@@ -4463,7 +4546,8 @@ export type DocumentCopiedMetadata = {
 export type DocumentCreatedMetadata = {
     /**
      * Who mechanically created the document. Absent on events published
-     * before attribution: ingest then treats [`Self::owner`] as the actor.
+     * before attribution: ingest derives a user/bot actor from [`Self::owner`].
+     * Team owners fall back to [`Self::on_behalf_of`], then the system bot.
      */
     actor?: string | null;
     /**
@@ -4481,7 +4565,7 @@ export type DocumentCreatedMetadata = {
     file_type?: null | FileType;
     on_behalf_of?: null | MacroUserIdStr;
     /**
-     * The owner (creator) of the document.
+     * The principal who owns the document.
      */
     owner: string;
     /**
@@ -7071,6 +7155,12 @@ export type NewThreadAnchor = {
      * Serialized mark identifier.
      */
     mark_id: string;
+    /**
+     * The document text the mark covers, captured by the editor as the
+     * comment is written. Trimmed and bounded before it is stored, so an
+     * oversized or whitespace-only claim cannot reach the thread row.
+     */
+    marked_text?: string | null;
     type: 'markdown';
 } | {
     /**
@@ -8032,6 +8122,17 @@ export type RemoveParticipantsRequest = {
 };
 
 /**
+ * Request body for renaming a label.
+ */
+export type RenameChannelLabelRequest = {
+    /**
+     * New display name.
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
+};
+
+/**
  * Request body for reordering favorites.
  */
 export type ReorderFavoritesRequest = {
@@ -8269,6 +8370,16 @@ export type SessionStoppedMetadata = {
 };
 
 /**
+ * Request body for moving a channel between labels.
+ */
+export type SetChannelLabelRequest = {
+    /**
+     * The label to put the channel in, or `null` to remove it from its label.
+     */
+    labelId?: string | null;
+};
+
+/**
  * Replace a channel's picture, or remove it by sending a null file id.
  */
 export type SetChannelPictureRequest = {
@@ -8437,6 +8548,34 @@ export type SimpleMention = {
      * Mentioned entity type.
      */
     entity_type: string;
+};
+
+/**
+ * A channel visible to the caller that matches a smart tag rule.
+ */
+export type SmartTagChannelMatch = {
+    /**
+     * Channel id.
+     */
+    id: string;
+    /**
+     * Channel display name.
+     */
+    name: string;
+};
+
+/**
+ * A bounded preview and the total number of visible channels matching a rule.
+ */
+export type SmartTagPreview = {
+    /**
+     * First matches, in alphabetical order.
+     */
+    channels: Array<SmartTagChannelMatch>;
+    /**
+     * Number of matching channels the caller participates in, including overflow.
+     */
+    totalCount: number;
 };
 
 /**
@@ -9830,6 +9969,13 @@ export type ThreadAnchor = {
      * Mark UUID serialized in the document.
      */
     mark_id: string;
+    /**
+     * The marked text as it read when the discussion was created, already
+     * trimmed and bounded. Absent on threads created or imported before
+     * snapshots were captured: the text a mark covers cannot be recovered
+     * from the mark id alone.
+     */
+    marked_text?: string | null;
     type: 'markdown';
 } | {
     /**
@@ -9919,6 +10065,16 @@ export type ThreadState = {
      * User who owns this discussion, including imported discussions.
      */
     user_id: string;
+};
+
+/**
+ * Transcription result.
+ */
+export type TranscribeResponse = {
+    /**
+     * Recognized text.
+     */
+    text: string;
 };
 
 /**
@@ -11466,6 +11622,157 @@ export type IngestTranscriptResponses = {
      */
     200: unknown;
 };
+
+export type ListChannelLabelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/channel-labels';
+};
+
+export type ListChannelLabelsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelLabelsError = ListChannelLabelsErrors[keyof ListChannelLabelsErrors];
+
+export type ListChannelLabelsResponses = {
+    200: ChannelLabelsList;
+};
+
+export type ListChannelLabelsResponse = ListChannelLabelsResponses[keyof ListChannelLabelsResponses];
+
+export type CreateChannelLabelData = {
+    body: CreateChannelLabelRequest;
+    path?: never;
+    query?: never;
+    url: '/channel-labels';
+};
+
+export type CreateChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateChannelLabelError = CreateChannelLabelErrors[keyof CreateChannelLabelErrors];
+
+export type CreateChannelLabelResponses = {
+    200: ChannelLabel;
+};
+
+export type CreateChannelLabelResponse = CreateChannelLabelResponses[keyof CreateChannelLabelResponses];
+
+export type SetChannelLabelData = {
+    body: SetChannelLabelRequest;
+    path: {
+        /**
+         * The channel id.
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/channels/{channel_id}';
+};
+
+export type SetChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelLabelError = SetChannelLabelErrors[keyof SetChannelLabelErrors];
+
+export type SetChannelLabelResponses = {
+    204: void;
+};
+
+export type SetChannelLabelResponse = SetChannelLabelResponses[keyof SetChannelLabelResponses];
+
+export type PreviewSmartTagData = {
+    body: ChannelLabelRule;
+    path?: never;
+    query?: never;
+    url: '/channel-labels/preview';
+};
+
+export type PreviewSmartTagErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PreviewSmartTagError = PreviewSmartTagErrors[keyof PreviewSmartTagErrors];
+
+export type PreviewSmartTagResponses = {
+    200: SmartTagPreview;
+};
+
+export type PreviewSmartTagResponse = PreviewSmartTagResponses[keyof PreviewSmartTagResponses];
+
+export type DeleteChannelLabelData = {
+    body?: never;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/{label_id}';
+};
+
+export type DeleteChannelLabelErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteChannelLabelError = DeleteChannelLabelErrors[keyof DeleteChannelLabelErrors];
+
+export type DeleteChannelLabelResponses = {
+    204: void;
+};
+
+export type DeleteChannelLabelResponse = DeleteChannelLabelResponses[keyof DeleteChannelLabelResponses];
+
+export type RenameChannelLabelData = {
+    body: RenameChannelLabelRequest;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/{label_id}';
+};
+
+export type RenameChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RenameChannelLabelError = RenameChannelLabelErrors[keyof RenameChannelLabelErrors];
+
+export type RenameChannelLabelResponses = {
+    200: ChannelLabel;
+};
+
+export type RenameChannelLabelResponse = RenameChannelLabelResponses[keyof RenameChannelLabelResponses];
 
 export type CreateChannelData = {
     body: CreateChannelRequest;
@@ -13127,6 +13434,64 @@ export type PutCrmTeamStagesResponses = {
 };
 
 export type PutCrmTeamStagesResponse = PutCrmTeamStagesResponses[keyof PutCrmTeamStagesResponses];
+
+export type TranscribeDictationData = {
+    /**
+     * OpenAPI representation of the raw encoded audio body extracted as `Bytes`.
+     */
+    body: Blob | File;
+    path?: never;
+    query?: {
+        /**
+         * ISO 639-1 language hint
+         */
+        language?: string;
+    };
+    url: '/dictation/transcribe';
+};
+
+export type TranscribeDictationErrors = {
+    /**
+     * Empty, oversized, or malformed request
+     */
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * Only signed-in users may dictate
+     */
+    403: ErrorResponse;
+    /**
+     * Body exceeds 8 MiB
+     */
+    413: unknown;
+    /**
+     * Unsupported audio container
+     */
+    415: ErrorResponse;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * Provider failure
+     */
+    502: ErrorResponse;
+    /**
+     * Transcription capacity exhausted; retry after the Retry-After delay
+     */
+    503: ErrorResponse;
+};
+
+export type TranscribeDictationError = TranscribeDictationErrors[keyof TranscribeDictationErrors];
+
+export type TranscribeDictationResponses = {
+    200: TranscribeResponse;
+};
+
+export type TranscribeDictationResponse = TranscribeDictationResponses[keyof TranscribeDictationResponses];
 
 export type GetUserDocumentsHandlerData = {
     body?: never;

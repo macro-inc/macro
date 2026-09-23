@@ -147,6 +147,7 @@ impl NotificationReader for AuthenticationTestService {
         &self,
         _user_id: MacroUserIdStr<'_>,
         _entity_refs: Vec<Entity<'static>>,
+        _query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report>> + Send
     {
         async { unreachable!("should not be called") }
@@ -631,6 +632,7 @@ impl NotificationReader for PresignedTestService {
         &self,
         _user_id: MacroUserIdStr<'_>,
         _entity_refs: Vec<Entity<'static>>,
+        _query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report>> + Send
     {
         async { unreachable!() }

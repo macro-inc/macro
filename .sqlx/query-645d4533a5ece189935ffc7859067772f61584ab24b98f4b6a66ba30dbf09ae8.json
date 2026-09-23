@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_usage\n            SET price_per_million_in = $2::real,\n                price_per_million_out = $3::real,\n                price_per_audio_minute = $4::real,\n                total = CASE WHEN (audio_seconds IS NULL) <> ($4::real IS NULL) THEN NULL\n                      ELSE (input_tokens::real / 1000000.0::real) * $2::real\n                      + (output_tokens::real / 1000000.0::real) * $3::real\n                      + (COALESCE(audio_seconds, 0) / 60.0 * COALESCE($4::real, 0))::real END\n            WHERE model = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float4",
+        "Float4",
+        "Float4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "645d4533a5ece189935ffc7859067772f61584ab24b98f4b6a66ba30dbf09ae8"
+}

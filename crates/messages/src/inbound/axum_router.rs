@@ -253,7 +253,7 @@ pub struct NonceQuery {
 }
 
 #[utoipa::path(operation_id = "entity_message_delete_message", delete, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path), NonceQuery), responses((status = 200, body = Message)))]
-/// Tombstone one message while preserving replies.
+/// Tombstone one message; deleting a discussion's root deletes the discussion.
 pub async fn delete_message<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,

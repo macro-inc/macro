@@ -1483,6 +1483,14 @@ pub struct CreateAgentSessionRequest {
     /// in-process one acts on them today; `agent_harness`'s `AgentKind`
     /// records what each of the others will need to.
     pub instructions: Option<String>,
+    /// Model the managed session runs on, overriding the persona's. Managed
+    /// sessions only: an external runtime picks its own.
+    ///
+    /// The session's model from the moment it exists, which is what a caller
+    /// choosing one before the first prompt means. Selecting a model *during*
+    /// a session is a control action instead, and reads as one in its
+    /// transcript.
+    pub model: Option<String>,
 }
 
 /// The triggering mention on a create request.
@@ -1810,6 +1818,7 @@ pub async fn create_agent_session_handler<
                 prompt: request.prompt,
                 profile,
                 instructions,
+                model: request.model.filter(|model| !model.trim().is_empty()),
             })
             .await?;
         return Ok((
@@ -1821,8 +1830,9 @@ pub async fn create_agent_session_handler<
     };
 
     // An external runtime sends its own first prompt through the control
-    // endpoint, so accepting one here would silently drop it.
-    if request.prompt.is_some() || request.repo_branch.is_some() {
+    // endpoint, so accepting one here would silently drop it, and it runs on
+    // whatever model its operator configured, which is not ours to set.
+    if request.prompt.is_some() || request.repo_branch.is_some() || request.model.is_some() {
         return Err(CreateSessionApiError::MixedSessionShape);
     }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;

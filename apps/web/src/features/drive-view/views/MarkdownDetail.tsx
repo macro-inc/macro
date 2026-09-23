@@ -28,10 +28,9 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import type { FileDetailContext } from '../util/file-detail-context';
 
-export type MarkdownDetailContext = {
-  data: MarkdownDocumentData;
-};
+export type MarkdownDetailContext = FileDetailContext<MarkdownDocumentData>;
 
 export type MarkdownDetailProps = {
   documentId: string;
@@ -102,7 +101,11 @@ function MarkdownDetailContent(props: {
         onShareOpenChange={props.onShareOpenChange}
       >
         <OldOverlay />
-        {props.children?.({ data: props.data })}
+        {props.children?.({
+          data: props.data,
+          documentMetadata: props.data.metadata,
+          userAccessLevel: props.data.userAccessLevel,
+        })}
         <SidePanel.Layout headerToggle={false}>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
             <MarkdownSidePanelSections />

@@ -52,11 +52,11 @@ export function isPlaceholderSessionId(id: string): boolean {
 export type StartPendingSessionOptions = {
   /** Persisted managed persona to run; omitted for Macro Coder. */
   botId?: string;
-  /** First prompt, delivered after any model override. */
+  /** First prompt. */
   prompt?: string;
   /** Uploaded SFS files delivered with the first prompt. */
   attachments?: PromptAttachment[];
-  /** Optional model switch applied before the first prompt. */
+  /** Model to run on instead of the persona's, set as the session is created. */
   modelOverride?: string;
   /**
    * Explicit GitHub repository for the managed Cursor session.
@@ -85,6 +85,7 @@ export function startPendingSession(
   void agentHarnessServiceClient
     .create({
       ...(options.botId ? { botId: options.botId } : {}),
+      ...(options.modelOverride ? { model: options.modelOverride } : {}),
       ...(options.repoUrl
         ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
         : {}),
@@ -98,19 +99,6 @@ export function startPendingSession(
         return;
       }
       const id = result.value.session.id;
-      if (options.modelOverride) {
-        const changed = await agentHarnessServiceClient.control(id, {
-          type: 'setModel',
-          model: options.modelOverride,
-        });
-        if (changed.isErr()) {
-          setError(
-            changed.error.map((error) => error.message).join(' ') ||
-              'The selected model could not be applied.'
-          );
-          return;
-        }
-      }
       const prompt = options.prompt?.trim() ?? '';
       if (prompt || options.attachments?.length) {
         const delivered = await agentHarnessServiceClient.control(id, {

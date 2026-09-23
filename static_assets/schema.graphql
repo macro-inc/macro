@@ -3383,6 +3383,21 @@ enum GraphqlNotificationDocumentSubType {
 }
 
 """
+Filters applied before the per-entity notification limit.
+"""
+input GraphqlNotificationFilter {
+	"""
+	Exact states to include; omitted means active (unseen and seen).
+	An empty list matches no notifications.
+	"""
+	states: [NotificationState!]
+	"""
+	Event names to include; omitted or empty means every event type.
+	"""
+	eventTypes: [String!]
+}
+
+"""
 Realtime notification patch represented as a new, updated, or deleted notification.
 """
 union GraphqlNotificationPatch = GraphqlNewNotification | GraphqlUpdatedNotification | GraphqlCacheDeletion
@@ -4098,7 +4113,7 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4220,7 +4235,7 @@ type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4328,7 +4343,7 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4458,7 +4473,7 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4538,7 +4553,7 @@ type GraphqlSoupChannelMessage implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4698,7 +4713,7 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4786,7 +4801,7 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4878,7 +4893,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5388,7 +5403,7 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5468,7 +5483,7 @@ interface GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the current viewer.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the current viewer has favorited this entity.
 	"""
@@ -5600,7 +5615,7 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5684,7 +5699,7 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5787,7 +5802,7 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""

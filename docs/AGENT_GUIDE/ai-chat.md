@@ -281,6 +281,45 @@ notified when the AI responds). Legacy Home background sends preserve the submit
 
 ## Composer anatomy (a11y)
 
+AI chat (including Home and doc-scoped chat) and agent session composers have
+a **Start dictation with OpenAI Whisper** microphone beside Send. It records
+in memory and uploads to the
+authenticated `/dictation/transcribe` storage endpoint only on confirmation.
+Whisper is available on all plans without consuming chat credits; its server
+credential is never exposed to the browser. Unsupported recording environments
+show a disabled microphone. Every supported browser uses Whisper; there are
+no browser speech-recognition or language-pack installation flows.
+
+While dictating, a scrolling microphone-volume timeline and **Cancel dictation** / **Use dictation**
+replace the composer controls. Cancel (or Escape) preserves the original draft.
+Bars sample microphone volume as recording chunks arrive (normally every 200ms): silence stays dotted, louder speech
+creates taller bars, and earlier levels move left without changing height.
+Volume analysis stays on-device and stops on confirm, cancel, error, or close.
+Use dictation stops recording, waits for Whisper, and appends plain text to
+the draft without sending it. Existing rich text and attachments remain intact.
+If the browser stops listening on its own, **Ready** waits for confirmation.
+While **Finishing…**, the checkmark is disabled and Cancel remains available.
+Mobile chat stays expanded when focus moves into dictation controls.
+Starting dictation in another composer releases the previous session without
+moving focus back to it. Closing the composer releases the microphone. Capture failures
+appear below the composer.
+
+Whisper dictation supports WebM, MP4, and Ogg recording depending on browser.
+Recordings stop just before five minutes or near 8 MB and wait for confirmation.
+Cancel discards the recording; cancel during transcription aborts the request and
+ignores any late result. If the service is temporarily at capacity, the composer
+stays in **Finishing…** while TanStack retries up to twice with exponential backoff,
+jitter, and the server's `Retry-After` delay. Cancel also cancels these retries.
+Other failures keep the recording in memory for an explicit retry with the
+checkmark. No audio or transcript is stored in the query cache or persisted by the dictation
+endpoint. Provider diagnostics exclude response content. The server detects
+the audio container and inspects its duration before contacting OpenAI, requires a
+signed-in user (bots and internal callers are refused), and rate limits each
+user to 60 attempts per hour (failed requests and retries count). Hourly limits
+show “Dictation limit reached. Please try again later.” and are not automatically retried.
+The backend records provider-reported audio seconds in the shared AI usage system
+and uses Whisper's per-minute model pricing without charging user credits.
+
 Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.
 
@@ -512,6 +551,16 @@ cannot grant access or change sharing settings. Copying a link alone never chang
 unsaved session drafts do not offer sharing.
 
 Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and agent names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.
+
+### Replying to selected agent text
+
+On desktop, drag to select transcript prose or expanded **Thought** text, then
+choose **Reply to this** above the selection. The composer inserts a single-line
+**Replying to** preview with the same quote-reply styling as channel replies.
+Click the preview to open the full **Referenced text** viewer. While editable,
+hover the preview for its menu: **Copy**, **Convert to text**, or **Delete**.
+Selecting text in the composer or outside the transcript must not show the reply
+button; clearing the transcript selection dismisses it.
 
 ### Expanded session mentions
 
