@@ -7,7 +7,7 @@ import {
   QueryClientProvider,
   useQuery,
 } from '@tanstack/solid-query';
-import { Suspense } from 'solid-js';
+import { createMemo, Show, Suspense } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CRM_TEAM_STAGE_DEFINITION_NAME, useDealStages } from './deal-stages';
 
@@ -50,7 +50,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function mount(consumeStages: boolean) {
+function mount(consumeStages: boolean, providerOwned = false) {
   const response = Promise.withResolvers<PropertyDefinitionResponse[]>();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -76,10 +76,38 @@ function mount(consumeStages: boolean) {
       <div data-testid="document">Cached document</div>
     );
   }
+  function ProviderOwnedView() {
+    // SoupViewContextProvider creates its stage source and grouping memo
+    // above the CRM child's boundary. SplitPanel wraps the provider itself.
+    const stages = useDealStages();
+    const group = createMemo(() => {
+      if (!consumeStages) return 'Cached document';
+      const stage = stages.resolveStage({
+        properties: [
+          {
+            definition: { id: 'team-stages' },
+            value: { type: 'SelectOption', value: ['qualified'] },
+          },
+        ],
+      });
+      return `${stages.stageDefinitionId()}:${stages
+        .stages()
+        .map((entry) => entry.label)
+        .join(',')}:${stage ?? 'Not set'}`;
+    });
+    return (
+      <Suspense fallback={<div data-testid="crm-loading" />}>
+        <div data-testid={consumeStages ? 'stages' : 'document'}>{group()}</div>
+      </Suspense>
+    );
+  }
   render(() => (
     <QueryClientProvider client={client}>
+      <div data-testid="split-chrome">Split chrome</div>
       <Suspense fallback={<div data-testid="loading" />}>
-        <View />
+        <Show when={providerOwned} fallback={<View />}>
+          <ProviderOwnedView />
+        </Show>
       </Suspense>
     </QueryClientProvider>
   ));
@@ -123,6 +151,29 @@ describe('deal-stage projections in shared soup contexts', () => {
         'team-stages:Updated'
       )
     );
+  });
+
+  it('keeps provider-owned grouping hidden under the split boundary until custom stages resolve', async () => {
+    const h = mount(true, true);
+    expect(screen.getByTestId('split-chrome')).toBeTruthy();
+    expect(screen.getByTestId('loading')).toBeTruthy();
+    expect(screen.queryByTestId('crm-loading')).toBeNull();
+    expect(screen.queryByTestId('stages')).toBeNull();
+    expect(screen.queryByText(/Not set/)).toBeNull();
+    h.response.resolve([customized]);
+    await waitFor(() =>
+      expect(screen.getByTestId('stages').textContent).toBe(
+        'team-stages:Qualified:qualified'
+      )
+    );
+    expect(screen.queryByTestId('loading')).toBeNull();
+  });
+
+  it('does not suspend provider-owned document views on unused CRM queries', () => {
+    mount(false, true);
+    expect(screen.queryByTestId('loading')).toBeNull();
+    expect(screen.queryByTestId('crm-loading')).toBeNull();
+    expect(screen.getByTestId('document').textContent).toBe('Cached document');
   });
 
   it('uses system defaults only after resolving that the team has no custom definition', async () => {

@@ -341,10 +341,23 @@ online first, then restart with API traffic blocked: verify the existing body,
 make a disposable edit, and restart offline again to check local recovery.
 Restoring connectivity must reauthorize synchronization before queued edits reach
 the server; verify the server copy, not just the still-cached editor text.
+Also reconnect after the initial sync's 10-second timeout: a reconnect snapshot
+must release queued edits without requiring the document to reopen. A document
+content-readiness timeout is retryable and must not revoke its cached open
+context; explicit access denial still does.
 The body should not wait for unrelated CRM metadata, references, duplicate-task
 suggestions, closed sharing/tag menus, or disabled mention queries. With those
 requests pending, the cached editor remains visible; optional information can
 appear when its own request finishes.
+
+For a cold deep link or restored split, document loading waits for persisted
+user identity before capturing its offline session; a stalled auth request must
+not delay an identity already restored from IndexedDB. If no identity is cached,
+the normal auth query must succeed first. A previous logout marker is not a
+cached identity: after signing in again, it must trigger fresh authentication,
+not clear the new login cookie. Verify this restart/deep-link flow with a
+disposable account. Logout during the identity wait prevents the old load from
+opening under a subsequent login.
 
 Cached open context is scoped to the signed-in user and invalidated at logout;
 permission tokens are never persisted. A missing body snapshot still requires an

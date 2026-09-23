@@ -11,7 +11,8 @@ let persistenceAvailable = true;
 let volatileEpoch = crypto.randomUUID();
 let validatedEpoch: string | undefined;
 
-function cacheEpoch(): string {
+/** Fence native loads that begin before user-info hydration supplies an identity. */
+export function documentSessionEpoch(): string {
   if (!persistenceAvailable) return volatileEpoch;
   try {
     const epoch = localStorage.getItem(EPOCH_KEY) ?? crypto.randomUUID();
@@ -35,7 +36,7 @@ export const offlineDocumentContextCache = createOfflineDocumentContextCache({
       authKeys.userInfo.queryKey
     );
     if (!state?.data?.authenticated || !state.data.id) return;
-    return { userId: state.data.id, epoch: cacheEpoch() };
+    return { userId: state.data.id, epoch: documentSessionEpoch() };
   },
 });
 

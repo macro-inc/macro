@@ -187,6 +187,36 @@ describe('SyncServiceSource', () => {
     }
   });
 
+  it('acknowledges queued edits when a reconnect waiter receives the first sync after bootstrap timed out', async () => {
+    vi.useFakeTimers();
+    const ws = new FakeSocket();
+    const src = new SyncServiceSource(ws, 'doc1', {
+      newId: () => 'reconnect-op',
+    });
+    try {
+      const events: SyncSourceEvent[] = [];
+      src.listen((event) => events.push(event));
+      await vi.advanceTimersByTimeAsync(TIMEOUTS.INITIAL_SYNC + 1);
+      expect((await src.doInitialSync()).isErr()).toBe(true);
+      expect(await src.pushUpdate([snap])).toBe(false);
+
+      ws.fireReconnect();
+      ws.deliver(remote.initialSync(snap, aw));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(events).toEqual([
+        { type: 'reconnect', snapshot: snap, awareness: aw },
+      ]);
+      expect(ws.heartbeats).toBe(1);
+      const delivered = src.pushUpdate([snap]);
+      expect(ws.sent).toHaveLength(1);
+      ws.deliver(remote.ack('reconnect-op'));
+      expect(await delivered).toBe(true);
+    } finally {
+      src.cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it('accepts a reconnect snapshot even after its waiter expired', async () => {
     vi.useFakeTimers();
     const ws = new FakeSocket();

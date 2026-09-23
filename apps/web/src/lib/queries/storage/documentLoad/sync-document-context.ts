@@ -11,6 +11,7 @@ import {
   LORO_SNAPSHOT_DB_NAME,
 } from '@macro-inc/collaboration/collab/snapshot-store';
 import { z } from 'zod';
+import { prefetchUserInfo } from '../../auth/user-info';
 import { queryClient } from '../../client';
 import {
   fetchDocumentLocation,
@@ -24,6 +25,7 @@ import {
 import { documentLoadKeys } from './keys';
 import type { DocumentCacheSession } from './offline-context-cache';
 import {
+  documentSessionEpoch,
   offlineDocumentContextCache,
   onDocumentSessionChange,
 } from './offline-context-runtime';
@@ -102,9 +104,16 @@ const loader = createSyncDocumentContextLoader({
 });
 
 /** Open cached native documents before network work; authorize synchronization separately. */
-export function fetchSyncDocumentOpenContext(documentId: string) {
+export async function fetchSyncDocumentOpenContext(documentId: string) {
   if (isNativeMobilePlatform() && !offlineDocumentContextCache.capture()) {
-    return Promise.resolve(LoadErrors.UNAUTHORIZED);
+    const epoch = documentSessionEpoch();
+    await prefetchUserInfo();
+    if (
+      epoch !== documentSessionEpoch() ||
+      !offlineDocumentContextCache.capture()
+    ) {
+      return LoadErrors.UNAUTHORIZED;
+    }
   }
   return loadResult(catchToResult(() => loader.load(documentId)));
 }

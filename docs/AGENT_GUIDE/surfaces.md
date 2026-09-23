@@ -720,6 +720,12 @@ Company and contact headers have `Copy link` beside the side-panel toggle.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
 
+Company selection actions **Set owner** and **Set revenue** remain available
+while team deal-stage definitions are loading. **Set stage** waits for the active
+team definition rather than opening an editor with system defaults. Check both
+the entity actions menu and command menu with stage requests delayed; cancel the
+editors without changing hosted data.
+
 `Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
 At narrow widths, `Show CRM navigation` opens the same navigation in a menu.
 The sidebar's Views and Lists sections can also collapse independently.

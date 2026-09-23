@@ -224,6 +224,8 @@ export function useDealStages(): DealStages {
   // Shared soup contexts also mount for documents and other non-CRM views.
   // Only read the query when a stage consumer needs it; actual CRM consumers
   // retain their Suspense behavior rather than treating pending data as defaults.
+  // Lazy memos keep their creation owner: SplitPanel wraps the soup provider
+  // itself in Suspense, covering provider-owned grouping as well as its children.
   const teamStageDefinition = createLazyMemo(() =>
     findTeamStageDefinition(teamDefinitionsQuery.data)
   );
