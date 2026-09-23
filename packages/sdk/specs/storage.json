@@ -17212,6 +17212,10 @@
             "description": "Number of attendees on the previewed copy.",
             "minimum": 0
           },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering."
+          },
           "isRecurring": {
             "type": "boolean",
             "description": "Whether the event repeats."

@@ -864,6 +864,9 @@ pub struct CalendarMentionEvent {
     pub viewer_event_id: Option<Uuid>,
     /// Display title.
     pub title: String,
+    /// Provider description, plain text or HTML, truncated for the preview.
+    /// Clients must sanitize it before rendering.
+    pub description: Option<String>,
     /// Time of the previewed instance: the requested occurrence when it
     /// exists, else the next upcoming one, else the latest past one, else the
     /// series start.

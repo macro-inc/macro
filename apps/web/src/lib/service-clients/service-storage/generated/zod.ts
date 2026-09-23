@@ -1603,6 +1603,12 @@ export const mentionPreviewsResponse = zod
                     .number()
                     .min(mentionPreviewsResponseItemsItemEventAttendeeCountMin)
                     .describe('Number of attendees on the previewed copy.'),
+                  description: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering.'
+                    ),
                   isRecurring: zod
                     .boolean()
                     .describe('Whether the event repeats.'),

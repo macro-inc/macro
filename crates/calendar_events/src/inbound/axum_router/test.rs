@@ -50,6 +50,7 @@ fn mention_preview_items_serialize_the_preview_contract() {
         event: Some(CalendarMentionEvent {
             viewer_event_id: Some(event_id),
             title: "Smart Macro Discussion".to_string(),
+            description: Some("Agenda: <b>roadmap</b>".to_string()),
             time: crate::domain::models::EventTime::Timed {
                 starts_at,
                 ends_at: starts_at + chrono::Duration::minutes(90),
@@ -70,6 +71,7 @@ fn mention_preview_items_serialize_the_preview_contract() {
     assert_eq!(json["event"]["viewerEventId"], event_id.to_string());
     assert_eq!(json["event"]["time"]["kind"], "timed");
     assert_eq!(json["event"]["attendeeCount"], 3);
+    assert_eq!(json["event"]["description"], "Agenda: <b>roadmap</b>");
 
     // A channel-shared preview carries no event of the viewer's to open.
     let mut shared = accessible;

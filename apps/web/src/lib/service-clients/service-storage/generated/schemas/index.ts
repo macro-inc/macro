@@ -238,6 +238,7 @@ export * from './calendarEventSourceContentCreatorName';
 export * from './calendarEventSourceContentDescription';
 export * from './calendarEventSourceContentLocation';
 export * from './calendarMentionEvent';
+export * from './calendarMentionEventDescription';
 export * from './calendarMentionEventLocation';
 export * from './calendarMentionEventOccurrenceKey';
 export * from './calendarMentionEventOrganizerEmail';
