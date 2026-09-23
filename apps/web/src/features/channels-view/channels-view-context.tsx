@@ -20,6 +20,8 @@ import {
   CHANNEL_DETAIL_SEARCH_NAMESPACE,
   channelDetailSearch,
   channelDetailSearchCodec,
+  channelsTabSearch,
+  channelsTabSearchCodec,
 } from './channels-route';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
@@ -95,6 +97,7 @@ export const [ChannelsViewProvider, useChannelsView] =
       const navigate = useNavigate();
       const params = useRouteParams(channelDetailRoute);
       const [detailSearch] = createSearchParams(channelDetailSearch);
+      const [tabSearch, setTabSearch] = createSearchParams(channelsTabSearch);
       const selectPreview = createPreviewSelectionGuard();
       const initial = props.initialState ?? {};
       const [state, setState] = makePersistedState(
@@ -106,6 +109,16 @@ export const [ChannelsViewProvider, useChannelsView] =
           restoreLocalState: props.initialState === undefined,
           restorePreferences: shouldRestorePreferences(initial),
         })
+      );
+
+      createEffect(
+        on(
+          () => [tabSearch.tab, tabSearch.mobileTab] as const,
+          ([tab, mobileTab]) => {
+            if (state.tab !== tab) setState('tab', tab);
+            if (state.mobileTab !== mobileTab) setState('mobileTab', mobileTab);
+          }
+        )
       );
 
       const mobileLayout = () => isTouchDevice();
@@ -148,6 +161,10 @@ export const [ChannelsViewProvider, useChannelsView] =
             replace,
             search: {
               [CHANNEL_DETAIL_SEARCH_NAMESPACE]: routeSearch(channel),
+              [channelsTabSearch.namespace]: channelsTabSearchCodec.serialize({
+                tab: state.tab,
+                mobileTab: state.mobileTab,
+              }),
             },
           }
         );
@@ -156,7 +173,19 @@ export const [ChannelsViewProvider, useChannelsView] =
         channel: ChannelPreviewSelection | undefined
       ) => {
         if (!channel) {
-          navigate({ route: channelsSplitRoute, params: {} });
+          navigate(
+            { route: channelsSplitRoute, params: {} },
+            {
+              search: {
+                [channelsTabSearch.namespace]: channelsTabSearchCodec.serialize(
+                  {
+                    tab: state.tab,
+                    mobileTab: state.mobileTab,
+                  }
+                ),
+              },
+            }
+          );
           return true;
         }
         if (mobileLayout() || !selectPreview.canSelect(channel)) return false;
@@ -171,7 +200,16 @@ export const [ChannelsViewProvider, useChannelsView] =
             else
               navigate(
                 { route: channelsSplitRoute, params: {} },
-                { replace: true }
+                {
+                  replace: true,
+                  search: {
+                    [channelsTabSearch.namespace]:
+                      channelsTabSearchCodec.serialize({
+                        tab: state.tab,
+                        mobileTab: state.mobileTab,
+                      }),
+                  },
+                }
               );
           }
         })
@@ -181,8 +219,16 @@ export const [ChannelsViewProvider, useChannelsView] =
         state,
         mobileLayout,
         selectedChannel,
-        setTab: (tab) => setState('tab', tab),
-        setMobileTab: (tab) => setState('mobileTab', tab),
+        setTab: (tab) => {
+          if (state.tab === tab) return;
+          setState('tab', tab);
+          setTabSearch({ tab });
+        },
+        setMobileTab: (mobileTab) => {
+          if (state.mobileTab === mobileTab) return;
+          setState('mobileTab', mobileTab);
+          setTabSearch({ mobileTab });
+        },
         setSelectedChannel,
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),
         setLabelOpen: (labelId, open) =>

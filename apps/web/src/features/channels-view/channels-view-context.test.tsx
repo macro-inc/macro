@@ -137,6 +137,58 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ChannelsViewProvider route selection', () => {
+  it('takes desktop and mobile tabs from pane search, ahead of saved state', () => {
+    entry.state = { 'channels.view': { tab: 'browse', mobileTab: 'channels' } };
+    const { context } = mountProvider(
+      '/channels?s0.channels.tab=recents&s0.channels.mobileTab=direct_messages'
+    );
+    expect(context.state.tab).toBe('recents');
+    expect(context.state.mobileTab).toBe('direct_messages');
+  });
+
+  it('normalizes invalid URL tabs to defaults without restoring stale tabs', async () => {
+    const { context, location, router } = mountProvider(
+      '/channels?s0.channels.tab=unknown'
+    );
+    await router.settled();
+    expect(context.state.tab).toBe('browse');
+    expect(location.read().search).toBe('');
+  });
+
+  it('writes each tab to pane search and follows browser Back/Forward', async () => {
+    const { context, location, router } = mountProvider();
+    context.setTab('recents');
+    await router.settled();
+    expect(location.read().search).toContain('s0.channels.tab=recents');
+
+    context.setMobileTab('direct_messages');
+    await router.settled();
+    expect(location.read().search).toContain(
+      's0.channels.mobileTab=direct_messages'
+    );
+    expect(location.back()).toBe(true);
+    await router.settled();
+    expect(context.state.tab).toBe('recents');
+    expect(context.state.mobileTab).toBe('channels');
+    expect(location.forward()).toBe(true);
+    await router.settled();
+    expect(context.state.mobileTab).toBe('direct_messages');
+  });
+
+  it('keeps tab search when entering and leaving inline detail', async () => {
+    const { context, location, router } = mountProvider(
+      '/channels?s0.channels.tab=recents'
+    );
+    context.setSelectedChannel({ type: 'channel', id: 'c1' });
+    await router.settled();
+    expect(location.read().pathname).toBe('/channels/c1');
+    expect(location.read().search).toContain('s0.channels.tab=recents');
+    context.setSelectedChannel(undefined);
+    await router.settled();
+    expect(location.read().pathname).toBe('/channels');
+    expect(location.read().search).toContain('s0.channels.tab=recents');
+  });
+
   it('persists collapsed labels per user and restores them', () => {
     const storageKey = 'macro:channels:view-state:v1:alice';
     const first = mountProvider();

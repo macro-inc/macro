@@ -81,13 +81,12 @@ function HomeReturnBreadcrumb(props: { onReturn: () => void }) {
 
 function InboxViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, previewEntity, openPreview, closePreview } =
+  const { state, setTab, previewEntity, openPreview, closePreview } =
     useInboxView();
 
   createEffect(() => {
     if (state.tab !== 'reminders') return;
-    setState('tab', 'signal');
-    setState('groupBy', 'date');
+    setTab('signal');
   });
   const newChat = closePreview;
 

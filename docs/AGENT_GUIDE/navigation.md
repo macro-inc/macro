@@ -51,7 +51,12 @@ Splits: the app is a tiling window manager. Public variable-length routes use
 pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
 to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
 namespaced query parameters such as `s0.drive.sort=created_at`; route identity
-and breadcrumb nesting remain in the path. Desktop panes expose Close when available and omit
+and breadcrumb nesting remain in the path. Home, Email, Tasks, and Channels
+store the selected tab under `sN.inbox.tab`, `sN.mail.tab`, `sN.tasks.tab`,
+and `sN.channels.tab`, respectively. Channels also stores the phone list
+selection as `sN.channels.mobileTab`. Omitted tab keys mean each view's default;
+changing tabs updates the URL, and browser Back/Forward restores the selection
+independently in each pane. Inline detail links preserve these keys. Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
 
 The app views are referred to as **workspaces**. Expanded workspace sidebars start
