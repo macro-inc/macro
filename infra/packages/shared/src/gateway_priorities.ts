@@ -32,7 +32,7 @@ type GatewayPriorityMap = { [K in GatewayService]: number };
  * Values on this listener must be unique. A missing key is a compile error.
  */
 export const GATEWAY_PRIORITIES: GatewayPriorityMap = {
-  [GatewayService.PREVIEW_GATEWAY]: 140,
+  [GatewayService.PREVIEW_GATEWAY]: 150,
   [GatewayService.DOCUMENT_STORAGE_SERVICE]: 10,
   [GatewayService.UNFURL_SERVICE]: 20,
   [GatewayService.NOTIFICATION_SERVICE]: 30,
