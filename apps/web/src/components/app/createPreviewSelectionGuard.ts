@@ -1,6 +1,6 @@
 import type { NavigationStackChangeReason } from '@app/components/navigation-stack/NavigationStack';
 import { toast } from '@core/component/Toast/Toast';
-import { createSignal, onCleanup, useContext } from 'solid-js';
+import { createSignal, onCleanup, untrack, useContext } from 'solid-js';
 import {
   type PreviewPanelSelection,
   previewBlockTarget,
@@ -39,18 +39,19 @@ export function createPreviewSelectionGuard(): PreviewSelectionGuard {
     const target = selection && previewBlockTarget(selection);
     return target && { type: target.blockType, id: target.blockId };
   };
-  const canSelect: SelectPreview = (selection, reason = 'navigate') => {
-    const next = identity(selection);
-    const existing = next && manager.findOpenView(next);
-    if (existing && existing.owner !== owner) {
-      if (reason === 'navigate') {
-        existing.activate?.();
-        toast.alert('Content already open');
+  const canSelect: SelectPreview = (selection, reason = 'navigate') =>
+    untrack(() => {
+      const next = identity(selection);
+      const existing = next && manager.findOpenView(next);
+      if (existing && existing.owner !== owner) {
+        if (reason === 'navigate') {
+          existing.activate?.();
+          toast.alert('Content already open');
+        }
+        return false;
       }
-      return false;
-    }
-    return true;
-  };
+      return true;
+    });
   const select: SelectPreview = (selection, reason) => {
     if (!canSelect(selection, reason)) return false;
     setCurrent(identity(selection));

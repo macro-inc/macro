@@ -1003,6 +1003,13 @@ pub struct QueuedControl {
 /// control routes can be mounted against it without knowing what a harness is.
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
+    /// Release and delete every session owned by a user before account deletion.
+    /// Internal account lifecycle only; shared sessions owned by others are untouched.
+    fn delete_user_sessions(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// The session is going away: release its live resources and delete it.
     fn session_deleted(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 

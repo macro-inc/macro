@@ -25,6 +25,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { type ChannelEntity, isChannelEntity, type WithSearch } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
+import { ensureNotificationSourceLoaded } from '@notifications/notification-helpers';
 import {
   useChannelLabelsQuery,
   useCreateChannelLabelMutation,
@@ -925,20 +926,28 @@ export function ChannelsRail(props: ChannelsRailProps) {
     );
   };
 
-  const markLabelRead = (label: ChannelLabel) => {
+  const markLabelRead = async (label: ChannelLabel) => {
     if (!channelTagsEnabled()) return;
     const channelIds = new Set(
       filterChannelLabelMembers(label.channelIds, channelsById())
     );
-    const unread = notificationSource
-      .notifications()
-      .filter(
-        (notification) =>
-          notification.entity_type === 'channel' &&
-          channelIds.has(notification.entity_id) &&
-          !notificationIsRead(notification)
+    if (channelIds.size === 0) return;
+    try {
+      await ensureNotificationSourceLoaded(notificationSource);
+      const unread = notificationSource
+        .notifications()
+        .filter(
+          (notification) =>
+            notification.entity_type === 'channel' &&
+            channelIds.has(notification.entity_id) &&
+            !notificationIsRead(notification)
+        );
+      await notificationSource.bulkMarkAsRead(unread);
+    } catch (error) {
+      toast.failure(
+        errorMessage(error, 'Failed to mark channel label as read')
       );
-    if (unread.length > 0) void notificationSource.bulkMarkAsRead(unread);
+    }
   };
 
   // Drops are resolved here rather than per row so a channel dragged from

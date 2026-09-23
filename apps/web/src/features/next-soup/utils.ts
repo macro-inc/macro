@@ -71,7 +71,7 @@ import {
 import {
   compositeEntity,
   getChannelNotificationParams,
-  markNotificationsForEntityAsRead,
+  markNotificationsForEntityAsReadInBackground,
   type NotificationSource,
   notificationIsRead,
   setDoneOverride,
@@ -793,7 +793,7 @@ export function markReminderSeenOnOpen(
   // Calendar events share the reminder situation: they open the calendar
   // component split, which has no block to clear the notification either.
   if (entity.type !== 'reminder' && entity.type !== 'calendar_event') return;
-  void markNotificationsForEntityAsRead(notificationSource, {
+  void markNotificationsForEntityAsReadInBackground(notificationSource, {
     type: entity.type,
     id: entity.id,
   });

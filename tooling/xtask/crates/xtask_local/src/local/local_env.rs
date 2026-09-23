@@ -195,6 +195,15 @@ impl InfraEnv {
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
         );
+        // Account deletion awaits both owning services from the auth container.
+        env.insert(
+            "OVERRIDE_AGENT_HARNESS_SERVICE_URL".into(),
+            "http://agent-harness-service:8101".into(),
+        );
+        env.insert(
+            "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL".into(),
+            "http://scheduled-action-service:8080".into(),
+        );
         // Lexical has the same host-vs-container split. The plain
         // `LEXICAL_SERVICE_URL` value does not affect `LexicalServiceUrl`,
         // which only reads the `OVERRIDE_` form.

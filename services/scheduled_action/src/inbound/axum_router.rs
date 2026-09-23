@@ -9,12 +9,14 @@ use crate::domain::ports::ScheduledActionService;
 use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::{get, post, put};
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use chrono_tz::Tz;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOrInternal,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model::response::EmptyResponse;
 use serde::{Deserialize, Serialize};
@@ -93,6 +95,10 @@ where
 {
     Router::new()
         .route(
+            "/scheduled-actions/user/{user_id}",
+            delete(delete_user_actions::<S, Auth>),
+        )
+        .route(
             "/scheduled-actions",
             get(list_actions::<S, Auth>).post(create_action::<S, Auth>),
         )
@@ -109,6 +115,15 @@ where
             get(list_history::<S, Auth>),
         )
         .with_state(state)
+}
+
+async fn delete_user_actions<S: ScheduledActionService, Auth: MacroAuthorizationService>(
+    State(state): State<ScheduledActionRouterState<S, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(user_id): Path<MacroUserIdStr<'static>>,
+) -> Result<StatusCode, ScheduledActionApiError> {
+    state.service.delete_user_actions(user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(

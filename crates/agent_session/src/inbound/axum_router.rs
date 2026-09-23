@@ -35,8 +35,8 @@ use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAcces
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
-    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserBotOrHarness, UserBotOrHarnessAuthorization,
+    ActingUser, InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserBotOrHarness, UserBotOrHarnessAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -215,6 +215,10 @@ where
             delete(delete_agent_session_handler::<R, Access, Auth>),
         )
         .route(
+            "/user/{user_id}",
+            delete(delete_user_sessions_handler::<R, Access, Auth>),
+        )
+        .route(
             "/{session_id}/control",
             post(control_agent_session_handler::<R, Access, Auth>),
         )
@@ -232,6 +236,21 @@ where
             put(put_agent_session_sandbox_size_handler::<R, Access, Auth>),
         )
         .with_state(state)
+}
+
+/// Account lifecycle endpoint: never grants cleanup authority to a user or harness token.
+async fn delete_user_sessions_handler<R, Access, Auth>(
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(user_id): Path<MacroUserIdStr<'static>>,
+) -> Result<StatusCode, AgentSessionApiError>
+where
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state.recipient.delete_user_sessions(user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Build the caller-default sandbox size router. Mount at `/agent-sandbox-size`.

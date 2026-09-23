@@ -28,7 +28,8 @@ import {
   isSnippetEntity,
   type WithNotification,
 } from '@entity';
-import type { NotificationSource } from '@notifications';
+import { notificationIsRead } from '@entity/utils/notification';
+import type { UnifiedNotification } from '@notifications/types';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { startOfDay, subWeeks } from 'date-fns';
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
@@ -80,16 +81,14 @@ function matchesCapabilities(
 }
 
 function matchesTab(
-  entity: WithNotification<EntityData>,
+  entity: EntityData,
   tab: InboxTab,
-  source: NotificationSource
+  notifications: () => UnifiedNotification[]
 ): boolean {
   const notDone = () =>
     entity.type === 'email'
       ? !entity.done
-      : getEntityNotifications(entity, source, {
-          scopeChannelThreads: true,
-        }).some((notification) => notification.state !== 'done');
+      : notifications().some((notification) => notification.state !== 'done');
   return match(tab)
     .with('signal', () => {
       if (!signalFilter(entity) || !notDone()) return false;
@@ -159,11 +158,35 @@ export function useInboxEntitiesQuery(
     };
   });
 
+  const scopedNotifications = (entity: EntityData) =>
+    getEntityNotifications(entity, notificationSource, {
+      scopeChannelThreads: true,
+    });
   const filterEntities = (entities: EntityData[]) => {
     const context = viewContext();
     return entities
       .filter((entity) => matchesCapabilities(entity, context.capabilities))
-      .filter((entity) => matchesTab(entity, context.tab, notificationSource));
+      .filter((entity) =>
+        matchesTab(entity, context.tab, () => scopedNotifications(entity))
+      );
+  };
+
+  /** Badge presence: stop at the first match without transforming the page. */
+  const hasUnreadEntity = (entities: readonly EntityData[]): boolean => {
+    const context = viewContext();
+    return entities.some((entity) => {
+      if (!matchesCapabilities(entity, context.capabilities)) return false;
+      // Cache only within this visit. Membership and unread checks share the
+      // same scoped snapshot, but later calls still observe optimistic changes.
+      let snapshot: UnifiedNotification[] | undefined;
+      const notifications = () => (snapshot ??= scopedNotifications(entity));
+      if (!matchesTab(entity, context.tab, notifications)) return false;
+      return entity.type === 'email'
+        ? !entity.isRead
+        : notifications().some(
+            (notification) => !notificationIsRead(notification)
+          );
+    });
   };
 
   const attachNotifications = (entity: EntityData) =>
@@ -179,6 +202,7 @@ export function useInboxEntitiesQuery(
     filterEntities,
     attachNotifications,
     transformEntities,
+    hasUnreadEntity,
     notificationSource,
   };
 }

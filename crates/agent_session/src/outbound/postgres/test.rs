@@ -1,5 +1,6 @@
 use super::*;
 mod search;
+mod user_cleanup;
 mod working_branch;
 use crate::domain::model::{AgentMcpServer, DEFAULT_AGENT_SESSION_NAME};
 use crate::domain::ports::AgentSessionRepo;
