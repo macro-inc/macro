@@ -1,5 +1,8 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type {
   PostSoupRequest,
@@ -780,6 +783,17 @@ export async function refetchSoupEntity(
 ): Promise<void> {
   if (options?.refreshGraphql) {
     void refreshActiveGraphqlSoupQueries();
+  }
+
+  // GraphQL lists never read this cache, so a miss means no REST list shows
+  // the entity. Own-touch inserts still land because Home's touched_by_me
+  // feed stays on REST.
+  if (
+    !options?.ownTouch &&
+    isFeatureEnabled(enableGraphqlSoup) &&
+    !hasSoupEntity(entityId)
+  ) {
+    return;
   }
 
   const { storageServiceClient } = await import('@service-storage/client');
