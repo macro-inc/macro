@@ -1,10 +1,12 @@
 /**
  * The session's model, as a pill that opens the harness's own model list.
  *
- * Everything here is harness-reported: the options come from the runtime's
- * ACP `configOptions` and the current model is the fold's rejection-safe
- * projection of them, so this component never needs a model registry of its
- * own. Renders nothing until the harness has advertised its models.
+ * The catalog is harness-reported: the options come from the runtime's ACP
+ * `configOptions` and the current model is the fold's rejection-safe
+ * projection of them. Names and logos still go through the house
+ * `modelLabel` / `ModelIcon`, because a runtime that keeps no display name
+ * for a model — the in-memory Macro Agent among them — reports the slug as
+ * its name. Renders nothing until the harness has advertised its models.
  *
  * Touch devices get a bottom sheet (`MobileDrawer`, the same chrome as the
  * split title menu) listing every model with a check on the current one, and
@@ -26,6 +28,8 @@ import {
   isLargeModelCatalog,
   matchesModelQuery,
 } from '@core/component/AI/component/input/modelCatalog';
+import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import Check from '@phosphor/check.svg';
@@ -80,13 +84,14 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
   const [query, setQuery] = createSignal('');
   const shown = () => props.changingTo ?? props.model;
   const label = () =>
-    props.options.find((option) => option.id === shown())?.name ??
-    shown() ??
-    'Model';
+    modelLabel(
+      shown() ?? undefined,
+      props.options.find((option) => option.id === shown())?.name
+    );
   const options = createMemo(() => withoutRedundantGroups(props.options));
   const toCatalogOption = (option: ModelOption): CatalogModelOption => ({
     id: option.id,
-    label: option.name,
+    label: modelLabel(option.id, option.name),
     description: option.description ?? undefined,
     group: option.group ?? undefined,
   });
@@ -120,15 +125,16 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
       preventScroll={false}
       preventScrollbarShift={false}
     >
-      {/* Plain text + caret, like the reference composer — no pill. */}
+      {/* Provider logo + text + caret, like the reference composer — no pill. */}
       <MobileDrawer.Trigger
         as={Button}
         variant="ghost"
         size="sm"
         aria-label="Agent model"
         disabled={props.disabled}
-        class="h-8 max-w-[60vw] min-w-0 justify-start gap-1 rounded-lg border-none bg-transparent px-1.5 text-left text-sm text-ink-subtle hover:bg-hover"
+        class="h-8 max-w-[60vw] min-w-0 justify-start gap-1.5 rounded-lg border-none bg-transparent px-1.5 text-left text-sm text-ink-subtle hover:bg-hover"
       >
+        <ModelIcon model={shown()} />
         <span class="min-w-0 truncate">{label()}</span>
         <CaretDown class="size-3.5 shrink-0" />
       </MobileDrawer.Trigger>
@@ -177,8 +183,9 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                           title={option.description ?? undefined}
                           onClick={() => pick(option.id)}
                         >
+                          <ModelIcon model={option.id} />
                           <span class="min-w-0 flex-1 truncate">
-                            {option.name}
+                            {modelLabel(option.id, option.name)}
                           </span>
                           <Show when={option.id === shown()}>
                             <Check class="size-3.5 shrink-0 text-accent" />
@@ -204,8 +211,9 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         class={PILL_TRIGGER_CLASS}
         disabled={props.disabled}
       >
-        {label()}
-        <CaretDown />
+        <ModelIcon model={shown()} class="size-3.5" />
+        <span class="min-w-0 truncate">{label()}</span>
+        <CaretDown class="shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)] overflow-hidden">
         {/* The gradients anchor here, outside the scrolling box, and read
@@ -227,7 +235,10 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                     title={option.description ?? undefined}
                     onSelect={() => pick(option.id)}
                   >
-                    <span class="flex-1 truncate">{option.name}</span>
+                    <ModelIcon model={option.id} class="size-3.5" />
+                    <span class="flex-1 truncate">
+                      {modelLabel(option.id, option.name)}
+                    </span>
                   </Dropdown.Item>
                 )}
               </For>

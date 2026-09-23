@@ -12,6 +12,7 @@
 import { DiffCounts } from '@app/features/agent-changes/components/DiffCounts';
 import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
 import { SidePanel } from '@components/app/side-panel';
+import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { References } from '@core/component/References';
 import { formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
@@ -24,6 +25,7 @@ import { activityCounts, latestPlan } from '../../state/session-summary';
 import { CountSummary, SessionStatusPill, TodoList } from '../../ui';
 import { AgentPullRequestChip } from '../AgentPullRequestChip';
 import {
+  modelDisplayName,
   sessionHarnessTitle,
   sessionRepositoryUrl,
   showsSessionHarness,
@@ -67,7 +69,13 @@ export function AgentSidePanelSections() {
             {(model) => (
               <SidePanel.Row label="Model">
                 <SidePanel.Pill>
-                  <span class="truncate">{model()}</span>
+                  <ModelIcon model={model()} class="size-3" />
+                  <span class="truncate">
+                    {modelDisplayName(
+                      model(),
+                      metadata()?.supportedModels ?? []
+                    )}
+                  </span>
                 </SidePanel.Pill>
               </SidePanel.Row>
             )}

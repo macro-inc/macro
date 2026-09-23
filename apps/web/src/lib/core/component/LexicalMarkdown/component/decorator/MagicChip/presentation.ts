@@ -1,3 +1,4 @@
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import type { MagicChipStatus } from '@macro-inc/lexical-core';
 import type {
   FoldedMessage,
@@ -192,7 +193,7 @@ function partActivity(part: MessagePart): MagicChipActivity {
       }))
       .with({ kind: 'control', control: { kind: 'set_model' } }, (part) => ({
         label: 'Model changed',
-        detail: part.control.model,
+        detail: modelLabel(part.control.model),
         busy: false,
       }))
       .with({ kind: 'control', control: { kind: 'compact' } }, () => ({

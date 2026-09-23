@@ -1,4 +1,5 @@
 import type { ListController } from '@app/components/list';
+import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { ChannelEntity } from '@entity';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
@@ -115,7 +116,7 @@ export type ChannelsRailContext = {
   selectTab: (tab: ChannelsTab) => void;
   sources: ChannelsSources;
   favorites: Accessor<readonly Favorite[]>;
-  selectedChannelId: Accessor<string | undefined>;
+  selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
   isGroupOpen: (group: ChannelsRailSection) => boolean;
   toggleGroup: (group: ChannelsRailSection) => void;
   /** Whether channel labels and smart tags are enabled for this user. */

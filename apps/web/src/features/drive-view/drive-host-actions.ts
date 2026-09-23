@@ -1,8 +1,4 @@
-import { entityDetailBlockType } from '@app/components/entity-detail/EntityDetail';
-import {
-  entityDetailTarget,
-  useEntityDetailNavigationStack,
-} from '@app/components/entity-detail/EntityDetailNavigationStack';
+import { entityDetailTarget } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { makeShareAction } from '@app/features/next-soup/actions';
 import {
   markReminderSeenOnOpen,
@@ -26,6 +22,7 @@ import {
 } from '@core/util/upload';
 import type { Accessor } from 'solid-js';
 import type { DriveHostActions } from './context/drive-context';
+import { useDriveDetailNavigation } from './drive-detail-navigation';
 
 /** App-specific navigation, upload and sharing adapters for the Drive workspace. */
 export function createDriveHostActions(options: {
@@ -36,7 +33,7 @@ export function createDriveHostActions(options: {
 
   const layout = useSplitLayout();
 
-  const navigation = useEntityDetailNavigationStack();
+  const navigation = useDriveDetailNavigation();
 
   const notificationSource = useGlobalNotificationSource();
 
@@ -82,14 +79,7 @@ export function createDriveHostActions(options: {
           fallbackName: entity.name,
         });
 
-        if (
-          entityDetailBlockType(target) &&
-          navigation.shouldNavigate(target, { event })
-        ) {
-          navigation.reset(target);
-
-          return;
-        }
+        if (navigation.navigate(target, { event })) return;
       }
 
       void openEntityInSplitFromUnifiedList(entity, {
@@ -121,14 +111,7 @@ export function createDriveHostActions(options: {
           fallbackName: name,
         });
 
-        if (
-          entityDetailBlockType(target) &&
-          navigation.shouldNavigate(target, { event })
-        ) {
-          navigation.reset(target);
-
-          return;
-        }
+        if (navigation.navigate(target, { event })) return;
       }
 
       const result = layout.openWithSplit(favoriteSplitContent(favorite), {

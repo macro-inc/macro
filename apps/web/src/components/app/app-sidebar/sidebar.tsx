@@ -1724,7 +1724,7 @@ type SidebarOpenAction = 'current-split' | 'new-split' | 'fullscreen';
 
 interface SidebarOpenInSplitMenuProps {
   /** The content the menu's actions open. */
-  content: () => SplitContent;
+  content?: () => SplitContent;
   /**
    * Runs once an action has placed the content in a split — e.g. the Email
    * account rows scope the freshly opened mail list to their inbox.
@@ -1732,6 +1732,7 @@ interface SidebarOpenInSplitMenuProps {
   onOpened?: (split: SplitHandle, action: SidebarOpenAction) => void;
   /** View-owned navigation for rows that select a location inside this split. */
   onOpenCurrentSplit?: () => void;
+  onOpenNewSplit?: () => void;
   onOpenFullscreen?: () => void;
   onOpenChange?: (open: boolean) => void;
   /**
@@ -1762,6 +1763,8 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       props.onOpenCurrentSplit();
       return;
     }
+    if (!props.content) return;
+
     const result = layout.openWithSplit(props.content(), {
       allowDuplicate: true,
       mergeHistory: false,
@@ -1779,6 +1782,13 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
     if (!manager || !manager.canAppendSplit()) return;
 
     analytics.track('split_created', { from: 'sidebar' });
+
+    if (props.onOpenNewSplit) {
+      props.onOpenNewSplit();
+      return;
+    }
+
+    if (!props.content) return;
 
     const result = manager.openWithSplit(props.content(), {
       activate: true,
@@ -1800,6 +1810,9 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       globalSplitManager()?.returnFocus();
       return;
     }
+
+    if (!props.content) return;
+
     const split = layout.replaceAllSplits(props.content(), {
       referredFrom: 'sidebar',
     });

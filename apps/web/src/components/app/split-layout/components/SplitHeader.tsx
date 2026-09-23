@@ -4,6 +4,7 @@ import { driveLocationLabel } from '@app/features/drive-view/core/location-label
 import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { useSplitRouter } from '@app/lib/split-router';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSidebarCollapse } from '@components/app/sidebarVisibility';
@@ -47,7 +48,7 @@ import { Portal } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
-import type { SplitContent } from '../layoutManager';
+import type { SplitContent, SplitId } from '../layoutManager';
 import {
   closeSplitOrReturnToList,
   shouldShowSplitCloseButton,
@@ -256,7 +257,9 @@ function SplitDriveReturnButton() {
   const sourceLabel = () => {
     const state = sourceList()?.state;
     const label = state?.['drive.returnLabel'];
+
     if (typeof label === 'string') return label;
+
     const driveState = state?.['drive.view.v2'] as DriveState | undefined;
     return driveState ? driveLocationLabel(driveState.location) : 'My Files';
   };
@@ -362,6 +365,7 @@ function SoupNavigationButtons() {
 function SplitHeaderContextMenu(props: ParentProps) {
   const panel = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
+  const router = useSplitRouter<SplitId>();
   if (!panel || !layout) return props.children;
 
   const splitIndex = createMemo(() =>
@@ -406,7 +410,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
             activeSplitId: layout.manager.activeSplitId(),
             currentSplitId: panel.handle.id,
             currentSplitIndex: splitIndex(),
-            currentSplitUrl: panel.handle.getUrl(),
+            currentSplitUrl: router.href(panel.handle.id),
             splits: splits.map((split, index) => ({
               index,
               id: split.id,

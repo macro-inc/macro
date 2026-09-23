@@ -11,6 +11,7 @@ import {
   type ParentProps,
   type Setter,
   Suspense,
+  useContext,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownName } from './MarkdownNameProvider';
@@ -29,6 +30,7 @@ export function ModalsProvider(
   const { displayName } = useMarkdownName();
   const notificationSource = useGlobalNotificationSource();
   const metadataQuery = useDocumentMetadataQuery(documentId);
+  const parentShareContext = useContext(ShareDialogContext);
   const [localShareOpen, setLocalShareOpen] = createSignal(false);
   const shareOpen = () => props.shareOpen ?? localShareOpen();
   const setShareOpen: Setter<boolean> = (next) => {
@@ -57,6 +59,7 @@ export function ModalsProvider(
         isOpen: shareOpen,
         open: () => setShareOpen(true),
         close: () => setShareOpen(false),
+        copyLink: parentShareContext?.copyLink,
       }}
     >
       {props.children}

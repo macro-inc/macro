@@ -1,8 +1,5 @@
 import { LIST_VIEW_ID, type ListView } from '@app/constants/list-views';
-import {
-  agentsRouteSegments,
-  parseAgentsRoute,
-} from '@app/features/agents-view/core/route';
+import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import type {
   BlockAlias,
   BlockAliasContext,
@@ -11,13 +8,12 @@ import type {
 } from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
-import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
-import { activeTabId } from '@core/signal/settingsTab';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
+import deepEqual from 'fast-deep-equal';
 import {
   type Accessor,
   batch,
@@ -52,27 +48,31 @@ type SplitKey = `${BlockName | BlockAlias | 'component'}:${string}`;
  */
 export type EntryState = Record<string, unknown>;
 
-export type SplitContent = {
+type SplitContentState = {
   /**
    * Whether to preserve the params originally passed when navigating to this content.
    * If false, then it only does so the first time.
    */
   preserveParams?: boolean;
-} & (
-  | {
-      type: BlockName | BlockAlias;
-      id: string;
-      params?: BlockComponentProps[BlockName];
-      aliasContext?: BlockAliasContext;
-      state?: EntryState;
-    }
-  | {
-      type: 'component';
-      id: string;
-      params?: Record<string, unknown>;
-      state?: EntryState;
-    }
-);
+  state?: EntryState;
+  /** Per-entry integration metadata, opaque to the layout manager. */
+  entryMetadata?: unknown;
+};
+
+export type SplitContent = SplitContentState &
+  (
+    | {
+        type: BlockName | BlockAlias;
+        id: string;
+        params?: BlockComponentProps[BlockName];
+        aliasContext?: BlockAliasContext;
+      }
+    | {
+        type: 'component';
+        id: string;
+        params?: Record<string, unknown>;
+      }
+  );
 
 export type SplitContentType = SplitContent['type'];
 
@@ -86,40 +86,6 @@ export type NavigationCause =
   | 'history-back'
   | 'history-forward'
   | 'replace';
-
-function sameContent(a: SplitContent, b: SplitContent): boolean {
-  return a.type === b.type && a.id === b.id;
-}
-
-function getAliasOrType(content: SplitContent): string {
-  return content.type === 'component'
-    ? content.type
-    : content.aliasContext?.alias || content.type;
-}
-
-/**
- * The `type/id` URL pair for a split's content. The settings panel is stored
- * internally as `component/settings` content, but serializes as
- * `settings/<active-tab-slug>` so the URL reflects (and can restore) which
- * settings page is open. Reads the active-tab signal, so the URL updates
- * reactively as the tab changes. `decodePairs` maps `settings/<tab>` back to
- * the internal `component/settings` content on the way in.
- *
- * This applies on mobile too: settings docks as a split there, and now that
- * settings is no longer a standalone `/settings/:tab` route, `settings/<tab>`
- * is claimed by the split layout like any other split — so there's no reason
- * to keep the tab out of the URL.
- */
-function contentUrlSegments(content: SplitContent): string[] {
-  if (content.type === 'component') {
-    const agentsRoute = agentsRouteSegments(content.id);
-    if (agentsRoute) return agentsRoute;
-  }
-  if (content.type === 'component' && content.id === 'settings') {
-    return ['settings', settingsTabToSlug(activeTabId())];
-  }
-  return [getAliasOrType(content), content.id].map(String);
-}
 
 function keyOfSplitContent(s: SplitContent): SplitKey {
   return `${s.type}:${s.id}`;
@@ -240,11 +206,6 @@ function keyOfSplitState(s: SplitState): SplitKey {
   return `${s.content.type}:${s.content.id}`;
 }
 
-export type UrlCapabilities = {
-  getUrlSegments: () => string[];
-  getUrl: () => string;
-};
-
 export enum SplitEvent {
   Insert,
   Remove,
@@ -354,7 +315,7 @@ export type SplitManager = {
 
   /**
    * Reconcile the splits with the provided list of splits.
-   * Useful for when the url changes.
+   * Useful when applying externally restored layout state.
    *
    * All [SplitContent] of type `component` will be fully re-created.
    * All [SplitContent] of type `block` will be preserved, and not re-mounted.
@@ -409,7 +370,7 @@ export type SplitManager = {
 
   /**
    * Register a predicate that marks certain splits as excluded — excluded splits
-   * are hidden from URL encoding, duplicate detection, and content lookup.
+   * are hidden from external serialization, duplicate detection, and content lookup.
    * Used for mobile swipe back behavior, where we want to ignore the bg split.
    */
   setExclusionFilter: (
@@ -436,7 +397,7 @@ export type SplitManager = {
       handle: PopoverSplitHandle;
     }
   >;
-} & UrlCapabilities;
+};
 
 export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   unregisterContentChangeListener: (
@@ -529,7 +490,14 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
    * Returns `undefined` if no state has been captured.
    */
   currentEntryState: () => EntryState | undefined;
-} & UrlCapabilities;
+  /**
+   * Replace the current history entry without remounting its content or
+   * notifying content-identity listeners. Identity-changing updates are ignored.
+   */
+  updateCurrentEntry: (
+    updater: (current: SplitContent) => SplitContent
+  ) => void;
+};
 
 function newSplitId(): SplitId {
   return brandSplitId(
@@ -572,11 +540,6 @@ function createPinnedMount(
     element: handle.element,
     aliasContext: content.aliasContext,
   };
-}
-
-function sameIdentity(a: SplitContent, b: SplitContent): boolean {
-  if (a.type !== b.type) return false;
-  return a.id === b.id;
 }
 
 function contentIdentity(content: SplitContent) {
@@ -736,6 +699,22 @@ export function createSplitLayout(
     });
   }
 
+  function applyEntryMetadata(
+    split: SplitState,
+    desired: SplitContent
+  ): SplitState {
+    if (deepEqual(split.content.entryMetadata, desired.entryMetadata)) {
+      return split;
+    }
+
+    const content = {
+      ...split.content,
+      entryMetadata: desired.entryMetadata,
+    } as SplitContent;
+    split.history.replaceCurrent(content);
+    return { ...split, content };
+  }
+
   const DEFAULT_SPLIT_CONTENT = defaultSplitContent ?? {
     type: 'component',
     id: LIST_VIEW_ID.inbox,
@@ -819,7 +798,10 @@ export function createSplitLayout(
     if (isDuplicateSplit(otherSplits, next)) return;
 
     const splitIndex = splitIndexById(split.id);
-    if (splitIndex >= 0 && !sameIdentity(split.content, content)) {
+    if (
+      splitIndex >= 0 &&
+      keyOfSplitContent(split.content) !== keyOfSplitContent(content)
+    ) {
       setSplitNamesById(
         produce((map) => {
           delete map[split.id];
@@ -845,7 +827,7 @@ export function createSplitLayout(
       }
     }
 
-    if (sameIdentity(split.content, content)) {
+    if (keyOfSplitContent(split.content) === keyOfSplitContent(content)) {
       // Update referredFrom if provided, even if content is the same
       if (referredFrom !== undefined) {
         return setState('splits', (s) => {
@@ -1018,8 +1000,8 @@ export function createSplitLayout(
    * the mount. See `SplitHandle.adoptContentId` for why this exists.
    *
    * The history entry is rewritten rather than pushed, and the navigation
-   * cause is `replace`, so the URL sync swaps the path in place instead of
-   * adding a back step to a placeholder the user can never return to.
+   * cause is `replace`, so external state can replace the id instead of adding
+   * a back step to a placeholder the user can never return to.
    */
   function adoptContentId(
     id: SplitId,
@@ -1065,6 +1047,37 @@ export function createSplitLayout(
     });
   }
 
+  function updateCurrentEntry(
+    id: SplitId,
+    updater: (current: SplitContent) => SplitContent
+  ): void {
+    const split = findSplitById(id);
+    if (!split) return;
+    if (
+      split.history.index < 0 ||
+      split.history.index >= split.history.items.length
+    ) {
+      return;
+    }
+
+    const current = split.content;
+    const next = updater(current);
+    if (
+      next === current ||
+      keyOfSplitContent(current) !== keyOfSplitContent(next)
+    )
+      return;
+
+    batch(() => {
+      split.history.replaceCurrent(next);
+      setState('splits', (splits) => {
+        const index = splits.findIndex((candidate) => candidate.id === id);
+        if (index < 0) return splits;
+        return splits.with(index, { ...splits[index], content: next });
+      });
+    });
+  }
+
   function reset(id: SplitId) {
     const i = splitIndexById(id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
@@ -1079,21 +1092,6 @@ export function createSplitLayout(
       reattach(state.splits[i], content, undefined, 'fresh');
     });
   }
-
-  const getUrlSegments = () => {
-    return state.splits
-      .filter((s) => !isExcluded(s))
-      .flatMap((s) => contentUrlSegments(s.content));
-  };
-
-  const getUrl = () => {
-    const visibleSplits = state.splits.filter((s) => !isExcluded(s));
-    return (
-      visibleSplits.map((s) => getAliasOrType(s.content)).join('/') +
-      '/' +
-      visibleSplits.map((s) => s.content.id).join('/')
-    );
-  };
 
   function activateSplit(id: SplitId) {
     // Invariant: an excluded split (the mobile background split) can never
@@ -1202,7 +1200,10 @@ export function createSplitLayout(
         // If there's only one split and it's the default split, then no-op
         if (state.splits.length <= 1) {
           // If it's not the default split, replace it with the default
-          if (!sameContent(content(), DEFAULT_SPLIT_CONTENT))
+          if (
+            keyOfSplitContent(content()) !==
+            keyOfSplitContent(DEFAULT_SPLIT_CONTENT)
+          )
             replace(currentSplit.id, {
               next: DEFAULT_SPLIT_CONTENT,
               referredFrom: null,
@@ -1213,8 +1214,6 @@ export function createSplitLayout(
 
         removeSplit(currentSplit.id);
       },
-      getUrlSegments: () => contentUrlSegments(content()),
-      getUrl: () => contentUrlSegments(content()).join('/'),
       isFirst: () => state.splits.at(0)?.id === id,
       isLast: () => state.splits.at(-1)?.id === id,
       isActive: () => currentSplit.id === state.activeSplitId,
@@ -1282,6 +1281,8 @@ export function createSplitLayout(
         const c = live.content as { state?: EntryState };
         return c.state;
       },
+      updateCurrentEntry: (updater) =>
+        updateCurrentEntry(currentSplit.id, updater),
     };
   };
 
@@ -1291,7 +1292,9 @@ export function createSplitLayout(
     const { content, activate, referredFrom, initialHistory, insertIndex } =
       options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
-    const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
+    const isDefault =
+      keyOfSplitContent(initialContent) ===
+      keyOfSplitContent(DEFAULT_SPLIT_CONTENT);
 
     // Direct split creation permits duplicate shells, but never duplicate entities.
     const existing = findOpenView(initialContent);
@@ -1401,14 +1404,37 @@ export function createSplitLayout(
     return getSplit(match.id);
   }
 
+  function reconcileEntryMetadata(
+    visibleSplits: SplitState[],
+    newSplits: SplitContent[]
+  ) {
+    const metadataChanged = visibleSplits.some(
+      (split, index) =>
+        !deepEqual(split.content.entryMetadata, newSplits[index]?.entryMetadata)
+    );
+    if (!metadataChanged) return;
+
+    setState('splits', (splits) => {
+      const nextById = new Map(
+        visibleSplits.map((split, index) => [
+          split.id,
+          applyEntryMetadata(split, newSplits[index]),
+        ])
+      );
+      return splits.map((split) => nextById.get(split.id) ?? split);
+    });
+  }
+
   function reconcileSplits(newSplits: SplitContent[]) {
-    // URL segments are produced by getUrlSegments(), which excludes excluded splits.
     const visibleSplits = state.splits.filter((s) => !isExcluded(s));
     const currentKeys = visibleSplits.map(keyOfSplitState);
     const newKeys = newSplits.map(keyOfSplitContent);
     const changed = newKeys.join(',') !== currentKeys.join(',');
 
-    if (!changed) return;
+    if (!changed) {
+      reconcileEntryMetadata(visibleSplits, newSplits);
+      return;
+    }
 
     // Build the result array by position, preserving excluded splits unchanged.
     const resultSplits: SplitState[] = [];
@@ -1423,7 +1449,7 @@ export function createSplitLayout(
 
     // Assign existing splits before creating replacements. Matching by content
     // after the same-position fast path lets a split keep its identity (and its
-    // history/mount) when browser navigation merely moves it to another index.
+    // history/mount) when inbound state merely moves it to another index.
     const assignments = new Array<SplitState | undefined>(newSplits.length);
 
     for (let i = 0; i < newSplits.length; i++) {
@@ -1433,7 +1459,8 @@ export function createSplitLayout(
       if (
         splitAtSameIndex &&
         !usedIds.has(splitAtSameIndex.id) &&
-        sameContent(splitAtSameIndex.content, newContent)
+        keyOfSplitContent(splitAtSameIndex.content) ===
+          keyOfSplitContent(newContent)
       ) {
         assignments[i] = splitAtSameIndex;
         usedIds.add(splitAtSameIndex.id);
@@ -1445,7 +1472,8 @@ export function createSplitLayout(
 
       const existing = visibleSplits.find(
         (split) =>
-          !usedIds.has(split.id) && sameContent(split.content, newSplits[i])
+          !usedIds.has(split.id) &&
+          keyOfSplitContent(split.content) === keyOfSplitContent(newSplits[i])
       );
       if (existing) {
         assignments[i] = existing;
@@ -1456,7 +1484,7 @@ export function createSplitLayout(
     for (let i = 0; i < newSplits.length; i++) {
       const existing = assignments[i];
       if (existing) {
-        resultSplits.push(existing);
+        resultSplits.push(applyEntryMetadata(existing, newSplits[i]));
         continue;
       }
 
@@ -1730,8 +1758,10 @@ export function createSplitLayout(
     }
     const visibleSplits = state.splits.filter((split) => !isExcluded(split));
     const splitToKeep =
-      visibleSplits.find((split) => sameContent(split.content, content)) ??
-      visibleSplits[0];
+      visibleSplits.find(
+        (split) =>
+          keyOfSplitContent(split.content) === keyOfSplitContent(content)
+      ) ?? visibleSplits[0];
 
     if (!splitToKeep) {
       return createNewSplit({
@@ -1753,7 +1783,9 @@ export function createSplitLayout(
 
     const handle = getSplit(splitToKeep.id);
     if (handle) {
-      if (!sameContent(splitToKeep.content, content)) {
+      if (
+        keyOfSplitContent(splitToKeep.content) !== keyOfSplitContent(content)
+      ) {
         handle.replace({
           next: content,
           mergeHistory: false,
@@ -1795,8 +1827,6 @@ export function createSplitLayout(
     swapSplit,
     canSwapSplit,
     createNewSplit,
-    getUrlSegments,
-    getUrl,
     activateSplit,
     hasSplit,
     getSplitByContent,

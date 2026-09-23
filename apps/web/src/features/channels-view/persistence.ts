@@ -49,7 +49,6 @@ const channelsEntryStateSchemaWithDefaults = z.object({
   mobileTab: z
     .enum(['channels', 'direct_messages', 'recents'])
     .default('channels'),
-  selectedChannelId: z.string().optional(),
   expandedGroups: channelsExpandedGroupsSchema.default({
     favorites: true,
     channels: true,
@@ -64,7 +63,6 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
   version: 1,
   tab: 'browse',
   mobileTab: 'channels',
-  selectedChannelId: undefined,
   expandedGroups: {
     favorites: true,
     channels: true,
@@ -105,9 +103,6 @@ function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
     version: 1,
     tab: state.tab,
     mobileTab: state.mobileTab,
-    ...(state.selectedChannelId === undefined
-      ? {}
-      : { selectedChannelId: state.selectedChannelId }),
     expandedGroups: state.expandedGroups,
     collapsedLabels: state.collapsedLabels,
   };
@@ -124,7 +119,6 @@ function restoreChannelsEntryState(
     ...current,
     tab: restored.tab,
     mobileTab: restored.mobileTab,
-    selectedChannelId: restored.selectedChannelId,
     expandedGroups: restored.expandedGroups,
     collapsedLabels: restored.collapsedLabels,
   };

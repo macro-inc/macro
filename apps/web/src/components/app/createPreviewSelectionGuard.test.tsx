@@ -1,5 +1,7 @@
-import { EntityDetailNavigationStack } from '@app/components/entity-detail/EntityDetailNavigationStack';
-import { useNavigationStack } from '@app/components/navigation-stack/NavigationStack';
+import {
+  NavigationStack,
+  useNavigationStack,
+} from '@app/components/navigation-stack/NavigationStack';
 import { toast } from '@core/component/Toast/Toast';
 import { render } from '@solidjs/testing-library';
 import { createMemo, createRoot, type ParentProps } from 'solid-js';
@@ -84,21 +86,28 @@ function Layout(props: ParentProps) {
 
 function setup(defaultValue?: PreviewPanelSelection[]) {
   let stack!: ReturnType<typeof useNavigationStack<PreviewPanelSelection>>;
+  let selectionGuard!: ReturnType<typeof createPreviewSelectionGuard>;
   function Capture() {
     stack = useNavigationStack<PreviewPanelSelection>();
     return null;
   }
   function App() {
+    selectionGuard = createPreviewSelectionGuard();
     return (
-      <Layout>
-        <EntityDetailNavigationStack.Root defaultValue={defaultValue}>
-          <Capture />
-        </EntityDetailNavigationStack.Root>
-      </Layout>
+      <NavigationStack.Root<PreviewPanelSelection>
+        defaultValue={defaultValue}
+        beforeChange={selectionGuard}
+      >
+        <Capture />
+      </NavigationStack.Root>
     );
   }
-  const view = render(App);
-  return { stack, ...view };
+  const view = render(() => (
+    <Layout>
+      <App />
+    </Layout>
+  ));
+  return { stack, selectionGuard, ...view };
 }
 
 it('does not move focus or toast for a conflicting restored selection', () => {
@@ -173,6 +182,23 @@ it('blocks breadcrumbs back to content opened elsewhere without changing history
   first.stack.pop();
   expect(first.stack.active()?.data.id).toBe('one');
   first.unmount();
+});
+
+it('preflights without claiming the requested selection', () => {
+  const first = setup();
+  const second = setup();
+  const third = setup();
+  const one = { type: 'email', id: 'one' } as const;
+  const two = { type: 'email', id: 'two' } as const;
+
+  first.stack.reset(one);
+  expect(second.selectionGuard.canSelect(one)).toBe(false);
+  expect(second.selectionGuard.canSelect(two)).toBe(true);
+  expect(third.stack.reset(two)).toBeDefined();
+
+  first.unmount();
+  second.unmount();
+  third.unmount();
 });
 
 it('treats Markdown as single-instance and allows revisiting the owning preview', () => {

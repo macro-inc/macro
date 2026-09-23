@@ -1,13 +1,30 @@
-import type { NavigationStackChangeReason } from '@app/components/navigation-stack/NavigationStack';
+import {
+  type ChannelPreviewSelection,
+  getChannelEntityTarget,
+} from '@app/features/next-soup/utils';
 import { makePersistedState } from '@app/lib/persistence';
+import {
+  createSearchParams,
+  useNavigate,
+  useRouteParams,
+} from '@app/lib/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  channelDetailRoute,
+  channelsSplitRoute,
+} from '@components/app/split-layout/split-router/app-routes';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ContextProviderProps } from '@solid-primitives/context';
-import { createSignal } from 'solid-js';
+import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { createStore, type Store } from 'solid-js/store';
+import {
+  CHANNEL_DETAIL_SEARCH_NAMESPACE,
+  channelDetailSearch,
+  channelDetailSearchCodec,
+} from './channels-route';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
   CHANNELS_DEFAULT_SORT_BY,
@@ -30,13 +47,12 @@ type ChannelsViewProviderProps = ContextProviderProps & {
 
 export type ChannelsViewContext = {
   state: Store<ChannelsViewState>;
-  /** The mobile list opens channels in the split; only desktop renders the inline preview. */
+  /** The mobile list opens channels in the split; only desktop renders detail. */
   mobileLayout: () => boolean;
-  /** Only admitted selections may render an inline preview. */
-  previewChannelId: () => string | undefined;
+  selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
   setTab: (tab: ChannelsTab) => void;
   setMobileTab: (tab: ChannelsQueryScope) => void;
-  setSelectedChannelId: (channelId: string | undefined) => void;
+  setSelectedChannel: (channel: ChannelPreviewSelection | undefined) => boolean;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
   /** Per-user collapse state of a team channel label. */
   setLabelOpen: (labelId: string, open: boolean) => void;
@@ -51,7 +67,6 @@ function createInitialState(
     tab: initial.tab ?? 'browse',
     mobileTab:
       initial.mobileTab ?? (initial.tab === 'recents' ? 'recents' : 'channels'),
-    selectedChannelId: initial.selectedChannelId,
     expandedGroups: {
       favorites: initial.expandedGroups?.favorites ?? true,
       channels: initial.expandedGroups?.channels ?? true,
@@ -80,6 +95,10 @@ export const [ChannelsViewProvider, useChannelsView] =
     (props) => {
       const panel = useSplitPanelOrThrow();
       const userId = useUserId();
+      const navigate = useNavigate();
+      const params = useRouteParams(channelDetailRoute);
+      const [detailSearch] = createSearchParams(channelDetailSearch);
+      const selectPreview = createPreviewSelectionGuard();
       const initial = props.initialState ?? {};
       const [state, setState] = makePersistedState(
         createStore(createInitialState(initial)),
@@ -93,31 +112,81 @@ export const [ChannelsViewProvider, useChannelsView] =
       );
 
       const mobileLayout = () => isTouchDevice();
-      const selectPreview = createPreviewSelectionGuard();
-      const [previewChannelId, setPreviewChannelId] = createSignal<string>();
-      const setSelectedChannelId = (
-        id: string | undefined,
-        reason: NavigationStackChangeReason = 'navigate'
-      ) => {
-        // The mobile layout keeps the selection for row highlighting only, so
-        // there is no preview to claim.
-        const preview =
-          id && !mobileLayout() ? { type: 'channel' as const, id } : undefined;
-        if (!selectPreview(preview, reason)) return;
-        setPreviewChannelId(preview?.id);
-        setState('selectedChannelId', id);
+      const selectedChannel = createMemo<ChannelPreviewSelection | undefined>(
+        () => {
+          const channelId = params.channelId;
+          if (typeof channelId !== 'string') return undefined;
+          const target = detailSearch.messageId
+            ? {
+                messageId: detailSearch.messageId,
+                ...(detailSearch.threadId
+                  ? { threadId: detailSearch.threadId }
+                  : {}),
+              }
+            : undefined;
+          return {
+            type: 'channel',
+            id: channelId,
+            ...(target ? { target } : {}),
+          };
+        }
+      );
+      const routeSearch = (channel: ChannelPreviewSelection) => {
+        const target = getChannelEntityTarget(channel);
+        const value = {
+          messageId: target?.kind === 'message' ? target.messageId : '',
+          threadId: target?.kind === 'message' ? (target.threadId ?? '') : '',
+        };
+        return channelDetailSearchCodec.serialize(value);
       };
-      // Keep restored selection in persistence even if another view currently
-      // owns its preview. It can be retried on selection or the next mount.
-      setSelectedChannelId(state.selectedChannelId, 'restore');
+      const navigateToChannel = (
+        channel: ChannelPreviewSelection,
+        replace = false
+      ) => {
+        const channelId =
+          channel.type === 'channel' ? channel.id : channel.channelId;
+        navigate(
+          { route: channelDetailRoute, params: { channelId } },
+          {
+            replace,
+            search: {
+              [CHANNEL_DETAIL_SEARCH_NAMESPACE]: routeSearch(channel),
+            },
+          }
+        );
+      };
+      const setSelectedChannel = (
+        channel: ChannelPreviewSelection | undefined
+      ) => {
+        if (!channel) {
+          navigate({ route: channelsSplitRoute, params: {} });
+          return true;
+        }
+        if (mobileLayout() || !selectPreview.canSelect(channel)) return false;
+        navigateToChannel(channel);
+        return true;
+      };
+
+      createEffect(
+        on(selectedChannel, (channel, previous) => {
+          if (!selectPreview(channel)) {
+            if (previous) navigateToChannel(previous, true);
+            else
+              navigate(
+                { route: channelsSplitRoute, params: {} },
+                { replace: true }
+              );
+          }
+        })
+      );
 
       return {
         state,
         mobileLayout,
-        previewChannelId,
+        selectedChannel,
         setTab: (tab) => setState('tab', tab),
         setMobileTab: (tab) => setState('mobileTab', tab),
-        setSelectedChannelId,
+        setSelectedChannel,
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),
         setLabelOpen: (labelId, open) =>
           setState('collapsedLabels', (collapsed) =>

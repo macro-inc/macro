@@ -8,30 +8,49 @@
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/component/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/component/mail` | Email client |
-| `/app/component/channels` | Channels list |
-| `/app/component/documents` | Files (documents list) |
-| `/app/component/tasks` | Tasks table |
-| `/app/component/agents` | AI chats / agents list |
+| `/app/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
+| `/app/inbox/<block-type>/<uuid>` | Home with a heterogeneous item opened inline; target metadata is stored in `sN.inbox-preview.*` query values |
+| `/app/mail` | Email client |
+| `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
+| `/app/channels` | Channels list |
+| `/app/channels/channel/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channel-detail.*` |
+| `/app/drive` | Files (Drive defaults to My Files) |
+| `/app/drive/<recent-or-shared>` | A Drive tab (`/app/drive/tab/<...>` remains a compatibility alias) |
+| `/app/drive/folder/<uuid>` | A Drive folder; breadcrumbs resolve from current accessible folder data |
+| `/app/drive/<document-type>/<uuid>` | An item opened inline in My Files |
+| `/app/drive/folder/<uuid>/<document-type>/<uuid>` | An item opened inline in its Drive folder; document types include `md`, `task`, `skill`, `snippet`, `canvas`, `pdf`, `code`, `csv`, `image`, `video`, `spreadsheet`, and `unknown` |
+| `/app/tasks` | Tasks table |
+| `/app/tasks/<uuid>` | Tasks with a task document opened inline |
+| `/app/agents` | AI chats / agents list |
 | `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
-| `/app/agent-chats/<uuid>` | Legacy AI chat opened in the Agents workspace |
-| `/app/component/calls` | Calls list |
-| `/app/component/companies` | Customers (CRM; needs a team) |
-| `/app/component/activity` | Activity heatmap + feed |
-| `/app/component/home` | Assistant (AI-first landing) |
+| `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
+| `/app/calls` | Calls list |
+| `/app/companies` | Customers (CRM; needs a team) |
+| `/app/activity` | Activity heatmap + feed |
+| `/app/home` | Assistant (AI-first landing) |
 | `/app/calendar/view` | Calendar |
-| `/app/md/<uuid>` | A document |
-| `/app/spreadsheet/<uuid>` | A native Macro spreadsheet |
+| `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
+| `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 
-Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
-(`/app/<left>/<right>`). Desktop panes expose Close when available and omit
+On touch devices, documents (including tasks) open in legacy blocks rather than
+inline Drive details. Canonical `/app/drive/.../<document-type>/<uuid>` links also
+fall back to legacy document routes. This uses touch detection, not the native-app
+check: in DevTools, enable touch emulation rather than only narrowing the viewport.
+Legacy document URLs upgrade to Drive only when desktop detail rendering is enabled.
+
+Splits: the app is a tiling window manager. Public variable-length routes use
+`~` as the boundary between panes
+(`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`
+pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
+to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
+namespaced query parameters such as `s0.drive.sort=created_at`; route identity
+and breadcrumb nesting remain in the path. Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
 
 The app views are referred to as **workspaces**. Expanded workspace sidebars start
@@ -40,7 +59,23 @@ displayed width. Workspace navigation uses shared 32px rows (44px on touch), 16p
 glyphs in aligned 20px icon slots, a 6px text gap, and compact sentence-case section
 headings. Tags and folders have a separate disclosure button on the **right** of
 the row: clicking the label selects the destination; clicking Expand/Collapse
-only opens or closes its children. Long destination names are single-line and
+only opens or closes its children. Selecting a Drive folder or tab closes an
+inline detail into that destination; it does not navigate back to Drive's root.
+Home, Email, Tasks, Channels, and Drive keep their workspace provider mounted
+while typed child routes own the accepted inline detail. Tasks and Email replace
+the list with detail, capturing its focus and scroll state before disposal. Their child
+selection participates in browser Back/Forward independently per pane. Explicit
+return controls navigate to the workspace's list root. Multiple panes navigate
+their child routes and history independently; returning to a list does not
+activate another pane. Opening a resource already displayed in another pane
+still activates its owner through router claim arbitration; the compatibility
+preview guard can instead reject a conflicting embedded preview. On touch, or
+when the new-app-view flag cannot render the detail, Home, Email, Tasks, and
+Channels detail URLs fall back to the existing full-block surface. Legacy email
+and channel message targets are normalized into per-pane search by ingress
+middleware, including external/history navigation; explicit namespaced values win.
+Unavailable documents retain their error/retry UI rather than navigating away.
+Long destination names are single-line and
 expose the full name on hover. Section chevrons point right and stay visible when
 collapsed. Expanded chevrons point down and appear when hovering their section;
 the section heading also brightens on hover. Sections and nested branches briefly
@@ -335,6 +370,15 @@ another pagination attempt. A missing item may still be uncached, but should app
 local search excludes unsupported email hits before limiting entity results;
 email mentions keep their separate search-service path.
 
+Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
+must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
+mounted and usable while the optional source loads or fails. A failed background
+refresh retains available history/channel items and recently-viewed ordering.
+Placeholder results also remain usable while replacement data loads. A normal cache-worker
+handoff between tabs preserves backfill cursors and watermarks; only a replacement
+that creates or resets stored cache data discards them. Per-lane full-refresh and
+Shared Mail restart rules still apply.
+
 ## Keyboard model (from the in-app guide; verified partially)
 
 - `Ctrl/Cmd+K` — jump to anything by name.
@@ -390,7 +434,9 @@ create a session before the user sends. Repeating it focuses the existing draft.
 
 Splits navigate independently. The retired Preview Pair mode no longer creates
 an adjacent viewer, redirects list navigation, or links split sizes and history.
-Inline details in workspaces continue to use their own navigation stack.
+Inline details in Home, Email, Tasks, Channels, and Drive use typed split-router
+child routes; there is no competing view-local detail stack or persisted selected
+ID. List filters, sidebar preferences, and focused-list state remain view-owned.
 Split back/forward navigation skips entries whose entities are open elsewhere,
 without moving focus or showing a toast. Those entries remain in history and
 become reachable again after their owning view releases them. A direction is
@@ -418,6 +464,13 @@ from the owning view before opening it elsewhere. The same rule applies to mouse
 selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
 never render inline previews or detail views: a tap opens the entity in the
 split, so the toast only appears when the content is genuinely open elsewhere.
+
+Split-router ownership checks use the final redirected destination. Concurrent
+opens of the same claimed resource wait for the first outstanding request rather
+than creating duplicate panes. If pane-history navigation reaches content owned
+by another pane, it focuses that owner without advancing the requesting pane's
+history cursor. Restoring a saved layout preserves existing duplicate panes;
+search-only updates within those panes do not collapse them.
 
 ## Entity action dialogs
 

@@ -424,9 +424,11 @@ text stays a link.
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
-sits on top and a footer row holds the model name (left, e.g. `Auto ⌄`) and
-**Send** (right). Tapping the model name opens a bottom sheet listing every
-model with a check on the current one — pick a row to switch. On desktop the
+sits on top and a footer row holds the model (left, as a provider logo and
+name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). Tapping the model opens a
+bottom sheet listing every model the same way, with a check on the current one
+— pick a row to switch. Models read as names even when the runtime reports
+only ids: Macro Agent's `anthropic/claude-sonnet-5` shows as **Sonnet 5**. On desktop the
 transcript and composer use the shared channel message width so expanding **Context** only
 grows vertically; your messages are right-aligned bubbles and the model pill
 sits above the box. Tap the session title
