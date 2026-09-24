@@ -77,6 +77,8 @@ use email::{
     outbound::EmailPgRepo,
 };
 use embedding::embedding_provider::openai::TextEmbedding3Small;
+use entity_registry::{NonUserOwners, OwnerGrantPolicy};
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use favorites::{
     domain::{mutation_service::FavoritesMutationServiceImpl, service::FavoritesServiceImpl},
     inbound::axum_router::FavoritesRouterState,
@@ -462,7 +464,9 @@ async fn run() -> anyhow::Result<()> {
     ));
     let system_properties_service = Arc::new(system_properties_service);
 
-    let document_repo = PgDocumentRepo::new(db.clone());
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
+    let document_repo = PgDocumentRepo::new(db.clone(), owned_entity_registrar.clone());
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config
             .document_storage_service_cloudfront_distribution_url
@@ -508,7 +512,7 @@ async fn run() -> anyhow::Result<()> {
         ));
 
     let project_service = Arc::new(ProjectServiceImpl::new(
-        PgProjectRepo::new(db.clone()),
+        PgProjectRepo::new(db.clone(), owned_entity_registrar),
         S3ProjectUploadAdapter::new(
             macro_aws_config::s3_client().await,
             config.document_storage_bucket.as_ref(),
@@ -1600,6 +1604,11 @@ async fn run() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
+            non_user_owners: if config.enable_non_user_owners {
+                NonUserOwners::Enabled
+            } else {
+                NonUserOwners::Disabled
+            },
         },
         config: Arc::new(config),
         channel_service: channels_service.clone(),

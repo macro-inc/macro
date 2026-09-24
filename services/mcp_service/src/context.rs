@@ -5,6 +5,7 @@ use ai_tools::{
     NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::{
     domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
 };
@@ -21,6 +22,8 @@ use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -209,7 +212,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         config.document_storage_bucket.as_ref(),
         config.docx_document_upload_bucket.as_ref(),
     );
-    let document_repo = PgDocumentRepo::new(db.clone());
+    let document_repo = PgDocumentRepo::new(
+        db.clone(),
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone()))),
+    );
     let cloudfront_private_key = LocalOrRemoteSecret::new_from_secret_manager(
         config
             .document_storage_service_cloudfront_signer_private_key_secret_name

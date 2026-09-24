@@ -24,7 +24,10 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
+pub mod creation_principal;
 pub mod team;
+
+pub use creation_principal::CreationPrincipal;
 
 const USER_PRINCIPAL_PREFIX: &str = "macro|";
 const BOT_PRINCIPAL_PREFIX: &str = "bot|";

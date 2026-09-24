@@ -179,6 +179,36 @@ fn attribution_delegated_keeps_actor_and_scopes_the_subject() {
 }
 
 #[test]
+fn creation_principal_attributes_the_mechanical_actor() {
+    let teo = user("macro|teo@example.com");
+    let bot = bot_id::BotId::new_from_uuid(Uuid::from_u128(0xB07A));
+    let team_bot = bot_id::NonSystemBotId::new(bot).unwrap();
+
+    let by_user = Attribution::from(&CreationPrincipal::User(teo.clone()));
+    let for_user = Attribution::from(&CreationPrincipal::BotForUser {
+        bot,
+        user: teo.clone(),
+    });
+    let by_team_bot = Attribution::from(&CreationPrincipal::TeamBot {
+        bot: team_bot,
+        team: Uuid::from_u128(9),
+    });
+
+    assert_eq!(by_user.actor().as_ref(), "macro|teo@example.com");
+    assert_eq!(by_user.on_behalf_of(), None);
+    assert_eq!(
+        for_user.actor().as_ref(),
+        "bot|00000000-0000-0000-0000-00000000b07a"
+    );
+    assert_eq!(for_user.on_behalf_of(), Some(teo));
+    assert_eq!(
+        by_team_bot.actor().as_ref(),
+        "bot|00000000-0000-0000-0000-00000000b07a"
+    );
+    assert_eq!(by_team_bot.on_behalf_of(), None);
+}
+
+#[test]
 fn subject_is_the_actor_unless_delegated() {
     let direct = Activity::common(
         Uuid::from_u128(1),

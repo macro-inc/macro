@@ -135,8 +135,8 @@ where
             None
         };
 
-        let mut metadata_builder = NewDocumentMetadata::builder(self.document_name.clone())
-            .attribution(service_context.attribution(user_id.clone()));
+        let principal = service_context.creation_principal(user_id);
+        let mut metadata_builder = NewDocumentMetadata::builder(self.document_name.clone());
         if let Some(project_id) = self.project_id {
             metadata_builder = metadata_builder.project_id(project_id);
         }
@@ -147,7 +147,7 @@ where
                     "Create spreadsheets with empty fileContent and isTask false, then use ReadSpreadsheet and EditSpreadsheet to populate the workbook".to_string(),
                 )));
             }
-            service_context.creator.create_spreadsheet(user_id, metadata_builder.build()).await
+            service_context.creator.create_spreadsheet(&principal, metadata_builder.build()).await
         } else {
             let document = NewPlainTextDocument::builder(metadata_builder.build())
                 .file_type(parsed_file_type)
@@ -155,7 +155,7 @@ where
                 .task_flag(self.is_task, maybe_team)
                 .build()
                 .map_err(failed_to_create_document)?;
-            service_context.creator.create_plain_text(user_id, document).await
+            service_context.creator.create_plain_text(&principal, document).await
         }
         .map(|document| document.into_response())
         .map_err(failed_to_create_document)?;

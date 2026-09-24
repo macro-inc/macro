@@ -2,22 +2,43 @@ use super::*;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 
-use activity::Actor;
+use bot_id::{BotId, NonSystemBotId};
 use entity_access::domain::models::{BotReceiptScope, Entity, EntityPermission};
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::DocumentResponseMetadata;
 use models_permissions::share_permission::access_level::AccessLevel;
+use uuid::Uuid;
 
 use crate::domain::{
     content::DocumentContent,
-    models::{CreateDocumentRepoArgs, CreateTaskRequest},
+    models::{CreateTaskRequest, NewDocument},
     response::{CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadataWithContent},
 };
 
 const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000123";
 const PROJECT_ID: &str = "00000000-0000-0000-0000-000000000456";
+const TEAM_ID: Uuid = Uuid::from_u128(7);
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|owner@example.com".to_string()).unwrap()
+}
+
+fn other_user() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap()
+}
+
+fn principal() -> CreationPrincipal {
+    CreationPrincipal::BotForUser {
+        bot: bot_id::MACRO_AI_BOT_ID,
+        user: owner(),
+    }
+}
+
+fn team_bot() -> CreationPrincipal {
+    CreationPrincipal::TeamBot {
+        bot: NonSystemBotId::new(BotId::TEST_A).unwrap(),
+        team: TEAM_ID,
+    }
 }
 
 #[derive(Default)]
@@ -41,7 +62,7 @@ async fn wait_for(notification: &Notify) {
 
 #[derive(Default)]
 struct RecordingService {
-    creates: Mutex<Vec<CreateDocumentRepoArgs>>,
+    creates: Mutex<Vec<(CreationPrincipal, NewDocument)>>,
     cleanups: Mutex<Vec<String>>,
     omit_url: bool,
     create_gate: Option<Arc<Gate>>,
@@ -52,13 +73,16 @@ struct RecordingService {
 impl DocumentCreationService for RecordingService {
     async fn create_document(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        args: CreateDocumentRepoArgs,
+        principal: &CreationPrincipal,
+        document: NewDocument,
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        let file_type = args.file_type.map(|kind| kind.to_string());
-        let document_name = args.document_name.clone();
-        self.creates.lock().unwrap().push(args);
+        let file_type = document.file_type.map(|kind| kind.to_string());
+        let document_name = document.document_name.clone();
+        self.creates
+            .lock()
+            .unwrap()
+            .push((principal.clone(), document));
         if let Some(gate) = &self.create_gate {
             gate.wait().await;
         }
@@ -68,7 +92,7 @@ impl DocumentCreationService for RecordingService {
                     DocumentResponseMetadata {
                         document_id: DOCUMENT_ID.to_string(),
                         document_version_id: 1,
-                        owner: model_owner::Owner::User(user_id),
+                        owner: principal.owner(),
                         document_name,
                         file_type: file_type.clone(),
                         sha: None,
@@ -93,10 +117,9 @@ impl DocumentCreationService for RecordingService {
 
     async fn handle_task_properties(
         &self,
-        _: MacroUserIdStr<'static>,
+        _: &CreationPrincipal,
         _: &str,
         _: &CreateTaskRequest,
-        _: &Attribution,
     ) -> Result<(), DocumentError> {
         panic!("file uploads do not create tasks")
     }
@@ -148,37 +171,55 @@ fn upload(name: &str, bytes: Vec<u8>) -> NewFileUpload {
         file_name: name.to_string(),
         bytes,
         project: None,
-        attribution: Attribution::delegated(Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID), owner()),
     }
+}
+
+fn project(entity_type: EntityType) -> Entity {
+    Entity {
+        entity_id: PROJECT_ID.to_string(),
+        entity_type,
+    }
+}
+
+fn edit() -> EntityPermission {
+    EntityPermission::AccessLevel {
+        access_level: AccessLevel::Edit,
+    }
+}
+
+fn bot_receipt(
+    bot: BotId,
+    scope: BotReceiptScope,
+    entity_type: EntityType,
+) -> EntityAccessReceipt<EditAccessLevel> {
+    EntityAccessReceipt::try_new_bot(bot.into(), scope, project(entity_type), edit()).unwrap()
 }
 
 fn project_receipt(
     user: MacroUserIdStr<'static>,
     entity_type: EntityType,
 ) -> EntityAccessReceipt<EditAccessLevel> {
-    EntityAccessReceipt::try_new_bot(
-        bot_id::MACRO_AI_BOT_ID.into(),
+    bot_receipt(
+        bot_id::MACRO_AI_BOT_ID,
         BotReceiptScope::User { acting_user: user },
-        Entity {
-            entity_id: PROJECT_ID.to_string(),
-            entity_type,
-        },
-        EntityPermission::AccessLevel {
-            access_level: AccessLevel::Edit,
-        },
+        entity_type,
     )
-    .unwrap()
+}
+
+fn user_receipt(user: MacroUserIdStr<'static>) -> EntityAccessReceipt<EditAccessLevel> {
+    EntityAccessReceipt::try_new_authenticated_user(user, project(EntityType::Project), edit())
+        .unwrap()
 }
 
 #[tokio::test]
-async fn uploads_exact_bytes_with_checksums_owner_project_and_attribution() {
+async fn uploads_exact_bytes_with_checksums_principal_and_project() {
     let service = Arc::new(RecordingService::default());
     let uploader = Arc::new(RecordingUploader::default());
     let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
     let bytes = vec![0, 255, 128, 13, 10];
     let mut file = upload("Report.PDF", bytes.clone());
     file.project = Some(project_receipt(owner(), EntityType::Project));
-    let created = creator.upload_file(owner(), file).await.unwrap();
+    let created = creator.upload_file(&principal(), file).await.unwrap();
     assert_eq!(created.document_id(), DOCUMENT_ID);
     assert_eq!(
         created
@@ -190,12 +231,12 @@ async fn uploads_exact_bytes_with_checksums_owner_project_and_attribution() {
     );
     let creates = service.creates.lock().unwrap();
     assert_eq!(creates.len(), 1);
-    assert_eq!(creates[0].document_name, "Report");
-    assert_eq!(creates[0].file_type, Some(FileType::Pdf));
-    assert_eq!(creates[0].user_id, owner());
-    assert_eq!(creates[0].project_id, Some(PROJECT_ID.parse().unwrap()));
-    assert!(creates[0].attribution.is_some());
-    assert_eq!(creates[0].sha, file_shas(&bytes).hex);
+    let (created_for, document) = &creates[0];
+    assert_eq!(*created_for, principal());
+    assert_eq!(document.document_name, "Report");
+    assert_eq!(document.file_type, Some(FileType::Pdf));
+    assert_eq!(document.project_id, Some(PROJECT_ID.parse().unwrap()));
+    assert_eq!(document.sha, file_shas(&bytes).hex);
     let uploads = uploader.uploads.lock().unwrap();
     assert_eq!(uploads.len(), 1);
     assert_eq!(uploads[0].bytes, bytes);
@@ -216,12 +257,12 @@ async fn preserves_unknown_extensions_and_leaves_conversion_to_the_pipeline() {
         let uploader = Arc::new(RecordingUploader::default());
         let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
         creator
-            .upload_file(owner(), upload(name, b"contents".to_vec()))
+            .upload_file(&principal(), upload(name, b"contents".to_vec()))
             .await
             .unwrap();
         let creates = service.creates.lock().unwrap();
-        assert_eq!(creates[0].document_name, expected_name);
-        assert_eq!(creates[0].file_type, expected_type);
+        assert_eq!(creates[0].1.document_name, expected_name);
+        assert_eq!(creates[0].1.file_type, expected_type);
     }
 }
 
@@ -241,7 +282,7 @@ async fn rejects_invalid_files_before_creating_metadata() {
         upload("large.pdf", vec![0; MAX_INLINE_UPLOAD_BYTES + 1]),
     ] {
         assert!(matches!(
-            creator.upload_file(owner(), file).await,
+            creator.upload_file(&principal(), file).await,
             Err(DocumentError::BadRequest(_))
         ));
     }
@@ -250,26 +291,98 @@ async fn rejects_invalid_files_before_creating_metadata() {
 }
 
 #[tokio::test]
-async fn rejects_receipts_for_another_user_or_entity_type() {
-    let service = Arc::new(RecordingService::default());
-    let uploader = Arc::new(RecordingUploader::default());
-    let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
-    for receipt in [
-        project_receipt(
-            MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap(),
+async fn accepts_only_project_receipts_minted_for_the_uploading_principal() {
+    let project_id: Uuid = PROJECT_ID.parse().unwrap();
+    let team_receipt = || {
+        bot_receipt(
+            BotId::TEST_A,
+            BotReceiptScope::Team { team_id: TEAM_ID },
             EntityType::Project,
+        )
+    };
+    for (uploader_principal, receipt, accepted) in [
+        (
+            principal(),
+            project_receipt(owner(), EntityType::Project),
+            true,
         ),
-        project_receipt(owner(), EntityType::Document),
+        (
+            CreationPrincipal::User(owner()),
+            user_receipt(owner()),
+            true,
+        ),
+        (team_bot(), team_receipt(), true),
+        (
+            principal(),
+            project_receipt(other_user(), EntityType::Project),
+            false,
+        ),
+        (
+            principal(),
+            project_receipt(owner(), EntityType::Document),
+            false,
+        ),
+        (
+            principal(),
+            bot_receipt(
+                BotId::TEST_A,
+                BotReceiptScope::User {
+                    acting_user: owner(),
+                },
+                EntityType::Project,
+            ),
+            false,
+        ),
+        (principal(), user_receipt(owner()), false),
+        (
+            CreationPrincipal::User(owner()),
+            project_receipt(owner(), EntityType::Project),
+            false,
+        ),
+        (
+            CreationPrincipal::User(owner()),
+            user_receipt(other_user()),
+            false,
+        ),
+        (
+            team_bot(),
+            bot_receipt(
+                BotId::TEST_A,
+                BotReceiptScope::Team {
+                    team_id: Uuid::from_u128(8),
+                },
+                EntityType::Project,
+            ),
+            false,
+        ),
+        (
+            team_bot(),
+            bot_receipt(
+                BotId::TEST_B,
+                BotReceiptScope::Team { team_id: TEAM_ID },
+                EntityType::Project,
+            ),
+            false,
+        ),
     ] {
+        let service = Arc::new(RecordingService::default());
+        let uploader = Arc::new(RecordingUploader::default());
+        let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
         let mut file = upload("report.pdf", vec![]);
         file.project = Some(receipt);
-        assert!(matches!(
-            creator.upload_file(owner(), file).await,
-            Err(DocumentError::Unauthorized)
-        ));
+        let result = creator.upload_file(&uploader_principal, file).await;
+        let creates = service.creates.lock().unwrap();
+        if accepted {
+            result.unwrap();
+            assert_eq!(creates.len(), 1);
+            assert_eq!(creates[0].0, uploader_principal);
+            assert_eq!(creates[0].1.project_id, Some(project_id));
+        } else {
+            assert!(matches!(result, Err(DocumentError::Unauthorized)));
+            assert!(creates.is_empty());
+            assert!(uploader.uploads.lock().unwrap().is_empty());
+        }
     }
-    assert!(service.creates.lock().unwrap().is_empty());
-    assert!(uploader.uploads.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -286,7 +399,7 @@ async fn cleans_up_when_storage_upload_fails_or_url_is_missing() {
         let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
         assert!(
             creator
-                .upload_file(owner(), upload("report.pdf", vec![1]))
+                .upload_file(&principal(), upload("report.pdf", vec![1]))
                 .await
                 .is_err()
         );
@@ -305,7 +418,7 @@ async fn accepts_empty_files_and_the_exact_size_limit() {
     let creator = DocumentCreator::new(service, (), uploader.clone(), ());
     for size in [0, MAX_INLINE_UPLOAD_BYTES] {
         creator
-            .upload_file(owner(), upload("file.bin", vec![0; size]))
+            .upload_file(&principal(), upload("file.bin", vec![0; size]))
             .await
             .unwrap();
     }
@@ -323,7 +436,7 @@ async fn dropping_the_caller_during_metadata_creation_finishes_the_upload() {
     let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
     let caller = tokio::spawn(async move {
         creator
-            .upload_file(owner(), upload("report.pdf", vec![1]))
+            .upload_file(&principal(), upload("report.pdf", vec![1]))
             .await
     });
 
@@ -351,7 +464,7 @@ async fn dropping_the_caller_during_upload_finishes_or_cleans_up() {
         let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
         let caller = tokio::spawn(async move {
             creator
-                .upload_file(owner(), upload("report.pdf", vec![1]))
+                .upload_file(&principal(), upload("report.pdf", vec![1]))
                 .await
         });
 
@@ -384,7 +497,7 @@ async fn dropping_the_caller_during_cleanup_does_not_interrupt_cleanup() {
     let creator = DocumentCreator::new(service.clone(), (), uploader, ());
     let caller = tokio::spawn(async move {
         creator
-            .upload_file(owner(), upload("report.pdf", vec![1]))
+            .upload_file(&principal(), upload("report.pdf", vec![1]))
             .await
     });
 
@@ -406,7 +519,7 @@ async fn storage_upload_timeout_cleans_up_metadata() {
     });
     let creator = DocumentCreator::new(service.clone(), (), uploader.clone(), ());
     let error = creator
-        .upload_file(owner(), upload("report.pdf", vec![1]))
+        .upload_file(&principal(), upload("report.pdf", vec![1]))
         .await
         .unwrap_err();
 

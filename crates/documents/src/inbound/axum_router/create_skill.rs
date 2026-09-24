@@ -3,10 +3,11 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
+use macro_authorization::MacroAuthorizationService;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
+use super::creation_principal::CreationPrincipalExtractor;
 use crate::domain::create::{MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument};
 use crate::domain::models::{CreateSkillRequest, CreateSkillResponse, DocumentError};
 use crate::domain::ports::DocumentService;
@@ -28,14 +29,14 @@ use crate::domain::ports::create::DocumentCreationService;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, project), fields(user_id=?user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(state, project))]
 pub async fn create_skill_handler<
     T: DocumentService + DocumentCreationService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     State(state): State<DocumentRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
     project: ProjectBodyAccessLevelExtractorV2<EditAccessLevel, CreateSkillRequest, Svc, Auth>,
 ) -> Result<Json<CreateSkillResponse>, DocumentError> {
     let req = project.into_inner();
@@ -48,7 +49,7 @@ pub async fn create_skill_handler<
     let created = state
         .creator
         .create_markdown_text(
-            user.authorization.user.macro_user_id.clone(),
+            &principal,
             NewMarkdownTextDocument {
                 metadata: metadata.build(),
                 markdown: req.markdown.unwrap_or_default(),

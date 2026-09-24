@@ -14,6 +14,8 @@ mod tests;
 
 use std::collections::HashMap;
 
+use entity_registry::BotFacts;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use model::project::{
     BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
     WithProjectId,
@@ -29,14 +31,16 @@ use crate::domain::ports::ProjectRepo;
 
 /// PostgreSQL-backed project repository.
 #[derive(Clone)]
-pub struct PgProjectRepo {
+pub struct PgProjectRepo<B> {
     pool: PgPool,
+    registrar: OwnedEntityRegistrar<B>,
 }
 
-impl PgProjectRepo {
-    /// Create a repository backed by the given connection pool.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+impl<B: BotFacts> PgProjectRepo<B> {
+    /// Create a repository backed by `pool` that registers uploaded folder
+    /// trees through `registrar`.
+    pub fn new(pool: PgPool, registrar: OwnedEntityRegistrar<B>) -> Self {
+        Self { pool, registrar }
     }
 }
 
@@ -64,7 +68,7 @@ fn map_project(
     })
 }
 
-impl ProjectRepo for PgProjectRepo {
+impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
     type Err = sqlx::Error;
 
     #[tracing::instrument(err, skip(self))]
@@ -383,7 +387,7 @@ impl ProjectRepo for PgProjectRepo {
         args: UploadFolderRepoArgs,
     ) -> Result<model::folder::UploadFolderWithIdsResponse, Self::Err> {
         let mut transaction = self.pool.begin().await?;
-        let result = upload_folder::upload_folder(&mut transaction, args).await?;
+        let result = upload_folder::upload_folder(&mut transaction, &self.registrar, args).await?;
         transaction.commit().await?;
         Ok(result)
     }

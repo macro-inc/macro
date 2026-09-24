@@ -37,6 +37,8 @@ use email::{
 };
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService as _;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -511,11 +513,10 @@ impl TaskPropertiesPort for NoOpTaskProperties {
     }
     async fn set_entity_property(
         &self,
-        _user_id: &str,
+        _principal: &model_owner::CreationPrincipal,
         _entity_id: &str,
         _property_definition_id: uuid::Uuid,
         _value: Option<models_properties::api::requests::SetPropertyValue>,
-        _attribution: &activity::Attribution,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -559,22 +560,16 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
 
     async fn set_entity_property(
         &self,
-        user_id: &str,
+        principal: &model_owner::CreationPrincipal,
         entity_id: &str,
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
-        attribution: &activity::Attribution,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
-        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
-        let entity_access_receipt = task_property_edit_receipt(
-            self.entity_access_service.as_ref(),
-            &user_id,
-            attribution,
-            entity_id,
-        )
-        .await?;
+        let entity_access_receipt =
+            task_property_edit_receipt(self.entity_access_service.as_ref(), principal, entity_id)
+                .await?;
         self.properties
             .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
@@ -808,7 +803,7 @@ pub type ToolEntityAccessManagementService =
 
 /// Type alias for the document service implementation used by AI tools
 pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
-    documents::outbound::pg_document_repo::PgDocumentRepo,
+    documents::outbound::pg_document_repo::PgDocumentRepo<PgBotsRepo>,
     documents::outbound::s3_upload_url::S3UploadUrlAdapter,
     TaskPropertiesAdapter,
     NoOpConnectionService,
@@ -986,7 +981,7 @@ pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManag
 /// tools only create, read, and move projects, never run upload or purge
 /// flows.
 pub type ToolProjectService = projects::domain::service::ProjectServiceImpl<
-    projects::outbound::PgProjectRepo,
+    projects::outbound::PgProjectRepo<PgBotsRepo>,
     projects::domain::ports::UnavailableProjectUploadUrlPort,
     projects::domain::ports::UnavailableBulkUploadRequestPort,
     projects::domain::ports::UnavailableShaCounterPort,
@@ -1018,7 +1013,10 @@ pub fn build_project_tool_context(
     email_service: Arc<ToolUserEmailService>,
 ) -> ToolProjectToolContext {
     let project_service = projects::domain::service::ProjectServiceImpl::new(
-        projects::outbound::PgProjectRepo::new(pool.clone()),
+        projects::outbound::PgProjectRepo::new(
+            pool.clone(),
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
+        ),
         projects::domain::ports::UnavailableProjectUploadUrlPort,
         projects::domain::ports::UnavailableBulkUploadRequestPort,
         projects::domain::ports::UnavailableShaCounterPort,
@@ -1075,20 +1073,19 @@ impl ToolEntityCreator {
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
         let document = documents::domain::create::NewPlainTextDocument::builder(
-            documents::domain::create::NewDocumentMetadata::builder(name.to_string())
-                .attribution(activity::Attribution::delegated(
-                    activity::Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID),
-                    user.clone(),
-                ))
-                .build(),
+            documents::domain::create::NewDocumentMetadata::new(name.to_string()),
         )
         .file_type(model::document::FileType::from_str("md").expect("md is a valid file type"))
         .text(markdown.to_string())
         .task_flag(is_task, team_id)
         .build()?;
+        let ai_for_user = model_owner::CreationPrincipal::BotForUser {
+            bot: bot_id::MACRO_AI_BOT_ID,
+            user: user.clone(),
+        };
         let created = self
             .document_creator
-            .create_plain_text(user.clone(), document)
+            .create_plain_text(&ai_for_user, document)
             .await?;
         Ok(created
             .into_response()
@@ -1143,8 +1140,7 @@ impl ToolEntityCreator {
         use models_properties::api::requests::SetPropertyValue;
         use system_properties::SystemPropertyKey;
 
-        let attribution =
-            activity::Attribution::direct(activity::Actor::new_from_user(user.clone()));
+        let principal = model_owner::CreationPrincipal::User(user.clone());
 
         if let Some(status) = properties.status.as_deref()
             && let Err(e) = self
@@ -1168,13 +1164,12 @@ impl ToolEntityCreator {
                     if let Err(e) = self
                         .task_properties
                         .set_entity_property(
-                            user.as_ref(),
+                            &principal,
                             task_id,
                             SystemPropertyKey::Priority.uuid(),
                             Some(SetPropertyValue::SelectOption {
                                 option_id: option.uuid(),
                             }),
-                            &attribution,
                         )
                         .await
                     {
@@ -1192,11 +1187,10 @@ impl ToolEntityCreator {
                     if let Err(e) = self
                         .task_properties
                         .set_entity_property(
-                            user.as_ref(),
+                            &principal,
                             task_id,
                             SystemPropertyKey::DueDate.uuid(),
                             Some(SetPropertyValue::Date { value }),
-                            &attribution,
                         )
                         .await
                     {
@@ -1225,13 +1219,12 @@ impl ToolEntityCreator {
             if let Err(e) = self
                 .task_properties
                 .set_entity_property(
-                    user.as_ref(),
+                    &principal,
                     task_id,
                     SystemPropertyKey::Assignees.uuid(),
                     Some(SetPropertyValue::MultiEntityReference {
                         references: vec![reference],
                     }),
-                    &attribution,
                 )
                 .await
             {

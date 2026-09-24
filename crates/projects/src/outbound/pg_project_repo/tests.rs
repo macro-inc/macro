@@ -1,19 +1,40 @@
 use std::collections::HashMap;
 
+use entity_registry::{BotFacts, EntityRegistryResult, OwnerGrantPolicy};
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::FileType;
 use model::folder::{FileSystemNode, FileSystemNodeWithIds, FolderItem};
 use model::item::Item;
 use model::project::ProjectPreviewV2;
+use model_owner::Owner;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
-use sqlx::{Pool, Postgres, Row};
+use sqlx::{PgPool, Pool, Postgres, Row};
 
 use super::PgProjectRepo;
 use crate::domain::models::{CreateProjectArgs, EditProjectArgs, UploadFolderRepoArgs};
 use crate::domain::ports::ProjectRepo;
+
+#[derive(Clone)]
+pub(super) struct NoBots;
+
+impl BotFacts for NoBots {
+    async fn sponsor(&self, _bot: bot_id::BotId) -> EntityRegistryResult<Option<Owner>> {
+        Ok(None)
+    }
+}
+
+pub(super) type TestRepo = PgProjectRepo<NoBots>;
+
+pub(super) fn test_repo(pool: PgPool) -> TestRepo {
+    PgProjectRepo::new(
+        pool,
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(NoBots)),
+    )
+}
 
 const ROOT_ID: &str = "10000000-0000-0000-0000-000000000001";
 const CHILD_ID: &str = "10000000-0000-0000-0000-000000000002";
@@ -112,7 +133,7 @@ async fn project_share_permission_columns(
 async fn history_listing_differs_from_owner_pending_listing(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool);
+    let repo = test_repo(pool);
 
     let viewed = repo.get_projects_for_user("macro|viewer@test.com").await?;
     assert_eq!(
@@ -154,7 +175,7 @@ async fn history_listing_differs_from_owner_pending_listing(
 async fn basic_lookup_includes_deleted_but_full_lookup_excludes_it(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool);
+    let repo = test_repo(pool);
 
     let basic = repo
         .get_basic_project(DELETED_ID)
@@ -174,7 +195,7 @@ async fn basic_lookup_includes_deleted_but_full_lookup_excludes_it(
 async fn children_are_depth_one_filtered_and_type_ordered(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool);
+    let repo = test_repo(pool);
     let children = repo.get_project_children(ROOT_ID).await?;
 
     let children = children
@@ -206,7 +227,7 @@ async fn children_are_depth_one_filtered_and_type_ordered(
 async fn preview_preserves_found_and_missing_input_entries(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool);
+    let repo = test_repo(pool);
     let missing = "10000000-0000-0000-0000-000000000099".to_owned();
     let previews = repo
         .batch_get_project_preview(&[CHILD_ID.to_owned(), missing.clone()])
@@ -233,7 +254,7 @@ async fn preview_preserves_found_and_missing_input_entries(
 async fn reads_share_permissions_and_bumps_modified_timestamp(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool);
+    let repo = test_repo(pool);
     let permission = repo.get_project_share_permission(ROOT_ID).await?;
     assert_eq!(permission.id, "share-root");
     assert_eq!(permission.owner, "macro|owner@test.com");
@@ -264,7 +285,7 @@ async fn reads_share_permissions_and_bumps_modified_timestamp(
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
 async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let permission = SharePermissionV2::new_project_share_permission(None);
     let project = repo
         .create_project(CreateProjectArgs {
@@ -345,7 +366,7 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
 async fn create_defaults_enabled_link_share_to_view(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let mut permission = SharePermissionV2::new_project_share_permission(None);
     permission.link_share = Some(LinkShare::Team);
 
@@ -376,7 +397,7 @@ async fn create_defaults_enabled_link_share_to_view(pool: Pool<Postgres>) -> any
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
 async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let unchanged = repo
         .edit_project(EditProjectArgs {
             project_id: CHILD_ID.to_owned(),
@@ -528,7 +549,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
 async fn recursive_detection_and_soft_delete_output(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     assert!(repo.is_project_recursively_nested(ROOT_ID, ROOT_ID).await?);
     assert!(
         repo.is_project_recursively_nested(ROOT_ID, CHILD_ID)
@@ -582,7 +603,7 @@ async fn recursive_detection_and_soft_delete_output(pool: Pool<Postgres>) -> any
 async fn revert_restores_subtree_and_handles_parent_state(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     sqlx::query!(
         r#"UPDATE "Project" SET "parentId" = $2 WHERE id = $1"#,
         ROOT_ID,
@@ -626,7 +647,7 @@ async fn revert_restores_subtree_and_handles_parent_state(
 async fn purge_returns_outputs_and_removes_access_and_permissions(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let deleted = repo.soft_delete_project(ROOT_ID).await?;
     let document_id = &deleted.document_ids[0];
     let bom_id = sqlx::query_scalar!(
@@ -684,7 +705,7 @@ async fn purge_returns_outputs_and_removes_access_and_permissions(
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
 async fn purge_rolls_back_all_deletions(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     repo.soft_delete_project(ROOT_ID).await?;
 
     let mut transaction = pool.begin().await?;
@@ -711,14 +732,7 @@ async fn purge_rolls_back_all_deletions(pool: Pool<Postgres>) -> anyhow::Result<
     Ok(())
 }
 
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
-)]
-async fn upload_folder_preserves_tree_metadata_and_compensates(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool.clone());
+fn nested_upload_args() -> anyhow::Result<UploadFolderRepoArgs> {
     let file = FolderItem {
         name: "nested.pdf".to_owned(),
         full_name: "nested.pdf".to_owned(),
@@ -738,16 +752,70 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
     ]));
     let mut share_permission = SharePermissionV2::new_project_share_permission(None);
     share_permission.link_share = Some(LinkShare::Team);
-    let result = repo
-        .upload_folder(UploadFolderRepoArgs {
-            user_id: MacroUserIdStr::parse_from_str("macro|owner@test.com")?.into_owned(),
-            share_permission,
-            root_folder,
-            root_folder_name: "Upload".to_owned(),
-            upload_request_id: "lambda-request-id".to_owned(),
-            parent_id: Some(ROOT_ID.to_owned()),
-        })
-        .await?;
+    Ok(UploadFolderRepoArgs {
+        user_id: MacroUserIdStr::parse_from_str("macro|owner@test.com")?.into_owned(),
+        share_permission,
+        root_folder,
+        root_folder_name: "Upload".to_owned(),
+        upload_request_id: "lambda-request-id".to_owned(),
+        parent_id: Some(ROOT_ID.to_owned()),
+    })
+}
+
+async fn direct_grants(pool: &Pool<Postgres>, id: &str) -> Vec<(String, String, String)> {
+    sqlx::query!(
+        r#"
+        SELECT source_type::text AS "source_type!", source_id,
+               access_level::text AS "access_level!"
+        FROM entity_access
+        WHERE entity_id::text = $1 AND granted_from_project_id IS NULL
+        ORDER BY source_type::text, source_id
+        "#,
+        id,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.source_type, row.source_id, row.access_level))
+    .collect()
+}
+
+#[derive(Debug, PartialEq)]
+struct UploaderRows {
+    upload_projects: i64,
+    documents: i64,
+    entities: i64,
+    grants: i64,
+}
+
+async fn uploader_rows(pool: &Pool<Postgres>) -> UploaderRows {
+    sqlx::query_as!(
+        UploaderRows,
+        r#"
+        SELECT
+            (SELECT COUNT(*) FROM "Project" WHERE "uploadRequestId" = 'lambda-request-id')
+                AS "upload_projects!",
+            (SELECT COUNT(*) FROM "Document" WHERE owner = $1) AS "documents!",
+            (SELECT COUNT(*) FROM entity WHERE owner_id = $1) AS "entities!",
+            (SELECT COUNT(*) FROM entity_access WHERE source_id = $1) AS "grants!"
+        "#,
+        "macro|owner@test.com",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn upload_folder_preserves_tree_metadata_and_compensates(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = test_repo(pool.clone());
+    let result = repo.upload_folder(nested_upload_args()?).await?;
 
     assert_eq!(result.project_ids.len(), 3);
     assert_eq!(result.documents.len(), 1);
@@ -798,16 +866,28 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
     .await?;
     assert_eq!(created_permissions, 4);
 
+    let uploader_grant = || {
+        (
+            "user".to_owned(),
+            "macro|owner@test.com".to_owned(),
+            "owner".to_owned(),
+        )
+    };
     for project_id in &result.project_ids {
         let entity = fetch_entity_row(&pool, project_id).await;
         assert_eq!(entity.owner_type, "user");
         assert_eq!(entity.owner_id, "macro|owner@test.com");
         assert_eq!(entity.entity_type, "project");
+        assert_eq!(direct_grants(&pool, project_id).await, [uploader_grant()]);
     }
     let document_entity = fetch_entity_row(&pool, &result.documents[0].document_id).await;
     assert_eq!(document_entity.owner_type, "user");
     assert_eq!(document_entity.owner_id, "macro|owner@test.com");
     assert_eq!(document_entity.entity_type, "document");
+    assert_eq!(
+        direct_grants(&pool, &result.documents[0].document_id).await,
+        [uploader_grant()]
+    );
 
     repo.delete_uploaded_tree(&result.project_ids, &document_ids)
         .await?;
@@ -837,10 +917,49 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
+async fn upload_folder_rolls_back_the_whole_tree_when_a_registration_fails(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = test_repo(pool.clone());
+    let before = uploader_rows(&pool).await;
+    sqlx::raw_sql(
+        r#"
+        CREATE FUNCTION reject_document_grant() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'injected document grant failure'; END $$;
+        CREATE TRIGGER reject_document_grant BEFORE INSERT ON entity_access
+        FOR EACH ROW WHEN (NEW.entity_type = 'document') EXECUTE FUNCTION reject_document_grant();
+    "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    assert!(repo.upload_folder(nested_upload_args()?).await.is_err());
+    assert_eq!(uploader_rows(&pool).await, before);
+
+    sqlx::raw_sql("DROP TRIGGER reject_document_grant ON entity_access")
+        .execute(&pool)
+        .await?;
+    repo.upload_folder(nested_upload_args()?).await?;
+    assert_eq!(
+        uploader_rows(&pool).await,
+        UploaderRows {
+            upload_projects: before.upload_projects + 3,
+            documents: before.documents + 1,
+            entities: before.entities + 4,
+            grants: before.grants + 4,
+        }
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
 async fn mark_uploaded_is_recursive_and_rejects_missing_root(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let uploaded_tree = repo
         .mark_projects_uploaded("10000000-0000-0000-0000-000000000006")
         .await?;

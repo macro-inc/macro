@@ -1,4 +1,3 @@
-use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{
     BomPart, DocumentMetadata, IDWithTimeStamps, SaveBomPart, VersionIDWithTimeStamps,
     VersionIDWithTimeStampsNoSha,
@@ -11,7 +10,7 @@ use sqlx::{Postgres, Transaction};
 pub async fn copy_docx_document(
     transaction: &mut Transaction<'_, Postgres>,
     original_document: &DocumentMetadata,
-    user_id: MacroUserIdStr<'static>,
+    owner: &Owner,
     new_document_name: &str,
 ) -> Result<DocumentMetadata, sqlx::Error> {
     let original_document_id = &original_document.document_id;
@@ -24,7 +23,7 @@ pub async fn copy_docx_document(
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
         "#,
-        user_id.as_ref(),
+        owner.principal_id(),
         new_document_name,
         original_document.file_type,
         original_document.document_family_id,
@@ -34,10 +33,7 @@ pub async fn copy_docx_document(
     )
     .fetch_one(transaction.as_mut())
     .await
-    .map_err(|err| {
-        tracing::error!(error=?err, "unable to copy document");
-        map_insert_document_error(err)
-    })?;
+    .map_err(insert_document_error)?;
 
     let document_bom = sqlx::query_as!(
         VersionIDWithTimeStampsNoSha,
@@ -74,7 +70,7 @@ pub async fn copy_docx_document(
 
     Ok(DocumentMetadata {
         document_id: document.id.clone(),
-        owner: Owner::User(user_id),
+        owner: owner.clone(),
         document_name: new_document_name.to_string(),
         file_type: original_document.file_type.clone(),
         sha: None,
@@ -98,7 +94,7 @@ pub async fn copy_docx_document(
 pub async fn copy_non_docx_document(
     transaction: &mut Transaction<'_, Postgres>,
     original_document: &DocumentMetadata,
-    user_id: MacroUserIdStr<'static>,
+    owner: &Owner,
     new_document_name: &str,
 ) -> Result<DocumentMetadata, sqlx::Error> {
     let original_document_id = &original_document.document_id;
@@ -116,7 +112,7 @@ pub async fn copy_non_docx_document(
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
         "#,
-        user_id.as_ref(),
+        owner.principal_id(),
         new_document_name,
         original_document.file_type,
         original_document.document_family_id,
@@ -126,10 +122,7 @@ pub async fn copy_non_docx_document(
     )
     .fetch_one(transaction.as_mut())
     .await
-    .map_err(|err| {
-        tracing::error!(error=?err, "unable to copy document");
-        map_insert_document_error(err)
-    })?;
+    .map_err(insert_document_error)?;
 
     let document_instance = sqlx::query_as!(
         VersionIDWithTimeStamps,
@@ -189,7 +182,7 @@ pub async fn copy_non_docx_document(
 
     Ok(DocumentMetadata {
         document_id: document.id.clone(),
-        owner: Owner::User(user_id),
+        owner: owner.clone(),
         document_name: new_document_name.to_string(),
         file_type: original_document.file_type.clone(),
         sha: Some(document_instance.sha),
@@ -283,11 +276,7 @@ async fn create_bom_parts(
     Ok(saved_bom_parts)
 }
 
-fn map_insert_document_error(err: sqlx::Error) -> sqlx::Error {
-    let no_user_found = "error returned from database: insert or update on table \"Document\" violates foreign key constraint \"Document_owner_fkey\"";
-    let err_string = err.to_string();
-    if err_string.contains(no_user_found) {
-        return sqlx::Error::Protocol("no user found".to_string());
-    }
+fn insert_document_error(err: sqlx::Error) -> sqlx::Error {
+    tracing::error!(error=?err, "unable to copy document");
     sqlx::Error::Protocol("unable to copy document".to_string())
 }

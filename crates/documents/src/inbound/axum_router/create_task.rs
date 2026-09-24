@@ -7,13 +7,14 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
     OptionalMacroUserTeamExtractorV2, ProjectBodyAccessLevelExtractorV2,
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
+use macro_authorization::MacroAuthorizationService;
 use models_permissions::share_permission::access_level::{AccessLevel, EditAccessLevel};
 
 use super::DocumentRouterState;
+use super::creation_principal::CreationPrincipalExtractor;
 use crate::domain::create::{MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument};
 use crate::domain::models::{CreateTaskRequest, CreateTaskResponse, DocumentError};
-use crate::domain::permission_token::encode_permission_token;
+use crate::domain::permission_token::encode_principal_permission_token;
 use crate::domain::ports::DocumentService;
 use crate::domain::ports::create::DocumentCreationService;
 use task_dedup::{EmbeddingMarkdown, NewTask};
@@ -34,21 +35,20 @@ use super::task_duplicates::spawn_task_duplicate_detection;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, optional_team, project), fields(user_id=?user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(state, optional_team, project))]
 pub async fn create_task_handler<
     T: DocumentService + DocumentCreationService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     State(state): State<DocumentRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
     optional_team: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Svc, Auth>,
     project: ProjectBodyAccessLevelExtractorV2<EditAccessLevel, CreateTaskRequest, Svc, Auth>,
 ) -> Result<Json<CreateTaskResponse>, DocumentError> {
     let req = project.into_inner();
     let task_name = req.task_name.clone();
     let markdown = req.markdown.clone().unwrap_or_default();
-    let owner = user.authorization.user.macro_user_id.as_ref().to_string();
 
     let mut metadata = NewDocumentMetadata::builder(task_name.clone());
     if let Some(project_id) = req.project_id {
@@ -66,7 +66,7 @@ pub async fn create_task_handler<
     let created = state
         .creator
         .create_markdown_text(
-            user.authorization.user.macro_user_id.clone(),
+            &principal,
             NewMarkdownTextDocument {
                 metadata: metadata.build(),
                 markdown,
@@ -92,7 +92,7 @@ pub async fn create_task_handler<
         state.lexical_client.clone(),
         NewTask {
             document_id: document_id.clone(),
-            owner,
+            owner: principal.owner().principal_id(),
             team_id: task_metadata.team_id,
             title: task_name,
             // Filled from lexical (embedding format) inside the spawn; defaults
@@ -101,12 +101,11 @@ pub async fn create_task_handler<
         },
     );
 
-    let token = encode_permission_token(
-        Some(user.authorization.user.macro_user_id.as_ref().to_string()),
+    let token = encode_principal_permission_token(
+        &principal,
         document_id.clone(),
         AccessLevel::Edit,
         &state.document_permission_jwt_secret,
-        None,
     )
     .map_err(|e| {
         tracing::error!(error=?e, "failed to encode permission token");

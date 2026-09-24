@@ -41,7 +41,7 @@ use model::document::{
     ContentType, DocumentBasic, DocumentMetadata, FileAssociation, FileType, FileTypeExt,
 };
 use model::response::PresignedUrl;
-use model_owner::Owner;
+use model_owner::{CreationPrincipal, Owner};
 use s3_key::{
     build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key,
     build_docx_to_pdf_converted_document_key, document_key_url_path,
@@ -63,7 +63,8 @@ use super::models::{
     CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
     DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs, EditDocumentServiceArgs,
     EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse,
-    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
+    ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument, TaskBranchName,
+    TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -831,28 +832,21 @@ impl<
 {
     async fn create_document(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        args: CreateDocumentRepoArgs,
+        principal: &CreationPrincipal,
+        document: NewDocument,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        <Self as DocumentService>::create_document(self, user_id, args, job_id).await
+        <Self as DocumentService>::create_document(self, principal, document, job_id).await
     }
 
     async fn handle_task_properties(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         document_id: &str,
         request: &CreateTaskRequest,
-        attribution: &Attribution,
     ) -> Result<(), DocumentError> {
-        <Self as DocumentService>::handle_task_properties(
-            self,
-            user_id,
-            document_id,
-            request,
-            attribution,
-        )
-        .await
+        <Self as DocumentService>::handle_task_properties(self, principal, document_id, request)
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1282,53 +1276,59 @@ impl<
         .await
     }
 
-    #[tracing::instrument(err, skip(self, args))]
+    #[tracing::instrument(err, skip(self, document))]
     async fn create_document(
         &self,
-        _user_id: MacroUserIdStr<'static>,
-        args: CreateDocumentRepoArgs,
+        principal: &CreationPrincipal,
+        document: NewDocument,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        validate_spreadsheet_creation(args.file_type, &args.sha)?;
-        if args.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
+        validate_spreadsheet_creation(document.file_type, &document.sha)?;
+        if document.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
             return Err(DocumentError::NameTooLong {
                 max: MAX_DOCUMENT_NAME_GRAPHEMES,
             });
         }
 
-        if args.sub_type == Some(DocumentSubType::InitiativeDescription)
-            && matches!(args.initial_link_share, InitialLinkShare::EntityDefault)
+        if document.sub_type == Some(DocumentSubType::InitiativeDescription)
+            && matches!(document.initial_link_share, InitialLinkShare::EntityDefault)
         {
             return Err(DocumentError::BadRequest(
                 "initiative descriptions must set an exact initial link share".to_string(),
             ));
         }
 
-        let file_type = args.file_type;
-        let project_id = args.project_id;
-        let sha = args.sha.clone();
-        let attribution = args.resolved_attribution();
+        let owner = principal.owner();
+        let file_type = document.file_type;
+        let project_id = document.project_id;
+        let sha = document.sha.clone();
 
-        let share_permission = match args.initial_link_share {
+        let share_permission = match document.initial_link_share {
             InitialLinkShare::EntityDefault => {
-                let team_default = self
+                let owner_team = self
                     .repo
-                    .get_team_default_link_share(args.user_id.as_ref())
+                    .get_owner_team(&owner)
                     .await
                     .map_err(|e| DocumentError::Internal(e.into()))?;
-                SharePermissionV2::new_document_share_permission(file_type, team_default)
+                SharePermissionV2::new_document_share_permission(
+                    file_type,
+                    owner_team.map(|team| team.default_link_share),
+                )
             }
             InitialLinkShare::Exact(state) => SharePermissionV2::from_link_share_state(state),
         };
 
-        let document_metadata = self.repo.create_document(args, share_permission).await?;
+        let document_metadata = self
+            .repo
+            .create_document(CreateDocumentRepoArgs { owner, document }, share_permission)
+            .await?;
 
         self.finish_created_document(
             document_metadata,
             file_type,
             project_id,
             sha,
-            attribution,
+            Attribution::from(principal),
             job_id,
         )
         .await
@@ -1337,28 +1337,29 @@ impl<
     #[tracing::instrument(err, skip(self, args))]
     async fn import_email_attachment(
         &self,
-        _user_id: MacroUserIdStr<'static>,
         args: ImportEmailAttachmentRepoArgs,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        validate_spreadsheet_creation(args.create.file_type, &args.create.sha)?;
-        if args.create.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
+        validate_spreadsheet_creation(args.document.file_type, &args.document.sha)?;
+        if args.document.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
             return Err(DocumentError::NameTooLong {
                 max: MAX_DOCUMENT_NAME_GRAPHEMES,
             });
         }
 
-        let file_type = args.create.file_type;
-        let project_id = args.create.project_id;
-        let sha = args.create.sha.clone();
-        let attribution = args.resolved_attribution();
+        let file_type = args.document.file_type;
+        let project_id = args.document.project_id;
+        let sha = args.document.sha.clone();
+        let attribution = Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID));
 
-        let team_default = self
+        let owner_team = self
             .repo
-            .get_team_default_link_share(args.create.user_id.as_ref())
+            .get_owner_team(&Owner::User(args.owner.clone()))
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
-        let share_permission =
-            SharePermissionV2::new_document_share_permission(file_type, team_default);
+        let share_permission = SharePermissionV2::new_document_share_permission(
+            file_type,
+            owner_team.map(|team| team.default_link_share),
+        );
 
         match self
             .repo
@@ -1565,7 +1566,7 @@ impl<
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         document_context: DocumentBasic,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         document_name: String,
         query_version_id: Option<i64>,
         sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
@@ -1599,11 +1600,12 @@ impl<
                 .map_err(|e| DocumentError::Internal(e.into()))?
         };
 
-        // Check project ownership - only copy project_id if the user owns the project
+        let owner = principal.owner();
+
         if let Some(project_id) = &original_metadata.project_id {
             match self.repo.get_project_owner(project_id).await {
                 Ok(project_owner) => {
-                    if project_owner.as_ref() != user_id.as_ref() {
+                    if !owner.is_user(&project_owner) {
                         original_metadata.project_id = None;
                         original_metadata.project_name = None;
                     }
@@ -1628,29 +1630,18 @@ impl<
         // Clean the document name
         let document_name = FileType::clean_document_name(&document_name).unwrap_or(document_name);
 
-        let copy_team_id = if original_metadata.sub_type == Some(DocumentSubType::Task) {
-            let team_id = self
-                .repo
-                .get_team_ids_for_user(user_id.as_ref())
-                .await
-                .map_err(|e| DocumentError::Internal(e.into()))?;
-
-            let team_id = team_id.first();
-
-            team_id.copied()
-        } else {
-            None
-        };
-
-        // The copier becomes the owner, so their team default decides the
-        // copy's initial share permission.
-        let team_default = self
+        let owner_team = self
             .repo
-            .get_team_default_link_share(user_id.as_ref())
+            .get_owner_team(&owner)
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
-        let share_permission =
-            SharePermissionV2::new_document_share_permission(file_type, team_default);
+        let copy_team_id = owner_team
+            .filter(|_| original_metadata.sub_type == Some(DocumentSubType::Task))
+            .map(|team| team.team_id);
+        let share_permission = SharePermissionV2::new_document_share_permission(
+            file_type,
+            owner_team.map(|team| team.default_link_share),
+        );
 
         // Create the copy in the database
         let new_metadata = self
@@ -1658,7 +1649,7 @@ impl<
             .copy_document(
                 CopyDocumentRepoArgs {
                     original_document: original_metadata.clone(),
-                    user_id: user_id.clone(),
+                    owner,
                     document_name,
                     file_type,
                     team_id: copy_team_id,
@@ -1669,7 +1660,7 @@ impl<
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
         let new_document_id = new_metadata.document_id.clone();
-        let new_owner = Owner::User(user_id.clone());
+        let new_owner = &new_metadata.owner;
 
         // File-type-specific S3 operations
         let copy_result = match file_type {
@@ -1680,7 +1671,7 @@ impl<
                     &original_metadata.document_id,
                 );
                 let dest_key =
-                    build_docx_to_pdf_converted_document_key(&new_owner, &new_document_id);
+                    build_docx_to_pdf_converted_document_key(new_owner, &new_document_id);
                 self.upload_url_service
                     .copy_object(&source_key, &dest_key)
                     .await
@@ -1717,7 +1708,7 @@ impl<
                         source_version_id,
                     );
                     let dest_key = build_cloud_storage_bucket_document_key(
-                        &new_owner,
+                        new_owner,
                         &new_document_id,
                         new_metadata.document_version_id,
                     );
@@ -1766,7 +1757,7 @@ impl<
                     source_version_id,
                 );
                 let dest_key = build_cloud_storage_bucket_document_key(
-                    &new_owner,
+                    new_owner,
                     &new_document_id,
                     new_metadata.document_version_id,
                 );
@@ -1827,7 +1818,7 @@ impl<
                 document_id: new_document_id.clone(),
                 source_document_id: original_metadata.document_id.clone(),
                 source_version_id: query_version_id,
-                owner: Owner::User(user_id.clone()),
+                owner: new_owner.clone(),
                 document_name: new_metadata.document_name.clone(),
                 file_type,
                 project_id: new_metadata.project_id.clone(),
@@ -1907,36 +1898,37 @@ impl<
     }
 
     /// Assigns the task properties to a document
-    #[tracing::instrument(skip(self, request, attribution), err)]
+    #[tracing::instrument(skip(self, request), err)]
     async fn handle_task_properties(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         document_id: &str,
         request: &CreateTaskRequest,
-        attribution: &Attribution,
     ) -> Result<(), DocumentError> {
         // Use provided properties or assign default ones for task
         let properties = if let Some(properties) = request.property_values.as_ref() {
             properties
         } else {
-            &vec![
-                PropertyInput {
+            &principal
+                .user()
+                .map(|user| PropertyInput {
                     property_id: ASSIGNEES_PROPERTY_ID.to_string(),
                     value: SetPropertyValue::MultiEntityReference {
                         references: vec![EntityReference {
-                            entity_id: user_id.as_ref().to_string(),
+                            entity_id: user.as_ref().to_string(),
                             entity_type: models_properties::EntityType::User,
                             specific_message_id: None,
                         }],
                     },
-                },
-                PropertyInput {
+                })
+                .into_iter()
+                .chain([PropertyInput {
                     property_id: STATUS_PROPERTY_ID.to_string(),
                     value: SetPropertyValue::SelectOption {
                         option_id: NOT_STARTED_STATUS_OPTION_ID,
                     },
-                },
-            ]
+                }])
+                .collect::<Vec<_>>()
         };
 
         for property_input in properties {
@@ -1948,11 +1940,10 @@ impl<
             let _ = self
                 .task_properties_service
                 .set_entity_property(
-                    user_id.as_ref(),
+                    principal,
                     document_id,
                     property_uuid,
                     Some(property_input.value.clone()),
-                    attribution,
                 )
                 .await
                 .inspect_err(|e| {

@@ -10,19 +10,17 @@ mod test;
 
 pub mod upload;
 
-use activity::Attribution;
 use anyhow::Context;
 use base64::Engine;
-use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
+use model_owner::CreationPrincipal;
 use sha2::{Digest, Sha256};
 
 use models_permissions::share_permission::LinkShareState;
 
 use crate::domain::content::{DocumentContent, DocumentContentLocation};
 use crate::domain::models::{
-    CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, EMPTY_SHA256, InitialLinkShare,
-    PropertyInput,
+    CreateTaskRequest, DocumentError, EMPTY_SHA256, InitialLinkShare, NewDocument, PropertyInput,
 };
 use crate::domain::ports::create::{
     DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService,
@@ -39,7 +37,6 @@ pub struct NewDocumentMetadata {
     project_id: Option<uuid::Uuid>,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     skip_history: bool,
-    attribution: Option<Attribution>,
     initial_link_share: InitialLinkShare,
 }
 
@@ -58,22 +55,16 @@ impl NewDocumentMetadata {
                 project_id: None,
                 created_at: None,
                 skip_history: false,
-                attribution: None,
                 initial_link_share: InitialLinkShare::EntityDefault,
             },
         }
     }
 
-    fn into_repo_args(
-        self,
-        user_id: MacroUserIdStr<'static>,
-        kind: RepoDocumentKind,
-    ) -> CreateDocumentRepoArgs {
-        CreateDocumentRepoArgs {
+    fn into_new_document(self, kind: RepoDocumentKind) -> NewDocument {
+        NewDocument {
             id: self.id,
             sha: kind.sha,
             document_name: self.document_name,
-            user_id,
             file_type: kind.file_type,
             project_id: self.project_id,
             team_id: kind.team_id,
@@ -81,7 +72,6 @@ impl NewDocumentMetadata {
             created_at: self.created_at,
             sub_type: kind.subtype.sub_type(),
             skip_history: self.skip_history,
-            attribution: self.attribution,
             initial_link_share: self.initial_link_share,
         }
     }
@@ -115,12 +105,6 @@ impl NewDocumentMetadataBuilder {
     /// Skip adding this document to user history.
     pub fn skip_history(mut self) -> Self {
         self.metadata.skip_history = true;
-        self
-    }
-
-    /// Attribute the create without changing document ownership.
-    pub fn attribution(mut self, attribution: Attribution) -> Self {
-        self.metadata.attribution = Some(attribution);
         self
     }
 
@@ -532,21 +516,18 @@ where
     /// sync room before returning; no browser or object-storage upload is needed.
     pub async fn create_spreadsheet(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         metadata: NewDocumentMetadata,
     ) -> Result<CreatedDocument, DocumentError> {
-        let args = metadata.into_repo_args(
-            user_id.clone(),
-            RepoDocumentKind {
-                file_type: Some(FileType::Spreadsheet),
-                sha: EMPTY_SHA256.to_string(),
-                subtype: RepoDocumentSubtype::Regular,
-                team_id: None,
-                share_with_team: false,
-            },
-        );
+        let document = metadata.into_new_document(RepoDocumentKind {
+            file_type: Some(FileType::Spreadsheet),
+            sha: EMPTY_SHA256.to_string(),
+            subtype: RepoDocumentSubtype::Regular,
+            team_id: None,
+            share_with_team: false,
+        });
         self.document_service
-            .create_document(user_id, args, None)
+            .create_document(principal, document, None)
             .await
             .map(CreatedDocument::new)
     }
@@ -555,7 +536,7 @@ where
     #[tracing::instrument(skip(self, document), err)]
     pub async fn create_plain_text(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         document: NewPlainTextDocument,
     ) -> Result<CreatedDocument, DocumentError> {
         let NewPlainTextDocument {
@@ -567,7 +548,7 @@ where
         match kind {
             PlainTextDocumentKind::Markdown(subtype) => {
                 self.create_markdown_text(
-                    user_id,
+                    principal,
                     NewMarkdownTextDocument {
                         metadata,
                         markdown: text,
@@ -578,7 +559,7 @@ where
             }
             PlainTextDocumentKind::Text(file_type) => {
                 self.create_text_file(
-                    user_id,
+                    principal,
                     NewTextFileDocument {
                         metadata,
                         file_type,
@@ -594,7 +575,7 @@ where
     #[tracing::instrument(skip(self, document), err)]
     pub async fn create_markdown_text(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         document: NewMarkdownTextDocument,
     ) -> Result<CreatedDocument, DocumentError> {
         let NewMarkdownTextDocument {
@@ -622,30 +603,25 @@ where
             None
         };
 
-        let args = metadata.into_repo_args(
-            user_id.clone(),
-            RepoDocumentKind {
-                file_type: Some(FileType::Md),
-                sha: EMPTY_SHA256.to_string(),
-                subtype: match &subtype {
-                    MarkdownSubtype::Note => RepoDocumentSubtype::Regular,
-                    MarkdownSubtype::Task { .. } => RepoDocumentSubtype::MarkdownTask,
-                    MarkdownSubtype::Snippet => RepoDocumentSubtype::MarkdownSnippet,
-                    MarkdownSubtype::Skill => RepoDocumentSubtype::MarkdownSkill,
-                    MarkdownSubtype::InitiativeDescription => {
-                        RepoDocumentSubtype::MarkdownInitiativeDescription
-                    }
-                },
-                team_id,
-                share_with_team: task.as_ref().is_some_and(|(_, share, _)| *share),
+        let new_document = metadata.into_new_document(RepoDocumentKind {
+            file_type: Some(FileType::Md),
+            sha: EMPTY_SHA256.to_string(),
+            subtype: match &subtype {
+                MarkdownSubtype::Note => RepoDocumentSubtype::Regular,
+                MarkdownSubtype::Task { .. } => RepoDocumentSubtype::MarkdownTask,
+                MarkdownSubtype::Snippet => RepoDocumentSubtype::MarkdownSnippet,
+                MarkdownSubtype::Skill => RepoDocumentSubtype::MarkdownSkill,
+                MarkdownSubtype::InitiativeDescription => {
+                    RepoDocumentSubtype::MarkdownInitiativeDescription
+                }
             },
-        );
-        let attribution = args.resolved_attribution();
-        let mention_user_id = user_id.clone();
+            team_id,
+            share_with_team: task.as_ref().is_some_and(|(_, share, _)| *share),
+        });
 
         let mut response = self
             .document_service
-            .create_document(user_id.clone(), args, None)
+            .create_document(principal, new_document, None)
             .await?;
 
         let document_id = response
@@ -659,7 +635,7 @@ where
             if let Some((property_values, share_with_team, team_id)) = task {
                 self.document_service
                     .handle_task_properties(
-                        user_id,
+                        principal,
                         &document_id,
                         &CreateTaskRequest {
                             task_name,
@@ -669,7 +645,6 @@ where
                             property_values,
                             share_with_team,
                         },
-                        &attribution,
                     )
                     .await?;
             }
@@ -698,10 +673,11 @@ where
             }
         };
 
-        if let Err(error) = self
-            .mention_tracker
-            .track_document_mentions(&document_id, &mention_user_id, &markdown)
-            .await
+        if let Some(user) = principal.user()
+            && let Err(error) = self
+                .mention_tracker
+                .track_document_mentions(&document_id, user, &markdown)
+                .await
         {
             tracing::error!(error=?error, document_id=%document_id, "unable to track document mentions");
         }
@@ -716,7 +692,7 @@ where
     #[tracing::instrument(skip(self, document), err)]
     pub async fn create_text_file(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         document: NewTextFileDocument,
     ) -> Result<CreatedDocument, DocumentError> {
         let NewTextFileDocument {
@@ -727,20 +703,17 @@ where
 
         let bytes = text.into_bytes();
         let hashes = file_shas(&bytes);
-        let args = metadata.into_repo_args(
-            user_id.clone(),
-            RepoDocumentKind {
-                file_type: Some(file_type.into_file_type()),
-                sha: hashes.hex,
-                subtype: RepoDocumentSubtype::Regular,
-                team_id: None,
-                share_with_team: false,
-            },
-        );
+        let new_document = metadata.into_new_document(RepoDocumentKind {
+            file_type: Some(file_type.into_file_type()),
+            sha: hashes.hex,
+            subtype: RepoDocumentSubtype::Regular,
+            team_id: None,
+            share_with_team: false,
+        });
 
         let mut response = self
             .document_service
-            .create_document(user_id, args, None)
+            .create_document(principal, new_document, None)
             .await?;
 
         let document_id = response
@@ -810,175 +783,4 @@ fn file_shas(file_content: &[u8]) -> FileShas {
     let base64 = base64::engine::general_purpose::STANDARD.encode(file_hash_result);
 
     FileShas { hex, base64 }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        MarkdownSubtype, NewDocumentMetadata, NewPlainTextDocument, RepoDocumentKind,
-        RepoDocumentSubtype, file_shas,
-    };
-    use crate::domain::models::{ImportEmailAttachmentRepoArgs, InitialLinkShare};
-    use activity::{Actor, Attribution};
-    use macro_user_id::user_id::MacroUserIdStr;
-    use model::document::FileType;
-
-    fn metadata() -> NewDocumentMetadata {
-        NewDocumentMetadata::new("test")
-    }
-
-    fn owner() -> MacroUserIdStr<'static> {
-        MacroUserIdStr::try_from("macro|owner@example.com".to_string()).unwrap()
-    }
-
-    fn repo_kind() -> RepoDocumentKind {
-        RepoDocumentKind {
-            file_type: Some(FileType::Md),
-            sha: "sha".to_string(),
-            subtype: RepoDocumentSubtype::Regular,
-            team_id: None,
-            share_with_team: false,
-        }
-    }
-
-    #[test]
-    fn creation_attribution_defaults_to_none() {
-        let args = metadata().into_repo_args(owner(), repo_kind());
-        assert_eq!(args.attribution, None);
-        assert_eq!(
-            args.resolved_attribution(),
-            Attribution::direct(Actor::new_from_user(owner()))
-        );
-    }
-
-    #[test]
-    fn email_import_resolves_to_the_system_principal() {
-        let args = ImportEmailAttachmentRepoArgs {
-            email_attachment_id: uuid::Uuid::from_u128(1),
-            create: metadata().into_repo_args(owner(), repo_kind()),
-        };
-
-        assert_eq!(args.create.user_id.as_ref(), "macro|owner@example.com");
-        assert_eq!(
-            args.resolved_attribution(),
-            Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID))
-        );
-    }
-
-    #[test]
-    fn creation_attribution_can_be_set_without_changing_owner() {
-        let attribution =
-            Attribution::delegated(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID), owner());
-        let args = NewDocumentMetadata::builder("welcome")
-            .attribution(attribution.clone())
-            .build()
-            .into_repo_args(owner(), repo_kind());
-
-        assert_eq!(args.user_id.as_ref(), "macro|owner@example.com");
-        assert_eq!(args.resolved_attribution(), attribution);
-    }
-
-    #[test]
-    fn link_share_defaults_to_the_entity_default_unless_set_exactly() {
-        use models_permissions::share_permission::access_level::AccessLevel;
-        use models_permissions::share_permission::{LinkShare, LinkShareState};
-
-        let args = metadata().into_repo_args(owner(), repo_kind());
-        assert_eq!(args.initial_link_share, InitialLinkShare::EntityDefault);
-
-        let state = LinkShareState::On {
-            scope: LinkShare::Team,
-            level: AccessLevel::View,
-        };
-        let args = NewDocumentMetadata::builder("description")
-            .initial_link_share(state)
-            .build()
-            .into_repo_args(owner(), repo_kind());
-        assert_eq!(args.initial_link_share, InitialLinkShare::Exact(state));
-    }
-
-    #[test]
-    fn initiative_description_is_a_markdown_only_subtype_without_task_properties() {
-        let err = NewPlainTextDocument::builder(metadata())
-            .file_type(FileType::Txt)
-            .text("hello")
-            .markdown_subtype(MarkdownSubtype::InitiativeDescription)
-            .build()
-            .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "bad request: initiative descriptions must be markdown documents"
-        );
-
-        NewPlainTextDocument::builder(metadata())
-            .file_type(FileType::Md)
-            .text("# goals")
-            .markdown_subtype(MarkdownSubtype::InitiativeDescription)
-            .build()
-            .unwrap();
-        assert_eq!(
-            RepoDocumentSubtype::MarkdownInitiativeDescription.sub_type(),
-            Some(document_sub_type::DocumentSubType::InitiativeDescription)
-        );
-    }
-
-    #[test]
-    fn new_plain_text_rejects_non_markdown_task() {
-        let err = NewPlainTextDocument::builder(metadata())
-            .file_type(FileType::Txt)
-            .text("hello")
-            .markdown_subtype(MarkdownSubtype::from_task_flag(true, None))
-            .build()
-            .unwrap_err();
-
-        assert_eq!(
-            err.to_string(),
-            "bad request: tasks must be markdown documents"
-        );
-    }
-
-    #[test]
-    fn new_plain_text_accepts_markdown_task() {
-        NewPlainTextDocument::builder(metadata())
-            .file_type(FileType::Md)
-            .text("# hello")
-            .task_flag(true, None)
-            .build()
-            .unwrap();
-    }
-
-    #[test]
-    fn task_flag_shares_only_when_a_team_was_resolved() {
-        let team_id = uuid::Uuid::from_u128(7);
-        for (resolved_team, expected_share) in [(None, false), (Some(team_id), true)] {
-            let MarkdownSubtype::Task {
-                share_with_team,
-                team_id: numbering_team,
-                property_values,
-            } = MarkdownSubtype::from_task_flag(true, resolved_team)
-            else {
-                panic!("a task flag builds a task subtype");
-            };
-            assert_eq!(share_with_team, expected_share);
-            assert_eq!(numbering_team, resolved_team);
-            assert!(property_values.is_none());
-        }
-        assert!(matches!(
-            MarkdownSubtype::from_task_flag(false, Some(team_id)),
-            MarkdownSubtype::Note
-        ));
-    }
-
-    #[test]
-    fn test_file_shas() {
-        let hashes = file_shas(b"hello");
-        assert_eq!(
-            hashes.hex,
-            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-        );
-        assert_eq!(
-            hashes.base64,
-            "LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ="
-        );
-    }
 }

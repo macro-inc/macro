@@ -40,7 +40,6 @@ use crate::{
         lexical_comment_marks::LexicalCommentMarks, markdown_init::LexicalSyncMarkdownInitializer,
     },
 };
-use activity::{Actor, Attribution};
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use bot_id::BotId;
 use entity_access::domain::{
@@ -50,6 +49,7 @@ use entity_access::domain::{
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{api::MessageServiceApi, ports::MessageError, service::MessageWrite};
+use model_owner::CreationPrincipal;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 use uuid::Uuid;
@@ -215,9 +215,12 @@ impl<
             .map_err(comment_access_error)
     }
 
-    /// Attribution for a write these tools make for `user`.
-    pub fn attribution(&self, user: MacroUserIdStr<'static>) -> Attribution {
-        Attribution::delegated(Actor::new_from_bot(self.actor), user)
+    /// Who these tools create entities as when acting for `user`.
+    pub fn creation_principal(&self, user: MacroUserIdStr<'static>) -> CreationPrincipal {
+        CreationPrincipal::BotForUser {
+            bot: self.actor,
+            user,
+        }
     }
 }
 

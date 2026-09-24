@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT source_type::text AS \"source_type!\", source_id\n        FROM entity_access\n        WHERE entity_id = $1 AND access_level = 'owner'\n        ORDER BY source_type::text\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "753c12914c55bc487f0c5fa53ef55e0e3efb7292f770e9761767054c43fd8a47"
+}

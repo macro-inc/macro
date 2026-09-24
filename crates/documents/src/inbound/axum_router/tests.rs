@@ -6,19 +6,24 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, request::Builder},
 };
+use bot_id::NonSystemBotId;
 use embedding::embedding_provider::openai::TextEmbedding3Small;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
-        EntityPermission, EntityType, MemberTeamRole, RequiredPermission, TeamRole, UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, BotReceiptScope, CallChannelInfo,
+        EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole, RequiredPermission,
+        TeamRole, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
+use entity_registry::NonUserOwners;
 use http_body_util::BodyExt;
 use lexical_client::LexicalClient;
 use macro_authorization::{
-    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
-    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+    BOT_FOR_MACRO_USER_ID_HEADER, BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims,
+    BotAuthentication, BotScope, INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER,
+    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
+    MacroAuthorizationState, MacroUserAuthentication,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model::{
@@ -26,7 +31,7 @@ use model::{
     sync_service::SyncServiceVersionID,
 };
 use model_entity::Entity;
-use model_owner::Owner;
+use model_owner::{CreationPrincipal, Owner};
 use model_user::UserContext;
 use rootcause::Report;
 use serde_json::{Value, json};
@@ -43,7 +48,10 @@ use task_dedup::{
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use super::{DocumentRouterState, content_uploaded::content_uploaded_handler, documents_router};
+use super::{
+    DocumentRouterState, content_uploaded::content_uploaded_handler,
+    create_document::create_document_internal_handler, documents_router,
+};
 
 mod sync_content;
 use crate::{
@@ -52,9 +60,9 @@ use crate::{
         create::DocumentCreator,
         events::InteractionReason,
         models::{
-            CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, DocumentTeamShareResponse,
-            EditDocumentServiceArgs, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
-            LocationQueryParams, TaskBranchName,
+            CreateTaskRequest, DocumentError, DocumentTeamShareResponse, EditDocumentServiceArgs,
+            GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams,
+            NewDocument, TaskBranchName,
         },
         ports::{DocumentContentEventService, DocumentService, create::DocumentCreationService},
         response::{
@@ -79,10 +87,11 @@ const LEGACY_INTERNAL_USER_ID_HEADER: &str = "x-document-storage-service-user-id
 const TEST_ORGANIZATION_ID: i32 = 42;
 const TEAM_ID: Uuid = Uuid::from_u128(0x82c6f359_691f_4ff3_965a_016a2970b1a2);
 const RESOLVED_DOCUMENT_ID: &str = "resolved-document";
+const BOT_TOKEN: &str = "valid-bot-token";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CreateDocumentCall {
-    user_id: String,
+    principal: CreationPrincipal,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -135,6 +144,7 @@ struct FakeDocumentService {
     team_slug_calls: Mutex<Vec<TeamSlugCall>>,
     team_slug_result: Mutex<Option<TeamSlugResult>>,
     get_document_calls: Mutex<Vec<String>>,
+    copy_calls: Mutex<Vec<CreationPrincipal>>,
 }
 
 impl FakeDocumentService {
@@ -142,6 +152,13 @@ impl FakeDocumentService {
         self.create_calls
             .lock()
             .expect("create calls lock poisoned")
+            .clone()
+    }
+
+    fn copy_calls(&self) -> Vec<CreationPrincipal> {
+        self.copy_calls
+            .lock()
+            .expect("copy calls lock poisoned")
             .clone()
     }
 
@@ -291,34 +308,33 @@ impl DocumentService for FakeDocumentService {
 
     async fn create_document(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        _args: CreateDocumentRepoArgs,
+        principal: &CreationPrincipal,
+        _document: NewDocument,
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         self.create_calls
             .lock()
             .expect("create calls lock poisoned")
             .push(CreateDocumentCall {
-                user_id: user_id.as_ref().to_string(),
+                principal: principal.clone(),
             });
 
-        Ok(create_document_response(user_id))
+        Ok(create_document_response(principal.owner()))
     }
 
     async fn import_email_attachment(
         &self,
-        user_id: MacroUserIdStr<'static>,
         args: ImportEmailAttachmentRepoArgs,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         self.import_calls
             .lock()
             .expect("import calls lock poisoned")
             .push(ImportEmailAttachmentCall {
-                user_id: user_id.as_ref().to_string(),
+                user_id: args.owner.as_ref().to_string(),
                 email_attachment_id: args.email_attachment_id,
             });
 
-        Ok(create_document_response(user_id))
+        Ok(create_document_response(Owner::User(args.owner)))
     }
 
     async fn get_document_content(
@@ -372,12 +388,17 @@ impl DocumentService for FakeDocumentService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
         _document_context: DocumentBasic,
-        _user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         _document_name: String,
         _query_version_id: Option<i64>,
         _sync_version_id: Option<SyncServiceVersionID>,
     ) -> Result<DocumentResponse, DocumentError> {
-        panic!("unexpected copy_document call")
+        self.copy_calls
+            .lock()
+            .expect("copy calls lock poisoned")
+            .push(principal.clone());
+
+        Ok(create_document_response(principal.owner()).document_response)
     }
 
     async fn get_project_name(&self, _project_id: &str) -> Result<String, DocumentError> {
@@ -393,10 +414,9 @@ impl DocumentService for FakeDocumentService {
 
     async fn handle_task_properties(
         &self,
-        _user_id: MacroUserIdStr<'static>,
+        _principal: &CreationPrincipal,
         _document_id: &str,
         _request: &CreateTaskRequest,
-        _attribution: &activity::Attribution,
     ) -> Result<(), DocumentError> {
         panic!("unexpected handle_task_properties call")
     }
@@ -477,19 +497,18 @@ impl DocumentContentEventService for FakeDocumentService {
 impl DocumentCreationService for FakeDocumentService {
     async fn create_document(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        args: CreateDocumentRepoArgs,
+        principal: &CreationPrincipal,
+        document: NewDocument,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        DocumentService::create_document(self, user_id, args, job_id).await
+        DocumentService::create_document(self, principal, document, job_id).await
     }
 
     async fn handle_task_properties(
         &self,
-        _user_id: MacroUserIdStr<'static>,
+        _principal: &CreationPrincipal,
         _document_id: &str,
         _request: &CreateTaskRequest,
-        _attribution: &activity::Attribution,
     ) -> Result<(), DocumentError> {
         panic!("unexpected creation handle_task_properties call")
     }
@@ -511,14 +530,14 @@ impl DocumentCreationService for FakeDocumentService {
     }
 }
 
-fn create_document_response(user_id: MacroUserIdStr<'static>) -> CreateDocumentResponseData {
+fn create_document_response(owner: Owner) -> CreateDocumentResponseData {
     CreateDocumentResponseData {
         document_response: DocumentResponse {
             document_metadata: DocumentResponseMetadataWithContent::new(
                 DocumentResponseMetadata {
                     document_id: "created-document".to_string(),
                     document_version_id: 1,
-                    owner: Owner::User(user_id),
+                    owner,
                     document_name: "test document".to_string(),
                     file_type: Some("pdf".to_string()),
                     sha: Some("test-sha".to_string()),
@@ -656,12 +675,28 @@ impl EntityAccessService for FakeEntityAccessService {
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _bot_id: BotId,
-        _scope: BotAccessScope,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        bot_id: BotId,
+        scope: BotAccessScope,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        panic!("unexpected generate_bot_entity_access_receipt call")
+        let scope = match scope {
+            BotAccessScope::User { user_id, .. } => BotReceiptScope::User {
+                acting_user: user_id,
+            },
+            BotAccessScope::Team { team_id } => BotReceiptScope::Team { team_id },
+        };
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            scope,
+            entity_access::domain::models::Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+        )
     }
 
     async fn get_access_level(
@@ -794,6 +829,41 @@ impl MacroAuthorizationService for FakeAuthorizationService {
 
         Ok(claims.user_id.as_deref().map(user_context))
     }
+
+    async fn authorize_bot(
+        &self,
+        bot_token: &str,
+        bot_scope: BotScope,
+        acting_user: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        if bot_token != BOT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(BotAuthentication {
+            bot_id: BotId::TEST_A,
+            token_id: Uuid::nil(),
+            bot_scope,
+            team_id: Some(TEAM_ID),
+            acting_user: acting_user
+                .and_then(|claims| claims.user_id)
+                .map(|user_id| MacroUserAuthentication {
+                    macro_user_id: user(&user_id),
+                    user_context: user_context(&user_id),
+                }),
+        })
+    }
+}
+
+fn user(user_id: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(user_id.to_string()).expect("test user id should be valid")
+}
+
+fn team_bot() -> CreationPrincipal {
+    CreationPrincipal::TeamBot {
+        bot: NonSystemBotId::new(BotId::TEST_A).expect("test bot is not a system bot"),
+        team: TEAM_ID,
+    }
 }
 
 fn user_context(user_id: &str) -> UserContext {
@@ -824,6 +894,17 @@ impl TaskDedupNotifier for FakeTaskDedupNotifier {
 }
 
 fn test_router() -> (
+    Router,
+    Arc<FakeDocumentService>,
+    FakeEntityAccessService,
+    FakeAuthorizationService,
+) {
+    test_router_with(NonUserOwners::Disabled)
+}
+
+fn test_router_with(
+    non_user_owners: NonUserOwners,
+) -> (
     Router,
     Arc<FakeDocumentService>,
     FakeEntityAccessService,
@@ -868,6 +949,7 @@ fn test_router() -> (
         lexical_client,
         creator,
         document_permission_jwt_secret: "unused-jwt-secret".to_string(),
+        non_user_owners,
     };
     let router = documents_router::<
         FakeDocumentService,
@@ -895,6 +977,16 @@ fn test_router() -> (
             >,
         ),
     )
+    .route(
+        "/internal",
+        axum::routing::post(
+            create_document_internal_handler::<
+                FakeDocumentService,
+                FakeEntityAccessService,
+                FakeAuthorizationService,
+            >,
+        ),
+    )
     .with_state(state);
 
     (
@@ -907,6 +999,60 @@ fn test_router() -> (
 
 fn create_request() -> Builder {
     Request::post("/").header("content-type", "application/json")
+}
+
+fn internal_create_request() -> Builder {
+    Request::post("/internal").header("content-type", "application/json")
+}
+
+fn with_user_bot(builder: Builder) -> Builder {
+    builder
+        .header(BOT_TOKEN_HEADER, BOT_TOKEN)
+        .header(BOT_SCOPE_HEADER, "user")
+        .header(BOT_FOR_MACRO_USER_ID_HEADER, JWT_USER_ID)
+}
+
+fn with_team_bot(builder: Builder) -> Builder {
+    builder
+        .header(BOT_TOKEN_HEADER, BOT_TOKEN)
+        .header(BOT_SCOPE_HEADER, "team")
+}
+
+fn with_user_bot_without_acting_user(builder: Builder) -> Builder {
+    builder
+        .header(BOT_TOKEN_HEADER, BOT_TOKEN)
+        .header(BOT_SCOPE_HEADER, "user")
+}
+
+fn with_jwt(builder: Builder) -> Builder {
+    builder.header("authorization", format!("Bearer {JWT_TOKEN}"))
+}
+
+fn with_internal_caller(builder: Builder) -> Builder {
+    builder
+        .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
+        .header(INTERNAL_MACRO_USER_ID_HEADER, STANDARD_INTERNAL_USER_ID)
+}
+
+type Authenticate = fn(Builder) -> Builder;
+
+fn creating_callers() -> [(Authenticate, NonUserOwners, CreationPrincipal); 3] {
+    [
+        (
+            with_jwt,
+            NonUserOwners::Disabled,
+            CreationPrincipal::User(user(JWT_USER_ID)),
+        ),
+        (
+            with_user_bot,
+            NonUserOwners::Disabled,
+            CreationPrincipal::BotForUser {
+                bot: BotId::TEST_A,
+                user: user(JWT_USER_ID),
+            },
+        ),
+        (with_team_bot, NonUserOwners::Enabled, team_bot()),
+    ]
 }
 
 fn request_body(email_attachment_id: Option<Uuid>) -> Body {
@@ -1170,7 +1316,7 @@ async fn legacy_internal_headers_reach_the_internal_only_creation_path() {
     let email_attachment_id = Uuid::new_v4();
     let (router, document_service, _access_service, authorization_service) = test_router();
     let request = finish_request(
-        create_request()
+        internal_create_request()
             .header(LEGACY_INTERNAL_API_KEY_HEADER, LEGACY_INTERNAL_KEY)
             .header(LEGACY_INTERNAL_USER_ID_HEADER, LEGACY_INTERNAL_USER_ID),
         Some(email_attachment_id),
@@ -1199,7 +1345,7 @@ async fn legacy_internal_headers_reach_the_internal_only_creation_path() {
 async fn standard_internal_headers_reach_the_document_service() {
     let (router, document_service, _access_service, authorization_service) = test_router();
     let request = finish_request(
-        create_request()
+        internal_create_request()
             .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
             .header(INTERNAL_MACRO_USER_ID_HEADER, STANDARD_INTERNAL_USER_ID),
         None,
@@ -1211,7 +1357,7 @@ async fn standard_internal_headers_reach_the_document_service() {
     assert_eq!(
         document_service.create_calls(),
         [CreateDocumentCall {
-            user_id: STANDARD_INTERNAL_USER_ID.to_string(),
+            principal: CreationPrincipal::User(user(STANDARD_INTERNAL_USER_ID)),
         }]
     );
     assert!(document_service.import_calls().is_empty());
@@ -1227,7 +1373,7 @@ async fn standard_internal_headers_reach_the_document_service() {
 async fn standard_internal_headers_take_precedence_over_legacy_headers() {
     let (router, document_service, _access_service, authorization_service) = test_router();
     let request = finish_request(
-        create_request()
+        internal_create_request()
             .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
             .header(INTERNAL_MACRO_USER_ID_HEADER, STANDARD_INTERNAL_USER_ID)
             .header(LEGACY_INTERNAL_API_KEY_HEADER, LEGACY_INTERNAL_KEY)
@@ -1241,7 +1387,7 @@ async fn standard_internal_headers_take_precedence_over_legacy_headers() {
     assert_eq!(
         document_service.create_calls(),
         [CreateDocumentCall {
-            user_id: STANDARD_INTERNAL_USER_ID.to_string(),
+            principal: CreationPrincipal::User(user(STANDARD_INTERNAL_USER_ID)),
         }]
     );
     assert!(document_service.import_calls().is_empty());
@@ -1273,4 +1419,142 @@ async fn jwt_user_cannot_create_a_document_for_an_email_attachment() {
     assert_eq!(body, json!({ "message": "unauthorized" }));
     assert!(document_service.create_calls().is_empty());
     assert!(document_service.import_calls().is_empty());
+}
+
+#[tokio::test]
+async fn public_create_records_the_resolved_creation_principal() {
+    for (authenticate, non_user_owners, principal) in creating_callers() {
+        let (router, document_service, _access_service, _authorization_service) =
+            test_router_with(non_user_owners);
+        let request = finish_request(authenticate(create_request()), None);
+
+        let (status, _body) = send(&router, request).await;
+
+        assert_eq!(status, StatusCode::OK, "{principal:?}");
+        assert_eq!(
+            document_service.create_calls(),
+            [CreateDocumentCall { principal }]
+        );
+    }
+}
+
+#[tokio::test]
+async fn copy_records_the_resolved_creation_principal() {
+    for (authenticate, non_user_owners, principal) in creating_callers() {
+        let (router, document_service, _access_service, _authorization_service) =
+            test_router_with(non_user_owners);
+        let request = authenticate(
+            Request::post("/copy-source/copy").header("content-type", "application/json"),
+        )
+        .body(Body::from(json!({ "documentName": "copy" }).to_string()))
+        .expect("request should build");
+
+        let (status, _body) = send(&router, request).await;
+
+        assert_eq!(status, StatusCode::OK, "{principal:?}");
+        assert_eq!(document_service.copy_calls(), [principal]);
+    }
+}
+
+#[tokio::test]
+async fn create_routes_reject_callers_that_cannot_create_before_reading_the_body() {
+    let callers: [Authenticate; 3] = [
+        with_team_bot,
+        with_user_bot_without_acting_user,
+        with_internal_caller,
+    ];
+
+    for path in [
+        "/",
+        "/create_markdown",
+        "/create_task",
+        "/create_snippet",
+        "/create_skill",
+        "/copy-source/copy",
+    ] {
+        for authenticate in callers {
+            let (router, document_service, _access_service, _authorization_service) = test_router();
+            let request =
+                authenticate(Request::post(path).header("content-type", "application/json"))
+                    .body(Body::from("not json"))
+                    .expect("request should build");
+
+            let (status, body) = send(&router, request).await;
+
+            assert_eq!(
+                (status, body),
+                (StatusCode::FORBIDDEN, json!({ "message": "forbidden" })),
+                "{path}"
+            );
+            assert!(document_service.create_calls().is_empty());
+            assert!(document_service.copy_calls().is_empty());
+        }
+    }
+}
+
+#[tokio::test]
+async fn internal_create_makes_the_calling_user_the_owner() {
+    let (router, document_service, _access_service, _authorization_service) = test_router();
+    let request = finish_request(with_jwt(internal_create_request()), None);
+
+    let (status, _body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        document_service.create_calls(),
+        [CreateDocumentCall {
+            principal: CreationPrincipal::User(user(JWT_USER_ID)),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn internal_create_imports_email_attachments_only_for_internal_callers() {
+    let email_attachment_id = Uuid::new_v4();
+    let (router, document_service, _access_service, _authorization_service) = test_router();
+
+    let from_user = finish_request(
+        with_jwt(internal_create_request()),
+        Some(email_attachment_id),
+    );
+    assert_eq!(
+        send(&router, from_user).await,
+        (
+            StatusCode::UNAUTHORIZED,
+            json!({ "message": "unauthorized" })
+        )
+    );
+    assert!(document_service.import_calls().is_empty());
+
+    let from_internal = finish_request(
+        with_internal_caller(internal_create_request()),
+        Some(email_attachment_id),
+    );
+    let (status, _body) = send(&router, from_internal).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        document_service.import_calls(),
+        [ImportEmailAttachmentCall {
+            user_id: STANDARD_INTERNAL_USER_ID.to_string(),
+            email_attachment_id,
+        }]
+    );
+    assert!(document_service.create_calls().is_empty());
+}
+
+#[tokio::test]
+async fn internal_create_rejects_bots() {
+    let (router, document_service, _access_service, _authorization_service) =
+        test_router_with(NonUserOwners::Enabled);
+
+    for authenticate in [with_user_bot as Authenticate, with_team_bot] {
+        let request = finish_request(authenticate(internal_create_request()), None);
+
+        assert_eq!(
+            send(&router, request).await,
+            (StatusCode::FORBIDDEN, json!({ "message": "forbidden" }))
+        );
+    }
+    assert!(document_service.create_calls().is_empty());
 }

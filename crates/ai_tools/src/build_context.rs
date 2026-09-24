@@ -10,6 +10,7 @@ use crate::tool_context::{
 };
 use anthropic::toolset::AnthropicToolContext;
 use anyhow::Context;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use connection_gateway_client::ConnectionGatewayClient;
@@ -24,6 +25,8 @@ use email::outbound::EmailPgRepo;
 use email_service_client::EmailServiceClientExternal;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -237,7 +240,10 @@ pub async fn build_tool_service_context_from_env(
         env.document_storage_bucket.to_string(),
         env.docx_document_upload_bucket.to_string(),
     );
-    let document_repo = PgDocumentRepo::new(pool.clone());
+    let document_repo = PgDocumentRepo::new(
+        pool.clone(),
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
+    );
     let cloudfront_config = CloudFrontConfig {
         distribution_url: env
             .document_storage_service_cloudfront_distribution_url
