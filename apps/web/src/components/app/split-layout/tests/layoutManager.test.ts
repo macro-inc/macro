@@ -47,6 +47,7 @@ vi.mock('../componentRegistry', () => ({
 }));
 
 vi.mock('@core/constant/allBlocks', () => ({
+  fileTypeToBlockName: vi.fn((type: string) => type),
   isBlockAlias: vi.fn(() => false),
   resolveBlockAlias: vi.fn((type: string) => type),
 }));
