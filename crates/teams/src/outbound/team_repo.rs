@@ -65,27 +65,6 @@ impl TeamRepositoryImpl {
         Ok(())
     }
 
-    /// Gets the owner of a team
-    #[tracing::instrument(skip(self), err)]
-    async fn get_team_owner(
-        &self,
-        team_id: &uuid::Uuid,
-    ) -> Result<MacroUserIdStr<'_>, anyhow::Error> {
-        let owner_id = sqlx::query!(
-            r#"
-            SELECT owner_id
-            FROM team
-            WHERE id = $1
-        "#,
-            team_id,
-        )
-        .map(|row| row.owner_id)
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(MacroUserIdStr::parse_from_str(owner_id.as_str()).map(|id| id.into_owned())?)
-    }
-
     #[tracing::instrument(skip(self), err)]
     async fn create_team_inner(
         &self,
@@ -330,6 +309,28 @@ impl TeamRepository for TeamRepositoryImpl {
         .await?;
 
         Ok(enterprise)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_owner(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<MacroUserIdStr<'static>, TeamError> {
+        let owner_id = sqlx::query!(
+            r#"
+            SELECT owner_id
+            FROM team
+            WHERE id = $1
+        "#,
+            team_id,
+        )
+        .map(|row| row.owner_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        MacroUserIdStr::parse_from_str(owner_id.as_str())
+            .map(|id| id.into_owned())
+            .map_err(|error| TeamError::StorageLayerError(error.into()))
     }
 
     #[tracing::instrument(skip(self), err)]

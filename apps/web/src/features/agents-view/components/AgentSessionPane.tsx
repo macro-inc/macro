@@ -79,6 +79,7 @@ function SessionContent(props: {
     retryLoad,
     session,
     sessionId,
+    startupError,
   } = useAgentSession();
   const panel = useSplitPanelOrThrow();
   const [shareOpen, setShareOpen] = createSignal(false);
@@ -235,19 +236,32 @@ function SessionContent(props: {
                 when={!loadFailed()}
                 fallback={
                   <Show
-                    when={accessDenied()}
+                    when={startupError()}
                     fallback={
-                      <LoadErrorPanel
-                        title="Unable to load this session"
-                        onRetry={loadRetryable() ? retryLoad : undefined}
-                      />
+                      <Show
+                        when={accessDenied()}
+                        fallback={
+                          <LoadErrorPanel
+                            title="Unable to load this session"
+                            onRetry={loadRetryable() ? retryLoad : undefined}
+                          />
+                        }
+                      >
+                        <EmptyStatePanel
+                          centered
+                          title="You don't have access to this session"
+                          description="Ask a participant to share it with you."
+                        />
+                      </Show>
                     }
                   >
-                    <EmptyStatePanel
-                      centered
-                      title="You don't have access to this session"
-                      description="Ask a participant to share it with you."
-                    />
+                    {(error) => (
+                      <EmptyStatePanel
+                        centered
+                        title="The agent could not be started"
+                        description={error()}
+                      />
+                    )}
                   </Show>
                 }
               >

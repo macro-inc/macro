@@ -107,6 +107,18 @@ loading settles, including when the list itself uses REST (notified-at sorting).
 Email alone is not sufficient verification: its inbox membership does not require
 the global notification feed.
 
+Check live Home recency with two accounts: leave the recipient on Home without
+opening the conversation, then send a DM from the other account. The row should
+move into **Last few minutes** and show unread without reloading, including when
+notifications use GraphQL but Home's notified-at list uses REST. Read the DM,
+return to Home, and repeat; also check a row previously marked done and a thread
+reply. Delay the Home list response while allowing single-entity hydration to
+finish: hydration must not cancel the list refresh or leave an old notification
+timestamp. Older in-flight snapshots must not move the delivered row backward.
+Also test a stale response that entirely omits a just-restored, previously done
+row: the row must stay visible. Marking it done again must override that restore,
+and other filter scopes must not inherit the retained membership.
+
 GraphQL-attached notification rows share the global feed's local seen/done
 overrides: Mark Done and Undo reflect local intent without waiting for an older
 cached notification snapshot to be replaced. These display overrides do not turn
@@ -154,8 +166,8 @@ colors; unknown foreign sources use the generic file icon.
 New agent-session rows always use a sparkle in the left slot, including while
 working. A coding session adds a second line with repository, captured working
 branch (when available), and PR number/status. Non-coding sessions stay on one
-line. Their timestamps and unread dots stay visible; hovering reveals the full
-title, activity, and repository/branch. Missing repository metadata is omitted.
+line. Their timestamps and unread dots stay visible. Missing repository metadata
+is omitted.
 The Agents workspace uses a single left dot for activity and unread state in
 place of the sparkle. Opening a loaded session from Home or Agents marks its
 notifications read after the viewing delay, including notifications arriving
@@ -481,28 +493,71 @@ A failure from an older, unmounted editor must not overwrite a newer edited repl
 A presentation or refresh error after successful delivery is not a reason to send
 again.
 
-Send and schedule are refused with a notice while the device is offline, while a
-draft is still syncing (its save was accepted locally but not yet confirmed by the
-server; retry after a moment), or while an attachment has no completed upload. The
-composer keeps its content in each case. Attachments cannot be added while
-offline: a blocking notice explains and nothing is attached.
-For a new standalone email, a failed REST draft save is best-effort: Send can
-still proceed without a draft ID when no save was queued and no attachment is
-waiting to upload. A server rejection blocks sending even an existing draft.
-An internal draft-save failure, including a failed response read after the save
-commits, stays queued and retries with backoff. It must not permanently disable
-autosave; Send stays blocked until a save is confirmed. Invalid or unauthorized
-writes still stop retrying.
-Test this with a previously saved draft as well as a new one: a queued edit must
-block Send and scheduling until a save commits. Reopening a cached draft while
-offline must retain its uploaded attachments and confirmed scheduled time.
+Choosing or clearing a send time is local preparation only. The composer remains
+editable and autosaves normally, shows **Scheduled send: ...** (the time and the
+viewer's timezone, e.g. **Sep 25 at 8:00 AM EDT**) in a bar attached
+below the composer (a strip along the bottom of the message card for replies), and
+performs no schedule, unschedule, archive, or delivery request. The bar's **Cancel**,
+at its far right, clears the local choice; the clock's tooltip reads **Schedule send
+time**. The clock and
+primary arrow remain icon-sized; the clock turns accent-colored when a time is
+selected, while the primary action's accessible name and tooltip change from
+**Send email** to **Schedule send**. Clicking it or pressing `Ctrl`/`Cmd`+`Enter
+runs the same validation and is the only initial scheduling commitment. A selected
+time that has passed is rejected at submission rather than falling back to immediate
+send. Touch toolbars keep the summary inline beside their icons, with Cancel next to
+the time; when space is tight, that summary truncates or wraps separately from the
+fixed icon group. The
+former picker-auto-commit behavior was a defect and must not be restored.
 
-While a schedule change is pending, immediate send and further schedule changes
-are disabled. Reply recipients cannot be edited or dragged during scheduling,
-sending, or discarding. A failed schedule or unschedule keeps the last confirmed time.
+Only a successful scheduling response or authoritative lifecycle reconciliation
+shows **Scheduled for ...**. Confirmed scheduled composers are content-locked.
+Picking another time creates a local proposal while the original remains active;
+the bar continues to show the original time plus the proposed replacement and
+explains that the original remains active. **Update schedule** commits the proposal.
+Clearing that proposal does not cancel the original. **Cancel schedule** is a
+separate explicit action, and only its
+confirmed success returns the message to an editable draft. Failed schedule,
+update, or cancel requests retain the user's local intent and last authoritative
+time, and never fall through to immediate Send. At narrow split widths the bar's
+label truncates while Cancel stays at its far edge; the bar never covers discard,
+attachment, formatting, the clock, or the primary action. Reply recipients
+cannot be edited or dragged during a confirmed schedule or active delivery mutation.
+
+When verifying, use an intercepted or isolated delivery fixture: choose a time,
+confirm that the editable **Scheduled send** preview makes zero delivery calls, then use
+the primary button and `Ctrl`/`Cmd`+`Enter separately to confirm exactly one schedule
+call. Reopen a confirmed schedule to exercise proposal/update and explicit cancel.
+If a later lifecycle refresh fails, the confirmed result remains in place; stale
+observations must not undo it or create a recovery draft after a failed inbox move.
+Reconciliation resumes when a fresh poll or event-driven read succeeds.
 If scheduling succeeds but marking the thread done fails, the email remains
 scheduled and a notice explains the separate failure. Check the confirmed time
 before retrying; do not treat that notice as a failed schedule.
+Keep a scheduled composer open through its due time when verifying the flow. It
+reconciles on email events, tab focus/reconnect, cross-tab schedule changes, and a
+short due-time poll. Confirmed delivery closes or disables the old composer and
+stops autosave/delete against the sent ID. Text from an edit that raced delivery
+is preserved as a new unsent draft, never submitted with the sent message ID.
+Recovery re-uploads local attachment files and restores forwarded attachments.
+Remote-only draft attachments cannot be copied after the original draft is gone;
+their pills are removed and a notice asks you to attach those files again.
+
+A successful initial schedule shows an **Email scheduled** notice whose description
+gives the full send time, with **Undo** and **View message** on their own row below
+it; a rescheduled email
+shows **Email rescheduled** with **View message**. Undo cancels the captured draft in
+the captured inbox and restores its editable body, envelope, and attachments; it must
+not overwrite a newer reply. View message opens the scheduled thread, or scrolls an
+inline reply back into view.
+The Email view's **Scheduled** tab lists only server-confirmed scheduled drafts,
+soonest first across the selected inboxes, as ordinary email rows: the recipients,
+subject, and snippet, with a clock-and-time badge (for example **Tomorrow, 2:12
+PM**) in place of the row's date; hovering it gives the full date, time, and
+timezone.
+Opening a row previews its thread like any other email; cancel from the opened
+message's bar. Search and filters are hidden on this tab. Immediate-send undo-window
+queue rows are not scheduled drafts and must not appear.
 
 With the new app views enabled, mobile and tablet Email use a floating, horizontally
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the
@@ -627,8 +682,11 @@ details include Print, and DOCX files include Download DOCX. Markdown details
 use the document menu, which already includes Download. Spreadsheets keep the
 editor's Import and export menu for Excel and CSV downloads. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
-entries. Opening a list row or sidebar favorite starts a new detail path; only
-navigation originating inside a detail appends to that path. Cmd/Ctrl-clicking a
+entries. Opening a list row or sidebar favorite pushes a new one-item detail path;
+sidebar favorites start from My Files instead of inheriting a previously selected
+folder. Only navigation originating inside a detail appends to that path. Browser
+Back and Forward restore the exact path saved with each entry, and renamed files
+update in mounted ancestor breadcrumbs without rewriting history. Cmd/Ctrl-clicking a
 row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Enter
 opens the focused row in a new split. Cmd/Ctrl-clicking a row's folder link or
 search hit opens a new tab. Short filtered pages load more results automatically;

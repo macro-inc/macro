@@ -68,7 +68,8 @@ export function EmailInboxChip(props: { entity: EmailEntity; class?: string }) {
 export function EmailIdentity(props: { entity: EmailEntity }) {
   return (
     <>
-      <Show when={props.entity.isDraft}>
+      {/* A scheduled draft's badge is its send time, in the timestamp slot. */}
+      <Show when={props.entity.isDraft && !props.entity.scheduledSendTime}>
         <DraftBadge />
       </Show>
       <span class="truncate min-w-0">

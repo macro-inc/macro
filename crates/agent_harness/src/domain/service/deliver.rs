@@ -231,6 +231,7 @@ where
         Ok(Some(SessionAnnouncement {
             session_id,
             bot_id: session.bot_id,
+            kind: AgentKind::for_session(session.bot_id, &session.harness),
             origin_parent: origin.parent,
             origin_thread_id: origin.thread_id,
             origin_message_id: origin.message_id,
@@ -238,5 +239,65 @@ where
             prompted_content: prompt.prompt.clone(),
             triggered_by: triggered_by.clone(),
         }))
+    }
+
+    /// Tell the thread what an announced turn's reply should say now: how
+    /// the turn ended, or that it is waiting on the user.
+    ///
+    /// Best-effort, like every lifecycle publish: the turn is over or still
+    /// running regardless, and the queue behind it drains whether or not the
+    /// thread hears. The bot and runtime kind are re-read from the row, as
+    /// they were when the turn was announced. A turn nobody announced - no
+    /// origin, no actor, or no message posted - has nothing to resolve.
+    /// Whether the kind's message needs resolving at all is the announcer's
+    /// call.
+    pub(super) async fn resolve_reply(
+        &self,
+        session_id: AgentSessionId,
+        turn: Option<&InFlightTurn>,
+        outcome: ReplyOutcome,
+    ) {
+        let Some(turn) = turn else {
+            return;
+        };
+        let (Some(message_id), Some(origin), Some(triggered_by)) = (
+            turn.announcement_message_id,
+            turn.announce.as_ref(),
+            turn.actor.as_ref(),
+        ) else {
+            return;
+        };
+        let session = match self.sessions.get_session(session_id).await {
+            Ok(session) => session,
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    %session_id,
+                    %message_id,
+                    "leaving a turn's reply unresolved: session row unavailable"
+                );
+                return;
+            }
+        };
+        if let Err(error) = self
+            .announcer
+            .resolve(ResolvedReply {
+                session_id,
+                bot_id: session.bot_id,
+                kind: AgentKind::for_session(session.bot_id, &session.harness),
+                message_id,
+                origin_parent: origin.parent.clone(),
+                triggered_by: triggered_by.clone(),
+                outcome,
+            })
+            .await
+        {
+            tracing::error!(
+                error = ?error,
+                %session_id,
+                %message_id,
+                "failed to resolve a turn's reply in its thread"
+            );
+        }
     }
 }

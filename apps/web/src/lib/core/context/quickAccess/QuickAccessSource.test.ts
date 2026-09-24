@@ -29,6 +29,7 @@ import {
   BUCKET_COMBINATIONS,
   type Bucket,
   type QuickAccessContextValue,
+  type QuickAccessListOptions,
 } from './types';
 
 const mocks = vi.hoisted(() => ({
@@ -265,12 +266,17 @@ const retainedListText = {
   'recently-viewed': `older-note@${Date.parse('2026-08-03T00:00:00.000Z')},newer-note@${Date.parse('2026-08-02T00:00:00.000Z')}`,
 };
 
-function renderRetainedList(client: QueryClient) {
+function renderRetainedList(
+  client: QueryClient,
+  options?: QuickAccessListOptions
+) {
   const Shell = () => {
-    const list = useQuickAccess().useList();
+    const quickAccess = useQuickAccess();
+    const list = options ? quickAccess.useList(options) : quickAccess.useList();
     const node = document.createElement('main');
     node.dataset.testid = 'retained-shell';
     createRenderEffect(() => {
+      node.dataset.loading = String(list.isLoading());
       node.textContent = list
         .items()
         .map((item) => `${item.id}@${item.sortTimestamp}`)
@@ -293,6 +299,136 @@ function renderRetainedList(client: QueryClient) {
 }
 
 describe('Quick Access source integration', () => {
+  it('lets initially empty cached channels populate during hydration and replays the last change', async () => {
+    const first = retainedQueryData.channels;
+    const latest = [{ ...first[0], name: 'Updated channel' }];
+    let finishFirst!: (data: typeof first) => void;
+    let finishLatest!: (data: typeof first) => void;
+    const fetch = vi
+      .fn<() => Promise<typeof first>>()
+      .mockResolvedValueOnce([])
+      .mockReturnValueOnce(
+        new Promise<typeof first>((resolve) => {
+          finishFirst = resolve;
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise<typeof first>((resolve) => {
+          finishLatest = resolve;
+        })
+      );
+    let query: UseQueryResult<unknown[]> | undefined;
+    mocks.queries.channels = () =>
+      (query = useQuery(() => ({
+        queryKey: ['channel-burst'],
+        queryFn: fetch,
+        retry: false,
+      })));
+    const client = new QueryClient();
+    const rendered = renderRetainedList(client);
+    try {
+      await vi.waitFor(() => expect(query?.isSuccess).toBe(true));
+      vi.useFakeTimers();
+      mocks.changed?.();
+      for (let i = 0; i < 8; i++) {
+        mocks.changed?.();
+        await vi.advanceTimersByTimeAsync(250);
+      }
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(rendered.getByTestId('retained-shell').dataset.loading).toBe(
+        'false'
+      );
+      finishFirst(first);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(rendered.getByTestId('retained-shell').textContent).toBe(
+        retainedListText.channels
+      );
+      expect(fetch).toHaveBeenCalledTimes(3);
+      finishLatest(latest);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(query?.data).toEqual(latest);
+      expect(fetch).toHaveBeenCalledTimes(3);
+      expect(rendered.getByTestId('retained-shell').dataset.loading).toBe(
+        'false'
+      );
+    } finally {
+      rendered.unmount();
+      client.clear();
+    }
+  });
+
+  it.each(['history', 'channels'] as const)(
+    'reports loading while the %s fallback is initially pending',
+    async (source) => {
+      let finish!: (data: unknown[]) => void;
+      mocks.queries[source] = () =>
+        useQuery(() => ({
+          queryKey: ['initial-loading', source],
+          queryFn: () =>
+            new Promise<unknown[]>((resolve) => {
+              finish = resolve;
+            }),
+          retry: false,
+        }));
+      const client = new QueryClient();
+      const rendered = renderRetainedList(client);
+      try {
+        const shell = rendered.getByTestId('retained-shell');
+        await vi.waitFor(() => expect(shell.dataset.loading).toBe('true'));
+        finish(retainedQueryData[source]);
+        await vi.waitFor(() => expect(shell.dataset.loading).toBe('false'));
+        expect(shell.textContent).toBe(retainedListText[source]);
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+
+  it.each(['history', 'channels'] as const)(
+    'keeps settled empty search results idle during a background %s refetch',
+    async (source) => {
+      let finishRefresh!: (data: unknown[]) => void;
+      const fetch = vi
+        .fn<() => Promise<unknown[]>>()
+        .mockResolvedValueOnce([])
+        .mockReturnValueOnce(
+          new Promise<unknown[]>((resolve) => {
+            finishRefresh = resolve;
+          })
+        );
+      let query: UseQueryResult<unknown[]> | undefined;
+      mocks.queries[source] = () =>
+        (query = useQuery(() => ({
+          queryKey: ['empty-background-refresh', source],
+          queryFn: fetch,
+          retry: false,
+        })));
+      const client = new QueryClient();
+      const rendered = renderRetainedList(client, {
+        buckets: ['note'],
+        searchTerm: () => 'no matching entities',
+      });
+      try {
+        const shell = rendered.getByTestId('retained-shell');
+        await vi.waitFor(() => expect(query?.isSuccess).toBe(true));
+        await vi.waitFor(() => expect(shell.dataset.loading).toBe('false'));
+        expect(shell.textContent).toBe('');
+        const refresh = query!.refetch();
+        await vi.waitFor(() => expect(query?.isRefetching).toBe(true));
+        expect(shell.dataset.loading).toBe('false');
+        expect(shell.textContent).toBe('');
+        finishRefresh([]);
+        await refresh;
+        expect(shell.dataset.loading).toBe('false');
+        expect(shell.textContent).toBe('');
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+
   it.each(
     (['history', 'channels', 'recently-viewed'] as const).flatMap((source) =>
       (['resolve', 'reject'] as const).map((settlement) => ({
@@ -388,6 +524,7 @@ describe('Quick Access source integration', () => {
         expect(shell.textContent).toBe(expected);
         const refresh = query!.refetch();
         await vi.waitFor(() => expect(query?.isRefetching).toBe(true));
+        expect(shell.dataset.loading).toBe('false');
         expect(shell.textContent).toBe(expected);
         rejectRefresh(new Error('cache refresh failed'));
         await refresh;

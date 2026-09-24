@@ -25,6 +25,10 @@ export {
   ElicitationForm,
   type ElicitationFormProps,
 } from './ElicitationForm';
+export {
+  FailureNoticeCard,
+  type FailureNoticeCardProps,
+} from './FailureNoticeCard';
 export { FoldedAnsiText } from './FoldedAnsiText';
 export { FoldedOutput } from './FoldedOutput';
 export { FoldedPathList } from './FoldedPathList';

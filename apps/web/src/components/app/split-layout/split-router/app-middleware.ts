@@ -5,12 +5,13 @@ import {
   calendarPath,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
-import { CHANNEL_DETAIL_SEARCH_NAMESPACE } from '@app/features/channels-view/channels-route';
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   driveDocumentFromContent,
   drivePath,
 } from '@app/features/drive-view/primitives/drive-route';
 import { driveDocumentBlockType } from '@app/features/drive-view/primitives/drive-route-schema';
+import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import { EMAIL_DETAIL_SEARCH_NAMESPACE } from '@app/features/email-view/email-route';
 import {
@@ -22,6 +23,8 @@ import {
 } from '@app/lib/split-router';
 import { replaceSplitSearchParams } from '@app/lib/split-router/search';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
+import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
+import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import { match } from 'ts-pattern';
 import { appSplitRoutes } from './app-routes';
 import { decodeLegacyPair } from './legacy-route';
@@ -115,19 +118,54 @@ function migrateLegacySearch({
   if (!externalSearch) return;
 
   const leafId = to.location.route.matches.at(-1)?.id;
+  const inboxChannel =
+    leafId === 'inbox-channel' ||
+    (leafId === 'inbox-preview' &&
+      routeParams(to.location.route).blockType === 'channel');
+  const inboxDocumentType =
+    leafId === 'inbox-document'
+      ? routeParams(to.location.route).documentType
+      : leafId === 'inbox-preview'
+        ? routeParams(to.location.route).blockType
+        : undefined;
+  const commentKey = (() => {
+    switch (inboxDocumentType) {
+      case 'md':
+      case 'task':
+      case 'skill':
+      case 'snippet':
+      case 'spreadsheet':
+        return MD_URL_PARAMS.commentId;
+      case 'pdf':
+        return PDF_URL_PARAMS.annotationId;
+    }
+  })();
+  const inboxDocumentMapping = commentKey
+    ? {
+        namespace: driveSearch.namespace,
+        fields: [[commentKey, 'commentId']] as const,
+      }
+    : undefined;
 
   const mapping = match(leafId)
     .with('mail-thread', () => ({
       namespace: EMAIL_DETAIL_SEARCH_NAMESPACE,
       fields: [[EMAIL_URL_PARAMS.messageId, 'messageId']] as const,
     }))
-    .with('channels-channel', () => ({
-      namespace: CHANNEL_DETAIL_SEARCH_NAMESPACE,
-      fields: [
-        [CHANNEL_URL_PARAMS.message, 'messageId'],
-        [CHANNEL_URL_PARAMS.thread, 'threadId'],
-      ] as const,
-    }))
+    .when(
+      (id) => id === 'channels-channel' || inboxChannel,
+      () => ({
+        namespace: channelsSearch.namespace,
+        fields: [
+          [CHANNEL_URL_PARAMS.message, 'messageId'],
+          [CHANNEL_URL_PARAMS.thread, 'threadId'],
+        ] as const,
+      })
+    )
+    .when(
+      (id) => id === 'inbox-document' || id === 'inbox-preview',
+      () => inboxDocumentMapping
+    )
     .with(CALENDAR_ROUTE_ID, () => ({
       namespace: CALENDAR_SEARCH_NAMESPACE,
       fields: [['eventId', 'eventId']] as const,

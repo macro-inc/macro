@@ -59,6 +59,12 @@ fn settled(identity: SessionIdentity, turn: u32) -> AgentSessionLifecycleEvent {
     })
 }
 
+/// The plan for a coding agent's session - the shape every fact had before
+/// kinds could differ.
+fn coder(event: &AgentSessionLifecycleEvent) -> Vec<PlannedNotification> {
+    plan(event, AgentKind::SandboxedCoder)
+}
+
 fn one_settled(actions: Vec<PlannedNotification>) -> Notify<AgentSessionSettledMetadata> {
     match actions.as_slice() {
         [PlannedNotification::Settled(notify)] => notify.clone(),
@@ -68,7 +74,7 @@ fn one_settled(actions: Vec<PlannedNotification>) -> Notify<AgentSessionSettledM
 
 #[test]
 fn settled_notifies_the_whole_audience_under_the_session() {
-    let notify = one_settled(plan(&settled(identity(), 2)));
+    let notify = one_settled(coder(&settled(identity(), 2)));
 
     assert_eq!(
         notify.entity,
@@ -93,7 +99,7 @@ fn settled_notifies_the_whole_audience_under_the_session() {
 
 #[test]
 fn a_session_with_no_thread_files_the_same_way() {
-    let notify = one_settled(plan(&settled(detached_identity(), 0)));
+    let notify = one_settled(coder(&settled(detached_identity(), 0)));
 
     assert_eq!(
         notify.entity,
@@ -105,7 +111,7 @@ fn a_session_with_no_thread_files_the_same_way() {
 #[test]
 fn the_owner_always_hears_settled_even_when_the_audience_is_empty() {
     // An event published before the audience field existed.
-    let notify = one_settled(plan(&settled(
+    let notify = one_settled(coder(&settled(
         SessionIdentity {
             audience: Vec::new(),
             ..identity()
@@ -118,9 +124,9 @@ fn the_owner_always_hears_settled_even_when_the_audience_is_empty() {
 
 #[test]
 fn settled_ids_are_stable_per_turn_and_distinct_across_turns() {
-    let first = one_settled(plan(&settled(identity(), 1)));
-    let again = one_settled(plan(&settled(identity(), 1)));
-    let next = one_settled(plan(&settled(identity(), 2)));
+    let first = one_settled(coder(&settled(identity(), 1)));
+    let again = one_settled(coder(&settled(identity(), 1)));
+    let next = one_settled(coder(&settled(identity(), 2)));
 
     assert_eq!(
         first.notification_id, again.notification_id,
@@ -133,9 +139,62 @@ fn settled_ids_are_stable_per_turn_and_distinct_across_turns() {
     );
 }
 
+/// A chat agent's announced turn already reached the thread as the patched
+/// reply, which the message service notifies on as a post.
+#[test]
+fn a_chat_agents_announced_turn_settles_silently() {
+    let actions = plan(&settled(identity(), 2), AgentKind::InMemory);
+
+    assert!(actions.is_empty(), "{actions:#?}");
+}
+
+/// Only the announced turn is spoken for by its reply: a chat session driven
+/// from the session view posted nothing, so its audience still hears settled.
+#[test]
+fn a_chat_agents_unannounced_turn_still_notifies() {
+    let event = AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
+        identity: identity(),
+        last_turn: Some(TurnSummary {
+            turn: TurnId(2),
+            action_id: AgentActionId::mint(),
+            actor: Some(user("alice@macro.com")),
+            announcement_message_id: None,
+            stop_reason: "end_turn".to_owned(),
+            excerpt: Some("Done.".to_owned()),
+        }),
+    });
+
+    let notify = one_settled(plan(&event, AgentKind::InMemory));
+    assert_eq!(
+        notify.recipients,
+        vec![owner(), user("alice@macro.com"), user("bob@macro.com")]
+    );
+    assert_eq!(notify.metadata.session.announcement_message_id, None);
+}
+
+/// A coding agent's chip is a pointer, not news, so settled is the only
+/// thing the thread hears - whichever coding runtime it was.
+#[test]
+fn every_coding_kinds_announced_turn_notifies_settled() {
+    for kind in [
+        AgentKind::SandboxedCoder,
+        AgentKind::Cursor,
+        AgentKind::CodexCloud,
+        AgentKind::ClaudeCloud,
+        AgentKind::External,
+    ] {
+        let notify = one_settled(plan(&settled(identity(), 2), kind));
+        assert_eq!(
+            notify.metadata.session.announcement_message_id,
+            Some(Uuid::from_u128(4)),
+            "{kind:?}"
+        );
+    }
+}
+
 #[test]
 fn settled_without_a_turn_record_notifies_nobody() {
-    let actions = plan(&AgentSessionLifecycleEvent::Settled(
+    let actions = coder(&AgentSessionLifecycleEvent::Settled(
         SessionSettledMetadata {
             identity: identity(),
             last_turn: None,
@@ -147,7 +206,7 @@ fn settled_without_a_turn_record_notifies_nobody() {
 
 #[test]
 fn waiting_for_input_goes_to_the_audience() {
-    let actions = plan(&AgentSessionLifecycleEvent::WaitingForInput(
+    let actions = coder(&AgentSessionLifecycleEvent::WaitingForInput(
         WaitingForInputMetadata {
             identity: identity(),
             turn: TurnId(3),
@@ -172,10 +231,52 @@ fn waiting_for_input_goes_to_the_audience() {
     );
 }
 
+fn waiting(announcement_message_id: Option<Uuid>) -> AgentSessionLifecycleEvent {
+    AgentSessionLifecycleEvent::WaitingForInput(WaitingForInputMetadata {
+        identity: identity(),
+        turn: TurnId(3),
+        action_id: AgentActionId::mint(),
+        announcement_message_id,
+        question: "Which approach?".to_owned(),
+    })
+}
+
+/// The pending reply is patched to say the agent is waiting, and that
+/// patch notifies the thread; a notification on top would be the same
+/// news twice.
+#[test]
+fn a_chat_agents_announced_turn_waits_silently() {
+    let actions = plan(&waiting(Some(Uuid::from_u128(4))), AgentKind::InMemory);
+
+    assert!(actions.is_empty(), "{actions:#?}");
+}
+
+/// Only the announced turn has a reply to speak through: a chat session
+/// asking from the session view still notifies its audience, and a coding
+/// agent's chip says nothing about a question.
+#[test]
+fn every_other_waiting_turn_still_notifies() {
+    for (kind, announced) in [
+        (AgentKind::InMemory, None),
+        (AgentKind::SandboxedCoder, Some(Uuid::from_u128(4))),
+        (AgentKind::Cursor, Some(Uuid::from_u128(4))),
+        (AgentKind::External, None),
+    ] {
+        let actions = plan(&waiting(announced), kind);
+        assert!(
+            matches!(
+                actions.as_slice(),
+                [PlannedNotification::WaitingForInput(_)]
+            ),
+            "{kind:?} announced={announced:?}: {actions:#?}"
+        );
+    }
+}
+
 #[test]
 fn mentioned_notifies_exactly_the_people_named() {
     let action_id = AgentActionId::mint();
-    let actions = plan(&AgentSessionLifecycleEvent::Mentioned(
+    let actions = coder(&AgentSessionLifecycleEvent::Mentioned(
         SessionMentionedMetadata {
             identity: identity(),
             action_id,
@@ -205,7 +306,7 @@ fn mentioned_notifies_exactly_the_people_named() {
 
 #[test]
 fn a_mention_of_nobody_is_nothing() {
-    let actions = plan(&AgentSessionLifecycleEvent::Mentioned(
+    let actions = coder(&AgentSessionLifecycleEvent::Mentioned(
         SessionMentionedMetadata {
             identity: identity(),
             action_id: AgentActionId::mint(),
@@ -242,13 +343,13 @@ fn facts_that_are_not_news_to_people_plan_nothing() {
             identity: identity(),
         }),
     ] {
-        assert!(plan(&event).is_empty(), "{event:?}");
+        assert!(coder(&event).is_empty(), "{event:?}");
     }
 }
 
 #[test]
 fn a_notify_becomes_a_realtime_and_push_request_with_its_own_id() {
-    let notify = one_settled(plan(&settled(identity(), 2)));
+    let notify = one_settled(coder(&settled(identity(), 2)));
     let expected_id = notify.notification_id;
 
     let request = notify.into_request();

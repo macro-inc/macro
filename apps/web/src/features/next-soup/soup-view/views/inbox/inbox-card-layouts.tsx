@@ -29,6 +29,7 @@ import { formatCompactRelativeTimestamp } from '@entity/utils/timestamp';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import { formatCalendarReminderTime } from '@notifications';
+import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
 import FilesIcon from '@phosphor/files.svg';
 import GitMergeIcon from '@phosphor/git-merge.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
@@ -117,46 +118,6 @@ const getGithubSender = (entity: EntityData, notification?: Notification) => {
   }
 
   return { id: login, fallbackName: login, imageUrl };
-};
-
-const getNotificationSenderFallbackName = (
-  notification: Notification
-): string | undefined => {
-  const content = notification.notification_metadata.content as
-    | {
-        sender?: string;
-        senderDisplayName?: string | null;
-        senderGithubLogin?: string;
-        botName?: string;
-        mentionedBy?: string;
-      }
-    | undefined;
-
-  switch (notification.notification_metadata.tag) {
-    case 'new_email':
-      return content?.sender ?? undefined;
-    case 'ai_response':
-      return 'Macro agent';
-    case 'agent_session_settled':
-    case 'agent_session_waiting_for_input':
-      return content?.botName;
-    case 'agent_session_mentioned':
-      return content?.mentionedBy ?? content?.botName;
-    case 'channel_message_send':
-      return content?.sender ?? notification.sender_id ?? undefined;
-    case 'commented_on_document':
-    case 'mentioned_in_document_comment':
-    case 'replied_to_document_comment_thread':
-      return content?.senderDisplayName ?? undefined;
-    case 'github_pr_status_changed':
-    case 'github_review_requested':
-    case 'github_pr_comment':
-    case 'github_pr_mention':
-    case 'github_pr_review':
-      return content?.senderGithubLogin ?? notification.sender_id ?? undefined;
-    default:
-      return undefined;
-  }
 };
 
 const getTimestamp = (entity: EntityData, notification?: Notification) => {

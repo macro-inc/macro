@@ -20,11 +20,11 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
 | `/app/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/inbox/<block-type>/<uuid>` | Home with a heterogeneous item opened inline; target metadata is stored in `sN.inbox-preview.*` query values |
+| `/app/inbox/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/inbox/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
 | `/app/channels` | Channels list |
-| `/app/channels/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channel-detail.*` |
+| `/app/channels/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channels.messageId` and `sN.channels.threadId`, in the same namespace as the Channels tab |
 | `/app/drive` | Files (Drive defaults to My Files) |
 | `/app/drive/<recent-or-shared>` | A Drive tab (`/app/drive/tab/<...>` remains a compatibility alias) |
 | `/app/drive/folder/<uuid>` | A Drive folder; breadcrumbs resolve from current accessible folder data |
@@ -40,15 +40,28 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/companies` | Customers (CRM; needs a team) |
 | `/app/activity` | Activity heatmap + feed |
 | `/app/home` | Assistant (AI-first landing) |
-| `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event uses `sN.calendar.eventId` |
+| `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/automation/<uuid>` | Cron routine editor; event routines show a backend-managed notice |
-| `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
+| `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
+| `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
+| `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
+
+When an event opens inline from Home, changing the Calendar period stays under
+`/app/inbox/calendar/`, updates the period segment, and re-focuses that event.
+Back/Forward restores the period and its event locator from `sN.calendar.*`.
+
+Home uses the shared channel and file details for channel conversations and
+supported documents, with a **Home** breadcrumb that returns to the list. A
+channel message or thread target stays in its conversation. Document comment
+targets, spreadsheets, unknown items, and other unsupported block types retain
+the legacy inline preview so their navigation still works. The URL shape stays
+`/app/inbox/<block-type>/<uuid>` in either rendering mode.
 
 On touch devices, documents (including tasks) open in legacy blocks rather than
 inline Drive details. Canonical `/app/drive/.../<document-type>/<uuid>` links also
@@ -411,7 +424,16 @@ email mentions keep their separate search-service path.
 
 Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
 must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. A failed background
+mounted and usable while the optional source loads or fails. When no entity rows
+are available yet, the menu shows **Loading results…** while keeping commands
+usable; a settled empty category shows **No results found**. Background history
+or channel refetches alone must not switch settled empty results back to loading,
+including when the active category does not use that source. Cache-update bursts
+must let in-flight history, channel, and menu-search reads publish their results,
+then catch up with one coalesced refresh. Verify with cache reads slower than the
+250 ms update throttle, starting from an empty cache: entities appear without
+waiting for background updates to stop. Changing the query/category or closing
+the menu still discards obsolete search results. A failed background
 refresh retains available history/channel items and recently-viewed ordering.
 Placeholder results also remain usable while replacement data loads. A normal cache-worker
 handoff between tabs preserves backfill cursors and watermarks; only a replacement

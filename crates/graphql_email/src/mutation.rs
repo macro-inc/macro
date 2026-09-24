@@ -400,6 +400,10 @@ fn draft_mutation_error(error: &EmailErr) -> async_graphql::Error {
         EmailErr::MessageAlreadySent(_) => {
             ("email draft has already been sent", "DRAFT_ALREADY_SENT")
         }
+        EmailErr::MessageDeliveryConflict(_) => (
+            "cancel scheduled delivery before editing this draft",
+            "INVALID",
+        ),
         EmailErr::MessageNotFound(_) => ("referenced email message not found", "NOT_FOUND"),
         EmailErr::ThreadNotFound => ("email thread not found", "NOT_FOUND"),
         EmailErr::InboxNotFound => ("email inbox not found", "INBOX_NOT_FOUND"),

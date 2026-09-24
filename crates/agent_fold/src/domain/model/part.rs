@@ -13,6 +13,7 @@ use super::permission::{PermissionOption, PermissionOutcome};
 use super::plan::PlanEntry;
 use super::tool::{ToolDetail, ToolName, ToolStatus};
 use super::user_tool::UserToolOutcome;
+use agent_runtime_protocol::domain::turn::FailureNotice;
 
 /// A unit of renderable content.
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
@@ -218,6 +219,11 @@ pub enum StopReason {
     Failed {
         /// The runtime's error message, verbatim.
         message: String,
+        /// The failure in the person's terms, when the runtime classified it
+        /// as one they can act on. Absent for an opaque failure, which a
+        /// reader shows as `message` alone.
+        #[serde(default)]
+        notice: Option<FailureNotice>,
     },
 }
 

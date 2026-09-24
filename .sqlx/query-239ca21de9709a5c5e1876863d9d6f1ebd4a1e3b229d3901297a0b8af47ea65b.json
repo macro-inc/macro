@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE user_notification SET state = $3, seen_at = $4 WHERE user_id = $1 AND notification_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "notification_state",
+            "kind": {
+              "Enum": [
+                "unseen",
+                "seen",
+                "done"
+              ]
+            }
+          }
+        },
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "239ca21de9709a5c5e1876863d9d6f1ebd4a1e3b229d3901297a0b8af47ea65b"
+}

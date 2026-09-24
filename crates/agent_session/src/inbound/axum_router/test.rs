@@ -201,6 +201,28 @@ impl OneBotDirectory {
         }
     }
 
+    /// A saved agent bound to the owner's paired macrod runtime.
+    fn macrod_agent() -> Self {
+        Self {
+            shares_channel_with: Vec::new(),
+            facts: BotFacts {
+                has_agent: true,
+                is_managed: false,
+                is_system: false,
+                owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                owner_team_id: None,
+                harness_id: Some(harness_id::HarnessId::TEST_A),
+                managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
+                    model: "persona-model".to_owned(),
+                    harness: "macrod".to_owned(),
+                    instructions: "persona instructions".to_owned(),
+                    mcp_servers: Default::default(),
+                }),
+                selected_channels: false,
+            },
+        }
+    }
+
     fn managed_agent() -> Self {
         Self {
             shares_channel_with: Vec::new(),
@@ -300,7 +322,80 @@ impl BotDirectory for OneBotDirectory {
     }
 }
 
+/// What a requester says when no runtime creates the session.
+const RUNTIME_UNAVAILABLE_REASON: &str =
+    "this agent's runtime did not open the session; make sure macrod is running and up to date";
+
+/// Stands in for the bot's runtime: records what was asked and answers with
+/// a session under the requested id, as macrod would have created it.
+#[derive(Default)]
+struct RecordingRequester {
+    requested: Mutex<Vec<RequestedExternalSession>>,
+    /// No runtime answers, as when the operator's macrod is not running.
+    unavailable: bool,
+}
+
+impl RecordingRequester {
+    /// A requester whose runtime never creates the session.
+    fn unavailable() -> Self {
+        Self {
+            requested: Mutex::default(),
+            unavailable: true,
+        }
+    }
+}
+
+impl ExternalSessionRequester for RecordingRequester {
+    async fn request(
+        &self,
+        request: RequestedExternalSession,
+    ) -> crate::domain::error::Result<AgentSession> {
+        if self.unavailable {
+            self.requested.lock().unwrap().push(request);
+            return Err(crate::domain::error::AgentSessionError::RuntimeUnavailable(
+                RUNTIME_UNAVAILABLE_REASON,
+            ));
+        }
+        let session = AgentSession {
+            repo_branch: None,
+            pull_request_url: None,
+            id: request.session_id,
+            name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            owner_id: Owner::User(request.owner.clone()),
+            thread_id: None,
+            thread_parent: None,
+            originating_message_id: None,
+            bot_id: request.bot_id,
+            model: request
+                .model
+                .clone()
+                .unwrap_or_else(|| "persona-model".to_owned()),
+            harness: "macrod".to_owned(),
+            repo_url: None,
+            workspace: "/home/operator/code".to_owned(),
+            sandbox_size: crate::domain::model::SandboxSize::Default,
+            instructions: None,
+            mcp_servers: Default::default(),
+            acp_session_id: None,
+            external: None,
+            status: SessionStatus::NoMessages,
+            created_at: Utc::now(),
+            modified_at: Utc::now(),
+        };
+        self.requested.lock().unwrap().push(request);
+        Ok(session)
+    }
+}
+
 fn router_for(opener: Arc<RecordingOpener>, bots: OneBotDirectory) -> Router {
+    router_with_requests(opener, bots, Arc::new(RecordingRequester::default()))
+}
+
+fn router_with_requests(
+    opener: Arc<RecordingOpener>,
+    bots: OneBotDirectory,
+    requests: Arc<RecordingRequester>,
+) -> Router {
     let service = MacroAuthorizationServiceImpl::new(
         FakeJwtValidator,
         InternalAuthConfig {
@@ -314,6 +409,7 @@ fn router_for(opener: Arc<RecordingOpener>, bots: OneBotDirectory) -> Router {
     agent_session_create_router(CreateSessionState::new(
         opener,
         Arc::new(bots),
+        requests,
         MacroAuthorizationState::new(Arc::new(service)),
     ))
 }
@@ -737,6 +833,130 @@ async fn anyone_can_select_a_managed_system_bot() {
     let selected = managed[0].profile.as_ref().expect("selected persona");
     assert_eq!(selected.bot_id, BotId::TEST_A);
     assert!(selected.profile.is_none());
+}
+
+/// The composer sends the managed shape for every persona it lists, and
+/// mints the id it has already opened a surface on. A bot whose runtime its
+/// operator runs is not opened here: the request is handed to that runtime
+/// under that id, and the session it creates is what the caller gets back.
+/// No prompt travels with it - the caller sends its own through the session
+/// once this answers.
+#[tokio::test]
+async fn an_owner_starts_their_macrod_agent_from_the_composer() {
+    let opener = Arc::new(RecordingOpener::default());
+    let requests = Arc::new(RecordingRequester::default());
+    let minted = macro_uuid::generate_uuid_v7();
+    let request = as_user(
+        OWNER,
+        serde_json::json!({
+            "id": minted,
+            "botId": BotId::TEST_A.as_uuid(),
+            "model": "claude-opus-5",
+        })
+        .to_string(),
+    );
+
+    let response = router_with_requests(
+        opener.clone(),
+        OneBotDirectory::macrod_agent(),
+        requests.clone(),
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert!(opener.managed.lock().unwrap().is_empty());
+    assert!(opener.opened.lock().unwrap().is_empty());
+    {
+        let requested = requests.requested.lock().unwrap();
+        assert_eq!(requested.len(), 1);
+        assert_eq!(requested[0].bot_id, BotId::TEST_A);
+        assert_eq!(requested[0].owner.as_ref(), OWNER);
+        assert_eq!(requested[0].session_id.as_uuid(), minted);
+        assert_eq!(requested[0].model.as_deref(), Some("claude-opus-5"));
+    }
+
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(payload["session"]["id"], minted.to_string());
+    assert_eq!(payload["session"]["model"], "claude-opus-5");
+}
+
+/// Nothing delivers a prompt sent this way, so a caller that sends one is
+/// told rather than left to wonder why it had no effect.
+#[tokio::test]
+async fn a_macrod_agent_refuses_a_prompt_on_the_create() {
+    let requests = Arc::new(RecordingRequester::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid(), "prompt": "fix it" }).to_string(),
+    );
+
+    let response = router_with_requests(
+        Arc::new(RecordingOpener::default()),
+        OneBotDirectory::macrod_agent(),
+        requests.clone(),
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(requests.requested.lock().unwrap().is_empty());
+}
+
+/// A runtime that never creates the session is a conflict the operator can
+/// act on, not a server fault: the message says what to fix.
+#[tokio::test]
+async fn a_macrod_agent_whose_runtime_never_answers_is_a_conflict() {
+    let requests = Arc::new(RecordingRequester::unavailable());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid() }).to_string(),
+    );
+
+    let response = router_with_requests(
+        Arc::new(RecordingOpener::default()),
+        OneBotDirectory::macrod_agent(),
+        requests.clone(),
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(requests.requested.lock().unwrap().len(), 1);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(bytes.to_vec()).unwrap(),
+        RUNTIME_UNAVAILABLE_REASON
+    );
+}
+
+#[tokio::test]
+async fn a_stranger_cannot_start_someone_elses_macrod_agent() {
+    let requests = Arc::new(RecordingRequester::default());
+    let request = as_user(
+        STRANGER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid() }).to_string(),
+    );
+
+    let response = router_with_requests(
+        Arc::new(RecordingOpener::default()),
+        OneBotDirectory::macrod_agent(),
+        requests.clone(),
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(requests.requested.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

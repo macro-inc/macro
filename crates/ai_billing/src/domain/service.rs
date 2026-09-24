@@ -6,10 +6,10 @@ mod test;
 
 use super::ledger::{SettlementPolicy, build_snapshot, decide};
 use super::models::{
-    AllowanceDecision, BillingError, BillingPeriod, BillingSettings, CREDIT_PACKS_CENTS,
-    Entitlement, OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS,
-    OverageChargeStatus, PeriodAllowance, PlanTier, Result, SeatAllowance, SeatUsage,
-    UsageSnapshot,
+    AllowanceDecision, AllowanceStore, BillingError, BillingPeriod, BillingSettings,
+    CREDIT_PACKS_CENTS, Entitlement, OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS,
+    OVERAGE_LIMIT_MIN_CENTS, OverageChargeStatus, PayerScope, PeriodAllowance, PlanTier, Result,
+    SeatAllowance, SeatUsage, UsageSnapshot,
 };
 use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,
@@ -18,6 +18,7 @@ use super::ports::{
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use teams::domain::open_seat_release::OpenSeatRelease;
 
 /// The billing service over its four ports.
 #[derive(Clone)]
@@ -62,6 +63,23 @@ fn chargeable_usage_cents(seats: &[SeatAllowance], usage: &[SeatUsage]) -> i64 {
         .sum()
 }
 
+fn same_seat_pairs(left: &[SeatAllowance], right: &[SeatAllowance]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    let mut left_pairs: Vec<(&str, i64)> = left
+        .iter()
+        .map(|seat| (seat.user.as_ref(), seat.included_cents))
+        .collect();
+    let mut right_pairs: Vec<(&str, i64)> = right
+        .iter()
+        .map(|seat| (seat.user.as_ref(), seat.included_cents))
+        .collect();
+    left_pairs.sort_unstable();
+    right_pairs.sort_unstable();
+    left_pairs == right_pairs
+}
+
 impl<E, U, R, P> BillingServiceImpl<E, U, R, P>
 where
     E: EntitlementSource,
@@ -70,26 +88,79 @@ where
     P: PaymentGateway,
 {
     async fn position(&self, user: &MacroUserIdStr<'_>, now: DateTime<Utc>) -> Result<Position> {
-        let entitlement = self.entitlements.entitlement(user).await?;
-        let settings = self.repo.settings(&entitlement.payer).await?;
+        let first = self.entitlements.entitlement(user).await?;
+        let settings = self.repo.settings(&first.payer).await?;
         let period = BillingPeriod::current(settings.period_anchor, now);
-        // Freeze the open period's allowance so a later plan or seat change
-        // cannot rewrite it after the period closes. Mid-period changes
-        // refresh this row while the period is still current.
-        if entitlement.tier.is_paid() && !entitlement.unlimited {
-            self.repo
-                .remember_period_allowance(
-                    &entitlement.payer,
-                    period.start,
-                    &entitlement.seat_allowances(),
-                )
-                .await?;
+        if !first.tier.is_paid() || first.unlimited {
+            return Ok(Position {
+                entitlement: first,
+                settings,
+                period,
+            });
         }
-        Ok(Position {
-            entitlement,
-            settings,
-            period,
-        })
+        let Some(open) = period.open_start(now) else {
+            return Ok(Position {
+                entitlement: first,
+                settings,
+                period,
+            });
+        };
+        let stored = self
+            .repo
+            .period_allowance(&first.payer, open.start())
+            .await?;
+        if stored
+            .as_ref()
+            .is_some_and(|allowance| same_seat_pairs(&allowance.seats, &first.seat_allowances()))
+        {
+            return Ok(Position {
+                entitlement: first,
+                settings,
+                period,
+            });
+        }
+
+        let entitlement = match &first.scope {
+            PayerScope::Personal => first.clone(),
+            PayerScope::TeamOwner { .. } | PayerScope::TeamMember { .. } => {
+                self.entitlements.entitlement(user).await?
+            }
+        };
+        if entitlement.payer.as_ref() != first.payer.as_ref() {
+            // `settings.seat_generation` was read for `first.payer`.
+            let settings = self.repo.settings(&entitlement.payer).await?;
+            let period = BillingPeriod::current(settings.period_anchor, now);
+            return Ok(Position {
+                entitlement,
+                settings,
+                period,
+            });
+        }
+        if !entitlement.tier.is_paid() || entitlement.unlimited {
+            return Ok(Position {
+                entitlement,
+                settings,
+                period,
+            });
+        }
+
+        // A conflict means a release already wrote the row. The next observation refreshes.
+        match self
+            .repo
+            .store_open_allowance(
+                &entitlement.payer,
+                open,
+                &entitlement.seat_allowances(),
+                settings.seat_generation,
+            )
+            .await?
+        {
+            AllowanceStore::Stored | AllowanceStore::Conflict => Ok(Position {
+                entitlement,
+                settings,
+                period,
+            }),
+        }
     }
 
     async fn snapshot_at(
@@ -333,6 +404,32 @@ where
             return Err(BillingError::FreePlan);
         }
         Ok(())
+    }
+}
+
+impl<E, U, R, P> OpenSeatRelease for BillingServiceImpl<E, U, R, P>
+where
+    E: EntitlementSource + Clone,
+    U: UsageReader + Clone,
+    R: BillingRepo + Clone,
+    P: PaymentGateway + Clone,
+{
+    type Err = BillingError;
+
+    #[tracing::instrument(skip(self), err)]
+    async fn release(&self, team_id: Uuid, member: &MacroUserIdStr<'_>) -> Result<()> {
+        let Some(payer) = self.entitlements.team_payer(team_id).await? else {
+            return Ok(());
+        };
+        if payer.as_ref() == member.as_ref() {
+            return Ok(());
+        }
+        let settings = self.repo.settings(&payer).await?;
+        let now = Utc::now();
+        let Some(open) = BillingPeriod::current(settings.period_anchor, now).open_start(now) else {
+            return Ok(());
+        };
+        self.repo.release_open_seat(&payer, open, member).await
     }
 }
 

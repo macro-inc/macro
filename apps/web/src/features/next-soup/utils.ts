@@ -529,11 +529,9 @@ export function getChannelEntityTarget(
 /**
  * Resolve the comment a document row opens at. A stamped `commentTarget` (the
  * Inbox preview route carries one, since it keeps no notifications) wins;
- * otherwise it is the row's newest unread comment notification, the one the
- * row announces, so opening it lands on that comment exactly like a copied
- * comment link. Read ones are skipped for the same reason as on a
- * whole-`channel` row: once the document looks caught up it should open
- * normally rather than scroll to an old comment.
+ * otherwise it is the comment notification the row stands for (see
+ * `getDocumentCommentNotification`), read or not, so opening it lands on that
+ * comment exactly like a copied comment link.
  */
 export function getDocumentCommentTarget(entity: {
   type: string;

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sent, processing FROM email_scheduled_messages WHERE message_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "processing",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a2bc347716dd6fcfe2bc061b3820fb8790cc7c0c4dd1ed198ac2f5d1dc6929d4"
+}

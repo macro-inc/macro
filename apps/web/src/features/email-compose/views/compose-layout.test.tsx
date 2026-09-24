@@ -1,12 +1,17 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ComposerSurface } from '@ui/components/ComposerSurface';
 import { type ComponentProps, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ComposeLayout } from './compose-layout';
 
 const attachHotkeys = vi.hoisted(() => vi.fn());
+const registerHotkeyMock = vi.hoisted(() => vi.fn());
+const onSend = vi.hoisted(() => vi.fn());
+const composeStatus = vi.hoisted(() => ({
+  disabled: false,
+}));
 vi.mock('@core/hotkey/hotkeys', () => ({
-  registerHotkey: vi.fn(),
+  registerHotkey: registerHotkeyMock,
   useHotkeyDOMScope: () => [attachHotkeys, 'compose-email'],
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
@@ -17,7 +22,8 @@ vi.mock('@ui', async () => ({
 vi.mock('../context/compose-context', () => ({
   useCompose: () => ({
     recipients: () => ({ cc: [], bcc: [] }),
-    disabled: () => false,
+    disabled: () => composeStatus.disabled,
+    onSend,
     isMobile: () => false,
   }),
 }));
@@ -36,7 +42,12 @@ function DraftSurface(props: ComponentProps<typeof ComposerSurface>) {
   return <ComposerSurface {...props} as="div" />;
 }
 
-beforeEach(() => attachHotkeys.mockClear());
+beforeEach(() => {
+  attachHotkeys.mockClear();
+  registerHotkeyMock.mockClear();
+  onSend.mockClear();
+  composeStatus.disabled = false;
+});
 afterEach(cleanup);
 
 describe('ComposeLayout root composition', () => {
@@ -70,4 +81,18 @@ describe('ComposeLayout root composition', () => {
       expect(attachHotkeys).toHaveBeenCalledTimes(1);
     }
   );
+
+  it('routes pointer and keyboard submission through the same controller', () => {
+    render(() => (
+      <ComposeLayout toolbar={<button onClick={onSend}>Send email</button>} />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Send email' }));
+
+    composeStatus.disabled = true;
+    const sendHotkey = registerHotkeyMock.mock.calls.find(
+      ([options]) => options.hotkey === 'cmd+enter'
+    )?.[0];
+    expect(sendHotkey?.keyDownHandler()).toBe(true);
+    expect(onSend).toHaveBeenCalledTimes(2);
+  });
 });

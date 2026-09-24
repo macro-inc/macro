@@ -12,6 +12,7 @@ mod api;
 mod bots_directory;
 mod config;
 mod containers;
+mod external_session_requests;
 mod harness_bindings;
 mod internal_mcp;
 mod model_providers;
@@ -739,7 +740,7 @@ async fn run() -> anyhow::Result<()> {
         messages::domain::service::MessageService::new(
             messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
             messages::domain::effects::MessageEffects::new(
-                messages::outbound::broker::BrokerMessagePublisher::new(broker),
+                messages::outbound::broker::BrokerMessagePublisher::new(broker.clone()),
                 messages::domain::ports::NoMessageEventPublisher,
                 message_delivery,
             ),
@@ -1004,6 +1005,12 @@ async fn run() -> anyhow::Result<()> {
     let create_state = CreateSessionState::new(
         harness.clone(),
         bots_directory.clone(),
+        Arc::new(
+            external_session_requests::BrokerExternalSessionRequests::new(
+                broker.clone(),
+                session_repo.clone(),
+            ),
+        ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let gateway_state = RuntimeGatewayState::new(

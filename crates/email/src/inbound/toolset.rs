@@ -3,6 +3,7 @@
 mod get_thread;
 mod list_inboxes;
 mod list_labels;
+mod send_confirmed_email;
 mod send_email;
 mod set_sender_policy;
 mod update_thread_labels;
@@ -24,6 +25,7 @@ use std::sync::Arc;
 pub use get_thread::{GetThread, GetThreadResponse};
 pub use list_inboxes::{ListInboxes, ListInboxesResponse, ToolInbox};
 pub use list_labels::{ListLabels, ListLabelsResponse, ToolLabel};
+pub use send_confirmed_email::SendConfirmedEmail;
 pub use send_email::{SendEmail, SendEmailResponse};
 pub use set_sender_policy::{SetSenderPolicy, SetSenderPolicyResponse, ToolSenderPolicy};
 pub use update_thread_labels::{UpdateThreadLabels, UpdateThreadLabelsResponse};
@@ -209,19 +211,27 @@ fn decode_composer_html(body: &str) -> Option<String> {
     decoded.trim_start().starts_with('<').then_some(decoded)
 }
 
-/// Create the full email toolset including SendEmail.
+/// The full email toolset, for hosts that finish user tools: the deferring
+/// `SendEmail`, which a composer or review card confirms, beside
+/// `SendConfirmedEmail`, which sends on a confirmation the user already
+/// gave in conversation. Both are always registered; the prompt decides
+/// which fits the surface the prompt came from.
 pub fn email_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
 where
     T: EmailService,
     G: GmailTokenProvider,
     E: EntityAccessService,
 {
-    mcp_toolset().add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
+    mcp_toolset()
+        .add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
+        .add_tool::<SendConfirmedEmail, EmailToolContext<T, G, E>>()
 }
 
 /// Email toolset for hosts without a composer (the MCP server and the
-/// channel-mention bot) — excludes SendEmail, whose draft only the chat
-/// frontend can review and send.
+/// channel-mention bot) — excludes both sending tools: `SendEmail`'s draft
+/// only a composer can review and send, and `SendConfirmedEmail` is for the
+/// in-process agent's conversation turns, not for MCP clients with their
+/// own confirmation policy.
 pub fn mcp_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
 where
     T: EmailService,

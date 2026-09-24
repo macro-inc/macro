@@ -125,6 +125,7 @@ function RegularMessageLayout(props: {
           <Message.AgentBadge />
           <Message.Timestamp class="shrink-0" format="time" />
           <Message.EditedIndicator class="shrink-0" />
+          <Message.AgentSessionLink class="ml-auto" />
         </div>
         <Message.FromPill />
       </Message.Slot>
@@ -164,6 +165,9 @@ function GroupedMessageLayout(props: {
             messageEditor={props.messageEditor}
             class="min-w-0 flex-1"
           />
+          {/* No sender line to sit on: the link takes the top right of the
+              content row instead. */}
+          <Message.AgentSessionLink class="pt-1" />
         </div>
       </Message.Slot>
       <Message.Slot

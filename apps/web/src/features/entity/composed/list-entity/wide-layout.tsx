@@ -78,9 +78,14 @@ export function WideLayout(props: LayoutProps) {
         'gap-y-2 gap-x-(--soup-row-column-gap) grid grid-rows-[1fr]',
         // Drop the indicator column entirely when the checkbox is hidden so the
         // content isn't indented by an empty gutter.
-        props.hideCheckbox
-          ? 'grid-cols-[1fr_auto_8ch]'
-          : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_8ch]',
+        // A scheduled send's badge is wider than a date, so it sizes its column.
+        isEmailEntity(props.entity) && props.entity.scheduledSendTime
+          ? props.hideCheckbox
+            ? 'grid-cols-[1fr_auto_auto]'
+            : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_auto]'
+          : props.hideCheckbox
+            ? 'grid-cols-[1fr_auto_8ch]'
+            : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_8ch]',
         '[--title-width:10rem]'
       )}
       style={{

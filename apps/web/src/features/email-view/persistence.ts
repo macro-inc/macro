@@ -21,7 +21,16 @@ const emailLocalStateStorage = createUserScopedStorage(
 );
 
 const emailTabSchema = z
-  .enum(['important', 'noise', 'sent', 'calendar', 'drafts', 'shared', 'all'])
+  .enum([
+    'important',
+    'noise',
+    'sent',
+    'scheduled',
+    'calendar',
+    'drafts',
+    'shared',
+    'all',
+  ])
   .catch('important');
 
 const emailFacetsSchema = z.record(z.string(), z.array(z.string()));

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearNotifiedFloors,
   raiseNotifiedFloor,
@@ -7,6 +7,7 @@ import {
 
 afterEach(() => {
   clearNotifiedFloors();
+  vi.useRealTimers();
 });
 
 describe('notified floors', () => {
@@ -35,15 +36,40 @@ describe('notified floors', () => {
     expect(resolveNotifiedAt('e-1', null)).toBe('2026-09-02T17:00:00Z');
   });
 
-  it('clears once the server catches up', () => {
+  it('survives optimistic reads and older responses arriving after a fresh snapshot', () => {
     raiseNotifiedFloor('e-1', '2026-09-02T17:00:00Z');
 
+    // Mapping the local write must not acknowledge it as server confirmation.
+    expect(resolveNotifiedAt('e-1', '2026-09-02T17:00:00Z')).toBe(
+      '2026-09-02T17:00:00Z'
+    );
     expect(resolveNotifiedAt('e-1', '2026-09-02T17:00:00.000123Z')).toBe(
       '2026-09-02T17:00:00.000123Z'
     );
-    // The floor is gone: subsequent reads are pass-through.
     expect(resolveNotifiedAt('e-1', '2026-09-01T00:00:00Z')).toBe(
-      '2026-09-01T00:00:00Z'
+      '2026-09-02T17:00:00Z'
     );
+  });
+
+  it('expires without duplicate or older deliveries extending retention', () => {
+    vi.useFakeTimers();
+    raiseNotifiedFloor('e-1', '2026-09-02T17:00:00Z');
+    vi.advanceTimersByTime(4 * 60 * 1000);
+    raiseNotifiedFloor('e-1', '2026-09-02T17:00:00Z');
+    raiseNotifiedFloor('e-1', '2026-09-02T16:00:00Z');
+    expect(resolveNotifiedAt('e-1', null)).toBe('2026-09-02T17:00:00Z');
+    vi.advanceTimersByTime(60 * 1000);
+    expect(resolveNotifiedAt('e-1', null)).toBeNull();
+  });
+
+  it('bounds retained stamps and keeps the most recently advanced entities', () => {
+    for (let i = 0; i < 200; i++) {
+      raiseNotifiedFloor(`e-${i}`, '2026-09-02T16:00:00Z');
+    }
+    raiseNotifiedFloor('e-0', '2026-09-02T17:00:00Z');
+    raiseNotifiedFloor('new', '2026-09-02T17:00:00Z');
+    expect(resolveNotifiedAt('e-1', null)).toBeNull();
+    expect(resolveNotifiedAt('e-0', null)).toBe('2026-09-02T17:00:00Z');
+    expect(resolveNotifiedAt('new', null)).toBe('2026-09-02T17:00:00Z');
   });
 });

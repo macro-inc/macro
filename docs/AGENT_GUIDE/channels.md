@@ -123,7 +123,9 @@ message; ordinary Markdown blockquotes remain presentation-only and do not count
 The composer always keeps an editable empty line after a block reference, including after
 the user deletes that line, so clicking below the reference can restore the text caret.
 
-`@Macro` answers in the thread (classic bot). Its tool calls execute immediately — there is
+The mention menu offers a single `@Macro`; the `enable-chat-v3-agents` rollout decides
+whether it answers in the thread as the classic bot or opens an agent session. Without the
+rollout, `@Macro` answers in the thread (classic bot). Its tool calls execute immediately — there is
 no composer or pending-confirmation card in a channel, so asking it to create a calendar
 event without attendees creates the event right away (unlike AI chat, where creation waits
 for the user to confirm a composer card). For an event with attendees the bot is prompted to
@@ -132,7 +134,8 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` / `@claude` open
+bot asks before scheduling a specific clock time. Within the rollout, `@Macro` — plus
+`@coder` / `@cursor` / `@codex` / `@claude` for everyone — opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 A follow-up sent while that session is still working stops the current turn,
@@ -248,6 +251,13 @@ thread past the chat's right edge.
 
 ## Message scrolling and navigation
 
+Thread rails end at the last reply avatar when there is no inline composer or
+footer below it, including when the parent message was deleted. Grouped replies
+after that avatar do not extend the rail. On mobile (or with the unified
+composer), starting a first reply adds no rail to the parent; replying to an
+existing thread keeps its reply branches without a dangling composer segment.
+Desktop inline replies still connect to their composer.
+
 Channels open at the latest message, with short conversations aligned above the
 composer. Incoming messages and growing replies stay in view while the channel is
 at the bottom. Consecutive sends stay pinned through server acknowledgement and
@@ -316,9 +326,12 @@ records `path` (`catch_up` or `full`) and `reason`
 ## Chat navigation rail
 
 Following a channel mention or browser notification for the conversation already
-shown in Chat activates that workspace and jumps to the targeted message or reply. It keeps
-the existing preview and does not show a **Content already open** toast. The
-same applies to a channel preview in Home; a closed channel opens normally.
+shown in Chat activates that workspace and jumps to the targeted message or reply.
+It keeps the shared channel detail mounted and does not show a **Content already open**
+toast. The same applies to a channel preview in Home; a closed channel opens normally.
+In Chat, the detail uses the shared channel top bar with Messages, Attachments,
+Participants, and Calls tabs (when calls are enabled). A message target switches
+back to Messages; changing unread notifications does not restart navigation.
 
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
 **Show navigation** (the hamburger) immediately before the conversation title,
@@ -332,7 +345,7 @@ On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section and the
 independently paginated `Channels` and `DMs` sections. Favorites appears when
 the user has channel favorites and only lists channels. Channel favorites open
-in the channel preview. Shift-clicking a favorite, channel, or DM opens that
+in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead.
 
 ### Channel labels
@@ -523,8 +536,13 @@ after the network failure must remain usable without erasing the refresh error.
 If more unread notifications
 remain, the limited edge must refresh to the next one rather than staying empty.
 Refreshing unread indicators while composing must preserve the conversation,
-scroll position, and input focus. The backend must support the new edge arguments
-before deploying the frontend that requests them.
+scroll position, and input focus. To check stale-cache recovery, mark notifications
+read/done in another tab, then repeat the action in a stale tab. Empty or partial
+changed-row responses must still reconcile mounted Soup and notification readers,
+without resetting loaded pages or starting an unused global notification feed.
+Undo must use only the mutation's returned IDs, not IDs from the subsequent refresh.
+The backend must support the new edge arguments before deploying the frontend
+that requests them.
 
 ## Call lifecycle
 

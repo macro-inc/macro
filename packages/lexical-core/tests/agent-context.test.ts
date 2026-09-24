@@ -157,11 +157,11 @@ describe('composeAgentContextPrompt', () => {
         messages: [{ sender: 'alice', content: 'earlier message' }],
       })
     ).toBe(
-      '<m-agent-context>{"version":1,"text":"Conversation parent: {\\"type\\":\\"document\\",\\"id\\":\\"doc-1\\"}\\n\\nPrior message 1:\\nSender: alice\\nContent: earlier message"}</m-agent-context>\n\noriginal request'
+      '<m-agent-context>{"version":1,"text":"Conversation parent: {\\"type\\":\\"document\\",\\"id\\":\\"doc-1\\"}\\nOrigin: this prompt was posted in a document comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.\\n\\nPrior message 1:\\nSender: alice\\nContent: earlier message"}</m-agent-context>\n\noriginal request'
     );
   });
 
-  it('names the conversation parent even without history', () => {
+  it('names the conversation parent and its origin even without history', () => {
     const composed = composeAgentContextPrompt({
       promptMarkdown: 'original',
       parent: { type: 'channel', id: 'channel-1' },
@@ -170,8 +170,21 @@ describe('composeAgentContextPrompt', () => {
 
     expect(state.root.children[0]).toMatchObject({
       type: 'agent-context',
-      text: 'Conversation parent: {"type":"channel","id":"channel-1"}',
+      text:
+        'Conversation parent: {"type":"channel","id":"channel-1"}\n' +
+        'Origin: this prompt was posted in a channel thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.',
     });
+  });
+
+  it('says nothing about an origin for a prompt from the session view', () => {
+    // No parent is the session view's signature; an origin line there would
+    // tell the agent its reply lands somewhere it does not.
+    const composed = composeAgentContextPrompt({
+      promptMarkdown: 'original',
+      messages: [{ sender: 'alice', content: 'earlier' }],
+    });
+    expect(composed).not.toContain('Origin:');
+    expect(composed).not.toContain('Conversation parent');
   });
 
   it('names the comment anchor and the text it marked', () => {
@@ -185,7 +198,8 @@ describe('composeAgentContextPrompt', () => {
     expect(state.root.children[0]).toMatchObject({
       type: 'agent-context',
       text:
-        'Conversation parent: {"type":"document","id":"doc-1"}\n\n' +
+        'Conversation parent: {"type":"document","id":"doc-1"}\n' +
+        'Origin: this prompt was posted in a document comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.\n\n' +
         'Comment anchor: {"markId":"mark-1","markedText":"the marked phrase"}\n' +
         'markedText is what the mark covered when the comment was posted; the document may have changed since.',
     });

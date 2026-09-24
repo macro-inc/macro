@@ -10,7 +10,11 @@ export const DOCUMENT_COMMENT_EVENT_TYPES = [
 const isDocumentCommentTag = (tag: string) =>
   (DOCUMENT_COMMENT_EVENT_TYPES as readonly string[]).includes(tag);
 
-/** The newest unread comment notification a document row announces. */
+/**
+ * The comment notification a document row stands for: its newest one that is
+ * not done. Like a channel thread row, the row keeps pointing at that comment
+ * after it is read; marking it done is what returns the row to the document.
+ */
 export function getDocumentCommentNotification(entity: {
   type: string;
   notifications?: () => UnifiedNotification[];
@@ -19,8 +23,7 @@ export function getDocumentCommentNotification(entity: {
   return (entity.notifications?.() ?? [])
     .filter(
       (n) =>
-        n.state === 'unseen' &&
-        isDocumentCommentTag(n.notification_metadata.tag)
+        n.state !== 'done' && isDocumentCommentTag(n.notification_metadata.tag)
     )
     .sort((a, b) => compareDateDesc(a.created_at, b.created_at))[0];
 }

@@ -9,6 +9,7 @@ import {
   useGlobalNotificationSource,
 } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import { previewBlockTarget } from '@components/app/previewTarget';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -347,7 +348,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                 )}
                               >
                                 <PreviewPanel
-                                  selectedEntity={conversation}
+                                  target={previewBlockTarget(conversation)}
                                   orchestrator={orchestrator}
                                   splitPanelContext={panel}
                                   headerLeading={

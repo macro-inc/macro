@@ -16,9 +16,12 @@ import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelName, useChannelType } from '@core/context/channels';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import {
+  type Accessor,
+  children,
   createComputed,
   createMemo,
   createSignal,
+  type JSX,
   Match,
   on,
   onCleanup,
@@ -39,6 +42,11 @@ import {
   useChannelTabItems,
 } from './use-channel-tab-items';
 
+export type ChannelDetailContext = {
+  channelId: string;
+  name: Accessor<string>;
+};
+
 export type ChannelDetailProps = {
   channelId: string;
   /**
@@ -48,27 +56,61 @@ export type ChannelDetailProps = {
    * ChannelSurface directly.
    */
   target?: ChannelTargetRequest;
+  /** Re-aim the current target without remounting the channel. */
+  navigationRequest?: number;
   /** Name shown until the channel loads. */
   fallbackName?: string;
   /** Whether the composer grabs focus on mount. Defaults to false. */
   autofocus?: boolean;
+  /** Render the host's header and register any host-specific breadcrumbs. */
+  children: (context: ChannelDetailContext) => JSX.Element;
 };
 
-function ChannelDetailTopBar(props: {
+type ChannelDetailHeaderProps = {
   channelId: string;
   fallbackName?: string;
-}) {
-  const { activeTab, setActiveTab } = useChannelTab();
-  const tabs = useChannelTabItems(props.channelId);
+};
+
+export function ChannelDetailTitle(props: ChannelDetailHeaderProps) {
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const participants = () =>
     participantsQuery.isSuccess ? (participantsQuery.data ?? []) : [];
+
+  return (
+    <div class="ph-no-capture flex min-w-0 shrink items-center gap-2">
+      <ChannelTopIcon
+        channelId={props.channelId}
+        channelType={channelType()}
+        participants={participants()}
+      />
+      <span class="truncate text-sm font-semibold">
+        {channelName() ?? 'New Channel'}
+      </span>
+    </div>
+  );
+}
+
+export function ChannelDetailTabs(props: { channelId: string }) {
+  const { activeTab, setActiveTab } = useChannelTab();
+  const tabs = useChannelTabItems(props.channelId);
+
+  return (
+    <TabsInset
+      list={tabs()}
+      value={activeTab()}
+      onChange={(value) => setActiveTab(value as ChannelTabId)}
+    />
+  );
+}
+
+export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
+  const channelName = useChannelName(props.channelId, props.fallbackName);
+  const channelType = useChannelType(props.channelId);
   const call = useCall(() => props.channelId);
 
-  // Seed for "Ask Macro": a new chat with this channel @mentioned, so the
-  // user does not have to create an agent and mention the channel by hand.
+  // Seed for "Ask Macro": a new chat with this channel @mentioned.
   const askMacroEntity = () => {
     const type = channelType();
     if (!type) return undefined;
@@ -81,55 +123,58 @@ function ChannelDetailTopBar(props: {
   };
 
   return (
+    <div class="header-actions ml-auto flex shrink-0 items-center gap-2">
+      <ChannelLiveIndicators channelId={props.channelId} />
+      <Show when={ENABLE_CALLS && !call.isInThisChannel()}>
+        <ChannelCallButton channelId={props.channelId} />
+      </Show>
+      <Show when={askMacroEntity()}>
+        {(entity) => (
+          <ChatWithAgentButton entity={entity()} label="Ask Macro" />
+        )}
+      </Show>
+    </div>
+  );
+}
+
+export function ChannelDetailTopBar(props: ChannelDetailHeaderProps) {
+  return (
     <ViewShell.TopBar class="gap-3">
-      <div class="ph-no-capture flex min-w-0 shrink items-center gap-2">
-        <ChannelTopIcon
-          channelId={props.channelId}
-          channelType={channelType()}
-          participants={participants()}
-        />
-        <span class="truncate text-sm font-semibold">
-          {channelName() ?? 'New Channel'}
-        </span>
-      </div>
-      <TabsInset
-        list={tabs()}
-        value={activeTab()}
-        onChange={(value) => setActiveTab(value as ChannelTabId)}
-      />
-      <div class="header-actions ml-auto flex shrink-0 items-center gap-2">
-        <ChannelLiveIndicators channelId={props.channelId} />
-        <Show when={ENABLE_CALLS && !call.isInThisChannel()}>
-          <ChannelCallButton channelId={props.channelId} />
-        </Show>
-        <Show when={askMacroEntity()}>
-          {(entity) => (
-            <ChatWithAgentButton entity={entity()} label="Ask Macro" />
-          )}
-        </Show>
-      </div>
+      <ChannelDetailTitle {...props} />
+      <ChannelDetailTabs channelId={props.channelId} />
+      <ChannelDetailActions {...props} />
     </ViewShell.TopBar>
   );
+}
+
+function ChannelDetailHeader(props: {
+  render: ChannelDetailProps['children'];
+  context: ChannelDetailContext;
+}) {
+  const resolved = children(() => props.render(props.context));
+  return <>{resolved()}</>;
 }
 
 function ChannelDetailContent(props: ChannelDetailProps) {
   const panel = useSplitPanelOrThrow();
   const channelId = props.channelId;
+  const channelName = useChannelName(channelId, props.fallbackName);
 
   // Convert the value-semantic target prop into identity-stable surface
-  // requests: only a changed value produces a new request object.
+  // requests: only a changed target or explicit re-open produces a new request.
   let lastTargetKey: string | undefined;
   const targetRequest = createMemo<ChannelTargetRequest | undefined>(
     (previous) => {
       const target = props.target;
-      const key = !target
+      const location = !target
         ? ''
         : target.kind === 'latest'
           ? 'latest'
           : `${target.messageId}:${target.threadId ?? ''}`;
+      const key = `${location}:${props.navigationRequest ?? 0}`;
       if (lastTargetKey !== undefined && key === lastTargetKey) return previous;
       lastTargetKey = key;
-      return target;
+      return target ? { ...target } : undefined;
     }
   );
 
@@ -175,9 +220,12 @@ function ChannelDetailContent(props: ChannelDetailProps) {
       <CallEventSync />
       <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
         <div class="flex size-full min-h-0 flex-col">
-          <ChannelDetailTopBar
-            channelId={channelId}
-            fallbackName={props.fallbackName}
+          <ChannelDetailHeader
+            render={props.children}
+            context={{
+              channelId,
+              name: () => channelName() ?? 'New Channel',
+            }}
           />
           <div class="flex min-h-0 flex-1 flex-col px-2">
             <Switch>
@@ -214,12 +262,10 @@ function ChannelDetailContent(props: ChannelDetailProps) {
 }
 
 /**
- * Default channel detail composed from channel parts (surface, tabs, top-bar
- * pieces) — the channel analogue of MarkdownDetail. Hosts needing a custom
- * arrangement compose ChannelSurface and the parts directly instead.
+ * Channel body and per-channel tab state. Hosts compose the top bar from the
+ * exported header parts through the children callback.
  *
- * Keys its content by channel id internally: the timeline, controllers, and
- * tab state are per-channel by construction, so a channel switch remounts.
+ * Keys its content by channel id so switching channels remounts the timeline.
  * Hosts pass a reactive `channelId` and never key their own render.
  */
 export function ChannelDetail(props: ChannelDetailProps) {

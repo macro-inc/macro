@@ -2,14 +2,23 @@ import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { setVirtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { createSignal, onCleanup, type ParentProps } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  batch,
+  createSignal,
+  For,
+  onCleanup,
+  type ParentProps,
+} from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocumentDiscussion } from './DocumentDiscussion';
 
 const mocks = vi.hoisted(() => ({
   mount: vi.fn(),
   unmount: vi.fn(),
   conversation: vi.fn(),
+  commentId: (): string | null => null,
+  navigationCount: (): number => 0,
+  renderedMessageIds: (): string[] => [],
 }));
 
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
@@ -39,7 +48,11 @@ vi.mock('@core/messages/DocumentConversation', () => ({
     hideWhenEmpty?: boolean;
   }) => {
     mocks.conversation(props);
-    return null;
+    return (
+      <For each={mocks.renderedMessageIds()}>
+        {(id) => <div data-message-id={id} />}
+      </For>
+    );
   },
   DocumentConversationComposer: () => {
     mocks.mount();
@@ -48,7 +61,8 @@ vi.mock('@core/messages/DocumentConversation', () => ({
   },
 }));
 vi.mock('@core/component/ParamsProvider', () => ({
-  useUrlParams: () => ({ commentId: () => null }),
+  useUrlParams: () => ({ commentId: () => mocks.commentId() }),
+  useParamNavigationCount: () => () => mocks.navigationCount(),
 }));
 vi.mock('@channel/Input/ChannelInputContainer', () => ({
   ChannelInputContainer: (props: ParentProps) => props.children,
@@ -131,5 +145,84 @@ describe('mobile document discussion accessory behind the flag', () => {
     expect(screen.getByRole('textbox')).toBe(input);
     expect(input.value).toBe('Unsent comment');
     expect(mocks.mount).toHaveBeenCalledOnce();
+  });
+});
+
+describe('scrolling to a linked Discussion message', () => {
+  const scrollIntoView = vi.fn();
+  const [commentId, setCommentId] = createSignal<string | null>(null);
+  const [navigationCount, setNavigationCount] = createSignal(0);
+  const [renderedMessageIds, setRenderedMessageIds] = createSignal<string[]>(
+    []
+  );
+  const flushMutations = () => new Promise((resolve) => setTimeout(resolve));
+  const scrolledIds = () =>
+    scrollIntoView.mock.contexts.map(
+      (element) => (element as HTMLElement).dataset.messageId
+    );
+
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = scrollIntoView;
+    mocks.commentId = commentId;
+    mocks.navigationCount = navigationCount;
+    mocks.renderedMessageIds = renderedMessageIds;
+    setCommentId(null);
+    setNavigationCount(0);
+    setRenderedMessageIds([]);
+  });
+
+  afterEach(() => {
+    scrollIntoView.mockReset();
+  });
+
+  const navigate = (id: string) =>
+    batch(() => {
+      setCommentId(id);
+      setNavigationCount((count) => count + 1);
+    });
+
+  it('scrolls to the target once it renders after its data loads', async () => {
+    setCommentId('m2');
+    setup();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    setRenderedMessageIds(['m1', 'm2']);
+    await flushMutations();
+
+    expect(scrolledIds()).toEqual(['m2']);
+  });
+
+  it('scrolls again when a later navigation targets another message', async () => {
+    setRenderedMessageIds(['m1', 'm2']);
+    setup();
+    navigate('m1');
+    navigate('m2');
+    await flushMutations();
+
+    expect(scrolledIds()).toEqual(['m1', 'm2']);
+  });
+
+  it('scrolls again on a repeat navigation to the same message', async () => {
+    setRenderedMessageIds(['m1']);
+    setup();
+    navigate('m1');
+    navigate('m1');
+    await flushMutations();
+
+    expect(scrolledIds()).toEqual(['m1', 'm1']);
+  });
+
+  it('does not steal scroll on later renders or when the value shows through again', async () => {
+    setRenderedMessageIds(['m1']);
+    setup();
+    navigate('m1');
+    await flushMutations();
+
+    setRenderedMessageIds(['m1', 'm2']);
+    setCommentId(null);
+    setCommentId('m1');
+    await flushMutations();
+
+    expect(scrolledIds()).toEqual(['m1']);
   });
 });

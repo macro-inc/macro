@@ -13,7 +13,7 @@ import {
 import { lazy, Show } from 'solid-js';
 import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
-import { channelDetailSearch } from './channels-route';
+import { channelsSearch } from './channels-route';
 
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
@@ -39,7 +39,7 @@ function LegacyChannelsView() {
 
 function ChannelsLegacyRouteView() {
   const params = useParams<{ channelId?: string }>();
-  const [search] = createSearchParams(channelDetailSearch);
+  const [search] = createSearchParams(channelsSearch);
   const legacyChannel = (id: string): SplitContent => {
     const params: Record<string, string> = {};
     if (search.messageId) params[CHANNEL_URL_PARAMS.message] = search.messageId;

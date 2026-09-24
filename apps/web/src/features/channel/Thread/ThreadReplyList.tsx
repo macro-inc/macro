@@ -50,6 +50,8 @@ export function ThreadReplyList(props: {
   onSelectReply?: (replyId: string) => void;
   /** Keep replies on the root's rail instead of branching each one off it. */
   monorail?: boolean;
+  /** An inline composer or footer continues the rail after the replies. */
+  railContinues?: boolean;
 }) {
   const listMetaByReplyId = createMemo(() =>
     buildThreadReplyListMeta(props.replies, props.isNewMessage)
@@ -101,6 +103,10 @@ export function ThreadReplyList(props: {
               fallback={
                 <ThreadReplyRail
                   grouped={listMetaByReplyId()[id].isGroupedWithPrevious}
+                  terminal={
+                    !props.railContinues &&
+                    listMetaByReplyId()[id].index >= lastAvatarIndex()
+                  }
                 />
               }
             >

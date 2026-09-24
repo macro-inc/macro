@@ -99,7 +99,10 @@ function WorkspaceContent() {
   const panel = useSplitPanelOrThrow();
   const calendarView = useCalendarView();
 
-  onMount(() => panel.handle.setDisplayName('Calendar'));
+  // An inline preview keeps its host's name.
+  onMount(() => {
+    if (!panel.isInlinePreview) panel.handle.setDisplayName('Calendar');
+  });
 
   return (
     <>
