@@ -1,7 +1,6 @@
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { Match, Show, Switch } from 'solid-js';
-import { BaseTool } from './BaseTool';
-import { DraftEmailResponse, SentEmailResponse } from './SendEmail';
+import { SentEmailResponse } from './SendEmail';
 import { createToolRenderer } from './ToolRenderer';
 
 type SendConfirmedEmailResponse = NamedTool<
@@ -14,21 +13,14 @@ type SendConfirmedEmailResponse = NamedTool<
  * conversation thread, so there is no pending composer and no review to
  * render: the response is the send itself, shown the way `SendEmail` shows
  * its finished send.
+ *
+ * Only `sent` is reachable. The tool runs server-side in the agent loop,
+ * with no composer to turn the send into a draft or hand it to the user to
+ * edit; those outcomes belong to `SendEmail`'s client-side finish alone.
  */
 function getSentResponse(response: SendConfirmedEmailResponse | undefined) {
   if (typeof response === 'object' && response !== null && 'sent' in response) {
     return response.sent;
-  }
-  return null;
-}
-
-function getDraftResponse(response: SendConfirmedEmailResponse | undefined) {
-  if (
-    typeof response === 'object' &&
-    response !== null &&
-    'convertedToDraft' in response
-  ) {
-    return response.convertedToDraft;
   }
   return null;
 }
@@ -39,7 +31,6 @@ const handler = createToolRenderer({
     const response = () => ctx.response?.data;
     const args = ctx.tool.data;
     const sentResponse = getSentResponse(response());
-    const draftResponse = getDraftResponse(response());
 
     return (
       <Show when={ctx.response}>
@@ -53,18 +44,6 @@ const handler = createToolRenderer({
               threadId={sentResponse!.thread_id}
               toolCallId={ctx.tool.id}
             />
-          </Match>
-          <Match when={draftResponse}>
-            <DraftEmailResponse
-              args={args}
-              draftId={draftResponse!.draft_id}
-              renderContext={ctx.renderContext}
-            />
-          </Match>
-          <Match when={response() === 'userEdited'}>
-            <BaseTool renderContext={ctx.renderContext} type="response">
-              Email edited by the user
-            </BaseTool>
           </Match>
         </Switch>
       </Show>
