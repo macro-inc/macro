@@ -359,16 +359,18 @@ function TeamAccessSection(props: { teamShare: TeamShareControls }) {
               props.teamShare.setAccessLevel(value as TeamShareScope)
             }
           >
-            <For each={props.teamShare.scopeOptions}>
-              {(option) => (
-                <Dropdown.RadioItem value={option.value}>
-                  <span class="flex-1 truncate">{option.label}</span>
-                  <Dropdown.ItemIndicator>
-                    <CheckIcon class="size-3.5 text-accent" />
-                  </Dropdown.ItemIndicator>
-                </Dropdown.RadioItem>
-              )}
-            </For>
+            <Dropdown.Group>
+              <For each={props.teamShare.scopeOptions}>
+                {(option) => (
+                  <Dropdown.RadioItem value={option.value}>
+                    <span class="flex-1 truncate">{option.label}</span>
+                    <Dropdown.ItemIndicator>
+                      <CheckIcon class="size-3.5 text-accent" />
+                    </Dropdown.ItemIndicator>
+                  </Dropdown.RadioItem>
+                )}
+              </For>
+            </Dropdown.Group>
           </Dropdown.RadioGroup>
         </Dropdown.Content>
       </Dropdown>

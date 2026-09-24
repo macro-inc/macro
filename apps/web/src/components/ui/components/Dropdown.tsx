@@ -26,6 +26,13 @@ import { Surface, type SurfaceProps } from './Surface';
     </Dropdown.Group>
   </Dropdown.Content>
 </Dropdown>
+
+Every child of `Dropdown.Content` / `Dropdown.SubContent` must be a
+`Dropdown.Group` (or paint its own `bg-menu`). The content wrapper is the
+`bg-edge-muted` hairline that shows through the gaps between adjacent groups,
+so items dropped straight into the content render on the edge color instead
+of the menu surface. Separate sections with adjacent groups, not
+`Dropdown.Separator`.
 */
 
 /*
@@ -225,8 +232,8 @@ function DropdownContent(props: DropdownContentProps) {
         </Show>
         <KobalteDropdownMenu.Content
           class={cn(
-            // Paint the same surface as context menus, including custom
-            // contents (calendar month lists) without a Dropdown.Group.
+            // Same surface as context menus; the inner wrapper below paints
+            // the hairline between groups, so children must be Dropdown.Group.
             'rounded-xl size-auto z-action-menu menu-open-animation glass bg-menu-glass text-sm [--color-surface:var(--color-menu)]',
             local.class
           )}

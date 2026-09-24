@@ -211,8 +211,10 @@ function CalendarMonthDropdown(props: CalendarMonthSelectorProps) {
         <span class="min-w-0 truncate">{formatCalendarMonth(props.month)}</span>
         <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-40 p-1">
-        <CalendarMonthMenu month={props.month} onChange={selectMonth} />
+      <Dropdown.Content class="min-w-40">
+        <Dropdown.Group class="p-1">
+          <CalendarMonthMenu month={props.month} onChange={selectMonth} />
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );

@@ -157,7 +157,6 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
                 onSelect={() => rail.markLabelRead(props.label)}
               />
             </Dropdown.Group>
-            <Dropdown.Separator class="my-1 h-px border-0 bg-edge-muted" />
             <Dropdown.Group>
               <MenuRow
                 icon={TrashIcon}

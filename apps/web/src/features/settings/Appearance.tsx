@@ -539,7 +539,7 @@ function ActiveThemeSelect(props: {
       >
         <Layer depth={3}>
           <Dropdown.RadioGroup value={selectedValue()} onChange={onChange}>
-            <div class="bg-surface p-1.5">
+            <Dropdown.Group>
               <Dropdown.RadioItem
                 value={SYSTEM_VALUE}
                 class="justify-between"
@@ -559,9 +559,8 @@ function ActiveThemeSelect(props: {
                   <CheckIcon class="size-3.5 text-accent" />
                 </Dropdown.ItemIndicator>
               </Dropdown.RadioItem>
-            </div>
-            <Dropdown.Separator class="h-px border-0 bg-edge-muted" />
-            <div class="max-h-64 overflow-y-auto bg-surface p-1.5">
+            </Dropdown.Group>
+            <Dropdown.Group class="max-h-64 overflow-y-auto">
               <For each={themes()}>
                 {(theme) => (
                   <Dropdown.RadioItem
@@ -580,7 +579,7 @@ function ActiveThemeSelect(props: {
                   </Dropdown.RadioItem>
                 )}
               </For>
-            </div>
+            </Dropdown.Group>
           </Dropdown.RadioGroup>
         </Layer>
       </Dropdown.Content>
