@@ -103,18 +103,20 @@ describe('settings entry points', () => {
       layout: {
         snapshot: () => ({ entries }),
         reconcile: (next) => {
-          entries = next.map((entry) => ({
-            ...entry,
+          entries = next.map((location) => ({
+            location,
             splitId: 'settings-split',
           }));
         },
         open: ({ location }) => {
           entries = [{ splitId: 'settings-split', location }];
+          return { status: 'applied', splitId: 'settings-split' };
         },
-        updateCurrentEntry: (id, update) => {
-          entries = entries.map((entry) =>
-            entry.splitId === id ? { ...update(entry), splitId: id } : entry
-          );
+        updateCurrentLocation: (id, update) => {
+          entries = entries.map((entry) => {
+            if (entry.splitId !== id) return entry;
+            return { location: update(entry), splitId: id };
+          });
         },
         activate: () => {},
         subscribe: () => () => {},

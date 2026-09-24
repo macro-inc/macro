@@ -56,6 +56,8 @@ export type ChannelDetailProps = {
    * ChannelSurface directly.
    */
   target?: ChannelTargetRequest;
+  /** Re-aim the current target without remounting the channel. */
+  navigationRequest?: number;
   /** Name shown until the channel loads. */
   fallbackName?: string;
   /** Whether the composer grabs focus on mount. Defaults to false. */
@@ -159,19 +161,20 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const channelName = useChannelName(channelId, props.fallbackName);
 
   // Convert the value-semantic target prop into identity-stable surface
-  // requests: only a changed value produces a new request object.
+  // requests: only a changed target or explicit re-open produces a new request.
   let lastTargetKey: string | undefined;
   const targetRequest = createMemo<ChannelTargetRequest | undefined>(
     (previous) => {
       const target = props.target;
-      const key = !target
+      const location = !target
         ? ''
         : target.kind === 'latest'
           ? 'latest'
           : `${target.messageId}:${target.threadId ?? ''}`;
+      const key = `${location}:${props.navigationRequest ?? 0}`;
       if (lastTargetKey !== undefined && key === lastTargetKey) return previous;
       lastTargetKey = key;
-      return target;
+      return target ? { ...target } : undefined;
     }
   );
 

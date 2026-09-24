@@ -2,7 +2,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::{CreatedAt, Query};
 use notification::domain::models::TaggedContent;
-use notification::domain::models::request::NotificationListFilters;
+use notification::domain::models::request::{NotificationListFilters, NotificationStatus};
 use notification::domain::models::{
     DeviceEndpoint, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
     UserNotificationRow, device::DeviceType,
@@ -111,9 +111,10 @@ impl NotificationRepository for SandboxNotificationRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: &[Entity<'_>],
+        status: &NotificationStatus,
     ) -> Result<Vec<Uuid>, Report> {
         self.inner
-            .get_notification_ids_for_entities(user_id, entities)
+            .get_notification_ids_for_entities(user_id, entities, status)
             .await
     }
 

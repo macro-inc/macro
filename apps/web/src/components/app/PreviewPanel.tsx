@@ -1,5 +1,6 @@
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
+import { createContextProvider } from '@solid-primitives/context';
 import deepEqual from 'fast-deep-equal';
 import {
   type Accessor,
@@ -13,7 +14,10 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { ViewShell } from '../view-shell/ViewShell';
-import type { PreviewBlockTarget } from './previewTarget';
+import type {
+  PreviewBlockTarget,
+  PreviewPanelSelection,
+} from './previewTarget';
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
@@ -22,6 +26,19 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from './split-layout/context';
+
+export const [PreviewPanelContext, useMaybePreviewPanel] =
+  createContextProvider(
+    (props: {
+      previewTarget: PreviewBlockTarget;
+      previewEntity?: PreviewPanelSelection;
+      onFocusOut?: VoidFunction;
+    }) => ({
+      previewTarget: () => props.previewTarget,
+      previewEntity: () => props.previewEntity,
+      onFocusOut: () => props.onFocusOut?.(),
+    })
+  );
 
 export type PreviewFrameProps = {
   splitPanelContext: SplitPanelContextType;
@@ -146,6 +163,10 @@ export function PreviewFrame(props: PreviewFrameProps) {
 
 export type PreviewPanelProps = {
   target: PreviewBlockTarget | undefined;
+  /** Re-open the same target without replacing its mounted block. */
+  navigationRequest?: number;
+  /** Live selection metadata when a row opened this route. */
+  selectedEntity?: PreviewPanelSelection;
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
   onFocusOut?: VoidFunction;
@@ -184,6 +205,14 @@ function PreviewBlock(
   const location = createMemo(() => props.target, undefined, {
     equals: sameLocation,
   });
+  const navigation = createMemo(
+    () => ({ target: location(), request: props.navigationRequest ?? 0 }),
+    undefined,
+    {
+      equals: (a, b) =>
+        a.request === b.request && sameLocation(a.target, b.target),
+    }
+  );
   const locate = async (target: PreviewBlockTarget) => {
     const handle = await props.orchestrator.getBlockHandle(
       target.blockId,
@@ -194,7 +223,7 @@ function PreviewBlock(
   };
 
   createRenderEffect(
-    on(location, (target) => {
+    on(navigation, ({ target }) => {
       if (!blockInstance()) return;
       void locate(target);
     })
@@ -206,11 +235,17 @@ function PreviewBlock(
       onFocusOut={props.onFocusOut}
       ref={props.ref}
       headerLeading={props.headerLeading}
-      locationKey={location}
+      locationKey={navigation}
     >
-      <Show when={blockInstance()}>
-        {(instance) => <Dynamic component={instance().element} />}
-      </Show>
+      <PreviewPanelContext
+        previewTarget={props.target}
+        previewEntity={props.selectedEntity}
+        onFocusOut={props.onFocusOut}
+      >
+        <Show when={blockInstance()}>
+          {(instance) => <Dynamic component={instance().element} />}
+        </Show>
+      </PreviewPanelContext>
     </PreviewFrame>
   );
 }

@@ -10,6 +10,8 @@ export type SendButtonProps = Omit<ButtonProps, 'size' | 'variant'> & {
   pending?: boolean;
   /** Drop the button from the layout — used to hide on mobile when the input is empty. */
   hidden?: boolean;
+  /** Visible desktop action text; touch surfaces retain the compact icon. */
+  actionLabel?: string;
 };
 
 export function SendButton(props: SendButtonProps) {
@@ -21,6 +23,7 @@ export function SendButton(props: SendButtonProps) {
     'children',
     'aria-label',
     'tooltip',
+    'actionLabel',
   ]);
   const resolved = children(() => local.children);
 
@@ -35,7 +38,11 @@ export function SendButton(props: SendButtonProps) {
       class={cn(
         'rounded-full touch:size-7.5',
         local.appearance === 'composer'
-          ? 'not-touch:not-disabled:bg-composer-action not-touch:not-disabled:text-composer-action-ink not-touch:light-mode:shadow-none not-touch:light-mode:backdrop-filter-none not-touch:light-mode:after:hidden'
+          ? cn(
+              'not-touch:not-disabled:bg-composer-action not-touch:not-disabled:text-composer-action-ink not-touch:light-mode:shadow-none not-touch:light-mode:backdrop-filter-none not-touch:light-mode:after:hidden',
+              local.actionLabel &&
+                'not-touch:w-auto! not-touch:aspect-auto! not-touch:px-3 not-touch:gap-1.5'
+            )
           : 'size-7',
         '[&_svg]:stroke-[4px]',
         'transition-transform ease-in-out duration-150',
@@ -53,7 +60,16 @@ export function SendButton(props: SendButtonProps) {
         when={!local.pending}
         fallback={<SpinnerIcon class="animate-spin" />}
       >
-        {resolved() ?? <ArrowUp />}
+        {resolved() ?? (
+          <>
+            <ArrowUp />
+            <Show when={local.actionLabel}>
+              <span class="hidden whitespace-nowrap text-sm font-medium not-touch:inline">
+                {local.actionLabel}
+              </span>
+            </Show>
+          </>
+        )}
       </Show>
     </Button>
   );

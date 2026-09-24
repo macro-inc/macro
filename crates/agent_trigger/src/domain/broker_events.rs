@@ -58,6 +58,24 @@ pub struct AgentMentionedEvent {
     pub message: MessagePostedMetadata,
 }
 
+/// A session somebody asked for from Macro itself - the composer - rather
+/// than by mentioning the bot. Nothing was posted anywhere, so there is no
+/// thread to announce into and no message to quote.
+///
+/// Served by the bot's own runtime, which creates the session under the id
+/// named here so the requester can find it. No prompt: whoever asked
+/// delivers theirs through the session's control endpoint once it exists,
+/// so nothing a user typed travels on this topic.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentSessionRequestedEvent {
+    /// The bot the session runs for.
+    pub bot_id: BotId,
+    /// The id the runtime must create the session under.
+    pub session_id: AgentSessionId,
+    /// Who asked; owns the session the runtime creates.
+    pub owner: String,
+}
+
 /// Events that open a new session.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,6 +85,9 @@ pub enum NewAgentSessionEvent {
     TopLevelMentioned(AgentBotMentionedEvent),
     /// Opened by a bot mention on a message parent other than a channel.
     Mentioned(AgentMentionedEvent),
+    /// Asked for from the composer, with no mention behind it. Consumers that
+    /// only know mentions see no [`OpeningMention`] here and skip it.
+    Requested(AgentSessionRequestedEvent),
 }
 
 /// The mention a new-session event carries, whichever parent it was on.
@@ -92,6 +113,16 @@ impl NewAgentSessionEvent {
                 bot_id: mentioned.bot_id,
                 message: mentioned.message.clone(),
             }),
+            Self::Requested(_) => None,
+        }
+    }
+
+    /// The composer request this event carries, if that is what it is.
+    #[must_use]
+    pub fn requested(&self) -> Option<&AgentSessionRequestedEvent> {
+        match self {
+            Self::Requested(requested) => Some(requested),
+            Self::TopLevelMentioned(_) | Self::Mentioned(_) => None,
         }
     }
 }
@@ -200,7 +231,10 @@ impl AgentTriggerTopicEvent {
     #[must_use]
     pub fn bot_id(&self) -> Option<BotId> {
         match self {
-            Self::New(event) => event.mention().map(|mention| mention.bot_id),
+            Self::New(event) => event
+                .mention()
+                .map(|mention| mention.bot_id)
+                .or_else(|| event.requested().map(|requested| requested.bot_id)),
             Self::Existing(event) => event.session_message().map(|message| message.bot_id),
         }
     }
@@ -349,8 +383,15 @@ impl AgentSessionMacroEvent {
         let bot_id = match &event {
             NewAgentSessionEvent::TopLevelMentioned(mentioned) => mentioned.bot_id,
             NewAgentSessionEvent::Mentioned(mentioned) => mentioned.bot_id,
+            NewAgentSessionEvent::Requested(requested) => requested.bot_id,
         };
         Self::new(bot_id, AgentTriggerTopicEvent::New(event))
+    }
+
+    /// Ask a bot's own runtime to open a session nobody mentioned it for.
+    #[must_use]
+    pub fn requested_event(event: AgentSessionRequestedEvent) -> Self {
+        Self::new_session(NewAgentSessionEvent::Requested(event))
     }
 
     /// Feed one of a bot's existing sessions, however the message arrived.

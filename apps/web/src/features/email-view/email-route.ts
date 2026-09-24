@@ -9,6 +9,7 @@ export const emailTabSearch = {
       'important',
       'noise',
       'sent',
+      'scheduled',
       'calendar',
       'drafts',
       'shared',

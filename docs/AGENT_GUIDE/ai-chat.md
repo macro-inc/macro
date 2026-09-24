@@ -387,7 +387,12 @@ stream over the app's websocket, not the HTTP response.
 When asked, the agent also answers document comments in place. A reply row reads
 **Replied to a comment on** (or **Commented on** for a new Discussion comment) followed
 by the document, and expands to the posted text; a resolve row reads **Resolved** or
-**Reopened a comment on** the document. The comment is posted as the agent with a
+**Reopened a comment on** the document. Asked to comment on part of a markdown
+document, the agent starts an inline comment on the quoted passage: the row reads
+**Commented on text in** the document and expands to the quoted text and the comment,
+and the passage is highlighted in the document with the comment floating beside it.
+A passage that is missing, spans blocks, or repeats with no occurrence chosen is
+refused with no highlight left behind. The comment is posted as the agent with a
 **from <user>** pill, and needs the user's comment access to the document.
 
 ## Agent sessions asking a question
@@ -415,9 +420,12 @@ marked done.
 
 ## In channels
 
-Mention `@Macro` in any channel message for the classic in-channel reply. Mention
-`@macro-new` (or `@coder` / `@cursor`) to open an **agent session** — a dedicated
-transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
+Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
+the classic in-channel reply; with it, the same mention opens an **agent session** — a
+dedicated transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
+`@coder` / `@cursor` always open a session. There is only ever one Macro entry in the
+mention menu; which of the two answers is the rollout's decision, not a second choice in
+the menu.
 
 ## Agent sessions
 

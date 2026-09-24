@@ -157,6 +157,8 @@ export function CommandMenuInner(props: {
       });
   const filteredItems = props.items ?? defaultCommandItems!.items;
   const pagination = defaultCommandItems?.pagination;
+  const isLoadingEntities = () =>
+    defaultCommandItems?.isLoadingEntities() ?? false;
   const listController = createCommandListController({
     items: filteredItems,
     selectedIndex: CommandState.selectedIndex,
@@ -638,6 +640,11 @@ export function CommandMenuInner(props: {
       </Show>
 
       <CommandMenuShell.Body>
+        <Show when={isLoadingEntities() && filteredItems().length > 0}>
+          <div role="status" class="px-4 py-2 text-xs text-ink-muted">
+            Loading results…
+          </div>
+        </Show>
         <div
           class="overflow-hidden transition-[height] duration-60 ease-out p-2"
           style={{ height: `${resultsHeight()}px` }}
@@ -645,7 +652,11 @@ export function CommandMenuInner(props: {
           <Show
             when={filteredItems().length > 0}
             fallback={
-              <CommandMenuEmptyState>No results found</CommandMenuEmptyState>
+              <CommandMenuEmptyState>
+                <Show when={isLoadingEntities()} fallback="No results found">
+                  <span role="status">Loading results…</span>
+                </Show>
+              </CommandMenuEmptyState>
             }
           >
             <VirtualizedCommandList

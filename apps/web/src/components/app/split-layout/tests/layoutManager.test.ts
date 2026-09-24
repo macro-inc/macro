@@ -48,6 +48,7 @@ vi.mock('../componentRegistry', () => ({
 }));
 
 vi.mock('@core/constant/allBlocks', () => ({
+  fileTypeToBlockName: vi.fn((type: string) => type),
   isBlockAlias: vi.fn(() => false),
   resolveBlockAlias: vi.fn((type: string) => type),
 }));
@@ -1079,6 +1080,32 @@ describe('layoutManager', () => {
       expect(router.search(manager.splits()[0].id, 'drive')).toEqual({
         commentId: ['comment-1'],
         tags: ['first', 'second'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('applies a new-split location when an entity pane is reused', async () => {
+      const { manager, router, dispose } = ingressRouter('/channel/one', {
+        enabled: false,
+      });
+      await router.settled();
+      const split = manager.splits()[0];
+
+      router.navigate(split.id, '/channel/one', {
+        target: 'new-split',
+        allowDuplicate: true,
+        search: {
+          channels: { messageId: ['second'] },
+        },
+      });
+      await router.settled();
+
+      expect(manager.splits()).toHaveLength(1);
+      expect(manager.splits()[0].content.entryMetadata).toMatchObject({
+        search: {
+          channels: { messageId: ['second'] },
+        },
       });
       router.dispose();
       dispose();

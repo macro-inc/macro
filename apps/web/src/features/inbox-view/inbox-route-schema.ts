@@ -1,9 +1,9 @@
 import { channelsSearch } from '@app/features/channels-view/channels-route';
-import { driveSearch } from '@app/features/drive-view/primitives/drive-route';
 import {
   DRIVE_DOCUMENT_TYPES,
   type DriveDocumentType,
 } from '@app/features/drive-view/primitives/drive-route-schema';
+import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import {
   type BlockAlias,
   BlockAliasRegistry,

@@ -7,7 +7,7 @@ import {
 } from '@app/features/calendar-view/calendar-url';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { channelDetailRoute } from '@app/features/channels-view/route';
-import { driveSearch } from '@app/features/drive-view/primitives/drive-route';
+import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { driveRootDocumentRoute } from '@app/features/drive-view/route';
 import {
   createSearchParams,

@@ -166,15 +166,19 @@ export function InboxCalendarRouteView() {
 export function InboxDetailRouteView() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
-  const { previewTarget, closePreview } = useInboxView();
+  const { previewTarget, previewNavigationRequest, closePreview } =
+    useInboxView();
 
   return (
-    <PreviewPanel
-      target={previewTarget()}
-      orchestrator={orchestrator}
-      splitPanelContext={panel}
-      headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}
-    />
+    <Suspense>
+      <PreviewPanel
+        target={previewTarget()}
+        navigationRequest={previewNavigationRequest()}
+        orchestrator={orchestrator}
+        splitPanelContext={panel}
+        headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}
+      />
+    </Suspense>
   );
 }
 

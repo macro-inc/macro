@@ -442,19 +442,6 @@ async fn main() -> anyhow::Result<()> {
         ),
     );
 
-    let teams_service_impl = TeamServiceImpl::new_with_analytics(
-        teams_repo_impl.clone(),
-        customer_repo_impl,
-        channel_service.clone(),
-        user_roles_and_permissions_service.clone(),
-        notification_ingress_service.clone(),
-        crm_enqueuer,
-        team_crm_settings_repo_impl,
-        team_analytics,
-    )
-    .with_contacts_enqueuer(contacts_enqueuer)
-    .with_event_broker(macro_event_broker);
-
     let foreign_entity_service =
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
 
@@ -517,6 +504,19 @@ async fn main() -> anyhow::Result<()> {
         ai_billing::outbound::PgBillingRepo::new(db.clone()),
         ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
     ));
+    let teams_service_impl = TeamServiceImpl::new_with_analytics(
+        teams_repo_impl.clone(),
+        customer_repo_impl,
+        channel_service.clone(),
+        user_roles_and_permissions_service.clone(),
+        notification_ingress_service.clone(),
+        crm_enqueuer,
+        team_crm_settings_repo_impl,
+        team_analytics,
+    )
+    .with_contacts_enqueuer(contacts_enqueuer)
+    .with_event_broker(macro_event_broker)
+    .with_open_seat_release((*ai_billing_service).clone());
     let document_storage_service_client = Arc::new(document_storage_service_client);
     let user_deletion = Arc::new(
         authentication_service::outbound::user_deletion::UserDeletionAdapter::new(

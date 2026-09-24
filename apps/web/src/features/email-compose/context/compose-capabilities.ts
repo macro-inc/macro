@@ -66,7 +66,6 @@ export interface DraftClientHandles {
 export interface SaveEmailDraft {
   draft: EmailDraft;
   clientHandles?: DraftClientHandles;
-  sendTime?: Date | null;
   previousThreadId?: string;
   inboxId?: string;
   completingThread?: boolean;
@@ -122,7 +121,11 @@ export interface EmailDelivery {
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
   unschedule(input: { draftId: string; inboxId?: string }): Promise<void>;
   schedule(
-    input: { draftId: string; sendTime: string },
+    input: {
+      draftId: string;
+      sendTime: string;
+      includeSignature?: boolean;
+    },
     inboxId?: string
   ): Promise<void>;
   archive(
@@ -135,6 +138,55 @@ export interface EmailDelivery {
     inboxId: string | undefined;
     onUndone: () => Promise<void> | void;
   }): Promise<void>;
+}
+
+export type EmailDraftLifecycleState =
+  | {
+      type: 'editing';
+      draftId: string;
+      threadId: string;
+      inboxId: string;
+      observedAt: number;
+    }
+  | {
+      type: 'scheduled';
+      draftId: string;
+      threadId: string;
+      inboxId: string;
+      sendTime: string;
+      observedAt: number;
+    }
+  | {
+      type: 'sent';
+      draftId: string;
+      threadId: string;
+      inboxId: string;
+      observedAt: number;
+    }
+  | {
+      type: 'missing';
+      draftId: string;
+      threadId: string;
+      inboxId?: string;
+      observedAt: number;
+    };
+
+export interface EmailDraftLifecycleSource {
+  observe(input: {
+    draftId: Accessor<string | null | undefined>;
+    threadId: Accessor<string | null | undefined>;
+    inboxId: Accessor<string | undefined>;
+  }): {
+    state: Accessor<EmailDraftLifecycleState | undefined>;
+    /** Prior observations stay invalid after failure until a fresh read succeeds. */
+    refresh(): Promise<EmailDraftLifecycleState | undefined>;
+    /** Read one captured identity even if the observing composer has navigated away. */
+    refreshIdentity?(input: {
+      draftId: string;
+      threadId: string;
+      inboxId?: string;
+    }): Promise<EmailDraftLifecycleState | undefined>;
+  };
 }
 
 export interface EmailComposeFeedback {
@@ -193,6 +245,7 @@ export interface EmailComposeContext {
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
   delivery: EmailDelivery;
+  draftLifecycle: EmailDraftLifecycleSource;
   notices: EmailComposeFeedback;
   accounts: EmailComposeAccounts;
   connectivity: EmailConnectivity;
@@ -208,7 +261,8 @@ export interface EmailComposeContext {
 export interface ComposeNoticeOptions {
   subtext?: string;
   duration?: number;
-  actions?: { label: string; onClick: () => void }[];
+  /** `kind` picks the action's icon; actions default to undo. */
+  actions?: { label: string; onClick: () => void; kind?: 'undo' | 'open' }[];
 }
 export interface EmailComposeHost {
   focusSibling?: (direction: 'next' | 'prev') => boolean | void;

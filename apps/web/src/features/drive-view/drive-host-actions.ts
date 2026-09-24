@@ -79,7 +79,7 @@ export function createDriveHostActions(options: {
           fallbackName: entity.name,
         });
 
-        if (navigation.navigate(target, { event })) return;
+        if (navigation.openRoot(target, { event })) return;
       }
 
       void openEntityInSplitFromUnifiedList(entity, {
@@ -100,18 +100,30 @@ export function createDriveHostActions(options: {
 
       if (favorite.entityType === 'document') {
         const block = favoriteBlockName(favorite);
+        let subType:
+          | { type: 'task'; is_completed: boolean }
+          | { type: 'snippet' | 'skill' }
+          | undefined;
+        if (block === 'task') {
+          subType = { type: block, is_completed: false };
+        } else if (block === 'snippet' || block === 'skill') {
+          subType = { type: block };
+        }
 
         const target = entityDetailTarget.document({
           id: favorite.entityId,
           fileType: favorite.fileType ?? undefined,
-          subType:
-            block === 'snippet' || block === 'skill'
-              ? { type: block }
-              : undefined,
+          subType,
           fallbackName: name,
         });
 
-        if (navigation.navigate(target, { event })) return;
+        if (
+          navigation.openRoot(target, {
+            event,
+            location: { kind: 'tab', tab: 'owned' },
+          })
+        )
+          return;
       }
 
       const result = layout.openWithSplit(favoriteSplitContent(favorite), {

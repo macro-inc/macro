@@ -34,6 +34,7 @@ import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
 import {
+  commentOnDocumentTextHandler,
   replyToDocumentCommentHandler,
   resolveDocumentCommentHandler,
 } from './DocumentComments';
@@ -171,6 +172,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadProject: readProjectHandler,
   RenameChannel: renameChannelHandler,
   RenameDocument: renameDocumentHandler,
+  CommentOnDocumentText: commentOnDocumentTextHandler,
   ReplyToDocumentComment: replyToDocumentCommentHandler,
   ResolveDocumentComment: resolveDocumentCommentHandler,
   SearchSkills: searchSkillsHandler,

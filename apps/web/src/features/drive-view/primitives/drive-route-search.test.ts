@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { driveSearch, driveSearchCodec } from './drive-route';
+import { driveSearch, driveSearchCodec } from './drive-search';
 
 it('keeps document comments separate from Drive view facets', () => {
   const { value, valid } = driveSearchCodec.parse({

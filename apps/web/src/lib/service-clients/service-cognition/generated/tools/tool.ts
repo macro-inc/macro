@@ -20,6 +20,10 @@ type ToolParserMap = {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
   };
+  CommentOnDocumentText: {
+    call: types.CommentOnDocumentText;
+    response: types.CommentOnDocumentTextResponse;
+  };
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
@@ -259,6 +263,10 @@ const toolParserMap = {
   CalculateSpreadsheet: {
     call: schemas.CalculateSpreadsheet,
     response: schemas.SpreadsheetResponse,
+  },
+  CommentOnDocumentText: {
+    call: schemas.CommentOnDocumentText,
+    response: schemas.CommentOnDocumentTextResponse,
   },
   ConfigureBot: {
     call: schemas.ConfigureBot,
@@ -540,6 +548,10 @@ type ToolDataMap = {
   CalculateSpreadsheet: {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
+  };
+  CommentOnDocumentText: {
+    call: types.CommentOnDocumentText;
+    response: types.CommentOnDocumentTextResponse;
   };
   ConfigureBot: {
     call: types.ConfigureBot;

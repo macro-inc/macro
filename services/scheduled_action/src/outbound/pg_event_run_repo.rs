@@ -392,6 +392,9 @@ impl EventRunRepository for PgEventRunRepo {
         .fetch_optional(&mut *tx)
         .await?;
         let Some(action) = action else {
+            // Drop only queues rollback. Release the action lock before returning
+            // so an immediate SKIP LOCKED reconciliation can observe this action.
+            tx.rollback().await?;
             return Ok(FinalizationResult::StaleClaim);
         };
         let stored = sqlx::query!(
@@ -405,17 +408,21 @@ impl EventRunRepository for PgEventRunRepo {
         .fetch_optional(&mut *tx)
         .await?;
         let Some(stored) = stored else {
+            tx.rollback().await?;
             return Ok(FinalizationResult::StaleClaim);
         };
         if stored.claim_token != Some(run.token.as_uuid()) {
+            tx.rollback().await?;
             return Ok(FinalizationResult::StaleClaim);
         }
         if stored.state == "finished" {
+            tx.rollback().await?;
             return Ok(FinalizationResult::AlreadyFinalized);
         }
         // Delayed bookkeeping may still finish its own claim. Reconciliation
         // uses the same lock: whichever terminal transition commits first wins.
         if stored.state != "started" || action.claim_token != stored.claim_token {
+            tx.rollback().await?;
             return Ok(FinalizationResult::StaleClaim);
         }
         let mut execution_record_id = None;

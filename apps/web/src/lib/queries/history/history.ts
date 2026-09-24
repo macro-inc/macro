@@ -104,11 +104,12 @@ export function useHistoryQuery() {
     const host = graphqlCacheHost();
     if (!host) return;
     onCleanup(
-      subscribeToVisibleCacheChanges(host, () => {
-        void activeQueryClient.invalidateQueries({
-          queryKey: historyKeys.graphqlList.queryKey,
-        });
-      })
+      subscribeToVisibleCacheChanges(host, () =>
+        activeQueryClient.invalidateQueries(
+          { queryKey: historyKeys.graphqlList.queryKey },
+          { cancelRefetch: false }
+        )
+      )
     );
   });
 

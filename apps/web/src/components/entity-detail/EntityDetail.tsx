@@ -68,6 +68,7 @@ export type EntityDetailProps = {
   shareOpen?: boolean;
   onShareOpenChange?: (open: boolean) => void;
   previewHeaderLeading?: JSX.Element;
+  navigationRequest?: number;
   children?: (context: EntityDetailContext) => JSX.Element;
 };
 
@@ -263,6 +264,7 @@ export function EntityDetail(props: EntityDetailProps) {
           <ChannelDetail
             channelId={channel().channelId}
             target={channel().target}
+            navigationRequest={props.navigationRequest}
             fallbackName={channel().fallbackName}
           >
             {(context) => (

@@ -76,6 +76,7 @@ function entityDetailTarget(
 function InboxEntityDetailBody(props: {
   target: EntityDetailTarget;
   value: Accessor<string>;
+  navigationRequest: number;
 }) {
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -88,7 +89,10 @@ function InboxEntityDetailBody(props: {
         </ViewShell.TopBar>
       </Show>
       <div class="relative min-h-0 min-w-0 flex-1">
-        <EntityDetail target={props.target}>
+        <EntityDetail
+          target={props.target}
+          navigationRequest={props.navigationRequest}
+        >
           {(context) => {
             const name = () => {
               switch (context.type) {
@@ -139,6 +143,7 @@ function InboxEntityDetailBody(props: {
 function InboxDirectDetail(props: {
   target: EntityDetailTarget;
   closePreview: () => void;
+  navigationRequest: number;
 }) {
   const value = () => `${props.target.type}:${props.target.id}`;
 
@@ -157,7 +162,11 @@ function InboxDirectDetail(props: {
         )}
       </ViewBreadcrumbs.Item>
       <SidePanel.Root>
-        <InboxEntityDetailBody target={props.target} value={value} />
+        <InboxEntityDetailBody
+          target={props.target}
+          value={value}
+          navigationRequest={props.navigationRequest}
+        />
       </SidePanel.Root>
     </ViewBreadcrumbs.Root>
   );
@@ -168,19 +177,25 @@ export function InboxEntityDetailRouteView() {
   const params = useParams<DetailParams>();
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
-  const { previewTarget, closePreview } = useInboxView();
+  const { previewTarget, previewNavigationRequest, closePreview } =
+    useInboxView();
   const detail = createMemo(() => entityDetailTarget(params, previewTarget()));
 
   return (
     <Switch>
       <Match when={detail()}>
         {(target) => (
-          <InboxDirectDetail target={target()} closePreview={closePreview} />
+          <InboxDirectDetail
+            target={target()}
+            closePreview={closePreview}
+            navigationRequest={previewNavigationRequest()}
+          />
         )}
       </Match>
       <Match when={true}>
         <PreviewPanel
           target={previewTarget()}
+          navigationRequest={previewNavigationRequest()}
           orchestrator={orchestrator}
           splitPanelContext={panel}
           headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}

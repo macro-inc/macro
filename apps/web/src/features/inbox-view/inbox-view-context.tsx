@@ -1,5 +1,5 @@
 import { channelsSearch } from '@app/features/channels-view/channels-route';
-import { driveSearch } from '@app/features/drive-view/primitives/drive-route';
+import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
 import {
@@ -18,7 +18,14 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
-import { type Accessor, createEffect, createMemo, on } from 'solid-js';
+import deepEqual from 'fast-deep-equal';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+} from 'solid-js';
 import {
   createStore,
   produce,
@@ -61,6 +68,8 @@ export type InboxViewContext = {
   setState: SetStoreFunction<InboxViewState>;
   /** The block the route currently opens inline, if any. */
   previewTarget: Accessor<PreviewBlockTarget | undefined>;
+  /** Re-aim a target when the selected row is opened again at the same URL. */
+  previewNavigationRequest: Accessor<number>;
   /** Whether the route opens the Calendar view inline. */
   calendarOpen: Accessor<boolean>;
   /** Bumped when the open calendar event is requested again, to re-aim in place. */
@@ -161,12 +170,25 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
       { route: inboxSplitRoute, params: {} },
       { search: withTab(inboxDetailSearch()) }
     );
+  const [previewNavigationRequest, setPreviewNavigationRequest] =
+    createSignal(0);
   const openPreview = (entity: PreviewSelection) => {
     if (entity.type === 'calendar_event') {
       return openCalendarEvent(entity);
     }
     const target = previewBlockTarget(entity);
     if (!selectPreview.canSelect(target)) return false;
+    const current = previewTarget();
+    if (
+      current &&
+      deepEqual(
+        inboxPreviewTargetNavigation(current),
+        inboxPreviewTargetNavigation(target)
+      )
+    ) {
+      setPreviewNavigationRequest((count) => count + 1);
+      return true;
+    }
     navigateTarget(target);
     return true;
   };
@@ -202,6 +224,7 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
     state,
     setState,
     previewTarget,
+    previewNavigationRequest,
     calendarOpen,
     calendarRefocus,
     openPreview,

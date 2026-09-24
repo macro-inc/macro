@@ -45,7 +45,7 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/automation/<uuid>` | Cron routine editor; event routines show a backend-managed notice |
-| `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
+| `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
@@ -422,7 +422,16 @@ email mentions keep their separate search-service path.
 
 Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
 must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. A failed background
+mounted and usable while the optional source loads or fails. When no entity rows
+are available yet, the menu shows **Loading results…** while keeping commands
+usable; a settled empty category shows **No results found**. Background history
+or channel refetches alone must not switch settled empty results back to loading,
+including when the active category does not use that source. Cache-update bursts
+must let in-flight history, channel, and menu-search reads publish their results,
+then catch up with one coalesced refresh. Verify with cache reads slower than the
+250 ms update throttle, starting from an empty cache: entities appear without
+waiting for background updates to stop. Changing the query/category or closing
+the menu still discards obsolete search results. A failed background
 refresh retains available history/channel items and recently-viewed ordering.
 Placeholder results also remain usable while replacement data loads. A normal cache-worker
 handoff between tabs preserves backfill cursors and watermarks; only a replacement

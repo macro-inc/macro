@@ -273,16 +273,31 @@ pub enum NotificationStatus {
 }
 
 impl NotificationStatus {
+    /// States needing an entity-scoped update, plus whether to include rows missing a view time.
+    /// ID-scoped writes still return every requested owned row to reconcile retries.
+    pub(crate) fn entity_update_filter(&self) -> (&'static [super::NotificationState], bool) {
+        use super::NotificationState;
+        match self {
+            Self::Seen => (&[NotificationState::Unseen], true),
+            Self::Done(true) => (&NotificationState::ACTIVE, false),
+            Self::Done(false) => (&[NotificationState::Done], false),
+        }
+    }
+
     /// returns true if we should be clearing the relevant push notifications
     /// for this notification
     pub(crate) fn should_clear_push_notifs(&self) -> bool {
-        use super::NotificationAction;
-        let action = match self {
-            NotificationStatus::Seen => NotificationAction::MarkSeen,
-            NotificationStatus::Done(true) => NotificationAction::MarkDone,
-            NotificationStatus::Done(false) => NotificationAction::Reopen,
-        };
-        action.should_clear_push_notifications()
+        if cfg!(feature = "clear_ios_push") {
+            use super::NotificationAction;
+            let action = match self {
+                NotificationStatus::Seen => NotificationAction::MarkSeen,
+                NotificationStatus::Done(true) => NotificationAction::MarkDone,
+                NotificationStatus::Done(false) => NotificationAction::Reopen,
+            };
+            action.should_clear_push_notifications()
+        } else {
+            false
+        }
     }
 }
 

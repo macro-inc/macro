@@ -5,21 +5,12 @@ import {
 } from '@core/constant/featureFlags';
 import type { Maybe } from '@core/types';
 import { throwOnErr } from '@core/util/result';
-import { channelThreadRootId } from '@notifications/channel-thread-root';
 import {
   nextNotificationState,
   notificationStatesForFilter,
 } from '@notifications/notification-state';
 import type { UnifiedNotification } from '@notifications/types';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
-import {
-  bumpSoupEntityNotifiedAt,
-  hasSoupEntity,
-  optimisticUpdateSoupItemUpdatedAt,
-  refetchSoupEntity,
-  restoreSoupEntityToDoneFilteredQueries,
-  type SoupEntityTag,
-} from '@queries/soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
@@ -34,7 +25,6 @@ import {
   useMutation,
 } from '@tanstack/solid-query';
 import { type Accessor, createSignal, untrack } from 'solid-js';
-import { match, P } from 'ts-pattern';
 import { z } from 'zod';
 import { queryClient } from '../client';
 import {
@@ -43,6 +33,7 @@ import {
   type UpdateNotificationsResult,
 } from './graphql/user-notifications';
 import { notificationKeys } from './keys';
+import { updateSoupForNotification } from './notification-soup';
 
 function stripOwnerId({
   owner_id: _,
@@ -930,37 +921,6 @@ export async function getNotificationById(
   return stripOwnerId(res as NotificationItem);
 }
 
-function notificationEntityTypeToSoupTag(
-  entityType: UnifiedNotification['entity_type']
-): SoupEntityTag | null {
-  return match(entityType)
-    .with('document', () => 'document' as const)
-    .with('chat', () => 'chat' as const)
-    .with('channel', () => 'channel' as const)
-    .with('project', () => 'project' as const)
-    .with('email_thread', () => 'emailThread' as const)
-    .with('foreign_entity', () => 'foreignEntity' as const)
-    .with('reminder', () => 'reminder' as const)
-    .with('calendar_event', () => 'calendarEvent' as const)
-    .with('agent_session', () => 'agentSession' as const)
-    .with(
-      P.union(
-        'user',
-        'team',
-        'call',
-        'channel_message',
-        'static_file',
-        'crm_company',
-        'crm_contact',
-        'skill',
-        'scheduled_action',
-        'initiative'
-      ),
-      () => null
-    )
-    .exhaustive();
-}
-
 /**
  * Snapshot the cached notification objects for the given ids. The returned
  * items can later be put back via `restoreUserNotifications`. Optimistic
@@ -1088,7 +1048,6 @@ export function optimisticInsertNotification(
   notification: UnifiedNotification
 ) {
   const item = notification as NotificationItem;
-  const soupTag = notificationEntityTypeToSoupTag(notification.entity_type);
 
   trackUnconfirmedInsert(item);
 
@@ -1133,48 +1092,7 @@ export function optimisticInsertNotification(
     };
   });
 
-  if (soupTag) {
-    if (hasSoupEntity(notification.entity_id)) {
-      if (notification.created_at) {
-        optimisticUpdateSoupItemUpdatedAt(
-          notification.entity_id,
-          soupTag,
-          notification.created_at
-        );
-      }
-    } else {
-      refetchSoupEntity(notification.entity_id, soupTag);
-    }
-
-    // The inbox's notified_at order moves the notified row up right away
-    // rather than on the next refetch of the page. A mention or thread reply
-    // belongs to its channel-thread row — the row the soup feed keys it on —
-    // so that is the row stamped (and fetched in, when it is not cached yet),
-    // not the channel's.
-    const threadRootId = channelThreadRootId(notification);
-    if (notification.created_at) {
-      bumpSoupEntityNotifiedAt(
-        threadRootId ?? notification.entity_id,
-        notification.created_at
-      );
-    }
-    if (threadRootId && !hasSoupEntity(threadRootId)) {
-      refetchSoupEntity(threadRootId, 'channelThread');
-    }
-
-    // A cached row may be absent from the done-filtered feeds — dropped when
-    // it was marked done, or the feed was fetched while it had nothing
-    // outstanding. The field merges above only patch rows already present,
-    // so put the row back where it is missing; otherwise this notification
-    // stays invisible in the inbox until the next refetch. No-op for rows
-    // the refetch paths above insert.
-    if (notification.state !== 'done') {
-      restoreSoupEntityToDoneFilteredQueries(
-        threadRootId ?? notification.entity_id,
-        notification.state
-      );
-    }
-  }
+  updateSoupForNotification(notification);
 
   // Cache is already updated via setQueriesData above. Mark as stale without
   // refetching — refetchType default would re-fetch every cached page of the

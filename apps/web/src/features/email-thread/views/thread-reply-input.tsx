@@ -89,6 +89,7 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
           <Layer depth={props.mobileDrawer ? 0 : 2}>
             <ReplyInputView
               context={viewContext.compose}
+              host={viewContext.composeHost}
               session={{
                 thread: ctx.thread,
                 recipientOptions: ctx.recipientOptions,

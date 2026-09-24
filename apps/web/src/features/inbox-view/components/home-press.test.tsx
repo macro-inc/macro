@@ -128,4 +128,38 @@ describe('Home document comment row', () => {
   it('reads as the plain document once the notification is done', () => {
     expect(renderRow('done').textContent).not.toContain('mentioned you');
   });
+
+  it('names the agent that replied instead of someone', () => {
+    const row = render(() => (
+      <HomeListEntity
+        entity={
+          {
+            type: 'document',
+            id: 'doc-1',
+            name: 'Plan',
+            ownerId: 'test-user',
+            fileType: 'md',
+            notifications: () => [
+              {
+                ...commentNotification('unseen'),
+                sender_id: null,
+                notification_metadata: {
+                  tag: 'replied_to_document_comment_thread',
+                  content: {
+                    commentId: 'comment-1',
+                    documentName: 'Plan',
+                    senderDisplayName: 'Macro',
+                  },
+                },
+              },
+            ],
+          } as never
+        }
+        occurrenceKey="doc-1"
+      />
+    )).container.querySelector<HTMLElement>('[data-home-item]')!;
+
+    expect(row.textContent).toContain('Macro replied on Recent chat');
+    expect(row.textContent).not.toContain('Someone');
+  });
 });

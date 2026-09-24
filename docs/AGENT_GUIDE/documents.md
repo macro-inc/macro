@@ -374,7 +374,7 @@ The `@` menu includes `Recent agent sessions` after Channels and before
 Companies. Search by session or persona name within the 500 most recently
 updated accessible sessions. Menu rows show the
 session title followed by a muted persona name, including `@Cursor` and
-`@macro(new)` for built-in personas. Names from the session API take precedence;
+`@Macro` for built-in personas. Names from the session API take precedence;
 older responses use the shared built-in name resolver or cached custom bots.
 Selecting one inserts an
 inline reference showing the shared agent icon and an underlined session title.

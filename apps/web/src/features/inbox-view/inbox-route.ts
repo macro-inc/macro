@@ -5,7 +5,7 @@ import {
   calendarSearchTarget,
 } from '@app/features/calendar-view/calendar-url';
 import type { channelsSearch } from '@app/features/channels-view/channels-route';
-import type { DriveSearchParams } from '@app/features/drive-view/primitives/drive-route';
+import type { DriveSearchParams } from '@app/features/drive-view/primitives/drive-search';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { PreviewBlockTarget } from '@components/app/previewTarget';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';

@@ -336,7 +336,64 @@ test('shadow isolation, link safety, literal plaintext and quote expansion use p
   expect(result.remaining).toBe(0);
 });
 
-test('resizes wide content, removes stale scaling, hides collapsed images', async ({
+test('wraps readable text while reserving horizontal scroll for atomic layouts', async ({
+  page,
+}) => {
+  const metrics = await page.evaluate(() => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const host = document.createElement('div');
+    host.style.width = '240px';
+    document.body.append(host);
+    mountEmailBody(
+      host,
+      prepareEmailBody(
+        {
+          html: `<p>${'Readable prose wraps at spaces. '.repeat(20)}</p><pre>${'unbroken-code-token-'.repeat(30)}</pre><blockquote><p>${'Quoted text stays inside the pane. '.repeat(20)}</p></blockquote><div class="macro-email-signature">${'long-signature-token-'.repeat(30)}</div>`,
+        },
+        { showQuotedContent: true }
+      ),
+      { theme: themes.light, adaptColors: false, normalizeFonts: false }
+    );
+    const content = host.shadowRoot?.querySelector('div');
+    const prose = content?.querySelector('p');
+    const pre = content?.querySelector('pre');
+    const signature = content?.querySelector('.macro-email-signature');
+    const quote = content?.querySelector('blockquote');
+    if (
+      !(content instanceof HTMLElement) ||
+      !(prose instanceof HTMLElement) ||
+      !(pre instanceof HTMLElement) ||
+      !(signature instanceof HTMLElement) ||
+      !(quote instanceof HTMLElement)
+    ) {
+      throw new Error('expected readable email elements');
+    }
+    return {
+      hostWidth: host.clientWidth,
+      contentWidth: content.scrollWidth,
+      proseWidth: prose.scrollWidth,
+      preWidth: pre.scrollWidth,
+      signatureWidth: signature.scrollWidth,
+      quoteWidth: quote.scrollWidth,
+      zoom: getComputedStyle(content).zoom,
+      overflowX: getComputedStyle(content).overflowX,
+    };
+  });
+  expect(metrics.hostWidth).toBe(240);
+  expect(metrics.zoom).toBe('1');
+  expect(metrics.overflowX).toBe('visible');
+  for (const width of [
+    metrics.contentWidth,
+    metrics.proseWidth,
+    metrics.preWidth,
+    metrics.signatureWidth,
+    metrics.quoteWidth,
+  ]) {
+    expect(width).toBeLessThanOrEqual(metrics.hostWidth);
+  }
+});
+
+test('scrolls wide content at native size and hides collapsed images', async ({
   page,
 }) => {
   await page.evaluate(() => {
@@ -355,12 +412,11 @@ test('resizes wide content, removes stale scaling, hides collapsed images', asyn
     host.addEventListener('collapse', () => renderer.setExpanded(false));
   });
   const content = page.locator('#resize-host > div');
-  await expect(content).toHaveCSS('zoom', '0.7');
+  await expect(content).toHaveCSS('zoom', '1');
   await expect(content).toHaveCSS('overflow-x', 'auto');
   await page.locator('#resize-host').evaluate((host) => {
     (host as HTMLElement).style.width = '1200px';
   });
-  await expect(content).toHaveCSS('zoom', '1');
   await expect(content).toHaveCSS('overflow-x', 'visible');
   await page.locator('#resize-host').dispatchEvent('collapse');
   await expect(content).toHaveCSS('overflow-x', 'hidden');

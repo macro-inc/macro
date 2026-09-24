@@ -9,9 +9,9 @@ import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   driveDocumentFromContent,
   drivePath,
-  driveSearch,
 } from '@app/features/drive-view/primitives/drive-route';
 import { driveDocumentBlockType } from '@app/features/drive-view/primitives/drive-route-schema';
+import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import { EMAIL_DETAIL_SEARCH_NAMESPACE } from '@app/features/email-view/email-route';
 import {

@@ -1,11 +1,15 @@
 use super::*;
 use crate::domain::ledger::plan_settlement;
-use crate::domain::models::{DenyReason, PayerScope, PeriodAllowance, PeriodLedger};
+use crate::domain::models::{
+    AllowanceStore, DenyReason, OpenPeriodStart, PayerScope, PeriodAllowance, PeriodLedger,
+    SeatGeneration,
+};
 use crate::domain::ports::SettlementOutcome;
 use macro_user_id::cowlike::CowLike;
 use macro_uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use teams::domain::open_seat_release::OpenSeatRelease;
 
 fn user(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(format!("macro|{email}")).unwrap()
@@ -15,6 +19,7 @@ fn user(email: &str) -> MacroUserIdStr<'static> {
 struct FakeEntitlements {
     by_user: Arc<Mutex<HashMap<String, Entitlement>>>,
     customers: Arc<Mutex<HashMap<String, String>>>,
+    payers: Arc<Mutex<HashMap<Uuid, MacroUserIdStr<'static>>>>,
 }
 
 impl FakeEntitlements {
@@ -47,6 +52,10 @@ impl FakeEntitlements {
             .insert(u.to_string(), customer.to_string());
         self
     }
+    fn payer_for_team(self, team_id: Uuid, payer: MacroUserIdStr<'static>) -> Self {
+        self.payers.lock().unwrap().insert(team_id, payer);
+        self
+    }
 }
 
 impl EntitlementSource for FakeEntitlements {
@@ -61,6 +70,9 @@ impl EntitlementSource for FakeEntitlements {
     }
     async fn stripe_customer_id(&self, user: &MacroUserIdStr<'_>) -> Result<Option<String>> {
         Ok(self.customers.lock().unwrap().get(user.as_ref()).cloned())
+    }
+    async fn team_payer(&self, team_id: Uuid) -> Result<Option<MacroUserIdStr<'static>>> {
+        Ok(self.payers.lock().unwrap().get(&team_id).cloned())
     }
 }
 
@@ -143,6 +155,7 @@ struct RepoState {
     charges: Vec<FakeCharge>,
     suspended: bool,
     allowances: HashMap<DateTime<Utc>, PeriodAllowance>,
+    releases: Vec<(String, DateTime<Utc>, String)>,
 }
 
 impl RepoState {
@@ -186,6 +199,9 @@ impl FakeRepo {
             .allowances
             .get(&period_start)
             .cloned()
+    }
+    fn releases(&self) -> Vec<(String, DateTime<Utc>, String)> {
+        self.state.lock().unwrap().releases.clone()
     }
 }
 
@@ -248,18 +264,44 @@ impl BillingRepo for FakeRepo {
             .get(&period_start)
             .cloned())
     }
-    async fn remember_period_allowance(
+    async fn store_open_allowance(
         &self,
         _payer: &MacroUserIdStr<'_>,
-        period_start: DateTime<Utc>,
+        period: OpenPeriodStart,
         seats: &[SeatAllowance],
-    ) -> Result<()> {
-        self.state.lock().unwrap().allowances.insert(
-            period_start,
+        observed: SeatGeneration,
+    ) -> Result<AllowanceStore> {
+        let mut state = self.state.lock().unwrap();
+        if state.settings.seat_generation != observed {
+            return Ok(AllowanceStore::Conflict);
+        }
+        state.allowances.insert(
+            period.start(),
             PeriodAllowance {
                 seats: seats.to_vec(),
             },
         );
+        Ok(AllowanceStore::Stored)
+    }
+    async fn release_open_seat(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period: OpenPeriodStart,
+        member: &MacroUserIdStr<'_>,
+    ) -> Result<()> {
+        let mut state = self.state.lock().unwrap();
+        let next = state.settings.seat_generation.raw().saturating_add(1);
+        state.settings.seat_generation = SeatGeneration::from_raw(next);
+        if let Some(allowance) = state.allowances.get_mut(&period.start()) {
+            allowance
+                .seats
+                .retain(|seat| seat.user.as_ref() != member.as_ref());
+        }
+        state.releases.push((
+            payer.as_ref().to_string(),
+            period.start(),
+            member.as_ref().to_string(),
+        ));
         Ok(())
     }
     async fn record_credit_purchase(
@@ -1113,4 +1155,268 @@ async fn current_period_uses_the_live_allowance_after_an_upgrade() {
     assert_eq!(snap.included_cents, 20_000);
     assert_eq!(snap.used_cents, 10_000);
     assert_eq!(snap.uncovered_cents, 0);
+}
+
+fn open_anchor(now: DateTime<Utc>) -> (DateTime<Utc>, DateTime<Utc>, OpenPeriodStart) {
+    let start = now - chrono::Duration::days(1);
+    let end = now + chrono::Duration::days(20);
+    let open = BillingPeriod::current(Some((start, end)), now)
+        .open_start(now)
+        .unwrap();
+    (start, end, open)
+}
+
+#[tokio::test]
+async fn release_targets_the_payer_open_period() {
+    let now = Utc::now();
+    let (start, end, open) = open_anchor(now);
+    let owner = user("owner@x.com");
+    let member = user("member@x.com");
+    let team_id = Uuid::from_u128(7);
+    let repo = FakeRepo::default();
+    repo.set_period(&owner, start, end).await.unwrap();
+    let ents = FakeEntitlements::default().payer_for_team(team_id, owner.clone());
+    let svc = BillingServiceImpl::new(
+        ents,
+        FakeUsage::default(),
+        repo.clone(),
+        FakePayments::default(),
+    );
+
+    svc.release(team_id, &member).await.unwrap();
+
+    assert_eq!(
+        repo.releases(),
+        vec![(
+            owner.as_ref().to_string(),
+            open.start(),
+            member.as_ref().to_string()
+        )]
+    );
+    assert!(repo.allowance(open.start()).is_none());
+}
+
+#[tokio::test]
+async fn release_missing_team_leaves_allowances_unchanged() {
+    let member = user("member@x.com");
+    let repo = FakeRepo::default();
+    let period_start = Utc::now();
+    repo.freeze(
+        period_start,
+        PeriodAllowance {
+            seats: vec![SeatAllowance {
+                user: member.clone(),
+                included_cents: 4_000,
+            }],
+        },
+    );
+    let svc = BillingServiceImpl::new(
+        FakeEntitlements::default(),
+        FakeUsage::default(),
+        repo.clone(),
+        FakePayments::default(),
+    );
+
+    svc.release(Uuid::from_u128(8), &member).await.unwrap();
+
+    assert!(repo.releases().is_empty());
+    assert_eq!(
+        repo.allowance(period_start).unwrap().seats,
+        vec![SeatAllowance {
+            user: member,
+            included_cents: 4_000,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn release_refuses_to_remove_the_payer() {
+    let now = Utc::now();
+    let (start, end, open) = open_anchor(now);
+    let owner = user("owner@x.com");
+    let team_id = Uuid::from_u128(9);
+    let repo = FakeRepo::default();
+    repo.set_period(&owner, start, end).await.unwrap();
+    repo.freeze(
+        open.start(),
+        PeriodAllowance {
+            seats: vec![SeatAllowance {
+                user: owner.clone(),
+                included_cents: 4_000,
+            }],
+        },
+    );
+    let ents = FakeEntitlements::default().payer_for_team(team_id, owner.clone());
+    let svc = BillingServiceImpl::new(
+        ents,
+        FakeUsage::default(),
+        repo.clone(),
+        FakePayments::default(),
+    );
+
+    svc.release(team_id, &owner).await.unwrap();
+
+    assert!(repo.releases().is_empty());
+    assert_eq!(
+        repo.allowance(open.start()).unwrap().seats,
+        vec![SeatAllowance {
+            user: owner,
+            included_cents: 4_000,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn position_keeps_matching_pairs_in_their_stored_order() {
+    let now = Utc::now();
+    let (start, end, open) = open_anchor(now);
+    let owner = user("owner@x.com");
+    let member = user("member@x.com");
+    let team_id = Uuid::from_u128(10);
+    let entitlement = Entitlement {
+        tier: PlanTier::Premium,
+        seat_tiers: vec![PlanTier::Premium, PlanTier::Max],
+        unlimited: false,
+        payer: owner.clone(),
+        billed_users: vec![owner.clone(), member.clone()],
+        scope: PayerScope::TeamOwner { team_id },
+    };
+    let stored = vec![
+        SeatAllowance {
+            user: member.clone(),
+            included_cents: 20_000,
+        },
+        SeatAllowance {
+            user: owner.clone(),
+            included_cents: 4_000,
+        },
+    ];
+    let repo = FakeRepo::default();
+    repo.set_period(&owner, start, end).await.unwrap();
+    repo.freeze(
+        open.start(),
+        PeriodAllowance {
+            seats: stored.clone(),
+        },
+    );
+    let svc = BillingServiceImpl::new(
+        FakeEntitlements::default().with(entitlement),
+        FakeUsage::default(),
+        repo.clone(),
+        FakePayments::default(),
+    );
+
+    svc.position(&owner, now).await.unwrap();
+
+    assert_eq!(repo.allowance(open.start()).unwrap().seats, stored);
+}
+
+#[tokio::test]
+async fn position_does_not_restore_a_member_released_between_entitlement_reads() {
+    let now = Utc::now();
+    let (start, end, open) = open_anchor(now);
+    let owner = user("owner@x.com");
+    let member = user("member@x.com");
+    let bob = user("bob@x.com");
+    let team_id = Uuid::from_u128(11);
+    let before = Entitlement {
+        tier: PlanTier::Premium,
+        seat_tiers: vec![PlanTier::Premium, PlanTier::Premium],
+        unlimited: false,
+        payer: owner.clone(),
+        billed_users: vec![owner.clone(), member.clone()],
+        scope: PayerScope::TeamOwner { team_id },
+    };
+    let after = Entitlement {
+        billed_users: vec![owner.clone()],
+        seat_tiers: vec![PlanTier::Premium],
+        ..before.clone()
+    };
+    let repo = FakeRepo::default();
+    repo.set_period(&owner, start, end).await.unwrap();
+    repo.freeze(
+        open.start(),
+        PeriodAllowance {
+            seats: vec![
+                SeatAllowance {
+                    user: owner.clone(),
+                    included_cents: 100,
+                },
+                SeatAllowance {
+                    user: member.clone(),
+                    included_cents: 100,
+                },
+                SeatAllowance {
+                    user: bob.clone(),
+                    included_cents: 300,
+                },
+            ],
+        },
+    );
+    let ents = ReleaseOnSecondRead {
+        calls: Arc::new(Mutex::new(0)),
+        before,
+        after: after.clone(),
+        repo: repo.clone(),
+        open,
+        member: member.clone(),
+    };
+    let svc = BillingServiceImpl::new(
+        ents,
+        FakeUsage::default(),
+        repo.clone(),
+        FakePayments::default(),
+    );
+
+    let position = svc.position(&owner, now).await.unwrap();
+
+    assert_eq!(position.entitlement.billed_users, after.billed_users);
+    assert_eq!(
+        repo.allowance(open.start()).unwrap().seats,
+        vec![
+            SeatAllowance {
+                user: owner,
+                included_cents: 100,
+            },
+            SeatAllowance {
+                user: bob,
+                included_cents: 300,
+            },
+        ]
+    );
+}
+
+struct ReleaseOnSecondRead {
+    calls: Arc<Mutex<u32>>,
+    before: Entitlement,
+    after: Entitlement,
+    repo: FakeRepo,
+    open: OpenPeriodStart,
+    member: MacroUserIdStr<'static>,
+}
+
+impl EntitlementSource for ReleaseOnSecondRead {
+    async fn entitlement(&self, _user: &MacroUserIdStr<'_>) -> Result<Entitlement> {
+        let first_read = {
+            let mut calls = self.calls.lock().unwrap();
+            *calls += 1;
+            *calls == 1
+        };
+        if first_read {
+            Ok(self.before.clone())
+        } else {
+            self.repo
+                .release_open_seat(&self.before.payer, self.open, &self.member)
+                .await?;
+            Ok(self.after.clone())
+        }
+    }
+
+    async fn stripe_customer_id(&self, _user: &MacroUserIdStr<'_>) -> Result<Option<String>> {
+        Ok(None)
+    }
+
+    async fn team_payer(&self, _team_id: Uuid) -> Result<Option<MacroUserIdStr<'static>>> {
+        Ok(None)
+    }
 }

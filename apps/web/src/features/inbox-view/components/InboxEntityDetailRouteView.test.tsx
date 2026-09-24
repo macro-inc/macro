@@ -18,6 +18,7 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
 vi.mock('../inbox-view-context', () => ({
   useInboxView: () => ({
     previewTarget: () => location.target,
+    previewNavigationRequest: () => 0,
     closePreview: location.close,
   }),
 }));

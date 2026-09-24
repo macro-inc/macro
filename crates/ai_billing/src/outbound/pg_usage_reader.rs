@@ -1,6 +1,10 @@
 //! Reads recorded AI usage from `ai_usage` at Macro's list rate.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{BillingError, BillingPeriod, Result, SeatUsage, UsageReader, list_rate_cents};
+use ai_usage::AiFeature;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
@@ -50,6 +54,7 @@ impl UsageReader for PgUsageReader {
             WHERE user_id = ANY($1)
               AND created_at >= $2
               AND created_at < $3
+              AND feature <> $6
             GROUP BY user_id
             "#,
             &ids,
@@ -57,6 +62,7 @@ impl UsageReader for PgUsageReader {
             period.end,
             FALLBACK_PRICE_PER_MILLION_IN,
             FALLBACK_PRICE_PER_MILLION_OUT,
+            AiFeature::AiProjection.to_string(),
         )
         .fetch_all(&self.pool)
         .await

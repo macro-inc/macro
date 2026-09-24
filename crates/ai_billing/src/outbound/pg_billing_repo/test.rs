@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::OVERAGE_CHARGE_THRESHOLD_CENTS;
+use crate::domain::{BillingPeriod, OVERAGE_CHARGE_THRESHOLD_CENTS};
 use chrono::DurationRound;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
@@ -429,61 +429,84 @@ async fn settlement_uses_stored_overage_policy_and_flushes_at_period_end(pool: P
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool);
-    let start = Utc::now()
+    let repo = PgBillingRepo::new(pool.clone());
+    let payer = payer();
+    let now = Utc::now()
         .duration_trunc(chrono::Duration::microseconds(1))
         .unwrap();
-    let earlier = start - chrono::Duration::days(30);
+    let period = BillingPeriod {
+        start: now,
+        end: now + chrono::Duration::days(30),
+    };
+    let open = period.open_start(now).unwrap();
+    let earlier = open.start() - chrono::Duration::days(30);
     let member = MacroUserIdStr::try_from("macro|member@example.com".to_string()).unwrap();
     let seats = vec![
         SeatAllowance {
-            user: payer(),
+            user: payer.clone(),
             included_cents: 4_000,
         },
         SeatAllowance {
-            user: member,
+            user: member.clone(),
             included_cents: 20_000,
         },
     ];
 
     assert!(
-        repo.period_allowance(&payer(), start)
+        repo.period_allowance(&payer, open.start())
             .await
             .unwrap()
             .is_none()
     );
 
-    repo.remember_period_allowance(&payer(), start, &seats)
-        .await
-        .unwrap();
+    assert_eq!(
+        repo.store_open_allowance(&payer, open, &seats, SeatGeneration::from_raw(0))
+            .await
+            .unwrap(),
+        AllowanceStore::Stored
+    );
     let frozen = repo
-        .period_allowance(&payer(), start)
+        .period_allowance(&payer, open.start())
         .await
         .unwrap()
         .unwrap();
     assert_eq!(frozen.seats, seats);
 
-    // A later observation of the same (open) period refreshes.
+    // A later observation of the same open period refreshes.
     let max_payer = vec![SeatAllowance {
-        user: payer(),
+        user: payer.clone(),
         included_cents: 20_000,
     }];
-    repo.remember_period_allowance(&payer(), start, &max_payer)
-        .await
-        .unwrap();
+    assert_eq!(
+        repo.store_open_allowance(&payer, open, &max_payer, SeatGeneration::from_raw(0))
+            .await
+            .unwrap(),
+        AllowanceStore::Stored
+    );
     let frozen = repo
-        .period_allowance(&payer(), start)
+        .period_allowance(&payer, open.start())
         .await
         .unwrap()
         .unwrap();
     assert_eq!(frozen.seats, max_payer);
 
-    // A different period is independent.
-    repo.remember_period_allowance(&payer(), earlier, &seats)
-        .await
-        .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO ai_billing_period_allowance (
+            user_id, period_start, billed_users, included_cents_by_user
+        )
+        VALUES ($1, $2, $3, $4)
+        "#,
+        payer.as_ref(),
+        earlier,
+        &vec![payer.as_ref().to_string(), member.as_ref().to_string()],
+        &vec![4_000_i64, 20_000_i64],
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     assert_eq!(
-        repo.period_allowance(&payer(), start)
+        repo.period_allowance(&payer, open.start())
             .await
             .unwrap()
             .unwrap()
@@ -491,11 +514,291 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
         max_payer
     );
     assert_eq!(
-        repo.period_allowance(&payer(), earlier)
+        repo.period_allowance(&payer, earlier)
             .await
             .unwrap()
             .unwrap()
             .seats,
         seats
+    );
+}
+
+struct RawAllowance {
+    billed_users: Vec<String>,
+    included_cents_by_user: Vec<i64>,
+    updated_at: chrono::DateTime<Utc>,
+}
+
+async fn raw_allowance(
+    pool: &PgPool,
+    payer: &str,
+    period_start: chrono::DateTime<Utc>,
+) -> Option<RawAllowance> {
+    sqlx::query!(
+        r#"
+        SELECT billed_users AS "billed_users!",
+               included_cents_by_user AS "included_cents_by_user!",
+               updated_at
+        FROM ai_billing_period_allowance
+        WHERE user_id = $1 AND period_start = $2
+        "#,
+        payer,
+        period_start,
+    )
+    .fetch_optional(pool)
+    .await
+    .unwrap()
+    .map(|row| RawAllowance {
+        billed_users: row.billed_users,
+        included_cents_by_user: row.included_cents_by_user,
+        updated_at: row.updated_at,
+    })
+}
+
+async fn seat_generation(pool: &PgPool, payer: &str) -> Option<i64> {
+    sqlx::query_scalar!(
+        r#"SELECT seat_generation FROM ai_billing_account WHERE user_id = $1"#,
+        payer,
+    )
+    .fetch_optional(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone());
+    let payer = payer();
+    let now = Utc::now();
+    let open_start = (now - chrono::Duration::days(1))
+        .duration_trunc(chrono::Duration::microseconds(1))
+        .unwrap();
+    let open = BillingPeriod {
+        start: open_start,
+        end: now + chrono::Duration::days(20),
+    }
+    .open_start(now)
+    .unwrap();
+    let closed_start = open_start - chrono::Duration::days(60);
+    let alice = MacroUserIdStr::try_from("macro|alice@example.com".to_string()).unwrap();
+    let bob = MacroUserIdStr::try_from("macro|bob@example.com".to_string()).unwrap();
+    let users = vec![
+        payer.as_ref().to_string(),
+        alice.as_ref().to_string(),
+        bob.as_ref().to_string(),
+    ];
+    let open_cents = vec![100_i64, 100, 300];
+    let closed_cents = vec![4_000_i64, 20_000, 4_000];
+    let seeded_at = open_start - chrono::Duration::days(2);
+    sqlx::query!(
+        r#"
+        INSERT INTO ai_billing_period_allowance (
+            user_id, period_start, billed_users, included_cents_by_user, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+        payer.as_ref(),
+        open.start(),
+        &users,
+        &open_cents,
+        seeded_at,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO ai_billing_period_allowance (
+            user_id, period_start, billed_users, included_cents_by_user, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+        payer.as_ref(),
+        closed_start,
+        &users,
+        &closed_cents,
+        seeded_at,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    repo.release_open_seat(&payer, open, &alice).await.unwrap();
+
+    let open_row = raw_allowance(&pool, payer.as_ref(), open.start())
+        .await
+        .unwrap();
+    assert_eq!(
+        open_row.billed_users,
+        vec![payer.as_ref().to_string(), bob.as_ref().to_string()]
+    );
+    assert_eq!(open_row.included_cents_by_user, vec![100, 300]);
+    assert_ne!(open_row.updated_at, seeded_at);
+    let closed_row = raw_allowance(&pool, payer.as_ref(), closed_start)
+        .await
+        .unwrap();
+    assert_eq!(closed_row.billed_users, users);
+    assert_eq!(closed_row.included_cents_by_user, closed_cents);
+    assert_eq!(closed_row.updated_at, seeded_at);
+    assert_eq!(seat_generation(&pool, payer.as_ref()).await, Some(1));
+
+    repo.release_open_seat(&payer, open, &alice).await.unwrap();
+
+    let retried = raw_allowance(&pool, payer.as_ref(), open.start())
+        .await
+        .unwrap();
+    assert_eq!(retried.billed_users, open_row.billed_users);
+    assert_eq!(
+        retried.included_cents_by_user,
+        open_row.included_cents_by_user
+    );
+    assert_eq!(retried.updated_at, open_row.updated_at);
+    assert_eq!(
+        raw_allowance(&pool, payer.as_ref(), closed_start)
+            .await
+            .unwrap()
+            .updated_at,
+        seeded_at
+    );
+    assert_eq!(seat_generation(&pool, payer.as_ref()).await, Some(2));
+
+    let outsider = MacroUserIdStr::try_from("macro|outsider@example.com".to_string()).unwrap();
+    repo.release_open_seat(&payer, open, &outsider)
+        .await
+        .unwrap();
+    let untouched = raw_allowance(&pool, payer.as_ref(), open.start())
+        .await
+        .unwrap();
+    assert_eq!(untouched.billed_users, open_row.billed_users);
+    assert_eq!(
+        untouched.included_cents_by_user,
+        open_row.included_cents_by_user
+    );
+    assert_eq!(untouched.updated_at, open_row.updated_at);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn store_open_allowance_does_not_write_a_stale_generation(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone());
+    let now = Utc::now();
+    let open = BillingPeriod {
+        start: (now - chrono::Duration::days(1))
+            .duration_trunc(chrono::Duration::microseconds(1))
+            .unwrap(),
+        end: now + chrono::Duration::days(20),
+    }
+    .open_start(now)
+    .unwrap();
+    let alice = MacroUserIdStr::try_from("macro|alice@example.com".to_string()).unwrap();
+    let bob = MacroUserIdStr::try_from("macro|bob@example.com".to_string()).unwrap();
+    let before = vec![
+        SeatAllowance {
+            user: payer(),
+            included_cents: 100,
+        },
+        SeatAllowance {
+            user: alice.clone(),
+            included_cents: 100,
+        },
+        SeatAllowance {
+            user: bob.clone(),
+            included_cents: 300,
+        },
+    ];
+    let after = vec![
+        SeatAllowance {
+            user: payer(),
+            included_cents: 100,
+        },
+        SeatAllowance {
+            user: bob,
+            included_cents: 300,
+        },
+    ];
+    assert_eq!(
+        repo.store_open_allowance(&payer(), open, &before, SeatGeneration::from_raw(0))
+            .await
+            .unwrap(),
+        AllowanceStore::Stored
+    );
+    repo.release_open_seat(&payer(), open, &alice)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.store_open_allowance(&payer(), open, &before, SeatGeneration::from_raw(0))
+            .await
+            .unwrap(),
+        AllowanceStore::Conflict
+    );
+    assert_eq!(
+        repo.period_allowance(&payer(), open.start())
+            .await
+            .unwrap()
+            .unwrap()
+            .seats,
+        after
+    );
+
+    assert_eq!(
+        repo.store_open_allowance(&payer(), open, &after, SeatGeneration::from_raw(1))
+            .await
+            .unwrap(),
+        AllowanceStore::Stored
+    );
+    assert_eq!(
+        repo.period_allowance(&payer(), open.start())
+            .await
+            .unwrap()
+            .unwrap()
+            .seats,
+        after
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn release_open_seat_without_an_allowance_row_bumps_generation(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone());
+    let now = Utc::now();
+    let open = BillingPeriod {
+        start: (now - chrono::Duration::days(1))
+            .duration_trunc(chrono::Duration::microseconds(1))
+            .unwrap(),
+        end: now + chrono::Duration::days(20),
+    }
+    .open_start(now)
+    .unwrap();
+    let member = MacroUserIdStr::try_from("macro|member@example.com".to_string()).unwrap();
+
+    repo.release_open_seat(&payer(), open, &member)
+        .await
+        .unwrap();
+
+    assert!(
+        repo.period_allowance(&payer(), open.start())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(seat_generation(&pool, payer().as_ref()).await, Some(1));
+    assert_eq!(
+        repo.store_open_allowance(
+            &payer(),
+            open,
+            &[SeatAllowance {
+                user: member.clone(),
+                included_cents: 4_000,
+            }],
+            SeatGeneration::from_raw(0),
+        )
+        .await
+        .unwrap(),
+        AllowanceStore::Conflict
+    );
+    assert!(
+        repo.period_allowance(&payer(), open.start())
+            .await
+            .unwrap()
+            .is_none()
     );
 }

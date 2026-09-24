@@ -135,7 +135,7 @@ pub enum AgentKind {
     CodexCloud,
     /// Anthropic-hosted Claude Code using the session owner's subscription.
     ClaudeCloud,
-    /// The in-process (in-memory) "macro(new)" bot, served by `agent_inmem`.
+    /// The in-process (in-memory) Macro agent bot, served by `agent_inmem`.
     InMemory,
     /// The bot's operator hosts the runtime and dials the gateway; no
     /// deployment here provisions anything for it.

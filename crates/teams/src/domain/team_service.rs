@@ -50,6 +50,7 @@ use crate::domain::{
         ToggleAutoJoinDomainError, TryJoinTeamByDomainError, is_generic_email_domain,
         team_slug_from_name,
     },
+    open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease},
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
     team_repo::{TeamMembersService, TeamRepository, TeamService},
@@ -105,6 +106,7 @@ pub struct TeamServiceImpl<
     TA = NoOpTeamAnalytics,
     CNE = NoOpContactsEnqueuer,
     EB = NoopMacroEventBroker,
+    OSR = NoOpOpenSeatRelease,
 > where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -116,6 +118,7 @@ pub struct TeamServiceImpl<
     TA: TeamAnalytics,
     CNE: ContactsEnqueuer,
     EB: MacroEventBroker,
+    OSR: OpenSeatRelease,
 {
     /// The underlying team repository
     team_repository: TR,
@@ -140,14 +143,16 @@ pub struct TeamServiceImpl<
     contacts_enqueuer: CNE,
     /// Outbound port for best-effort team events.
     event_broker: EB,
+    /// Outbound port that releases a removed member's open seat.
+    open_seat_release: OSR,
 }
 
 fn channel_error_to_team_error(error: ChannelMutationErr) -> TeamError {
     TeamError::StorageLayerError(error.into())
 }
 
-impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB> Clone
-    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR> Clone
+    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -159,6 +164,7 @@ where
     TA: TeamAnalytics,
     CNE: ContactsEnqueuer,
     EB: MacroEventBroker + Clone,
+    OSR: OpenSeatRelease,
 {
     fn clone(&self) -> Self {
         Self {
@@ -172,6 +178,7 @@ where
             team_analytics: self.team_analytics.clone(),
             contacts_enqueuer: self.contacts_enqueuer.clone(),
             event_broker: self.event_broker.clone(),
+            open_seat_release: self.open_seat_release.clone(),
         }
     }
 }
@@ -188,6 +195,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS>
         NoOpTeamAnalytics,
         NoOpContactsEnqueuer,
         NoopMacroEventBroker,
+        NoOpOpenSeatRelease,
     >
 where
     TR: TeamRepository,
@@ -222,7 +230,19 @@ where
 }
 
 impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA>
-    TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, NoOpContactsEnqueuer, NoopMacroEventBroker>
+    TeamServiceImpl<
+        TR,
+        CR,
+        CS,
+        URPS,
+        NI,
+        CE,
+        TCRMS,
+        TA,
+        NoOpContactsEnqueuer,
+        NoopMacroEventBroker,
+        NoOpOpenSeatRelease,
+    >
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -259,12 +279,13 @@ where
             team_analytics,
             contacts_enqueuer: NoOpContactsEnqueuer,
             event_broker: NoopMacroEventBroker,
+            open_seat_release: NoOpOpenSeatRelease,
         }
     }
 }
 
-impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB>
-    TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR>
+    TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -276,12 +297,13 @@ where
     TA: TeamAnalytics,
     CNE: ContactsEnqueuer,
     EB: MacroEventBroker,
+    OSR: OpenSeatRelease,
 {
     /// Replaces the contacts enqueuer while preserving every other service dependency.
     pub fn with_contacts_enqueuer<CNE2>(
         self,
         contacts_enqueuer: CNE2,
-    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE2, EB>
+    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE2, EB, OSR>
     where
         CNE2: ContactsEnqueuer,
     {
@@ -296,6 +318,7 @@ where
             team_analytics: self.team_analytics,
             contacts_enqueuer,
             event_broker: self.event_broker,
+            open_seat_release: self.open_seat_release,
         }
     }
 
@@ -303,7 +326,7 @@ where
     pub fn with_event_broker<EB2>(
         self,
         event_broker: EB2,
-    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB2>
+    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB2, OSR>
     where
         EB2: MacroEventBroker,
     {
@@ -318,7 +341,76 @@ where
             team_analytics: self.team_analytics,
             contacts_enqueuer: self.contacts_enqueuer,
             event_broker,
+            open_seat_release: self.open_seat_release,
         }
+    }
+
+    /// Replaces the open-seat release while preserving every other service dependency.
+    pub fn with_open_seat_release<OSR2>(
+        self,
+        open_seat_release: OSR2,
+    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR2>
+    where
+        OSR2: OpenSeatRelease,
+    {
+        TeamServiceImpl {
+            team_repository: self.team_repository,
+            customer_repository: self.customer_repository,
+            channel_service: self.channel_service,
+            user_roles_and_permissions_service: self.user_roles_and_permissions_service,
+            notification_ingress: self.notification_ingress,
+            crm_enqueuer: self.crm_enqueuer,
+            team_crm_settings_repository: self.team_crm_settings_repository,
+            team_analytics: self.team_analytics,
+            contacts_enqueuer: self.contacts_enqueuer,
+            event_broker: self.event_broker,
+            open_seat_release,
+        }
+    }
+
+    async fn restore_after_channels_left(
+        &self,
+        removed_member: &TeamMember<'_>,
+        subscription_id: Option<&stripe::SubscriptionId>,
+        user_id: &MacroUserIdStr<'_>,
+        left_channel_ids: &[uuid::Uuid],
+        failed_step: &'static str,
+    ) {
+        self.channel_service
+            .restore_by_channel_ids(user_id, left_channel_ids)
+            .await
+            .inspect_err(|rollback_err| {
+                tracing::error!(
+                    error = ?rollback_err,
+                    failed_step,
+                    "unable to rollback team channel membership after {failed_step} failed"
+                );
+            })
+            .ok();
+        if let Some(subscription_id) = subscription_id {
+            self.customer_repository
+                .increment_seat_count(subscription_id, removed_member.plan, 1)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error = ?rollback_err,
+                        failed_step,
+                        "unable to rollback customer seat count after {failed_step} failed"
+                    );
+                })
+                .ok();
+        }
+        self.team_repository
+            .rollback_remove_user_from_team(removed_member)
+            .await
+            .inspect_err(|rollback_err| {
+                tracing::error!(
+                    error = ?rollback_err,
+                    failed_step,
+                    "unable to rollback removed team member after {failed_step} failed"
+                );
+            })
+            .ok();
     }
 
     #[allow(
@@ -554,8 +646,8 @@ impl GetTeamSubscriptionError {
     }
 }
 
-impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB> TeamMembersService
-    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR> TeamMembersService
+    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -567,6 +659,7 @@ where
     TA: TeamAnalytics,
     CNE: ContactsEnqueuer,
     EB: MacroEventBroker + Clone,
+    OSR: OpenSeatRelease,
 {
     #[tracing::instrument(skip(self), err)]
     async fn list_team_members(
@@ -583,8 +676,8 @@ where
     }
 }
 
-impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB> TeamService
-    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR> TeamService
+    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -596,6 +689,7 @@ where
     TA: TeamAnalytics,
     CNE: ContactsEnqueuer,
     EB: MacroEventBroker + Clone,
+    OSR: OpenSeatRelease,
 {
     #[tracing::instrument(skip(self), err)]
     async fn create_team(
@@ -866,10 +960,32 @@ where
             .get_team_enterprise_status(&team_id)
             .await?;
 
-        let removed_member = self
+        let roles_to_remove = team_member_roles_to_remove();
+        let current_roles = self
+            .user_roles_and_permissions_service
+            .get_user_roles(user_id)
+            .await
+            .map_err(RemoveUserFromTeamError::RemoveRolesFromUserError)?;
+        let roles_to_restore: Vec<RoleId> = roles_to_remove
+            .iter()
+            .filter(|role| current_roles.contains(*role))
+            .cloned()
+            .collect();
+
+        let removed_member = match self
             .team_repository
             .remove_user_from_team(&team_id, user_id)
-            .await?;
+            .await
+        {
+            Ok(removed_member) => removed_member,
+            Err(RemoveUserFromTeamError::UserNotInTeam) => {
+                if let Err(error) = self.open_seat_release.release(team_id, user_id).await {
+                    return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
+                }
+                return Err(RemoveUserFromTeamError::UserNotInTeam);
+            }
+            Err(error) => return Err(error),
+        };
 
         let subscription_id = if enterprise {
             None
@@ -951,7 +1067,6 @@ where
             }
         };
 
-        let roles_to_remove = team_member_roles_to_remove();
         let roles = non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap();
 
         if let Err(e) = self
@@ -959,39 +1074,39 @@ where
             .dangerous_remove_roles_from_user(user_id, &roles)
             .await
         {
-            self.channel_service
-                .restore_by_channel_ids(user_id, &left_channel_ids)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback team channel membership after removing team member roles failed"
-                    );
-                })
-                .ok();
-            if let Some(subscription_id) = subscription_id.as_ref() {
-                self.customer_repository
-                    .increment_seat_count(subscription_id, removed_member.plan, 1)
+            self.restore_after_channels_left(
+                &removed_member,
+                subscription_id.as_ref(),
+                user_id,
+                &left_channel_ids,
+                "removing team member roles",
+            )
+            .await;
+            return Err(RemoveUserFromTeamError::RemoveRolesFromUserError(e));
+        }
+
+        if let Err(error) = self.open_seat_release.release(team_id, user_id).await {
+            if let Ok(restore) = non_empty::NonEmpty::new(roles_to_restore.as_slice()) {
+                self.user_roles_and_permissions_service
+                    .dangerous_upsert_roles_for_user(user_id, restore)
                     .await
                     .inspect_err(|rollback_err| {
                         tracing::error!(
-                            error=?rollback_err,
-                            "unable to rollback customer seat count after removing team member roles failed"
+                            error = ?rollback_err,
+                            "unable to restore member roles after releasing the open seat failed"
                         );
                     })
                     .ok();
             }
-            self.team_repository
-                .rollback_remove_user_from_team(&removed_member)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback removed team member after removing team member roles failed"
-                    );
-                })
-                .ok();
-            return Err(RemoveUserFromTeamError::RemoveRolesFromUserError(e));
+            self.restore_after_channels_left(
+                &removed_member,
+                subscription_id.as_ref(),
+                user_id,
+                &left_channel_ids,
+                "releasing the open seat",
+            )
+            .await;
+            return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
         }
 
         // Best-effort: ask the email service to tear down CRM rows

@@ -28,8 +28,11 @@ where
         &self,
         link: &Link,
         accessible_inboxes: &[Link],
-        input: CreateDraftInput,
+        mut input: CreateDraftInput,
     ) -> Result<CreatedDraft, EmailErr> {
+        // Ordinary draft persistence never grants delivery authority. Keep the
+        // legacy field wire-compatible, but only explicit delivery can use it.
+        input.send_time = None;
         self.prepare_and_insert_db_message(link, accessible_inboxes, input, true)
             .await
     }
@@ -243,6 +246,15 @@ where
             if raced.is_some_and(|m| m.is_sent || !m.is_draft) {
                 return Err(EmailErr::MessageAlreadySent(draft_id));
             }
+            if self
+                .email_repo
+                .scheduled_send_times_by_message_ids(&[msg.db_id])
+                .await
+                .map_err(anyhow::Error::from)?
+                .contains_key(&msg.db_id)
+            {
+                return Err(EmailErr::MessageDeliveryConflict(draft_id));
+            }
             return Ok(DeletedUserDraft {
                 deleted: false,
                 thread_deleted: false,
@@ -339,17 +351,10 @@ where
         let Some(settled) = self
             .email_repo
             .insert_message(&resolved, &contacts, link_id, new_thread, is_draft)
-            .await
-            .map_err(anyhow::Error::from)?
+            .await?
         else {
-            // The upsert's owner guard rejected the write: the row it landed
-            // on is under another inbox or is no longer an unsent draft. Tell
-            // the sent case apart, as the delete path does — the client
-            // resets its composer on `MessageAlreadySent` but latches
-            // autosave off on a not-found. Re-read through the handle when the
-            // save carried one, since a concurrent first save may have
-            // settled it on a row this save's input never named. Anything
-            // else stays the opaque not-found the validation read reports.
+            // A concurrent first save can settle a client handle on a different
+            // row. Classify the authoritative row, not our discarded candidate.
             let rejected_id = match resolved.draft_client_id {
                 Some(handle) => self
                     .email_repo
@@ -364,10 +369,20 @@ where
                 .get_simple_message(rejected_id, &accessible_link_ids)
                 .await
                 .map_err(anyhow::Error::from)?;
-            if rejected.is_some_and(|m| m.is_sent || !m.is_draft) {
-                return Err(EmailErr::MessageAlreadySent(resolved.db_id));
+            if rejected.as_ref().is_some_and(|m| m.is_sent || !m.is_draft) {
+                return Err(EmailErr::MessageAlreadySent(rejected_id));
             }
-            return Err(EmailErr::MessageNotFound(resolved.db_id));
+            if rejected.is_some()
+                && self
+                    .email_repo
+                    .scheduled_send_times_by_message_ids(&[rejected_id])
+                    .await
+                    .map_err(anyhow::Error::from)?
+                    .contains_key(&rejected_id)
+            {
+                return Err(EmailErr::MessageDeliveryConflict(rejected_id));
+            }
+            return Err(EmailErr::MessageNotFound(rejected_id));
         };
 
         Ok(CreatedDraft {
@@ -394,64 +409,27 @@ where
     /// forwards (a `replying_to_id` is present) require
     /// `signature_on_replies_forwards`. Best-effort — any failure just skips.
     async fn maybe_inject_signature(&self, link: &Link, input: &mut CreateDraftInput) {
-        if input.include_signature == Some(false) {
-            // Honor "exclude" literally: drop any server-wrapped signature a
-            // client may have baked in, rather than just declining to add one.
-            if input
+        let settings = if input.include_signature == Some(false)
+            || input
                 .body_html
                 .as_deref()
                 .is_some_and(super::signature::has_signature)
-                && let Some(body_html) = input.body_html.take()
-            {
-                input.body_html = Some(super::signature::strip_signature(&body_html));
-            }
-            return;
-        }
-        // Idempotent: if the body already carries a signature — a client still
-        // baking it in during the FE cutover, or a re-sent message — don't add
-        // another (and leave body_text alone too).
-        if input
-            .body_html
-            .as_deref()
-            .is_some_and(super::signature::has_signature)
         {
-            return;
-        }
-        let settings = match self.email_repo.fetch_email_settings(link.id).await {
-            Ok(settings) => settings,
-            Err(e) => {
-                tracing::warn!(error = ?e, "failed to fetch settings for signature; skipping");
-                return;
-            }
+            None
+        } else {
+            self.email_repo.fetch_email_settings(link.id).await
+                .inspect_err(|error| tracing::warn!(error=?error, "failed to fetch settings for signature; skipping"))
+                .ok()
         };
-        let Some(signature) = settings.signature.filter(|s| !s.trim().is_empty()) else {
-            return;
-        };
-        let include = match input.include_signature {
-            Some(value) => value,
-            None => {
-                if input.replying_to_id.is_some() {
-                    settings.signature_on_replies_forwards
-                } else {
-                    true
-                }
-            }
-        };
-        if !include {
-            return;
+        super::signature::SignaturePreparation {
+            settings,
+            include_signature: input.include_signature,
         }
-        if let Some(body_html) = input.body_html.take() {
-            input.body_html = Some(super::signature::inject_signature(&body_html, &signature));
-        }
-        let plain = super::signature::signature_plain_text(&signature);
-        if !plain.is_empty()
-            && let Some(existing) = input.body_text.take().filter(|s| !s.is_empty())
-        {
-            // Only append to an existing plain-text body. HTML-only sends
-            // (body_text None/empty, e.g. the AI path) keep no text part rather
-            // than getting a signature-only one that drops the message body.
-            input.body_text = Some(format!("{existing}\n\n{plain}"));
-        }
+        .apply(
+            input.replying_to_id.is_some(),
+            &mut input.body_html,
+            &mut input.body_text,
+        );
     }
 
     async fn validate_existing_message(
@@ -490,13 +468,26 @@ where
             // across the move, and the delete's cascade drops any client-handle
             // binding — the save's binding upsert re-points the handle at the
             // recreated row in the same transaction, so queued offline saves
-            // keep converging. A raced delete (`None`) is fine — the row is
-            // gone either way, and a raced send is caught by the insert's
-            // owner guard.
-            self.email_repo
+            // keep converging. A guarded miss may instead mean the source is
+            // now scheduled: do not continue and adopt another reply draft in
+            // the target inbox while that committed source is still present.
+            let deleted = self
+                .email_repo
                 .delete_draft_message(msg.db_id, msg.thread_db_id, accessible_link_ids)
                 .await
                 .map_err(anyhow::Error::from)?;
+            if deleted.is_none()
+                && let Some(retained) = self
+                    .email_repo
+                    .get_simple_message(msg.db_id, accessible_link_ids)
+                    .await
+                    .map_err(anyhow::Error::from)?
+            {
+                if retained.is_sent || !retained.is_draft {
+                    return Err(EmailErr::MessageAlreadySent(msg.db_id));
+                }
+                return Err(EmailErr::MessageDeliveryConflict(msg.db_id));
+            }
             input.provider_id = None;
             input.thread_db_id = None;
             input.provider_thread_id = None;

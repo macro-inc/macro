@@ -601,6 +601,20 @@ export const SpreadsheetResponse = z.any().superRefine((x, ctx) => {
   }
 });
 
+export const CommentOnDocumentText = z.object({
+  documentId: z.string().uuid(),
+  text: z.string(),
+  occurrence: z.union([z.number().int().gte(1), z.null()]).optional(),
+  content: z.string(),
+});
+
+export const CommentOnDocumentTextResponse = z.object({
+  documentId: z.string().uuid(),
+  threadId: z.string().uuid(),
+  commentId: z.string().uuid(),
+  markedText: z.string(),
+});
+
 export const ConfigureBot = z.object({
   botId: z.string().uuid(),
   name: z.union([z.string(), z.null()]).optional(),

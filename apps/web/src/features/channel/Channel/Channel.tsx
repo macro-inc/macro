@@ -334,11 +334,10 @@ export function Channel(props: ChannelProps) {
       // Once there are no older pages left to fetch, the oldest loaded message
       // (index 0) is the true first message in the channel.
       !messagesQuery.hasNextPage,
-      // A reply being composed opens the thread before any reply exists; the
-      // rail must already reach it. Signal reads keep this memo live.
+      // Only an inline composer extends the rail before a reply exists.
       (message) =>
-        threadManager.getOrCreateThreadState(message.id).isReplying() ||
-        unifiedInput.replyTarget()?.threadId === message.id
+        !isUnifiedInputMode() &&
+        threadManager.getOrCreateThreadState(message.id).isReplying()
     )
   );
 

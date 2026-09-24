@@ -13,7 +13,7 @@ import {
 import {
   driveSearch,
   driveSearchCodec,
-} from '@app/features/drive-view/primitives/drive-route';
+} from '@app/features/drive-view/primitives/drive-search';
 import type { SerializedSearchParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';

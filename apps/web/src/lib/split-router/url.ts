@@ -1,3 +1,4 @@
+import { mergeBrowserEntries, parseBrowserEntries } from './entry-state';
 import {
   assertRouteEntry,
   decodeRoute,
@@ -38,11 +39,13 @@ export function parseExternalLocation(
   value: string | SplitRouterExternalLocationValue
 ): SplitRouterExternalLocationValue {
   if (typeof value !== 'string') {
-    return {
+    const location: SplitRouterExternalLocationValue = {
       pathname: value.pathname || '/',
       search: addPrefix(value.search, '?'),
       hash: addPrefix(value.hash, '#'),
     };
+    if (Object.hasOwn(value, 'state')) location.state = value.state;
+    return location;
   }
 
   const parsed = new URL(value, 'https://split-router.invalid');
@@ -63,10 +66,9 @@ export function parseRoutePathname(
     .split('/')
     .filter(Boolean);
   const base = routes.basePath;
-  const segments =
-    base.length > 0 && base.every((part, index) => raw[index] === part)
-      ? raw.slice(base.length)
-      : raw;
+  let segments = raw;
+  const startsWithBase = base.every((part, index) => raw[index] === part);
+  if (base.length > 0 && startsWithBase) segments = raw.slice(base.length);
 
   try {
     return segments.map(decodeURIComponent);
@@ -102,9 +104,10 @@ export function decodeRouteLayout(
   routes: SplitRoutesManifest,
   segments: string[]
 ): SplitRouterEntry[] {
-  const parts = segments.includes(SPLIT_PATH_SEPARATOR)
-    ? framedParts(segments)
-    : [segments];
+  let parts = [segments];
+  if (segments.includes(SPLIT_PATH_SEPARATOR)) {
+    parts = framedParts(segments);
+  }
   const decoded = parts.map((part) => decodeRoute(routes, part));
 
   if (decoded.length > 0 && decoded.every(Boolean)) {
@@ -136,7 +139,8 @@ export function encodeRouteLayout(
   return entries.flatMap((entry, index) => {
     const segments = encodeRoute(routes, entry);
 
-    return index === 0 ? segments : [SPLIT_PATH_SEPARATOR, ...segments];
+    if (index === 0) return segments;
+    return [SPLIT_PATH_SEPARATOR, ...segments];
   });
 }
 
@@ -155,23 +159,30 @@ export function decodeSplitRouterLocation(options: {
     externalLocation.pathname
   );
   const search = parseSplitSearch(externalLocation.search);
-  const entries = decodeRouteLayout(options.routes, segments ?? []).map(
-    (entry, index) => {
-      const route = entry.location.route;
-      const splitSearch = filterRouteSearch(
-        options.routes,
-        route,
-        search.get(index)
-      );
-
-      return {
-        location: {
-          ...entry.location,
-          ...(splitSearch ? { search: splitSearch } : {}),
-        },
-      };
+  const browserEntries = parseBrowserEntries(externalLocation.state);
+  const decodedEntries = decodeRouteLayout(options.routes, segments ?? []);
+  let entryState: typeof browserEntries;
+  if (browserEntries?.length === decodedEntries.length) {
+    entryState = browserEntries;
+  }
+  const entries = decodedEntries.map((entry, index) => {
+    const route = entry.location.route;
+    const splitSearch = filterRouteSearch(
+      options.routes,
+      route,
+      search.get(index)
+    );
+    const browserEntry = entryState?.[index];
+    const decoded: SplitRouterEntry = {
+      location: { ...entry.location },
+    };
+    if (splitSearch) decoded.location.search = splitSearch;
+    if (browserEntry?.key) decoded.key = browserEntry.key;
+    if (browserEntry && Object.hasOwn(browserEntry, 'state')) {
+      decoded.state = browserEntry.state;
     }
-  );
+    return decoded;
+  });
 
   return { entries, externalLocation };
 }
@@ -187,10 +198,12 @@ export function encodeSplitRouterLocation(options: {
     options.routes,
     encodeRouteLayout(options.routes, options.entries)
   );
-  const ownedSearch =
-    options.preserveExternalSearch === false
-      ? new Set(options.routes.globalSearch ?? [])
-      : getExternalSearchKeys(options.routes, options.entries);
+  let ownedSearch: ReadonlySet<string>;
+  if (options.preserveExternalSearch === false) {
+    ownedSearch = new Set(options.routes.globalSearch ?? []);
+  } else {
+    ownedSearch = getExternalSearchKeys(options.routes, options.entries);
+  }
   const query = new URLSearchParams();
 
   for (const [key, value] of new URLSearchParams(options.previous.search)) {
@@ -218,11 +231,17 @@ export function encodeSplitRouterLocation(options: {
     pathname.replace(/\/+$/g, '') !==
     options.previous.pathname.replace(/\/+$/g, '');
 
-  return {
+  const encoded: SplitRouterExternalLocationValue = {
     pathname,
-    search: search ? `?${search}` : '',
-    hash: !pathChanged || options.preserveHash ? options.previous.hash : '',
+    search: '',
+    hash: '',
+    state: mergeBrowserEntries(options.previous.state, options.entries),
   };
+  if (search) encoded.search = `?${search}`;
+  if (!pathChanged || options.preserveHash) {
+    encoded.hash = options.previous.hash;
+  }
+  return encoded;
 }
 
 export function serializeSplitRouterLocation(options: {
