@@ -113,7 +113,10 @@ export function CopyAvailabilityButton(props: { class?: string }) {
         class={cn('shrink-0 rounded-lg border border-edge-muted', props.class)}
       >
         <Dropdown placement="bottom-start">
-          <Dropdown.Trigger class="gap-1.5 bg-transparent px-2 hover:bg-ink/[0.04]">
+          <Dropdown.Trigger
+            data-tour="calendar-availability"
+            class="gap-1.5 bg-transparent px-2 hover:bg-ink/[0.04]"
+          >
             <CalendarCheckIcon class="size-3.5 shrink-0" />
             <span class="truncate text-xs font-medium">Copy availability</span>
           </Dropdown.Trigger>

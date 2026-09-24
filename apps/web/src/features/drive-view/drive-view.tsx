@@ -1,5 +1,6 @@
 import { listOwnedSlotName } from '@app/components/list';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import {
   type FacetSelection,
   useSoupListNavigationHotkeys,
@@ -147,7 +148,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
 
   return (
     <DriveProvider value={{ state, source, list, sidebar, actions }}>
-      <DriveWorkspace />
+      <DriveWorkspace guide={<ViewGettingStarted view="documents" />} />
     </DriveProvider>
   );
 }

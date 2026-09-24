@@ -56,6 +56,7 @@ import {
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
+import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import {
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
@@ -668,6 +669,7 @@ export const SoupView = (props: SoupViewProps) => {
         </div>
         <SoupFiltersBar variant={props.filterBarVariant} />
       </Show>
+      <ViewGettingStarted view={contentId} />
       <Show when={soupView.source.cachedMail?.()}>
         <p role="status" class="px-4 py-1 text-xs text-ink-muted">
           Showing cached mail. Only synchronized messages are available.

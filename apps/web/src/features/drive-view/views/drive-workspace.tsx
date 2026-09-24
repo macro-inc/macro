@@ -3,7 +3,7 @@ import { SplitRouter } from '@app/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createMemo, Show, Suspense } from 'solid-js';
+import { createMemo, type JSX, Show, Suspense } from 'solid-js';
 import { DriveFileDropzone } from '../components/drive-file-dropzone';
 import { useDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
@@ -22,7 +22,7 @@ export function DriveLoading() {
   );
 }
 
-export function DriveWorkspace() {
+export function DriveWorkspace(props: { guide?: JSX.Element }) {
   const { state, sidebar, actions } = useDriveView();
 
   const breadcrumbs = createMemo(() =>
@@ -67,6 +67,7 @@ export function DriveWorkspace() {
                 fallback={
                   <>
                     <DriveHeader />
+                    {props.guide}
                     <ViewShell.Content>
                       <Suspense fallback={<DriveLoading />}>
                         <DriveFileDropzone onDrop={actions.dropFiles}>

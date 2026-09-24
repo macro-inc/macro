@@ -1,5 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
+import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { SplitRouter } from '@app/lib/split-router';
@@ -86,6 +87,7 @@ function ChannelsViewRoot() {
                       />
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
+                      <ViewGettingStarted view="channels" />
                       <ChannelSourcesContext.Provider value={sources}>
                         <SplitRouter.Outlet
                           fallback={() => (

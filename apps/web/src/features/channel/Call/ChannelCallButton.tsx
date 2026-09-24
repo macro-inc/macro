@@ -100,6 +100,7 @@ export function ChannelCallButton(props: { channelId: string }) {
   return (
     <Show when={!call.isInThisChannel()}>
       <Button
+        data-tour="channel-call"
         onClick={handleClick}
         tooltip={tooltip()}
         variant={variant()}

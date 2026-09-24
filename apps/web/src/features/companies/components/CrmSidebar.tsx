@@ -52,7 +52,7 @@ export function CrmSidebar(props: {
         }
       />
       <ViewSidebar.Content>
-        <div class="px-1.5">
+        <div data-tour="crm-layout" class="px-1.5">
           <TabsInset
             aria-label="Company layout"
             fullWidth

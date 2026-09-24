@@ -5,7 +5,8 @@ import {
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
-import { SidePanel } from '@components/app/side-panel/SidePanel';
+import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
+import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
@@ -96,6 +97,7 @@ function CalendarPages() {
 }
 
 function WorkspaceContent() {
+  const sidePanel = useSidePanel();
   const panel = useSplitPanelOrThrow();
   const calendarView = useCalendarView();
 
@@ -107,6 +109,17 @@ function WorkspaceContent() {
   return (
     <>
       <Header />
+      <ViewGettingStarted
+        view="calendar"
+        onStepChange={(step) => {
+          if (!step.revealCalendars || !sidePanel || sidePanel.isNarrow())
+            return;
+          sidePanel.setIsOpen(true);
+          sidePanel.setOpenSectionIds([
+            ...new Set([...sidePanel.openSectionIds(), 'calendar-controls']),
+          ]);
+        }}
+      />
       <SidePanelSections />
 
       <SelectedEventDetails
@@ -117,7 +130,10 @@ function WorkspaceContent() {
       />
 
       <main class="flex size-full min-h-0">
-        <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
+        <div
+          data-tour="calendar-grid"
+          class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col"
+        >
           <CalendarPages />
         </div>
       </main>

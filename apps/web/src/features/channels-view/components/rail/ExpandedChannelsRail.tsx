@@ -772,7 +772,13 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
             </span>
           </Show>
         </button>
-        <div data-section-action="" class="flex items-center gap-0.5">
+        <div
+          data-tour={
+            props.config.group === 'channels' ? 'channels-create' : undefined
+          }
+          data-section-action=""
+          class="flex items-center gap-0.5"
+        >
           <ChannelSortDropdown
             group={props.config.group}
             label={props.config.label}

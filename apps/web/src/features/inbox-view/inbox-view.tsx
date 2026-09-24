@@ -1,6 +1,7 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
 import { CalendarView } from '@app/features/calendar-view/calendar-view';
+import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import { createSearchParams, SplitRouter } from '@app/lib/split-router';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewFrame, PreviewPanel } from '@components/app/PreviewPanel';
@@ -52,6 +53,9 @@ function HomeListPane(props: {
         showContent();
       }}
     >
+      <Show when={!isTouchDevice()}>
+        <ViewGettingStarted view="home" />
+      </Show>
       <Suspense fallback={<InboxFallback />}>
         <InboxList
           hasPreview={props.hasPreview}
@@ -113,7 +117,10 @@ function InboxViewRoot() {
                         onNewChat={newChat}
                       />
                     </ViewShell.Aside>
-                    <ViewShell.Main class="overflow-hidden">
+                    <ViewShell.Main
+                      data-tour="home-composer"
+                      class="overflow-hidden"
+                    >
                       {/* Detail routes load lazily. Suspend only this area, so
                           the list stays mounted and a pending detail's effects
                           wait until it resolves. */}
