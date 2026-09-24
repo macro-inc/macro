@@ -295,6 +295,16 @@ describe('session controls', () => {
     expect(screen.queryByText('Changes ready to review')).toBeNull();
   });
 
+  it('hides the handoff while the session still has queued messages', () => {
+    const context = readyContext();
+    const [queued, setQueued] = createSignal(true);
+    context.host.hasQueuedMessages = queued;
+    mount(context, () => <ChangesHandoff />);
+    expect(screen.queryByText('Changes ready to review')).toBeNull();
+    setQueued(false);
+    expect(screen.getByText('Changes ready to review')).toBeTruthy();
+  });
+
   it('sends queued notes to the agent from the dock', () => {
     const context = readyContext();
     const { controller } = mount(context, () => <ReviewNotesDock />);

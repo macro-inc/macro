@@ -650,7 +650,9 @@ or failed GitHub request never falls back to estimated transcript totals.
 
 While the pane is closed and a capture has files, a **Changes ready to
 review** card sits above the composer with **Review changes**, **Pull request
-#N** (opens GitHub), and **Dismiss**. With no linked PR, the pane explains
+#N** (opens GitHub), and **Dismiss**. It is hidden while the session still
+has queued messages — those prompts will keep changing the tree. With no
+linked PR, the pane explains
 that a GitHub PR is required. Ask the agent to open one and register its URL
 with `set_pull_request`, then use **Refresh changes**. An unavailable or
 oversized PR is explained in the pane; there is no branch or container fallback.
