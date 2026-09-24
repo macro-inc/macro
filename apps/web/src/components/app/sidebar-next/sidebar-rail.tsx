@@ -16,7 +16,7 @@ import { useNavItemGates } from './use-nav-item-gates';
 
 /**
  * The rebuilt app sidebar, behind `enable-new-app-views`: a single always-narrow
- * column of 36px icon buttons, labels in tooltips.
+ * column of 40px icon buttons, labels in tooltips.
  *
  * Always narrow by design — there is no slim mode or hover-peek overlay.
  * `cmd+.` toggles navigation in the active workspace. The `g`-prefixed
@@ -54,15 +54,15 @@ export const SidebarRail = () => {
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
       class={cn(
-        'relative flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-hidden border-edge-frame bg-panel px-2.5 pb-3 pt-3',
+        'relative flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-hidden border-edge-frame bg-panel px-2 pb-3 pt-2',
         (globalSplitManager()?.splits().length ?? 1) <= 1 && 'border-r'
       )}
     >
       <SidebarRailCreateButton />
       <SearchRailButton />
 
-      <nav class="shrink-0 pt-5">
-        <ul class="flex flex-col items-center gap-2">
+      <nav class="shrink-0 pt-4">
+        <ul class="flex flex-col items-center gap-1">
           <For each={visibleNavItems(gates())}>
             {(item) => (
               <li class="flex">

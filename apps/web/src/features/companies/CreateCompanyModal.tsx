@@ -101,7 +101,7 @@ export function CreateCompanyModal() {
         class="rounded-xl touch:h-auto *:max-h-[75vh]"
       >
         <Panel.Body>
-          <form class="flex flex-col gap-4 p-4" onSubmit={handleSubmit}>
+          <form class="flex flex-col gap-4 p-5" onSubmit={handleSubmit}>
             <Dialog.CloseButton
               as={Button}
               size="icon-sm"

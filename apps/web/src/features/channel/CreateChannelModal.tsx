@@ -151,7 +151,7 @@ export function CreateChannelModal() {
     >
       <Panel depth={2} class="rounded-xl *:max-h-[75vh]">
         <Panel.Body>
-          <form class="flex flex-col gap-4 p-4" onSubmit={handleSubmit}>
+          <form class="flex flex-col gap-4 p-5" onSubmit={handleSubmit}>
             <div class="flex items-center gap-1">
               <Show when={team()}>
                 <TabsInset

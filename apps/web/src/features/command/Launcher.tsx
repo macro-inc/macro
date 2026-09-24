@@ -1012,7 +1012,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         ref={ref}
         tabindex={-1}
       >
-        <CommandMenuShell.Header class="gap-2 px-4 my-1 border-b-0">
+        <CommandMenuShell.Header class="border-b-0">
           <Show
             when={searchMode()}
             fallback={

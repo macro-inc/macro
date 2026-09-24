@@ -69,7 +69,12 @@ fall back to legacy document routes. This uses touch detection, not the native-a
 check: in DevTools, enable touch emulation rather than only narrowing the viewport.
 Legacy document URLs upgrade to Drive only when desktop detail rendering is enabled.
 
-Splits: the app is a tiling window manager. Public variable-length routes use
+The outer navigation rail uses 20px icons in 40px buttons with 4px gaps.
+Command and create-menu headers have 20px horizontal and 12px vertical padding.
+
+Splits: the app is a tiling window manager. Active light-theme panes are white;
+inactive desktop panes are slightly darker than the active pane across themes,
+while retaining the theme hue. Public variable-length routes use
 `~` as the boundary between panes
 (`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`
 pane routes remain accepted. Known app-view URLs under `/app/component/` redirect

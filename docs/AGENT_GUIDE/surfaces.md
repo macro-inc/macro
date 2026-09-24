@@ -693,6 +693,9 @@ returning from an opened file.
 
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
+Event composer dropdown triggers and date/time inputs use the theme control
+surface, so they blend with the dialog instead of using the darker page fill.
+
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
 recent choice is remembered locally for navigation that does not specify a period. An
