@@ -64,6 +64,7 @@ function getNotificationIcon(
     .with('call_started', () => PhoneIcon)
     .with('reminder', () => BellIcon)
     .with('calendar_event_reminder', () => CalendarBlankIcon)
+    .with('calendar_event_join_request', () => CalendarBlankIcon)
     .with('inbox_reauth_required', () => EnvelopeIcon)
     .with('agent_session_settled', () => AgentIcon)
     .with('agent_session_waiting_for_input', () => QuestionIcon)

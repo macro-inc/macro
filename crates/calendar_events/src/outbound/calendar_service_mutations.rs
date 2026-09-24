@@ -22,7 +22,7 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventPatch,
-        VisibleCalendar,
+        CalendarJoinRequest, VisibleCalendar,
     },
     ports::{
         CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
@@ -303,6 +303,33 @@ impl CalendarMutationService for CalendarServiceMutations {
             .json(&serde_json::json!({ "calendarId": calendar_id })),
         )
         .await
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn respond_to_join_request(
+        &self,
+        requester_id: &str,
+        request_id: Uuid,
+        accept: bool,
+    ) -> Result<CalendarJoinRequest, CalendarMutationError> {
+        self.send(
+            self.request(
+                reqwest::Method::PUT,
+                &format!("/join-requests/{request_id}"),
+                requester_id,
+            )
+            .json(&serde_json::json!({
+                "decision": if accept { "accept" } else { "decline" },
+            })),
+        )
+        .await?
+        .json::<CalendarJoinRequest>()
+        .await
+        .map_err(|error| {
+            CalendarMutationError::Retryable(format!(
+                "the join request response could not be parsed: {error}"
+            ))
+        })
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]

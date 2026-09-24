@@ -496,6 +496,90 @@
           }
         }
       }
+    },
+    "/join-requests/{request_id}": {
+      "put": {
+        "tags": ["calendar_events"],
+        "summary": "Answer a request to join one of the requester's events and return where\nit now stands.",
+        "operationId": "respond_to_join_request",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Join request id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondToJoinRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The answered join request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only or needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request not found or its event is not editable by the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The provider rejected the new guest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -773,6 +857,57 @@
             "description": "Event visibility."
           }
         }
+      },
+      "CalendarJoinRequest": {
+        "type": "object",
+        "description": "A channel member's request to be added as a guest of an event they see\nonly through a channel share.",
+        "required": [
+          "id",
+          "eventId",
+          "requesterId",
+          "requesterEmail",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the request was made, or last reopened."
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The owner's event entity that was shared with the channel."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Request identifier."
+          },
+          "requesterEmail": {
+            "type": "string",
+            "description": "Address the owner invites when accepting."
+          },
+          "requesterId": {
+            "type": "string",
+            "description": "Macro user asking to join."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CalendarJoinRequestStatus",
+            "description": "Where the request stands."
+          }
+        }
+      },
+      "CalendarJoinRequestDecision": {
+        "type": "string",
+        "description": "How an owner answers a join request.",
+        "enum": ["accept", "decline"]
+      },
+      "CalendarJoinRequestStatus": {
+        "type": "string",
+        "description": "Lifecycle of a request to be added as a guest of a shared event.",
+        "enum": ["pending", "accepted", "declined"]
       },
       "CalendarMutationApiError": {
         "type": "object",
@@ -1109,6 +1244,17 @@
           }
         ],
         "description": "Realtime signal that a connected inbox's calendar projection changed."
+      },
+      "RespondToJoinRequestRequest": {
+        "type": "object",
+        "description": "Request body answering a join request.",
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/CalendarJoinRequestDecision",
+            "description": "The owner's answer."
+          }
+        }
       },
       "RsvpCalendarEventRequest": {
         "type": "object",

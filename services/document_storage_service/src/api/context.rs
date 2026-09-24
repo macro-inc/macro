@@ -13,8 +13,13 @@ use cal::{
     outbound::analytics_client::AnalyticsClientSink,
 };
 use calendar_events::{
-    domain::service::CalendarService, inbound::axum_router::CalendarRouterState,
-    outbound::pg::PgCalendarRepository,
+    domain::{join_requests::CalendarJoinRequestServiceImpl, service::CalendarService},
+    inbound::{
+        axum_router::CalendarRouterState, join_request_router::CalendarJoinRequestRouterState,
+    },
+    outbound::{
+        notification_notifier::NotificationCalendarJoinRequestNotifier, pg::PgCalendarRepository,
+    },
 };
 use call::{
     domain::service::CallServiceImpl,
@@ -253,6 +258,16 @@ pub(crate) type DssCalendarService = CalendarService<PgCalendarRepository>;
 
 /// Calendar occurrence router state.
 pub(crate) type DssCalendarState = CalendarRouterState<DssCalendarService, AuthorizationService>;
+
+/// Service for asking to join calendar events shared with a channel.
+pub(crate) type DssCalendarJoinRequestService = CalendarJoinRequestServiceImpl<
+    PgCalendarRepository,
+    NotificationCalendarJoinRequestNotifier<NotificationIngressType>,
+>;
+
+/// Calendar join-request router state.
+pub(crate) type DssCalendarJoinRequestState =
+    CalendarJoinRequestRouterState<DssCalendarJoinRequestService, AuthorizationService>;
 
 /// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
 pub(crate) struct TaskPropertiesAdapter {
@@ -618,6 +633,7 @@ pub(crate) struct ApiContext {
     pub channel_list_state: DssChannelListState,
     pub entity_access_service: Arc<EntityAccessService>,
     pub calendar_state: DssCalendarState,
+    pub calendar_join_request_state: DssCalendarJoinRequestState,
     pub documents_state: DocumentsState,
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,

@@ -20,10 +20,14 @@ use cal::{
     inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };
+use calendar_events::domain::join_requests::CalendarJoinRequestServiceImpl;
 use calendar_events::domain::reminder_dispatch::CalendarReminderDispatchService;
 use calendar_events::inbound::axum_router::CalendarRouterState;
 use calendar_events::inbound::dispatch_worker::CalendarReminderDispatchWorker;
-use calendar_events::outbound::notification_notifier::NotificationCalendarReminderNotifier;
+use calendar_events::inbound::join_request_router::CalendarJoinRequestRouterState;
+use calendar_events::outbound::notification_notifier::{
+    NotificationCalendarJoinRequestNotifier, NotificationCalendarReminderNotifier,
+};
 use calendar_events::outbound::sqs_dispatch_queue::SqsCalendarDispatchQueue;
 use call::{
     domain::service::CallServiceImpl,
@@ -1424,6 +1428,15 @@ async fn run() -> anyhow::Result<()> {
         )),
         authorization_state.clone(),
     );
+    // Join requests write, so they use the primary rather than the replica
+    // the occurrence reads use.
+    let calendar_join_request_state = CalendarJoinRequestRouterState::new(
+        Arc::new(CalendarJoinRequestServiceImpl::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+            NotificationCalendarJoinRequestNotifier::new((*notification_ingress_service).clone()),
+        )),
+        authorization_state.clone(),
+    );
 
     // Reminder dispatch. An EventBridge rule drops a sweep tick on this queue
     // every minute; the sweep fans one message out per due firing, onto the
@@ -1586,6 +1599,7 @@ async fn run() -> anyhow::Result<()> {
         channel_list_state,
         entity_access_service: entity_access_service.clone(),
         calendar_state,
+        calendar_join_request_state,
         projects_state: ProjectRouterState {
             service: project_service,
             access_service: entity_access_service.clone(),

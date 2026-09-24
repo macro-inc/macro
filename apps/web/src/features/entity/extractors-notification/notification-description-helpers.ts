@@ -121,6 +121,7 @@ export function getActionVerb(type: NotificationType): string {
       // Reads as a standalone phrase, not an actor's action — nobody sent it.
       .with('reminder', () => 'reminder')
       .with('calendar_event_reminder', () => 'upcoming event')
+      .with('calendar_event_join_request', () => 'asked to join')
       .with('inbox_reauth_required', () => 'needs reconnection')
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer')
@@ -166,6 +167,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('call_started', () => (count === 1 ? 'call' : 'calls'))
     .with('reminder', () => (count === 1 ? 'reminder' : 'reminders'))
     .with('calendar_event_reminder', () => (count === 1 ? 'event' : 'events'))
+    .with('calendar_event_join_request', () =>
+      count === 1 ? 'join request' : 'join requests'
+    )
     .with('inbox_reauth_required', () => (count === 1 ? 'inbox' : 'inboxes'))
     .with('agent_session_settled', () =>
       count === 1 ? 'agent run' : 'agent runs'

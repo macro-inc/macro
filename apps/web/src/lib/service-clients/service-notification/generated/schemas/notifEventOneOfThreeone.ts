@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AiResponseMetadata } from './aiResponseMetadata';
+import type { CalendarEventJoinRequestMetadata } from './calendarEventJoinRequestMetadata';
 import type { NotifEventOneOfThreeoneTag } from './notifEventOneOfThreeoneTag';
 
 /**
- * An AI assistant responded to a chat.
+ * A channel member asked to be added as a guest of a shared event.
  */
 export type NotifEventOneOfThreeone = {
-  /** An AI assistant responded to a chat. */
-  content: AiResponseMetadata;
+  /** A channel member asked to be added as a guest of a shared event. */
+  content: CalendarEventJoinRequestMetadata;
   tag: NotifEventOneOfThreeoneTag;
 };

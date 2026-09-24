@@ -6,11 +6,13 @@
  */
 import type {
   CalendarEvent,
+  CalendarJoinRequest,
   CalendarMutationApiError,
   CopyCalendarEventRequest,
   CreateCalendarEventRequest,
   DeleteCalendarEventParams,
   ListCalendarsResponse,
+  RespondToJoinRequestRequest,
   RsvpCalendarEventRequest,
   UpdateCalendarEventRequest,
 } from './schemas';
@@ -517,4 +519,84 @@ export const healthHandler = async (
     status: res.status,
     headers: res.headers,
   } as healthHandlerResponse;
+};
+
+/**
+ * @summary Answer a request to join one of the requester's events and return where
+it now stands.
+ */
+export type respondToJoinRequestResponse200 = {
+  data: CalendarJoinRequest;
+  status: 200;
+};
+
+export type respondToJoinRequestResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type respondToJoinRequestResponse403 = {
+  data: CalendarMutationApiError;
+  status: 403;
+};
+
+export type respondToJoinRequestResponse404 = {
+  data: CalendarMutationApiError;
+  status: 404;
+};
+
+export type respondToJoinRequestResponse409 = {
+  data: CalendarMutationApiError;
+  status: 409;
+};
+
+export type respondToJoinRequestResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type respondToJoinRequestResponseSuccess =
+  respondToJoinRequestResponse200 & {
+    headers: Headers;
+  };
+export type respondToJoinRequestResponseError = (
+  | respondToJoinRequestResponse401
+  | respondToJoinRequestResponse403
+  | respondToJoinRequestResponse404
+  | respondToJoinRequestResponse409
+  | respondToJoinRequestResponse503
+) & {
+  headers: Headers;
+};
+
+export type respondToJoinRequestResponse =
+  | respondToJoinRequestResponseSuccess
+  | respondToJoinRequestResponseError;
+
+export const getRespondToJoinRequestUrl = (requestId: string) => {
+  return `/join-requests/${requestId}`;
+};
+
+export const respondToJoinRequest = async (
+  requestId: string,
+  respondToJoinRequestRequest: RespondToJoinRequestRequest,
+  options?: RequestInit
+): Promise<respondToJoinRequestResponse> => {
+  const res = await fetch(getRespondToJoinRequestUrl(requestId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(respondToJoinRequestRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: respondToJoinRequestResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as respondToJoinRequestResponse;
 };

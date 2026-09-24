@@ -42,6 +42,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('reminder', () => 'Reminder')
       // Same shape: no actor, reads "Upcoming event · <event title>".
       .with('calendar_event_reminder', () => 'Upcoming event')
+      .with('calendar_event_join_request', () => 'asked to join an event')
       .with('github_pr_status_changed', () => 'updated a pull request')
       .with('github_pr_check_run', () => {
         const meta = n.notification_metadata;
@@ -101,6 +102,10 @@ export function getNotificationTargetName(
       .with({ tag: 'reminder' }, () => undefined)
       .with(
         { tag: 'calendar_event_reminder' },
+        (m) => m.content.title || '(No title)'
+      )
+      .with(
+        { tag: 'calendar_event_join_request' },
         (m) => m.content.title || '(No title)'
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
@@ -167,6 +172,10 @@ export function getNotificationContent(
       .with({ tag: 'calendar_event_reminder' }, (m) =>
         formatCalendarReminderTime(m.content)
       )
+      .with(
+        { tag: 'calendar_event_join_request' },
+        (m) => `${m.content.requesterEmail} asked to join`
+      )
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
       .with(
         { tag: 'agent_session_settled' },
@@ -230,6 +239,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       // reminder resolves to no target name and renders without one anyway.
       .with({ tag: 'reminder' }, () => true)
       .with({ tag: 'calendar_event_reminder' }, () => true)
+      .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with(
         {

@@ -1516,6 +1516,65 @@ impl NotificationExtIos for ReminderMetadata {
     }
 }
 
+/// A channel member who sees a calendar event only through a channel share
+/// asked its owner to add them as a guest. Sent to the owner, with the
+/// requester as sender.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEventJoinRequestMetadata {
+    /// The owner's calendar event entity the request is for.
+    #[schema(value_type = String, format = Uuid)]
+    pub event_id: Uuid,
+    /// The join request, answered from the event.
+    #[schema(value_type = String, format = Uuid)]
+    pub request_id: Uuid,
+    /// Event display title when the request was made.
+    pub title: String,
+    /// Address the owner would invite.
+    pub requester_email: String,
+}
+
+impl Notification for CalendarEventJoinRequestMetadata {
+    const TYPE_NAME: &'static str = "calendar_event_join_request";
+}
+
+impl NotificationTitle for CalendarEventJoinRequestMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(if self.title.is_empty() {
+            "(No title)".to_string()
+        } else {
+            self.title.clone()
+        })
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("{} asked to join", self.requester_email))
+    }
+}
+
+impl NotificationExtIos for CalendarEventJoinRequestMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(Self::TYPE_NAME).append(&self.request_id.to_string())
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(self, sender_id, notification_id, None).ok()
+    }
+}
+
 /// A calendar event alarm came due. Like [`ReminderMetadata`], these are
 /// self-notifications: `sender_id` must stay `None` or the only recipient is
 /// filtered out. Everything the alert renders rides in here so the

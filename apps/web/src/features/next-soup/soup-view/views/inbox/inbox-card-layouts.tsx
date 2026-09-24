@@ -260,9 +260,11 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       <AtIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
-    .with('calendar_event_reminder', () => () => (
-      <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
-    ))
+    .with(
+      'calendar_event_reminder',
+      'calendar_event_join_request',
+      () => () => <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
+    )
     .with(
       'github_pr_status_changed',
       'github_pr_check_run',
@@ -1480,12 +1482,27 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
     return value ? formatCalendarReminderTime(value) : undefined;
   };
 
+  // A join request row says who asked; the owner answers from the event.
+  const joinRequest = () => {
+    const meta = props.item.notification?.notification_metadata;
+    return meta?.tag === 'calendar_event_join_request'
+      ? meta.content
+      : undefined;
+  };
+
   return (
     <BaseCard
       {...props}
       icon={<CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />}
       title={props.item.entity.name || '(No title)'}
     >
+      <Show when={joinRequest()}>
+        {(request) => (
+          <InboxCard.Content class="truncate">
+            {request().requesterEmail} asked to join
+          </InboxCard.Content>
+        )}
+      </Show>
       <Show when={datePreview()}>
         {(value) => (
           <InboxCard.Content class="truncate">{value()}</InboxCard.Content>

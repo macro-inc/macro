@@ -896,6 +896,37 @@ export const listTypedNotificationsResponse = zod
                     .describe('A calendar event alarm came due.'),
                   zod
                     .object({
+                      content: zod
+                        .object({
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              "The owner's calendar event entity the request is for."
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe(
+                              'The join request, answered from the event.'
+                            ),
+                          requesterEmail: zod
+                            .string()
+                            .describe('Address the owner would invite.'),
+                          title: zod
+                            .string()
+                            .describe(
+                              'Event display title when the request was made.'
+                            ),
+                        })
+                        .describe(
+                          'A channel member who sees a calendar event only through a channel share\nasked its owner to add them as a guest. Sent to the owner, with the\nrequester as sender.'
+                        ),
+                      tag: zod.enum(['calendar_event_join_request']),
+                    })
+                    .describe(
+                      'A channel member asked to be added as a guest of a shared event.'
+                    ),
+                  zod
+                    .object({
                       content: zod.object({
                         messageId: zod.string(),
                         summary: zod.string(),
@@ -2651,6 +2682,37 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe('A calendar event alarm came due.'),
                   zod
                     .object({
+                      content: zod
+                        .object({
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              "The owner's calendar event entity the request is for."
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe(
+                              'The join request, answered from the event.'
+                            ),
+                          requesterEmail: zod
+                            .string()
+                            .describe('Address the owner would invite.'),
+                          title: zod
+                            .string()
+                            .describe(
+                              'Event display title when the request was made.'
+                            ),
+                        })
+                        .describe(
+                          'A channel member who sees a calendar event only through a channel share\nasked its owner to add them as a guest. Sent to the owner, with the\nrequester as sender.'
+                        ),
+                      tag: zod.enum(['calendar_event_join_request']),
+                    })
+                    .describe(
+                      'A channel member asked to be added as a guest of a shared event.'
+                    ),
+                  zod
+                    .object({
                       content: zod.object({
                         messageId: zod.string(),
                         summary: zod.string(),
@@ -4400,6 +4462,37 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe('A calendar event alarm came due.'),
                   zod
                     .object({
+                      content: zod
+                        .object({
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              "The owner's calendar event entity the request is for."
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe(
+                              'The join request, answered from the event.'
+                            ),
+                          requesterEmail: zod
+                            .string()
+                            .describe('Address the owner would invite.'),
+                          title: zod
+                            .string()
+                            .describe(
+                              'Event display title when the request was made.'
+                            ),
+                        })
+                        .describe(
+                          'A channel member who sees a calendar event only through a channel share\nasked its owner to add them as a guest. Sent to the owner, with the\nrequester as sender.'
+                        ),
+                      tag: zod.enum(['calendar_event_join_request']),
+                    })
+                    .describe(
+                      'A channel member asked to be added as a guest of a shared event.'
+                    ),
+                  zod
+                    .object({
                       content: zod.object({
                         messageId: zod.string(),
                         summary: zod.string(),
@@ -6096,6 +6189,33 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['calendar_event_reminder']),
             })
             .describe('A calendar event alarm came due.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  eventId: zod
+                    .uuid()
+                    .describe(
+                      "The owner's calendar event entity the request is for."
+                    ),
+                  requestId: zod
+                    .uuid()
+                    .describe('The join request, answered from the event.'),
+                  requesterEmail: zod
+                    .string()
+                    .describe('Address the owner would invite.'),
+                  title: zod
+                    .string()
+                    .describe('Event display title when the request was made.'),
+                })
+                .describe(
+                  'A channel member who sees a calendar event only through a channel share\nasked its owner to add them as a guest. Sent to the owner, with the\nrequester as sender.'
+                ),
+              tag: zod.enum(['calendar_event_join_request']),
+            })
+            .describe(
+              'A channel member asked to be added as a guest of a shared event.'
+            ),
           zod
             .object({
               content: zod.object({

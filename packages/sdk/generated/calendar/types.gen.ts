@@ -240,6 +240,47 @@ export type CalendarEventSourceContent = {
 };
 
 /**
+ * A channel member's request to be added as a guest of an event they see
+ * only through a channel share.
+ */
+export type CalendarJoinRequest = {
+    /**
+     * When the request was made, or last reopened.
+     */
+    createdAt: string;
+    /**
+     * The owner's event entity that was shared with the channel.
+     */
+    eventId: string;
+    /**
+     * Request identifier.
+     */
+    id: string;
+    /**
+     * Address the owner invites when accepting.
+     */
+    requesterEmail: string;
+    /**
+     * Macro user asking to join.
+     */
+    requesterId: string;
+    /**
+     * Where the request stands.
+     */
+    status: CalendarJoinRequestStatus;
+};
+
+/**
+ * How an owner answers a join request.
+ */
+export type CalendarJoinRequestDecision = 'accept' | 'decline';
+
+/**
+ * Lifecycle of a request to be added as a guest of a shared event.
+ */
+export type CalendarJoinRequestStatus = 'pending' | 'accepted' | 'declined';
+
+/**
  * HTTP error body returned by calendar mutation endpoints.
  */
 export type CalendarMutationApiError = {
@@ -484,6 +525,16 @@ export type RefreshCalendarEvent = {
      * Connected inbox whose calendars changed.
      */
     link_id: string;
+};
+
+/**
+ * Request body answering a join request.
+ */
+export type RespondToJoinRequestRequest = {
+    /**
+     * The owner's answer.
+     */
+    decision: CalendarJoinRequestDecision;
 };
 
 /**
@@ -888,3 +939,49 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
+
+export type RespondToJoinRequestData = {
+    body: RespondToJoinRequestRequest;
+    path: {
+        /**
+         * Join request id
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/join-requests/{request_id}';
+};
+
+export type RespondToJoinRequestErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only or needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * Request not found or its event is not editable by the requester
+     */
+    404: CalendarMutationApiError;
+    /**
+     * The provider rejected the new guest
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type RespondToJoinRequestError = RespondToJoinRequestErrors[keyof RespondToJoinRequestErrors];
+
+export type RespondToJoinRequestResponses = {
+    /**
+     * The answered join request
+     */
+    200: CalendarJoinRequest;
+};
+
+export type RespondToJoinRequestResponse = RespondToJoinRequestResponses[keyof RespondToJoinRequestResponses];

@@ -11,10 +11,10 @@ use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionSettledMetadata,
-    AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
-    ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata,
-    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrComment, GithubPrMention,
-    GithubPrReview, GithubPrStatusChanged, GithubReviewRequested,
+    AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventJoinRequestMetadata,
+    CalendarEventReminderMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
+    ChannelReplyMetadata, CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrComment,
+    GithubPrMention, GithubPrReview, GithubPrStatusChanged, GithubReviewRequested,
     MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
     RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
@@ -48,6 +48,7 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         RepliedToDocumentCommentThreadMetadata::TYPE_NAME,
         CommentedOnDocumentMetadata::TYPE_NAME,
         CalendarEventReminderMetadata::TYPE_NAME,
+        CalendarEventJoinRequestMetadata::TYPE_NAME,
         AgentSessionSettledMetadata::TYPE_NAME,
         AgentSessionWaitingForInputMetadata::TYPE_NAME,
         AgentSessionMentionedMetadata::TYPE_NAME,

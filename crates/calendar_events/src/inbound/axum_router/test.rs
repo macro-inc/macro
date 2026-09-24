@@ -63,6 +63,8 @@ fn mention_preview_items_serialize_the_preview_contract() {
             organizer_name: None,
             attendee_count: 3,
             updated_at: starts_at,
+            can_request_to_join: false,
+            join_request_status: None,
         }),
     };
     let json = serde_json::to_value(&accessible).unwrap();

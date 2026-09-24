@@ -457,6 +457,8 @@ function CalendarEventPreviewDetails(props: {
         <SharedEventActions
           eventId={props.mentionedEventId}
           title={props.event.title}
+          canRequestToJoin={props.event.canRequestToJoin ?? false}
+          joinRequestStatus={props.event.joinRequestStatus ?? undefined}
         />
       </Show>
     </div>

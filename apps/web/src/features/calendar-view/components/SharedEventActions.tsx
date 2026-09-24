@@ -2,14 +2,18 @@ import { useHoldParentHoverCardOpen } from '@core/component/HoverCard';
 import { toast } from '@core/component/Toast/Toast';
 import CalendarPlusIcon from '@phosphor/calendar-plus.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
 import DownloadIcon from '@phosphor/download-simple.svg';
+import UserPlusIcon from '@phosphor/user-plus.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
+import { useRequestToJoinCalendarEventMutation } from '@queries/calendar/join-requests';
 import {
   useCopySharedCalendarEventMutation,
   useDownloadCalendarEventIcsMutation,
 } from '@queries/calendar/mutations';
+import type { CalendarMentionEventJoinRequestStatus } from '@service-storage/generated/schemas/calendarMentionEventJoinRequestStatus';
 import { Button, Dropdown } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Match, Show, Switch } from 'solid-js';
 
 /** File name for an exported event, derived from its title. */
 export function icsFileName(title: string): string {
@@ -24,10 +28,18 @@ export function icsFileName(title: string): string {
 
 /**
  * Actions for a meeting the viewer sees only because it was shared with one
- * of their channels: add a private copy to one of their calendars, or
- * download it for a calendar Macro does not write to.
+ * of their channels: ask its owner to add them as a guest, add a private copy
+ * to one of their calendars, or download it for a calendar Macro does not
+ * write to.
  */
-export function SharedEventActions(props: { eventId: string; title: string }) {
+export function SharedEventActions(props: {
+  eventId: string;
+  title: string;
+  /** Whether the event's owner can add the viewer as a guest. */
+  canRequestToJoin: boolean;
+  /** The viewer's request to join, if they made one. */
+  joinRequestStatus?: CalendarMentionEventJoinRequestStatus;
+}) {
   const [menuOpen, setMenuOpen] = createSignal(false);
   // The calendar menu portals out of the hover card; keep the card open
   // while the viewer picks a calendar.
@@ -51,6 +63,18 @@ export function SharedEventActions(props: { eventId: string; title: string }) {
   const addToCalendar = (calendarId?: string) => {
     copy.mutate({ eventId: props.eventId, calendarId });
   };
+
+  // Shown as sent from the moment the ask succeeds, ahead of the preview
+  // refetch that carries the stored status.
+  const [asked, setAsked] = createSignal(false);
+  const requestToJoin = useRequestToJoinCalendarEventMutation({
+    onSuccess: () => {
+      setAsked(true);
+      toast.success('Asked the organizer to add you');
+    },
+    onError: (error) =>
+      toast.failure(error.message || 'Failed to ask to join the event'),
+  });
 
   const download = useDownloadCalendarEventIcsMutation({
     onSuccess: (document) => {
@@ -76,6 +100,31 @@ export function SharedEventActions(props: { eventId: string; title: string }) {
       class="mt-1 flex flex-wrap items-center gap-1"
       onClick={(event) => event.stopPropagation()}
     >
+      <Switch>
+        <Match when={props.joinRequestStatus === 'pending' || asked()}>
+          <span class="flex h-5 items-center gap-1 px-1 text-xs text-ink-muted">
+            <CheckIcon class="size-3" />
+            Requested
+          </span>
+        </Match>
+        <Match when={props.joinRequestStatus === 'accepted'}>
+          <span class="flex h-5 items-center gap-1 px-1 text-xs text-ink-muted">
+            <CheckIcon class="size-3" />
+            Invited
+          </span>
+        </Match>
+        <Match when={props.canRequestToJoin}>
+          <Button
+            variant="outline"
+            size="xs"
+            disabled={requestToJoin.isPending}
+            onClick={() => requestToJoin.mutate(props.eventId)}
+          >
+            <UserPlusIcon />
+            Ask to join
+          </Button>
+        </Match>
+      </Switch>
       <Show
         when={writableCalendars().length > 1}
         fallback={

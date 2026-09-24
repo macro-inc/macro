@@ -1137,6 +1137,122 @@
         }
       }
     },
+    "/calendar-events/{event_id}/join-requests": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "List pending requests to join one of the requester's events.",
+        "operationId": "list_join_requests",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending join requests, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Event not found or not editable by the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Listing failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Ask the owner of an event shared with one of the requester's channels to\nadd them as a guest.",
+        "operationId": "request_to_join",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Shared calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The requester's join request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Event not found or not shared with the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already on the requester's calendar, or only the organizer can add guests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Join request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/active": {
       "get": {
         "tags": ["call::inbound::axum_router"],
@@ -17236,6 +17352,91 @@
           }
         }
       },
+      "CalendarJoinRequest": {
+        "type": "object",
+        "description": "A channel member's request to be added as a guest of an event they see\nonly through a channel share.",
+        "required": [
+          "id",
+          "eventId",
+          "requesterId",
+          "requesterEmail",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the request was made, or last reopened."
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The owner's event entity that was shared with the channel."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Request identifier."
+          },
+          "requesterEmail": {
+            "type": "string",
+            "description": "Address the owner invites when accepting."
+          },
+          "requesterId": {
+            "type": "string",
+            "description": "Macro user asking to join."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CalendarJoinRequestStatus",
+            "description": "Where the request stands."
+          }
+        }
+      },
+      "CalendarJoinRequestApiError": {
+        "type": "object",
+        "description": "HTTP error body returned by join-request endpoints.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/CalendarJoinRequestErrorCode",
+            "description": "Machine-readable failure category."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable failure description."
+          }
+        }
+      },
+      "CalendarJoinRequestErrorCode": {
+        "type": "string",
+        "description": "Machine-readable join-request failure category.",
+        "enum": [
+          "not_found",
+          "already_on_calendar",
+          "organizer_only",
+          "internal"
+        ]
+      },
+      "CalendarJoinRequestStatus": {
+        "type": "string",
+        "description": "Lifecycle of a request to be added as a guest of a shared event.",
+        "enum": ["pending", "accepted", "declined"]
+      },
+      "CalendarJoinRequestsResponse": {
+        "type": "object",
+        "description": "Pending requests to join one event.",
+        "required": ["requests"],
+        "properties": {
+          "requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarJoinRequest"
+            },
+            "description": "Oldest first."
+          }
+        }
+      },
       "CalendarMentionEvent": {
         "type": "object",
         "description": "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting, or — when the requester has\nnone — from the mentioned projection a channel they belong to was given.",
@@ -17252,6 +17453,10 @@
             "description": "Number of attendees on the previewed copy.",
             "minimum": 0
           },
+          "canRequestToJoin": {
+            "type": "boolean",
+            "description": "For a channel-shared preview, whether the event's owner can add the\nrequester as a guest. Always false for the requester's own copy."
+          },
           "description": {
             "type": ["string", "null"],
             "description": "Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering."
@@ -17259,6 +17464,17 @@
           "isRecurring": {
             "type": "boolean",
             "description": "Whether the event repeats."
+          },
+          "joinRequestStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarJoinRequestStatus",
+                "description": "For a channel-shared preview, the requester's join request, if any."
+              }
+            ]
           },
           "location": {
             "type": ["string", "null"],

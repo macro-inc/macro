@@ -561,6 +561,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		calendarEventReminderTimeZone: timeZone
 		calendarEventReminderMinutesBefore: minutesBefore
 	}
+	... on GraphqlCalendarEventJoinRequestMetadata {
+		calendarEventJoinRequestEventId: eventId
+		calendarEventJoinRequestRequestId: requestId
+		calendarEventJoinRequestTitle: title
+		calendarEventJoinRequestRequesterEmail: requesterEmail
+	}
 	... on GraphqlAiResponseMetadata {
 		aiResponseSummary: summary
 		aiResponseMessageId: messageId

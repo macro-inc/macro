@@ -2,12 +2,12 @@ use super::*;
 use crate::domain::models::{
     ActorInboxes, AppliedGoogleGrant, CalendarAttendee, CalendarAttendeeInput,
     CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventCopySource, CalendarEventOverride,
-    CalendarEventSource, CalendarLinkTokenIdentity, CalendarOccurrence, CalendarOccurrenceCursor,
-    CalendarSyncStatus, CalendarWatchRelease, ConferenceChange, DisconnectedGoogleCalendar,
-    EventStart, EventStatus, EventTransparency, EventType, EventVisibility,
-    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel,
-    OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, ProviderCalendar, StoredGoogleCalendar,
-    VisibleCalendar,
+    CalendarEventSource, CalendarJoinTarget, CalendarLinkTokenIdentity, CalendarOccurrence,
+    CalendarOccurrenceCursor, CalendarSyncStatus, CalendarWatchRelease, ConferenceChange,
+    DisconnectedGoogleCalendar, EventStart, EventStatus, EventTransparency, EventType,
+    EventVisibility, GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSource,
+    GoogleWatchChannel, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, ProviderCalendar,
+    StoredGoogleCalendar, VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -138,7 +138,7 @@ fn draft() -> CalendarEventDraft {
 }
 
 #[derive(Clone)]
-struct FakeRepo {
+pub(in crate::domain) struct FakeRepo {
     mutation_target: Option<CalendarEventMutationTarget>,
     /// Series attendees a mutation carries forward RSVP/optional state from.
     stored_attendees: Vec<CalendarAttendee>,
@@ -160,6 +160,13 @@ struct FakeRepo {
     fail_list_visible: bool,
     fail_owned_inboxes: bool,
     copy_source: Option<CalendarEventCopySource>,
+    join_target: Option<CalendarJoinTarget>,
+    /// The request `get_join_request` returns.
+    join_request: Option<CalendarJoinRequest>,
+    /// Whether `open_join_request` reports the request as newly pending.
+    join_request_opened: bool,
+    pub(in crate::domain) opened_join_requests: Arc<Mutex<Vec<(Uuid, String, String)>>>,
+    resolved_join_requests: Arc<Mutex<Vec<(Uuid, CalendarJoinRequestStatus)>>>,
 }
 
 impl Default for FakeRepo {
@@ -180,6 +187,11 @@ impl Default for FakeRepo {
             fail_list_visible: false,
             fail_owned_inboxes: false,
             copy_source: None,
+            join_target: None,
+            join_request: None,
+            join_request_opened: true,
+            opened_join_requests: Default::default(),
+            resolved_join_requests: Default::default(),
         }
     }
 }
@@ -407,6 +419,64 @@ impl CalendarRepository for FakeRepo {
         _event_id: Uuid,
     ) -> Result<Option<CalendarEventCopySource>, rootcause::Report> {
         Ok(self.copy_source.clone())
+    }
+
+    async fn get_join_target(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<CalendarJoinTarget>, rootcause::Report> {
+        Ok(self.join_target.clone())
+    }
+
+    async fn open_join_request(
+        &self,
+        event_id: Uuid,
+        requester_id: &str,
+        requester_email: &str,
+    ) -> Result<(CalendarJoinRequest, bool), rootcause::Report> {
+        self.opened_join_requests.lock().unwrap().push((
+            event_id,
+            requester_id.to_string(),
+            requester_email.to_string(),
+        ));
+        Ok((
+            join_request(
+                event_id,
+                requester_email,
+                CalendarJoinRequestStatus::Pending,
+            ),
+            self.join_request_opened,
+        ))
+    }
+
+    async fn list_pending_join_requests(
+        &self,
+        _event_id: Uuid,
+    ) -> Result<Vec<CalendarJoinRequest>, rootcause::Report> {
+        Ok(self.join_request.clone().into_iter().collect())
+    }
+
+    async fn get_join_request(
+        &self,
+        _request_id: Uuid,
+    ) -> Result<Option<CalendarJoinRequest>, rootcause::Report> {
+        Ok(self.join_request.clone())
+    }
+
+    async fn resolve_join_request(
+        &self,
+        request_id: Uuid,
+        status: CalendarJoinRequestStatus,
+    ) -> Result<Option<CalendarJoinRequest>, rootcause::Report> {
+        self.resolved_join_requests
+            .lock()
+            .unwrap()
+            .push((request_id, status));
+        Ok(self
+            .join_request
+            .clone()
+            .map(|request| CalendarJoinRequest { status, ..request }))
     }
 
     async fn remove_google_source(
@@ -2641,4 +2711,148 @@ async fn copy_leaves_an_event_the_calendar_already_holds_untouched() {
 
     assert!(matches!(error, CalendarMutationError::AlreadyOnCalendar));
     assert!(upserts.lock().unwrap().is_empty());
+}
+
+pub(in crate::domain) fn join_request(
+    event_id: Uuid,
+    requester_email: &str,
+    status: CalendarJoinRequestStatus,
+) -> CalendarJoinRequest {
+    CalendarJoinRequest {
+        id: Uuid::now_v7(),
+        event_id,
+        requester_id: "macro|asker@example.com".to_string(),
+        requester_email: requester_email.to_string(),
+        status,
+        created_at: Utc::now(),
+    }
+}
+
+/// A repository for join-request tests: `target` is what the requester sees,
+/// and `opened` whether recording their request newly opens it.
+pub(in crate::domain) fn join_repo(target: Option<CalendarJoinTarget>, opened: bool) -> FakeRepo {
+    FakeRepo {
+        join_target: target,
+        join_request_opened: opened,
+        ..FakeRepo::default()
+    }
+}
+
+pub(in crate::domain) fn owner_repo() -> FakeRepo {
+    FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        ..FakeRepo::default()
+    }
+}
+
+#[tokio::test]
+async fn accepting_a_join_request_adds_the_requester_as_a_guest() {
+    let event_id = Uuid::now_v7();
+    let pending = join_request(
+        event_id,
+        "asker@example.com",
+        CalendarJoinRequestStatus::Pending,
+    );
+    let repo = FakeRepo {
+        stored_attendees: vec![echo_attendee("self@example.com", true)],
+        join_request: Some(pending.clone()),
+        ..owner_repo()
+    };
+    let resolved = repo.resolved_join_requests.clone();
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let patches = provider.updated_patches.clone();
+
+    let answered = service(repo, provider, FakeTokens::ok())
+        .respond_to_join_request("macro|self@example.com", pending.id, true)
+        .await
+        .unwrap();
+
+    assert_eq!(answered.status, CalendarJoinRequestStatus::Accepted);
+    let patches = patches.lock().unwrap();
+    let emails: Vec<_> = patches[0]
+        .attendees
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|attendee| attendee.email.as_str())
+        .collect();
+    assert_eq!(emails, ["self@example.com", "asker@example.com"]);
+    assert_eq!(
+        resolved.lock().unwrap().as_slice(),
+        [(pending.id, CalendarJoinRequestStatus::Accepted)]
+    );
+}
+
+#[tokio::test]
+async fn declining_a_join_request_writes_nothing_to_the_provider() {
+    let pending = join_request(
+        Uuid::now_v7(),
+        "asker@example.com",
+        CalendarJoinRequestStatus::Pending,
+    );
+    let repo = FakeRepo {
+        join_request: Some(pending.clone()),
+        ..owner_repo()
+    };
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+
+    let answered = service(repo, provider, FakeTokens::ok())
+        .respond_to_join_request("macro|self@example.com", pending.id, false)
+        .await
+        .unwrap();
+
+    assert_eq!(answered.status, CalendarJoinRequestStatus::Declined);
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn only_someone_who_can_edit_the_event_answers_its_join_requests() {
+    let pending = join_request(
+        Uuid::now_v7(),
+        "asker@example.com",
+        CalendarJoinRequestStatus::Pending,
+    );
+    let repo = FakeRepo {
+        join_request: Some(pending.clone()),
+        ..FakeRepo::default()
+    };
+    let resolved = repo.resolved_join_requests.clone();
+
+    let error = service(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    )
+    .respond_to_join_request("macro|stranger@example.com", pending.id, true)
+    .await
+    .unwrap_err();
+
+    assert!(matches!(error, CalendarMutationError::NotFound));
+    assert!(resolved.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_answered_join_request_is_returned_unchanged() {
+    let accepted = join_request(
+        Uuid::now_v7(),
+        "asker@example.com",
+        CalendarJoinRequestStatus::Accepted,
+    );
+    let repo = FakeRepo {
+        join_request: Some(accepted.clone()),
+        ..owner_repo()
+    };
+    let resolved = repo.resolved_join_requests.clone();
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+
+    let answered = service(repo, provider, FakeTokens::ok())
+        .respond_to_join_request("macro|self@example.com", accepted.id, false)
+        .await
+        .unwrap();
+
+    assert_eq!(answered.status, CalendarJoinRequestStatus::Accepted);
+    assert!(calls.lock().unwrap().is_empty());
+    assert!(resolved.lock().unwrap().is_empty());
 }

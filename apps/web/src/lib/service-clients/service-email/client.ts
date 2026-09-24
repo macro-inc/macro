@@ -7,9 +7,11 @@ import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type {
   CalendarEvent,
+  CalendarJoinRequest,
   CopyCalendarEventRequest,
   CreateCalendarEventRequest,
   ListCalendarsResponse,
+  RespondToJoinRequestRequest,
   RsvpCalendarEventRequest,
   UpdateCalendarEventRequest,
 } from '@service-calendar/generated/schemas';
@@ -628,6 +630,19 @@ export const emailClient = {
       `${calendarHost}/events/${eventId}/copy`,
       {
         method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
+  },
+  async respondToCalendarJoinRequest(
+    requestId: string,
+    args: RespondToJoinRequestRequest
+  ) {
+    return fetchWithToken<CalendarJoinRequest, CalendarMutationErrorCode>(
+      `${calendarHost}/join-requests/${requestId}`,
+      {
+        method: 'PUT',
         body: JSON.stringify(args),
         errorResponseHandler: calendarMutationErrorHandler,
       }

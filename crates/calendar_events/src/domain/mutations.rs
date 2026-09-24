@@ -15,9 +15,10 @@ use super::{
     models::{
         ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
         CalendarCreationTarget, CalendarEvent, CalendarEventCopyAccess, CalendarEventDraft,
-        CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert,
-        DisconnectedGoogleCalendar, EventReminders, EventTime, EventType, OccurrenceRange,
-        REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
+        CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert, CalendarJoinRequest,
+        CalendarJoinRequestStatus, DisconnectedGoogleCalendar, EventReminders, EventTime,
+        EventType, OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
+        REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventChange,
@@ -319,6 +320,90 @@ where
             return Err(CalendarMutationError::AlreadyOnCalendar);
         };
         self.persist_echo(target.actor.as_ref(), upsert).await
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn respond_to_join_request(
+        &self,
+        requester_id: &str,
+        request_id: Uuid,
+        accept: bool,
+    ) -> Result<CalendarJoinRequest, CalendarMutationError> {
+        let request = self
+            .repository
+            .get_join_request(request_id)
+            .await
+            .map_err(internal)?
+            .ok_or(CalendarMutationError::NotFound)?;
+        // Only someone who can edit the shared event answers for it; anyone
+        // else learns nothing about the request.
+        let target = self
+            .resolve_mutation_target(requester_id, request.event_id, None)
+            .await?;
+        if request.status != CalendarJoinRequestStatus::Pending {
+            return Ok(request);
+        }
+        if accept {
+            if target.is_read_only {
+                return Err(CalendarMutationError::ReadOnly);
+            }
+            let mut attendees: Vec<CalendarAttendeeInput> = self
+                .repository
+                .get_event_attendees(request.event_id)
+                .await
+                .map_err(internal)?
+                .into_iter()
+                .map(|attendee| CalendarAttendeeInput {
+                    email: attendee.email,
+                    is_optional: attendee.is_optional,
+                    response_status: None,
+                })
+                .collect();
+            if !attendees.iter().any(|attendee| {
+                attendee
+                    .email
+                    .eq_ignore_ascii_case(&request.requester_email)
+            }) {
+                attendees.push(CalendarAttendeeInput {
+                    email: request.requester_email.clone(),
+                    is_optional: false,
+                    response_status: None,
+                });
+            }
+            // The update path carries every retained guest's RSVP forward and
+            // sends Google's invitation to the new one.
+            self.update_event(
+                requester_id,
+                request.event_id,
+                None,
+                CalendarEventPatch {
+                    attendees: Some(attendees),
+                    ..CalendarEventPatch::default()
+                },
+                CalendarUpdateScope::All,
+            )
+            .await?;
+        }
+        let status = if accept {
+            CalendarJoinRequestStatus::Accepted
+        } else {
+            CalendarJoinRequestStatus::Declined
+        };
+        match self
+            .repository
+            .resolve_join_request(request_id, status)
+            .await
+            .map_err(internal)?
+        {
+            Some(resolved) => Ok(resolved),
+            // Another answer landed first; report where it left the request.
+            None => self
+                .repository
+                .get_join_request(request_id)
+                .await
+                .map_err(internal)?
+                .ok_or(CalendarMutationError::NotFound),
+        }
     }
 
     #[tracing::instrument(skip(self, requester_id, patch), err)]
@@ -846,4 +931,4 @@ fn internal(error: rootcause::Report) -> CalendarMutationError {
 }
 
 #[cfg(test)]
-mod test;
+pub(super) mod test;

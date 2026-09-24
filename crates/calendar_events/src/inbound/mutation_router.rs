@@ -25,8 +25,8 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
-        CalendarEventPatch, ConferenceChange, EventReminders, EventTime, EventTransparency,
-        EventVisibility, OutOfOfficeProperties, VisibleCalendar,
+        CalendarEventPatch, CalendarJoinRequest, ConferenceChange, EventReminders, EventTime,
+        EventTransparency, EventVisibility, OutOfOfficeProperties, VisibleCalendar,
     },
     ports::{
         CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
@@ -89,6 +89,10 @@ where
         .route(
             "/events/{event_id}/copy",
             post(copy_calendar_event::<S, Auth>),
+        )
+        .route(
+            "/join-requests/{request_id}",
+            put(respond_to_join_request::<S, Auth>),
         )
         .with_state(state)
 }
@@ -501,6 +505,63 @@ where
         )
         .await?;
     Ok((StatusCode::CREATED, Json(event)))
+}
+
+/// How an owner answers a join request.
+#[derive(Clone, Copy, Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CalendarJoinRequestDecision {
+    /// Add the requester as a guest, which sends them the invitation.
+    Accept,
+    /// Turn the request down.
+    Decline,
+}
+
+/// Request body answering a join request.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RespondToJoinRequestRequest {
+    /// The owner's answer.
+    pub decision: CalendarJoinRequestDecision,
+}
+
+/// Answer a request to join one of the requester's events and return where
+/// it now stands.
+#[tracing::instrument(skip_all, fields(request_id = %request_id), err)]
+#[utoipa::path(
+    put,
+    path = "/join-requests/{request_id}",
+    tag = "calendar_events",
+    params(("request_id" = Uuid, Path, description = "Join request id")),
+    request_body = RespondToJoinRequestRequest,
+    responses(
+        (status = 200, description = "The answered join request", body = CalendarJoinRequest),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "Calendar is read-only or needs reauthorization", body = CalendarMutationApiError),
+        (status = 404, description = "Request not found or its event is not editable by the requester", body = CalendarMutationApiError),
+        (status = 409, description = "The provider rejected the new guest", body = CalendarMutationApiError),
+        (status = 503, description = "Transient provider failure", body = CalendarMutationApiError),
+    )
+)]
+pub async fn respond_to_join_request<S, Auth>(
+    State(state): State<CalendarMutationRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(request_id): Path<Uuid>,
+    Json(request): Json<RespondToJoinRequestRequest>,
+) -> Result<Json<CalendarJoinRequest>, CalendarMutationApiError>
+where
+    S: CalendarMutationService,
+    Auth: MacroAuthorizationService,
+{
+    let answered = state
+        .service
+        .respond_to_join_request(
+            user.authorization.user.macro_user_id.as_ref(),
+            request_id,
+            matches!(request.decision, CalendarJoinRequestDecision::Accept),
+        )
+        .await?;
+    Ok(Json(answered))
 }
 
 /// Calendars visible to the requester across connected and delegated inboxes.

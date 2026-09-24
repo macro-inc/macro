@@ -161,6 +161,8 @@ use utoipa::OpenApi;
         calendar_events::inbound::axum_router::list_occurrences,
         calendar_events::inbound::axum_router::mention_previews,
         calendar_events::inbound::axum_router::event_ics,
+        calendar_events::inbound::join_request_router::request_to_join,
+        calendar_events::inbound::join_request_router::list_join_requests,
         calendar_events::inbound::axum_router::list_team_out_of_office,
 
         // annotations
@@ -517,6 +519,11 @@ use utoipa::OpenApi;
             calendar_events::inbound::axum_router::TeamOutOfOfficeItem,
             calendar_events::inbound::axum_router::TeamOutOfOfficeResponse,
             calendar_events::domain::models::CalendarMentionEvent,
+            calendar_events::domain::models::CalendarJoinRequest,
+            calendar_events::domain::models::CalendarJoinRequestStatus,
+            calendar_events::inbound::join_request_router::CalendarJoinRequestsResponse,
+            calendar_events::inbound::join_request_router::CalendarJoinRequestApiError,
+            calendar_events::inbound::join_request_router::CalendarJoinRequestErrorCode,
             calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
             SoupApiItem,

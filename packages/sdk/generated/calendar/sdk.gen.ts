@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CopyCalendarEventData, CopyCalendarEventErrors, CopyCalendarEventResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, HealthHandlerData, HealthHandlerResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
+import type { CopyCalendarEventData, CopyCalendarEventErrors, CopyCalendarEventResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, HealthHandlerData, HealthHandlerResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, RespondToJoinRequestData, RespondToJoinRequestErrors, RespondToJoinRequestResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -133,5 +133,20 @@ export class Sdk extends HeyApiClient {
      */
     public healthHandler<ThrowOnError extends boolean = false>(options?: Options<HealthHandlerData, ThrowOnError>): RequestResult<HealthHandlerResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<HealthHandlerResponses, unknown, ThrowOnError>({ url: '/health', ...options });
+    }
+    
+    /**
+     * Answer a request to join one of the requester's events and return where
+     * it now stands.
+     */
+    public respondToJoinRequest<ThrowOnError extends boolean = false>(options: Options<RespondToJoinRequestData, ThrowOnError>): RequestResult<RespondToJoinRequestResponses, RespondToJoinRequestErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<RespondToJoinRequestResponses, RespondToJoinRequestErrors, ThrowOnError>({
+            url: '/join-requests/{request_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 }
