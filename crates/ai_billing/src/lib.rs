@@ -39,7 +39,8 @@ pub mod inbound;
 pub mod outbound;
 
 pub use domain::{
-    AllowanceDecision, BillingError, BillingPeriod, BillingService, BillingSettings,
-    CREDIT_PACKS_CENTS, DenyReason, Entitlement, PayerScope, PlanTier, TARGET_GROSS_MARGIN_BPS,
-    UsageSnapshot, list_rate_cents,
+    AiAdmissionError, AiAdmissionService, AllowanceDecision, BillingAdmissionService, BillingError,
+    BillingPeriod, BillingService, BillingSettings, CREDIT_PACKS_CENTS, DenyReason, Entitlement,
+    PayerScope, PlanTier, QUOTA_EXEMPT_FEATURES, TARGET_GROSS_MARGIN_BPS,
+    UnconfiguredAiAdmissionService, UsageSnapshot, is_quota_exempt, list_rate_cents,
 };
