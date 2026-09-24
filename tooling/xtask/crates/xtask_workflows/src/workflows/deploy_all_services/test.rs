@@ -30,12 +30,14 @@ fn bootstrap_excludes_all_deployment_matrices_until_activation() {
         );
         let result = std::fs::read_to_string(output_path).unwrap();
         for matrix in ["matrix", "binaries", "lambdas"] {
-            assert!(
-                result
-                    .lines()
-                    .any(|line| line == format!("{matrix}={expected}")),
-                "{result}"
-            );
+            let prefix = format!("{matrix}=");
+            let value = result
+                .lines()
+                .find_map(|line| line.strip_prefix(&prefix))
+                .unwrap();
+            let mut actual: Vec<String> = serde_json::from_str(value).unwrap();
+            actual.sort();
+            assert_eq!(serde_json::json!(actual), expected, "{result}");
         }
         config["services"]["pending"]
             .as_object_mut()
