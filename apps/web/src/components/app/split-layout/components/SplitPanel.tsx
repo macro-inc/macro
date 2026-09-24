@@ -10,6 +10,7 @@ import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow'
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { splitContainerAttribute } from '@core/dom-selectors';
+import { EVENT_MODIFIER_KEYS } from '@core/hotkey/constants';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
@@ -268,6 +269,16 @@ export function SplitPanel(props: SplitPanelProps) {
               handleEvent: (e) => {
                 pointerTarget =
                   e.target instanceof Element ? e.target : undefined;
+              },
+            }}
+            // A split opened from the keyboard has no pressed element to keep
+            // in view. Modifiers are held through Shift- and Cmd-clicks.
+            on:keydown={{
+              capture: true,
+              handleEvent: (e) => {
+                if (!EVENT_MODIFIER_KEYS.has(e.key.toLowerCase())) {
+                  pointerTarget = undefined;
+                }
               },
             }}
             data-split-id={props.split.id}

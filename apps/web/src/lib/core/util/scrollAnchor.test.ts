@@ -131,7 +131,10 @@ function setupScrolledElement(top: number) {
   scroller.append(content);
   document.body.append(scroller);
   // jsdom has no layout, so the scroll extent and rects are stubbed.
-  Object.defineProperty(scroller, 'scrollHeight', { value: 5000 });
+  Object.defineProperty(scroller, 'scrollHeight', {
+    value: 5000,
+    configurable: true,
+  });
   Object.defineProperty(scroller, 'clientHeight', { value: 500 });
   vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(rect(0, 500));
   const position = { top };
@@ -188,6 +191,32 @@ describe('element scroll anchor', () => {
     document.body.append(element);
 
     expect(captureElementScrollAnchor(element)).toBeUndefined();
+  });
+
+  it('anchors a tall element that starts above the viewport', () => {
+    const { scroller, element } = setupScrolledElement(-200);
+    vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(rect(-200, 300));
+
+    const captured = captureElementScrollAnchor(element);
+    expect(captured?.scroller).toBe(scroller);
+    expect(captured?.anchor.top).toBe(-200);
+  });
+
+  it('skips an inner scroll container that does not overflow', () => {
+    const { scroller, element } = setupScrolledElement(450);
+    const inner = document.createElement('div');
+    inner.style.overflowY = 'auto';
+    element.replaceWith(inner);
+    inner.append(element);
+
+    expect(captureElementScrollAnchor(element)?.scroller).toBe(scroller);
+  });
+
+  it('falls back to a scroll container whose content still fits', () => {
+    const { scroller, element } = setupScrolledElement(450);
+    Object.defineProperty(scroller, 'scrollHeight', { value: 500 });
+
+    expect(captureElementScrollAnchor(element)?.scroller).toBe(scroller);
   });
 
   it('holds the element in place through later reflows', () => {

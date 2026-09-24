@@ -80,26 +80,27 @@ export function restoreScrollAnchor(
   scroller.scrollTop += top - anchor.top;
 }
 
+/**
+ * The nearest ancestor that scrolls vertically. When none overflows yet, the
+ * nearest one styled to scroll, since the reflow can make it overflow.
+ */
 function verticalScrollParent(element: Element): HTMLElement | undefined {
+  let styled: HTMLElement | undefined;
   for (
     let parent = element.parentElement;
     parent;
     parent = parent.parentElement
   ) {
-    const { overflowY } = getComputedStyle(parent);
-    if (
-      /auto|scroll/.test(overflowY) &&
-      parent.scrollHeight > parent.clientHeight
-    ) {
-      return parent;
-    }
+    if (!/auto|scroll/.test(getComputedStyle(parent).overflowY)) continue;
+    if (parent.scrollHeight > parent.clientHeight) return parent;
+    styled ??= parent;
   }
-  return undefined;
+  return styled;
 }
 
 /**
- * Anchors on `element` when it is on screen in the nearest container that
- * scrolls it vertically.
+ * Anchors on `element` when any of it is on screen in the nearest container
+ * that scrolls it vertically.
  */
 export function captureElementScrollAnchor(
   element: Element | undefined
@@ -109,8 +110,8 @@ export function captureElementScrollAnchor(
   if (!scroller) return undefined;
 
   const view = scroller.getBoundingClientRect();
-  const top = element.getBoundingClientRect().top;
-  if (top < view.top || top > view.bottom) return undefined;
+  const { top, bottom } = element.getBoundingClientRect();
+  if (bottom < view.top || top > view.bottom) return undefined;
 
   return {
     scroller,
