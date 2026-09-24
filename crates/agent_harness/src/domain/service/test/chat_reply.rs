@@ -246,3 +246,98 @@ async fn a_coding_turn_is_offered_to_the_announcer_as_a_coder_and_still_notifies
         turns.notifier.notified()
     );
 }
+
+/// A question the agent asks through ACP is held for the session view; the
+/// thread's spinner has no way of knowing that on its own.
+mod elicitation {
+    use super::*;
+    use agent_client_protocol::schema::v1::{
+        CreateElicitationRequest, ElicitationFormMode, ElicitationSchema, ElicitationSessionScope,
+        RequestId,
+    };
+    use agent_runtime_protocol::domain::action::{ElicitationAnswer, ElicitationRequestId};
+
+    fn ask(agent: &FakeAgent, request_id: i64, question: &str) {
+        let request = CreateElicitationRequest::new(
+            ElicitationFormMode::new(
+                ElicitationSessionScope::new(SessionId::new("acp-test")),
+                ElicitationSchema::new(),
+            ),
+            question,
+        );
+        let (method, params) = request
+            .to_untyped_message()
+            .expect("an elicitation serializes")
+            .into_parts();
+        agent.sends_raw(
+            RawJsonRpcMessage::request(method, params, RequestId::Number(request_id))
+                .expect("elicitation params are an object"),
+        );
+    }
+
+    /// Raised: the reply says it is waiting and what for. Cleared: the reply
+    /// is pending again. Ended: the reply is the answer. One message, three
+    /// patches, and no `waiting_for_input` notification on top of the first -
+    /// the patch already told the thread.
+    #[tokio::test]
+    async fn a_question_is_told_in_the_thread_and_withdrawn_when_answered() {
+        let ((service, _, containers, announcer, _), turns) =
+            harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+        let id = AgentSessionId::new();
+        let container = chat_session_with_a_running_turn(&service, &containers, id).await;
+        let agent = container.agent();
+        let pending = announcer.announced_messages()[0].message_id;
+
+        ask(&agent, 7, "Which inbox should I send from?");
+        // Opened, TurnStarted, WaitingForInput.
+        turns.lifecycle_published(3).await;
+        let resolved = announcer.resolved();
+        assert_eq!(resolved.len(), 1, "{resolved:#?}");
+        assert_eq!(resolved[0].message_id, pending);
+        assert_eq!(resolved[0].session_id, id);
+        assert_eq!(
+            resolved[0].outcome,
+            ReplyOutcome::NeedsInput {
+                question: "Which inbox should I send from?".to_owned(),
+            }
+        );
+        assert!(
+            turns.notifier.notified().is_empty(),
+            "the patch is the notification: {:#?}",
+            turns.notifier.notified()
+        );
+
+        service
+            .execute(
+                id,
+                HarnessCommand::Deliver(DeliverAction::control(ControlEvent {
+                    action: AgentAction::respond_elicitation(
+                        ElicitationRequestId::Number(7),
+                        ElicitationAnswer::Decline,
+                    ),
+                    action_id: None,
+                    actor: Some(sender()),
+                })),
+            )
+            .await
+            .expect("the answer is delivered");
+        // InputReceived.
+        turns.lifecycle_published(4).await;
+        let resolved = announcer.resolved();
+        assert_eq!(resolved.len(), 2, "{resolved:#?}");
+        assert_eq!(resolved[1].message_id, pending);
+        assert_eq!(resolved[1].outcome, ReplyOutcome::Resumed);
+
+        says(&agent, "Sent from your primary inbox.");
+        agent.completes_prompt().await;
+        // TurnEnded, Settled.
+        turns.lifecycle_published(6).await;
+        let resolved = announcer.resolved();
+        assert_eq!(resolved.len(), 3, "{resolved:#?}");
+        assert_eq!(resolved[2].message_id, pending);
+        assert_eq!(
+            resolved[2].outcome,
+            ReplyOutcome::Answered("Sent from your primary inbox.".to_owned())
+        );
+    }
+}

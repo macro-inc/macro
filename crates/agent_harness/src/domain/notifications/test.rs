@@ -231,6 +231,48 @@ fn waiting_for_input_goes_to_the_audience() {
     );
 }
 
+fn waiting(announcement_message_id: Option<Uuid>) -> AgentSessionLifecycleEvent {
+    AgentSessionLifecycleEvent::WaitingForInput(WaitingForInputMetadata {
+        identity: identity(),
+        turn: TurnId(3),
+        action_id: AgentActionId::mint(),
+        announcement_message_id,
+        question: "Which approach?".to_owned(),
+    })
+}
+
+/// The pending reply is patched to say the agent is waiting, and that
+/// patch notifies the thread; a notification on top would be the same
+/// news twice.
+#[test]
+fn a_chat_agents_announced_turn_waits_silently() {
+    let actions = plan(&waiting(Some(Uuid::from_u128(4))), AgentKind::InMemory);
+
+    assert!(actions.is_empty(), "{actions:#?}");
+}
+
+/// Only the announced turn has a reply to speak through: a chat session
+/// asking from the session view still notifies its audience, and a coding
+/// agent's chip says nothing about a question.
+#[test]
+fn every_other_waiting_turn_still_notifies() {
+    for (kind, announced) in [
+        (AgentKind::InMemory, None),
+        (AgentKind::SandboxedCoder, Some(Uuid::from_u128(4))),
+        (AgentKind::Cursor, Some(Uuid::from_u128(4))),
+        (AgentKind::External, None),
+    ] {
+        let actions = plan(&waiting(announced), kind);
+        assert!(
+            matches!(
+                actions.as_slice(),
+                [PlannedNotification::WaitingForInput(_)]
+            ),
+            "{kind:?} announced={announced:?}: {actions:#?}"
+        );
+    }
+}
+
 #[test]
 fn mentioned_notifies_exactly_the_people_named() {
     let action_id = AgentActionId::mint();

@@ -90,25 +90,118 @@ fn the_pending_reply_is_an_inline_await_node() {
     assert_eq!(body["inline"], true);
 }
 
-#[test]
-fn a_resolved_reply_is_never_blank() {
-    assert_eq!(
-        reply_content(ReplyOutcome::Answered("Sure.".to_owned())),
-        "Sure."
-    );
-    for outcome in [
+const SESSION: agent_session::domain::model::AgentSessionId =
+    agent_session::domain::model::AgentSessionId::TEST_A;
+
+/// Everything the reply can say, in every state the domain can ask for.
+fn every_outcome() -> Vec<ReplyOutcome> {
+    vec![
+        ReplyOutcome::Answered("Sure.".to_owned()),
         ReplyOutcome::Empty,
         ReplyOutcome::Cancelled,
         ReplyOutcome::Failed,
-    ] {
+        ReplyOutcome::NeedsInput {
+            question: "Which inbox?".to_owned(),
+        },
+        ReplyOutcome::Resumed,
+    ]
+}
+
+/// The exact bytes the frontend's `I_AGENT_SESSION_MENTION` transformer
+/// matches and `buildAgentSessionMentionMarkdown` produces: the tag around
+/// one JSON object with `id` first.
+#[test]
+fn the_session_link_is_an_agent_session_mention_node() {
+    assert_eq!(
+        session_link(SESSION),
+        r#"<m-agent-session-mention>{"id":"00000000-0000-0000-0000-00000000000a","label":"Agent session"}</m-agent-session-mention>"#
+    );
+    let body: serde_json::Value = serde_json::from_str(
+        session_link(SESSION)
+            .trim_start_matches("<m-agent-session-mention>")
+            .trim_end_matches("</m-agent-session-mention>"),
+    )
+    .expect("the mention node body is JSON");
+    assert_eq!(body["id"], SESSION.to_string());
+}
+
+/// A patch replaces the content wholesale, so a link only the pending
+/// reply carried would vanish with the spinner. Every state leads with it,
+/// on its own line, with the body following intact.
+#[test]
+fn the_session_link_survives_every_patch() {
+    let link = session_link(SESSION);
+    let pending = pending_reply(SESSION);
+    assert_eq!(pending, format!("{link}\n\n{PENDING_REPLY}"));
+    for outcome in every_outcome() {
+        let content = reply_content(SESSION, outcome.clone());
         assert!(
-            !reply_content(outcome.clone()).trim().is_empty(),
-            "{outcome:?}"
+            content.starts_with(&format!("{link}\n\n")),
+            "{outcome:?}: {content}"
+        );
+        assert_eq!(
+            content.matches("<m-agent-session-mention>").count(),
+            1,
+            "{outcome:?}: one link, not one per patch"
         );
     }
+    assert_eq!(
+        reply_content(SESSION, ReplyOutcome::Answered("Sure.".to_owned())),
+        format!("{link}\n\nSure.")
+    );
+}
+
+#[test]
+fn a_resolved_reply_is_never_blank() {
+    let link = session_link(SESSION);
+    for outcome in every_outcome() {
+        let body = reply_content(SESSION, outcome.clone())
+            .trim_start_matches(link.as_str())
+            .trim()
+            .to_owned();
+        assert!(!body.is_empty(), "{outcome:?}");
+    }
     assert_ne!(
-        reply_content(ReplyOutcome::Failed),
-        reply_content(ReplyOutcome::Empty),
+        reply_content(SESSION, ReplyOutcome::Failed),
+        reply_content(SESSION, ReplyOutcome::Empty),
         "an error and a silence read differently"
     );
+}
+
+/// The thread cannot answer the question; the reply says where it can be
+/// answered and what it is.
+#[test]
+fn a_waiting_reply_shows_the_question_and_points_at_the_session() {
+    let content = reply_content(
+        SESSION,
+        ReplyOutcome::NeedsInput {
+            question: "Which inbox should I send from?".to_owned(),
+        },
+    );
+    assert!(content.contains("Which inbox should I send from?"));
+    assert!(content.contains("open the agent session"), "{content}");
+    assert!(content.contains(&session_link(SESSION)));
+}
+
+/// Once the question is cleared the turn is running again, and the reply
+/// looks exactly as it did when it was posted.
+#[test]
+fn a_resumed_reply_is_the_pending_reply_again() {
+    assert_eq!(
+        reply_content(SESSION, ReplyOutcome::Resumed),
+        pending_reply(SESSION)
+    );
+}
+
+/// The answer and a question are news; the spinner coming back is not.
+#[test]
+fn only_the_spinner_returning_is_a_silent_patch() {
+    for outcome in every_outcome() {
+        let expected = if outcome == ReplyOutcome::Resumed {
+            PatchMessageNotificationPolicy::Default
+        } else {
+            PatchMessageNotificationPolicy::NotifyAsPostedMessage
+        };
+        assert_eq!(patch_policy(&outcome), expected, "{outcome:?}");
+    }
 }

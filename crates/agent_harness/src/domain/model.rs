@@ -564,12 +564,18 @@ pub struct AnnouncedMessage {
     pub message_id: Uuid,
 }
 
-/// How a turn ended, as the thread that prompted it should hear.
+/// What a turn's reply in the thread that prompted it should say now.
 ///
-/// Text wins whenever there is any: an agent that wrote something and was
-/// then cancelled or cut off still said it, and the thread would rather read
-/// that than a notice. The rest distinguish the silences a reader can act on
-/// differently - try again, or not.
+/// Mostly how the turn ended. Text wins whenever there is any: an agent that
+/// wrote something and was then cancelled or cut off still said it, and the
+/// thread would rather read that than a notice. The rest distinguish the
+/// silences a reader can act on differently - try again, or not.
+///
+/// Two are not ends at all. A turn that asks the user something through an
+/// ACP elicitation is held open until someone answers it in the session
+/// view, and a thread showing a spinner has no way of knowing that; so the
+/// reply says so ([`Self::NeedsInput`]) and returns to pending once the
+/// question is cleared ([`Self::Resumed`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReplyOutcome {
     /// The agent answered; its last message, whole.
@@ -581,6 +587,13 @@ pub enum ReplyOutcome {
     Cancelled,
     /// The runtime refused the prompt or died underneath the turn.
     Failed,
+    /// The turn is waiting on a question only the session view can answer.
+    NeedsInput {
+        /// What the agent is asking, in prose.
+        question: String,
+    },
+    /// The question was answered or withdrawn and the turn is running again.
+    Resumed,
 }
 
 impl ReplyOutcome {
@@ -603,7 +616,7 @@ impl ReplyOutcome {
     }
 }
 
-/// Facts required to replace a turn's pending reply with how it ended.
+/// Facts required to replace a turn's pending reply with what it should say.
 ///
 /// Modelled on [`SessionAnnouncement`], which posted the message this
 /// resolves: the same bot posts, on the same person's current capability
@@ -611,6 +624,8 @@ impl ReplyOutcome {
 /// thread gets nothing patched in their name either.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedReply {
+    /// The session whose turn the reply speaks for; what the reply links to.
+    pub session_id: AgentSessionId,
     /// The bot the session runs for; the patch is made as it.
     pub bot_id: BotId,
     /// The runtime serving the session. A coding runtime's chip renders
@@ -622,7 +637,7 @@ pub struct ResolvedReply {
     pub origin_parent: messages::domain::models::MessageParent,
     /// Who prompted the turn.
     pub triggered_by: MacroUserIdStr<'static>,
-    /// What the turn became.
+    /// What the reply should say now.
     pub outcome: ReplyOutcome,
 }
 

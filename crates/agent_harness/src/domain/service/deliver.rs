@@ -241,14 +241,16 @@ where
         }))
     }
 
-    /// Tell the thread how an announced turn ended.
+    /// Tell the thread what an announced turn's reply should say now: how
+    /// the turn ended, or that it is waiting on the user.
     ///
-    /// Best-effort, like every lifecycle publish: the turn is already over,
-    /// and the queue behind it drains whether or not the thread hears. The
-    /// bot and runtime kind are re-read from the row, as they were when the
-    /// turn was announced. A turn nobody announced - no origin, no actor,
-    /// or no message posted - has nothing to resolve. Whether the kind's
-    /// message needs resolving at all is the announcer's call.
+    /// Best-effort, like every lifecycle publish: the turn is over or still
+    /// running regardless, and the queue behind it drains whether or not the
+    /// thread hears. The bot and runtime kind are re-read from the row, as
+    /// they were when the turn was announced. A turn nobody announced - no
+    /// origin, no actor, or no message posted - has nothing to resolve.
+    /// Whether the kind's message needs resolving at all is the announcer's
+    /// call.
     pub(super) async fn resolve_reply(
         &self,
         session_id: AgentSessionId,
@@ -280,6 +282,7 @@ where
         if let Err(error) = self
             .announcer
             .resolve(ResolvedReply {
+                session_id,
                 bot_id: session.bot_id,
                 kind: AgentKind::for_session(session.bot_id, &session.harness),
                 message_id,

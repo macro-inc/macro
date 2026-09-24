@@ -454,6 +454,22 @@ where
                     tracing::warn!(%session_id, "elicitation raised with no in-flight record");
                     return Ok(CommandOutcome::Completed);
                 };
+                // The question is held for the user and answered only in the
+                // session view (`hold_or_refuse_elicitation`), so a thread
+                // showing a spinner would spin until someone happened to open
+                // the session. Say so where the person who asked is looking.
+                // This is not an in-memory special case: it is the fallback
+                // for any runtime this harness does not control - a user-run
+                // macrod, a third-party agent - that elicits from a channel
+                // turn.
+                self.resolve_reply(
+                    session_id,
+                    Some(&turn),
+                    ReplyOutcome::NeedsInput {
+                        question: question.clone(),
+                    },
+                )
+                .await;
                 self.publish_lifecycle(session_id, |identity| {
                     AgentSessionLifecycleEvent::WaitingForInput(WaitingForInputMetadata {
                         identity,
@@ -471,6 +487,10 @@ where
                     tracing::warn!(%session_id, "elicitation cleared with no in-flight record");
                     return Ok(CommandOutcome::Completed);
                 };
+                // The turn is running again; the thread goes back to waiting
+                // for its answer.
+                self.resolve_reply(session_id, Some(&turn), ReplyOutcome::Resumed)
+                    .await;
                 self.publish_lifecycle(session_id, |identity| {
                     AgentSessionLifecycleEvent::InputReceived(InputReceivedMetadata {
                         identity,

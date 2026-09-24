@@ -5,14 +5,18 @@
 //! magic chip Lexical composes, a live portal into the session that renders
 //! the turn itself; a chat agent's turn is a pending reply - the channel
 //! markdown's pulsing await node - that is patched into the answer when the
-//! turn ends, the way the original Macro bot replied. The domain names the
-//! kind; nothing about either node's syntax leaves this module.
+//! turn ends, the way the original Macro bot replied, and that says so
+//! while the turn waits on a question only the session view can answer. A
+//! chat agent's message leads with a link to its session in every state.
+//! The domain names the kind; nothing about any node's syntax leaves this
+//! module.
 
 #[cfg(test)]
 mod test;
 
 use std::sync::Arc;
 
+use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
 use entity_access::domain::{
     models::{BotAccessScope, EntityAccessReceipt},
@@ -40,7 +44,7 @@ use crate::domain::model::{
 };
 use crate::domain::ports::SessionAnnouncer;
 
-/// A chat agent's message while its turn runs, replaced by the answer.
+/// A chat agent's message body while its turn runs, replaced by the answer.
 ///
 /// Rendered by the channel markdown as the pulsing await node, like the
 /// original Macro bot's.
@@ -48,15 +52,67 @@ const PENDING_REPLY: &str = r#"<m-await>{"text":"Thinking…","inline":true}</m-
 const EMPTY_RESPONSE_FALLBACK: &str = "I wasn't able to come up with a response.";
 const CANCELLED_FALLBACK: &str = "I stopped before finishing that.";
 const ERROR_FALLBACK: &str = "Sorry — I ran into an error while responding.";
+/// Introduces the agent's question when a turn stops to ask one. Only the
+/// session view can answer it, and the link ahead of every reply is how the
+/// reader gets there.
+const NEEDS_INPUT_LEAD: &str =
+    "I have a question before I can continue — open the agent session to answer it:";
+/// What the session link reads as wherever the channel markdown is shown as
+/// text: notification excerpts, search, plain-text previews.
+const SESSION_LINK_LABEL: &str = "Agent session";
+
+/// A link to the session, as the channel markdown's agent-session mention
+/// node - the same syntax `<m-agent-session-mention>` mentions in a message
+/// use, so every surface already renders it.
+///
+/// The channel message view lifts a leading one out of the body onto the
+/// sender line, which is why it goes first and why every state of the reply
+/// carries it: a patch replaces the content wholesale, and a link only the
+/// pending reply had would vanish with the spinner.
+fn session_link(session_id: AgentSessionId) -> String {
+    format!(
+        r#"<m-agent-session-mention>{{"id":"{session_id}","label":"{SESSION_LINK_LABEL}"}}</m-agent-session-mention>"#
+    )
+}
+
+/// `body` behind the session link, as its own paragraph so the view can
+/// take the link and leave the body intact.
+fn with_session_link(session_id: AgentSessionId, body: &str) -> String {
+    format!("{}\n\n{body}", session_link(session_id))
+}
+
+/// A chat agent's message as first posted: the link, then the spinner.
+fn pending_reply(session_id: AgentSessionId) -> String {
+    with_session_link(session_id, PENDING_REPLY)
+}
 
 /// What a chat agent's pending reply becomes. Never blank: a turn that said
-/// nothing is told as such rather than left as an empty message.
-fn reply_content(outcome: ReplyOutcome) -> String {
-    match outcome {
+/// nothing is told as such rather than left as an empty message. A turn
+/// waiting on its question shows the question, and one resumed after the
+/// answer shows the spinner again.
+fn reply_content(session_id: AgentSessionId, outcome: ReplyOutcome) -> String {
+    let body = match outcome {
         ReplyOutcome::Answered(text) => text,
         ReplyOutcome::Empty => EMPTY_RESPONSE_FALLBACK.to_owned(),
         ReplyOutcome::Cancelled => CANCELLED_FALLBACK.to_owned(),
         ReplyOutcome::Failed => ERROR_FALLBACK.to_owned(),
+        ReplyOutcome::NeedsInput { question } => format!("{NEEDS_INPUT_LEAD}\n\n{question}"),
+        ReplyOutcome::Resumed => PENDING_REPLY.to_owned(),
+    };
+    with_session_link(session_id, &body)
+}
+
+/// Whether the thread should hear about a patch. The answer, and a question
+/// only a person can unblock, are news the pending reply withheld; the
+/// spinner coming back is not.
+const fn patch_policy(outcome: &ReplyOutcome) -> PatchMessageNotificationPolicy {
+    match outcome {
+        ReplyOutcome::Answered(_)
+        | ReplyOutcome::Empty
+        | ReplyOutcome::Cancelled
+        | ReplyOutcome::Failed
+        | ReplyOutcome::NeedsInput { .. } => PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+        ReplyOutcome::Resumed => PatchMessageNotificationPolicy::Default,
     }
 }
 
@@ -184,7 +240,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 .await
                 .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?
         } else {
-            PENDING_REPLY.to_owned()
+            pending_reply(announcement.session_id)
         };
         let posted = self
             .messages
@@ -232,9 +288,8 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 access,
                 message_id,
                 MessagePatch {
-                    content: Some(reply_content(resolution.outcome)),
-                    // The answer is the news the pending reply withheld.
-                    notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                    notification_policy: patch_policy(&resolution.outcome),
+                    content: Some(reply_content(resolution.session_id, resolution.outcome)),
                     ..Default::default()
                 },
             )
