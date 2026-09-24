@@ -2,9 +2,14 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
   createFilesReadyHandler,
   getDragDropPosition,
+  isInlineVideoFileName,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { toast } from '@core/component/Toast/Toast';
-import { handleFileFolderDrop } from '@core/util/upload';
+import {
+  handleFileFolderDrop,
+  isFileUploadEntry,
+  type UploadInput,
+} from '@core/util/upload';
 import { type FocusableElement, tabbable } from 'tabbable';
 import type { ComposeBodyActions } from './context/editor-capabilities';
 import { makeAttachmentPublic } from './make-attachment-public';
@@ -35,6 +40,22 @@ export const readDroppedEmailFiles: ComposeBodyActions['readDroppedFiles'] = (
     onFiles(uploaded.map((item) => item.file))
   );
 
+export function withInlineVideos(
+  onFilesReady: (entries: UploadInput[]) => Promise<void>,
+  onInlineVideos: ((files: File[]) => void) | undefined
+) {
+  if (!onInlineVideos) return onFilesReady;
+  return (entries: UploadInput[]) => {
+    const videos = entries.flatMap((entry) => {
+      if (isFileUploadEntry(entry) && entry.isFolder) return [];
+      const file = isFileUploadEntry(entry) ? entry.file : entry;
+      return isInlineVideoFileName(file.name) ? [file] : [];
+    });
+    if (videos.length > 0) onInlineVideos(videos);
+    return onFilesReady(entries);
+  };
+}
+
 export function createComposeBodyActions(): ComposeBodyActions {
   return {
     focusSibling: createPanelFocusSibling(),
@@ -42,19 +63,22 @@ export function createComposeBodyActions(): ComposeBodyActions {
       toast.success(`${email} added to CC`);
     },
     readDroppedFiles: readDroppedEmailFiles,
-    insertFiles(editor, files, directories, dropEvent) {
+    insertFiles(editor, { files, directories, dropEvent, onInlineVideos }) {
       handleFileFolderDrop(
         files,
         directories,
-        createFilesReadyHandler(
-          editor,
-          undefined,
-          undefined,
-          dropEvent
-            ? () => getDragDropPosition(editor, dropEvent, true)
-            : undefined,
-          (ids) => ids.forEach(makeAttachmentPublic),
-          { width: 542, height: 542 }
+        withInlineVideos(
+          createFilesReadyHandler(
+            editor,
+            undefined,
+            undefined,
+            dropEvent
+              ? () => getDragDropPosition(editor, dropEvent, true)
+              : undefined,
+            (ids) => ids.forEach(makeAttachmentPublic),
+            { width: 542, height: 542 }
+          ),
+          onInlineVideos
         )
       );
     },

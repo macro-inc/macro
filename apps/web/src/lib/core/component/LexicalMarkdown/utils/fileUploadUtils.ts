@@ -28,6 +28,11 @@ const getImageExtensionsHeic = () => [
 ];
 const getVideoExtensions = () => blockNameToFileExtensions.video;
 
+export function isInlineVideoFileName(name: string) {
+  const ext = fileExtension(name);
+  return ext != null && getVideoExtensions().includes(ext);
+}
+
 export function isInlineMediaFileName(name: string) {
   const ext = fileExtension(name);
   return (

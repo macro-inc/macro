@@ -68,12 +68,10 @@ export function EmailComposeView(props: EmailComposeViewProps) {
       recipientAdded: (email) =>
         composeContext.notices.feedback.success(`${email} added to CC`),
       readDroppedFiles: composeContext.editorFiles.readDroppedFiles,
-      insertFiles: (editor, files, directories, dropEvent) =>
+      insertFiles: (editor, input) =>
         composeContext.editorFiles.uploadEditorFiles({
           editor,
-          files,
-          directories,
-          dropEvent,
+          ...input,
           onUploaded: (ids) =>
             ids.forEach(composeContext.editorFiles.makePublic),
         }),

@@ -177,6 +177,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
             ids.forEach(composeContext.editorFiles.makePublic);
             scheduleDraftSave();
           },
+          onInlineVideos: handleAddAttachments,
         });
       },
     });
@@ -446,6 +447,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                     ids.forEach(composeContext.editorFiles.makePublic);
                     scheduleDraftSave();
                   },
+                  onInlineVideos: handleAddAttachments,
                 });
               },
             }}

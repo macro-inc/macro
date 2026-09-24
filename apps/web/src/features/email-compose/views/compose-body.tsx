@@ -105,7 +105,12 @@ export function ComposeBody(props: {
                   ? files.filter((file) => isInlineMediaFileName(file.name))
                   : [];
               if (ed && media.length > 0) {
-                ctx.bodyActions.insertFiles(ed, media, [], event);
+                ctx.bodyActions.insertFiles(ed, {
+                  files: media,
+                  directories: [],
+                  dropEvent: event,
+                  onInlineVideos: props.onAddFiles,
+                });
               }
               const attachments = files.filter((file) => !media.includes(file));
               if (attachments.length === 0 && dirs.length === 0) return;
@@ -165,7 +170,12 @@ export function ComposeBody(props: {
               portalScope="local"
               onPasteFilesAndDirs={(files, directories) => {
                 const ed = editor();
-                if (ed) ctx.bodyActions.insertFiles(ed, files, directories);
+                if (!ed) return;
+                ctx.bodyActions.insertFiles(ed, {
+                  files,
+                  directories,
+                  onInlineVideos: props.onAddFiles,
+                });
               }}
             />
           </Scroll>

@@ -9,8 +9,11 @@ export interface ComposeBodyActions {
   ): void;
   insertFiles(
     editor: LexicalEditor,
-    files: FileSystemFileEntry[],
-    directories: FileSystemDirectoryEntry[],
-    dropEvent?: DragEvent
+    input: {
+      files: FileSystemFileEntry[];
+      directories: FileSystemDirectoryEntry[];
+      dropEvent?: DragEvent;
+      onInlineVideos?: (files: File[]) => void;
+    }
   ): void;
 }
