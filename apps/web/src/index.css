@@ -930,6 +930,17 @@ html[data-touch-device='true'] :is(
 @layer base {
   html {
     overflow: hidden;
+    /* Keep the app's own theme under the browser's forced-colors mode
+       (Windows High Contrast; the identical rendering has also shown up
+       unprompted in Chrome on macOS, where it is not a user setting, and
+       cleared on refresh). Forced colors replace every background with
+       `Canvas` and every border with `CanvasText`, including the
+       `border-transparent` spacer border every Button carries, so the app
+       turns into bare white boxes with its fills, unread dots, and accent
+       color gone. The themes already cover contrast; a real high-contrast
+       pass would replace this opt-out with `forced-colors:` variants on the
+       affected components. */
+    forced-color-adjust: none;
   }
 
   /* `-apple-system-body` opts the root font-size into iOS/iPadOS Dynamic Type
