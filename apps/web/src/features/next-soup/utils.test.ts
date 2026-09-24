@@ -1084,7 +1084,7 @@ describe('getDocumentCommentTarget', () => {
       documentRow([commentNotification('n1', 'comment-1')]) as never
     );
     expect(result.params).toEqual({ blockType: 'md', previewId: 'doc-1' });
-    expect(result.search['document-detail']).toEqual({
+    expect(result.search.drive).toEqual({
       commentId: ['comment-1'],
     });
     const target = inboxPreviewTarget(result.params, {

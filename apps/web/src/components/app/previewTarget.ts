@@ -3,10 +3,12 @@ import {
   type CalendarPreviewSelection,
   type ChannelPreviewSelection,
   calendarViewTargetForEntity,
+  getChannelEntityTarget,
   getDocumentCommentTarget,
   type ReminderPreviewSelection,
   reminderSplitTarget,
 } from '@app/features/next-soup/utils';
+import { getChannelParams } from '@block-channel/utils/link';
 import type {
   BlockAliasContext,
   BlockComponentProps,
@@ -25,7 +27,6 @@ import type {
 } from '@entity';
 import { untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
-import { channelPreviewTarget } from './channelPreviewTarget';
 
 type IdOnlyPreviewSelection = {
   id: string;
@@ -92,7 +93,18 @@ export function previewBlockTarget(
     }))
     .with(
       { type: P.union('channel', 'channel_message', 'channel_thread') },
-      channelPreviewTarget
+      (channel) => {
+        const target = untrack(() => getChannelEntityTarget(channel));
+        return {
+          blockType: 'channel',
+          blockId: channel.type === 'channel' ? channel.id : channel.channelId,
+          aliasContext: undefined,
+          params:
+            target?.kind === 'message'
+              ? getChannelParams(target.messageId, target.threadId)
+              : undefined,
+        };
+      }
     )
     .with({ type: 'foreign' }, (foreignEntity) => ({
       blockType:

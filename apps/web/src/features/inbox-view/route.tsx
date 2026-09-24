@@ -6,6 +6,9 @@ import {
   calendarSearch,
 } from '@app/features/calendar-view/calendar-url';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
+import { channelDetailRoute } from '@app/features/channels-view/route';
+import { driveSearch } from '@app/features/drive-view/primitives/drive-route';
+import { driveRootDocumentRoute } from '@app/features/drive-view/route';
 import {
   createSearchParams,
   defineRoute,
@@ -27,13 +30,13 @@ import { URL_PARAMS as EMAIL_URL_PARAMS } from '../email-thread/core/location';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import {
   inboxCalendarLegacyTarget,
+  inboxDetailParamsFromRoute,
   inboxPreviewLegacyTarget,
 } from './inbox-route';
 import {
   INBOX_PREVIEW_SEARCH_NAMESPACES,
   type InboxPreviewRouteParams,
   inboxBaseBlockType,
-  inboxDocumentSearch,
   inboxPreviewRouteParams,
 } from './inbox-route-schema';
 
@@ -46,11 +49,18 @@ const InboxView = lazy(async () => ({
 const InboxDetailRouteView = lazy(async () => ({
   default: (await import('./inbox-view')).InboxDetailRouteView,
 }));
+const InboxEntityDetailRouteView = lazy(async () => ({
+  default: (await import('./components/InboxEntityDetailRouteView'))
+    .InboxEntityDetailRouteView,
+}));
 const InboxCalendarRouteView = lazy(async () => ({
   default: (await import('./inbox-view')).InboxCalendarRouteView,
 }));
 
 type InboxDetailParams = Partial<InboxPreviewRouteParams> & {
+  channelId?: string;
+  documentType?: string;
+  documentId?: string;
   period?: CalendarPeriodView;
 };
 
@@ -70,16 +80,17 @@ function LegacyInboxView() {
 function InboxLegacyRouteView() {
   const params = useParams<InboxDetailParams>();
   const [channelSearch] = createSearchParams(channelsSearch);
-  const [documentSearch] = createSearchParams(inboxDocumentSearch);
+  const [documentSearch] = createSearchParams(driveSearch);
   const [eventSearch] = createSearchParams(calendarSearch);
   const legacyTarget = () => {
-    const { blockType, previewId, period } = params;
+    const { period } = params;
     if (period) return inboxCalendarLegacyTarget(period, eventSearch);
-    if (!blockType || !previewId) return;
-    return inboxPreviewLegacyTarget(
-      { blockType, previewId },
-      { channel: channelSearch, document: documentSearch }
-    );
+    const detail = inboxDetailParamsFromRoute(params);
+    if (!detail) return;
+    return inboxPreviewLegacyTarget(detail, {
+      channel: channelSearch,
+      document: documentSearch,
+    });
   };
 
   return (
@@ -92,8 +103,7 @@ function InboxLegacyRouteView() {
 export const InboxRouteView = withAuth(() => {
   const params = useParams<InboxDetailParams>();
   const detailRequested = () =>
-    (typeof params.blockType === 'string' &&
-      typeof params.previewId === 'string') ||
+    inboxDetailParamsFromRoute(params) !== undefined ||
     typeof params.period === 'string';
 
   return (
@@ -120,6 +130,35 @@ export const inboxCalendarRoute = defineRoute({
   search: [CALENDAR_SEARCH_NAMESPACE],
 });
 
+export const inboxChannelRoute = defineRoute({
+  ...channelDetailRoute,
+  id: 'inbox-channel',
+  path: 'channel/:channelId',
+  component: InboxEntityDetailRouteView,
+});
+
+export const inboxDocumentRoute = defineRoute({
+  ...driveRootDocumentRoute,
+  id: 'inbox-document',
+  component: InboxEntityDetailRouteView,
+  externalSearch: (entry: Readonly<SplitRouterEntry>) => {
+    const type = routeParams<{ documentType?: string }>(
+      entry.location.route
+    ).documentType;
+    if (
+      type === 'md' ||
+      type === 'task' ||
+      type === 'snippet' ||
+      type === 'skill'
+    ) {
+      return Object.values(MARKDOWN_URL_PARAMS);
+    }
+    if (type === 'pdf') return Object.values(PDF_URL_PARAMS);
+    return type === 'spreadsheet' ? [MARKDOWN_URL_PARAMS.commentId] : [];
+  },
+  remountKey: ({ documentType, documentId }) =>
+    `${inboxBaseBlockType(documentType)}:${documentId}`,
+});
 export const inboxPreviewRoute = defineRoute({
   id: 'inbox-preview',
   path: ':blockType/:previewId',
@@ -141,7 +180,8 @@ export const inboxPreviewRoute = defineRoute({
     ) {
       return Object.values(MARKDOWN_URL_PARAMS);
     }
-    return type === 'pdf' ? Object.values(PDF_URL_PARAMS) : [];
+    if (type === 'pdf') return Object.values(PDF_URL_PARAMS);
+    return type === 'spreadsheet' ? [MARKDOWN_URL_PARAMS.commentId] : [];
   },
   remountKey: ({ blockType, previewId }) =>
     `${inboxBaseBlockType(blockType)}:${previewId}`,
@@ -157,5 +197,10 @@ export const inboxSplitRoute = defineRoute({
   component: InboxRouteView,
   search: '*' as const,
   // The period path is matched before the block pattern can claim `calendar`.
-  children: [inboxCalendarRoute, inboxPreviewRoute],
+  children: [
+    inboxCalendarRoute,
+    inboxChannelRoute,
+    inboxDocumentRoute,
+    inboxPreviewRoute,
+  ],
 });

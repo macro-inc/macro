@@ -1,8 +1,4 @@
-import {
-  useViewShell,
-  ViewBreadcrumbs,
-  ViewShell,
-} from '@app/components/view-shell';
+import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
 import { CalendarView } from '@app/features/calendar-view/calendar-view';
 import { createSearchParams, SplitRouter } from '@app/lib/split-router';
@@ -17,6 +13,7 @@ import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createEffect, onMount, Show, Suspense } from 'solid-js';
 import { HomeChatStart } from './components/HomeChatStart';
+import { HomeReturnBreadcrumb } from './components/HomeReturnBreadcrumb';
 import { InboxListLayout } from './components/InboxHeader';
 import { InboxList } from './components/InboxList';
 import { InboxTabs } from './components/InboxTabs';
@@ -63,20 +60,6 @@ function HomeListPane(props: {
         />
       </Suspense>
     </InboxListLayout>
-  );
-}
-
-function HomeReturnBreadcrumb(props: { onReturn: () => void }) {
-  return (
-    <nav aria-label="Home location" class="flex items-center gap-0.5">
-      <ViewBreadcrumbs.ReturnButton
-        data-allow-focus-in-preview
-        onClick={props.onReturn}
-      >
-        Home
-      </ViewBreadcrumbs.ReturnButton>
-      <ViewBreadcrumbs.Separator />
-    </nav>
   );
 }
 

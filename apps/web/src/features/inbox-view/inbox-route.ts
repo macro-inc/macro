@@ -5,15 +5,16 @@ import {
   calendarSearchTarget,
 } from '@app/features/calendar-view/calendar-url';
 import type { channelsSearch } from '@app/features/channels-view/channels-route';
+import type { DriveSearchParams } from '@app/features/drive-view/primitives/drive-route';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { PreviewBlockTarget } from '@components/app/previewTarget';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { documentCommentLocation } from '@notifications/document-comment-location';
 import type { z } from 'zod';
-import type {
-  InboxPreviewRouteParams,
-  inboxDocumentSearch,
+import {
+  type InboxPreviewRouteParams,
+  isInboxDocumentType,
 } from './inbox-route-schema';
 
 export type InboxPreviewSearch = {
@@ -21,8 +22,34 @@ export type InboxPreviewSearch = {
     z.infer<typeof channelsSearch.schema>,
     'messageId' | 'threadId'
   >;
-  document: z.infer<typeof inboxDocumentSearch.schema>;
+  document: Pick<DriveSearchParams, 'commentId'>;
 };
+
+/** Normalize typed and fallback child routes to the same block identity. */
+export function inboxDetailParamsFromRoute(params: {
+  blockType?: InboxPreviewRouteParams['blockType'];
+  previewId?: string;
+  channelId?: string;
+  documentType?: string;
+  documentId?: string;
+}): InboxPreviewRouteParams | undefined {
+  if (params.channelId) {
+    return { blockType: 'channel', previewId: params.channelId };
+  }
+  if (
+    params.documentType &&
+    params.documentId &&
+    isInboxDocumentType(params.documentType)
+  ) {
+    return {
+      blockType: params.documentType,
+      previewId: params.documentId,
+    };
+  }
+  if (params.blockType && params.previewId) {
+    return { blockType: params.blockType, previewId: params.previewId };
+  }
+}
 
 function channelParams(
   search: InboxPreviewSearch['channel']

@@ -20,7 +20,7 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
 | `/app/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/inbox/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.document-detail.commentId`; a calendar row renders the Calendar view inline at `/app/inbox/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
+| `/app/inbox/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/inbox/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
 | `/app/channels` | Channels list |
@@ -53,6 +53,13 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 When an event opens inline from Home, changing the Calendar period stays under
 `/app/inbox/calendar/`, updates the period segment, and re-focuses that event.
 Back/Forward restores the period and its event locator from `sN.calendar.*`.
+
+Home uses the shared channel and file details for channel conversations and
+supported documents, with a **Home** breadcrumb that returns to the list. A
+channel message or thread target stays in its conversation. Document comment
+targets, spreadsheets, unknown items, and other unsupported block types retain
+the legacy inline preview so their navigation still works. The URL shape stays
+`/app/inbox/<block-type>/<uuid>` in either rendering mode.
 
 On touch devices, documents (including tasks) open in legacy blocks rather than
 inline Drive details. Canonical `/app/drive/.../<document-type>/<uuid>` links also

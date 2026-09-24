@@ -1,5 +1,9 @@
 import { channelsSearch } from '@app/features/channels-view/channels-route';
-import { createSearchParamsCodec } from '@app/lib/split-router';
+import { driveSearch } from '@app/features/drive-view/primitives/drive-route';
+import {
+  DRIVE_DOCUMENT_TYPES,
+  type DriveDocumentType,
+} from '@app/features/drive-view/primitives/drive-route-schema';
 import {
   type BlockAlias,
   BlockAliasRegistry,
@@ -21,6 +25,9 @@ export const inboxPreviewRouteParams = z
   .refine(({ blockType }) => blockType !== 'write' && blockType !== 'calendar');
 
 export type InboxPreviewRouteParams = z.infer<typeof inboxPreviewRouteParams>;
+export function isInboxDocumentType(value: string): value is DriveDocumentType {
+  return (DRIVE_DOCUMENT_TYPES as readonly string[]).includes(value);
+}
 
 const aliasBaseTypes: Record<BlockAlias, BlockName> = {
   csv: 'code',
@@ -42,20 +49,8 @@ export function inboxBaseBlockType(
     : (blockType as BlockName);
 }
 
-export const INBOX_DOCUMENT_SEARCH_NAMESPACE = 'document-detail';
-
-/** The comment a document item opens at, as a copied comment link would. */
-export const inboxDocumentSearch = {
-  namespace: INBOX_DOCUMENT_SEARCH_NAMESPACE,
-  schema: z.object({ commentId: z.string() }),
-  defaults: { commentId: '' },
-};
-
-export const inboxDocumentSearchCodec =
-  createSearchParamsCodec(inboxDocumentSearch);
-
 /** Search the inline Home item owns; the channel namespace is shared with the channels view. */
 export const INBOX_PREVIEW_SEARCH_NAMESPACES = [
   channelsSearch.namespace,
-  INBOX_DOCUMENT_SEARCH_NAMESPACE,
+  driveSearch.namespace,
 ] as const;

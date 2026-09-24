@@ -134,6 +134,10 @@ vi.mock('@components/app/previewTarget', () => ({
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToResolvedBlockName: (type: string) => blocks.resolve(type),
+  itemToBlockName: (entity: {
+    fileType?: string;
+    subType?: { type: string };
+  }) => entity.subType?.type ?? entity.fileType ?? 'unknown',
   isBlockAlias: (type: string) => type in blocks.aliases,
   resolveBlockAlias: (type: string) => blocks.resolve(type),
 }));
@@ -465,6 +469,25 @@ describe('InboxViewProvider route selection', () => {
       },
     });
     expect(guard.selections.at(-1)).toEqual(context.previewTarget());
+  });
+
+  it('restores a document comment without losing Drive search fields', async () => {
+    const { context, router } = mountProvider(
+      undefined,
+      '/inbox/md/document-1?s0.drive.commentId=comment-1&s0.drive.scope=all&s0.drive.tags=first&s0.drive.tags=second'
+    );
+    await router.settled();
+
+    expect(context.previewTarget()).toMatchObject({
+      blockType: 'md',
+      blockId: 'document-1',
+      params: { comment_id: 'comment-1' },
+    });
+    expect(router.search('split', 'drive')).toEqual({
+      commentId: ['comment-1'],
+      scope: ['all'],
+      tags: ['first', 'second'],
+    });
   });
 
   it('serializes a live selection to its block path and closes it through the root route', async () => {

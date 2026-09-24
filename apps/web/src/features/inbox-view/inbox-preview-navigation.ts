@@ -10,6 +10,10 @@ import {
   channelsSearch,
   channelsSearchCodec,
 } from '@app/features/channels-view/channels-route';
+import {
+  driveSearch,
+  driveSearchCodec,
+} from '@app/features/drive-view/primitives/drive-route';
 import type { SerializedSearchParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
@@ -19,11 +23,7 @@ import {
   type PreviewPanelSelection,
   previewBlockTarget,
 } from '@components/app/previewTarget';
-import {
-  INBOX_DOCUMENT_SEARCH_NAMESPACE,
-  type InboxPreviewRouteParams,
-  inboxDocumentSearchCodec,
-} from './inbox-route-schema';
+import type { InboxPreviewRouteParams } from './inbox-route-schema';
 
 type DetailSearch = Record<string, SerializedSearchParams | undefined>;
 
@@ -47,7 +47,7 @@ export function inboxDetailSearch(
 ): DetailSearch {
   return {
     [channelsSearch.namespace]: detail.channel,
-    [INBOX_DOCUMENT_SEARCH_NAMESPACE]: detail.document,
+    [driveSearch.namespace]: detail.document,
     [CALENDAR_SEARCH_NAMESPACE]: detail.calendar,
   };
 }
@@ -61,7 +61,8 @@ function documentDetailSearch(
   target: PreviewBlockTarget
 ): SerializedSearchParams | undefined {
   if (target.blockType === 'channel') return;
-  return inboxDocumentSearchCodec.serialize({
+  return driveSearchCodec.serialize({
+    ...driveSearch.defaults,
     commentId:
       targetParam(target, MD_URL_PARAMS.commentId) ||
       targetParam(target, PDF_URL_PARAMS.annotationId),
