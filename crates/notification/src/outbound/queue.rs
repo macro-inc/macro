@@ -1,6 +1,12 @@
 //! SQS queue adapter for notification delivery.
 
+#[cfg(test)]
+mod test;
+
+use std::future::Future;
+
 use aws_sdk_sqs::Client as SqsClient;
+use futures::{StreamExt, stream};
 use rootcause::Report;
 use serde::Serialize;
 
@@ -9,8 +15,17 @@ use crate::domain::models::queue_message::{
 };
 use crate::domain::ports::{NotificationIngressQueue, NotificationQueue};
 
-#[cfg(test)]
-mod test;
+const MAX_CONCURRENT_SENDS: usize = 10;
+
+/// Await every send, including after an error, without unbounded SQS fanout.
+async fn send_concurrently(
+    sends: impl IntoIterator<Item = impl Future<Output = Result<(), Report>>>,
+) -> Result<(), Report> {
+    stream::iter(sends)
+        .buffer_unordered(MAX_CONCURRENT_SENDS)
+        .fold(Ok(()), |result, next| async move { result.and(next) })
+        .await
+}
 
 /// SQS-backed implementation of the notification queue ports.
 ///
@@ -56,10 +71,11 @@ impl NotificationQueue for SqsQueue {
         &self,
         messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
-        for message in messages {
-            self.send_json(&message).await?;
-        }
-        Ok(())
+        let sends: Vec<_> = messages
+            .into_iter()
+            .map(|message| async move { self.send_json(&message).await })
+            .collect();
+        send_concurrently(sends).await
     }
 
     async fn receive_messages(&self) -> Result<Vec<RawQueueMessage>, Report> {

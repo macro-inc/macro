@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH requested_entities AS (\n                SELECT entity_type, entity_id\n                FROM UNNEST($2::text[], $3::text[]) AS entity(entity_type, entity_id)\n            )\n            SELECT un.notification_id\n            FROM user_notification un\n            JOIN notification n ON n.id = un.notification_id\n            WHERE un.user_id = $1\n              AND un.deleted_at IS NULL\n              AND (un.state = ANY($4::notification_state[]) OR ($5 AND un.seen_at IS NULL))\n              AND EXISTS (\n                  SELECT 1\n                  FROM requested_entities entity\n                  WHERE (\n                      n.event_item_type = entity.entity_type\n                      AND n.event_item_id = entity.entity_id\n                  )\n                  OR (\n                      n.secondary_event_item_type = entity.entity_type\n                      AND n.secondary_event_item_id = entity.entity_id\n                  )\n                  OR (\n                      entity.entity_type = 'channel_message'\n                      AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = entity.entity_id\n                  )\n              )\n            ORDER BY un.created_at, un.notification_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray",
+        {
+          "Custom": {
+            "name": "notification_state[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "notification_state",
+                  "kind": {
+                    "Enum": [
+                      "unseen",
+                      "seen",
+                      "done"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "11aa415053064f569057bd100e3aa8686566813f38bd7e90d8d076b3cc5a8b94"
+}

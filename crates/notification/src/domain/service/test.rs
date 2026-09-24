@@ -1,5 +1,7 @@
 //! Unit tests for the notification services.
 
+mod status_updates;
+
 use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
@@ -115,6 +117,8 @@ struct MockRepository {
     entity_notification_ids: Vec<Uuid>,
     updated_notifications: Option<Vec<UserNotificationRow<serde_json::Value>>>,
     entity_lookup_calls: Mutex<Vec<(String, Vec<(EntityType, String)>)>>,
+    entity_lookup_filters: Mutex<Vec<(Vec<crate::domain::models::NotificationState>, bool)>>,
+    basic_notification_calls: Mutex<Vec<Vec<Uuid>>>,
     mark_seen_calls: Mutex<Vec<(String, Vec<Uuid>)>>,
     mark_done_calls: Mutex<Vec<(String, Vec<Uuid>, bool)>>,
 }
@@ -134,6 +138,8 @@ impl MockRepository {
             entity_notification_ids: Vec::new(),
             updated_notifications: None,
             entity_lookup_calls: Mutex::new(Vec::new()),
+            entity_lookup_filters: Mutex::new(Vec::new()),
+            basic_notification_calls: Mutex::new(Vec::new()),
             mark_seen_calls: Mutex::new(Vec::new()),
             mark_done_calls: Mutex::new(Vec::new()),
         }
@@ -358,7 +364,13 @@ impl NotificationRepository for MockRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: &[model_entity::Entity<'_>],
+        status: &NotificationStatus,
     ) -> Result<Vec<Uuid>, Report> {
+        let (states, include_unviewed) = status.entity_update_filter();
+        self.entity_lookup_filters
+            .lock()
+            .unwrap()
+            .push((states.to_vec(), include_unviewed));
         self.entity_lookup_calls.lock().unwrap().push((
             user_id.to_string(),
             entities
@@ -371,9 +383,18 @@ impl NotificationRepository for MockRepository {
 
     async fn get_basic_notifications(
         &self,
-        _notification_ids: &[Uuid],
+        notification_ids: &[Uuid],
     ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
-        Ok(self.basic_notifications.clone())
+        self.basic_notification_calls
+            .lock()
+            .unwrap()
+            .push(notification_ids.to_vec());
+        Ok(self
+            .basic_notifications
+            .iter()
+            .filter(|notification| notification_ids.contains(&notification.id))
+            .cloned()
+            .collect())
     }
 
     async fn get_digest_eligible_notification_ids(
@@ -598,9 +619,10 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: &[model_entity::Entity<'_>],
+        status: &NotificationStatus,
     ) -> Result<Vec<Uuid>, Report> {
         (**self)
-            .get_notification_ids_for_entities(user_id, entities)
+            .get_notification_ids_for_entities(user_id, entities, status)
             .await
     }
 
@@ -1922,6 +1944,10 @@ async fn test_update_notifications_for_entities_uses_single_batch_lookup() {
         repo.mark_seen_calls.lock().unwrap().as_slice(),
         [(user.to_string(), vec![first, second])]
     );
+    assert_eq!(
+        repo.entity_lookup_filters.lock().unwrap().as_slice(),
+        [(vec![crate::domain::models::NotificationState::Unseen], true)]
+    );
 }
 
 #[tokio::test]
@@ -1952,6 +1978,13 @@ async fn test_update_notifications_for_entities_supports_done_status() {
         repo.mark_done_calls.lock().unwrap().as_slice(),
         [(user.to_string(), vec![notification_id], true)]
     );
+    assert_eq!(
+        repo.entity_lookup_filters.lock().unwrap().as_slice(),
+        [(
+            crate::domain::models::NotificationState::ACTIVE.to_vec(),
+            false
+        )]
+    );
 }
 
 #[tokio::test]
@@ -1979,6 +2012,7 @@ async fn test_update_notifications_for_entities_noops_when_no_notifications_matc
 
     assert!(updated.is_empty());
     assert!(repo.mark_done_calls.lock().unwrap().is_empty());
+    assert!(repo.basic_notification_calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
