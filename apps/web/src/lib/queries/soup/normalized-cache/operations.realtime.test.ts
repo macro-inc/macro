@@ -32,6 +32,7 @@ import {
   getSoupEntityById,
   invalidateSoupEntity,
   refetchSoupEntity,
+  removeSoupEntitiesFromDoneFilteredQueries,
 } from './operations';
 
 type HomeData = InfiniteData<SoupAstItemsFlatPage, unknown>;
@@ -132,6 +133,17 @@ function homeItems() {
   return testQueryClient.getQueryData<HomeData>(homeKey)!.pages[0].items;
 }
 
+function cacheChannelOutsideHome() {
+  // Another list keeps the channel normalized after Home removes it.
+  testQueryClient.setQueryDefaults(['soup', 'items', 'other'], {
+    meta: { normalize: true },
+  });
+  testQueryClient.setQueryData(
+    ['soup', 'items', 'other'],
+    page([channel(OLD)])
+  );
+}
+
 describe('Home notification revalidation with real normalized query keys', () => {
   it('invalidates complete JSON-roundtripped keys with undefined optional slots', async () => {
     const home = mountHome();
@@ -199,16 +211,9 @@ describe('Home notification revalidation with real normalized query keys', () =>
     );
   });
 
-  it('restores a cached done-filtered row on a new notification', () => {
-    mountHome();
-    // Another cached list keeps the entity normalized after Home removes it.
-    testQueryClient.setQueryDefaults(['soup', 'items', 'other'], {
-      meta: { normalize: true },
-    });
-    testQueryClient.setQueryData(
-      ['soup', 'items', 'other'],
-      page([channel(OLD)])
-    );
+  it('keeps a restored done-filtered row when its notification-triggered refetch omits it', async () => {
+    const home = mountHome();
+    cacheChannelOutsideHome();
     testQueryClient.setQueryData(homeKey, page([]));
     expect(getSoupEntityById('channel-1')).toBeDefined();
 
@@ -220,5 +225,31 @@ describe('Home notification revalidation with real normalized query keys', () =>
     expect(resolveNotifiedAt('channel-1', homeItems()[0].notified_at)).toBe(
       NEW
     );
+
+    // Notification callbacks revalidate after restoring the row. The replica
+    // may still return the done-filtered page from before this notification.
+    invalidateSoupEntity('channel-1');
+    expect(home.queryFn).toHaveBeenCalledOnce();
+    home.resolve(page([]));
+    await vi.waitFor(() =>
+      expect(home.observer.getCurrentResult().fetchStatus).toBe('idle')
+    );
+    expect(homeItems()).toHaveLength(1);
+  });
+
+  it('does not resurrect a restored row that the user marks done again', async () => {
+    const home = mountHome([]);
+    cacheChannelOutsideHome();
+    updateSoupForNotification(notification());
+    expect(homeItems()).toHaveLength(1);
+
+    removeSoupEntitiesFromDoneFilteredQueries(new Set(['channel-1']));
+    const refetch = testQueryClient.invalidateQueries({
+      queryKey: homeKey,
+      exact: true,
+    });
+    home.resolve(page([]));
+    await refetch;
+    expect(homeItems()).toEqual([]);
   });
 });

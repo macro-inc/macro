@@ -35,6 +35,7 @@ import {
 } from './normalizer';
 import { raiseNotifiedFloor } from './notified-floor';
 import { ownTouchStamp } from './own-touch';
+import { retainRestoredSoupItem } from './restored-membership';
 import type {
   SoupEntityPartial,
   SoupEntityTag,
@@ -585,6 +586,7 @@ export function restoreSoupEntityToDoneFilteredQueries(
         index === 0 ? { ...page, items: [item, ...page.items] } : page
       ),
     });
+    retainRestoredSoupItem(queryClient, key, item);
   }
 
   for (const [
@@ -620,6 +622,7 @@ export function restoreSoupEntityToDoneFilteredQueries(
             : page
         ),
       });
+      retainRestoredSoupItem(queryClient, key, item);
       continue;
     }
 

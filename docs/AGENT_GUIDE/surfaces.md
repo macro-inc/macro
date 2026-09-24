@@ -104,6 +104,9 @@ return to Home, and repeat; also check a row previously marked done and a thread
 reply. Delay the Home list response while allowing single-entity hydration to
 finish: hydration must not cancel the list refresh or leave an old notification
 timestamp. Older in-flight snapshots must not move the delivered row backward.
+Also test a stale response that entirely omits a just-restored, previously done
+row: the row must stay visible. Marking it done again must override that restore,
+and other filter scopes must not inherit the retained membership.
 
 GraphQL-attached notification rows share the global feed's local seen/done
 overrides: Mark Done and Undo reflect local intent without waiting for an older
