@@ -4,6 +4,7 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
+import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
 import { type ChannelEntity, type EntityData, isChannelEntity } from '@entity';
 import {
@@ -34,6 +35,22 @@ export type ChannelsDataSource = ListDataSource<ChannelEntity>;
 export type ChannelsSourceScope = ChannelsQueryScope | 'search';
 
 export type ChannelsSources = Record<ChannelsSourceScope, ChannelsDataSource>;
+
+/**
+ * Last rows each rail list rendered this session, keyed by viewer, scope, and
+ * sort. GraphQL results only come back through an asynchronous cache read on
+ * every mount, so without this the rail shows a spinner on each visit while
+ * TanStack-backed sidebars render from memory. Fresh query data replaces it.
+ */
+const retainedRailChannels = new Map<string, ChannelEntity[]>();
+
+function retainedRailKey(
+  userId: string | undefined,
+  scope: ChannelsSourceScope,
+  sortMethod: string | undefined
+) {
+  return userId ? `${userId}:${scope}:${sortMethod}` : undefined;
+}
 
 export const CHANNELS_QUERY_DEFINITIONS = {
   recents: {
@@ -188,6 +205,27 @@ export function resolveSelectedChannel(
   );
 }
 
+function sortChannelsForScope(
+  scope: ChannelsSourceScope,
+  channels: ChannelEntity[],
+  sortMethod: ChannelListSort | undefined
+): ChannelEntity[] {
+  if (scope === 'recents') return channels;
+
+  const activeSort =
+    sortMethod ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method;
+  const sortDate = (channel: ChannelEntity) =>
+    activeSort === 'created_at'
+      ? channel.createdAt
+      : activeSort === 'viewed_at'
+        ? channel.viewedAt
+        : channel.updatedAt;
+
+  return channels
+    .slice()
+    .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
+}
+
 function useChannelsDataSource(
   scope: ChannelsSourceScope,
   enabled: Accessor<boolean>,
@@ -201,28 +239,25 @@ function useChannelsDataSource(
       graphqlProjection: 'channel-list',
     })
   );
+  const userId = useUserId();
+  const retainedKey = () => retainedRailKey(userId(), scope, sortMethod());
   const items = createMemo<ChannelEntity[]>((previous) => {
-    if (!query.isEnabled || query.isLoading) return previous;
+    if (!query.isEnabled) return previous;
+    const key = retainedKey();
+    if (query.isLoading) {
+      return (key && retainedRailChannels.get(key)) || previous;
+    }
 
-    const channels = filterChannelsForScope(
+    const channels = sortChannelsForScope(
       scope,
-      (query.data?.entities ?? []).filter(isChannelEntity)
+      filterChannelsForScope(
+        scope,
+        (query.data?.entities ?? []).filter(isChannelEntity)
+      ),
+      sortMethod()
     );
-
-    if (scope === 'recents') return channels;
-
-    const activeSort =
-      sortMethod() ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method;
-    const sortDate = (channel: ChannelEntity) =>
-      activeSort === 'created_at'
-        ? channel.createdAt
-        : activeSort === 'viewed_at'
-          ? channel.viewedAt
-          : channel.updatedAt;
-
-    return channels
-      .slice()
-      .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
+    if (key && !query.isPlaceholderData) retainedRailChannels.set(key, channels);
+    return channels;
   }, []);
 
   return {

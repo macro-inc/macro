@@ -16,7 +16,12 @@ const useSoupAstItemsQuery = vi.hoisted(() =>
   )
 );
 
+const currentUserId = vi.hoisted(() => ({ value: 'user-a' }));
+
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => currentUserId.value,
+}));
 vi.mock('@entity', () => ({
   isChannelEntity: (entity: { type: string }) => entity.type === 'channel',
 }));
@@ -78,6 +83,59 @@ describe('channel list query selection', () => {
       expect(selectionOptions?.().staleTime).toBe(0);
     } finally {
       dispose();
+    }
+  });
+
+  it('renders the last rail rows while a remounted list reads its cache', () => {
+    const channel = {
+      type: 'channel',
+      id: 'channel-1',
+      channelType: 'private',
+      createdAt: '2026-09-01T00:00:00Z',
+    };
+    const mountChannels = (state: {
+      isLoading: boolean;
+      entities: unknown[];
+    }) => {
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        isLoading: state.isLoading,
+        data: { entities: state.entities },
+      }));
+      return createRoot((dispose) => ({
+        sources: useChannelsSources(
+          (scope) => scope === 'channels',
+          () => 'created_at'
+        ),
+        dispose,
+      }));
+    };
+
+    currentUserId.value = 'retained-user';
+    const first = mountChannels({ isLoading: false, entities: [channel] });
+    expect(first.sources.channels.items().map(({ id }) => id)).toEqual([
+      'channel-1',
+    ]);
+    first.dispose();
+
+    const remounted = mountChannels({ isLoading: true, entities: [] });
+    try {
+      expect(remounted.sources.channels.items().map(({ id }) => id)).toEqual([
+        'channel-1',
+      ]);
+      expect(remounted.sources.channels.isLoading()).toBe(false);
+    } finally {
+      remounted.dispose();
+    }
+
+    currentUserId.value = 'other-user';
+    const otherViewer = mountChannels({ isLoading: true, entities: [] });
+    try {
+      expect(otherViewer.sources.channels.items()).toEqual([]);
+      expect(otherViewer.sources.channels.isLoading()).toBe(true);
+    } finally {
+      otherViewer.dispose();
+      useSoupAstItemsQuery.mockReset();
     }
   });
 });
