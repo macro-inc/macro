@@ -20,7 +20,8 @@ export type FloatRegionProps = ParentProps<{
  *
  * Inside a SplitPanel, contributions from inactive (background swipe) panels
  * are ignored automatically. Among active contributors to the same region the
- * highest priority wins; ties go to the most recently mounted.
+ * highest priority wins; ties go to the most recently mounted. A suppressed
+ * region has no winner at all, so the fallback chrome does not step in.
  *
  * Contributions own their horizontal padding (`px-(--mobile-chrome-gutter)`
  * to align with the dock) and must re-enable `pointer-events-auto` on

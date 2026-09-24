@@ -29,6 +29,12 @@ export type FloatRegionRegistrationHandle = {
   unregister: () => void;
 };
 
+type FloatRegionSuppressor = {
+  id: symbol;
+  /** Reactive: whether this suppressor currently holds the region closed. */
+  isActive: Accessor<boolean>;
+};
+
 function createFloatRegionsState() {
   // Regions are independent silos — keyed by region so winner recomputation
   // in one region never tracks changes in another.
@@ -36,6 +42,11 @@ function createFloatRegionsState() {
     Object.fromEntries(
       FLOAT_REGIONS.map((region) => [region, [] as FloatRegionRegistration[]])
     ) as Record<FloatRegionName, FloatRegionRegistration[]>
+  );
+  const [suppressors, setSuppressors] = createStore(
+    Object.fromEntries(
+      FLOAT_REGIONS.map((region) => [region, [] as FloatRegionSuppressor[]])
+    ) as Record<FloatRegionName, FloatRegionSuppressor[]>
   );
   const [mounts, setMounts] = createStore<
     Partial<Record<FloatRegionName, HTMLElement>>
@@ -64,9 +75,28 @@ function createFloatRegionsState() {
     };
   }
 
+  /**
+   * Hold a region closed while `isActive` is true. A suppressed region has no
+   * winner, so lower-priority fallback chrome does not take the slot over from
+   * the contribution that stepped aside. Returns a disposer.
+   */
+  function suppress(
+    region: FloatRegionName,
+    isActive: Accessor<boolean>
+  ): () => void {
+    const entry: FloatRegionSuppressor = {
+      id: Symbol('float-region-suppressor'),
+      isActive,
+    };
+    setSuppressors(region, (prev) => [...prev, entry]);
+    return () =>
+      setSuppressors(region, (prev) => prev.filter((s) => s.id !== entry.id));
+  }
+
   function winnerOf(
     region: FloatRegionName
   ): FloatRegionRegistration | undefined {
+    if (suppressors[region].some((s) => s.isActive())) return undefined;
     let winner: FloatRegionRegistration | undefined;
     for (const r of registrations[region]) {
       if (!r.isActive()) continue;
@@ -83,6 +113,7 @@ function createFloatRegionsState() {
 
   return {
     register,
+    suppress,
     setMount: (region: FloatRegionName, el: HTMLElement) =>
       setMounts(region, el),
     mount: (region: FloatRegionName) => mounts[region],

@@ -1,4 +1,5 @@
 import { usePreference } from '@app/preferences/use-preference';
+import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { useMaybeBlockAliasedName } from '@core/block';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -225,6 +226,7 @@ function SidePanelLayoutInner(
 ) {
   const resolved = children(() => props.children);
   const zoneCtx = useContext(ResizeZoneContext);
+  const splitPanel = useSplitPanel();
 
   if (!zoneCtx) {
     throw new Error('SidePanelLayoutInner must be rendered inside Resize.Zone');
@@ -242,6 +244,16 @@ function SidePanelLayoutInner(
   );
   const showOverlay = createMemo(
     () => isNarrow() && hasSections() && props.isOpen()
+  );
+
+  // The mobile bottom chrome floats from the layout root, above this panel's
+  // stacking context, so the overlay cannot cover it — the region has to stand
+  // down for as long as the overlay owns the frame.
+  onCleanup(
+    FloatRegions.suppress(
+      'accessory',
+      () => showOverlay() && (splitPanel?.isPanelActive() ?? true)
+    )
   );
 
   return (
