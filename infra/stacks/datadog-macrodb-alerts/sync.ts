@@ -71,7 +71,9 @@ function toPayload(spec: MonitorSpec) {
 
 async function listManagedMonitors(): Promise<MonitorSummary[]> {
   const query = encodeURIComponent('tag:"managed:datadog-macrodb-alerts"');
-  const response = await ddFetch(`/api/v1/monitor/search?query=${query}&per_page=100`);
+  const response = await ddFetch(
+    `/api/v1/monitor/search?query=${query}&per_page=100`
+  );
   if (!response.ok) {
     throw new Error(
       `monitor search failed: ${response.status} ${await response.text()}`

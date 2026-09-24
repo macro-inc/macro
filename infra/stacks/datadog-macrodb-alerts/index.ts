@@ -30,5 +30,4 @@ if (stack === 'prod') {
   }
 }
 
-export const monitorCount =
-  stack === 'prod' ? MACRODB_PROD_MONITORS.length : 0;
+export const monitorCount = stack === 'prod' ? MACRODB_PROD_MONITORS.length : 0;
