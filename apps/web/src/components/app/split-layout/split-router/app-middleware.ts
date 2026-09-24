@@ -96,12 +96,15 @@ export function createAppSplitRouterMiddleware(options: {
       if (!externalSearch) return;
 
       const leafId = to.location.route.matches.at(-1)?.id;
+      const inboxChannel =
+        leafId === 'inbox-preview' &&
+        routeParams(to.location.route).blockType === 'channel';
       let namespace: string;
       let fields: [string, string][];
       if (leafId === 'mail-thread') {
         namespace = EMAIL_DETAIL_SEARCH_NAMESPACE;
         fields = [[EMAIL_URL_PARAMS.messageId, 'messageId']];
-      } else if (leafId === 'channels-channel') {
+      } else if (leafId === 'channels-channel' || inboxChannel) {
         namespace = CHANNEL_DETAIL_SEARCH_NAMESPACE;
         fields = [
           [CHANNEL_URL_PARAMS.message, 'messageId'],

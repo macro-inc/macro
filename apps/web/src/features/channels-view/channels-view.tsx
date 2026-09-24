@@ -3,6 +3,7 @@ import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/util
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { SplitRouter } from '@app/lib/split-router';
+import { channelPreviewTarget } from '@components/app/channelPreviewTarget';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -236,7 +237,7 @@ export function ChannelDetailRouteView() {
       >
         {(channel) => (
           <PreviewPanel
-            selectedEntity={channel()}
+            target={channelPreviewTarget(channel())}
             orchestrator={orchestrator}
             splitPanelContext={panel}
           />

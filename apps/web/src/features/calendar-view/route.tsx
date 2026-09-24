@@ -13,7 +13,9 @@ const CalendarView = lazy(async () => ({
   default: (await import('./calendar-view')).CalendarView,
 }));
 
-export const CalendarRouteView = withAuth(() => <CalendarView />);
+export const CalendarRouteView = withAuth(() => (
+  <CalendarView route={calendarSplitRoute} />
+));
 
 export const calendarSplitRoute = defineRoute({
   id: CALENDAR_ROUTE_ID,

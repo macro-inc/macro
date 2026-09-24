@@ -1,8 +1,11 @@
 import { previewBlockTarget } from '@components/app/previewTarget';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { inboxPreviewNavigation } from '../inbox-view/inbox-preview-navigation';
-import { inboxPreviewSelection } from '../inbox-view/inbox-route';
+import {
+  inboxCalendarNavigation,
+  inboxPreviewNavigation,
+} from '../inbox-view/inbox-preview-navigation';
+import { inboxPreviewTarget } from '../inbox-view/inbox-route';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -395,7 +398,14 @@ describe('calendar view navigation', () => {
               }),
             ],
           },
-          search: { calendar: { eventId: ['event-1'] } },
+          search: {
+            calendar: expect.objectContaining({
+              eventId: ['event-1'],
+              occurrenceKey: ['instance-1'],
+              startDate: ['2026-01-27'],
+              endDate: ['2026-01-28'],
+            }),
+          },
         }),
       }),
       expect.any(Object)
@@ -504,25 +514,31 @@ describe('Drive document routing', () => {
 });
 
 describe('Inbox calendar preview navigation', () => {
-  it.each([
-    { kind: 'allDay' as const, startDate: '2025-01-01', endDate: '2025-01-03' },
-    {
-      kind: 'timed' as const,
-      startsAt: '2025-01-01T12:00:00.000Z',
-      endsAt: '2025-01-01T13:00:00.000Z',
-    },
-  ])('round-trips $kind event times', (time) => {
-    const result = inboxPreviewNavigation({
-      type: 'calendar_event',
-      id: 'event-1',
-      time,
+  it('targets the Calendar period path with the event and locator in search', () => {
+    const range = {
+      start: '2025-01-01T00:00:00.000Z',
+      end: '2025-01-02T00:00:00.000Z',
+      startDate: '2025-01-01',
+      endDate: '2025-01-02',
+    };
+    expect(
+      inboxCalendarNavigation(
+        { eventId: 'event-1', occurrenceKey: 'occurrence-1', range },
+        'timeGridWeek'
+      )
+    ).toEqual({
+      params: { period: 'timeGridWeek' },
+      search: {
+        'channel-detail': undefined,
+        calendar: {
+          eventId: ['event-1'],
+          occurrenceKey: ['occurrence-1'],
+          startDate: [range.startDate],
+          endDate: [range.endDate],
+        },
+      },
     });
-    expect(result.search.calendarTimeKind).toBe(time.kind);
-    expect(inboxPreviewSelection(result.params, result.search)).toMatchObject({
-      type: 'calendar_event',
-      id: 'event-1',
-      time,
-    });
+    expect(inboxCalendarNavigation({}, 'timeGridWeek')).toBeUndefined();
   });
 });
 
@@ -537,18 +553,24 @@ describe('Inbox channel preview navigation', () => {
       blockType: 'channel',
       previewId: 'channel-1',
     });
-    expect(result.search).toMatchObject({
-      targetMessageId: 'message-1',
-      targetThreadId: 'thread-1',
+    expect(result.search).toEqual({
+      'channel-detail': { messageId: ['message-1'], threadId: ['thread-1'] },
     });
   });
   it('keeps untargeted channels at latest', () => {
     expect(
       inboxPreviewNavigation({ type: 'channel', id: 'channel-1' }).search
-    ).toMatchObject({
-      targetMessageId: '',
-      targetThreadId: '',
-    });
+    ).toEqual({ 'channel-detail': undefined });
+  });
+  it('names markdown subtypes in the path', () => {
+    expect(
+      inboxPreviewNavigation({
+        type: 'document',
+        id: 'task-1',
+        fileType: 'md',
+        subType: { type: 'task', is_completed: false },
+      }).params
+    ).toEqual({ blockType: 'task', previewId: 'task-1' });
   });
 });
 
@@ -966,16 +988,16 @@ describe('getDocumentCommentTarget', () => {
     const result = inboxPreviewNavigation(
       documentRow([commentNotification('n1', 'comment-1')]) as never
     );
-    expect(result.search.targetCommentId).toBe('comment-1');
-    const selection = inboxPreviewSelection(result.params, result.search);
-    expect(selection).toMatchObject({
-      type: 'document',
-      id: 'doc-1',
-      commentTarget: { commentId: 'comment-1' },
+    expect(result.params).toEqual({ blockType: 'md', previewId: 'doc-1' });
+    expect(result.search['document-detail']).toEqual({
+      commentId: ['comment-1'],
     });
-    expect(previewBlockTarget(selection!).params).toEqual({
-      comment_id: 'comment-1',
+    const target = inboxPreviewTarget(result.params, {
+      channel: { messageId: '', threadId: '' },
+      document: { commentId: 'comment-1' },
     });
+    expect(target).toMatchObject({ blockType: 'md', blockId: 'doc-1' });
+    expect(target.params).toEqual({ comment_id: 'comment-1' });
   });
 
   it('passes the comment to a document preview', () => {

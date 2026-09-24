@@ -7,7 +7,11 @@ import {
   routeParams,
 } from '@app/lib/split-router';
 import { describe, expect, it } from 'vitest';
-import { CALENDAR_SEARCH_NAMESPACE, calendarSearchCodec } from './calendar-url';
+import {
+  CALENDAR_SEARCH_NAMESPACE,
+  calendarSearchCodec,
+  calendarTargetSearch,
+} from './calendar-url';
 import { calendarSplitRoute } from './route';
 
 const routes = createRoutesManifest({ definitions: [calendarSplitRoute] });
@@ -36,13 +40,17 @@ describe('Calendar split route', () => {
     expect(decodeRoute(routes, ['calendar', 'agenda'])).toBeUndefined();
   });
 
-  it('serializes only a non-empty focused event id', () => {
-    expect(calendarSearchCodec.serialize({ eventId: '' })).toBeUndefined();
-    expect(calendarSearchCodec.serialize({ eventId: 'event-1' })).toEqual({
-      eventId: ['event-1'],
-    });
+  it('serializes only the non-empty parts of a focus target', () => {
+    expect(
+      calendarSearchCodec.serialize(calendarTargetSearch({}))
+    ).toBeUndefined();
+    expect(
+      calendarSearchCodec.serialize(
+        calendarTargetSearch({ eventId: 'event-1' })
+      )
+    ).toEqual({ eventId: ['event-1'] });
     expect(calendarSearchCodec.parse({ eventId: ['event-1'] })).toEqual({
-      value: { eventId: 'event-1' },
+      value: calendarTargetSearch({ eventId: 'event-1' }),
       valid: true,
     });
   });

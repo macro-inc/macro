@@ -38,14 +38,46 @@ const guard = vi.hoisted(() => ({
   preflights: [] as unknown[],
   allow: true,
 }));
+const blocks = vi.hoisted(() => {
+  const aliases: Record<string, string> = {
+    task: 'md',
+    snippet: 'md',
+    skill: 'md',
+    csv: 'code',
+  };
+  return {
+    aliases,
+    resolve: (type: string) => aliases[type] ?? type,
+    aliasContext: (kind: string | undefined) =>
+      kind && kind in aliases
+        ? { alias: kind, baseType: aliases[kind] }
+        : undefined,
+  };
+});
 vi.mock('@core/context/user', () => ({ useUserId: () => () => user.id }));
 vi.mock('@components/app/previewTarget', () => ({
+  previewCalendarTarget: (selection: {
+    id: string;
+    occurrenceKey?: string;
+  }) => ({
+    eventId: selection.id,
+    occurrenceKey: selection.occurrenceKey,
+    range: {
+      start: '2025-01-01T00:00:00.000Z',
+      end: '2025-01-02T00:00:00.000Z',
+      startDate: '2025-01-01',
+      endDate: '2025-01-02',
+    },
+  }),
   previewBlockTarget: (selection: {
     type: string;
     id: string;
     channelId?: string;
+    messageId?: string;
+    threadId?: string;
+    target?: { messageId: string; threadId?: string };
     fileType?: string;
-    foreignSource?: string;
+    subType?: { type: string };
     occurrenceKey?: string;
     referencedEntity?: {
       id: string;
@@ -54,55 +86,60 @@ vi.mock('@components/app/previewTarget', () => ({
       subType?: string;
     };
   }) => {
-    if (selection.type === 'calendar_event') {
-      return {
-        blockType: 'calendar',
-        blockId: 'view',
-        params: {
-          eventId: selection.id,
-          occurrenceKey: selection.occurrenceKey,
-          range: {
-            start: '2025-01-01T00:00:00.000Z',
-            end: '2025-01-02T00:00:00.000Z',
-            startDate: '2025-01-01',
-            endDate: '2025-01-02',
-          },
-        },
-      };
-    }
     if (selection.type === 'reminder') {
       const reference = selection.referencedEntity;
-      const referenceType =
+      const kind =
         reference?.subType ??
         reference?.fileType ??
         reference?.type ??
         'unknown';
       return {
-        blockType: ['task', 'snippet', 'skill'].includes(referenceType)
-          ? 'md'
-          : referenceType,
+        blockType: blocks.resolve(kind),
         blockId: reference?.id ?? selection.id,
+        aliasContext: blocks.aliasContext(kind),
+      };
+    }
+    if (
+      selection.type === 'channel' ||
+      selection.type === 'channel_message' ||
+      selection.type === 'channel_thread'
+    ) {
+      const messageId = selection.target?.messageId ?? selection.messageId;
+      const threadId = selection.target?.threadId ?? selection.threadId;
+      return {
+        blockType: 'channel',
+        blockId: selection.channelId ?? selection.id,
+        aliasContext: undefined,
+        params: messageId
+          ? {
+              channel_message_id: messageId,
+              ...(threadId ? { channel_thread_id: threadId } : {}),
+            }
+          : undefined,
+      };
+    }
+    if (selection.type === 'document') {
+      return {
+        blockType: blocks.resolve(selection.fileType ?? 'unknown'),
+        blockId: selection.id,
+        aliasContext: blocks.aliasContext(selection.subType?.type),
       };
     }
     return {
-      blockType:
-        selection.type === 'document'
-          ? selection.fileType
-          : selection.type === 'channel_message' ||
-              selection.type === 'channel_thread'
-            ? 'channel'
-            : selection.type === 'foreign'
-              ? 'unknown'
-              : selection.type,
-      blockId: selection.channelId ?? selection.id,
+      blockType: selection.type === 'foreign' ? 'unknown' : selection.type,
+      blockId: selection.id,
+      aliasContext: undefined,
     };
   },
 }));
 vi.mock('@core/constant/allBlocks', () => ({
-  fileTypeToResolvedBlockName: (type: string) =>
-    ['task', 'snippet', 'skill'].includes(type) ? 'md' : type,
-  isBlockAlias: () => false,
-  resolveBlockAlias: (type: string) => type,
+  fileTypeToResolvedBlockName: (type: string) => blocks.resolve(type),
+  isBlockAlias: (type: string) => type in blocks.aliases,
+  resolveBlockAlias: (type: string) => blocks.resolve(type),
+}));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  isFeatureEnabled: () => true,
 }));
 vi.mock('@components/app/createPreviewSelectionGuard', () => ({
   createPreviewSelectionGuard: () => {
@@ -409,27 +446,28 @@ describe('InboxViewProvider route selection', () => {
     context.closePreview();
     await router.settled();
     expect(location.read().pathname).toBe('/inbox');
-    expect(location.read().search).toContain('s0.inbox.tab=noise');
+    expect(location.read().search).toBe('?s0.inbox.tab=noise');
   });
 
-  it('rebuilds a heterogeneous channel-message preview from a direct URL', () => {
+  it('rebuilds a targeted channel preview from a direct URL', () => {
     const { context } = mountProvider(
       undefined,
-      '/inbox/channel/channel-1?s0.inbox-preview.selectionType=channel_message&s0.inbox-preview.selectionId=row-1&s0.inbox-preview.sourceMessageId=message-1&s0.inbox-preview.sourceThreadId=thread-1&s0.inbox-preview.targetMessageId=message-1&s0.inbox-preview.targetThreadId=thread-1'
+      '/inbox/channel/channel-1?s0.channel-detail.messageId=message-1&s0.channel-detail.threadId=thread-1'
     );
 
-    expect(context.previewEntity()).toEqual({
-      type: 'channel_message',
-      id: 'row-1',
-      channelId: 'channel-1',
-      messageId: 'message-1',
-      threadId: 'thread-1',
-      target: { messageId: 'message-1', threadId: 'thread-1' },
+    expect(context.previewTarget()).toEqual({
+      blockType: 'channel',
+      blockId: 'channel-1',
+      aliasContext: undefined,
+      params: {
+        channel_message_id: 'message-1',
+        channel_thread_id: 'thread-1',
+      },
     });
-    expect(guard.selections.at(-1)).toEqual(context.previewEntity());
+    expect(guard.selections.at(-1)).toEqual(context.previewTarget());
   });
 
-  it('serializes a live preview selection and closes it through the root route', async () => {
+  it('serializes a live selection to its block path and closes it through the root route', async () => {
     const { context, location, router } = mountProvider();
 
     expect(
@@ -441,43 +479,73 @@ describe('InboxViewProvider route selection', () => {
       })
     ).toBe(true);
     await router.settled();
-    expect(location.read().pathname).toBe('/inbox/md/task-1');
-    expect(location.read().search).toContain(
-      's0.inbox-preview.selectionType=document'
-    );
-    expect(context.previewEntity()).toMatchObject({
-      type: 'document',
-      id: 'task-1',
-      fileType: 'md',
-      subType: { type: 'task' },
+    expect(location.read().pathname).toBe('/inbox/task/task-1');
+    expect(location.read().search).toBe('');
+    expect(context.previewTarget()).toEqual({
+      blockType: 'md',
+      blockId: 'task-1',
+      aliasContext: { alias: 'task', baseType: 'md' },
+      params: undefined,
     });
 
     context.closePreview();
     await router.settled();
     expect(location.read().pathname).toBe('/inbox');
-    expect(context.previewEntity()).toBeUndefined();
+    expect(context.previewTarget()).toBeUndefined();
   });
 
-  it('round-trips calendar, reminder, foreign, and document subtype targets', async () => {
+  it('opens calendar events inline at the Calendar route with the locator in search', async () => {
     const { context, location, router } = mountProvider();
 
-    context.openPreview({
-      type: 'calendar_event',
-      id: 'event-1',
-      occurrenceKey: 'occurrence-1',
-      time: {
-        kind: 'timed',
-        startsAt: '2025-01-01T12:00:00.000Z',
-        endsAt: '2025-01-01T13:00:00.000Z',
-      },
-    });
+    expect(
+      context.openPreview({
+        type: 'calendar_event',
+        id: 'event-1',
+        occurrenceKey: 'occurrence-1',
+        time: {
+          kind: 'timed',
+          startsAt: '2025-01-01T12:00:00.000Z',
+          endsAt: '2025-01-01T13:00:00.000Z',
+        },
+      })
+    ).toBe(true);
     await router.settled();
-    expect(location.read().pathname).toBe('/inbox/calendar/view');
-    expect(context.previewEntity()).toMatchObject({
-      type: 'calendar_event',
-      id: 'event-1',
-      occurrenceKey: 'occurrence-1',
-    });
+    expect(location.read().pathname).toMatch(
+      /^\/inbox\/calendar\/(month|week|day)$/
+    );
+    const search = location.read().search;
+    expect(search).toContain('s0.calendar.eventId=event-1');
+    expect(search).toContain('s0.calendar.occurrenceKey=occurrence-1');
+    expect(search).toContain('s0.calendar.startDate=2025-01-01');
+    expect(search).toContain('s0.calendar.endDate=2025-01-02');
+    expect(context.calendarOpen()).toBe(true);
+    expect(context.previewTarget()).toBeUndefined();
+
+    // The same event again re-aims in place instead of navigating.
+    const committed = location.history().length;
+    const refocus = context.calendarRefocus();
+    expect(
+      context.openPreview({
+        type: 'calendar_event',
+        id: 'event-1',
+        occurrenceKey: 'occurrence-1',
+      })
+    ).toBe(true);
+    await router.settled();
+    expect(location.history()).toHaveLength(committed);
+    expect(location.read().search).toBe(search);
+    expect(context.calendarRefocus()).toBe(refocus + 1);
+
+    // Leaving the calendar for a block clears its locator.
+    context.openPreview({ type: 'email', id: 'email-1' });
+    await router.settled();
+    expect(location.read().pathname).toBe('/inbox/email/email-1');
+    expect(location.read().search).not.toContain('s0.calendar.');
+    expect(context.calendarOpen()).toBe(false);
+  });
+
+  it('carries only block identity and location params for other row kinds', async () => {
+    const { context, location, router } = mountProvider();
 
     context.openPreview({
       type: 'reminder',
@@ -490,11 +558,11 @@ describe('InboxViewProvider route selection', () => {
       },
     });
     await router.settled();
-    expect(location.read().pathname).toBe('/inbox/md/task-2');
-    expect(context.previewEntity()).toMatchObject({
-      type: 'reminder',
-      id: 'reminder-1',
-      referencedEntity: { id: 'task-2', subType: 'task' },
+    expect(location.read().pathname).toBe('/inbox/task/task-2');
+    expect(context.previewTarget()).toMatchObject({
+      blockType: 'md',
+      blockId: 'task-2',
+      aliasContext: { alias: 'task' },
     });
 
     context.openPreview({
@@ -504,26 +572,40 @@ describe('InboxViewProvider route selection', () => {
     });
     await router.settled();
     expect(location.read().pathname).toBe('/inbox/unknown/foreign-1');
-    expect(context.previewEntity()).toEqual({
-      type: 'foreign',
-      id: 'foreign-1',
-      foreignSource: 'unknown',
+    expect(context.previewTarget()).toEqual({
+      blockType: 'unknown',
+      blockId: 'foreign-1',
+      aliasContext: undefined,
+      params: undefined,
     });
 
     context.openPreview({
-      type: 'document',
-      id: 'snippet-1',
-      fileType: 'md',
-      subType: { type: 'snippet' },
+      type: 'channel_message',
+      id: 'row-1',
+      channelId: 'channel-1',
+      messageId: 'message-1',
+      threadId: 'thread-1',
     });
     await router.settled();
-    expect(location.read().pathname).toBe('/inbox/md/snippet-1');
-    expect(context.previewEntity()).toMatchObject({
-      type: 'document',
-      id: 'snippet-1',
-      fileType: 'md',
-      subType: { type: 'snippet' },
+    expect(location.read().pathname).toBe('/inbox/channel/channel-1');
+    expect(location.read().search).toContain(
+      's0.channel-detail.messageId=message-1'
+    );
+    expect(location.read().search).toContain(
+      's0.channel-detail.threadId=thread-1'
+    );
+    expect(context.previewTarget()).toMatchObject({
+      params: {
+        channel_message_id: 'message-1',
+        channel_thread_id: 'thread-1',
+      },
     });
+
+    // A previous item's location must not linger on the next one.
+    context.openPreview({ type: 'email', id: 'email-1' });
+    await router.settled();
+    expect(location.read().pathname).toBe('/inbox/email/email-1');
+    expect(location.read().search).toBe('');
   });
 
   it('keeps the accepted preview when compatibility preflight blocks selection', async () => {
@@ -536,7 +618,10 @@ describe('InboxViewProvider route selection', () => {
     expect(context.openPreview({ type: 'email', id: 'blocked' })).toBe(false);
     await router.settled();
     expect(location.read().pathname).toBe('/inbox/email/current');
-    expect(context.previewEntity()).toEqual({ type: 'email', id: 'current' });
+    expect(context.previewTarget()).toMatchObject({
+      blockType: 'email',
+      blockId: 'current',
+    });
   });
 
   it('replaces an incompatible direct preview and closes previews on tab change', async () => {

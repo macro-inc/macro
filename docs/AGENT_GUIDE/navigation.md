@@ -9,7 +9,7 @@
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
 | `/app/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/inbox/<block-type>/<uuid>` | Home with a heterogeneous item opened inline; target metadata is stored in `sN.inbox-preview.*` query values |
+| `/app/inbox/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channel-detail.*` and a document comment `sN.document-detail.commentId`; a calendar row renders the Calendar view inline at `/app/inbox/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
 | `/app/channels` | Channels list |
@@ -29,7 +29,7 @@
 | `/app/companies` | Customers (CRM; needs a team) |
 | `/app/activity` | Activity heatmap + feed |
 | `/app/home` | Assistant (AI-first landing) |
-| `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event uses `sN.calendar.eventId` |
+| `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |

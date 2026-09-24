@@ -3,10 +3,12 @@ import {
   agentsRouteSegments,
 } from '@app/features/agents-view/core/route';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
+import { isCalendarRange } from '@app/features/calendar-view/calendar-range';
 import {
   CALENDAR_ROUTE_ID,
   CALENDAR_SEARCH_NAMESPACE,
   calendarSearchCodec,
+  calendarTargetSearch,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import type { DriveLocation } from '@app/features/drive-view/core/types';
@@ -212,12 +214,22 @@ export function splitLocationFromContent(
     (content.type === 'component' && content.id === CALENDAR_VIEW_ID) ||
     (content.type === 'calendar' && content.id === CALENDAR_BLOCK_ID)
   ) {
-    const rawEventId = isRecord(content.params)
-      ? (content.params as Record<string, unknown>).eventId
-      : undefined;
-    const eventId =
-      typeof rawEventId === 'string' && rawEventId.length > 0 ? rawEventId : '';
-    const search = calendarSearchCodec.serialize({ eventId });
+    const params: Record<string, unknown> = isRecord(content.params)
+      ? content.params
+      : {};
+    const search = calendarSearchCodec.serialize(
+      calendarTargetSearch({
+        eventId:
+          typeof params.eventId === 'string' && params.eventId.length > 0
+            ? params.eventId
+            : undefined,
+        occurrenceKey:
+          typeof params.occurrenceKey === 'string'
+            ? params.occurrenceKey
+            : undefined,
+        range: isCalendarRange(params.range) ? params.range : undefined,
+      })
+    );
     return {
       route: {
         matches: [

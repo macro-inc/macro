@@ -29,6 +29,7 @@ import {
 import type { MarkdownDocumentKind } from '@block-md/types';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import { previewBlockTarget } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -58,7 +59,7 @@ function PreviewPanelEntityDetail(props: EntityDetailProps) {
 
   return (
     <PreviewPanel
-      selectedEntity={props.target}
+      target={previewBlockTarget(props.target)}
       orchestrator={orchestrator}
       splitPanelContext={panel}
       headerLeading={props.previewHeaderLeading}

@@ -39,6 +39,7 @@ vi.mock('@app/components/view-shell', () => ({
   },
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
+  getChannelEntityTarget: () => undefined,
   markChannelNotificationsSeenOnOpen: mocks.markRead,
 }));
 vi.mock('@app/features/soup', () => ({
@@ -55,9 +56,9 @@ vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
 vi.mock('@components/app/PreviewPanel', () => ({
-  PreviewPanel: (props: { selectedEntity: ChannelEntity }) => (
+  PreviewPanel: (props: { target: { blockId: string } }) => (
     <div data-testid="preview">
-      {props.selectedEntity.id}
+      {props.target.blockId}
       <textarea aria-label="Composer" />
     </div>
   ),

@@ -121,6 +121,12 @@ export function createSplitRouter<TSplitId>(
   });
   const findEntry = (splitId: TSplitId) =>
     transitions.pending(splitId) ?? layout.find(splitId);
+  // With nothing in flight, the committed location is the destination: there
+  // is no transition to run, and no middleware, history, or URL write to make.
+  const isCurrentDestination = (splitId: TSplitId, entry: SplitRouterEntry) =>
+    !transitions.has(GLOBAL_TRANSITION) &&
+    transitions.pending(splitId) === undefined &&
+    layout.entryEquals(layout.find(splitId), entry);
 
   const findClaimedSplit = (
     claim: SplitRouteClaim,
@@ -593,6 +599,9 @@ export function createSplitRouter<TSplitId>(
       const history = navigateOptions.replace ? 'replace' : 'push';
       const targetId =
         target === 'new-split' ? undefined : (target as TSplitId);
+      if (targetId !== undefined && isCurrentDestination(targetId, next)) {
+        return;
+      }
       transitionEntry({
         key: targetId ?? Symbol('new-split-transition'),
         splitId: targetId,
@@ -624,6 +633,7 @@ export function createSplitRouter<TSplitId>(
         }),
       };
       const history = updateOptions.history ?? 'push';
+      if (isCurrentDestination(splitId, next)) return;
 
       transitionEntry({
         key: splitId,
