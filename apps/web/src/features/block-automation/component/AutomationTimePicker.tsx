@@ -56,10 +56,16 @@ export function AutomationTimePicker(props: {
   );
   const [period, setPeriod] = createSignal<'AM' | 'PM'>(initial.period);
 
+  let internalCommit = false;
+
   createEffect(
     on(
       () => props.value,
       (value) => {
+        if (internalCommit) {
+          internalCommit = false;
+          return;
+        }
         const p = parseHHMM(value);
         setHour(p.hour);
         setHourDisplay(p.hour.toString());
@@ -76,6 +82,7 @@ export function AutomationTimePicker(props: {
     nextMinute: number,
     nextPeriod: 'AM' | 'PM'
   ) => {
+    internalCommit = true;
     props.onChange(toHHMM(nextHour, nextMinute, nextPeriod));
   };
 
