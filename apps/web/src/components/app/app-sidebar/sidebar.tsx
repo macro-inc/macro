@@ -1490,7 +1490,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar flex flex-col gap-0 overflow-hidden bg-surface px-3 pb-3 pt-4 text-[13px]',
         isExpanded() &&
-          'relative h-full shrink-0 max-w-55 w-55 border-r border-edge-frame opacity-100',
+          'relative h-full shrink-0 max-w-55 w-55 border-edge-frame opacity-100',
+        isExpanded() &&
+          (globalSplitManager()?.splits().length ?? 1) <= 1 &&
+          'border-r',
         props.sidebarState === 'hidden' &&
           'fixed left-0 top-0 bottom-0 h-full -translate-x-full max-w-0 w-0 opacity-0 pointer-events-none',
         isCollapsed() && 'fixed z-modal-content',
