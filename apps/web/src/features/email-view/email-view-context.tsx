@@ -24,6 +24,7 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
+import { useEmailLinksQuery } from '@queries/email/link';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import {
   type Accessor,
@@ -47,6 +48,7 @@ import {
 } from './email-route';
 import { normalizeInboxSelection } from './inbox-selection';
 import { createEmailViewPersistence } from './persistence';
+import { createInboxSelectionReconciliation } from './primitives/inbox-selection-reconciliation';
 import {
   type EmailDataSource,
   type EmailDataSourceItem,
@@ -313,6 +315,15 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     closeThread();
     setState('inboxIds', normalizeInboxSelection(ids));
   };
+
+  // This belongs to the view lifecycle, even while every inbox picker is unmounted.
+  const linksQuery = useEmailLinksQuery();
+  createInboxSelectionReconciliation({
+    selectedIds: () => state.inboxIds,
+    loadedLinks: () =>
+      linksQuery.isSuccess ? linksQuery.data.links : undefined,
+    clearSelection: () => setInboxIds(undefined),
+  });
 
   const setFacets = (facets: EmailViewState['facets']) => {
     closeThread();

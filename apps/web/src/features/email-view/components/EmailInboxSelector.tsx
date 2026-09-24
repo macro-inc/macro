@@ -10,7 +10,7 @@ import PlusIcon from '@phosphor/plus.svg';
 import TrayIcon from '@phosphor/tray.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { cn, Dropdown, pressHandlers } from '@ui';
-import { createEffect, createMemo, For, type JSX, Show } from 'solid-js';
+import { createMemo, For, type JSX, Show } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 
 const ALL_INBOXES_ID = 'all';
@@ -37,18 +37,6 @@ function useInboxSelection() {
       }))
       .sort((a, b) => a.label.localeCompare(b.label))
   );
-
-  // Reconcile saved scope with the authoritative links query, including removals.
-  createEffect(() => {
-    if (!linksQuery.isSuccess) return;
-    if (
-      state.inboxIds?.some(
-        (id) => !options().some((option) => option.id === id)
-      )
-    ) {
-      setInboxIds(undefined);
-    }
-  });
 
   const isAll = () => state.inboxIds === undefined;
   const hasMultipleInboxes = () => options().length > 1;

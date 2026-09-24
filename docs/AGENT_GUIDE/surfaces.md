@@ -519,7 +519,8 @@ Its single-select menu includes `All inboxes`, which clears the account selectio
 and removes the filter. Saved selections from the old multi-select picker restore
 the first saved inbox; an empty saved selection restores All inboxes. Once linked
 accounts load successfully, a selected inbox that no longer exists resets to All
-inboxes. New email uses the originating email-view split even if another split
+inboxes. This runs for the whole email view, including on touch devices before
+the filter drawer opens. New email uses the originating email-view split even if another split
 is active. Verify that
 sidebar and menu selection stay in sync and that clearing preserves the current tab and other filters.
 Sidebar rows, `New`, and the panel's back, forward and close controls act on primary-button
