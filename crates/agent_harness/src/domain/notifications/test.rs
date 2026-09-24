@@ -62,7 +62,7 @@ fn settled(identity: SessionIdentity, turn: u32) -> AgentSessionLifecycleEvent {
 /// The plan for a coding agent's session - the shape every fact had before
 /// kinds could differ.
 fn coder(event: &AgentSessionLifecycleEvent) -> Vec<PlannedNotification> {
-    plan(event, AgentKind::SandboxedCoder)
+    plan(event, true)
 }
 
 fn one_settled(actions: Vec<PlannedNotification>) -> Notify<AgentSessionSettledMetadata> {
@@ -143,7 +143,7 @@ fn settled_ids_are_stable_per_turn_and_distinct_across_turns() {
 /// reply, which the message service notifies on as a post.
 #[test]
 fn a_chat_agents_announced_turn_settles_silently() {
-    let actions = plan(&settled(identity(), 2), AgentKind::InMemory);
+    let actions = plan(&settled(identity(), 2), false);
 
     assert!(actions.is_empty(), "{actions:#?}");
 }
@@ -164,7 +164,7 @@ fn a_chat_agents_unannounced_turn_still_notifies() {
         }),
     });
 
-    let notify = one_settled(plan(&event, AgentKind::InMemory));
+    let notify = one_settled(plan(&event, false));
     assert_eq!(
         notify.recipients,
         vec![owner(), user("alice@macro.com"), user("bob@macro.com")]
@@ -173,23 +173,14 @@ fn a_chat_agents_unannounced_turn_still_notifies() {
 }
 
 /// A coding agent's chip is a pointer, not news, so settled is the only
-/// thing the thread hears - whichever coding runtime it was.
+/// thing the thread hears.
 #[test]
-fn every_coding_kinds_announced_turn_notifies_settled() {
-    for kind in [
-        AgentKind::SandboxedCoder,
-        AgentKind::Cursor,
-        AgentKind::CodexCloud,
-        AgentKind::ClaudeCloud,
-        AgentKind::External,
-    ] {
-        let notify = one_settled(plan(&settled(identity(), 2), kind));
-        assert_eq!(
-            notify.metadata.session.announcement_message_id,
-            Some(Uuid::from_u128(4)),
-            "{kind:?}"
-        );
-    }
+fn a_coding_agents_announced_turn_notifies_settled() {
+    let notify = one_settled(plan(&settled(identity(), 2), true));
+    assert_eq!(
+        notify.metadata.session.announcement_message_id,
+        Some(Uuid::from_u128(4))
+    );
 }
 
 #[test]
@@ -246,7 +237,7 @@ fn waiting(announcement_message_id: Option<Uuid>) -> AgentSessionLifecycleEvent 
 /// news twice.
 #[test]
 fn a_chat_agents_announced_turn_waits_silently() {
-    let actions = plan(&waiting(Some(Uuid::from_u128(4))), AgentKind::InMemory);
+    let actions = plan(&waiting(Some(Uuid::from_u128(4))), false);
 
     assert!(actions.is_empty(), "{actions:#?}");
 }
@@ -256,19 +247,18 @@ fn a_chat_agents_announced_turn_waits_silently() {
 /// agent's chip says nothing about a question.
 #[test]
 fn every_other_waiting_turn_still_notifies() {
-    for (kind, announced) in [
-        (AgentKind::InMemory, None),
-        (AgentKind::SandboxedCoder, Some(Uuid::from_u128(4))),
-        (AgentKind::Cursor, Some(Uuid::from_u128(4))),
-        (AgentKind::External, None),
+    for (is_coding, announced) in [
+        (false, None),
+        (true, Some(Uuid::from_u128(4))),
+        (true, None),
     ] {
-        let actions = plan(&waiting(announced), kind);
+        let actions = plan(&waiting(announced), is_coding);
         assert!(
             matches!(
                 actions.as_slice(),
                 [PlannedNotification::WaitingForInput(_)]
             ),
-            "{kind:?} announced={announced:?}: {actions:#?}"
+            "is_coding={is_coding} announced={announced:?}: {actions:#?}"
         );
     }
 }
