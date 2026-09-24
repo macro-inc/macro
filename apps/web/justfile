@@ -1,3 +1,10 @@
+# Android: SDK/JDK setup and optional Firebase config are handled by the launcher.
+android-dev *ARGS:
+    bash scripts/android.sh dev {{ARGS}}
+
+android-build *ARGS:
+    bash scripts/android.sh build {{ARGS}}
+
 # iOS: dev-facing, for testing in Simulator. Honors PORT like the web dev
 # server (`PORT=3001 just ios-dev`): the vite server picks PORT up through
 # beforeDevCommand's environment, and the --config merge points the webview's

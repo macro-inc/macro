@@ -1,5 +1,8 @@
+import { createNativeAuthSession } from '@core/auth/native-auth';
 import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { invalidateGithubLinkStatus } from '@queries/auth';
 import { authServiceClient } from '@service-auth/client';
 import { createSignal, onMount } from 'solid-js';
 
@@ -14,8 +17,11 @@ async function checkGithubReauthenticationStatus(): Promise<boolean> {
 
 /** Kick off the OAuth flow; on success the browser navigates away. */
 async function startGithubReauthentication(): Promise<void> {
+  const session = isNativeMobilePlatform()
+    ? createNativeAuthSession('github-link-callback')
+    : undefined;
   const result = await authServiceClient.reauthenticateGithub(
-    window.location.href
+    session?.callbackUrl ?? window.location.href
   );
 
   if (result.isErr()) {
@@ -23,7 +29,16 @@ async function startGithubReauthentication(): Promise<void> {
     return;
   }
 
-  window.location.href = result.value;
+  if (!session) {
+    window.location.href = result.value;
+    return;
+  }
+  const auth = await session.authenticate(result.value);
+  if (auth.success) {
+    await invalidateGithubLinkStatus();
+  } else if (auth.error !== 'User canceled login') {
+    toast.failure('Failed to reconnect GitHub');
+  }
 }
 
 /**

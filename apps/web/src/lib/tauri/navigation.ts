@@ -1,3 +1,5 @@
+import { getNativeMobilePlatform } from '@core/util/platform';
+import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { useNavigate } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -22,11 +24,24 @@ export function useTauriNavigationEffect() {
 
     async function inner() {
       unsubscribe = await listen<NavigateEvent>('navigate', (ev) => {
-        console.info({ ev });
         const path = ev.payload.query
           ? `${ev.payload.path}?${ev.payload.query}`
           : ev.payload.path;
-        navigate(path);
+        if (
+          getNativeMobilePlatform() === 'android' &&
+          ev.payload.path !== '/login'
+        ) {
+          // Route through the session gate. During cold start the login marker
+          // can precede the user-info query and is not proof of authentication.
+          if (ev.payload.path === '/') {
+            navigate(path);
+          } else {
+            setPostLoginRedirect(path);
+            navigate('/');
+          }
+        } else {
+          navigate(path);
+        }
       });
       // On a cold open, the deep-link handler emits `navigate` during
       // startup, before this listener exists, and the event is lost — pull

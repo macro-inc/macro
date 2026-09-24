@@ -37,6 +37,26 @@ Signed universal links and share-sheet flows still need end-to-end verification;
 see the [Tauri guide](../../apps/web/tauri/src-tauri/README.md#ios-27-scene-lifecycle)
 and [repeatable iOS smoke test](../../apps/web/tests/native/ios/README.md).
 
+## Native Android
+
+The Android welcome screen also offers `Create new account` and `Log into existing
+account`. Google sign-in opens a system browser Auth Tab; completing or canceling
+returns to Macro. Cancel and retry should open a fresh attempt. Enter provider
+passwords and verification codes only in that browser, never in agent messages.
+
+After signing in, test background/foreground, force-stop/relaunch, logout, and
+signing in as another account. An entity link opened while signed out should
+remain pending until authentication completes. The destination expires after
+30 minutes and explicit logout clears it. Test both cold and warm delivery;
+forcing an Android intent to Macro proves routing, not verified App Links.
+Root links must preserve query parameters through the welcome or inbox redirect,
+including when Android delivers the link after the session gate mounts. Test
+with a harmless marker query; checkout return parameters can trigger analytics
+and license refreshes and should only be exercised in a checkout test.
+See [Android development](../ANDROID_DEVELOPMENT.md) for build commands and
+certificate-dependent domain verification. Provider completion, account linking,
+and verified links still require end-to-end qualification.
+
 ## Mailpit (local email)
 
 - UI: `http://localhost:<mailpit-port>/`
