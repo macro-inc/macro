@@ -509,15 +509,24 @@ Only tools with a supported result view can expand. Unknown tools, unsupported
 drafts, and payloads that do not fit their renderer stay as summary rows with
 no caret. Tool arguments and results never fall back to raw JSON.
 
-Consecutive calls collect under an expanded **Calling N tools** group while
-running. Rows appear as calls arrive; after the calls finish, the group briefly
-settles and collapses to **Called N tools**. Group growth and collapse happen
-immediately, without animation, including fast batches. Completed groups in
-history start collapsed and can be reopened. The group caret sits immediately
-after its label and appears on hover or keyboard focus. Expand an edit row to
-view its diffs. Result bodies load only when their row opens; syntax highlighting
-may appear after the diff text. Opening a session or expanding a group should
-leave the app responsive, even when the session contains many file edits.
+Tool runs keep one group from their first call. Historical runs start collapsed;
+live calls get a 150 ms buffer, so fast parallel bursts can finish as **Called N
+tools** without flashing a list. Ongoing work opens a scrollable window of at
+most five compact rows. The window follows unfinished calls first, keeping slow
+work visible even when later calls finish, until you scroll or interact with it;
+scrolling back to the bottom resumes following. An automatically opened window
+stays visible for at least 600 ms and waits for 150 ms without an active call
+before collapsing smoothly. These delays are shared by the group, never queued
+per call, and do not delay answer text or tool execution. Manually opening,
+closing, or interacting with a group overrides automatic collapse. Subagents
+and tools requiring user input remain outside these groups so they stay visible
+during other tool bursts. Nested agent activity has its own scrollable window.
+
+The group caret sits immediately after its label and appears on hover or keyboard
+focus. Expand an edit row to view its diffs. Result bodies load only when their
+row opens; syntax highlighting may appear after the diff text. Opening a session
+or expanding a group should leave the app responsive, even when the session
+contains many file edits.
 
 `DisplayResults` renders its dynamic view directly in the reply and stays visible
 without opening a tool row. It breaks tool groups before and after itself,
@@ -532,8 +541,9 @@ server do not currently receive this tool.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
-rows accumulate, completed calls stop shimmering, the group collapses after
-completion without height animation, and its carets still expand the results.
+ongoing rows accumulate in the five-row window, completed calls stop shimmering,
+fast batches stay compact, and the group collapses smoothly after completion.
+Its carets should still expand the results, and reduced motion disables animation.
 Check that rich result controls still work and `DisplayResults` stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat

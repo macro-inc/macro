@@ -131,15 +131,22 @@ export function SubagentToolCall(props: {
             )}
           </Show>
           <Show when={props.detail.children.length > 0}>
-            <div class="flex flex-col gap-1 border-l-2 border-edge-muted pl-2">
+            <div
+              role="region"
+              aria-label="Agent activity"
+              tabIndex={0}
+              class="flex max-h-40 flex-col overflow-y-auto overscroll-contain border-l-2 border-edge-muted pl-2"
+            >
               <Index each={props.detail.children}>
                 {(child, index) => (
-                  <ChildPart
-                    part={child()}
-                    index={index}
-                    childCount={props.detail.children.length}
-                    context={childContext()}
-                  />
+                  <div class="min-h-8 shrink-0">
+                    <ChildPart
+                      part={child()}
+                      index={index}
+                      childCount={props.detail.children.length}
+                      context={childContext()}
+                    />
+                  </div>
                 )}
               </Index>
             </div>
