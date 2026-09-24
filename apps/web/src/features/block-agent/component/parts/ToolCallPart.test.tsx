@@ -163,7 +163,7 @@ describe('ToolCallPart routing', () => {
     );
   });
 
-  it('shows an MCP tool by its own name, with the server beside it', () => {
+  it('shows an MCP tool by its own name without the server label', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={{
@@ -180,7 +180,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('title').textContent).toBe('ask');
-    expect(rendered.getByTestId('subtitle').textContent).toBe('deepwiki');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('');
   });
 
   it('reuses a known renderer for calls from the explicit Macro MCP server', () => {
@@ -223,7 +223,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
-    expect(rendered.getByTestId('subtitle').textContent).toBe('ops');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
@@ -246,7 +246,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('subtitle').textContent).toBe('external');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
   });

@@ -36,9 +36,9 @@ session-specific.
 
 A session transcript shows each tool call as a collapsible row (consecutive calls
 fold into a `Called N tools` group; click it to see the rows). A tool reached over
-an MCP server - Macro's own (`ReadContent · macro`) from a Cursor, Claude, or
-Codex session, or a third-party server (`ask_question · deepwiki`) - is titled by
-the tool's name with the server as its subtitle, never by the harness's dispatcher
+an MCP server - Macro's own (`ReadContent`) from a Cursor, Claude, or
+Codex session, or a third-party server (`ask_question`) - is titled by
+the tool's own name, without a server or workspace label, never by the harness's dispatcher
 (`mcp`). Clicking the row expands the exchange: a `Request` section with the
 tool's own arguments and a `Response` section with what it returned, both as
 syntax-lit, pretty-printed JSON (prose results show as text), each with a copy
