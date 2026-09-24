@@ -74,6 +74,7 @@
               "AI/mcp/tools/bash-code-execution",
               "AI/mcp/tools/bulk-set-entity-property-options",
               "AI/mcp/tools/calculate-spreadsheet",
+              "AI/mcp/tools/comment-on-document-text",
               "AI/mcp/tools/configure-bot",
               "AI/mcp/tools/content-search",
               "AI/mcp/tools/create-bot",

@@ -58,6 +58,47 @@ export const replyToDocumentCommentHandler = createToolRenderer({
   },
 });
 
+export const commentOnDocumentTextHandler = createToolRenderer({
+  name: 'CommentOnDocumentText',
+  render: (ctx) => {
+    const [expanded, setExpanded] = createSignal(false);
+    const markedText = () =>
+      ctx.response?.data.markedText ?? ctx.tool.data.text;
+
+    return (
+      <BaseTool
+        icon={ChatCircle}
+        renderContext={ctx.renderContext}
+        type="call"
+        response={
+          expanded() ? (
+            <div class="flex flex-col gap-2 rounded-lg border border-edge-muted bg-ink/[0.02] p-3 text-xs text-ink">
+              <blockquote class="whitespace-pre-wrap break-words border-l-2 border-edge-muted pl-2 text-ink-muted">
+                {markedText()}
+              </blockquote>
+              <p class="whitespace-pre-wrap break-words">
+                {ctx.tool.data.content}
+              </p>
+            </div>
+          ) : undefined
+        }
+      >
+        <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+          <span class="min-w-0">
+            {ctx.response ? 'Commented on text in' : 'Comment on text in'}{' '}
+            <DocumentPreview documentId={ctx.tool.data.documentId} />
+          </span>
+          <Tool.ResultToggle
+            expanded={expanded()}
+            onToggle={() => setExpanded((value) => !value)}
+            showToggle={!!ctx.tool.data.content}
+          />
+        </div>
+      </BaseTool>
+    );
+  },
+});
+
 export const resolveDocumentCommentHandler = createToolRenderer({
   name: 'ResolveDocumentComment',
   render: (ctx) => {
