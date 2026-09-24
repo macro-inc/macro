@@ -121,6 +121,13 @@ export type Agent = {
      */
     instructions: string;
     /**
+     * Whether the agent works in a repository, which decides how it answers
+     * a channel mention: a coding agent posts a magic chip into its live
+     * session, a chat agent replies in the thread. `None` follows the
+     * harness - in-memory chats, every other runtime codes.
+     */
+    is_coding?: boolean | null;
+    /**
      * Which MCP servers sessions of this agent are handed.
      */
     mcp: AgentMcpServers;
@@ -3209,6 +3216,10 @@ export type CreateAgentRequest = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Whether the agent is a coding agent. Omit to follow the harness.
+     */
+    is_coding?: boolean | null;
     /**
      * Which MCP servers sessions of this agent are handed.
      */
@@ -10356,6 +10367,10 @@ export type UpdateAgentRequest = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Whether the agent is a coding agent. Omit to follow the harness.
+     */
+    is_coding?: boolean | null;
     /**
      * Which MCP servers sessions of this agent are handed.
      */
