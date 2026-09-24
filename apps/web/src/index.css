@@ -177,8 +177,10 @@
   --layer-surface: var(--color-surface-0);
   --layer-inset: var(--color-surface-0);
 
+  /* Through a token so a scope filled with the ink color (see `inverted`) can
+     restate it — there, a highlight tinted with ink is the fill color. */
   ::selection {
-    background-color: oklch(from var(--color-ink) l c h / 0.1);
+    background-color: var(--color-selection);
   }
 
 }
@@ -334,6 +336,7 @@ body.tauri-ios {
   --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
   --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
   --color-selected: color-mix(in oklch, var(--color-accent) 8%, transparent);
+  --color-selection: oklch(from var(--color-ink) l c h / 0.1);
   --color-success: var(--color-green);
   --color-warning: var(--color-amber);
   --color-failure: var(--color-red);
@@ -579,6 +582,10 @@ html:not([data-touch-device="true"]) {
    so app behavior is unchanged. */
 @custom-variant light-mode (&:where([data-theme-light="true"] *));
 @custom-variant dark-mode (&:where([data-theme-light="false"] *));
+/* The exact complement of `dark-mode`: also matches before the theme feature
+   has written the attribute, where `light-mode` would leave an element with no
+   branch at all. */
+@custom-variant not-dark-mode (&:not(:where([data-theme-light="false"] *)));
 
 /* Dark surfaces need a larger ink step for the thread path to remain visible.
    Both inputs stay opaque, so overlapping rail segments still render evenly. */
@@ -601,6 +608,67 @@ html[data-theme-light='false'] {
 [data-theme-light='true'] {
   --color-avatar-edge: oklch(1 0 0 / 0.4);
   --color-composer: var(--color-surface-4);
+}
+
+/* A patch of UI filled with the ink color rather than a surface — the AI chat's
+   user prompt bubble. Every semantic color inside is re-derived from that fill,
+   so `text-ink-muted`, `bg-code-buffer`, `border-edge`, hover feedback and the
+   selection highlight keep their meaning instead of resolving against the page
+   and disappearing into the fill.
+
+   The ramps are mixed from the two anchors rather than borrowed from the
+   theme's own ramps: a theme's surfaces only step one way (a light theme lifts
+   toward white), so swapping the ramps wholesale would flatten every muted
+   shade into the same near-page color.
+
+   The swap is declared on the children, not on the scope root. The root has to
+   keep the outer `--color-ink` to paint with, and a property that read a
+   sibling declaration on the same element would form a cycle. Children inherit
+   it down the whole subtree, so a bubble costs one declaration block, not one
+   per span. */
+@utility inverted {
+  --inverted-fill: var(--color-ink);
+  --inverted-ink: var(--color-page);
+
+  background-color: var(--inverted-fill);
+  color: var(--inverted-ink);
+  /* Light over dark needs more paint than dark over light to read, so the
+     scope carries a heavier highlight than the app's surfaces do. */
+  --color-selection: color-mix(in oklch, var(--inverted-ink) 25%, transparent);
+
+  & > * {
+    --color-surface-0: var(--inverted-fill);
+    --color-surface-1: color-mix(in oklch, var(--inverted-ink) 8%, var(--inverted-fill));
+    --color-surface-2: color-mix(in oklch, var(--inverted-ink) 12%, var(--inverted-fill));
+    --color-surface-3: color-mix(in oklch, var(--inverted-ink) 18%, var(--inverted-fill));
+    --color-surface-4: color-mix(in oklch, var(--inverted-ink) 24%, var(--inverted-fill));
+    --color-content-0: var(--inverted-ink);
+    --color-content-1: color-mix(in oklch, var(--inverted-ink) 72%, var(--inverted-fill));
+    --color-content-2: color-mix(in oklch, var(--inverted-ink) 62%, var(--inverted-fill));
+    --color-content-3: color-mix(in oklch, var(--inverted-ink) 50%, var(--inverted-fill));
+    --color-content-4: color-mix(in oklch, var(--inverted-ink) 36%, var(--inverted-fill));
+
+    --color-ink: var(--color-content-0);
+    --color-ink-muted: var(--color-content-1);
+    --color-ink-subtle: var(--color-content-2);
+    --color-ink-extra-muted: var(--color-content-2);
+    --color-ink-disabled: var(--color-content-3);
+    --color-ink-placeholder: var(--color-content-4);
+
+    --color-page: var(--color-surface-0);
+    --color-surface: var(--color-surface-0);
+    --color-inset: var(--color-surface-0);
+    --color-panel: var(--color-surface-1);
+    --color-message: var(--color-surface-1);
+    --color-code-buffer: var(--color-surface-1);
+    --color-edge-muted: var(--color-surface-3);
+    --color-edge: var(--color-surface-4);
+
+    /* The page's 3%/6%/10% ink washes vanish on a filled surface. */
+    --color-hover: color-mix(in oklch, var(--color-content-0) 8%, transparent);
+    --color-active: color-mix(in oklch, var(--color-content-0) 14%, transparent);
+    --color-skeleton: color-mix(in oklch, var(--color-content-0) 20%, transparent);
+  }
 }
 
 /* Floating "island" chrome shared by the mobile dock buttons, header islands,
