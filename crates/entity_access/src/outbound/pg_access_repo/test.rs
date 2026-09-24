@@ -1157,3 +1157,109 @@ async fn reminder_access_is_owner_for_the_owner_and_nothing_for_anyone_else(
 
     Ok(())
 }
+
+async fn insert_calendar_event(pool: &PgPool, owner_id: &str, visibility: &str) -> Uuid {
+    let link_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+        VALUES ($1, $2, $2, $1::text || '@example.com', 'GMAIL')
+        "#,
+    )
+    .bind(link_id)
+    .bind(owner_id)
+    .execute(pool)
+    .await
+    .unwrap();
+    let event_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO calendar_events (
+            id, owner_id, source_link_id, ical_uid, title, visibility,
+            canonical_source_kind, starts_at, ends_at
+        )
+        VALUES ($1, $2, $3, $1::text, 'Pilates', $4, 'google', now(), now() + interval '1 hour')
+        "#,
+    )
+    .bind(event_id)
+    .bind(owner_id)
+    .bind(link_id)
+    .bind(visibility)
+    .execute(pool)
+    .await
+    .unwrap();
+    event_id
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn calendar_event_channel_share_grants_current_participants_view(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let owner = "macro|calendar-owner@example.com";
+    let member = "macro|calendar-member@example.com";
+    let former = "macro|calendar-former@example.com";
+    let stranger = "macro|calendar-stranger@example.com";
+    let shared = insert_calendar_event(&pool, owner, "default").await;
+    let private = insert_calendar_event(&pool, owner, "private").await;
+    let unshared = insert_calendar_event(&pool, owner, "default").await;
+
+    let channel_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'private', $2)",
+    )
+    .bind(channel_id)
+    .bind(owner)
+    .execute(&pool)
+    .await?;
+    for (participant, left) in [(owner, false), (member, false), (former, true)] {
+        sqlx::query(
+            r#"
+            INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at)
+            VALUES ($1, $2, 'member', CASE WHEN $3 THEN now() END)
+            "#,
+        )
+        .bind(channel_id)
+        .bind(participant)
+        .bind(left)
+        .execute(&pool)
+        .await?;
+    }
+    for event_id in [shared, private] {
+        sqlx::query(
+            r#"
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, 'calendar_event', $2::uuid::text, 'channel', 'view')
+            "#,
+        )
+        .bind(event_id)
+        .bind(channel_id)
+        .execute(&pool)
+        .await?;
+    }
+
+    let repo = PgAccessRepository::new(pool.clone());
+    let access = |event_id: Uuid, user: &'static str| {
+        let repo = repo.clone();
+        async move {
+            repo.get_calendar_event_access(&event_id.to_string(), Some(&user_id(user)))
+                .await
+                .unwrap()
+        }
+    };
+
+    assert_eq!(access(shared, owner).await, Some(AccessLevel::Owner));
+    assert_eq!(access(private, owner).await, Some(AccessLevel::Owner));
+    assert_eq!(access(shared, member).await, Some(AccessLevel::View));
+    assert_eq!(access(private, member).await, None);
+    assert_eq!(access(unshared, member).await, None);
+    assert_eq!(access(shared, former).await, None);
+    assert_eq!(access(shared, stranger).await, None);
+
+    sqlx::query("UPDATE calendar_events SET status = 'cancelled' WHERE id = $1")
+        .bind(shared)
+        .execute(&pool)
+        .await?;
+    assert_eq!(access(shared, member).await, None);
+    assert_eq!(access(shared, owner).await, Some(AccessLevel::Owner));
+    Ok(())
+}

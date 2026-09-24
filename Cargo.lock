@@ -2960,6 +2960,7 @@ dependencies = [
  "channels",
  "chrono",
  "entity_access",
+ "entity_registry",
  "harness_id",
  "hex",
  "macro_authorization",
@@ -2971,6 +2972,7 @@ dependencies = [
  "messages",
  "mockall",
  "model-error-response",
+ "model_owner",
  "rand 0.9.4",
  "rootcause",
  "schemars 1.2.1",
@@ -3942,6 +3944,7 @@ dependencies = [
  "ratatui",
  "reqwest 0.13.4",
  "rootcause",
+ "rustix 1.1.4",
  "rustls 0.23.45",
  "serde",
  "serde_json",
@@ -5826,6 +5829,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "bot_id",
+ "channel_sender",
  "chrono",
  "clap",
  "cloudfront_sign",
@@ -5858,6 +5862,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "messages",
  "mockall",
  "model",
  "model-entity",
@@ -5869,6 +5874,7 @@ dependencies = [
  "models_properties",
  "non_empty",
  "rdkafka",
+ "redis",
  "reqwest 0.13.4",
  "rootcause",
  "s3_key",
@@ -6646,6 +6652,7 @@ dependencies = [
 name = "entity_registry"
 version = "0.1.0"
 dependencies = [
+ "bot_id",
  "chrono",
  "macro_db_migrator",
  "model-entity",
@@ -6663,7 +6670,10 @@ dependencies = [
 name = "entity_registry_db_utils"
 version = "0.1.0"
 dependencies = [
+ "bot_id",
  "chrono",
+ "entity_access_db_utils",
+ "entity_registry",
  "macro_db_migrator",
  "model_owner",
  "rootcause",

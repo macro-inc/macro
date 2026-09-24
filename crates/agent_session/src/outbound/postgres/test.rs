@@ -2180,6 +2180,7 @@ async fn a_document_session_preserves_its_origin_and_inherits_live_document_acce
             actor: OWNER.to_owned().try_into().unwrap(),
             triggered_by: None,
             input: PostMessage {
+                id: None,
                 attribution: Default::default(),
                 notification_policy: Default::default(),
                 content: "@agent investigate".into(),

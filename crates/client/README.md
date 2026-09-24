@@ -31,6 +31,41 @@ scheduled automatically in the background. Failures latch the existing storage
 health state without deleting records or pending mutations. Recovery/reset remains
 an explicit caller decision after closing the storage.
 
+## Network refreshes
+
+Normalized refreshes persist only records whose merged contents changed. The hot
+tier is published after the atomic storage write succeeds, so failed writes cannot
+make retries incorrectly look unchanged. With no optimistic layers, the changed
+record keys also identify visible changes without duplicate before/after snapshots.
+Pending layers still use full effective-view comparison and rebasing.
+
+## Browser OPFS writes
+
+The OPFS adapter coalesces each Turso vectored write into batches of at most
+1 MiB instead of making one synchronous browser call per WAL frame. Scratch
+space is bounded to the same size. Batching never spans separate I/O operations
+or delays completion/flushes; offset preflight, partial-write retries, and
+first-error propagation retain their existing semantics.
+
+## Projection refreshes
+
+Hydration folds authoritative index mutations in order and writes only final
+states that differ from stored state. An updated normalized record does not force
+unchanged index facts to be deleted and reinserted. Pending optimistic projections
+are still rebased for every affected key, even when authority is unchanged.
+
+## Local filter execution
+
+Local SQL materializes Boolean result sets once, but enumerates a universe only
+within the requested profile and partition. Empty predicates do not enumerate
+cached documents. Conjunctions with an indexable positive term filter one scoped
+candidate set using document-leading fact probes, rather than materializing every
+residual posting list. Other negated conjunctions use set difference instead of
+first building a full complement. Optimistic facts also use document-leading
+primary-key probes rather than repeatedly scanning the materialized shadow set.
+These execution choices keep the same predicate, ordering, missing-fact, and
+shadow-suppression semantics.
+
 ## Tests
 
 Run from the repository root:

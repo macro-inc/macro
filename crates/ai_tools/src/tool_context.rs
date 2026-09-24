@@ -209,6 +209,19 @@ pub fn build_channel_tool_context_without_side_effects(
     )
 }
 
+/// Shared message service with no side effects. Messages posted through it
+/// are persisted but notify no one, so it is only for tests and read paths.
+pub fn build_message_service_without_side_effects(
+    pool: sqlx::PgPool,
+    lexical_client: Arc<lexical_client::LexicalClient>,
+) -> Arc<dyn messages::domain::api::MessageServiceApi> {
+    Arc::new(shared_message_service(
+        pool,
+        messages::domain::ports::NoMessageEventPublisher,
+        lexical_client,
+    ))
+}
+
 /// Shared message service used by agent tools: the same persistence, reference
 /// authorization, and group-mention policy as the channel HTTP API, over the
 /// delivery `effects` a host composed.
@@ -259,14 +272,47 @@ pub struct ChannelSideEffectClients {
 pub fn build_channel_tool_context_with_side_effects(
     pool: sqlx::PgPool,
     lexical_client: Arc<lexical_client::LexicalClient>,
-    clients: ChannelSideEffectClients,
+    clients: &ChannelSideEffectClients,
 ) -> ToolChannelToolContext {
-    let notification_ingress = Arc::new(SqsNotificationIngress {
+    let dispatcher = channel_event_dispatcher(&pool, clients);
+    let messages = message_service_with_side_effects(
+        pool.clone(),
+        lexical_client.clone(),
+        clients,
+        dispatcher.clone(),
+    );
+    build_channel_tool_context_with_dispatcher(pool, dispatcher, lexical_client, messages)
+}
+
+/// Build the shared message service with the same delivery as the
+/// document-storage message API: channel side effects for channel messages,
+/// and realtime updates and comment notifications for document discussions.
+/// Hosts that let the agent comment on documents need this so participants
+/// are notified.
+pub fn build_message_service_with_side_effects(
+    pool: sqlx::PgPool,
+    lexical_client: Arc<lexical_client::LexicalClient>,
+    clients: &ChannelSideEffectClients,
+) -> Arc<dyn messages::domain::api::MessageServiceApi> {
+    let dispatcher = channel_event_dispatcher(&pool, clients);
+    message_service_with_side_effects(pool, lexical_client, clients, dispatcher)
+}
+
+fn notification_ingress(
+    clients: &ChannelSideEffectClients,
+) -> Arc<SqsNotificationIngress<notification::outbound::queue::SqsQueue>> {
+    Arc::new(SqsNotificationIngress {
         queue: notification::outbound::queue::SqsQueue::new(
             clients.sqs.clone(),
             macro_queues::NotificationIngressQueue::new().to_string(),
         ),
-    });
+    })
+}
+
+fn channel_event_dispatcher(
+    pool: &sqlx::PgPool,
+    clients: &ChannelSideEffectClients,
+) -> ToolChannelEventDispatcher {
     let contacts_ingress = Arc::new(SqsContactsIngress {
         queue: SqsContactsQueue::new(
             clients.sqs.clone(),
@@ -276,36 +322,52 @@ pub fn build_channel_tool_context_with_side_effects(
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(clients.connection_gateway.clone()),
-        NotificationChannelSender::new(notification_ingress),
+        NotificationChannelSender::new(notification_ingress(clients)),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
     .with_macro_event_broker(clients.macro_event_broker.clone());
-    let dispatcher: ToolChannelEventDispatcher =
-        Arc::new(SpawnedChannelEventDispatcher::new(side_effects));
+    Arc::new(SpawnedChannelEventDispatcher::new(side_effects))
+}
+
+fn message_service_with_side_effects(
+    pool: sqlx::PgPool,
+    lexical_client: Arc<lexical_client::LexicalClient>,
+    clients: &ChannelSideEffectClients,
+    dispatcher: ToolChannelEventDispatcher,
+) -> Arc<dyn messages::domain::api::MessageServiceApi> {
     let access = entity_access::domain::service::EntityAccessServiceImpl::new(
         entity_access::outbound::PgAccessRepository::new(pool.clone()),
     );
+    let realtime = messages::outbound::connection_gateway::ConnectionGatewayMessages(
+        clients.connection_gateway.clone(),
+    );
     let effects = messages::domain::effects::MessageEffects::new(
-        messages::outbound::broker::BrokerMessagePublisher::new(clients.macro_event_broker),
+        messages::outbound::broker::BrokerMessagePublisher::new(clients.macro_event_broker.clone()),
         messages::domain::ports::NoMessageEventPublisher,
-        channels::domain::message_delivery::ChannelMessageDelivery::new(
-            PgChannelsRepo::new(pool.clone()),
-            dispatcher.clone(),
-            channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
+        messages::domain::delivery::ParentMessagePublisher::new(
+            channels::domain::message_delivery::ChannelMessageDelivery::new(
+                PgChannelsRepo::new(pool.clone()),
+                dispatcher,
+                channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
+                    pool.clone(),
+                    Arc::new(access.clone()),
+                ),
+                realtime.clone(),
+            ),
+            messages::domain::delivery::DiscussionDelivery::new(
+                messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()),
+                messages::outbound::entity_access_audience::EntityAccessMessageAudience(access),
+                realtime,
+                messages::outbound::notification_sender::MessageNotificationSender(
+                    notification_ingress(clients),
+                ),
+            )
+            .with_sharing(messages::outbound::pg_discussion_context::PgDiscussionContext(
                 pool.clone(),
-                Arc::new(access),
-            ),
-            messages::outbound::connection_gateway::ConnectionGatewayMessages(
-                clients.connection_gateway,
-            ),
+            )),
         ),
     );
-    let messages = Arc::new(shared_message_service(
-        pool.clone(),
-        effects,
-        lexical_client.clone(),
-    ));
-    build_channel_tool_context_with_dispatcher(pool, dispatcher, lexical_client, messages)
+    Arc::new(shared_message_service(pool, effects, lexical_client))
 }
 
 /// Build the channel AI tool context wired to `dispatcher`, so messages sent by
@@ -353,13 +415,13 @@ pub type ToolCalendarToolContext =
 /// `calendar_service_url` with the shared internal API key.
 pub fn build_calendar_tool_context(
     pool: sqlx::PgPool,
-    calendar_service_url: String,
+    calendar_service_url: macro_service_urls::CalendarServiceUrl,
     internal_api_key: String,
 ) -> ToolCalendarToolContext {
     CalendarToolContext::new(
         Arc::new(
             calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations::new(
-                calendar_service_url,
+                calendar_service_url.to_string(),
                 internal_api_key,
             ),
         ),

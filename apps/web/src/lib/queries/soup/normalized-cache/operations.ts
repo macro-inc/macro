@@ -1,5 +1,8 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type {
   PostSoupRequest,
@@ -768,6 +771,10 @@ export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
  * `refreshGraphql` also network-refreshes mounted GraphQL Soup operations.
  * REST's normalized entity insertion cannot change GraphQL list or grouped-bin
  * membership, so creation callers must request this transport revalidation.
+ *
+ * `created` marks an entity that did not exist a moment ago, so it sorts first
+ * in newest-first lists. It is inserted into the REST lists whose filters admit
+ * it, without refetching any list, in either transport.
  */
 export async function refetchSoupEntity(
   entityId: string,
@@ -776,10 +783,23 @@ export async function refetchSoupEntity(
     includeRoot?: boolean;
     ownTouch?: boolean;
     refreshGraphql?: boolean;
+    created?: boolean;
   }
 ): Promise<void> {
   if (options?.refreshGraphql) {
     void refreshActiveGraphqlSoupQueries();
+  }
+
+  // GraphQL lists never read this cache, so a miss means no REST list shows
+  // the entity. Own-touch inserts still land because Home's touched_by_me
+  // feed stays on REST.
+  if (
+    !options?.ownTouch &&
+    !options?.created &&
+    isFeatureEnabled(enableGraphqlSoup) &&
+    !hasSoupEntity(entityId)
+  ) {
+    return;
   }
 
   const { storageServiceClient } = await import('@service-storage/client');
@@ -811,6 +831,7 @@ export async function refetchSoupEntity(
       optimisticUpdateSoupEntity(item);
     } else {
       insertSoupEntity(item);
+      if (options?.created) continue;
       if (options?.ownTouch) {
         invalidateAllSoupExceptTouched();
       } else {

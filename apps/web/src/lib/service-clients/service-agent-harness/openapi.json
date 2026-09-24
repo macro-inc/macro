@@ -2296,6 +2296,11 @@
             "format": "uuid",
             "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona. On an external request, bot callers may omit it\n(their own identity is used) and must not name another bot; user callers\nmust supply a bot they own."
           },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Id to create the session under, minted by the caller. Lets a surface\nopen on the session's final id - URL, history row, references - the\nmoment the user acts, rather than after this request answers (which\nfor a managed sandbox can take a while). Omitted, the service mints\none. Managed sessions only. Answers 409 if a session already holds\nthe id."
+          },
           "instructions": {
             "type": ["string", "null"],
             "description": "Instructions the session's runtime works under, for its whole life.\n\nRecorded on the session whichever runtime serves it. Only the\nin-process one acts on them today; `agent_harness`'s `AgentKind`\nrecords what each of the others will need to."

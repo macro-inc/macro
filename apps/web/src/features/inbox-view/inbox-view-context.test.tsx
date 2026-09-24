@@ -195,7 +195,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('InboxViewProvider initialization', () => {
-  it('honors all explicit fields instead of restoring the split entry', () => {
+  it('honors explicit fields except the URL-owned tab', () => {
     entry.state = { [INBOX_ENTRY_STATE_KEY]: { version: 1, tab: 'signal' } };
     const initial: InboxViewStateOptions = {
       tab: 'noise',
@@ -204,7 +204,11 @@ describe('InboxViewProvider initialization', () => {
       facets: { type: ['email'], read: ['unread'] },
     };
 
-    expect(mountProvider(initial).context.state).toEqual(initial);
+    expect(mountProvider(initial).context.state).toEqual({
+      ...initial,
+      tab: 'signal',
+      groupBy: 'date',
+    });
   });
 
   it.each([
@@ -212,7 +216,9 @@ describe('InboxViewProvider initialization', () => {
     { tab: 'noise', groupBy: 'date' },
     { tab: 'reminders', groupBy: 'none' },
   ] as const)('defaults omitted fields for $tab', ({ tab, groupBy }) => {
-    expect(mountProvider({ tab }).context.state).toEqual({
+    expect(
+      mountProvider({ tab }, `/inbox?s0.inbox.tab=${tab}`).context.state
+    ).toEqual({
       tab,
       groupBy,
       search: '',
@@ -359,6 +365,53 @@ describe('InboxViewProvider initialization', () => {
 });
 
 describe('InboxViewProvider route selection', () => {
+  it('takes the tab from pane search ahead of explicit and restored state', () => {
+    entry.state = { [INBOX_ENTRY_STATE_KEY]: { version: 1, tab: 'signal' } };
+    const { context } = mountProvider(
+      { tab: 'signal' },
+      '/inbox?s0.inbox.tab=noise'
+    );
+    expect(context.state.tab).toBe('noise');
+  });
+
+  it('normalizes invalid URL tabs without restoring an old selection', async () => {
+    const { context, location, router } = mountProvider(
+      undefined,
+      '/inbox?s0.inbox.tab=unknown'
+    );
+    await router.settled();
+    expect(context.state.tab).toBe('signal');
+    expect(location.read().search).toBe('');
+  });
+
+  it('writes the tab to the URL and follows browser Back/Forward', async () => {
+    const { context, location, router } = mountProvider();
+    context.setTab('noise');
+    await router.settled();
+    expect(location.read().search).toBe('?s0.inbox.tab=noise');
+    expect(location.back()).toBe(true);
+    await router.settled();
+    expect(context.state.tab).toBe('signal');
+    expect(location.forward()).toBe(true);
+    await router.settled();
+    expect(context.state.tab).toBe('noise');
+  });
+
+  it('keeps the URL tab when opening and closing a preview', async () => {
+    const { context, location, router } = mountProvider(
+      undefined,
+      '/inbox?s0.inbox.tab=noise'
+    );
+    context.openPreview({ type: 'email', id: 'thread-1' });
+    await router.settled();
+    expect(location.read().pathname).toBe('/inbox/email/thread-1');
+    expect(location.read().search).toContain('s0.inbox.tab=noise');
+    context.closePreview();
+    await router.settled();
+    expect(location.read().pathname).toBe('/inbox');
+    expect(location.read().search).toContain('s0.inbox.tab=noise');
+  });
+
   it('rebuilds a heterogeneous channel-message preview from a direct URL', () => {
     const { context } = mountProvider(
       undefined,

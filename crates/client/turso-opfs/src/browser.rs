@@ -946,6 +946,7 @@ struct TestFaults {
     connection_close_calls: usize,
     reset_fault: Option<ResetFault>,
     max_write_chunk: Option<usize>,
+    write_calls: usize,
     next_write_error: Option<CompletionError>,
     write_error_after_chunks: Option<(usize, CompletionError)>,
 }
@@ -1119,21 +1120,22 @@ impl File for OpfsFile {
             let expected =
                 preflight_write_range(pos, buffers.iter().map(|buffer| buffer.as_slice().len()))?;
             let mut total = 0_usize;
-            for buffer in &buffers {
-                let written = write_all(
-                    pos,
-                    buffer.as_slice(),
-                    self.owner,
-                    self.session,
-                    self.handle,
-                )?;
-                total = total
-                    .checked_add(written)
-                    .ok_or(CompletionError::ShortWrite)?;
-                pos = pos
-                    .checked_add(written as u64)
-                    .ok_or(CompletionError::ShortWrite)?;
-            }
+            // OPFS has no native writev: one browser call per WAL page can
+            // dominate COMMIT. Coalesce only this vector, with bounded scratch
+            // space; write_all still handles partial writes and sync is unchanged.
+            crate::write_batch::write_batches(
+                buffers.iter().map(|buffer| buffer.as_slice()),
+                |bytes| {
+                    let written = write_all(pos, bytes, self.owner, self.session, self.handle)?;
+                    total = total
+                        .checked_add(written)
+                        .ok_or(CompletionError::ShortWrite)?;
+                    pos = pos
+                        .checked_add(written as u64)
+                        .ok_or(CompletionError::ShortWrite)?;
+                    Ok(())
+                },
+            )?;
             if total == expected {
                 completion_count(total)
             } else {
@@ -2001,6 +2003,7 @@ fn write_once(
     #[cfg(test)]
     let (chunk_limit, injected_error) = REGISTRY.with(|registry| {
         let mut registry = registry.borrow_mut();
+        registry.faults.write_calls += 1;
         let injected = registry.faults.next_write_error.take().or_else(|| {
             let fault = registry.faults.write_error_after_chunks.as_mut()?;
             if fault.0 == 0 {

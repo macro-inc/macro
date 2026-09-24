@@ -1,4 +1,7 @@
-import { getChannelEntityTarget } from '@app/features/next-soup/utils';
+import {
+  getChannelEntityTarget,
+  getDocumentCommentTarget,
+} from '@app/features/next-soup/utils';
 import type { CalendarBlockProps } from '@block-calendar/types';
 import {
   type PreviewPanelSelection,
@@ -70,6 +73,7 @@ function selectionSearch(
         ...base,
         fileType: selection.fileType ?? '',
         subType: selection.subType?.type ?? '',
+        targetCommentId: getDocumentCommentTarget(selection)?.commentId ?? '',
       };
     case 'foreign':
       return { ...base, foreignSource: selection.foreignSource };

@@ -84,3 +84,45 @@ describe.each(['recent', 'new chat'] as const)('Home %s press', (kind) => {
     expect(activate).not.toHaveBeenCalled();
   });
 });
+
+describe('Home document comment row', () => {
+  const commentNotification = (state: 'unseen' | 'seen') => ({
+    id: 'n1',
+    entity_id: 'doc-1',
+    entity_type: 'document',
+    sender_id: 'macro|peter@macro.com',
+    state,
+    created_at: '2026-09-23T00:00:00Z',
+    notification_metadata: {
+      tag: 'mentioned_in_document_comment',
+      content: { commentId: 'comment-1', documentName: 'Plan' },
+    },
+  });
+
+  const renderRow = (state: 'unseen' | 'seen') =>
+    render(() => (
+      <HomeListEntity
+        entity={
+          {
+            type: 'document',
+            id: 'doc-1',
+            name: 'Plan',
+            ownerId: 'test-user',
+            fileType: 'md',
+            notifications: () => [commentNotification(state)],
+          } as never
+        }
+        occurrenceKey="doc-1"
+      />
+    )).container.querySelector<HTMLElement>('[data-home-item]')!;
+
+  it('announces an unread comment mention', () => {
+    expect(renderRow('unseen').textContent).toContain(
+      'Peter mentioned you on Recent chat'
+    );
+  });
+
+  it('reads as the plain document once the comment is read', () => {
+    expect(renderRow('seen').textContent).not.toContain('mentioned you');
+  });
+});

@@ -182,6 +182,304 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
+  describe('mixed folder contents', () => {
+    const excludedId = '00000000-0000-0000-0000-000000000000';
+    const item = (id: string, __typename = 'GraphqlSoupDocument') => ({
+      id,
+      __typename,
+      projectId: 'folder-a',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-02T00:00:00Z',
+    });
+
+    function fixture(localItems = [item('cached-document')]) {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      let revision = REVISION_0;
+      let notify: (revision: string) => void = () => {};
+      const [folder, setFolder] = createSignal('folder-a');
+      const filters = () => ({
+        documentFilter: { literal: { projectId: folder() } },
+        chatFilter: { literal: { projectId: folder() } },
+        projectFilter: { literal: { projectId: folder() } },
+        emailFilter: { tree: { literal: { projectId: folder() } } },
+      });
+      makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+        cursor
+          ? { continuation: { cursor } }
+          : {
+              initial: {
+                filters: filters(),
+                emailView: 'ALL',
+                sortMethod: 'UPDATED_AT',
+                limit: 100,
+              },
+            }
+      );
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: typeof notify) => {
+          notify = callback;
+          return () => {};
+        },
+        onCacheGenerationChanged: () => () => {},
+      });
+      entityFilterMock.mockImplementation(async () => ({
+        kind: 'reconciled',
+        revision,
+        keys: localItems.map((record) => `${record.__typename}:${record.id}`),
+        retainedKeys: [],
+        optimistic: false,
+      }));
+      readRecordsByKeysMock.mockImplementation(async () => ({
+        revision,
+        records: localItems.map((record) => ({
+          recordKey: `${record.__typename}:${record.id}`,
+          record,
+        })),
+      }));
+      const { query, dispose } = createRoot((dispose) => ({
+        dispose,
+        query: createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true, localReconciliation: 'without-email' })
+        ),
+      }));
+      return {
+        fake,
+        query,
+        dispose,
+        filters,
+        setFolder,
+        ids: () => query.data()?.entities.map((entity) => entity.id),
+        push: () => {
+          revision = String(Number(revision) + 1);
+          notify(revision);
+        },
+      };
+    }
+
+    it('hydrates a never-visited folder without waiting for its mixed GraphQL response', async () => {
+      const f = fixture([
+        item('document'),
+        item('chat', 'GraphqlSoupChat'),
+        item('subfolder', 'GraphqlSoupProject'),
+      ]);
+      try {
+        await vi.waitFor(() =>
+          expect(f.ids()).toEqual(['document', 'chat', 'subfolder'])
+        );
+        expect(f.query.isLoading()).toBe(false);
+        expect(f.query.isFetching()).toBe(true);
+        expect(f.query.hasNextPage()).toBe(false);
+        expect(f.fake.executions).toHaveLength(1);
+        expect(f.fake.executions[0].variables).toMatchObject({
+          input: { initial: { filters: f.filters(), emailView: 'ALL' } },
+        });
+        expect(entityFilterMock).toHaveBeenCalledWith({
+          filters: {
+            ...f.filters(),
+            emailFilter: { tree: { literal: { threadId: excludedId } } },
+          },
+          sortMethod: 'UPDATED_AT',
+          sortDirection: 'DESC',
+          limit: 100,
+          baseline: [],
+        });
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('retains server email and cursors across local reconciliation and later pages', async () => {
+      const f = fixture();
+      const email = item('email', 'GraphqlSoupEmailThread');
+      const olderEmail = item('older-email', 'GraphqlSoupEmailThread');
+      try {
+        await vi.waitFor(() => expect(f.ids()).toEqual(['cached-document']));
+        f.fake.executions[0].next(
+          graphqlSoupPage({
+            items: [item('server-document'), email],
+            next_cursor: 'page-2',
+          }),
+          { source: 'normalized-cache-hit' }
+        );
+        f.push();
+        await vi.waitFor(() =>
+          expect(f.ids()).toEqual(['cached-document', 'email'])
+        );
+        expect(entityFilterMock.mock.lastCall?.[0].baseline).toEqual([
+          {
+            key: 'GraphqlSoupDocument:server-document',
+            sortTimestamp: '2026-01-02T00:00:00Z',
+          },
+        ]);
+        expect(f.query.hasNextPage()).toBe(true);
+        const next = f.query.fetchNextPage();
+        expect(f.fake.executions[1].variables).toEqual({
+          input: { continuation: { cursor: 'page-2' } },
+        });
+        f.fake.executions[1].next(
+          graphqlSoupPage({ items: [olderEmail], next_cursor: null }),
+          { source: 'normalized-cache-hit' }
+        );
+        await next;
+        await vi.waitFor(() =>
+          expect(f.ids()).toEqual(['cached-document', 'email', 'older-email'])
+        );
+        expect(f.query.hasNextPage()).toBe(false);
+        const refresh = f.query.refresh();
+        f.fake.executions[2].next(
+          graphqlSoupPage({ items: [email], next_cursor: null })
+        );
+        await refresh;
+        expect(f.ids()).toEqual(['email']);
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it.each(['email-only', 'network-error'] as const)(
+      'does not mistake an empty partial projection for an empty folder: %s',
+      async (outcome) => {
+        const f = fixture([]);
+        try {
+          await vi.waitFor(() =>
+            expect(readRecordsByKeysMock).toHaveBeenCalled()
+          );
+          expect(f.query.data()).toBeUndefined();
+          expect(f.query.isLoading()).toBe(true);
+          if (outcome === 'network-error') {
+            const error = new CombinedError({
+              networkError: new Error('offline'),
+            });
+            f.fake.executions[0].fail(error);
+            expect(f.query.error()).toBe(error);
+            expect(f.query.data()).toBeUndefined();
+          } else {
+            f.fake.executions[0].next(
+              graphqlSoupPage({
+                items: [item('email', 'GraphqlSoupEmailThread')],
+                next_cursor: null,
+              })
+            );
+            expect(f.ids()).toEqual(['email']);
+          }
+        } finally {
+          f.dispose();
+        }
+      }
+    );
+
+    it.each([false, true])(
+      'requires visible local rows before suppressing loading/errors unless server data exists: %s',
+      async (hasServerData) => {
+        const f = fixture();
+        const deletion = createGraphqlSoupDeletion(['cached-document']);
+        const pending = deferred<void>();
+        const mutation = queryClient.getMutationCache().build(queryClient, {
+          mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+          onMutate: () => ({ graphqlDeletion: deletion }),
+          mutationFn: () => pending.promise,
+          onSettled: () => deletion.release(),
+        });
+        let completion: Promise<void> | undefined;
+        try {
+          await vi.waitFor(() => expect(f.ids()).toEqual(['cached-document']));
+          if (hasServerData) {
+            f.fake.executions[0].next(
+              graphqlSoupPage({
+                items: [item('cached-document')],
+                next_cursor: null,
+              }),
+              { source: 'normalized-cache-hit' }
+            );
+          }
+          completion = mutation.execute(undefined);
+          await vi.waitFor(() =>
+            expect(mutation.state.context?.graphqlDeletion).toBe(deletion)
+          );
+          await vi.waitFor(() =>
+            expect(f.ids()).toEqual(hasServerData ? [] : undefined)
+          );
+          expect(f.query.isLoading()).toBe(!hasServerData);
+
+          const error = new CombinedError({
+            networkError: new Error('offline'),
+          });
+          f.fake.executions[0].fail(error);
+          expect(f.query.error()).toBe(hasServerData ? undefined : error);
+          expect(f.ids()).toEqual(hasServerData ? [] : undefined);
+
+          // Releasing the deletion makes the cached projection usable again.
+          deletion.release();
+          await vi.waitFor(() => expect(f.ids()).toEqual(['cached-document']));
+          expect(f.query.error()).toBeUndefined();
+          expect(f.query.isLoading()).toBe(false);
+        } finally {
+          pending.resolve();
+          await completion;
+          deletion.release();
+          f.dispose();
+        }
+      }
+    );
+
+    it('keeps a partial projection usable when only some cached rows are pending deletion', async () => {
+      const f = fixture([item('deleted'), item('visible')]);
+      const deletion = createGraphqlSoupDeletion(['deleted']);
+      const pending = deferred<void>();
+      const mutation = queryClient.getMutationCache().build(queryClient, {
+        mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+        onMutate: () => ({ graphqlDeletion: deletion }),
+        mutationFn: () => pending.promise,
+        onSettled: () => deletion.release(),
+      });
+      let completion: Promise<void> | undefined;
+      try {
+        await vi.waitFor(() => expect(f.ids()).toEqual(['deleted', 'visible']));
+        completion = mutation.execute(undefined);
+        await vi.waitFor(() => expect(f.ids()).toEqual(['visible']));
+        expect(f.query.isLoading()).toBe(false);
+        f.fake.executions[0].fail(
+          new CombinedError({ networkError: new Error('offline') })
+        );
+        expect(f.query.error()).toBeUndefined();
+        expect(f.ids()).toEqual(['visible']);
+      } finally {
+        pending.resolve();
+        await completion;
+        deletion.release();
+        f.dispose();
+      }
+    });
+
+    it('does not leak local members across folders while a new projection is pending', async () => {
+      const f = fixture();
+      const pending = deferred<unknown>();
+      try {
+        await vi.waitFor(() => expect(f.ids()).toEqual(['cached-document']));
+        entityFilterMock.mockImplementation(() => pending.promise);
+        f.setFolder('folder-b');
+        expect(f.query.data()).toBeUndefined();
+        expect(f.query.isLoading()).toBe(true);
+        await vi.waitFor(() =>
+          expect(entityFilterMock.mock.lastCall?.[0].filters).toMatchObject({
+            documentFilter: { literal: { projectId: 'folder-b' } },
+          })
+        );
+        f.fake.executions[0].next(
+          graphqlSoupPage({ items: [item('late-folder-a')], next_cursor: null })
+        );
+        expect(f.query.data()).toBeUndefined();
+      } finally {
+        f.dispose();
+        pending.resolve({ kind: 'unsupported' });
+      }
+    });
+  });
+
   it('uses the channel list projection for initial pages, pagination, refresh and reconciliation', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

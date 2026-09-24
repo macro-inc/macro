@@ -5,6 +5,7 @@ import {
   ShareDialogContext,
   ShareModal,
 } from '@core/component/TopBar/ShareButton';
+import { queryReadyGate } from '@queries/gate';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import {
   createSignal,
@@ -76,7 +77,9 @@ export function ModalsProvider(
           itemType="document"
           name={displayName() ?? ''}
           userPermissions={permissions()}
-          owner={metadataQuery.data?.owner}
+          owner={
+            queryReadyGate(metadataQuery) ? metadataQuery.data.owner : undefined
+          }
         />
       </Suspense>
     </ShareDialogContext.Provider>

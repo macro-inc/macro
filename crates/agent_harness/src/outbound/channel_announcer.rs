@@ -133,6 +133,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .post(
                 access,
                 PostMessage {
+                    id: None,
                     attribution: MessageAttribution::ActingUser,
                     // The chip is a pointer, not news: the thread hears
                     // about the session when it finishes or asks, through
@@ -173,6 +174,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .post(
                 access,
                 PostMessage {
+                    id: None,
                     attribution: MessageAttribution::ActingUser,
                     anchor: None,
                     content,

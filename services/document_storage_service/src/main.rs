@@ -876,6 +876,11 @@ async fn run() -> anyhow::Result<()> {
     });
 
     let activity_consumer_brokers = config.kafka_brokers.as_ref().to_string();
+    let editing_activity = Arc::new(
+        documents_hex::outbound::editing_activity::RedisEditingActivityStore::new(
+            redis_client.clone(),
+        ),
+    );
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
         let activity_repo = activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone());
@@ -893,7 +898,12 @@ async fn run() -> anyhow::Result<()> {
                 _,
             >::new(
                 activity_repo,
-                crate::service::activity::ingest,
+                move |event| {
+                    let editing_activity = editing_activity.clone();
+                    async move {
+                        crate::service::activity::ingest(event, editing_activity.as_ref()).await
+                    }
+                },
                 activity_realtime,
             );
             loop {

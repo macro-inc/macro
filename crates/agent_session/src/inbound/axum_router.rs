@@ -1460,6 +1460,14 @@ where
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionRequest {
+    /// Id to create the session under, minted by the caller. Lets a surface
+    /// open on the session's final id - URL, history row, references - the
+    /// moment the user acts, rather than after this request answers (which
+    /// for a managed sandbox can take a while). Omitted, the service mints
+    /// one. Managed sessions only. Answers 409 if a session already holds
+    /// the id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<Uuid>,
     /// Bot the session runs for. On a managed request this optionally selects
     /// a persisted persona the user owns, may use through team membership, or
     /// can `@` mention in a shared channel; omitting it uses the deployment's
@@ -1639,7 +1647,7 @@ impl IntoResponse for CreateSessionApiError {
             Self::InvalidWorkspace(reason) => (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned()),
             Self::MixedSessionShape => (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "a managed session may take a prompt, persona and instructions; naming a \
+                "a managed session may take an id, prompt, persona and instructions; naming a \
                  workspace, owner or thread asks for an external one"
                     .to_owned(),
             ),
@@ -1657,6 +1665,10 @@ impl IntoResponse for CreateSessionApiError {
             Self::Domain(AgentSessionError::ThreadSessionExists) => (
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
+            ),
+            Self::Domain(AgentSessionError::SessionIdTaken(_)) => (
+                StatusCode::CONFLICT,
+                "a session with this id already exists".to_owned(),
             ),
             Self::Domain(AgentSessionError::InvalidRepositorySelection(reason)) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned())
@@ -1823,6 +1835,7 @@ pub async fn create_agent_session_handler<
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                id: request.id.map(AgentSessionId::new_from_uuid),
                 repo_url: request.repo_url,
                 repo_branch: request
                     .repo_branch
@@ -1851,7 +1864,11 @@ pub async fn create_agent_session_handler<
     // An external runtime sends its own first prompt through the control
     // endpoint, so accepting one here would silently drop it, and it runs on
     // whatever model its operator configured, which is not ours to set.
-    if request.prompt.is_some() || request.repo_branch.is_some() || request.model.is_some() {
+    if request.prompt.is_some()
+        || request.repo_branch.is_some()
+        || request.model.is_some()
+        || request.id.is_some()
+    {
         return Err(CreateSessionApiError::MixedSessionShape);
     }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;

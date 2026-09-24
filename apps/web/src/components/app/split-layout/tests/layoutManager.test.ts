@@ -1,11 +1,18 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
+import { CALENDAR_PREFERENCES_KEY } from '@app/features/calendar/calendar-preferences';
 import { driveDestination } from '@app/features/drive-view/drive-route-navigation';
+import { driveSplitRoute } from '@app/features/drive-view/route';
+import {
+  emailSplitRoute,
+  emailThreadRoute,
+} from '@app/features/email-view/route';
 import {
   getListNavigationSource,
   listNavigationSourceId,
   registerListNavigationSource,
   withListNavigationSource,
 } from '@app/features/soup/collection/list-navigation-source';
+import { taskDetailRoute } from '@app/features/tasks-view/route';
 import { createMemorySplitRouterLocation } from '@app/lib/split-router/integrations/memory';
 import { createSplitRouter } from '@app/lib/split-router/router';
 import { createRoutesManifest } from '@app/lib/split-router/routes';
@@ -25,13 +32,7 @@ import {
 } from '../layoutUtils';
 import { createMobileSwipeLayout } from '../mobile/createMobileSwipeLayout';
 import { createAppSplitRouterMiddleware } from '../split-router/app-middleware';
-import {
-  appSplitRoutes,
-  driveSplitRoute,
-  emailSplitRoute,
-  emailThreadRoute,
-  taskDetailRoute,
-} from '../split-router/app-routes';
+import { appSplitRoutes } from '../split-router/app-routes';
 import { createAppSplitRouterLayout } from '../splitRouterLayout';
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -894,9 +895,71 @@ describe('layoutManager', () => {
       dispose();
     });
 
+    it('renders Calendar as a route-backed component and restores URL state', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/calendar/week?eventId=event-1'
+      );
+      await router.settled();
+      const split = manager.splits()[0];
+      const mount = split.mount;
+      expect(split.content).toMatchObject({
+        type: 'component',
+        id: 'calendar',
+      });
+      expect(mount.kind).toBe('component');
+      expect(router.route(split.id)?.matches).toEqual([
+        { id: 'view-calendar', params: { period: 'timeGridWeek' } },
+      ]);
+      expect(router.search(split.id, 'calendar')).toEqual({
+        eventId: ['event-1'],
+      });
+      expect(location.read().pathname).toBe('/calendar/week');
+      expect(new URLSearchParams(location.read().search).get('eventId')).toBe(
+        'event-1'
+      );
+      expect(
+        new URLSearchParams(location.read().search).get('s0.calendar.eventId')
+      ).toBe('event-1');
+
+      location.set('/calendar/day?s0.calendar.eventId=event-2');
+      await router.settled();
+      expect(manager.splits()[0].mount).toBe(mount);
+      expect(router.route(split.id)?.matches).toEqual([
+        { id: 'view-calendar', params: { period: 'timeGridDay' } },
+      ]);
+      expect(router.search(split.id, 'calendar')).toEqual({
+        eventId: ['event-2'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('upgrades the legacy Calendar block URL to the preferred period route', async () => {
+      localStorage.setItem(
+        CALENDAR_PREFERENCES_KEY,
+        JSON.stringify({ periodView: 'dayGridMonth' })
+      );
+      const { manager, location, router, dispose } = ingressRouter(
+        '/calendar/view?eventId=legacy-event'
+      );
+      await router.settled();
+      const split = manager.splits()[0];
+      expect(split.content).toMatchObject({
+        type: 'component',
+        id: 'calendar',
+      });
+      expect(location.read().pathname).toBe('/calendar/month');
+      expect(router.search(split.id, 'calendar')).toEqual({
+        eventId: ['legacy-event'],
+      });
+      localStorage.removeItem(CALENDAR_PREFERENCES_KEY);
+      router.dispose();
+      dispose();
+    });
+
     it('normalizes legacy search per detail pane without overriding canonical values', async () => {
       const { manager, location, router, dispose } = ingressRouter(
-        '/mail/one/~/channels/channel/c1/~/mail/two/~/mail' +
+        '/mail/one/~/channels/c1/~/mail/two/~/mail' +
           '?email_message_id=legacy&channel_message_id=first&channel_message_id=last' +
           '&channel_thread_id=thread&s0.email-detail.messageId=explicit' +
           '&s0.email-detail.extra=keep&s2.email-detail.messageId=&referral_code=code#focus'

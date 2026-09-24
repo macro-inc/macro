@@ -1,3 +1,6 @@
+import { match } from 'ts-pattern';
+import type { DriveLocation } from './core/types';
+import type { DriveDocumentRoute } from './primitives/drive-route';
 import {
   driveFolderDocumentRoute,
   driveFolderRoute,
@@ -5,10 +8,7 @@ import {
   driveSplitRoute,
   driveTabDocumentRoute,
   driveTabRoute,
-} from '@components/app/split-layout/split-router/app-routes';
-import { match } from 'ts-pattern';
-import type { DriveLocation } from './core/types';
-import type { DriveDocumentRoute } from './primitives/drive-route';
+} from './route';
 
 /** Maps Drive domain selection to a route, including its folder/tab params. */
 export function driveDestination(

@@ -6,11 +6,6 @@ import {
   stripSettingsSplitFromUrl,
 } from './settingsSplitUrl';
 
-// Route-only helpers do not need to initialize the application views.
-vi.mock('@components/app/split-layout/split-router/app-views', () => ({
-  withLaunchParams: () => () => null,
-}));
-
 // Legacy split decoding only needs alias resolution to exist.
 vi.mock('@core/constant/allBlocks', () => ({
   isBlockAlias: vi.fn(() => false),

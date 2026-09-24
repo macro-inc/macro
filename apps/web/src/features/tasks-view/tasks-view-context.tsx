@@ -8,16 +8,16 @@ import {
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { makePersistedState } from '@app/lib/persistence';
-import { useNavigate, useRouteParams } from '@app/lib/split-router';
+import {
+  createSearchParams,
+  useNavigate,
+  useRouteParams,
+} from '@app/lib/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import {
-  taskDetailRoute,
-  tasksSplitRoute,
-} from '@components/app/split-layout/split-router/app-routes';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -45,6 +45,8 @@ import {
   type TasksDataSourceItem,
   useTasksDataSource,
 } from './queries/use-tasks-query';
+import { taskDetailRoute, tasksSplitRoute } from './route';
+import { tasksTabSearch, tasksTabSearchCodec } from './tasks-tab-search';
 import type {
   TaskDetailTarget,
   TaskSortId,
@@ -101,6 +103,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const panel = useSplitPanelOrThrow();
   const navigate = useNavigate();
   const routeParams = useRouteParams(taskDetailRoute);
+  const [tabSearch] = createSearchParams(tasksTabSearch);
   const selectPreview = createPreviewSelectionGuard();
   const userId = useUserId();
   const tagSets = useTagSets();
@@ -131,6 +134,25 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       restoreEntryState: props.initialState === undefined,
       restorePreferences: initial.collapsedSidebarSectionIds === undefined,
     })
+  );
+
+  createEffect(
+    on(
+      () => tabSearch.tab,
+      (tab) => {
+        if (state.tab === tab) return;
+        setState(
+          produce((draft) => {
+            draft.tab = tab;
+            draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
+            draft.facets = normalizeFacetSelection(
+              DEFAULT_TASK_FACET_SELECTION
+            );
+            draft.collapsedGroupIds = [];
+          })
+        );
+      }
+    )
   );
 
   const isGroupExpanded = (groupId: string) =>
@@ -189,14 +211,33 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
   };
-  const closeTask = () => navigate({ route: tasksSplitRoute, params: {} });
+  const closeTask = () =>
+    navigate(
+      { route: tasksSplitRoute, params: {} },
+      {
+        search: {
+          [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
+            tab: state.tab,
+          }),
+        },
+      }
+    );
   const openTask = (
     task: TaskDetailTarget,
     options?: EntityDetailNavigationOptions
   ) => {
     if (!opensInline(options)) return false;
     if (!selectPreview.canSelect(taskSelection(task.id))) return true;
-    navigate({ route: taskDetailRoute, params: { taskId: task.id } });
+    navigate(
+      { route: taskDetailRoute, params: { taskId: task.id } },
+      {
+        search: {
+          [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
+            tab: state.tab,
+          }),
+        },
+      }
+    );
     return true;
   };
 
@@ -206,10 +247,27 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         if (previous) {
           navigate(
             { route: taskDetailRoute, params: { taskId: previous.id } },
-            { replace: true }
+            {
+              replace: true,
+              search: {
+                [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
+                  tab: state.tab,
+                }),
+              },
+            }
           );
         } else {
-          navigate({ route: tasksSplitRoute, params: {} }, { replace: true });
+          navigate(
+            { route: tasksSplitRoute, params: {} },
+            {
+              replace: true,
+              search: {
+                [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
+                  tab: state.tab,
+                }),
+              },
+            }
+          );
         }
         return;
       }
@@ -224,9 +282,10 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   );
 
   const setTab = (tab: TaskTab) => {
-    closeTask();
-    if (state.tab === tab) return;
-
+    if (state.tab === tab) {
+      closeTask();
+      return;
+    }
     setState(
       produce((draft) => {
         draft.tab = tab;
@@ -235,6 +294,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         draft.collapsedGroupIds = [];
       })
     );
+    closeTask();
   };
 
   const setFacets = (facets: TasksViewState['facets']) => {

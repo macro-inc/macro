@@ -13,7 +13,7 @@
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
 | `/app/channels` | Channels list |
-| `/app/channels/channel/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channel-detail.*` |
+| `/app/channels/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channel-detail.*` |
 | `/app/drive` | Files (Drive defaults to My Files) |
 | `/app/drive/<recent-or-shared>` | A Drive tab (`/app/drive/tab/<...>` remains a compatibility alias) |
 | `/app/drive/folder/<uuid>` | A Drive folder; breadcrumbs resolve from current accessible folder data |
@@ -29,7 +29,7 @@
 | `/app/companies` | Customers (CRM; needs a team) |
 | `/app/activity` | Activity heatmap + feed |
 | `/app/home` | Assistant (AI-first landing) |
-| `/app/calendar/view` | Calendar |
+| `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event uses `sN.calendar.eventId` |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
@@ -51,7 +51,12 @@ Splits: the app is a tiling window manager. Public variable-length routes use
 pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
 to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
 namespaced query parameters such as `s0.drive.sort=created_at`; route identity
-and breadcrumb nesting remain in the path. Desktop panes expose Close when available and omit
+and breadcrumb nesting remain in the path. Home, Email, Tasks, and Channels
+store the selected tab under `sN.inbox.tab`, `sN.mail.tab`, `sN.tasks.tab`,
+and `sN.channels.tab`, respectively. Channels also stores the phone list
+selection as `sN.channels.mobileTab`. Omitted tab keys mean each view's default;
+changing tabs updates the URL, and browser Back/Forward restores the selection
+independently in each pane. Inline detail links preserve these keys. Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
 
 The app views are referred to as **workspaces**. Expanded workspace sidebars start
@@ -416,13 +421,13 @@ Shared Mail restart rules still apply.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
 
-Settings → Agents and Settings → Harness render while their requests are pending.
+Settings → Agents → Agents / Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 
 With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
-Settings → Harness, above Cursor, with the
-Anthropic logo. Settings → Agents selects an agent's harness but does not host
+Settings → Agents → Runtimes, above Cursor, with the
+Anthropic logo. Settings → Agents → Agents selects an agent's runtime but does not host
 Claude's connection form. **Connect Claude** starts authorization and opens sign-in
 on the first click; a fallback link remains if the browser blocks the tab.
 Approve on Claude's page, copy the complete `code#state`, then use **Finish

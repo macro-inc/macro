@@ -115,10 +115,6 @@ export const COMMIT_COMMENT_MARK_COMMAND = createCommand<{
   markId: string;
 }>('COMMIT_COMMENT_MARK_COMMAND');
 
-const CLEANUP_COMMENTS_COMMAND = createCommand<string[]>(
-  'CLEANUP_COMMENTS_COMMAND'
-);
-
 const generateMarkId = () => v7();
 
 export const markNodeKeysToIDs: Map<NodeKey, Array<string>> = new Map();
@@ -398,14 +394,6 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
       },
       COMMAND_PRIORITY_EDITOR
     ),
-    editor.registerCommand(
-      CLEANUP_COMMENTS_COMMAND,
-      (payload) => {
-        $disposeExternalDraftComments(payload);
-        return true;
-      },
-      COMMAND_PRIORITY_EDITOR
-    ),
 
     // Publish mounted marks after their commands and lookup entries are ready.
     editor.registerMutationListener(
@@ -468,31 +456,6 @@ export function commentPlugin(props: CommentPluginProps) {
   return (editor: LexicalEditor) => {
     return registerPlugin(editor, props);
   };
-}
-
-function _$disposeLocalDraftComments() {
-  $traverseNodes($getRoot(), (node) => {
-    if ($isCommentNode(node)) {
-      if (node.getIsDraft() && node.getIsLocal()) {
-        $unwrapMarkNode(node);
-      }
-    }
-  });
-}
-
-function $disposeExternalDraftComments(validPeerIds: string[]) {
-  $traverseNodes($getRoot(), (node) => {
-    if ($isCommentNode(node)) {
-      const nodePeerId = $getPeerId(node);
-      if (!nodePeerId) {
-        $unwrapMarkNode(node);
-        return;
-      }
-      if (!validPeerIds.includes(nodePeerId)) {
-        $unwrapMarkNode(node);
-      }
-    }
-  });
 }
 
 function $removeOrphanedCommentMarks(validMarkIds: ReadonlySet<string>) {

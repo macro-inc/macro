@@ -1,0 +1,23 @@
+.byoa-word {
+  display: inline-grid;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+.byoa-word > span {
+  grid-area: 1 / 1;
+  opacity: 0;
+  animation: byoa-word-cycle 11s infinite;
+  animation-delay: calc(var(--word-index) * 2.75s);
+}
+
+@keyframes byoa-word-cycle {
+  0% { opacity: 0; transform: translateY(55%); }
+  3%, 21% { opacity: 1; transform: translateY(0); }
+  25%, 100% { opacity: 0; transform: translateY(-55%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .byoa-word > span { animation: none; }
+  .byoa-word > span:first-child { opacity: 1; }
+}

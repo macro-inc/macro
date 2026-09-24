@@ -1,8 +1,9 @@
 import { Popover } from '@kobalte/core/popover';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
+import CheckCircle from '@phosphor/check-circle.svg';
 import { cn, Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
-import { createEffect, createSignal, useContext } from 'solid-js';
+import { createEffect, createSignal, on, Show, useContext } from 'solid-js';
 import type { Layout, Root } from './commentType';
 import { MeasureContainer } from './MeasureContainer';
 import { CommentsContext, ThreadCard } from './Thread';
@@ -30,6 +31,16 @@ export function MinimizedThread(props: {
   }
 
   const { highlightedCommentId, setActiveThread } = useContext(CommentsContext);
+  // Resolving from the expanded card folds the thread back to its badge.
+  createEffect(
+    on(
+      () => props.comment.resolved,
+      (resolved) => {
+        if (resolved) setExpanded(false);
+      },
+      { defer: true }
+    )
+  );
   createEffect(() => {
     if (!expandable()) return;
     const hId = highlightedCommentId();
@@ -87,7 +98,17 @@ export function MinimizedThread(props: {
                 'bg-comment/10 group-hover:bg-comment/20': props.isActive,
               })}
             >
-              <ChatTeardrop class="size-4" onClick={clickHandler} />
+              <Show
+                when={props.comment.resolved}
+                fallback={
+                  <ChatTeardrop class="size-4" onClick={clickHandler} />
+                }
+              >
+                <CheckCircle
+                  class="size-4 text-success"
+                  onClick={clickHandler}
+                />
+              </Show>
               <div class="flex items-center px-1 h-6">
                 <span class="text-xs text-center">{commentCount()}</span>
               </div>
@@ -101,7 +122,14 @@ export function MinimizedThread(props: {
           document's scroll and clipping like the badge it opens from. */}
       <Popover
         open={expanded()}
-        onOpenChange={setExpanded}
+        onOpenChange={(open) => {
+          setExpanded(open);
+          // Discard a dismissed draft in the same tick; waiting for the
+          // editor's selection change paints its badge and highlight a frame.
+          // A thread activated by the same press keeps its selection.
+          if (!open && props.comment.isNew && props.isActive)
+            setActiveThread(null);
+        }}
         anchorRef={badge}
         placement="left-start"
         gutter={4}

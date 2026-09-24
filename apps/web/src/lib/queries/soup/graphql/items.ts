@@ -51,6 +51,7 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
+import { NIL as NIL_UUID } from 'uuid';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { soupPageTimestamp } from '../page-timestamp';
 import {
@@ -79,6 +80,8 @@ export type GraphqlSoupAstItemsQueryArgs = {
 export type GraphqlSoupAstItemsQueryOptions = {
   enabled: boolean;
   projection?: 'channel-list';
+  /** Reconcile indexed members while retaining server-only email rows. */
+  localReconciliation?: 'without-email';
   showSupportedForeignEntities?: boolean;
 };
 
@@ -146,6 +149,7 @@ export function createGraphqlSoupAstItemsQuery(
     generation: number;
     baselineKeys: ReadonlySet<string>;
     displayedKeys: ReadonlySet<string>;
+    withoutEmail: boolean;
     data: SoupAstItemsData;
     mail?: {
       nextCursor: string | null;
@@ -311,7 +315,14 @@ export function createGraphqlSoupAstItemsQuery(
     const input = firstPageInput();
     const queryOptions = options();
     const host = getGraphqlSoupCacheHost();
-    const records = serverRecords();
+    const withoutEmail = queryOptions.localReconciliation === 'without-email';
+    // Email membership remains server-owned. Leaving it out of the overlay's
+    // baseline makes displayData retain those rows, including later pages.
+    const records = withoutEmail
+      ? serverRecords().filter(
+          (record) => record.__typename !== 'GraphqlSoupEmailThread'
+        )
+      : serverRecords();
     const requestId = ++localRequest;
     const requestGeneration = cacheGeneration;
     if (input !== previousInitialInput) {
@@ -347,14 +358,23 @@ export function createGraphqlSoupAstItemsQuery(
       localEvaluationPending = false;
       return;
     }
-    const filters = initial.filters ?? {};
+    const filters = withoutEmail
+      ? {
+          ...initial.filters,
+          emailFilter: { tree: { literal: { threadId: NIL_UUID } } },
+        }
+      : (initial.filters ?? {});
+    const mailView =
+      !withoutEmail && isCachedMailView(initial.emailView)
+        ? initial.emailView
+        : undefined;
     const sortMethod = initial.sortMethod;
     if (sortMethod !== 'CREATED_AT' && sortMethod !== 'UPDATED_AT') {
       localEvaluationPending = false;
       return;
     }
     const baseline = soupReconciliationBaseline(records, sortMethod);
-    if (!baseline && !isCachedMailView(initial.emailView)) {
+    if (!baseline && !mailView) {
       setLocalProjection(undefined);
       localEvaluationPending = false;
       return;
@@ -377,9 +397,6 @@ export function createGraphqlSoupAstItemsQuery(
       let outcome: 'success' | 'incomplete' | 'error' = 'incomplete';
       try {
         for (let attempt = 0; attempt < 3; attempt += 1) {
-          const mailView = isCachedMailView(initial.emailView)
-            ? initial.emailView
-            : undefined;
           let result = await host.entityFilter({
             filters,
             sortMethod,
@@ -474,6 +491,7 @@ export function createGraphqlSoupAstItemsQuery(
               result.kind === 'mail-page' ? [] : records.map(soupItemKey)
             ),
             displayedKeys: new Set(reconciledRecords.map(soupItemKey)),
+            withoutEmail,
             ...(result.kind === 'mail-page'
               ? {
                   mail: {
@@ -683,7 +701,17 @@ export function createGraphqlSoupAstItemsQuery(
     if (
       !local ||
       local.input !== firstPageInput() ||
-      local.generation !== cacheGeneration
+      local.generation !== cacheGeneration ||
+      local.withoutEmail !== (options().localReconciliation === 'without-email')
+    )
+      return undefined;
+    // A partial projection with no visible rows after pending deletes cannot
+    // prove that a folder is empty (it could contain only email). Keep initial
+    // loading/errors until the server establishes membership.
+    if (
+      local.withoutEmail &&
+      !query.data &&
+      local.data.entities.every((entity) => pendingDeleteIds().has(entity.id))
     )
       return undefined;
     const keys = serverRecordKeys();

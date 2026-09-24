@@ -5,6 +5,8 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+entity_access_db_utils = { path = "../../entity_access_db_utils" }
+entity_registry = { path = "../entity_registry" }
 chrono = { workspace = true }
 model_owner = { path = "../../model_owner", features = ["sqlx"] }
 rootcause = { workspace = true }
@@ -15,5 +17,6 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../../bot_id" }
 macro_db_migrator = { path = "../../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

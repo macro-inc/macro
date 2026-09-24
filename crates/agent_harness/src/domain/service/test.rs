@@ -906,7 +906,7 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
 #[tokio::test]
 async fn open_sends_the_comment_anchor_the_prompt_was_posted_on() {
     let context = ConversationContext {
-        anchor: Some(CommentAnchor {
+        anchor: Some(CommentAnchor::Mark {
             mark_id: "0199f3d4-0000-7000-8000-00000000000a".to_owned(),
             marked_text: Some("the marked phrase".to_owned()),
             current: None,
@@ -2723,6 +2723,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
 
     let session = service
         .open_managed_session(agent_session::domain::ports::OpenManagedSession {
+            id: None,
             repo_url: None,
             repo_branch: None,
             instructions: None,
@@ -2961,6 +2962,7 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
 
     let result = service
         .open_managed_session(OpenManagedSession {
+            id: None,
             repo_url: None,
             repo_branch: None,
             instructions: None,
@@ -2989,6 +2991,7 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         .expect("the user default should persist");
 
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         instructions: None,
@@ -3714,6 +3717,7 @@ mod lifecycle_events {
 async fn codex_named_session_provisions_egress_without_advertising_mcp() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         owner: model_owner::Owner::User(sender()),
@@ -3847,6 +3851,7 @@ impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
 async fn a_chosen_model_is_the_session_model_from_creation() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         owner: model_owner::Owner::User(sender()),
@@ -3875,6 +3880,7 @@ async fn a_chosen_model_is_the_session_model_from_creation() {
 async fn a_cursor_managed_session_is_always_stamped_cursor() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         owner: model_owner::Owner::User(sender()),
@@ -3901,6 +3907,7 @@ async fn a_cursor_managed_session_is_always_stamped_cursor() {
 
 fn explicit_cursor_request() -> OpenManagedSession {
     OpenManagedSession {
+        id: None,
         owner: model_owner::Owner::User(sender()),
         instructions: None,
         model: None,

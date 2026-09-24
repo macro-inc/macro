@@ -2,6 +2,13 @@ import {
   agentsRouteFromSegments,
   agentsRouteSegments,
 } from '@app/features/agents-view/core/route';
+import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
+import {
+  CALENDAR_ROUTE_ID,
+  CALENDAR_SEARCH_NAMESPACE,
+  calendarSearchCodec,
+} from '@app/features/calendar-view/calendar-url';
+import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import type { DriveLocation } from '@app/features/drive-view/core/types';
 import type { DriveDocumentRoute } from '@app/features/drive-view/primitives/drive-route';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
@@ -22,6 +29,7 @@ import {
 } from '@app/lib/split-router/routes';
 import { parseSearchState } from '@app/lib/split-router/search';
 import { isRecord } from '@app/lib/split-router/utils';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -39,6 +47,10 @@ export function decodeLegacyPair(
 
   if (type === 'settings') {
     return { type: 'component', id: 'settings' };
+  }
+
+  if (type === 'calendar' && id === CALENDAR_BLOCK_ID) {
+    return { type: 'component', id: CALENDAR_VIEW_ID };
   }
 
   if (type === 'component') {
@@ -196,6 +208,29 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  if (
+    (content.type === 'component' && content.id === CALENDAR_VIEW_ID) ||
+    (content.type === 'calendar' && content.id === CALENDAR_BLOCK_ID)
+  ) {
+    const rawEventId = isRecord(content.params)
+      ? (content.params as Record<string, unknown>).eventId
+      : undefined;
+    const eventId =
+      typeof rawEventId === 'string' && rawEventId.length > 0 ? rawEventId : '';
+    const search = calendarSearchCodec.serialize({ eventId });
+    return {
+      route: {
+        matches: [
+          {
+            id: CALENDAR_ROUTE_ID,
+            params: { period: getPreferredCalendarPeriodView() },
+          },
+        ],
+      },
+      ...(search ? { search: { [CALENDAR_SEARCH_NAMESPACE]: search } } : {}),
+    };
+  }
+
   if (content.type === 'component' && content.id === 'documents') {
     return { route: { matches: [{ id: 'drive', params: {} }] } };
   }

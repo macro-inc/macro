@@ -8,10 +8,6 @@ import {
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import type { PreviewPanelSelection } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import {
-  inboxPreviewRoute,
-  inboxSplitRoute,
-} from '@components/app/split-layout/split-router/app-routes';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
@@ -30,10 +26,12 @@ import {
   inboxPreviewSearchCodec,
   inboxPreviewSelection,
 } from './inbox-route';
+import { inboxTabSearch, inboxTabSearchCodec } from './inbox-tab-search';
 import {
   createInboxViewPersistence,
   normalizeInboxFacets,
 } from './persistence';
+import { inboxPreviewRoute, inboxSplitRoute } from './route';
 import type {
   InboxGroupBy,
   InboxTab,
@@ -68,6 +66,7 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
   const navigate = useNavigate();
   const routeParams = useRouteParams(inboxPreviewRoute);
   const [previewSearch] = createSearchParams(inboxPreviewSearch);
+  const [tabSearch] = createSearchParams(inboxTabSearch);
   const selectPreview = createPreviewSelectionGuard();
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'signal';
@@ -86,6 +85,21 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
     })
   );
 
+  createEffect(
+    on(
+      () => tabSearch.tab,
+      (tab) => {
+        if (state.tab === tab) return;
+        setState(
+          produce((draft) => {
+            draft.tab = tab;
+            draft.groupBy = defaultGroupBy(tab);
+          })
+        );
+      }
+    )
+  );
+
   const previewEntity = createMemo<PreviewPanelSelection | undefined>(() => {
     const blockType = routeParams.blockType;
     const previewId = routeParams.previewId;
@@ -102,11 +116,24 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
           [INBOX_PREVIEW_SEARCH_NAMESPACE]: inboxPreviewSearchCodec.serialize(
             preview.search
           ),
+          [inboxTabSearch.namespace]: inboxTabSearchCodec.serialize({
+            tab: state.tab,
+          }),
         },
       }
     );
   };
-  const closePreview = () => navigate({ route: inboxSplitRoute, params: {} });
+  const closePreview = () =>
+    navigate(
+      { route: inboxSplitRoute, params: {} },
+      {
+        search: {
+          [inboxTabSearch.namespace]: inboxTabSearchCodec.serialize({
+            tab: state.tab,
+          }),
+        },
+      }
+    );
   const openPreview = (entity: PreviewPanelSelection) => {
     if (!selectPreview.canSelect(entity)) return false;
     navigatePreview(entity);
@@ -117,20 +144,30 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
     on(previewEntity, (entity, previous) => {
       if (selectPreview(entity)) return;
       if (previous) navigatePreview(previous, true);
-      else navigate({ route: inboxSplitRoute, params: {} }, { replace: true });
+      else
+        navigate(
+          { route: inboxSplitRoute, params: {} },
+          {
+            replace: true,
+            search: {
+              [inboxTabSearch.namespace]: inboxTabSearchCodec.serialize({
+                tab: state.tab,
+              }),
+            },
+          }
+        );
     })
   );
 
   const setTab = (tab: InboxTab) => {
     if (state.tab === tab) return;
-    closePreview();
-
     setState(
       produce((draft) => {
         draft.tab = tab;
         draft.groupBy = defaultGroupBy(tab);
       })
     );
+    closePreview();
   };
 
   const setFacets = (facets: FacetSelection) => {

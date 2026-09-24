@@ -5,10 +5,14 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import { Entity, MaybeEntityRow } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { unreadFilterFn } from '@entity/utils/filter';
+import { getDocumentCommentNotification } from '@notifications/document-comment-notification';
+import type { UnifiedNotification } from '@notifications/types';
 import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
+import ChatTeardropIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-solid';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { cn, pressHandlers } from '@ui';
-import { Show } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
 import { HomeEntityIcon } from './HomeEntityIcon';
 
 type HomeListEntityProps = BaseListEntityProps & {
@@ -20,6 +24,10 @@ type HomeListEntityProps = BaseListEntityProps & {
 export function HomeListEntity(props: HomeListEntityProps) {
   const threadEntity = () =>
     props.entity.type === 'channel_thread' ? props.entity : undefined;
+  // A document announcing an unread comment reads like a thread row: the
+  // comment glyph, who did what, and where. Opening it lands on the comment.
+  const commentNotification = () =>
+    getDocumentCommentNotification(props.entity);
   const unread = () => unreadFilterFn(props.entity);
 
   return (
@@ -41,22 +49,25 @@ export function HomeListEntity(props: HomeListEntityProps) {
               })}
               data-home-item
             >
-              <Show
-                when={threadEntity()}
-                fallback={<HomeEntityIcon entity={props.entity} />}
-              >
-                <ViewSidebar.Icon>
-                  <ArrowBendUpLeftIcon class="size-4" />
-                </ViewSidebar.Icon>
-              </Show>
+              <Switch fallback={<HomeEntityIcon entity={props.entity} />}>
+                <Match when={threadEntity()}>
+                  <ViewSidebar.Icon>
+                    <ArrowBendUpLeftIcon class="size-4" />
+                  </ViewSidebar.Icon>
+                </Match>
+                <Match when={commentNotification()}>
+                  <ViewSidebar.Icon>
+                    <ChatTeardropIcon class="size-4" />
+                  </ViewSidebar.Icon>
+                </Match>
+              </Switch>
               <span
                 class={cn(
                   'block min-w-0 flex-1 truncate font-normal',
                   unread() && 'text-ink'
                 )}
               >
-                <Show
-                  when={threadEntity()}
+                <Switch
                   fallback={
                     <Show
                       when={props.channelName}
@@ -66,13 +77,23 @@ export function HomeListEntity(props: HomeListEntityProps) {
                     </Show>
                   }
                 >
-                  {(thread) => (
-                    <HomeThreadTitle
-                      entity={thread()}
-                      channelName={props.channelName}
-                    />
-                  )}
-                </Show>
+                  <Match when={threadEntity()}>
+                    {(thread) => (
+                      <HomeThreadTitle
+                        entity={thread()}
+                        channelName={props.channelName}
+                      />
+                    )}
+                  </Match>
+                  <Match when={commentNotification()}>
+                    {(notification) => (
+                      <HomeCommentTitle
+                        entity={props.entity}
+                        notification={notification()}
+                      />
+                    )}
+                  </Match>
+                </Switch>
               </span>
               <span
                 data-home-timestamp
@@ -149,6 +170,33 @@ function HomeThreadTitle(
       <span class="max-w-1/2 truncate">{senderLabel()}</span>
       <span class="shrink-0 whitespace-pre"> in </span>
       <span class="min-w-0 truncate">{location()}</span>
+    </span>
+  );
+}
+
+function HomeCommentTitle(props: {
+  entity: HomeListEntityProps['entity'];
+  notification: UnifiedNotification;
+}) {
+  const sender = () => {
+    const senderId = props.notification.sender_id;
+    return senderId
+      ? getDisplayName(tryMacroId(senderId), { emailFallback: 'local-part' }) ||
+          'Someone'
+      : 'Someone';
+  };
+  const action = () =>
+    match(props.notification.notification_metadata.tag)
+      .with('mentioned_in_document_comment', () => ' mentioned you on ')
+      .with('replied_to_document_comment_thread', () => ' replied on ')
+      .otherwise(() => ' commented on ');
+  return (
+    <span class="flex min-w-0 items-center">
+      <span class="max-w-1/2 shrink-0 truncate">{sender()}</span>
+      <span class="shrink-0 whitespace-pre">{action()}</span>
+      <span class="min-w-0 truncate">
+        <Entity.Title entity={props.entity} />
+      </span>
     </span>
   );
 }

@@ -219,6 +219,10 @@ pub struct OpenExternalAgentSession {
 /// paths remain runtime-owned. There is no originating mention to announce.
 #[derive(Debug, Clone)]
 pub struct OpenManagedSession {
+    /// The id the session is created under, when the caller minted one so it
+    /// could open a surface on the final id before this answers. `None`
+    /// mints one here.
+    pub id: Option<AgentSessionId>,
     /// Repository explicitly selected by the caller for a supported runtime.
     pub repo_url: Option<String>,
     /// Starting branch for the selected repository.

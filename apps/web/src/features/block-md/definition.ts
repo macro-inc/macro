@@ -1,16 +1,6 @@
-import {
-  defineBlock,
-  type ExtractLoadType,
-  LoadErrors,
-  loadResult,
-} from '@core/block';
+import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
-import { ThrownResultError } from '@core/util/result';
-import {
-  fetchDocumentLocation,
-  waitForDocumentSyncServiceReady,
-} from '@queries/storage/document-location';
-import { fetchDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
+import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
@@ -21,7 +11,6 @@ import {
   resumeDocumentSpan,
   startDocumentSpan,
 } from './observability';
-import type { Diff } from './types';
 
 export const definition = defineBlock({
   name: 'md',
@@ -54,86 +43,23 @@ export const definition = defineBlock({
         registerDocumentSpan(documentId, rootSpan);
       }
       return rootSpan.span('doc.load', async (loadSpan) => {
-        const loadBundle = () =>
-          loadSpan.span('doc.load.bundle', async (bundleSpan) => {
-            const result = await fetchDocumentLoadBundle(documentId);
-            if (result.isErr()) {
-              bundleSpan.error(new ThrownResultError(result.error));
-            }
-            return result;
-          });
-
-        // The location span covers the sync-service readiness wait too, so it
-        // reflects when the document actually became loadable.
-        const loadLocation = () =>
-          loadSpan.span('doc.load.location', async (locationSpan) => {
-            const result = await loadResult(
-              fetchDocumentLocation({ documentId })
-            );
-            if (result.isErr()) {
-              locationSpan.error(new ThrownResultError(result.error));
-              return result;
-            }
-            let location = result.value;
-            if (
-              location.type === 'presignedUrl' &&
-              location.content.state === 'pending'
-            ) {
-              location = await waitForDocumentSyncServiceReady({
-                documentId,
-              }).catch((error) => {
-                console.error(
-                  'Failed waiting for markdown sync-service location',
-                  error
-                );
-                return location;
-              });
-              locationSpan.setAttr('location.pending', true);
-              return ok(location);
-            }
-            return ok(location);
-          });
-
-        const [maybeBundle, maybeLocation] = await Promise.all([
-          loadBundle(),
-          loadLocation(),
-        ]);
-        if (maybeBundle.isErr()) {
-          loadSpan.error('load bundle failed');
-          rootSpan.error('load bundle failed');
+        const context = await loadSpan.span('doc.load.context', () =>
+          fetchSyncDocumentOpenContext(documentId)
+        );
+        if (context.isErr()) {
+          loadSpan.error('load context failed');
+          rootSpan.error('load context failed');
           endDocumentSpan(documentId);
-          return err(maybeBundle.error);
+          return err(context.error);
         }
-        const { token, documentMetadata, userAccessLevel } = maybeBundle.value;
-
-        if (maybeLocation.isErr()) {
-          loadSpan.error('load location failed');
-          rootSpan.error('load location failed');
-          endDocumentSpan(documentId);
-          return err(maybeLocation.error);
-        }
-
-        const location = maybeLocation.value;
-
-        // Markdown initialization and lifecycle persistence are backend-owned.
-        // If a markdown document still resolves to object storage here, opening
-        // it would require a backend repair/backfill path rather than a frontend
-        // sync-service mutation that leaves DB content metadata inconsistent.
-        if (location.type !== 'syncServiceContent') {
-          console.error(
-            'Markdown document is not available in sync-service',
-            documentId,
-            location.content
-          );
-          loadSpan.error('markdown document not in sync-service');
-          rootSpan.error('markdown document not in sync-service');
-          endDocumentSpan(documentId);
-          return LoadErrors.INVALID;
-        }
+        const { token, authorization, documentMetadata, userAccessLevel } =
+          context.value;
+        loadSpan.setAttr('doc.context.cached', context.value.fromCache);
 
         const { source: syncSource, doInitialSync } = createSyncServiceSource(
           source.id,
-          token
+          token,
+          authorization
         );
 
         // HACK: unfortunately, most blocks still rely on a dssFile for things like
@@ -170,8 +96,3 @@ export const definition = defineBlock({
 });
 
 export type MarkdownData = ExtractLoadType<(typeof definition)['load']>;
-
-export type MarkdownBlockSpec = {
-  setPatches: (args: { patches: Diff[] }) => Promise<void>;
-  setIsRewriting: () => Promise<void>;
-};

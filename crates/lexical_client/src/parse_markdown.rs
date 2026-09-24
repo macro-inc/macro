@@ -221,19 +221,39 @@ pub struct AgentContextMessage<'a> {
 
 /// The document location of the comment thread an agent prompt was posted in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentContextAnchor<'a> {
-    /// Lexical mark the comment is attached to.
-    pub mark_id: &'a str,
-    /// The marked text when the comment was posted, when it was captured.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub marked_text: Option<&'a str>,
-    /// The text the mark covers in the document now, when it was resolved.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub current_marked_text: Option<&'a str>,
-    /// The passage around the mark now, when it was resolved.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub surrounding_text: Option<&'a str>,
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum AgentContextAnchor<'a> {
+    /// A comment mark in a markdown document.
+    Markdown {
+        /// Lexical mark the comment is attached to.
+        mark_id: &'a str,
+        /// The marked text when the comment was posted, when it was captured.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        marked_text: Option<&'a str>,
+        /// The text the mark covers in the document now, when it was resolved.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        current_marked_text: Option<&'a str>,
+        /// The passage around the mark now, when it was resolved.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        surrounding_text: Option<&'a str>,
+    },
+    /// A highlight on a PDF.
+    PdfHighlight {
+        /// Highlight annotation the comment is attached to.
+        anchor_id: &'a str,
+        /// The text the highlight covers, when it carries any.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        marked_text: Option<&'a str>,
+    },
+    /// A point pinned on a PDF page, which covers no text.
+    PdfPin {
+        /// Pin annotation the comment is attached to.
+        anchor_id: &'a str,
+    },
 }
 
 #[derive(Debug, serde::Serialize)]

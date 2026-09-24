@@ -4,7 +4,10 @@ import { useMessageBotMentionUsers } from '@channel/use-channel-bot-mention-user
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useUserId } from '@core/context/user';
 import { useMessageLink } from '@queries/messages/document-messages';
-import { useSendMessageMutation } from '@queries/messages/mutations';
+import {
+  newMessageId,
+  useSendMessageMutation,
+} from '@queries/messages/mutations';
 import { useMessageTimelineQuery } from '@queries/messages/timeline';
 import type { MessageParent } from '@service-storage/messages';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -36,7 +39,7 @@ export function DocumentConversationComposer(props: {
         await send.mutateAsync({
           parent: props.parent,
           senderId,
-          optimisticId: crypto.randomUUID(),
+          optimisticId: newMessageId(),
           ...buildPostMessageSendPayload({ snapshot }),
         });
         input?.clear();

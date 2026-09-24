@@ -7,13 +7,13 @@ import { useRouteParams } from '@app/lib/split-router';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { taskDetailRoute } from '@components/app/split-layout/split-router/app-routes';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ShareDialogContext,
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { createSignal } from 'solid-js';
+import { taskDetailRoute } from '../route';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskDetailTarget } from '../types';
 import { TaskDetail } from './TaskDetail';
