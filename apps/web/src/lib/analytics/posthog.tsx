@@ -17,14 +17,23 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
   () => {
     const analytics = useAnalytics();
 
-    const [featureFlags, setFeatureFlags] = createSignal<string[]>([], {
-      equals: false,
-    });
+    // PostHog persists the last answer and serves it synchronously on reload.
+    // Rendering from it makes the first paint final instead of swapping
+    // flagged subtrees when the network answer lands.
+    const cachedVariants = analytics.posthog.featureFlags?.getFlagVariants();
+    const hasCachedFlags =
+      cachedVariants !== undefined && Object.keys(cachedVariants).length > 0;
+    const [featureFlags, setFeatureFlags] = createSignal<string[]>(
+      hasCachedFlags
+        ? Object.keys(cachedVariants).filter((key) => cachedVariants[key])
+        : [],
+      { equals: false }
+    );
     // Distinguishes "flags not fetched yet" from "no flags enabled": both
     // leave featureFlags empty, but destructive flag-off fallbacks (e.g.
     // RedirectSplit) must not fire before the answer arrives. Set even on
     // errorsLoading so a PostHog outage degrades to flags-off, not a hang.
-    const [flagsLoaded, setFlagsLoaded] = createSignal(false);
+    const [flagsLoaded, setFlagsLoaded] = createSignal(hasCachedFlags);
 
     const unsub = analytics.posthog.onFeatureFlags((flags, _, ctx) => {
       // Flags usually arrive after first paint and swap flagged subtrees,
