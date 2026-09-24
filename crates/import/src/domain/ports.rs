@@ -8,6 +8,9 @@ use uuid::Uuid;
 /// Errors surfaced by the import service and repository.
 #[derive(Debug, Error)]
 pub enum ImportError {
+    /// A billable import operation was denied or billing could not be checked.
+    #[error(transparent)]
+    Admission(#[from] ai_billing::domain::AiAdmissionError),
     /// Database failure.
     #[error("database error: {0}")]
     Db(rootcause::Report),

@@ -596,12 +596,16 @@ async fn main() -> anyhow::Result<()> {
         document_properties: document_properties_for_import,
         team_repository: ai_tools::build_team_repository(db.clone()),
     };
+    let ai_admission = Arc::new(ai_billing::domain::BillingAdmissionService::new(
+        ai_billing.as_ref().clone(),
+    ));
     let import_service = Arc::new(
         import::domain::service::ImportServiceImpl::new(
             import::outbound::pg_import_repo::PgImportRepo::new(db.clone()),
             mcp_selector.clone(),
             Arc::new(entity_creator),
             recorder.clone(),
+            ai_admission.clone(),
         )
         .with_notifier(import_notify),
     );
@@ -664,9 +668,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
-        admission: Arc::new(ai_billing::domain::BillingAdmissionService::new(
-            ai_billing.as_ref().clone(),
-        )),
+        admission: ai_admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };

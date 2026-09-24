@@ -32,6 +32,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use uuid::Uuid;
 
+mod admission;
 mod prompts;
 
 #[cfg(test)]
@@ -90,11 +91,11 @@ fn notion_import_max_turns(pages: usize) -> usize {
     (2 * pages + 6).min(40)
 }
 
-fn notion_import_failure_reason(outcome: &anyhow::Result<()>) -> String {
+fn notion_import_failure_reason(outcome: &Result<()>) -> String {
     outcome
         .as_ref()
         .err()
-        .map(ToString::to_string)
+        .map(admission::failure_reason)
         .unwrap_or_else(|| "the import job did not finish this item".to_string())
 }
 
@@ -305,6 +306,7 @@ pub struct ImportServiceImpl<R, S, C> {
     mcp_tools: Arc<S>,
     creator: Arc<C>,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
+    admission: Arc<dyn ai_billing::domain::AiAdmissionService>,
     notifier: Option<ImportNotify>,
 }
 
@@ -315,6 +317,7 @@ impl<R: Clone, S, C> Clone for ImportServiceImpl<R, S, C> {
             mcp_tools: self.mcp_tools.clone(),
             creator: self.creator.clone(),
             recorder: self.recorder.clone(),
+            admission: self.admission.clone(),
             notifier: self.notifier.clone(),
         }
     }
@@ -327,12 +330,14 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
         mcp_tools: Arc<S>,
         creator: Arc<C>,
         recorder: Arc<dyn ai_usage::UsageRecorder>,
+        admission: Arc<dyn ai_billing::domain::AiAdmissionService>,
     ) -> Self {
         Self {
             repo,
             mcp_tools,
             creator,
             recorder,
+            admission,
             notifier: None,
         }
     }
@@ -364,7 +369,7 @@ where
             let outcome =
                 tokio::time::timeout(GATHER_TIMEOUT, service.run_gather_session(&user, source))
                     .await
-                    .unwrap_or_else(|_| Err(anyhow::anyhow!("gather session timed out")));
+                    .unwrap_or_else(|_| Err(anyhow::anyhow!("gather session timed out").into()));
             let gather_succeeded = outcome.is_ok();
 
             let finished = match outcome {
@@ -378,7 +383,12 @@ where
                     tracing::warn!(source = source.as_ref(), error = ?e, "gather session failed");
                     service
                         .repo
-                        .finish_run(&user, source, RunStatus::Failed, Some(&e.to_string()))
+                        .finish_run(
+                            &user,
+                            source,
+                            RunStatus::Failed,
+                            Some(&admission::failure_reason(&e)),
+                        )
                         .await
                 }
             };
@@ -451,36 +461,32 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         let mcp_tools = self.connector_tools(user, source).await?;
 
-        // Slack discovery is a listing problem, not a language problem:
-        // enumerate channels through the connector directly and stage the
-        // strongest. The agent session only runs as a fallback, when the
-        // connector's tool surface changed under us.
-        if source == ImportSource::Slack {
-            match self.gather_slack_direct(user, &mcp_tools).await {
-                Ok(_) => return Ok(()),
+        // Slack discovery is deterministic unless the connector's tool surface
+        // changed. Other sources require AI discovery.
+        let direct = if source == ImportSource::Slack {
+            Some(async { self.gather_slack_direct(user, &mcp_tools).await.map(|_| ()) })
+        } else {
+            None
+        };
+        self.direct_or_ai(user, direct, async {
+            // Staging is idempotent. Both models belong to one admitted gather,
+            // not separate operations that recheck allowance mid-flight.
+            match self
+                .gather_agent_session(user, source, GATHER_MODEL, mcp_tools.clone())
+                .await
+            {
+                Ok(()) => Ok(()),
                 Err(e) => {
-                    tracing::warn!(error = ?e, "direct slack gather failed; trying the agent");
+                    tracing::warn!(model = GATHER_MODEL, error = ?e, "gather session failed; retrying on the fallback model");
+                    self.gather_agent_session(user, source, GATHER_FALLBACK_MODEL, mcp_tools.clone())
+                        .await
                 }
             }
-        }
-
-        // Staging is idempotent (the ledger dedups already-staged rows), so
-        // rerunning the whole session on the fallback model is safe even
-        // when the primary died mid-way through staging.
-        match self
-            .gather_agent_session(user, source, GATHER_MODEL, mcp_tools.clone())
-            .await
-        {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                tracing::warn!(model = GATHER_MODEL, error = ?e, "gather session failed; retrying on the fallback model");
-                self.gather_agent_session(user, source, GATHER_FALLBACK_MODEL, mcp_tools)
-                    .await
-            }
-        }
+        })
+        .await
     }
 
     /// One agent gather session on a specific model.
@@ -867,26 +873,17 @@ where
         user: &MacroUserIdStr<'static>,
         mcp_tools: Arc<UserMcpTools>,
         row: &ImportEntity,
-    ) -> anyhow::Result<()> {
-        let outcome = tokio::time::timeout(NOTION_PAGE_IMPORT_TIMEOUT, async {
-            match self
-                .import_notion_page_direct(user, &mcp_tools, row)
-                .await
-            {
-                Ok(()) => Ok(()),
-                Err(direct_error) => {
-                    tracing::info!(id = %row.id, error = ?direct_error, "direct notion import failed; trying the agent");
-                    self.run_notion_import_session(
-                        user,
-                        std::slice::from_ref(row),
-                        mcp_tools,
-                    )
-                    .await
-                }
-            }
-        })
+    ) -> Result<()> {
+        let outcome = tokio::time::timeout(
+            NOTION_PAGE_IMPORT_TIMEOUT,
+            self.direct_or_ai(
+                user,
+                Some(self.import_notion_page_direct(user, &mcp_tools, row)),
+                self.run_notion_import_session(user, std::slice::from_ref(row), mcp_tools.clone()),
+            ),
+        )
         .await
-        .unwrap_or_else(|_| Err(anyhow::anyhow!("notion import timed out")));
+        .unwrap_or_else(|_| Err(anyhow::anyhow!("notion import timed out").into()));
 
         let _ = outcome.as_ref().inspect_err(|e| {
             tracing::warn!(id = %row.id, error = ?e, "notion page import failed");
@@ -1399,6 +1396,12 @@ where
             .process_notion_page(user, mcp_tools, &importing_row)
             .await;
         self.notify(user).await;
+        // Preserve admission as a typed failure rather than wrapping it in the
+        // generic "Notion page import failed" message below.
+        let pipeline_result = match pipeline_result {
+            Err(error @ ImportError::Admission(_)) => return Err(error),
+            result => result,
+        };
 
         let row = self
             .repo
