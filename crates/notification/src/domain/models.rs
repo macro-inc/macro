@@ -2,6 +2,7 @@
 
 pub mod android;
 pub mod apple;
+pub mod delivery_outbox;
 pub mod device;
 pub mod email_notification_digest;
 pub mod entity_query;

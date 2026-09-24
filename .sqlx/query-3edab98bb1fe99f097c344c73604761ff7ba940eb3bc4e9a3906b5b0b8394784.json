@@ -1,0 +1,93 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                un.user_id,\n                un.sent,\n                un.state AS \"state!: NotificationState\",\n                un.created_at::timestamptz AS \"created_at!\",\n                un.seen_at::timestamptz AS viewed_at,\n                un.deleted_at::timestamptz AS deleted_at,\n                n.notification_event_type,\n                n.event_item_id,\n                n.event_item_type,\n                n.metadata AS \"metadata!: serde_json::Value\",\n                n.sender_id\n            FROM user_notification un\n            JOIN notification n ON n.id = un.notification_id\n            WHERE un.notification_id = $1\n            ORDER BY un.user_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "state!: NotificationState",
+        "type_info": {
+          "Custom": {
+            "name": "notification_state",
+            "kind": {
+              "Enum": [
+                "unseen",
+                "seen",
+                "done"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "viewed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "notification_event_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "event_item_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "event_item_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "metadata!: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "sender_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3edab98bb1fe99f097c344c73604761ff7ba940eb3bc4e9a3906b5b0b8394784"
+}

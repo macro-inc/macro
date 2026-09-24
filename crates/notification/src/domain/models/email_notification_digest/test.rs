@@ -170,6 +170,15 @@ impl DigestBatcher for MockDigestBatcher {
     ) -> impl Future<Output = Result<ports::ClaimResult<ports::DigestBatch>, Report>> + Send {
         async { Ok(ports::ClaimResult::Empty) }
     }
+
+    async fn remove_notification_receipt(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _notification_id: Uuid,
+        _delivery_generation: Uuid,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 /// Mock last online checker with configurable behavior.
@@ -911,7 +920,7 @@ async fn test_ingest_blocked_notification_returns_dont_send() {
     );
     let notif = create_test_notification_row(BlockedNotification);
 
-    let result = driver.ingest(notif).await.unwrap();
+    let result = driver.ingest(notif, Uuid::now_v7()).await.unwrap();
 
     assert!(
         matches!(result, StateMachineDecisionA::DontSend(_)),
@@ -935,7 +944,7 @@ async fn test_ingest_user_not_exists_returns_dont_send() {
         message: "hello".to_string(),
     });
 
-    let result = driver.ingest(notif).await.unwrap();
+    let result = driver.ingest(notif, Uuid::now_v7()).await.unwrap();
 
     assert!(
         matches!(result, StateMachineDecisionA::DontSend(_)),
@@ -959,7 +968,7 @@ async fn test_ingest_user_exists_push_enabled_returns_indeterminate() {
         message: "hello".to_string(),
     });
 
-    let result = driver.ingest(notif).await.unwrap();
+    let result = driver.ingest(notif, Uuid::now_v7()).await.unwrap();
 
     assert!(
         matches!(result, StateMachineDecisionA::Indeterminate(_)),
@@ -984,7 +993,7 @@ async fn test_ingest_user_exists_push_disabled_recently_online_returns_dont_send
         message: "hello".to_string(),
     });
 
-    let result = driver.ingest(notif).await.unwrap();
+    let result = driver.ingest(notif, Uuid::now_v7()).await.unwrap();
 
     assert!(
         matches!(result, StateMachineDecisionA::DontSend(_)),
@@ -1009,7 +1018,7 @@ async fn test_ingest_user_exists_push_disabled_offline_returns_batch_was_queued(
         message: "hello".to_string(),
     });
 
-    let result = driver.ingest(notif).await.unwrap();
+    let result = driver.ingest(notif, Uuid::now_v7()).await.unwrap();
 
     assert!(
         matches!(result, StateMachineDecisionA::BatchWasQueued(_)),

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE notification_delivery_outbox outbox\n                SET completed_at = now(), updated_at = now()\n                WHERE outbox.notification_id = $1\n                  AND outbox.completed_at IS NULL\n                  AND NOT EXISTS (\n                      SELECT 1\n                      FROM notification_delivery_outbox_intent intent\n                      WHERE intent.notification_id = outbox.notification_id\n                        AND intent.published_at IS NULL\n                  )\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a612d643daaeb8435eda0dab85a84ad6610a79ab496714cd1aa548ffe0fd0fe7"
+}

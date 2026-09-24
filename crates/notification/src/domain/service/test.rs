@@ -1,6 +1,10 @@
 //! Unit tests for the notification services.
 
 use crate::domain::models::apple::APNSPushNotification;
+use crate::domain::models::delivery_outbox::{
+    ClaimedDeliveryIntent, ClaimedDeliveryRequest, ClaimedDigestReceiptCleanup, DeliveryClaimToken,
+    DeliveryLease,
+};
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::email_notification_digest::ports::DigestBatch;
@@ -16,17 +20,20 @@ use crate::domain::models::request::{
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
     NotificationIdAndCollapseKey, RateLimitConfig, RateLimitExceeded, RateLimitKey,
-    RateLimitResult, SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
+    RateLimitResult, SendNotificationRequest, SendNotificationRequestBuilder, TaggedContent,
+    UserNotificationRow,
 };
 use crate::domain::ports::{
-    EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
-    RealtimeSender, SnsEndpointManager,
+    EmailSender, NotificationDeliveryRepository, NotificationEgress, NotificationQueue,
+    NotificationRepository, NotificationSender, RealtimeSender, SnsEndpointManager,
 };
 use crate::domain::service::{
     NotificationEgressService, NotificationIngress, NotificationIngressService, NotificationReader,
     NotificationReaderService, PlatformArnConfig,
 };
+use crate::outbound::repository::DbNotificationRepository;
 use chrono::Utc;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -36,6 +43,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
@@ -101,6 +109,23 @@ fn test_user_id(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email(email).unwrap()
 }
 
+fn conn_request(
+    notification_id: Uuid,
+    recipient: MacroUserIdStr<'static>,
+) -> SendNotificationRequest<'static, TestNotification, ()> {
+    SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_string("delivery-test".to_string()),
+        secondary_notification_entity: None,
+        notification: TestNotification {
+            message: "durable delivery".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([recipient]),
+    }
+    .into_request_with_id(notification_id)
+    .with_conn_gateway()
+}
+
 /// Mock repository that tracks calls.
 struct MockRepository {
     muted_users: HashSet<MacroUserIdStr<'static>>,
@@ -117,6 +142,33 @@ struct MockRepository {
     entity_lookup_calls: Mutex<Vec<(String, Vec<(EntityType, String)>)>>,
     mark_seen_calls: Mutex<Vec<(String, Vec<Uuid>)>>,
     mark_done_calls: Mutex<Vec<(String, Vec<Uuid>, bool)>>,
+    delivery_requests: Mutex<HashMap<Uuid, MockDeliveryRequest>>,
+    delivery_intents: Mutex<HashMap<(Uuid, i32), MockDeliveryIntent>>,
+    prepare_failures_remaining: AtomicUsize,
+    intent_completion_failures_remaining: AtomicUsize,
+    intent_completion_errors_remaining: AtomicUsize,
+    intent_release_failures_remaining: AtomicUsize,
+}
+
+#[derive(Clone)]
+struct MockDeliveryRequest {
+    generation: Uuid,
+    request: serde_json::Value,
+    notifications: Vec<UserNotificationRow<serde_json::Value>>,
+    prepared: bool,
+    completed: bool,
+    claim_token: Option<DeliveryClaimToken>,
+    attempt_count: i32,
+    created_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Clone)]
+struct MockDeliveryIntent {
+    payload: serde_json::Value,
+    published: bool,
+    claim_token: Option<DeliveryClaimToken>,
+    attempt_count: i32,
+    created_at: chrono::DateTime<Utc>,
 }
 
 impl MockRepository {
@@ -136,6 +188,12 @@ impl MockRepository {
             entity_lookup_calls: Mutex::new(Vec::new()),
             mark_seen_calls: Mutex::new(Vec::new()),
             mark_done_calls: Mutex::new(Vec::new()),
+            delivery_requests: Mutex::new(HashMap::new()),
+            delivery_intents: Mutex::new(HashMap::new()),
+            prepare_failures_remaining: AtomicUsize::new(0),
+            intent_completion_failures_remaining: AtomicUsize::new(0),
+            intent_completion_errors_remaining: AtomicUsize::new(0),
+            intent_release_failures_remaining: AtomicUsize::new(0),
         }
     }
 
@@ -203,6 +261,18 @@ impl MockRepository {
             .push(endpoint);
         self
     }
+
+    fn with_prepare_failures(self, count: usize) -> Self {
+        self.prepare_failures_remaining
+            .store(count, Ordering::Relaxed);
+        self
+    }
+
+    fn with_intent_completion_failures(self, count: usize) -> Self {
+        self.intent_completion_failures_remaining
+            .store(count, Ordering::Relaxed);
+        self
+    }
 }
 
 struct MockStateMachine;
@@ -211,9 +281,130 @@ impl BulkDigestStateMachine for MockStateMachine {
     async fn ingest<T: Serialize + Send + Sync + 'static>(
         &self,
         _notif: UserNotificationRow<Arc<T>>,
+        _delivery_generation: Uuid,
     ) -> Result<crate::domain::models::email_notification_digest::StateMachineDecisionA, Report>
     {
-        Err(report!("not implemented"))
+        Ok(
+            crate::domain::models::email_notification_digest::StateMachineDecisionA::DontSend(
+                crate::domain::models::email_notification_digest::DontSend::new(),
+            ),
+        )
+    }
+
+    async fn cleanup_digest_receipt(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _notification_id: Uuid,
+        _delivery_generation: Uuid,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+}
+
+struct ReplaySafeDigestStateMachine {
+    ingest_attempts: AtomicUsize,
+    delivery_generations: Mutex<Vec<Uuid>>,
+}
+
+impl ReplaySafeDigestStateMachine {
+    fn new() -> Self {
+        Self {
+            ingest_attempts: AtomicUsize::new(0),
+            delivery_generations: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl BulkDigestStateMachine for Arc<ReplaySafeDigestStateMachine> {
+    async fn ingest<T: Serialize + Send + Sync + 'static>(
+        &self,
+        _notification: UserNotificationRow<Arc<T>>,
+        delivery_generation: Uuid,
+    ) -> Result<crate::domain::models::email_notification_digest::StateMachineDecisionA, Report>
+    {
+        self.ingest_attempts.fetch_add(1, Ordering::Relaxed);
+        self.delivery_generations
+            .lock()
+            .unwrap()
+            .push(delivery_generation);
+        Ok(
+            crate::domain::models::email_notification_digest::StateMachineDecisionA::BatchWasQueued(
+                crate::domain::models::email_notification_digest::BatchSend::from_inner(()),
+            ),
+        )
+    }
+
+    async fn cleanup_digest_receipt(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _notification_id: Uuid,
+        _delivery_generation: Uuid,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+}
+
+struct FailingStateMachine;
+
+impl BulkDigestStateMachine for FailingStateMachine {
+    async fn ingest<T: Serialize + Send + Sync + 'static>(
+        &self,
+        _notification: UserNotificationRow<Arc<T>>,
+        _delivery_generation: Uuid,
+    ) -> Result<crate::domain::models::email_notification_digest::StateMachineDecisionA, Report>
+    {
+        Err(report!("injected transient state-machine failure"))
+    }
+
+    async fn cleanup_digest_receipt(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _notification_id: Uuid,
+        _delivery_generation: Uuid,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "redis-tests")]
+struct RedisCleanupStateMachine {
+    batcher: crate::outbound::digest_batcher::RedisDigestBatcher,
+    failures_remaining: AtomicUsize,
+}
+
+#[cfg(feature = "redis-tests")]
+impl BulkDigestStateMachine for RedisCleanupStateMachine {
+    async fn ingest<T: Serialize + Send + Sync + 'static>(
+        &self,
+        _notification: UserNotificationRow<Arc<T>>,
+        _delivery_generation: Uuid,
+    ) -> Result<crate::domain::models::email_notification_digest::StateMachineDecisionA, Report>
+    {
+        Ok(
+            crate::domain::models::email_notification_digest::StateMachineDecisionA::DontSend(
+                crate::domain::models::email_notification_digest::DontSend::new(),
+            ),
+        )
+    }
+
+    async fn cleanup_digest_receipt(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_id: Uuid,
+        delivery_generation: Uuid,
+    ) -> Result<(), Report> {
+        if self
+            .failures_remaining
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(report!("injected Redis cleanup failure"));
+        }
+        self.batcher
+            .remove_notification_receipt(user_id, notification_id, delivery_generation)
+            .await
     }
 }
 
@@ -525,6 +716,341 @@ impl NotificationRepository for MockRepository {
         &self,
         _user_id: MacroUserIdStr<'_>,
         _notification_event_type: &str,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+}
+
+impl NotificationDeliveryRepository for MockRepository {
+    async fn restore_existing_delivery_request<
+        'a,
+        T: Serialize + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
+        &self,
+        request: &SendNotificationRequest<'a, T, U>,
+    ) -> Result<Option<HashSet<MacroUserIdStr<'static>>>, Report> {
+        Ok(self
+            .delivery_requests
+            .lock()
+            .unwrap()
+            .get(&request.uuid_to_write)
+            .map(|existing| {
+                existing
+                    .notifications
+                    .iter()
+                    .map(|notification| notification.owner_id.clone())
+                    .collect()
+            }))
+    }
+
+    async fn persist_notification_with_delivery_request<
+        'a,
+        T: Serialize + DeserializeOwned + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
+        &self,
+        request: SendNotificationRequest<'a, T, U>,
+        _service_sender: &str,
+    ) -> Result<Vec<UserNotificationRow<Arc<T>>>, Report> {
+        let notification_id = request.uuid_to_write;
+        let mut requests = self.delivery_requests.lock().unwrap();
+        if let Some(existing) = requests.get(&notification_id) {
+            return existing
+                .notifications
+                .iter()
+                .cloned()
+                .map(|row| row.try_map(|value| serde_json::from_value(value).map(Arc::new)))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(Report::from);
+        }
+
+        self.created_notifications
+            .lock()
+            .unwrap()
+            .push(notification_id);
+        let collapse_key = request
+            .build_apns
+            .as_ref()
+            .map(|output| output.attr.collapse_key.clone());
+        self.stored_collapse_keys
+            .lock()
+            .unwrap()
+            .push((notification_id, collapse_key));
+
+        let now = Utc::now();
+        let entity = request.req.notification_entity.clone().into_owned();
+        let sender_id = request
+            .req
+            .sender_id
+            .as_ref()
+            .map(|id| id.clone().into_owned());
+        let notification_event_type = request.req.notification.tag.as_ref().to_string();
+        let metadata = serde_json::to_value(&request.req.notification.content)?;
+        let raw_rows: Vec<_> = request
+            .req
+            .recipient_ids
+            .iter()
+            .map(|recipient| UserNotificationRow {
+                owner_id: recipient.clone().into_owned(),
+                notification_id,
+                notification_event_type: notification_event_type.clone(),
+                entity: entity.clone(),
+                sent: false,
+                state: crate::domain::models::NotificationState::Unseen,
+                created_at: now,
+                viewed_at: None,
+                updated_at: now,
+                deleted_at: None,
+                notification_metadata: metadata.clone(),
+                sender_id: sender_id.clone(),
+            })
+            .collect();
+        let delivery_request = serde_json::to_value(&request)?;
+        requests.insert(
+            notification_id,
+            MockDeliveryRequest {
+                generation: Uuid::now_v7(),
+                request: delivery_request,
+                notifications: raw_rows.clone(),
+                prepared: false,
+                completed: false,
+                claim_token: None,
+                attempt_count: 0,
+                created_at: now,
+            },
+        );
+
+        raw_rows
+            .into_iter()
+            .map(|row| row.try_map(|value| serde_json::from_value(value).map(Arc::new)))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Report::from)
+    }
+
+    async fn claim_delivery_request(
+        &self,
+        notification_id: Option<Uuid>,
+        claim_token: DeliveryClaimToken,
+        _lease: DeliveryLease,
+    ) -> Result<Option<ClaimedDeliveryRequest>, Report> {
+        let mut requests = self.delivery_requests.lock().unwrap();
+        let entry = requests.iter_mut().find(|(id, request)| {
+            notification_id.is_none_or(|notification_id| **id == notification_id)
+                && !request.prepared
+                && !request.completed
+                && request.claim_token.is_none()
+        });
+        let Some((notification_id, request)) = entry else {
+            return Ok(None);
+        };
+        request.claim_token = Some(claim_token);
+        request.attempt_count += 1;
+        Ok(Some(ClaimedDeliveryRequest {
+            notification_id: *notification_id,
+            generation: request.generation,
+            claim_token,
+            request: request.request.clone(),
+            notifications: request.notifications.clone(),
+            attempt_count: request.attempt_count,
+            pending_since: request.created_at,
+        }))
+    }
+
+    async fn prepare_delivery_intents(
+        &self,
+        notification_id: Uuid,
+        claim_token: DeliveryClaimToken,
+        payloads: &[serde_json::Value],
+        _digest_receipt_cleanup_after: chrono::DateTime<Utc>,
+    ) -> Result<bool, Report> {
+        if self
+            .prepare_failures_remaining
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(report!(
+                "injected failure after state-machine ingest before intent persistence"
+            ));
+        }
+
+        let mut requests = self.delivery_requests.lock().unwrap();
+        let Some(request) = requests.get_mut(&notification_id) else {
+            return Ok(false);
+        };
+        if request.claim_token != Some(claim_token) || request.prepared {
+            return Ok(false);
+        }
+        request.prepared = true;
+        request.completed = payloads.is_empty();
+        request.claim_token = None;
+        let now = Utc::now();
+        let mut intents = self.delivery_intents.lock().unwrap();
+        for (position, payload) in payloads.iter().enumerate() {
+            intents
+                .entry((notification_id, position as i32))
+                .or_insert(MockDeliveryIntent {
+                    payload: payload.clone(),
+                    published: false,
+                    claim_token: None,
+                    attempt_count: 0,
+                    created_at: now,
+                });
+        }
+        Ok(true)
+    }
+
+    async fn release_delivery_request(
+        &self,
+        notification_id: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<(), Report> {
+        if let Some(request) = self
+            .delivery_requests
+            .lock()
+            .unwrap()
+            .get_mut(&notification_id)
+            && request.claim_token == Some(claim_token)
+        {
+            request.claim_token = None;
+        }
+        Ok(())
+    }
+
+    async fn claim_delivery_intent(
+        &self,
+        notification_id: Option<Uuid>,
+        claim_token: DeliveryClaimToken,
+        _lease: DeliveryLease,
+    ) -> Result<Option<ClaimedDeliveryIntent>, Report> {
+        let mut intents = self.delivery_intents.lock().unwrap();
+        let entry = intents.iter_mut().find(|((id, _), intent)| {
+            notification_id.is_none_or(|notification_id| *id == notification_id)
+                && !intent.published
+                && intent.claim_token.is_none()
+        });
+        let Some(((notification_id, position), intent)) = entry else {
+            return Ok(None);
+        };
+        intent.claim_token = Some(claim_token);
+        intent.attempt_count += 1;
+        Ok(Some(ClaimedDeliveryIntent {
+            notification_id: *notification_id,
+            position: *position,
+            claim_token,
+            payload: intent.payload.clone(),
+            attempt_count: intent.attempt_count,
+            pending_since: intent.created_at,
+        }))
+    }
+
+    async fn complete_delivery_intent(
+        &self,
+        notification_id: Uuid,
+        position: i32,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<bool, Report> {
+        if self
+            .intent_completion_errors_remaining
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(report!("injected delivery intent completion error"));
+        }
+
+        if self
+            .intent_completion_failures_remaining
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Ok(false);
+        }
+
+        let mut intents = self.delivery_intents.lock().unwrap();
+        let Some(intent) = intents.get_mut(&(notification_id, position)) else {
+            return Ok(false);
+        };
+        if intent.claim_token != Some(claim_token) || intent.published {
+            return Ok(false);
+        }
+        intent.published = true;
+        intent.claim_token = None;
+        let complete = intents
+            .iter()
+            .filter(|((id, _), _)| *id == notification_id)
+            .all(|(_, intent)| intent.published);
+        drop(intents);
+        if complete
+            && let Some(request) = self
+                .delivery_requests
+                .lock()
+                .unwrap()
+                .get_mut(&notification_id)
+        {
+            request.completed = true;
+        }
+        Ok(true)
+    }
+
+    async fn release_delivery_intent(
+        &self,
+        notification_id: Uuid,
+        position: i32,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<(), Report> {
+        if self
+            .intent_release_failures_remaining
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(report!("injected delivery intent release failure"));
+        }
+
+        if let Some(intent) = self
+            .delivery_intents
+            .lock()
+            .unwrap()
+            .get_mut(&(notification_id, position))
+            && intent.claim_token == Some(claim_token)
+        {
+            intent.claim_token = None;
+        }
+        Ok(())
+    }
+
+    async fn claim_digest_receipt_cleanup(
+        &self,
+        _claim_token: DeliveryClaimToken,
+        _lease: DeliveryLease,
+        _orphan_cleanup_after: chrono::DateTime<Utc>,
+    ) -> Result<Option<ClaimedDigestReceiptCleanup>, Report> {
+        Ok(None)
+    }
+
+    async fn complete_digest_receipt_cleanup(
+        &self,
+        _notification_id: Uuid,
+        _user_id: MacroUserIdStr<'_>,
+        _generation: Uuid,
+        _claim_token: DeliveryClaimToken,
+    ) -> Result<bool, Report> {
+        Ok(false)
+    }
+
+    async fn release_digest_receipt_cleanup(
+        &self,
+        _notification_id: Uuid,
+        _user_id: MacroUserIdStr<'_>,
+        _generation: Uuid,
+        _claim_token: DeliveryClaimToken,
     ) -> Result<(), Report> {
         Ok(())
     }
@@ -843,6 +1369,54 @@ impl NotificationQueue for std::sync::Arc<MockQueue> {
     }
 }
 
+/// Queue fault injector whose publish-call numbers can fail once.
+struct FaultQueue {
+    attempts: AtomicUsize,
+    fail_attempts: Mutex<HashSet<usize>>,
+    published: Mutex<Vec<serde_json::Value>>,
+}
+
+impl FaultQueue {
+    fn failing_on(attempts: impl IntoIterator<Item = usize>) -> Self {
+        Self {
+            attempts: AtomicUsize::new(0),
+            fail_attempts: Mutex::new(attempts.into_iter().collect()),
+            published: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn published(&self) -> Vec<serde_json::Value> {
+        self.published.lock().unwrap().clone()
+    }
+}
+
+impl NotificationQueue for Arc<FaultQueue> {
+    async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
+        &self,
+        messages: Vec<QueueMessage<'a, T, U>>,
+    ) -> Result<(), Report> {
+        let attempt = self.attempts.fetch_add(1, Ordering::Relaxed) + 1;
+        if self.fail_attempts.lock().unwrap().remove(&attempt) {
+            return Err(report!("injected queue publication failure"));
+        }
+
+        let values = messages
+            .into_iter()
+            .map(serde_json::to_value)
+            .collect::<Result<Vec<_>, _>>()?;
+        self.published.lock().unwrap().extend(values);
+        Ok(())
+    }
+
+    async fn receive_messages(&self) -> Result<Vec<RawQueueMessage>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn delete_message(&self, _receipt_handle: &str) -> Result<(), Report> {
+        Ok(())
+    }
+}
+
 /// No-op mock for SNS endpoint management used in reader service tests.
 struct MockSnsEndpoint;
 
@@ -1112,6 +1686,481 @@ async fn test_queue_message_multiple_channels() {
     assert!(has_conn_gateway, "Should have ConnGateway message");
     assert!(has_ios, "Should have iOS message");
     assert!(has_email, "Should have Email message");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_delivery_outbox_recovers_publish_failure_and_two_replays(pool: sqlx::PgPool) {
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user_id("outbox-replay@example.com");
+    let queue = Arc::new(FaultQueue::failing_on([1]));
+    let service = NotificationIngressService::new(
+        DbNotificationRepository::new(pool.clone()),
+        queue.clone(),
+        MockStateMachine,
+    );
+
+    assert!(
+        service
+            .send_notification(conn_request(notification_id, recipient.clone()))
+            .await
+            .is_err(),
+        "the injected queue failure must reach the ingress caller"
+    );
+
+    let persisted: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notification_delivery_outbox WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        persisted, 1,
+        "delivery remains durable after publish failure"
+    );
+
+    sqlx::query(
+        "UPDATE notification_delivery_outbox_intent SET next_attempt_at = now() WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let second = service
+        .send_notification(conn_request(notification_id, recipient.clone()))
+        .await
+        .unwrap()
+        .unwrap();
+    sqlx::query("DELETE FROM notification_digest_receipt_cleanup WHERE notification_id = $1")
+        .bind(notification_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let third = service
+        .send_notification(conn_request(notification_id, recipient.clone()))
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        second.notified_recipients,
+        HashSet::from([recipient.clone()])
+    );
+    assert_eq!(third.notified_recipients, HashSet::from([recipient]));
+    assert_eq!(
+        queue.published().len(),
+        1,
+        "completed intent is not replayed"
+    );
+    let cleanup_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notification_digest_receipt_cleanup WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        cleanup_count, 0,
+        "completed duplicate must not recreate a cleanup obligation"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_delivery_outbox_resumes_after_partial_channel_publish(pool: sqlx::PgPool) {
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user_id("outbox-partial@example.com");
+    let queue = Arc::new(FaultQueue::failing_on([2]));
+    let service = NotificationIngressService::new(
+        DbNotificationRepository::new(pool.clone()),
+        queue.clone(),
+        MockStateMachine,
+    );
+    let request = || {
+        SendNotificationRequestBuilder {
+            notification_entity: EntityType::Document
+                .with_entity_string("partial-delivery".to_string()),
+            secondary_notification_entity: None,
+            notification: TestNotification {
+                message: "partial".to_string(),
+            },
+            sender_id: None,
+            recipient_ids: HashSet::from([recipient.clone()]),
+        }
+        .into_request_with_id(notification_id)
+        .with_conn_gateway()
+        .with_email()
+    };
+
+    assert!(service.send_notification(request()).await.is_err());
+    assert_eq!(queue.published().len(), 1, "first channel was handed off");
+
+    sqlx::query(
+        "UPDATE notification_delivery_outbox_intent SET next_attempt_at = now() WHERE notification_id = $1 AND published_at IS NULL",
+    )
+    .bind(notification_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    service.send_notification(request()).await.unwrap();
+
+    let published = queue.published();
+    assert_eq!(published.len(), 2);
+    assert_eq!(
+        published
+            .iter()
+            .filter(|message| message["content"]["ConnGateway"].is_object())
+            .count(),
+        1
+    );
+    assert_eq!(
+        published
+            .iter()
+            .filter(|message| message["content"]["Email"].is_object())
+            .count(),
+        1
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_concurrent_duplicate_ingress_publishes_one_completed_intent(pool: sqlx::PgPool) {
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user_id("outbox-concurrent@example.com");
+    let queue = Arc::new(MockQueue::new());
+    let first = NotificationIngressService::new(
+        DbNotificationRepository::new(pool.clone()),
+        queue.clone(),
+        MockStateMachine,
+    );
+    let second = NotificationIngressService::new(
+        DbNotificationRepository::new(pool.clone()),
+        queue.clone(),
+        MockStateMachine,
+    );
+
+    let (first_result, second_result) = tokio::join!(
+        first.send_notification(conn_request(notification_id, recipient.clone())),
+        second.send_notification(conn_request(notification_id, recipient)),
+    );
+    first_result.unwrap();
+    second_result.unwrap();
+
+    assert_eq!(queue.get_published().len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_legacy_duplicate_restores_original_recipient_before_mute_filter(pool: sqlx::PgPool) {
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user_id("legacy-muted@example.com");
+    let repository = DbNotificationRepository::new(pool.clone());
+    repository
+        .create_notification(
+            SendNotificationRequestBuilder {
+                notification_entity: EntityType::Document.with_entity_str("legacy"),
+                secondary_notification_entity: None,
+                notification: TaggedContent::new(TestNotification {
+                    message: "legacy".to_string(),
+                }),
+                sender_id: None,
+                recipient_ids: HashSet::from([recipient.clone()]),
+            },
+            notification_id,
+            "test",
+            None,
+        )
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO user_mute_notification (user_id) VALUES ($1)")
+        .bind(recipient.as_ref())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repository, queue.clone(), MockStateMachine);
+    let result = service
+        .send_notification(conn_request(notification_id, recipient.clone()))
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(result.notified_recipients, HashSet::from([recipient]));
+    assert_eq!(queue.get_published().len(), 1);
+}
+
+#[tokio::test]
+async fn test_digest_replay_after_ingest_before_intent_persistence_reuses_generation() {
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user_id("digest-replay@example.com");
+    let state_machine = Arc::new(ReplaySafeDigestStateMachine::new());
+    let service = NotificationIngressService::new(
+        MockRepository::new().with_prepare_failures(1),
+        MockQueue::new(),
+        state_machine.clone(),
+    );
+
+    assert!(
+        service
+            .send_notification(conn_request(notification_id, recipient.clone()))
+            .await
+            .is_err()
+    );
+    service
+        .send_notification(conn_request(notification_id, recipient))
+        .await
+        .unwrap();
+
+    assert_eq!(state_machine.ingest_attempts.load(Ordering::Relaxed), 2);
+    let generations = state_machine.delivery_generations.lock().unwrap();
+    assert_eq!(generations.len(), 2);
+    assert_eq!(generations[0], generations[1]);
+}
+
+#[tokio::test]
+async fn test_unconfirmed_intent_completion_stops_inline_republication() {
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user_id("completion-expired@example.com");
+    let repository = Arc::new(MockRepository::new().with_intent_completion_failures(1));
+    let queue = Arc::new(MockQueue::new());
+    let service =
+        NotificationIngressService::new(repository.clone(), queue.clone(), MockStateMachine);
+
+    assert!(
+        service
+            .send_notification(conn_request(notification_id, recipient.clone()))
+            .await
+            .is_err()
+    );
+    assert_eq!(queue.get_published().len(), 1);
+    let intent = repository
+        .delivery_intents
+        .lock()
+        .unwrap()
+        .values()
+        .next()
+        .cloned()
+        .unwrap();
+    assert!(!intent.published);
+    assert!(intent.claim_token.is_none());
+
+    service
+        .send_notification(conn_request(notification_id, recipient))
+        .await
+        .unwrap();
+    assert_eq!(queue.get_published().len(), 2);
+}
+
+#[tokio::test]
+async fn test_unconfirmed_intent_completion_stops_recovery_batch() {
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user_id("recovery-completion-expired@example.com");
+    let repository = Arc::new(MockRepository::new());
+    let queue = Arc::new(FaultQueue::failing_on([1]));
+    let service =
+        NotificationIngressService::new(repository.clone(), queue.clone(), MockStateMachine);
+
+    assert!(
+        service
+            .send_notification(conn_request(notification_id, recipient))
+            .await
+            .is_err()
+    );
+    repository
+        .intent_completion_failures_remaining
+        .store(1, Ordering::Relaxed);
+
+    assert!(service.recover_pending_deliveries(10).await.is_err());
+    assert_eq!(queue.attempts.load(Ordering::Relaxed), 2);
+    assert_eq!(queue.published().len(), 1);
+    let intent = repository
+        .delivery_intents
+        .lock()
+        .unwrap()
+        .values()
+        .next()
+        .cloned()
+        .unwrap();
+    assert!(!intent.published);
+    assert!(intent.claim_token.is_none());
+
+    service.recover_pending_deliveries(10).await.unwrap();
+    assert_eq!(queue.published().len(), 2);
+}
+
+#[tokio::test]
+async fn test_unconfirmed_completion_outcomes_stop_recovery_batch() {
+    for (completion_errors, release_errors) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
+        let notification_id = Uuid::now_v7();
+        let recipient = test_user_id(&format!(
+            "recovery-completion-{completion_errors}-release-{release_errors}@example.com"
+        ));
+        let repository = Arc::new(MockRepository::new());
+        let queue = Arc::new(FaultQueue::failing_on([1]));
+        let service =
+            NotificationIngressService::new(repository.clone(), queue.clone(), MockStateMachine);
+
+        assert!(
+            service
+                .send_notification(conn_request(notification_id, recipient))
+                .await
+                .is_err()
+        );
+        if completion_errors == 0 {
+            repository
+                .intent_completion_failures_remaining
+                .store(1, Ordering::Relaxed);
+        } else {
+            repository
+                .intent_completion_errors_remaining
+                .store(1, Ordering::Relaxed);
+        }
+        repository
+            .intent_release_failures_remaining
+            .store(release_errors, Ordering::Relaxed);
+
+        assert!(service.recover_pending_deliveries(10).await.is_err());
+        assert_eq!(queue.attempts.load(Ordering::Relaxed), 2);
+        assert_eq!(queue.published().len(), 1);
+        let intent = repository
+            .delivery_intents
+            .lock()
+            .unwrap()
+            .values()
+            .next()
+            .cloned()
+            .unwrap();
+        assert!(!intent.published);
+        assert_eq!(intent.claim_token.is_some(), release_errors == 1);
+    }
+}
+
+#[tokio::test]
+async fn test_state_machine_error_keeps_preparation_retryable() {
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user_id("state-error@example.com");
+    let repository = Arc::new(MockRepository::new());
+    let service =
+        NotificationIngressService::new(repository.clone(), MockQueue::new(), FailingStateMachine);
+
+    assert!(
+        service
+            .send_notification(conn_request(notification_id, recipient))
+            .await
+            .is_err()
+    );
+    let requests = repository.delivery_requests.lock().unwrap();
+    let request = requests.get(&notification_id).unwrap();
+    assert!(!request.prepared);
+    assert!(request.claim_token.is_none());
+    assert!(repository.delivery_intents.lock().unwrap().is_empty());
+}
+
+#[cfg(feature = "redis-tests")]
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_recovery_retries_and_completes_actual_digest_receipt_cleanup(pool: sqlx::PgPool) {
+    use crate::outbound::digest_batcher::RedisDigestBatcher;
+    use redis::AsyncCommands;
+
+    let redis_url =
+        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let client = redis::Client::open(redis_url).unwrap();
+    let mut connection = client.get_multiplexed_async_connection().await.unwrap();
+    let prefix = format!("test_service_cleanup_{}", Uuid::now_v7().as_simple());
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user_id("service-cleanup@example.com");
+    let repository = DbNotificationRepository::new(pool.clone());
+    repository
+        .persist_notification_with_delivery_request(
+            conn_request(notification_id, recipient.clone()),
+            "test",
+        )
+        .await
+        .unwrap();
+    let preparation_token = DeliveryClaimToken::new();
+    let claimed = repository
+        .claim_delivery_request(
+            Some(notification_id),
+            preparation_token,
+            DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let generation = claimed.generation;
+    let digest_notification = claimed.notifications[0].clone();
+    repository
+        .prepare_delivery_intents(
+            notification_id,
+            preparation_token,
+            &[],
+            Utc::now() - chrono::Duration::seconds(1),
+        )
+        .await
+        .unwrap();
+
+    RedisDigestBatcher::with_key_prefix(connection.clone(), &prefix)
+        .add_to_digest_for_delivery_generation(
+            &digest_notification,
+            generation,
+            Duration::from_secs(60),
+        )
+        .await
+        .unwrap();
+    let receipt_key = format!(
+        "{prefix}:digest_receipt:{}:{notification_id}:{generation}",
+        recipient.as_ref()
+    );
+    assert!(connection.exists::<_, bool>(&receipt_key).await.unwrap());
+
+    let service = NotificationIngressService::new(
+        repository,
+        MockQueue::new(),
+        RedisCleanupStateMachine {
+            batcher: RedisDigestBatcher::with_key_prefix(connection.clone(), &prefix),
+            failures_remaining: AtomicUsize::new(1),
+        },
+    );
+    assert!(service.recover_pending_deliveries(1).await.is_err());
+    assert!(connection.exists::<_, bool>(&receipt_key).await.unwrap());
+    let obligation_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notification_digest_receipt_cleanup WHERE notification_id = $1 AND generation = $2",
+    )
+    .bind(notification_id)
+    .bind(generation)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(obligation_count, 1);
+
+    sqlx::query(
+        "UPDATE notification_digest_receipt_cleanup SET safe_after = now() WHERE notification_id = $1 AND generation = $2",
+    )
+    .bind(notification_id)
+    .bind(generation)
+    .execute(&pool)
+    .await
+    .unwrap();
+    service.recover_pending_deliveries(2).await.unwrap();
+
+    assert!(!connection.exists::<_, bool>(&receipt_key).await.unwrap());
+    let obligation_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notification_digest_receipt_cleanup WHERE notification_id = $1 AND generation = $2",
+    )
+    .bind(notification_id)
+    .bind(generation)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(obligation_count, 0);
+
+    let keys: Vec<String> = redis::cmd("KEYS")
+        .arg(format!("{prefix}:*"))
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+    for key in keys {
+        connection.del::<_, ()>(key).await.unwrap();
+    }
 }
 
 #[tokio::test]
@@ -1413,6 +2462,15 @@ impl DigestBatcher for MockDigestBatcher {
 
     async fn claim_ready_digest(&self) -> Result<ClaimResult<DigestBatch>, Report> {
         Ok(ClaimResult::Empty)
+    }
+
+    async fn remove_notification_receipt(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _notification_id: Uuid,
+        _delivery_generation: Uuid,
+    ) -> Result<(), Report> {
+        Ok(())
     }
 }
 
@@ -2296,6 +3354,15 @@ impl DigestBatcher for ReadyDigestBatcher {
             Some(batch) => Ok(ClaimResult::Ready(batch)),
             None => Ok(ClaimResult::Empty),
         }
+    }
+
+    async fn remove_notification_receipt(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _notification_id: Uuid,
+        _delivery_generation: Uuid,
+    ) -> Result<(), Report> {
+        Ok(())
     }
 }
 

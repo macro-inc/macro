@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT notification_id\n                FROM notification_delivery_outbox\n                WHERE prepared_at IS NULL\n                  AND completed_at IS NULL\n                  AND next_attempt_at <= now()\n                  AND (claim_expires_at IS NULL OR claim_expires_at <= now())\n                  AND ($1::uuid IS NULL OR notification_id = $1)\n                ORDER BY next_attempt_at, created_at\n                FOR UPDATE SKIP LOCKED\n                LIMIT 1\n            )\n            UPDATE notification_delivery_outbox outbox\n            SET claim_token = $2,\n                claim_expires_at = $3,\n                attempt_count = outbox.attempt_count + 1,\n                updated_at = now()\n            FROM candidate\n            WHERE outbox.notification_id = candidate.notification_id\n            RETURNING\n                outbox.notification_id,\n                outbox.generation,\n                outbox.request AS \"request!: serde_json::Value\",\n                outbox.attempt_count,\n                outbox.created_at AS \"created_at!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "generation",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "request!: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "attempt_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1a1b0d33760bbb72efa0b2dd5d92c38822ce59364f6dbebb0204654577e39260"
+}

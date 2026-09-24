@@ -4,6 +4,7 @@
 //! filtering recipients, persisting to DB, and publishing to the queue.
 
 use crate::domain::models::apple::{APNSPushNotification, Aps};
+use crate::domain::models::delivery_outbox::{DeliveryClaimToken, DeliveryLease};
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::mobile::{MessageAttributes, PushType};
@@ -22,8 +23,8 @@ use crate::domain::models::{
     NotificationStatusPayload, NotificationTypeName, PatchDelete, UserNotificationRow,
 };
 use crate::domain::ports::{
-    NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
-    NotificationRealtimePublisher, NotificationRepository, SnsEndpointManager,
+    NoopNotificationRealtimePublisher, NotificationDeliveryRepository, NotificationIngressQueue,
+    NotificationQueue, NotificationRealtimePublisher, NotificationRepository, SnsEndpointManager,
 };
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
@@ -36,8 +37,13 @@ use rootcause::prelude::ResultExt;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 use uuid::Uuid;
+
+const DELIVERY_CLAIM_LEASE_SECONDS: i64 = 30;
+const DELIVERY_PREPARATION_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Trait for sending notifications through the ingress service.
 pub trait NotificationIngress: Send + Sync + 'static {
@@ -183,7 +189,7 @@ pub struct NotificationIngressService<N, Q, S> {
 
 impl<N, Q, S> NotificationIngress for NotificationIngressService<N, Q, S>
 where
-    N: NotificationRepository,
+    N: NotificationRepository + NotificationDeliveryRepository,
     Q: NotificationQueue,
     S: BulkDigestStateMachine,
 {
@@ -198,7 +204,7 @@ where
 
 impl<N, Q, S> NotificationIngressService<N, Q, S>
 where
-    N: NotificationRepository,
+    N: NotificationRepository + NotificationDeliveryRepository,
     Q: NotificationQueue,
     S: BulkDigestStateMachine,
 {
@@ -215,20 +221,33 @@ where
     /// Send a notification to the specified recipients.
     ///
     /// This method performs the following steps:
-    /// 1. Filter recipients (remove sender, muted users, unsubscribed users)
-    /// 2. Create notification in the database
-    /// 3. Build and publish QueueMessage to SQS
-    /// 4. Return result (delivery happens async via worker)
+    /// 1. Resume an existing notification by its persisted recipients
+    /// 2. Filter recipients for a genuinely new notification
+    /// 3. Atomically create the notification and durable delivery request
+    /// 4. Prepare and publish outstanding channel intents
     async fn send_notification_impl<
         'a,
-        T: Clone + Serialize + Send + Sync + 'static,
+        T: Clone + Serialize + DeserializeOwned + Send + Sync + 'static,
         U: Serialize + Send + Sync + 'static,
     >(
         &'a self,
         request: SendNotificationRequest<'a, T, U>,
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
         let notification_id = request.uuid_to_write;
-        let mut request = self
+        if let Some(notified_recipients) = self
+            .repository
+            .restore_existing_delivery_request(&request)
+            .await
+            .context(SendNotificationError::Other)?
+        {
+            self.dispatch_notification_delivery(notification_id).await?;
+            return Ok(Some(NotificationResult {
+                notification_id,
+                notified_recipients,
+            }));
+        }
+
+        let request = self
             .filter_recipients(request)
             .await
             .context(SendNotificationError::Other)?;
@@ -237,60 +256,448 @@ where
             return Ok(None);
         }
 
-        let (queue_messages, apns_collapse_key) = self
-            .build_queue_message(notification_id, &mut request)
-            .await?;
-
-        let notified_recipients = request.req.recipient_ids.clone();
-
-        // Create notification in DB (with collapse key if APNS was built)
-        let created = self
+        let notifications = self
             .repository
-            .create_notification(
-                request.req,
-                notification_id,
-                self.service_name,
-                apns_collapse_key.as_deref(),
-            )
+            .persist_notification_with_delivery_request(request, self.service_name)
             .await
             .context(SendNotificationError::Other)?;
 
-        // If notification already exists (idempotent), return early
-        let Some(n) = created else {
-            return Ok(Some(NotificationResult {
-                notification_id,
-                notified_recipients: HashSet::new(),
-            }));
-        };
+        let notified_recipients = notifications
+            .into_iter()
+            .map(|notification| notification.owner_id)
+            .collect();
 
-        // get the timestamp info back out of the db created values
-        let first = n
-            .first()
-            .ok_or_else(|| rootcause::report!("create_notification returned empty Vec"))
-            .context(SendNotificationError::Other)?;
-        let (created_at, updated_at) = (first.created_at, first.updated_at);
-
-        let results = join_all(
-            n.into_iter()
-                .map(|user_notif| self.state_machine_driver.ingest(user_notif)),
-        )
-        .await;
-
-        self.queue
-            .publish(
-                queue_messages
-                    .with_state_decisions(results)
-                    .map(|msg| msg.with_timestamps(created_at, updated_at))
-                    .collect(),
-            )
-            .await
-            .context(SendNotificationError::Other)?;
+        self.dispatch_notification_delivery(notification_id).await?;
 
         // Return result (delivery happens async)
         Ok(Some(NotificationResult {
             notification_id,
             notified_recipients,
         }))
+    }
+
+    async fn dispatch_notification_delivery(
+        &self,
+        notification_id: Uuid,
+    ) -> Result<(), Report<SendNotificationError>> {
+        self.prepare_delivery_request(Some(notification_id)).await?;
+
+        loop {
+            let Some(intent) = self
+                .claim_delivery_intent(Some(notification_id))
+                .await
+                .context(SendNotificationError::Other)?
+            else {
+                return Ok(());
+            };
+
+            match self.publish_delivery_intent(intent).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    return Err(rootcause::report!(
+                        "delivery intent queue handoff succeeded but durable completion was not confirmed"
+                    )
+                    .context(SendNotificationError::Other));
+                }
+                Err(error) => return Err(error.context(SendNotificationError::Other)),
+            }
+        }
+    }
+
+    /// Recover a bounded batch of preparation and channel publication work.
+    ///
+    /// The ingress worker calls this independently of ingress SQS messages so a
+    /// committed notification remains recoverable even if its source message is
+    /// delayed or dead-lettered.
+    pub async fn recover_pending_deliveries(&self, limit: usize) -> Result<(), Report> {
+        let mut first_error = None;
+
+        for _ in 0..limit {
+            let prepared = match self.prepare_delivery_request(None).await {
+                Ok(prepared) => prepared,
+                Err(error) => {
+                    let error = error.into_dynamic();
+                    tracing::warn!(error = ?error, "failed to prepare pending notification delivery");
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                    // A row was claimed and has now been backed off. Continue
+                    // this batch so a poison request cannot block newer work.
+                    true
+                }
+            };
+
+            let published = match self.claim_delivery_intent(None).await {
+                Ok(Some(intent)) => {
+                    match self.publish_delivery_intent(intent).await {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            // SQS accepted the payload, but this claimant can no
+                            // longer durably acknowledge it. End this batch so
+                            // a later recovery tick observes the backoff instead
+                            // of immediately handing off the same intent again.
+                            return Err(rootcause::report!(
+                                "delivery intent queue handoff succeeded but durable completion was not confirmed"
+                            ));
+                        }
+                        Err(error) => {
+                            tracing::warn!(error = ?error, "failed to recover notification delivery intent");
+                            if first_error.is_none() {
+                                first_error = Some(error);
+                            }
+                        }
+                    }
+                    true
+                }
+                Ok(None) => false,
+                Err(error) => {
+                    tracing::warn!(error = ?error, "failed to claim notification delivery intent");
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                    false
+                }
+            };
+
+            let cleaned = match self.cleanup_digest_receipt().await {
+                Ok(cleaned) => cleaned,
+                Err(error) => {
+                    tracing::warn!(error = ?error, "failed to clean notification digest receipt");
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                    true
+                }
+            };
+
+            if !prepared && !published && !cleaned {
+                break;
+            }
+        }
+
+        match first_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+
+    async fn prepare_delivery_request(
+        &self,
+        notification_id: Option<Uuid>,
+    ) -> Result<bool, Report<SendNotificationError>> {
+        let claim_token = DeliveryClaimToken::new();
+        let lease = DeliveryLease::until(
+            chrono::Utc::now() + chrono::Duration::seconds(DELIVERY_CLAIM_LEASE_SECONDS),
+        );
+        let Some(claimed) = self
+            .repository
+            .claim_delivery_request(notification_id, claim_token, lease)
+            .await
+            .context(SendNotificationError::Other)?
+        else {
+            return Ok(false);
+        };
+
+        let pending_age_seconds = chrono::Utc::now()
+            .signed_duration_since(claimed.pending_since)
+            .num_seconds()
+            .max(0);
+        tracing::info!(
+            notification_id = %claimed.notification_id,
+            attempt_count = claimed.attempt_count,
+            pending_age_seconds,
+            "preparing durable notification delivery request",
+        );
+
+        let claimed_notification_id = claimed.notification_id;
+        let claimed_token = claimed.claim_token;
+        let result = match tokio::time::timeout(
+            DELIVERY_PREPARATION_TIMEOUT,
+            self.prepare_claimed_delivery(claimed),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(rootcause::report!(
+                "notification delivery preparation exceeded its bounded timeout"
+            )
+            .context(SendNotificationError::Other)),
+        };
+        if result.is_err() {
+            self.repository
+                .release_delivery_request(claimed_notification_id, claimed_token)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        error = ?error,
+                        notification_id = %claimed_notification_id,
+                        "failed to release notification delivery preparation claim",
+                    );
+                })
+                .context(SendNotificationError::Other)?;
+        }
+        result.map(|()| true)
+    }
+
+    async fn prepare_claimed_delivery(
+        &self,
+        claimed: crate::domain::models::delivery_outbox::ClaimedDeliveryRequest,
+    ) -> Result<(), Report<SendNotificationError>> {
+        let mut request: SendNotificationRequest<'static, serde_json::Value, serde_json::Value> =
+            serde_json::from_value(claimed.request).context(SendNotificationError::Other)?;
+
+        request.req.recipient_ids = claimed
+            .notifications
+            .iter()
+            .map(|notification| notification.owner_id.clone())
+            .collect();
+
+        if claimed.notifications.is_empty() {
+            self.repository
+                .prepare_delivery_intents(
+                    claimed.notification_id,
+                    claimed.claim_token,
+                    &[],
+                    chrono::Utc::now() + chrono::Duration::seconds(DELIVERY_CLAIM_LEASE_SECONDS),
+                )
+                .await
+                .context(SendNotificationError::Other)?;
+            return Ok(());
+        }
+
+        let (queue_messages, _) = self
+            .build_queue_message(claimed.notification_id, &mut request)
+            .await?;
+        let first = claimed
+            .notifications
+            .first()
+            .expect("empty notifications returned above");
+        let (created_at, updated_at) = (first.created_at, first.updated_at);
+        let results = join_all(claimed.notifications.into_iter().map(|notification| {
+            self.state_machine_driver
+                .ingest(notification.map(Arc::new), claimed.generation)
+        }))
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, Report>>()
+        .context(SendNotificationError::Other)?;
+        let payloads = queue_messages
+            .with_state_decisions(results)
+            .map(|message| message.with_timestamps(created_at, updated_at))
+            .map(serde_json::to_value)
+            .collect::<Result<Vec<_>, _>>()
+            .context(SendNotificationError::Other)?;
+
+        let prepared = self
+            .repository
+            .prepare_delivery_intents(
+                claimed.notification_id,
+                claimed.claim_token,
+                &payloads,
+                chrono::Utc::now() + chrono::Duration::seconds(DELIVERY_CLAIM_LEASE_SECONDS),
+            )
+            .await
+            .context(SendNotificationError::Other)?;
+        if !prepared {
+            tracing::warn!(
+                notification_id = %claimed.notification_id,
+                "notification delivery preparation claim expired before commit",
+            );
+            return Err(rootcause::report!(
+                "notification delivery preparation claim expired before commit"
+            )
+            .context(SendNotificationError::Other));
+        }
+
+        Ok(())
+    }
+
+    async fn claim_delivery_intent(
+        &self,
+        notification_id: Option<Uuid>,
+    ) -> Result<Option<crate::domain::models::delivery_outbox::ClaimedDeliveryIntent>, Report> {
+        self.repository
+            .claim_delivery_intent(
+                notification_id,
+                DeliveryClaimToken::new(),
+                DeliveryLease::until(
+                    chrono::Utc::now() + chrono::Duration::seconds(DELIVERY_CLAIM_LEASE_SECONDS),
+                ),
+            )
+            .await
+    }
+
+    async fn publish_delivery_intent(
+        &self,
+        intent: crate::domain::models::delivery_outbox::ClaimedDeliveryIntent,
+    ) -> Result<bool, Report> {
+        let pending_age_seconds = chrono::Utc::now()
+            .signed_duration_since(intent.pending_since)
+            .num_seconds()
+            .max(0);
+        tracing::info!(
+            notification_id = %intent.notification_id,
+            position = intent.position,
+            attempt_count = intent.attempt_count,
+            pending_age_seconds,
+            "publishing durable notification delivery intent",
+        );
+
+        let message: QueueMessage<'static, serde_json::Value, serde_json::Value> =
+            serde_json::from_value(intent.payload)?;
+        if let Err(error) = self.queue.publish(vec![message]).await {
+            tracing::warn!(
+                error = ?error,
+                notification_id = %intent.notification_id,
+                position = intent.position,
+                attempt_count = intent.attempt_count,
+                pending_age_seconds,
+                "failed to publish durable notification delivery intent",
+            );
+            self.repository
+                .release_delivery_intent(
+                    intent.notification_id,
+                    intent.position,
+                    intent.claim_token,
+                )
+                .await
+                .inspect_err(|release_error| {
+                    tracing::warn!(
+                        error = ?release_error,
+                        notification_id = %intent.notification_id,
+                        position = intent.position,
+                        "failed to release notification delivery intent claim",
+                    );
+                })?;
+            return Err(error);
+        }
+
+        let completed = match self
+            .repository
+            .complete_delivery_intent(intent.notification_id, intent.position, intent.claim_token)
+            .await
+        {
+            Ok(completed) => completed,
+            Err(error) => {
+                // SQS already accepted the payload. A completion-query error is
+                // therefore the same durability outcome as an expired claim:
+                // confirmation is unknown and this drain must stop.
+                tracing::warn!(
+                    error = ?error,
+                    notification_id = %intent.notification_id,
+                    position = intent.position,
+                    "failed to confirm durable notification delivery completion after queue handoff",
+                );
+                false
+            }
+        };
+        if !completed {
+            // Queue handoff is deliberately at-least-once. If completion is
+            // unconfirmed after SQS accepts the payload, recovery may publish
+            // it again.
+            tracing::warn!(
+                notification_id = %intent.notification_id,
+                position = intent.position,
+                "delivery intent completion unconfirmed after queue publication; duplicate handoff is possible",
+            );
+            // Stop this drain and back the intent off if this claimant still
+            // owns it. Otherwise a just-expired claim can be reclaimed in the
+            // surrounding loop and handed to SQS repeatedly until the worker
+            // timeout. A newer claimant's token is never disturbed.
+            if let Err(release_error) = self
+                .repository
+                .release_delivery_intent(
+                    intent.notification_id,
+                    intent.position,
+                    intent.claim_token,
+                )
+                .await
+            {
+                tracing::warn!(
+                    error = ?release_error,
+                    notification_id = %intent.notification_id,
+                    position = intent.position,
+                    "failed to back off delivery intent after unconfirmed completion",
+                );
+            }
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
+    async fn cleanup_digest_receipt(&self) -> Result<bool, Report> {
+        let now = chrono::Utc::now();
+        let claim_token = DeliveryClaimToken::new();
+        let Some(cleanup) = self
+            .repository
+            .claim_digest_receipt_cleanup(
+                claim_token,
+                DeliveryLease::until(now + chrono::Duration::seconds(DELIVERY_CLAIM_LEASE_SECONDS)),
+                now + chrono::Duration::seconds(DELIVERY_CLAIM_LEASE_SECONDS),
+            )
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        let pending_age_seconds = now
+            .signed_duration_since(cleanup.pending_since)
+            .num_seconds()
+            .max(0);
+        tracing::info!(
+            notification_id = %cleanup.notification_id,
+            attempt_count = cleanup.attempt_count,
+            pending_age_seconds,
+            "cleaning durable notification digest receipt",
+        );
+
+        if let Err(error) = self
+            .state_machine_driver
+            .cleanup_digest_receipt(
+                cleanup.user_id.copied(),
+                cleanup.notification_id,
+                cleanup.generation,
+            )
+            .await
+        {
+            tracing::warn!(
+                error = ?error,
+                notification_id = %cleanup.notification_id,
+                attempt_count = cleanup.attempt_count,
+                pending_age_seconds,
+                "failed to clean durable notification digest receipt",
+            );
+            self.repository
+                .release_digest_receipt_cleanup(
+                    cleanup.notification_id,
+                    cleanup.user_id,
+                    cleanup.generation,
+                    cleanup.claim_token,
+                )
+                .await?;
+            return Err(error);
+        }
+
+        let completed = self
+            .repository
+            .complete_digest_receipt_cleanup(
+                cleanup.notification_id,
+                cleanup.user_id,
+                cleanup.generation,
+                cleanup.claim_token,
+            )
+            .await?;
+        if !completed {
+            // Redis DEL is idempotent. If the DB lease expired after deletion,
+            // recovery safely repeats the cleanup.
+            tracing::warn!(
+                notification_id = %cleanup.notification_id,
+                "digest receipt cleanup lease expired after Redis deletion",
+            );
+        }
+
+        Ok(true)
     }
 
     /// Filter recipients based on:
