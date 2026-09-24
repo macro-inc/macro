@@ -557,7 +557,7 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         _access_token: &str,
         target: &GoogleCalendarTarget,
         source: &CalendarEventCopySource,
-    ) -> Result<CalendarEventUpsert, GoogleProviderError> {
+    ) -> Result<Option<CalendarEventUpsert>, GoogleProviderError> {
         self.calls.lock().unwrap().push("import".to_string());
         self.imported_sources
             .lock()
@@ -566,7 +566,10 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         if let Some(error) = self.fail() {
             return Err(error);
         }
-        Ok(self.echo(&target.owner_id))
+        if matches!(self.behavior, FakeProviderBehavior::Gone) {
+            return Ok(None);
+        }
+        Ok(Some(self.echo(&target.owner_id)))
     }
 
     async fn stop_watch_channel(
@@ -2615,4 +2618,27 @@ async fn copy_requires_a_writable_calendar() {
             .await,
         Err(CalendarMutationError::ReadOnly)
     ));
+}
+
+#[tokio::test]
+async fn copy_leaves_an_event_the_calendar_already_holds_untouched() {
+    let repo = FakeRepo {
+        copy_source: Some(copy_source(CalendarEventCopyAccess::ChannelShared)),
+        creation_target: Some(creation_target(false)),
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+
+    // `Gone` makes the fake report that Google already holds the UID.
+    let error = service(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Gone),
+        FakeTokens::ok(),
+    )
+    .copy_shared_event("macro|user", Uuid::now_v7(), None)
+    .await
+    .unwrap_err();
+
+    assert!(matches!(error, CalendarMutationError::AlreadyOnCalendar));
+    assert!(upserts.lock().unwrap().is_empty());
 }

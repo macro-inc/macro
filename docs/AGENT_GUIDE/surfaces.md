@@ -761,8 +761,10 @@ own sees the mention's title and time, and its hover card adds a `Shared with yo
 your calendar` line with no open action. Clicking such a mention shows that hover card
 instead of opening the calendar. Private and confidential events are never shared this way.
 That hover card also offers `Add to calendar`, which imports a private copy (no guests, no
-join link, guests are not notified) onto the viewer's primary calendar, or onto one they pick
-from a menu when they have more than one writable calendar; the mention then opens that copy.
+join link, guests are not notified) onto the viewer's only writable calendar, or onto one they
+pick from a menu when they have several; the mention then opens that copy. If Google already has
+the meeting on that calendar (an invitation not yet synced), nothing is imported and the card
+reports it is already on their calendar.
 `Download .ics` saves the event as an iCalendar file.
 Every calendar mention's hover card shows the schedule, location, organizer and attendee
 count, plus the first lines of the event description (its links open), and no last-updated

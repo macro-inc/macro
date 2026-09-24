@@ -15,10 +15,11 @@ const MAX_LINE_OCTETS: usize = 75;
 /// Render an event as a single-event `VCALENDAR` document.
 ///
 /// The UID is the meeting's own, so a client that already holds the meeting
-/// updates it rather than duplicating it. Timed events are written in their
-/// original IANA zone when it is known, so a recurrence keeps its wall-clock
-/// time across daylight-saving changes; clients resolve the `TZID` without a
-/// `VTIMEZONE` block.
+/// updates it rather than duplicating it. A one-off timed event is written in
+/// UTC. A recurring one keeps its original IANA zone when it is known, so the
+/// series holds its wall-clock time across daylight-saving changes; that
+/// `TZID` carries no `VTIMEZONE` block, which Google, Apple and Outlook
+/// resolve by name but strict importers may reject.
 pub fn render_event_ics(source: &CalendarEventCopySource) -> String {
     let mut lines = vec![
         "BEGIN:VCALENDAR".to_string(),
@@ -31,7 +32,10 @@ pub fn render_event_ics(source: &CalendarEventCopySource) -> String {
         format!("DTSTAMP:{}", utc_stamp(source.updated_at)),
         format!("SEQUENCE:{}", source.sequence),
     ];
-    lines.extend(time_lines(&source.time));
+    lines.extend(time_lines(
+        &source.time,
+        !source.recurrence_lines.is_empty(),
+    ));
     lines.extend(
         source
             .recurrence_lines
@@ -70,7 +74,7 @@ pub fn render_event_ics(source: &CalendarEventCopySource) -> String {
     document
 }
 
-fn time_lines(time: &EventTime) -> [String; 2] {
+fn time_lines(time: &EventTime, is_recurring: bool) -> [String; 2] {
     match time {
         EventTime::Timed {
             starts_at,
@@ -78,6 +82,7 @@ fn time_lines(time: &EventTime) -> [String; 2] {
             time_zone,
         } => match time_zone
             .as_deref()
+            .filter(|_| is_recurring)
             .and_then(|zone| zone.parse::<Tz>().ok())
         {
             Some(zone) => [

@@ -34,8 +34,12 @@ export function SharedEventActions(props: { eventId: string; title: string }) {
   useHoldParentHoverCardOpen(menuOpen);
 
   const calendars = useVisibleCalendarsQuery();
+  // Reading `data` while the query is pending would suspend the whole hover
+  // card; until the list arrives there is simply nothing to pick.
   const writableCalendars = () =>
-    (calendars.data ?? []).filter((calendar) => calendar.isWritable);
+    (calendars.isSuccess ? calendars.data : []).filter(
+      (calendar) => calendar.isWritable
+    );
 
   const copy = useCopySharedCalendarEventMutation({
     onSuccess: () => toast.success('Added to your calendar'),
@@ -53,11 +57,16 @@ export function SharedEventActions(props: { eventId: string; title: string }) {
       const url = URL.createObjectURL(
         new Blob([new Uint8Array(document)], { type: 'text/calendar' })
       );
+      // Safari ignores clicks on a detached link and starts the download a
+      // turn later, so the link is attached and the URL outlives the click.
       const link = window.document.createElement('a');
       link.href = url;
       link.download = icsFileName(props.title);
+      link.style.display = 'none';
+      window.document.body.append(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     },
     onError: () => toast.failure('Failed to download the event'),
   });

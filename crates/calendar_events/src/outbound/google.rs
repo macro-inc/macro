@@ -1336,7 +1336,19 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         access_token: &str,
         target: &GoogleCalendarTarget,
         source: &CalendarEventCopySource,
-    ) -> Result<CalendarEventUpsert, GoogleProviderError> {
+    ) -> Result<Option<CalendarEventUpsert>, GoogleProviderError> {
+        // showDeleted=false: only a live event would be overwritten.
+        let held = self
+            .events_by_ical_uid(
+                access_token,
+                target.email_link_id,
+                &target.provider_calendar_id,
+                &source.ical_uid,
+            )
+            .await?;
+        if !held.is_empty() {
+            return Ok(None);
+        }
         let calendar = urlencoding::encode(&target.provider_calendar_id);
         let body = import_body(source);
         self.gate.acquire(target.email_link_id).await?;
@@ -1360,6 +1372,7 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
                     "Google Calendar dropped the event immediately after import",
                 )
             })
+            .map(Some)
     }
 
     #[tracing::instrument(skip(self, access_token), err)]

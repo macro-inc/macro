@@ -32,7 +32,7 @@ fn unfolded(document: &str) -> Vec<String> {
 }
 
 #[test]
-fn timed_event_with_zone_is_written_in_local_wall_time() {
+fn a_recurring_timed_event_is_written_in_its_zones_wall_time() {
     let mut event = source(EventTime::Timed {
         starts_at: Utc.with_ymd_and_hms(2026, 9, 24, 23, 30, 0).unwrap(),
         ends_at: Utc.with_ymd_and_hms(2026, 9, 25, 0, 0, 0).unwrap(),
@@ -56,12 +56,30 @@ fn timed_event_with_zone_is_written_in_local_wall_time() {
 }
 
 #[test]
-fn timed_event_without_a_known_zone_is_written_in_utc() {
+fn a_one_off_timed_event_is_written_in_utc() {
+    let event = source(EventTime::Timed {
+        starts_at: Utc.with_ymd_and_hms(2026, 9, 24, 23, 30, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2026, 9, 25, 0, 0, 0).unwrap(),
+        time_zone: Some("America/New_York".to_string()),
+    });
+
+    let lines = unfolded(&render_event_ics(&event));
+
+    assert!(lines.contains(&"DTSTART:20260924T233000Z".to_string()));
+    assert!(lines.contains(&"DTEND:20260925T000000Z".to_string()));
+}
+
+#[test]
+fn a_recurring_event_without_a_known_zone_is_written_in_utc() {
     let event = source(EventTime::Timed {
         starts_at: Utc.with_ymd_and_hms(2026, 9, 24, 23, 30, 0).unwrap(),
         ends_at: Utc.with_ymd_and_hms(2026, 9, 25, 0, 0, 0).unwrap(),
         time_zone: Some("Not/AZone".to_string()),
     });
+    let event = CalendarEventCopySource {
+        recurrence_lines: vec!["RRULE:FREQ=DAILY".to_string()],
+        ..event
+    };
 
     let lines = unfolded(&render_event_ics(&event));
 

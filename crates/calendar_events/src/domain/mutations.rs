@@ -296,7 +296,7 @@ where
             return Err(CalendarMutationError::ReadOnly);
         }
         let access_token = self.fetch_token(&target.token_identity).await?;
-        let upsert = self
+        let Some(upsert) = self
             .provider
             .import_event(
                 &access_token,
@@ -304,7 +304,20 @@ where
                 &source,
             )
             .await
-            .map_err(provider_error)?;
+            .map_err(provider_error)?
+        else {
+            // Google already has the meeting on that calendar, most likely an
+            // invitation Macro has not synced yet; pull it in so the mention
+            // resolves to it.
+            if let Err(error) = self
+                .repository
+                .schedule_google_sync_for_link(target.email_link_id)
+                .await
+            {
+                tracing::warn!(error=?error, "failed to schedule a sync for an already-held event");
+            }
+            return Err(CalendarMutationError::AlreadyOnCalendar);
+        };
         self.persist_echo(target.actor.as_ref(), upsert).await
     }
 

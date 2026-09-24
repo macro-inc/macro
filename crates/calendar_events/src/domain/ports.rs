@@ -205,12 +205,17 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
     /// Import a private copy of another calendar's event into the target
     /// calendar under the source's iCalendar UID. Guests are not notified:
     /// the copy carries no attendees and Google sends nothing on import.
+    ///
+    /// Returns `None`, importing nothing, when the calendar already holds a
+    /// live event with that UID. Google's import updates such an event in
+    /// place, which would strip the guests and join link of an invitation
+    /// Macro has not synced yet.
     fn import_event(
         &self,
         access_token: &str,
         target: &GoogleCalendarTarget,
         source: &CalendarEventCopySource,
-    ) -> impl Future<Output = Result<CalendarEventUpsert, GoogleProviderError>> + Send;
+    ) -> impl Future<Output = Result<Option<CalendarEventUpsert>, GoogleProviderError>> + Send;
 
     /// Close a push notification channel. A channel Google no longer knows
     /// about is success, since the goal is only that it stops delivering.
