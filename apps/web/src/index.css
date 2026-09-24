@@ -258,6 +258,44 @@ body.tauri-ios {
   );
 }
 
+/* The prompt bubble fills itself with a content color, so the code chips,
+   hairlines and hover tints its subtree asks for would be drawn in the color
+   the fill already uses. Re-derive those tokens from the bubble's own
+   foreground, and own the fill here too so the two cannot drift apart.
+   Everything inside then reads the same tokens as the rest of the app without
+   knowing it sits on a fill, and currentColor keeps one definition correct in
+   both themes. */
+[data-user-message-bubble] {
+  background-color: var(--color-content-0);
+  color: var(--color-panel);
+  --color-ink: currentColor;
+  --color-ink-muted: color-mix(in oklch, currentColor 78%, transparent);
+  --color-ink-subtle: color-mix(in oklch, currentColor 62%, transparent);
+  --color-ink-disabled: color-mix(in oklch, currentColor 48%, transparent);
+  --color-ink-placeholder: color-mix(in oklch, currentColor 40%, transparent);
+  --color-ink-extra-muted: var(--color-ink-subtle);
+  --color-code-buffer: color-mix(in oklch, currentColor 12%, transparent);
+  --color-hover: color-mix(in oklch, currentColor 10%, transparent);
+  --color-active: color-mix(in oklch, currentColor 16%, transparent);
+  --color-edge: color-mix(in oklch, currentColor 24%, transparent);
+  --color-edge-muted: color-mix(in oklch, currentColor 14%, transparent);
+  --color-skeleton: color-mix(in oklch, currentColor 14%, transparent);
+}
+
+/* A dark theme has no room above the page for an ink-filled bubble, so the
+   prompt reads as a raised surface carrying ordinary ink. */
+[data-theme-light='false'] [data-user-message-bubble] {
+  background-color: var(--color-surface-4);
+  color: var(--color-content-0);
+}
+
+/* The shared 10% ink wash is ink on ink here, so selecting prompt text shows
+   nothing. Tint the fill with the text color instead. */
+[data-user-message-bubble]::selection,
+[data-user-message-bubble] ::selection {
+  background-color: color-mix(in oklch, currentColor 28%, transparent);
+}
+
 @theme {
   /* Reading sizes at a 16px root; rem units preserve accessibility scaling. */
   --text-base: 0.9375rem;
