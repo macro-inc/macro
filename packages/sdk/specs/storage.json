@@ -21858,16 +21858,23 @@
       },
       "DocumentSyncEditor": {
         "type": "object",
-        "description": "An editor reported by Sync from an authenticated session. Identity strings\nare validated during Activity classification so invalid hints cannot stop search.",
+        "description": "An editor reported by Sync from an authenticated session.",
         "required": ["actor"],
         "properties": {
           "actor": {
             "type": "string",
-            "description": "Principal that performed the edit."
+            "description": "User or bot that performed the edit."
           },
           "on_behalf_of": {
-            "type": ["string", "null"],
-            "description": "User represented by an agent, if any."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User represented by an agent, if any."
+              }
+            ]
           }
         }
       },

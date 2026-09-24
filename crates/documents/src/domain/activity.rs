@@ -12,7 +12,7 @@ use ::activity::{
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use super::events::DocumentTopicEvent;
+use super::events::{DocumentSyncEditor, DocumentTopicEvent};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
 
@@ -122,35 +122,22 @@ impl ActivitySource for DocumentTopicEvent {
             // Extraction-pipeline noise, not user activity.
             DocumentTopicEvent::ContentUploaded(_) => Ingest::Ignore,
             DocumentTopicEvent::SyncContentUpdated(metadata) => {
-                let mut editors = metadata.editors.clone();
-                if let Some(actor) = &metadata.actor {
-                    editors.push(super::events::DocumentSyncEditor {
-                        actor: actor.as_ref().to_owned(),
-                        on_behalf_of: metadata
-                            .on_behalf_of
-                            .as_ref()
-                            .map(|user| user.as_ref().to_owned()),
-                    });
-                }
-                editors.sort_unstable();
+                let legacy = metadata.actor.clone().map(|actor| DocumentSyncEditor {
+                    actor,
+                    on_behalf_of: metadata.on_behalf_of.clone(),
+                });
+                let mut editors: Vec<_> = metadata.editors.iter().cloned().chain(legacy).collect();
+                // A stable order keeps ordinals, and so activity ids, identical on replay.
+                editors.sort_by(|a, b| editor_key(a).cmp(&editor_key(b)));
                 editors.dedup();
                 let activities: Vec<_> = editors
                     .into_iter()
-                    .filter_map(|editor| {
-                        let actor = Actor::try_from(editor.actor).ok()?;
-                        let on_behalf_of = editor
-                            .on_behalf_of
-                            .map(MacroUserIdStr::try_from)
-                            .transpose()
-                            .ok()?;
-                        Some(Attribution::new(actor, on_behalf_of))
-                    })
                     .enumerate()
-                    .map(|(ordinal, attribution)| {
+                    .map(|(ordinal, editor)| {
                         Activity::attributed(
                             event_id,
                             ordinal as u32,
-                            attribution,
+                            Attribution::new(editor.actor, editor.on_behalf_of),
                             EntityType::Document,
                             &metadata.document_id,
                             CommonAction::Edited,
@@ -168,6 +155,13 @@ impl ActivitySource for DocumentTopicEvent {
             DocumentTopicEvent::Interaction(_) => Ingest::Ignore,
         }
     }
+}
+
+fn editor_key(editor: &DocumentSyncEditor) -> (&str, Option<&str>) {
+    (
+        editor.actor.as_ref(),
+        editor.on_behalf_of.as_ref().map(|user| user.as_ref()),
+    )
 }
 
 /// Classify document activity and debounce Sync edits in the Activity consumer.

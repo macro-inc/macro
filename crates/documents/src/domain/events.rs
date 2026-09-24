@@ -125,15 +125,15 @@ pub struct DocumentContentUploadedMetadata {
     pub document_version_id: Option<String>,
 }
 
-/// An editor reported by Sync from an authenticated session. Identity strings
-/// are validated during Activity classification so invalid hints cannot stop search.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+/// An editor reported by Sync from an authenticated session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentSyncEditor {
-    /// Principal that performed the edit.
-    pub actor: String,
+    /// User or bot that performed the edit.
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub actor: Actor<'static>,
     /// User represented by an agent, if any.
-    pub on_behalf_of: Option<String>,
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
 }
 
 /// Metadata for [`DocumentTopicEvent::SyncContentUpdated`].

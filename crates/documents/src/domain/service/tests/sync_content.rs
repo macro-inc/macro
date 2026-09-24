@@ -19,8 +19,10 @@ async fn notifications_resolve_the_stored_type_and_preserve_attribution() {
             .publish_sync_content_updated(
                 "doc-1",
                 vec![crate::domain::events::DocumentSyncEditor {
-                    actor: actor.into(),
-                    on_behalf_of: Some(user.into()),
+                    actor: activity::Actor::try_from(actor.to_owned()).unwrap(),
+                    on_behalf_of: Some(
+                        macro_user_id::user_id::MacroUserIdStr::try_from(user.to_owned()).unwrap(),
+                    ),
                 }],
             )
             .await
@@ -77,17 +79,13 @@ async fn a_batch_of_editors_still_publishes_only_one_search_event() {
     repo.expect_get_basic_document()
         .return_once(|_| Box::pin(std::future::ready(Ok(task_document_context("doc-1")))));
     let (service, broker) = make_test_service_with_event_broker(repo);
-    let editors = [
-        "macro|alice@example.com",
-        "macro|bob@example.com",
-        "invalid",
-    ]
-    .into_iter()
-    .map(|actor| crate::domain::events::DocumentSyncEditor {
-        actor: actor.to_owned(),
-        on_behalf_of: None,
-    })
-    .collect();
+    let editors = ["macro|alice@example.com", "macro|bob@example.com"]
+        .into_iter()
+        .map(|actor| crate::domain::events::DocumentSyncEditor {
+            actor: activity::Actor::try_from(actor.to_owned()).unwrap(),
+            on_behalf_of: None,
+        })
+        .collect();
     service
         .publish_sync_content_updated("doc-1", editors)
         .await
@@ -100,6 +98,6 @@ async fn a_batch_of_editors_still_publishes_only_one_search_event() {
             .as_array()
             .unwrap()
             .len(),
-        3
+        2
     );
 }

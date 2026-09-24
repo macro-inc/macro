@@ -1,5 +1,6 @@
 //! Handler for sync-content notifications from the synchronization service.
 
+use activity::Actor;
 use axum::{
     Json,
     extract::{Path, State},
@@ -7,6 +8,7 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 
 use super::{DocumentRouterState, Params};
@@ -40,11 +42,14 @@ pub async fn sync_content_updated_handler<
     Json(request): Json<SyncContentUpdatedRequest>,
 ) -> Result<StatusCode, DocumentError> {
     let mut editors = request.editors;
-    // Sync releases before batched editors sent a single agent actor.
-    if let Some(actor) = request.actor {
+    // Sync releases before batched editors sent a single agent actor. Invalid
+    // legacy ids are dropped, as they always were, so search still extracts.
+    if let Some(actor) = request.actor.and_then(|actor| Actor::try_from(actor).ok()) {
         editors.push(DocumentSyncEditor {
             actor,
-            on_behalf_of: request.on_behalf_of,
+            on_behalf_of: request
+                .on_behalf_of
+                .and_then(|user| MacroUserIdStr::try_from(user).ok()),
         });
     }
     state

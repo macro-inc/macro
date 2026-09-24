@@ -4,8 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { MacroUserIdStr } from './macroUserIdStr';
 
-/**
- * User represented by an agent, if any.
- */
-export type DocumentSyncEditorOnBehalfOf = string | null;
+export type DocumentSyncEditorOnBehalfOf = null | MacroUserIdStr;

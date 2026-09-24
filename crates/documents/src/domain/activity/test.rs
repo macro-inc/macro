@@ -411,8 +411,8 @@ fn editor_event(editors: &[(&str, Option<&str>)]) -> DocumentTopicEvent {
         .iter()
         .map(
             |(actor, subject)| crate::domain::events::DocumentSyncEditor {
-                actor: (*actor).to_owned(),
-                on_behalf_of: subject.map(str::to_owned),
+                actor: Actor::try_from((*actor).to_owned()).unwrap(),
+                on_behalf_of: subject.map(user),
             },
         )
         .collect();
@@ -420,12 +420,10 @@ fn editor_event(editors: &[(&str, Option<&str>)]) -> DocumentTopicEvent {
 }
 
 #[test]
-fn batched_editors_are_distinct_valid_and_keep_agent_attribution() {
+fn batched_editors_are_distinct_and_keep_agent_attribution() {
     let event = editor_event(&[
         ("macro|alice@example.com", None),
         ("macro|alice@example.com", None),
-        ("invalid", None),
-        ("macro|bad-subject@example.com", Some("invalid")),
         (
             "bot|00000000-0000-0000-0000-00000000a1a1",
             Some("macro|alice@example.com"),

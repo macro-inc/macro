@@ -7,12 +7,10 @@
 import type { DocumentSyncEditorOnBehalfOf } from './documentSyncEditorOnBehalfOf';
 
 /**
- * An editor reported by Sync from an authenticated session. Identity strings
-are validated during Activity classification so invalid hints cannot stop search.
+ * An editor reported by Sync from an authenticated session.
  */
 export interface DocumentSyncEditor {
-  /** Principal that performed the edit. */
+  /** User or bot that performed the edit. */
   actor: string;
-  /** User represented by an agent, if any. */
   on_behalf_of?: DocumentSyncEditorOnBehalfOf;
 }
