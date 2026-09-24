@@ -67,6 +67,7 @@ export function SplitPanel(props: SplitPanelProps) {
   const [bottomPanel, setBottomPanel] =
     createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
+  let pointerTarget: Element | undefined;
 
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const headerCollapseController = createPriorityCollapseController();
@@ -228,6 +229,7 @@ export function SplitPanel(props: SplitPanelProps) {
           replaceOwnedSlot: ownedSlots.replace,
           panelSize,
           panelRef,
+          pointerTarget: () => pointerTarget,
         }}
       >
         <SplitDrawerGroup panelSize={panelSize}>
@@ -260,6 +262,13 @@ export function SplitPanel(props: SplitPanelProps) {
               setPanelRef(ref);
               props.setPanelRef(ref);
               attachHotKeys(ref);
+            }}
+            on:pointerdown={{
+              capture: true,
+              handleEvent: (e) => {
+                pointerTarget =
+                  e.target instanceof Element ? e.target : undefined;
+              },
             }}
             data-split-id={props.split.id}
             {...splitContainerAttribute}
