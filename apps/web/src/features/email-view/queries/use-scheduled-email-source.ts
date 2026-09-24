@@ -92,6 +92,12 @@ export function useScheduledEmailSource(
     isLoadingMore: () => false,
     loadMore: async () => {},
     refresh: async () => {
+      // The scheduled query waits on the inbox list, so a failed list is the
+      // thing to retry; the scheduled read follows once it succeeds.
+      if (links.isError) {
+        await links.refetch();
+        return;
+      }
       await scheduled.refetch();
     },
   };
