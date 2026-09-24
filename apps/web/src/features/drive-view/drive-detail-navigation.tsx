@@ -4,15 +4,7 @@ import type {
   EntityDetailNavigationStackEntry,
   EntityDetailTarget,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
-import {
-  getRouteEntryState,
-  routeParams,
-  useNavigate,
-  useParams,
-  useRouteState,
-  useSplitHistory,
-  useSplitRouter,
-} from '@app/split-router';
+import { useNavigate, useParams, useRouteState } from '@app/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -40,17 +32,13 @@ import {
 } from './primitives/drive-route';
 import { driveSplitRoute } from './route';
 
-type DriveDetailHistoryEntry = EntityDetailNavigationStackEntry & {
-  historyIndex?: number;
-};
-
 type DriveDetailRootOptions = EntityDetailNavigationOptions & {
   location?: DriveLocation;
 };
 
 type DriveDetailNavigation = {
-  entries: Accessor<readonly DriveDetailHistoryEntry[]>;
-  active: Accessor<DriveDetailHistoryEntry | undefined>;
+  entries: Accessor<readonly EntityDetailNavigationStackEntry[]>;
+  active: Accessor<EntityDetailNavigationStackEntry | undefined>;
   navigate: (
     target: EntityDetailTarget,
     options?: EntityDetailNavigationOptions
@@ -83,8 +71,6 @@ export function DriveDetailNavigationProvider(
 ) {
   const params = useParams<DriveRouteParams>();
   const navigate = useNavigate();
-  const router = useSplitRouter();
-  const history = useSplitHistory();
   const routeTrail = useRouteState(driveSplitRoute);
   const selectPreview = createPreviewSelectionGuard();
   const activeDocument = createMemo(() => driveDocumentFromParams(params));
@@ -107,59 +93,12 @@ export function DriveDetailNavigationProvider(
     return [target];
   };
 
-  const historyIndexForTrail = (
-    expected: readonly DriveDocumentTarget[]
-  ): number | undefined => {
-    const snapshot = history();
-    if (!snapshot) return;
-
-    for (let index = snapshot.index; index >= 0; index -= 1) {
-      const entry = snapshot.entries[index];
-      if (!entry) continue;
-      const document = driveDocumentFromParams(
-        routeParams(entry.location.route) as DriveRouteParams
-      );
-      const candidate = getRouteEntryState(
-        router.routes,
-        entry,
-        driveSplitRoute
-      );
-
-      const endpoint = candidate?.at(-1);
-      const endpointMatches =
-        endpoint !== undefined &&
-        sameDocumentRoute(documentRouteFromTarget(endpoint), document);
-      const trailMatches =
-        candidate?.length === expected.length &&
-        candidate.every((target, targetIndex) => {
-          const expectedTarget = expected[targetIndex];
-          if (!expectedTarget) return false;
-          return sameDocumentRoute(
-            documentRouteFromTarget(target),
-            documentRouteFromTarget(expectedTarget)
-          );
-        });
-      if (endpointMatches && trailMatches) return index;
-
-      // Direct URLs and pre-state history entries still represent a valid
-      // one-item root.
-      if (candidate || expected.length !== 1) continue;
-      const expectedDocument = documentRouteFromTarget(expected[0]!);
-      if (sameDocumentRoute(document, expectedDocument)) return index;
-    }
-  };
-
-  const entries = createMemo<DriveDetailHistoryEntry[]>(() => {
-    const targets = trail();
-    return targets.map((target, index) => {
-      const prefix = targets.slice(0, index + 1);
-      return {
-        value: `drive-detail:${index}:${documentRouteFromTarget(target).type}:${target.id}`,
-        data: target,
-        historyIndex: historyIndexForTrail(prefix),
-      };
-    });
-  });
+  const entries = createMemo<EntityDetailNavigationStackEntry[]>(() =>
+    trail().map((target, index) => ({
+      value: `drive-detail:${index}:${documentRouteFromTarget(target).type}:${target.id}`,
+      data: target,
+    }))
+  );
   const active = () => entries().at(-1);
 
   const resolveTarget = (
@@ -237,27 +176,19 @@ export function DriveDetailNavigationProvider(
       if (entryIndex < 0) return;
       if (entryIndex === currentEntries.length - 1) return;
 
-      const entry = currentEntries[entryIndex]!;
-      const snapshot = history();
-      if (entry.historyIndex !== undefined && snapshot) {
-        navigate(entry.historyIndex - snapshot.index);
-        return;
-      }
+      const nextTrail = currentEntries
+        .slice(0, entryIndex + 1)
+        .map((candidate) => candidate.data)
+        .filter(
+          (candidate): candidate is DriveDocumentTarget =>
+            candidate.type === 'document'
+        );
+      const target = nextTrail.at(-1);
+      if (!target) return;
 
-      const target = entry.data;
-      if (target.type !== 'document') return;
       navigate(
         driveDestination(props.location(), documentRouteFromTarget(target)),
-        {
-          replace: true,
-          state: currentEntries
-            .slice(0, entryIndex + 1)
-            .map((candidate) => candidate.data)
-            .filter(
-              (candidate): candidate is DriveDocumentTarget =>
-                candidate.type === 'document'
-            ),
-        }
+        { state: nextTrail }
       );
     },
 
