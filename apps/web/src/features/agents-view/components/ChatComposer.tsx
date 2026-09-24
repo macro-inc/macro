@@ -74,6 +74,10 @@ export function ChatComposer(props: {
   let container: HTMLDivElement | undefined;
   useTouchOutsideToDismissKeyboard(() => container);
   const disabled = () => !!props.blockedReason || props.session?.disabled;
+  // A prompt sent into an open turn waits in the server queue behind it, so
+  // the control says queue rather than send — the same wording the block's
+  // composer uses.
+  const sendQueues = () => props.session?.busy === true;
   const canSendNext = () =>
     !hasContent() &&
     !props.session?.sendNextHeld &&
@@ -274,7 +278,8 @@ export function ChatComposer(props: {
                       fallback={
                         <SendButton
                           appearance="composer"
-                          aria-label="Send"
+                          aria-label={sendQueues() ? 'Queue message' : 'Send'}
+                          tooltip={sendQueues() ? 'Queue message' : 'Send'}
                           title={props.blockedReason}
                           disabled={
                             !hasContent() ||

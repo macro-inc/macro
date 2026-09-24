@@ -711,6 +711,12 @@ must stay hidden; subsequent live messages must still appear.
   Enters therefore advance one entry, not two: each advance ends the turn the server is
   actually running. Typed composer text still takes priority and Enter
   queues that new prompt normally.
+- A draft outranks the in-flight controls. As soon as the composer holds text or an
+  attachment, the button on its right is the send arrow — labelled `Queue message`
+  while a turn is open — and clicking it queues that prompt behind the running turn.
+  The `Stop` square (and the `Send next queued message` action) come back when the
+  composer is empty again. This is what makes a mid-turn follow-up possible on touch,
+  where the button is the only send affordance.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
   entries, then stop.

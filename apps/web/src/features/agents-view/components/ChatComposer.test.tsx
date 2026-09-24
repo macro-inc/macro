@@ -148,7 +148,7 @@ describe('Chat session input', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(stop).toHaveBeenCalledOnce();
     type('Next request');
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Queue message' }));
     expect(send).toHaveBeenCalledWith('Next request', []);
   });
 
@@ -305,7 +305,9 @@ describe('attachments in the shared composer', () => {
       />
     ));
     expect(
-      screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')
+      screen
+        .getByRole('button', { name: 'Queue message' })
+        .hasAttribute('disabled')
     ).toBe(true);
     editor.enter?.(undefined, '');
     expect(send).not.toHaveBeenCalled();
