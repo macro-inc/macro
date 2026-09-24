@@ -8,6 +8,9 @@ import { PosthogProvider, ShowFeatureFlag, useFeatureFlag } from './posthog';
 const posthog = vi.hoisted(() => ({
   onFeatureFlags: vi.fn<PostHog['onFeatureFlags']>(),
   getFeatureFlagResult: vi.fn<PostHog['getFeatureFlagResult']>(),
+  featureFlags: {
+    getFlagVariants: vi.fn<() => Record<string, string | boolean>>(),
+  },
   unsubscribe: vi.fn(),
 }));
 
@@ -58,6 +61,7 @@ function renderFlag(flag: RemoteFlag = channelTags) {
 beforeEach(() => {
   vi.clearAllMocks();
   posthog.getFeatureFlagResult.mockReset();
+  posthog.featureFlags.getFlagVariants.mockReturnValue({});
   posthog.onFeatureFlags.mockReturnValue(posthog.unsubscribe);
 });
 afterEach(cleanup);
@@ -100,6 +104,22 @@ describe('reactive PostHog flags', () => {
     await receiveFlags(flagResult(true, 'second'), flags);
     expect(view.result().payload).toBe('second');
     expect(view.mount).toHaveBeenCalledOnce();
+  });
+
+  it('renders cached flags on first paint before PostHog answers', () => {
+    posthog.featureFlags.getFlagVariants.mockReturnValue({
+      [channelTags.key]: true,
+    });
+    posthog.getFeatureFlagResult.mockReturnValue(flagResult(true, 'cached'));
+
+    const view = renderFlag();
+
+    expect(view.result()).toEqual({
+      enabled: true,
+      payload: 'cached',
+      loading: false,
+    });
+    expect(screen.getByRole('button', { name: 'New label' })).toBeTruthy();
   });
 
   it('keeps painted content while a flag-enabled lazy view loads', async () => {
