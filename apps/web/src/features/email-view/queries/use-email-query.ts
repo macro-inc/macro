@@ -72,6 +72,10 @@ type AdmittedEmails = {
   items: EmailEntity[];
 };
 
+type RetainedEmailPublication = AdmittedEmails & {
+  resolved: Map<string, EmailEntity | undefined>;
+};
+
 /** Query, service search, and row assembly owned by the Email view. */
 export function useEmailDataSource(
   state: EmailDataSourceInput,
@@ -236,28 +240,49 @@ export function useEmailDataSource(
     };
   });
 
-  const entities = createMemo<EmailEntity[]>(() => {
-    if (!facetsReady() || (!search.isSearching() && isListPending())) return [];
-    if (!hasReadFilter())
-      return selectEmails(rawEntities()).filter(matchesOtherFacets);
-    const current = new Map<string, EmailEntity | undefined>();
-    for (const lookup of retainedQueries()) {
-      const data = lookup.data();
-      if (data === undefined) continue;
-      const byId = new Map(
-        selectEmails(data).map((email) => [email.id, email])
+  const publication = createMemo<RetainedEmailPublication>(
+    (previous) => {
+      const currentScope = scope();
+      if (!facetsReady() || (!search.isSearching() && isListPending())) {
+        return { scope: currentScope, items: [], resolved: new Map() };
+      }
+      if (!hasReadFilter()) {
+        return {
+          scope: currentScope,
+          items: selectEmails(rawEntities()).filter(matchesOtherFacets),
+          resolved: new Map(),
+        };
+      }
+      // Carry the last confirmed lookup through a new batch's pending read,
+      // including explicit non-membership. Otherwise pagination can flash old
+      // unread flags or resurrect an archived row from its discovery snapshot.
+      const current = new Map(
+        previous.scope === currentScope ? previous.resolved : []
       );
-      for (const id of lookup.ids()) current.set(id, byId.get(id));
-    }
-    return admitted().items.flatMap((snapshot) => {
-      // Snapshots bridge a pending lookup only. A confirmed non-match (trash,
-      // archive, changed search text membership, etc.) must not be resurrected.
-      const email = current.has(snapshot.id)
-        ? current.get(snapshot.id)
-        : snapshot;
-      return email && matchesOtherFacets(email) ? [email] : [];
-    });
-  });
+      for (const lookup of retainedQueries()) {
+        const data = lookup.data();
+        if (data === undefined) continue;
+        const byId = new Map(
+          selectEmails(data).map((email) => [email.id, email])
+        );
+        for (const id of lookup.ids()) current.set(id, byId.get(id));
+      }
+      return {
+        scope: currentScope,
+        resolved: current,
+        items: admitted().items.flatMap((snapshot) => {
+          // Snapshots bridge the first pending lookup only; subsequent pending
+          // reads retain the canonical value or exclusion from that lookup.
+          const email = current.has(snapshot.id)
+            ? current.get(snapshot.id)
+            : snapshot;
+          return email && matchesOtherFacets(email) ? [email] : [];
+        }),
+      };
+    },
+    { scope: '', items: [], resolved: new Map() }
+  );
+  const entities = () => publication().items;
 
   const listEntities = createMemo((): WithNotification<EntityData>[] =>
     entities().map((email) =>

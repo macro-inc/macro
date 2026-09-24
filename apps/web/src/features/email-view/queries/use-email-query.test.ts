@@ -403,6 +403,31 @@ describe('Email list query transitions', () => {
       setRetentionLoading(false);
     });
     expect(ids(source)).toEqual([]);
+    setRetentionLoading(true);
+    expect(ids(source)).toEqual([]);
+  });
+
+  it('keeps the confirmed read flag while a retained batch reloads', () => {
+    const {
+      source,
+      setState,
+      setDiscoveryEntities,
+      setRetainedEntities,
+      setRetentionLoading,
+    } = mount();
+    setState('facets', { read: ['unread'] });
+    expect(ids(source)).toEqual(['noise']);
+    batch(() => {
+      setDiscoveryEntities([]);
+      setRetainedEntities([{ ...email('noise'), isRead: true }]);
+    });
+    expect(source.items().find((row) => row.kind === 'entity')).toMatchObject({
+      entity: { isRead: true },
+    });
+    setRetentionLoading(true);
+    expect(source.items().find((row) => row.kind === 'entity')).toMatchObject({
+      entity: { isRead: true },
+    });
   });
 
   it('does not retain admitted hits when the search text changes', () => {
