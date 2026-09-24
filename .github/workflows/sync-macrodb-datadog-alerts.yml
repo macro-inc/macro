@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: namespace-profile-linux-small
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
