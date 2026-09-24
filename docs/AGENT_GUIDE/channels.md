@@ -333,7 +333,10 @@ optional `Favorites` section and the
 independently paginated `Channels` and `DMs` sections. Favorites appears when
 the user has channel favorites and only lists channels. Channel favorites open
 in the channel preview. Shift-clicking a favorite, channel, or DM opens that
-conversation in a new split instead.
+conversation in a new split instead. Right-clicking a favorite opens the same
+menu as its channel's row in the sections below — `Mark Read`, `Unfavorite`,
+`Mute notifications`, `Copy Link`, and the label actions when channel labels
+are enabled — and focuses the favorite row rather than the channel's own row.
 
 ### Channel labels
 

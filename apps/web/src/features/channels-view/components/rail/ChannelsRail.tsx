@@ -287,25 +287,42 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return 'Channel labels are unavailable right now.';
   };
 
-  // A labelled channel renders under its label even before the paginated
-  // Channels source reaches it, so fetch the ones the sources have not loaded.
-  const labelledChannelIds = createMemo(() => [
-    ...new Set(labels().flatMap((label) => label.channelIds)),
+  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
+  const favoriteChannelIds = createMemo(() =>
+    favorites()
+      .filter((favorite) => favorite.entityType === 'channel')
+      .map((favorite) => favorite.entityId)
+  );
+
+  // A labelled or favorited channel has a row before the paginated Channels
+  // source reaches it, so fetch the ones the sources have not loaded: a label
+  // needs them to list its channels, a favorite row to act on its channel.
+  const referencedChannelIds = createMemo(() => [
+    ...new Set([
+      ...labels().flatMap((label) => label.channelIds),
+      ...favoriteChannelIds(),
+    ]),
   ]);
-  const missingLabelledIds = createMemo(() => {
+  const missingChannelIds = createMemo(() => {
     const loaded = new Set(channels().map((channel) => channel.id));
-    return labelledChannelIds().filter((id) => !loaded.has(id));
+    return referencedChannelIds().filter((id) => !loaded.has(id));
   });
-  const labelledChannelsQuery = useChannelsByIdsQuery(missingLabelledIds);
-  const labelledChannels = createMemo<ChannelEntity[]>((previous) => {
-    if (!channelTagsEnabled()) return [];
-    if (!labelledChannelsQuery.isEnabled || labelledChannelsQuery.isLoading)
+  const referencedChannelsQuery = useChannelsByIdsQuery(missingChannelIds);
+  const referencedChannels = createMemo<ChannelEntity[]>((previous) => {
+    if (!referencedChannelsQuery.isEnabled || referencedChannelsQuery.isLoading)
       return previous;
     return deduplicateChannels([
-      (labelledChannelsQuery.data?.entities ?? []).filter(isChannelEntity),
+      (referencedChannelsQuery.data?.entities ?? []).filter(isChannelEntity),
       previous,
     ]);
   }, []);
+  // Only a label puts a fetched channel in a section. A favorited one stays
+  // out of the section lists, and so out of their unread counts.
+  const labelledChannels = createMemo<ChannelEntity[]>(() => {
+    if (!channelTagsEnabled()) return [];
+    const labelled = new Set(labels().flatMap((label) => label.channelIds));
+    return referencedChannels().filter((channel) => labelled.has(channel.id));
+  });
 
   const allChannels = createMemo(() =>
     deduplicateChannels([channels(), labelledChannels()])
@@ -313,10 +330,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const channelsById = createMemo(
     () => new Map(allChannels().map((channel) => [channel.id, channel]))
   );
+  const channelById = (channelId: string) =>
+    channelsById().get(channelId) ??
+    referencedChannels().find((channel) => channel.id === channelId);
 
   const channelActivity = useChannelRailActivity(allChannels, channelCalls);
-
-  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
 
   const isLabelOpen = (labelId: string) =>
     !state.collapsedLabels.includes(labelId);
@@ -1050,6 +1068,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     selectTab,
     sources: props.sources,
     favorites,
+    channelById,
     selectedChannel,
     isGroupOpen: (group) => state.expandedGroups[group],
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
