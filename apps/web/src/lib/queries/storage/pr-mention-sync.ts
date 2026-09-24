@@ -1,7 +1,7 @@
 import { queryClient } from '@queries/client';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { getForeignEntityResponse } from '@service-storage/generated/zod';
-import { pullRequestMentionKeys } from './keys';
+import { documentGithubPullRequestsKeys, pullRequestMentionKeys } from './keys';
 
 export async function handlePullRequestUpdated(
   payload: unknown
@@ -31,6 +31,14 @@ export async function handlePullRequestUpdated(
         : entity
     );
   }
+
+  // Invalidate task PR queries when a PR is updated. When a PR's task
+  // associations change, open task views need to refetch their PR lists.
+  // We don't know which specific tasks are affected from the foreign entity
+  // alone, so we invalidate all task PR queries.
+  void queryClient.invalidateQueries({
+    queryKey: documentGithubPullRequestsKeys._def,
+  });
 }
 
 export function invalidatePullRequestMentions(): void {
