@@ -387,29 +387,6 @@ function applyMediaScale(container: Element) {
   });
 }
 
-// Mail clients (and the backend sanitizer) drop <video>, so recipients get a
-// link to the uploaded file instead; the file itself is also attached.
-function replaceVideosWithLinks(container: Element) {
-  for (const video of container.querySelectorAll('video')) {
-    const src = video.getAttribute('src');
-    // Until the upload finishes the source is a local blob/preview URL that
-    // recipients can't open; the attachment still carries the file.
-    if (!src || !/^https?:\/\//i.test(src)) {
-      video.remove();
-      continue;
-    }
-    const link = video.ownerDocument.createElement('a');
-    link.href = src;
-    link.target = '_blank';
-    link.textContent = '▶ Play video';
-    link.setAttribute(
-      'style',
-      'display:inline-block;padding:8px 12px;border:1px solid #d0d0d0;border-radius:8px;color:#1a73e8;text-decoration:none;font-weight:500'
-    );
-    video.replaceWith(link);
-  }
-}
-
 export function prepareEmailBody(
   editor: LexicalEditor | undefined,
   // if this argument is provided, we append the message being replied to the html email body
@@ -452,8 +429,6 @@ export function prepareEmailBodyFromHtml(
 
   // Apply image scale to width/height attributes so the recipient sees the resized dimensions
   applyMediaScale(parsed.body);
-
-  replaceVideosWithLinks(parsed.body);
 
   // Convert Macro document mentions to HTML links in the parsed DOM
   const mentions = convertDocumentMentionsToLinks(parsed.body);

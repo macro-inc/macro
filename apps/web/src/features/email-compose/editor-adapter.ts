@@ -40,19 +40,22 @@ export const readDroppedEmailFiles: ComposeBodyActions['readDroppedFiles'] = (
     onFiles(uploaded.map((item) => item.file))
   );
 
-export function withInlineVideos(
+export function withVideoAttachments(
   onFilesReady: (entries: UploadInput[]) => Promise<void>,
-  onInlineVideos: ((files: File[]) => void) | undefined
+  onVideos: ((files: File[]) => void) | undefined
 ) {
-  if (!onInlineVideos) return onFilesReady;
+  if (!onVideos) return onFilesReady;
   return (entries: UploadInput[]) => {
-    const videos = entries.flatMap((entry) => {
-      if (isFileUploadEntry(entry) && entry.isFolder) return [];
+    const videos: File[] = [];
+    const rest = entries.filter((entry) => {
+      if (isFileUploadEntry(entry) && entry.isFolder) return true;
       const file = isFileUploadEntry(entry) ? entry.file : entry;
-      return isInlineVideoFileName(file.name) ? [file] : [];
+      if (!isInlineVideoFileName(file.name)) return true;
+      videos.push(file);
+      return false;
     });
-    if (videos.length > 0) onInlineVideos(videos);
-    return onFilesReady(entries);
+    if (videos.length > 0) onVideos(videos);
+    return onFilesReady(rest);
   };
 }
 
@@ -63,11 +66,11 @@ export function createComposeBodyActions(): ComposeBodyActions {
       toast.success(`${email} added to CC`);
     },
     readDroppedFiles: readDroppedEmailFiles,
-    insertFiles(editor, { files, directories, dropEvent, onInlineVideos }) {
+    insertFiles(editor, { files, directories, dropEvent, onVideos }) {
       handleFileFolderDrop(
         files,
         directories,
-        withInlineVideos(
+        withVideoAttachments(
           createFilesReadyHandler(
             editor,
             undefined,
@@ -78,7 +81,7 @@ export function createComposeBodyActions(): ComposeBodyActions {
             (ids) => ids.forEach(makeAttachmentPublic),
             { width: 542, height: 542 }
           ),
-          onInlineVideos
+          onVideos
         )
       );
     },

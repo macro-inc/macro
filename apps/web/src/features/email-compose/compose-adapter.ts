@@ -76,7 +76,7 @@ import {
 } from './context/compose-capabilities';
 import { decodeBase64Utf8 } from './core/decode-base64';
 import type { EmailDraft } from './core/email-draft';
-import { readDroppedEmailFiles, withInlineVideos } from './editor-adapter';
+import { readDroppedEmailFiles, withVideoAttachments } from './editor-adapter';
 import { makeAttachmentPublic } from './make-attachment-public';
 import {
   emailDraftLifecycleSource,
@@ -204,7 +204,7 @@ export function createEmailComposeContext(
         handleFileFolderDrop(
           input.files,
           input.directories,
-          withInlineVideos(
+          withVideoAttachments(
             createFilesReadyHandler(
               input.editor,
               input.sourceId,
@@ -216,7 +216,7 @@ export function createEmailComposeContext(
               input.onUploaded,
               { width: 542, height: 542 }
             ),
-            input.onInlineVideos
+            input.onVideos
           )
         );
       },

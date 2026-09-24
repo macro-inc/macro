@@ -76,32 +76,6 @@ describe('prepareEmailBodyFromHtml', () => {
       expect(decoded).toContain('href="https://example.com/accept"');
     }
   );
-  it('replaces inline videos with a link to the uploaded file', () => {
-    const prepared = prepareEmailBodyFromHtml(
-      '<p>Clip</p><div><video src="https://static.example.com/file/clip-1" width="542" height="300" data-scale="1"></video></div>'
-    );
-    const dom = new DOMParser().parseFromString(
-      decodeBase64Utf8(prepared.bodyHtml),
-      'text/html'
-    );
-    expect(dom.querySelector('video')).toBeNull();
-    const link = dom.querySelector('a');
-    expect(link?.getAttribute('href')).toBe(
-      'https://static.example.com/file/clip-1'
-    );
-    expect(link?.textContent).toBe('▶ Play video');
-  });
-
-  it('drops videos whose source is still a local upload preview', () => {
-    const prepared = prepareEmailBodyFromHtml(
-      '<p>Clip</p><div><video src="blob:https://app.example.com/1234"></video></div>'
-    );
-    const html = decodeBase64Utf8(prepared.bodyHtml);
-    expect(html).not.toContain('<video');
-    expect(html).not.toContain('blob:');
-    expect(html).not.toContain('Play video');
-  });
-
   it('does not add a quote block without appendReply (undo-send restore)', () => {
     const prepared = prepareEmailBodyFromHtml('<p>hi there</p>');
     const decoded = decodeBase64Utf8(prepared.bodyHtml);

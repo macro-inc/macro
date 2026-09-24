@@ -17,6 +17,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { createAttachmentViewer } from '../components/attachment-viewer';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { useCompose } from '../context/compose-context';
 import type { DraftFormAttachment } from '../primitives/email-form-state';
@@ -31,6 +32,7 @@ export function ComposeBody(props: {
   onAddFiles?: (files: File[]) => void;
 }) {
   const ctx = useCompose();
+  const attachmentViewer = createAttachmentViewer();
 
   const [editor, setEditor] = createSignal<LexicalEditor>();
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -109,7 +111,7 @@ export function ComposeBody(props: {
                   files: media,
                   directories: [],
                   dropEvent: event,
-                  onInlineVideos: props.onAddFiles,
+                  onVideos: props.onAddFiles,
                 });
               }
               const attachments = files.filter((file) => !media.includes(file));
@@ -174,7 +176,7 @@ export function ComposeBody(props: {
                 ctx.bodyActions.insertFiles(ed, {
                   files,
                   directories,
-                  onInlineVideos: props.onAddFiles,
+                  onVideos: props.onAddFiles,
                 });
               }}
             />
@@ -183,9 +185,15 @@ export function ComposeBody(props: {
         {ctx.signaturePreview?.()}
         <div class="flex flex-wrap items-center gap-2">
           <For each={ctx.attachments()}>
-            {(attachment) => <AttachmentItem attachment={attachment} />}
+            {(attachment) => (
+              <AttachmentItem
+                attachment={attachment}
+                onOpen={attachmentViewer.onClickFor(attachment)}
+              />
+            )}
           </For>
         </div>
+        <attachmentViewer.Viewer />
       </div>
       <Show when={ctx.validationError('no_message')}>
         {(err) => <div class="text-failure-ink mt-1">{err().message}</div>}
@@ -194,7 +202,10 @@ export function ComposeBody(props: {
   );
 }
 
-function AttachmentItem(props: { attachment: DraftFormAttachment }) {
+function AttachmentItem(props: {
+  attachment: DraftFormAttachment;
+  onOpen?: () => void;
+}) {
   const ctx = useCompose();
 
   const handleRemove = () => {
@@ -212,6 +223,7 @@ function AttachmentItem(props: { attachment: DraftFormAttachment }) {
             }}
             removable
             onRemove={handleRemove}
+            onClick={props.onOpen}
           />
         )}
       </Match>
@@ -224,6 +236,7 @@ function AttachmentItem(props: { attachment: DraftFormAttachment }) {
             }}
             removable
             onRemove={handleRemove}
+            onClick={props.onOpen}
           />
         )}
       </Match>
@@ -236,6 +249,7 @@ function AttachmentItem(props: { attachment: DraftFormAttachment }) {
             }}
             removable
             onRemove={handleRemove}
+            onClick={props.onOpen}
           />
         )}
       </Match>

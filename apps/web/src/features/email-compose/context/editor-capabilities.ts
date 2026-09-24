@@ -13,7 +13,7 @@ export interface ComposeBodyActions {
       files: FileSystemFileEntry[];
       directories: FileSystemDirectoryEntry[];
       dropEvent?: DragEvent;
-      onInlineVideos?: (files: File[]) => void;
+      onVideos?: (files: File[]) => void;
     }
   ): void;
 }
