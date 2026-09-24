@@ -231,6 +231,14 @@ export function splitLocationFromContent(
     };
   }
 
+  if (content.type === 'pr') {
+    return {
+      route: {
+        matches: [{ id: 'pr-detail', params: { foreignEntityId: content.id } }],
+      },
+    };
+  }
+
   if (content.type === 'component' && content.id === 'documents') {
     return { route: { matches: [{ id: 'drive', params: {} }] } };
   }
@@ -319,6 +327,13 @@ export function splitContentFromLocation(
     return { type: 'component', id: root.id.slice('view-'.length) };
   if (root.id === 'drive') return { type: 'component', id: 'documents' };
   if (root.id === 'settings') return { type: 'component', id: 'settings' };
+  if (root.id === 'pr-detail') {
+    const { foreignEntityId } = routeParams(location.route);
+    if (typeof foreignEntityId === 'string' && foreignEntityId.length > 0) {
+      return { type: 'pr', id: foreignEntityId };
+    }
+    throw new Error('Invalid PR detail split route');
+  }
 
   const params = routeParams(location.route);
   if (

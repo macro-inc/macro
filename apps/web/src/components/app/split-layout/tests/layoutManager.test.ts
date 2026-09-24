@@ -883,6 +883,31 @@ describe('layoutManager', () => {
       }
     );
 
+    it('opens a PR on its standalone route and keeps the existing block content identity', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/pr/pr-1');
+      await router.settled();
+      const split = manager.splits()[0];
+      expect(split.content).toMatchObject({ type: 'pr', id: 'pr-1' });
+      expect(router.route(split.id)?.matches).toEqual([
+        { id: 'pr-detail', params: { foreignEntityId: 'pr-1' } },
+      ]);
+      expect(location.read().pathname).toBe('/pr/pr-1');
+      router.dispose();
+      dispose();
+    });
+
+    it('uses the PR route for existing split navigation', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/inbox');
+      await router.settled();
+      manager.getSplit(manager.splits()[0].id)!.replace({
+        next: { type: 'pr', id: 'pr-2' },
+      });
+      await router.settled();
+      expect(location.read().pathname).toBe('/pr/pr-2');
+      router.dispose();
+      dispose();
+    });
+
     it('keeps Drive list routes on touch', async () => {
       const { location, router, dispose } = ingressRouter(
         '/drive/~/drive/shared/~/drive/folder/folder',

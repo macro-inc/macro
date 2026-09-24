@@ -5,6 +5,7 @@ import {
   agentsViewRoute,
   codersRoute,
 } from '@app/features/agents-view/route';
+import { prDetailRoute } from '@app/features/block-pr/route';
 import { calendarSplitRoute } from '@app/features/calendar-view/route';
 import { channelsSplitRoute } from '@app/features/channels-view/route';
 import { companiesRoute } from '@app/features/companies/route';
@@ -47,6 +48,7 @@ export const appSplitRoutes = defineRoutes({
     companiesRoute,
     foldersRoute,
     searchRoute,
+    prDetailRoute,
     legacySplitRoute,
   ],
   globalSearch: ['referral_code'],

@@ -1,11 +1,14 @@
 import {
-  type BlockTool,
-  ResponsiveBlockToolbar,
-} from '@components/app/ResponsiveBlockToolbar';
-import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
+  type FileOperation,
+  SplitFileMenu,
+} from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
-import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { useBlockId } from '@core/block';
+import {
+  SplitTitleFileMenu,
+  StaticSplitLabel,
+} from '@components/app/split-layout/components/SplitLabel';
+import { Permissions } from '@core/component/SharePermissions';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
 import GithubIcon from '@icon/mcp-github.svg';
 import GitMerge from '@phosphor/git-merge.svg';
@@ -74,15 +77,15 @@ export function PrStatusChip(props: { status: string; class?: string }) {
 }
 
 /**
- * PR identity in the split header chrome plus the standard split toolbar:
- * file menu (open on GitHub), side panel toggle, and narrow content/info
- * tabs — matching the other block types.
+ * PR identity in the split header chrome and file menu, independent of the
+ * legacy block context. Foreign PRs have the same read-only permission that
+ * the legacy BlockLoader supplied by default.
  */
 export function PrSplitHeader(props: {
+  foreignEntityId: string;
   prRef: PrRef;
   enrichment: GithubPullRequest | undefined;
 }) {
-  const blockId = useBlockId();
   const title = () => props.enrichment?.name ?? prDisplayName(props.prRef);
   const githubUrl = () => props.enrichment?.url ?? prHtmlUrl(props.prRef);
 
@@ -93,8 +96,6 @@ export function PrSplitHeader(props: {
       action: () => openExternalUrl(githubUrl()),
     },
   ];
-
-  const tools: BlockTool[] = [];
 
   return (
     <>
@@ -110,13 +111,17 @@ export function PrSplitHeader(props: {
         />
       </SplitHeaderLeft>
 
-      <ResponsiveBlockToolbar
-        tools={tools}
-        ops={ops}
-        id={blockId}
-        itemType="foreign"
-        name={title()}
-      />
+      <SplitTitleFileMenu>
+        <SplitFileMenu
+          id={props.foreignEntityId}
+          itemType="foreign"
+          entityKind="pr"
+          permissions={Permissions.CAN_VIEW}
+          name={title()}
+          ops={ops}
+          buttonClass={isTouchDevice() ? 'order-last' : 'order-first'}
+        />
+      </SplitTitleFileMenu>
     </>
   );
 }
