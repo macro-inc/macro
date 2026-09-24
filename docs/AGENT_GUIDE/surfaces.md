@@ -905,20 +905,6 @@ before the call name. Owners can click the name to rename it, then Save or press
 Enter; Cancel or Escape discards the edit. Guests and other participants see a
 read-only name.
 
-### Local call previews
-
-Local development previews are mounted at `/app/component/call-join-preview`,
-`/app/component/call-preview`,
-`/app/component/call-incoming-preview`, and `/app/component/call-lifecycle-preview`.
-They use sample data, participant photos, and simulated media/actions, including
-guest and signed-in joining, leaving for Macro, call controls, and details.
-The incoming preview exercises themed invitations and creator-named Live rows.
-The lifecycle preview keeps a simulated teammate in the room across page remounts.
-Join, leave, reopen from Live, then join again with `Hold leave cleanup` checked:
-the second join must wait with one join request until `Finish pending leave` is
-pressed. Live stays available until `End simulated call`.
-Preview invitations send no email or rings and preview controls request no media access.
-
 ### Sharing a call
 
 A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical

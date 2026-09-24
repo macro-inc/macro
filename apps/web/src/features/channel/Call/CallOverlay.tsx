@@ -54,16 +54,10 @@ function ParticipantTileWrapper(props: {
   );
 }
 
-type ParticipantAvatarRenderer = (
-  userId: string | undefined,
-  name: string | undefined
-) => JSXElement;
-
 function ParticipantAvatar(props: {
   userId: string | undefined;
   fallbackName: string | undefined;
   avatarSize?: 'sm' | 'md';
-  renderAvatar?: ParticipantAvatarRenderer;
 }) {
   const avatarClass = () =>
     cn(
@@ -80,34 +74,27 @@ function ParticipantAvatar(props: {
     <div class="flex items-center justify-center size-full p-4">
       <div class={avatarClass()}>
         <Show
-          when={props.renderAvatar}
+          when={props.userId?.trim()}
+          keyed
           fallback={
-            <Show
-              when={props.userId?.trim()}
-              keyed
-              fallback={
-                <div
-                  class={cn(
-                    'flex size-full items-center justify-center rounded-full bg-ink-extra-muted text-surface font-semibold',
-                    props.avatarSize === 'sm' ? 'text-xl' : 'text-4xl'
-                  )}
-                >
-                  {fallbackInitial()}
-                </div>
-              }
-            >
-              {(userId) => (
-                <UserIcon
-                  id={userId}
-                  size="fill"
-                  suppressClick
-                  showTooltip={false}
-                />
+            <div
+              class={cn(
+                'flex size-full items-center justify-center rounded-full bg-ink-extra-muted text-surface font-semibold',
+                props.avatarSize === 'sm' ? 'text-xl' : 'text-4xl'
               )}
-            </Show>
+            >
+              {fallbackInitial()}
+            </div>
           }
         >
-          {(render) => render()(props.userId, props.fallbackName)}
+          {(userId) => (
+            <UserIcon
+              id={userId}
+              size="fill"
+              suppressClick
+              showTooltip={false}
+            />
+          )}
         </Show>
       </div>
     </div>
@@ -123,7 +110,6 @@ function LocalParticipantTile(props: {
   userId: string | undefined;
   fallbackName: string | undefined;
   avatarSize?: 'sm' | 'md';
-  renderAvatar?: ParticipantAvatarRenderer;
   class?: string;
 }) {
   return (
@@ -139,7 +125,6 @@ function LocalParticipantTile(props: {
             userId={props.userId}
             fallbackName={props.fallbackName}
             avatarSize={props.avatarSize}
-            renderAvatar={props.renderAvatar}
           />
         }
       >
@@ -157,10 +142,7 @@ function LocalParticipantTile(props: {
   );
 }
 
-function ParticipantTile(props: {
-  participant: RemoteParticipant;
-  renderAvatar?: ParticipantAvatarRenderer;
-}) {
+function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
   const displayName = () =>
@@ -188,11 +170,7 @@ function ParticipantTile(props: {
       <Show
         when={cameraTrack()}
         fallback={
-          <ParticipantAvatar
-            userId={macroId()}
-            fallbackName={displayName()}
-            renderAvatar={props.renderAvatar}
-          />
+          <ParticipantAvatar userId={macroId()} fallbackName={displayName()} />
         }
       >
         <TrackView track={cameraTrack()} />
@@ -234,7 +212,6 @@ export function CallOverlay(props: {
   showTeamSharing?: boolean;
   sharedWithTeam?: boolean;
   localName?: string;
-  renderAvatar?: ParticipantAvatarRenderer;
 }) {
   const callCtx = useCallContext();
   const currentUserId = useUserId();
@@ -335,7 +312,6 @@ export function CallOverlay(props: {
               isVideoMuted={callCtx.isVideoMuted()}
               track={localVideoTrack()}
               userId={localUserId()}
-              renderAvatar={props.renderAvatar}
               fallbackName={
                 props.localName ||
                 callCtx.room()?.localParticipant.name ||
@@ -349,12 +325,7 @@ export function CallOverlay(props: {
             class={`size-full grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`}
           >
             <For each={participants()}>
-              {(participant) => (
-                <ParticipantTile
-                  participant={participant}
-                  renderAvatar={props.renderAvatar}
-                />
-              )}
+              {(participant) => <ParticipantTile participant={participant} />}
             </For>
           </div>
 
@@ -368,7 +339,6 @@ export function CallOverlay(props: {
               isVideoMuted={callCtx.isVideoMuted()}
               track={localVideoTrack()}
               userId={localUserId()}
-              renderAvatar={props.renderAvatar}
               fallbackName={
                 props.localName ||
                 callCtx.room()?.localParticipant.name ||

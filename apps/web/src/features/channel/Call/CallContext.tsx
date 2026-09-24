@@ -448,9 +448,6 @@ export type CallState = {
 
 const CallContext = createContext<CallState>();
 
-/** Supplies a call controller to a subtree, including isolated UI previews. */
-export const CallStateProvider = CallContext.Provider;
-
 export function useCallContext(): CallState {
   const ctx = useContext(CallContext);
   if (!ctx) {

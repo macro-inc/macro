@@ -323,28 +323,6 @@ if (LOCAL_ONLY) {
 
 if (import.meta.env.DEV) {
   registerComponent(
-    'call-lifecycle-preview',
-    lazy(() => import('@app/features/meetings/debug/MeetingLifecyclePreview'))
-  );
-  registerComponent(
-    'call-incoming-preview',
-    lazy(() => import('@app/features/meetings/debug/IncomingCallPreview'))
-  );
-  registerComponent(
-    'call-join-preview',
-    lazy(async () => ({
-      default: (await import('@app/features/meetings/debug/CallsPreview'))
-        .JoinCallPreview,
-    }))
-  );
-  registerComponent(
-    'call-preview',
-    lazy(async () => ({
-      default: (await import('@app/features/meetings/debug/CallsPreview'))
-        .InCallPreview,
-    }))
-  );
-  registerComponent(
     'spreadsheet-demo',
     withAuth(() => {
       const enabled = useSpreadsheetAccess();
