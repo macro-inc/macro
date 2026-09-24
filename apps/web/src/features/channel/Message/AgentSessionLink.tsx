@@ -1,4 +1,5 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { splitMessageContent } from './agent-session-link';
@@ -9,9 +10,10 @@ type AgentSessionLinkProps = {
 };
 
 /**
- * A quiet "View agent session" link on the sender line of a message an
- * agent posted from a session, opening that session. Rendered only when the
- * message leads with the harness's session node; see `agent-session-link`.
+ * A quiet "Open Session" chip on the sender line of a message an agent
+ * posted from a session, opening that session in its own split. Rendered
+ * only when the message leads with the harness's session node; see
+ * `agent-session-link`.
  */
 export function AgentSessionLink(props: AgentSessionLinkProps) {
   const message = useMessage();
@@ -24,7 +26,9 @@ export function AgentSessionLink(props: AgentSessionLinkProps) {
         <button
           type="button"
           class={cn(
-            'shrink-0 text-xs leading-none text-ink-muted hover:text-ink hover:underline',
+            'inline-flex shrink-0 items-center gap-1 rounded-full',
+            'bg-surface px-2 py-0.5 text-xs leading-none text-ink-muted',
+            'transition-colors hover:bg-hover hover:text-ink',
             props.class
           )}
           title="Open the agent session this message came from"
@@ -36,7 +40,8 @@ export function AgentSessionLink(props: AgentSessionLinkProps) {
             );
           }}
         >
-          View agent session
+          Open Session
+          <ArrowUpRightIcon class="size-3" aria-hidden="true" />
         </button>
       )}
     </Show>

@@ -1026,6 +1026,15 @@ export type ProjectItemType = 'document' | 'chat' | 'project';
  */
 export type SearchSkillsMatchType = 'partial' | 'exact';
 /**
+ * User tools are pending until a user executes them
+ */
+export type UserToolResponseForSendEmailResponse =
+  | 'PendingUserExecution'
+  | 'Rejected'
+  | {
+      UserAction: SendEmailResponse;
+    };
+/**
  * Response from the SendEmail tool.
  */
 export type SendEmailResponse =
@@ -1046,15 +1055,6 @@ export type SendEmailResponse =
       convertedToDraft: {
         draft_id: string;
       };
-    };
-/**
- * User tools are pending until a user executes them
- */
-export type UserToolResponseForSendEmailResponse =
-  | 'PendingUserExecution'
-  | 'Rejected'
-  | {
-      UserAction: SendEmailResponse;
     };
 export type ToolEntityType =
   | 'document'
@@ -5729,64 +5729,7 @@ export interface SendChannelMessageResponse {
   message_id: string;
 }
 /**
- * Send an email immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in: describe the email to the user in prose there, ask whether to send it, wait for their reply, and call this tool only once they have approved that specific email - quoting their approving message in userConfirmation. Never call it without one, and never call it in the agent session view or in chat: use SendEmail there, whose review card or composer is the confirmation. Takes the same fields as SendEmail; write the body in Markdown, which is rendered to HTML on send.
- */
-export interface SendConfirmedEmail {
-  /**
-   * The subject line of the email.
-   */
-  subject: string;
-  /**
-   * The body of the email, written as Markdown. A host with a composer
-   * (chat) replaces this with the base64url-encoded HTML the composer
-   * exported before the tool runs; a host without one (an agent session)
-   * leaves the Markdown, and this tool renders it the same way.
-   */
-  body: string;
-  /**
-   * The primary recipients (To field).
-   */
-  to: EmailRecipient[];
-  /**
-   * Carbon copy recipients (optional).
-   */
-  cc?: EmailRecipient[];
-  /**
-   * Blind carbon copy recipients (optional).
-   */
-  bcc?: EmailRecipient[];
-  /**
-   * The ID of a message to reply to (optional). When set, the email is
-   * sent as a reply within the same thread.
-   */
-  replyingToId?: string | null;
-  /**
-   * Per-message signature override, set by the composer's signature preview —
-   * not normally by you. Omit to use the inbox's default policy (always on a
-   * new email; on replies/forwards only when the user enabled it). `false`
-   * excludes the signature for this one email.
-   */
-  includeSignature?: boolean | null;
-  /**
-   * The user's own message approving this specific email, quoted verbatim - for example their "yes, send it" after you described the email in prose. Required: do not call this tool without one, do not paraphrase it, and never supply it yourself.
-   */
-  userConfirmation: string;
-}
-/**
- * A recipient for an email.
- */
-export interface EmailRecipient {
-  /**
-   * The recipient's email address.
-   */
-  email: string;
-  /**
-   * The recipient's display name (optional).
-   */
-  name?: string | null;
-}
-/**
- * Draft, compose, and send an email. ALWAYS use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) — never write the email as plain text in the chat. This tool opens the email draft in the composer for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
+ * Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
  */
 export interface SendEmail {
   /**
@@ -5824,6 +5767,19 @@ export interface SendEmail {
    * excludes the signature for this one email.
    */
   includeSignature?: boolean | null;
+}
+/**
+ * A recipient for an email.
+ */
+export interface EmailRecipient {
+  /**
+   * The recipient's email address.
+   */
+  email: string;
+  /**
+   * The recipient's display name (optional).
+   */
+  name?: string | null;
 }
 /**
  * Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.
@@ -6313,6 +6269,50 @@ export interface WebSearchResponse {
 export interface WebSearchToolError {
   type: string;
   error_code: string;
+}
+/**
+ * Send an email immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in: describe the email to the user in prose there, ask whether to send it, wait for their reply, and call this tool only once they have approved that specific email - quoting their approving message in userConfirmation. Never call it without one, and never call it in the agent session view or in chat: use SendEmail there, whose review card or composer is the confirmation. Takes the same fields as SendEmail; write the body in Markdown, which is rendered to HTML on send.
+ */
+export interface SendConfirmedEmail {
+  /**
+   * The subject line of the email.
+   */
+  subject: string;
+  /**
+   * The body of the email, written as Markdown. A host with a composer
+   * (chat) replaces this with the base64url-encoded HTML the composer
+   * exported before the tool runs; a host without one (an agent session)
+   * leaves the Markdown, and this tool renders it the same way.
+   */
+  body: string;
+  /**
+   * The primary recipients (To field).
+   */
+  to: EmailRecipient[];
+  /**
+   * Carbon copy recipients (optional).
+   */
+  cc?: EmailRecipient[];
+  /**
+   * Blind carbon copy recipients (optional).
+   */
+  bcc?: EmailRecipient[];
+  /**
+   * The ID of a message to reply to (optional). When set, the email is
+   * sent as a reply within the same thread.
+   */
+  replyingToId?: string | null;
+  /**
+   * Per-message signature override, set by the composer's signature preview —
+   * not normally by you. Omit to use the inbox's default policy (always on a
+   * new email; on replies/forwards only when the user enabled it). `false`
+   * excludes the signature for this one email.
+   */
+  includeSignature?: boolean | null;
+  /**
+   * The user's own message approving this specific email, quoted verbatim - for example their "yes, send it" after you described the email in prose. Required: do not call this tool without one, do not paraphrase it, and never supply it yourself.
+   */
+  userConfirmation: string;
 }
 /**
  * Read threaded content by ID(s). Supports reading channels, chats, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.

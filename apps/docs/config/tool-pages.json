@@ -67,6 +67,7 @@
   "AI/mcp/tools/search-tools",
   "AI/mcp/tools/self-knowledge",
   "AI/mcp/tools/send-channel-message",
+  "AI/mcp/tools/send-confirmed-email",
   "AI/mcp/tools/send-email",
   "AI/mcp/tools/set-entity-property",
   "AI/mcp/tools/set-sender-policy",
