@@ -278,51 +278,6 @@ where
         session_id: AgentSessionId,
         command: HarnessCommand,
     ) -> Result<CommandOutcome> {
-        match &command {
-            HarnessCommand::Open(open)
-                if AgentKind::of(open.bot_id) == AgentKind::SandboxedCoder
-                    && !is_macro_staff(&open.origin.sender) =>
-            {
-                return Err(AgentSessionError::Forbidden.into());
-            }
-            // The queue mutations sit behind the same staff gate as delivery:
-            // an edited entry is delivered later under its original identity,
-            // so rewriting (or dropping) what a Daytona session is about to
-            // run is the same privilege as prompting it.
-            HarnessCommand::Deliver(DeliverAction {
-                actor,
-                action: AgentAction::RespondToPermission(_),
-                ..
-            }) => {
-                if actor.is_none() {
-                    return Err(AgentSessionError::Forbidden.into());
-                }
-            }
-            HarnessCommand::Deliver(DeliverAction { actor, .. })
-            | HarnessCommand::EditQueued { actor, .. }
-            | HarnessCommand::RemoveQueued { actor, .. } => {
-                let session = self.sessions.get_session(session_id).await?;
-                if AgentKind::for_session(session.bot_id, &session.harness)
-                    == AgentKind::ClaudeCloud
-                    && !actor
-                        .as_ref()
-                        .is_some_and(|actor| session.owner_id.is_user(actor))
-                {
-                    return Err(AgentSessionError::Forbidden.into());
-                }
-                if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
-                    && !actor.as_ref().is_some_and(is_macro_staff)
-                {
-                    return Err(AgentSessionError::Forbidden.into());
-                }
-            }
-            HarnessCommand::Open(_)
-            | HarnessCommand::Turn(_)
-            | HarnessCommand::SessionStopped { .. }
-            | HarnessCommand::SetSandboxSize(_)
-            | HarnessCommand::Delete => {}
-        }
-
         match command {
             HarnessCommand::Open(command) => {
                 self.open(session_id, command).await?;
@@ -718,15 +673,20 @@ where
     /// dispatch that fails after the chip posted retries without posting a
     /// second one.
     ///
-    /// A failed dispatch puts the entry back at the front: it stays next in
-    /// line for the next turn end or the next prompt, and stays visible in
-    /// the queue meanwhile. The error still propagates, so a caller whose
-    /// own action triggered this dispatch hears about it.
+    /// A transient failure puts the entry back at the front for the next
+    /// turn end or prompt, without scheduling retries. Quota denial instead
+    /// rejects waiting work and publishes its public failure reason. The error
+    /// still propagates to the caller whose action triggered dispatch.
     #[tracing::instrument(err, skip(self), fields(%session_id))]
     pub(super) async fn dispatch_next(&self, session_id: AgentSessionId) -> Result<Dispatch> {
         let Some(mut entry) = self.queues.claim_next(session_id) else {
             return Ok(Dispatch::QueueEmpty);
         };
+
+        if let Err(error) = self.admit_session(session_id).await {
+            self.failed_dispatch(session_id, entry, &error).await;
+            return Err(error);
+        }
 
         // Compose a copy: the queued entry stays raw so a retry still edits
         // and re-composes the user's text, and the chip (below) still shows
@@ -808,7 +768,7 @@ where
                 Ok(Dispatch::Dispatched)
             }
             Err(error) => {
-                self.queues.requeue_front(session_id, entry);
+                self.failed_dispatch(session_id, entry, &error).await;
                 Err(error)
             }
         }
@@ -889,14 +849,22 @@ pub(super) async fn run_session_worker<
             span,
             route,
         } = queued;
-        let result = if route {
-            inner
-                .route_then_execute(session_id, command)
-                .instrument(span)
-                .await
-        } else {
-            inner.execute(session_id, command).instrument(span).await
-        };
+        let result = async {
+            let admission = inner.admit_command(session_id, &command).await;
+            if !route && let Err(error) = &admission {
+                inner.reject_forwarded(session_id, &command, error).await;
+            }
+            if let Some(outcome) = admission? {
+                return Ok(outcome);
+            }
+            if route {
+                inner.route_then_execute(session_id, command).await
+            } else {
+                inner.execute(session_id, command).await
+            }
+        }
+        .instrument(span)
+        .await;
         let _ = completed.send(result);
     }
 }

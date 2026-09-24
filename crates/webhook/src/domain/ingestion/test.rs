@@ -1642,7 +1642,8 @@ async fn agent_session_lifecycle_events_are_scoped_and_named_by_the_session() {
 #[tokio::test]
 async fn every_agent_session_lifecycle_variant_is_named_by_its_wire_tag() {
     use agent_session::domain::events::{
-        AgentSessionLifecycleEvent, SessionDeletedMetadata, WaitingForInputMetadata,
+        AgentSessionLifecycleEvent, CommandRejectedMetadata, SessionDeletedMetadata,
+        WaitingForInputMetadata,
     };
 
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
@@ -1671,6 +1672,18 @@ async fn every_agent_session_lifecycle_variant_is_named_by_its_wire_tag() {
         .await
         .expect("lifecycle events are ingested");
 
+    service
+        .ingest_agent_session_lifecycle_event(agent_session_lifecycle_event(|identity| {
+            AgentSessionLifecycleEvent::CommandRejected(CommandRejectedMetadata {
+                identity,
+                action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
+                code: "ai_allowance_exhausted".to_owned(),
+                error: "AI allowance exhausted".to_owned(),
+            })
+        }))
+        .await
+        .expect("rejections remain observable to session subscribers");
+
     let names: Vec<String> = lock(&repository.state)
         .match_calls
         .iter()
@@ -1678,7 +1691,11 @@ async fn every_agent_session_lifecycle_variant_is_named_by_its_wire_tag() {
         .collect();
     assert_eq!(
         names,
-        ["agent_session.waiting_for_input", "agent_session.deleted"]
+        [
+            "agent_session.waiting_for_input",
+            "agent_session.deleted",
+            "agent_session.command_rejected",
+        ]
     );
 }
 

@@ -77,6 +77,7 @@ impl Modify for SecurityAddon {
         claude_auth::StartResponse,
         claude_auth::CompleteRequest,
         claude_auth::EmptyRequest,
+        ai_billing::inbound::admission::AiAdmissionErrorBody,
         CreateAgentSessionRequest,
         CreateAgentSessionResponse,
         CreateSessionThread,

@@ -282,6 +282,7 @@ async fn run() -> anyhow::Result<()> {
         ),
     });
     let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
+    let admission = ai_billing::composition::ai_admission_service(pool.clone());
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
@@ -289,7 +290,10 @@ async fn run() -> anyhow::Result<()> {
             connection_gateway.clone(),
             session_audience.clone(),
         ),
-        HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(pool.clone())),
+        agent_session::domain::name_generation::AdmissionCheckingAgentSessionNameGenerator::new(
+            HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(pool.clone())),
+            Arc::clone(&admission),
+        ),
         turn_observer.clone(),
         lifecycle_publisher.clone(),
         replica,
@@ -870,6 +874,7 @@ async fn run() -> anyhow::Result<()> {
             // Finished / asking / mentioned reach people through the same
             // notification ingress channel messages use.
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
+            admission,
         )
         .with_repositories(open_repositories),
     );
