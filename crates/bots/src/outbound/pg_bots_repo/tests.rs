@@ -84,6 +84,7 @@ fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAge
         channel_ids: Vec::new(),
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: None,
+        is_coding: None,
     }
 }
 
@@ -102,6 +103,7 @@ fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAge
         channel_ids: Vec::new(),
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: Some(false),
+        is_coding: None,
     }
 }
 
@@ -681,6 +683,49 @@ async fn auto_accept_permissions_persists_each_of_its_three_states(
             .await?
             .unwrap()
             .auto_accept_permissions,
+        None
+    );
+    Ok(())
+}
+
+/// The coding choice is stored as the caller made it, absent included: an
+/// unchosen persona keeps following its harness rather than being frozen at
+/// whatever the harness rule said when it was saved.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn is_coding_persists_each_of_its_three_states(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let repo = PgBotsRepo::new(pool.clone());
+    let mut create = create_agent_req("chatty-coder", AgentChannelScope::All);
+    create.is_coding = Some(false);
+    let created = service.create_agent(user_id(USER_OWNER), create).await?;
+    assert_eq!(created.is_coding, Some(false));
+    assert_eq!(
+        repo.get_agent(created.bot.id).await?.unwrap().is_coding,
+        Some(false)
+    );
+    assert_eq!(
+        repo.list_manageable_agents(user_id(USER_OWNER)).await?[0].is_coding,
+        Some(false)
+    );
+
+    let mut update = update_agent_req("chatty-coder", AgentChannelScope::All);
+    update.is_coding = Some(true);
+    let updated = service
+        .update_agent(user_id(USER_OWNER), created.bot.id, update)
+        .await?;
+    assert_eq!(updated.is_coding, Some(true));
+    assert_eq!(
+        repo.get_agent(created.bot.id).await?.unwrap().is_coding,
+        Some(true)
+    );
+
+    let mut update = update_agent_req("chatty-coder", AgentChannelScope::All);
+    update.is_coding = None;
+    service
+        .update_agent(user_id(USER_OWNER), created.bot.id, update)
+        .await?;
+    assert_eq!(
+        repo.get_agent(created.bot.id).await?.unwrap().is_coding,
         None
     );
     Ok(())

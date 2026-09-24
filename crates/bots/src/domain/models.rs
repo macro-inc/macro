@@ -299,6 +299,11 @@ pub struct Agent {
     /// Whether the agent's sessions approve ACP permission requests without
     /// asking. `None` means always prompt. Bypass also requires the harness's opt-in.
     pub auto_accept_permissions: Option<bool>,
+    /// Whether the agent works in a repository, which decides how it answers
+    /// a channel mention: a coding agent posts a magic chip into its live
+    /// session, a chat agent replies in the thread. `None` follows the
+    /// harness - in-memory chats, every other runtime codes.
+    pub is_coding: Option<bool>,
 }
 
 /// Request to create a persisted AI agent.
@@ -337,6 +342,9 @@ pub struct CreateAgentRequest {
     /// asking. Omit to always prompt.
     #[serde(default)]
     pub auto_accept_permissions: Option<bool>,
+    /// Whether the agent is a coding agent. Omit to follow the harness.
+    #[serde(default)]
+    pub is_coding: Option<bool>,
 }
 
 /// Request to replace the editable configuration of a persisted AI agent.
@@ -375,6 +383,9 @@ pub struct UpdateAgentRequest {
     /// asking. Omit to always prompt.
     #[serde(default)]
     pub auto_accept_permissions: Option<bool>,
+    /// Whether the agent is a coding agent. Omit to follow the harness.
+    #[serde(default)]
+    pub is_coding: Option<bool>,
 }
 
 /// Channel containing a bot.
