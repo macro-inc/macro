@@ -59,22 +59,21 @@ pub struct AgentMentionedEvent {
 }
 
 /// A session somebody asked for from Macro itself - the composer - rather
-/// than by mentioning the bot. Nothing was posted anywhere: there is no
-/// thread to announce into, and the prompt travels here because there is no
-/// message to read it from.
+/// than by mentioning the bot. Nothing was posted anywhere, so there is no
+/// thread to announce into and no message to quote.
 ///
 /// Served by the bot's own runtime, which creates the session under the id
-/// named here so the requester can find it.
+/// named here so the requester can find it. No prompt: whoever asked
+/// delivers theirs through the session's control endpoint once it exists,
+/// so nothing a user typed travels on this topic.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentSessionRequestedEvent {
     /// The bot the session runs for.
     pub bot_id: BotId,
     /// The id the runtime must create the session under.
     pub session_id: AgentSessionId,
-    /// Who asked; owns the session and authors the prompt.
+    /// Who asked; owns the session the runtime creates.
     pub owner: String,
-    /// The first prompt.
-    pub prompt: String,
 }
 
 /// Events that open a new session.

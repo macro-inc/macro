@@ -131,10 +131,11 @@ impl WorkExecutor for Dispatcher {
                 session,
                 bot,
                 sender,
-                content,
             } => {
                 // Same create as a mention, minus the thread: the requester is
-                // waiting on this id, so the session is created under it.
+                // waiting on this id, so the session is created under it. No
+                // prompt here - whoever asked sends their own through the
+                // session once this create answers them.
                 let request = CreateAgentSessionRequest {
                     id: Some(session.as_uuid()),
                     bot_id: Some(bot.as_uuid()),
@@ -148,11 +149,12 @@ impl WorkExecutor for Dispatcher {
                     model: None,
                 };
                 self.api.create_session(&request, &sender).await?;
+                // Be dialed in before the prompt the requester is about to
+                // send arrives, so it lands on a runtime that is serving.
                 self.runtime
                     .ensure_connected()
                     .await
                     .map_err(DispatchError::Dial)?;
-                self.api.prompt(session, &sender, &content).await?;
                 Ok(())
             }
             TriggerWork::PromptExisting {

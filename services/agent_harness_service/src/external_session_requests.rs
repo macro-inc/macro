@@ -48,7 +48,6 @@ where
             bot_id: request.bot_id,
             session_id,
             owner: request.owner.as_ref().to_owned(),
-            prompt: request.prompt,
         });
         self.broker
             .send_event(&event)
@@ -61,7 +60,18 @@ where
         let deadline = tokio::time::Instant::now() + RUNTIME_ANSWER_TIMEOUT;
         loop {
             match self.sessions.get(session_id).await {
-                Ok(session) => return Ok(session),
+                Ok(session) => {
+                    let Some(model) = request.model else {
+                        return Ok(session);
+                    };
+                    // The runtime created the row on the persona's default.
+                    // The choice goes on the row now, ahead of the first
+                    // prompt - which the caller cannot send before this
+                    // answers - so the session binds on it, exactly as it
+                    // would on the persona's own.
+                    self.sessions.set_model(session_id, &model).await?;
+                    return self.sessions.get(session_id).await;
+                }
                 Err(error) => {
                     if tokio::time::Instant::now() >= deadline {
                         tracing::info!(

@@ -43,17 +43,16 @@ pub enum TriggerWork {
         content: String,
     },
     /// Open a session somebody asked for from the composer, under the id
-    /// they are waiting on, and forward their prompt. No thread, so nothing
-    /// is announced anywhere; the app shows the session directly.
+    /// they are waiting on. No thread, so nothing is announced anywhere;
+    /// the app shows the session directly and sends its own first prompt
+    /// through the session once this create answers.
     OpenRequested {
         /// The id to create the session under.
         session: AgentSessionId,
         /// The agent the session runs for.
         bot: BotId,
-        /// Who asked; owns the session and authors the prompt.
+        /// Who asked; owns the session.
         sender: MacroUserIdStr<'static>,
-        /// The first prompt.
-        content: String,
     },
     /// Forward a message into a session that already exists, serving it
     /// first if this daemon is not already. Just the prompt: the harness
@@ -88,7 +87,6 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 bot_id,
                 session_id,
                 owner,
-                prompt,
             },
         )) => {
             let sender = MacroUserIdStr::try_from(owner).map_err(|_| Skipped::NotFromUser)?;
@@ -96,7 +94,6 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 session: session_id,
                 bot: bot_id,
                 sender,
-                content: prompt,
             })
         }
         AgentTriggerTopicEvent::New(event) => {

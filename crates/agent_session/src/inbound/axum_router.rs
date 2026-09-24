@@ -1596,8 +1596,9 @@ pub enum CreateSessionApiError {
     NotAnAgentBot,
     /// The bot's sessions are opened by the trigger pipeline, not this route.
     ManagedBot,
-    /// The selected persona is served by an external runtime.
-    ExternalPersona,
+    /// A first-party system bot this deployment does not run: nothing can
+    /// serve it, and no caller can fix that.
+    UnmanagedSystemBot,
     /// The caller identified no user to own the session.
     OwnerRequired,
     /// The owner is not a parseable user id.
@@ -1608,9 +1609,9 @@ pub enum CreateSessionApiError {
     MixedSessionShape,
     /// The thread named neither a parent nor a channel.
     ThreadParentRequired,
-    /// A persona whose runtime is its operator's was asked for without a
-    /// prompt; the runtime has nothing to open the session for.
-    PromptRequired,
+    /// A field the request cannot honour for a persona whose runtime is its
+    /// operator's: they configure it, or the caller sends it separately.
+    ExternalPersonaUnsupported(&'static str),
     /// The thread already routes to a session; carries it for recovery.
     ThreadSessionExists {
         /// The existing session, when it could be resolved.
@@ -1646,10 +1647,13 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "this bot's sessions are opened by the trigger pipeline".to_owned(),
             ),
-            Self::ExternalPersona => (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "this persona cannot be started from Macro".to_owned(),
-            ),
+            Self::UnmanagedSystemBot => {
+                tracing::error!("a system bot this deployment does not run was selected");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "this agent is misconfigured and cannot be started".to_owned(),
+                )
+            }
             Self::OwnerRequired => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "owner is required for bot callers".to_owned(),
@@ -1669,9 +1673,9 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "thread.parent is required".to_owned(),
             ),
-            Self::PromptRequired => (
+            Self::ExternalPersonaUnsupported(field) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "a prompt is required to start this agent".to_owned(),
+                format!("{field} is not supported for an agent that runs on its own machine"),
             ),
             Self::ThreadSessionExists { session_id } => {
                 let body = ThreadSessionExistsResponse {
@@ -1699,6 +1703,12 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "owner is not a known user".to_owned(),
             ),
+            // Nothing to open onto: the persona's runtime is its operator's,
+            // and it did not answer. Says what they have to fix.
+            Self::Domain(AgentSessionError::RuntimeUnavailable(reason)) => {
+                tracing::info!(reason, "create refused: the bot's runtime is unavailable");
+                (StatusCode::CONFLICT, reason.to_owned())
+            }
             Self::Domain(error) => {
                 tracing::error!(error = ?error, "failed to open an agent session");
                 (
@@ -1840,7 +1850,9 @@ pub async fn create_agent_session_handler<
                     .map_err(|error| match error {
                         ManagedPersonaError::Unknown => CreateSessionApiError::UnknownBot,
                         ManagedPersonaError::NotAgent => CreateSessionApiError::NotAnAgentBot,
-                        ManagedPersonaError::External => CreateSessionApiError::ExternalPersona,
+                        ManagedPersonaError::UnmanagedSystemBot => {
+                            CreateSessionApiError::UnmanagedSystemBot
+                        }
                         ManagedPersonaError::Forbidden => CreateSessionApiError::NotYourBot,
                         ManagedPersonaError::Lookup(error) => CreateSessionApiError::Domain(error),
                     })?;
@@ -1850,7 +1862,9 @@ pub async fn create_agent_session_handler<
                 // session itself, exactly as it does for a mention: the
                 // request goes out as a trigger and the runtime creates the
                 // session under the id we hand it. Nothing is announced,
-                // there being no thread; the prompt rides on the trigger.
+                // there being no thread, and no prompt travels with it - the
+                // caller delivers its first prompt through the control
+                // endpoint once this answers, as it does for a managed one.
                 SelectedPersona::External { bot_id } => {
                     if request.repo_url.is_some() || request.repo_branch.is_some() {
                         return Err(CreateSessionApiError::Domain(
@@ -1859,10 +1873,13 @@ pub async fn create_agent_session_handler<
                             ),
                         ));
                     }
-                    let prompt = request
-                        .prompt
-                        .filter(|prompt| !prompt.trim().is_empty())
-                        .ok_or(CreateSessionApiError::PromptRequired)?;
+                    // Refused rather than dropped: nothing delivers it, and a
+                    // caller that sent one would otherwise never learn it was
+                    // ignored. A model is different - it is applied when the
+                    // session binds, like the persona's own.
+                    if request.prompt.is_some() {
+                        return Err(CreateSessionApiError::ExternalPersonaUnsupported("prompt"));
+                    }
                     let owner = owner
                         .as_user()
                         .cloned()
@@ -1879,7 +1896,7 @@ pub async fn create_agent_session_handler<
                                 .unwrap_or_else(AgentSessionId::new),
                             bot_id,
                             owner,
-                            prompt,
+                            model: request.model.filter(|model| !model.trim().is_empty()),
                         })
                         .await?;
                     return Ok((

@@ -109,16 +109,22 @@ pub enum SelectedPersona {
 
 /// A session asked for from the composer, for a bot whose runtime is its
 /// operator's. The runtime creates it, the way it does for a mention.
+///
+/// No prompt: the caller delivers its own through the control endpoint once
+/// the session exists, exactly as it does for a managed one, so a prompt the
+/// user typed never rides the trigger topic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestedExternalSession {
     /// The id the runtime is told to create the session under.
     pub session_id: AgentSessionId,
     /// The bot the session runs for.
     pub bot_id: BotId,
-    /// Who asked; owns the session and authors the prompt.
+    /// Who asked; owns the session that the runtime creates.
     pub owner: MacroUserIdStr<'static>,
-    /// The first prompt, delivered by the runtime once it has created the session.
-    pub prompt: String,
+    /// The model they chose over the persona's default, when they did. It
+    /// reaches the runtime the way the persona's own does: recorded on the
+    /// session, then selected when the session binds on its first prompt.
+    pub model: Option<String>,
 }
 
 /// Hands a composer request to the bot's own runtime and waits for the
@@ -139,8 +145,10 @@ pub enum ManagedPersonaError {
     Unknown,
     /// The bot has no agent runtime.
     NotAgent,
-    /// The bot is served by an external runtime.
-    External,
+    /// A first-party system bot this deployment does not run. It has no
+    /// operator to ask and no owner to authorize against, so it is nobody's
+    /// to start - a misconfiguration rather than a policy answer.
+    UnmanagedSystemBot,
     /// The owner does not own or belong to the persona's owner, or is not
     /// a user at all.
     Forbidden,
@@ -148,7 +156,8 @@ pub enum ManagedPersonaError {
     Lookup(AgentSessionError),
 }
 
-/// Resolve and authorize a managed persona for the session's owner.
+/// Resolve and authorize a persona for the session's owner, whoever runs its
+/// runtime.
 ///
 /// Ownership policy lives in the domain: private personas belong to their
 /// owner, team personas are available to team members, selected-channel
@@ -156,21 +165,10 @@ pub enum ManagedPersonaError {
 /// and managed system bots (the deployment's own coders) are available to
 /// everyone, exactly as they are when mentioned in a channel. Every rule is
 /// about a person, so an owner that is not a user selects nothing.
-pub async fn managed_persona_for_owner<Bots: BotDirectory>(
-    bots: &Bots,
-    bot_id: BotId,
-    owner: &Owner,
-) -> std::result::Result<SelectedManagedPersona, ManagedPersonaError> {
-    match persona_for_owner(bots, bot_id, owner).await? {
-        SelectedPersona::Managed(persona) => Ok(persona),
-        SelectedPersona::External { .. } => Err(ManagedPersonaError::External),
-    }
-}
-
-/// Resolve and authorize a persona for the session's owner, whoever runs its
-/// runtime. Same ownership policy as [`managed_persona_for_owner`]; an
-/// externally run persona is authorized the same way and then told apart, so
-/// the caller can hand the request to the runtime its operator runs.
+///
+/// A persona whose runtime its operator runs is authorized by those same
+/// rules and only then told apart, so the caller can hand the request to
+/// that runtime instead of opening the session here.
 pub async fn persona_for_owner<Bots: BotDirectory>(
     bots: &Bots,
     bot_id: BotId,
@@ -187,7 +185,7 @@ pub async fn persona_for_owner<Bots: BotDirectory>(
     }
     if facts.is_system {
         if !facts.is_managed {
-            return Err(ManagedPersonaError::External);
+            return Err(ManagedPersonaError::UnmanagedSystemBot);
         }
         return Ok(SelectedPersona::Managed(SelectedManagedPersona {
             bot_id,
