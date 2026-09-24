@@ -49,7 +49,23 @@ export function createLayoutAdapter<TSplitId>(
     right: SplitRouterEntry[]
   ): boolean =>
     left.length === right.length &&
-    left.every((entry, index) => entryEquals(entry, right[index]));
+    left.every((entry, index) =>
+      deepEqual(entry.location, right[index]?.location)
+    );
+
+  const snapshotsEqual = (
+    left: SplitRouterLayoutEntry<TSplitId>[],
+    right: SplitRouterLayoutEntry<TSplitId>[]
+  ) =>
+    left.length === right.length &&
+    left.every((entry, index) => {
+      const candidate = right[index];
+      return (
+        candidate !== undefined &&
+        Object.is(entry.splitId, candidate.splitId) &&
+        deepEqual(entry.location, candidate.location)
+      );
+    });
 
   const changedIds = (
     before: SplitRouterEntry[],
@@ -59,7 +75,7 @@ export function createLayoutAdapter<TSplitId>(
     const changed = new Set<TSplitId>();
 
     after.forEach((entry, index) => {
-      if (entryEquals(before[index], entry)) return;
+      if (deepEqual(before[index]?.location, entry.location)) return;
 
       const splitId = visible[index]?.splitId;
       if (splitId !== undefined) changed.add(splitId);
@@ -75,7 +91,7 @@ export function createLayoutAdapter<TSplitId>(
     for (const entry of requested) assertRouteEntry(routes, entry);
     if (layoutsEqual(current, requested)) return false;
 
-    layout.reconcile(requested);
+    layout.reconcile(requested.map((entry) => entry.location));
     return true;
   };
 
@@ -84,7 +100,7 @@ export function createLayoutAdapter<TSplitId>(
     target: TSplitId | 'new-split';
     replace: boolean;
     requireExistingTarget?: boolean;
-  }): boolean => {
+  }): { changed: boolean; layoutChanged: boolean; splitId?: TSplitId } => {
     assertRouteEntry(routes, options.entry);
     let targetId: TSplitId | undefined;
     let current: SplitRouterLayoutEntry<TSplitId> | undefined;
@@ -93,21 +109,45 @@ export function createLayoutAdapter<TSplitId>(
       current = find(targetId);
     }
 
-    if (options.requireExistingTarget && !current) return false;
-
-    if (targetId !== undefined && current) {
-      if (entryEquals(current, options.entry)) return false;
-
-      layout.updateCurrentEntry(targetId, () => options.entry);
-      return true;
+    if (options.requireExistingTarget && !current) {
+      return { changed: false, layoutChanged: false };
     }
 
-    layout.open({
-      ...options.entry,
+    if (targetId !== undefined && current) {
+      if (deepEqual(current.location, options.entry.location)) {
+        return { changed: true, layoutChanged: false, splitId: targetId };
+      }
+
+      layout.updateCurrentLocation(targetId, () => options.entry.location);
+      const applied = find(targetId);
+      if (!deepEqual(applied?.location, options.entry.location)) {
+        throw new Error('Split layout did not apply the requested location');
+      }
+      return { changed: true, layoutChanged: true, splitId: targetId };
+    }
+
+    const before = snapshot().entries;
+    const result = layout.open({
+      location: options.entry.location,
       target: options.target,
       replace: options.replace,
     });
-    return true;
+    if (result.status === 'unavailable') {
+      return { changed: false, layoutChanged: false };
+    }
+
+    const after = snapshot().entries;
+    const applied = after.find((entry) =>
+      Object.is(entry.splitId, result.splitId)
+    );
+    if (!deepEqual(applied?.location, options.entry.location)) {
+      throw new Error('Split layout did not apply the requested location');
+    }
+    return {
+      changed: true,
+      layoutChanged: !snapshotsEqual(before, after),
+      splitId: result.splitId,
+    };
   };
 
   return {
@@ -121,5 +161,6 @@ export function createLayoutAdapter<TSplitId>(
     layoutsEqual,
     reconcile,
     snapshot,
+    snapshotsEqual,
   };
 }

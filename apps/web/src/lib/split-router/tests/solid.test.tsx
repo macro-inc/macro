@@ -19,9 +19,9 @@ import {
   useSplitRouter,
 } from '../solid';
 import type {
-  SplitRouterEntry,
   SplitRouterHistorySnapshot,
   SplitRouterLayout,
+  SplitRouterLayoutEntry,
   SplitRouterSettledChange,
   SplitRoutes,
 } from '../types';
@@ -39,7 +39,7 @@ function CoercedParamsView() {
 }
 
 function createLayout(): SplitRouterLayout<string> {
-  let entry: (SplitRouterEntry & { splitId: string }) | undefined;
+  let entry: SplitRouterLayoutEntry<string> | undefined;
   const listeners = new Set<(change: SplitRouterSettledChange) => void>();
   const notify = () => {
     for (const listener of listeners) {
@@ -51,15 +51,15 @@ function createLayout(): SplitRouterLayout<string> {
     snapshot: () => ({
       entries: entry ? [entry] : [],
     }),
-    updateCurrentEntry(_splitId, update) {
+    updateCurrentLocation(_splitId, update) {
       if (!entry) return;
-      entry = { splitId: entry.splitId, ...update(entry) };
+      entry = { splitId: entry.splitId, location: update(entry) };
       notify();
     },
-    open: () => {},
-    reconcile(entries) {
-      const next = entries[0];
-      entry = next ? { splitId: 'split', ...next } : undefined;
+    open: () => ({ status: 'unavailable' }),
+    reconcile(locations) {
+      const location = locations[0];
+      entry = location ? { splitId: 'split', location } : undefined;
       notify();
     },
     activate: () => {},
@@ -325,16 +325,13 @@ describe('Solid split router hooks', () => {
     ));
 
     const setChild = (itemId: string) => {
-      layout.updateCurrentEntry('split', (entry) => ({
-        ...entry,
-        location: {
-          ...entry.location,
-          route: {
-            matches: [
-              { id: 'parent', params: {} },
-              { id: 'child', params: { itemId } },
-            ],
-          },
+      layout.updateCurrentLocation('split', (entry) => ({
+        ...entry.location,
+        route: {
+          matches: [
+            { id: 'parent', params: {} },
+            { id: 'child', params: { itemId } },
+          ],
         },
       }));
     };

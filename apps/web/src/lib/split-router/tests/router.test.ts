@@ -5,7 +5,7 @@ import * as path from '../path';
 import { createSplitRouter } from '../router';
 import { defineRoute, rootRouteMatch, routeParams } from '../routes';
 import type {
-  SplitRouterEntry,
+  SplitLocation,
   SplitRouterExternalLocation,
   SplitRouterExternalLocationValue,
   SplitRouterLayout,
@@ -17,7 +17,9 @@ import type {
 
 type Layout = SplitRouterLayout<string> & {
   reconcileCount(): number;
+  updateCount(): number;
   activatedSplitId(): string | undefined;
+  swapEntries(): void;
 };
 
 const driveFolderRoute = defineRoute({
@@ -48,6 +50,7 @@ const routes: SplitRoutes = {
 function createLayout(): Layout {
   let nextId = 0;
   let reconciliations = 0;
+  let updates = 0;
   let activatedSplitId: string | undefined;
   let entries: SplitRouterLayoutSnapshot<string>['entries'] = [];
   const listeners = new Set<(change: SplitRouterSettledChange) => void>();
@@ -61,10 +64,12 @@ function createLayout(): Layout {
   return {
     snapshot: () => ({ entries }),
 
-    updateCurrentEntry(splitId, update) {
-      entries = entries.map((entry) =>
-        entry.splitId === splitId ? { splitId, ...update(entry) } : entry
-      );
+    updateCurrentLocation(splitId, update) {
+      updates += 1;
+      entries = entries.map((entry) => {
+        if (entry.splitId !== splitId) return entry;
+        return { splitId, location: update(entry) };
+      });
       notify();
     },
 
@@ -73,6 +78,7 @@ function createLayout(): Layout {
         splitId: `split-${++nextId}`,
         ...entry,
       };
+      let openedId = next.splitId;
       if (target === 'new-split' || !target) {
         entries = [...entries, next];
       } else {
@@ -81,23 +87,25 @@ function createLayout(): Layout {
         if (index < 0) {
           entries = [...entries, next];
         } else {
+          openedId = entries[index]!.splitId;
           entries = entries.with(index, {
             ...next,
-            splitId: entries[index]!.splitId,
+            splitId: openedId,
           });
         }
       }
       notify(replace ? 'replace' : 'push');
+      return { status: 'applied', splitId: openedId };
     },
 
-    reconcile(nextEntries) {
+    reconcile(nextLocations) {
       reconciliations++;
-      entries = nextEntries.map((entry, index) => {
+      entries = nextLocations.map((location, index) => {
         const current = entries[index];
 
         return {
           splitId: current?.splitId ?? `split-${++nextId}`,
-          ...entry,
+          location,
         };
       });
       notify('replace');
@@ -113,7 +121,12 @@ function createLayout(): Layout {
     },
 
     reconcileCount: () => reconciliations,
+    updateCount: () => updates,
     activatedSplitId: () => activatedSplitId,
+    swapEntries() {
+      entries = entries.toReversed();
+      notify();
+    },
   };
 }
 
@@ -252,7 +265,7 @@ describe('split router', () => {
   });
   it('rejects unresolved host snapshots before accepting state or committing a URL', () => {
     const layout = createLayout();
-    layout.reconcile([{ location: {} } as SplitRouterEntry]);
+    layout.reconcile([{} as SplitLocation]);
     const location = createMemorySplitRouterLocation('/drive');
     expect(() => createSplitRouter({ layout, routes, location })).toThrow(
       'nonempty match branch'
@@ -907,6 +920,7 @@ describe('split router', () => {
     });
     await router.settled();
 
+    expect(layout.updateCount()).toBe(0);
     const entries = router.history(splitId)!.entries;
     expect(entries).toHaveLength(3);
     expect(entries[1]?.key).not.toBe(entries[2]?.key);
@@ -935,6 +949,72 @@ describe('split router', () => {
     await router.settled();
     expect(router.entry(splitId)?.state).toEqual({
       breadcrumb: 'replacement',
+    });
+  });
+
+  it('preserves router metadata when duplicate-URL panes swap', async () => {
+    const location = createMemorySplitRouterLocation(
+      '/drive/folder/one/~/drive/folder/one'
+    );
+    const layout = createLayout();
+    const router = createSplitRouter({ layout, routes, location });
+    const [first, second] = layout.snapshot().entries;
+
+    router.navigate(first!.splitId, '/drive/folder/one', {
+      state: { breadcrumb: 'first' },
+    });
+    router.navigate(second!.splitId, '/drive/folder/one', {
+      state: { breadcrumb: 'second' },
+    });
+    await router.settled();
+    const browserStateBeforeSwap = location.read().state;
+
+    layout.swapEntries();
+    await router.settled();
+
+    expect(layout.snapshot().entries.map((entry) => entry.splitId)).toEqual([
+      second!.splitId,
+      first!.splitId,
+    ]);
+    expect(router.entry(first!.splitId)?.state).toEqual({
+      breadcrumb: 'first',
+    });
+    expect(router.entry(second!.splitId)?.state).toEqual({
+      breadcrumb: 'second',
+    });
+    expect(location.read().state).not.toEqual(browserStateBeforeSwap);
+  });
+
+  it('observes a duplicate-pane swap during a queued layout echo', async () => {
+    const location = createMemorySplitRouterLocation('/drive/folder/one');
+    const layout = createLayout();
+    const router = createSplitRouter({ layout, routes, location });
+    const first = layout.snapshot().entries[0]!;
+
+    router.navigate(first.splitId, '/drive/folder/one', {
+      state: { breadcrumb: 'first' },
+    });
+    await router.settled();
+    router.navigate(first.splitId, '/drive/folder/one', {
+      target: 'new-split',
+      allowDuplicate: true,
+      state: { breadcrumb: 'second' },
+    });
+    const browserStateBeforeSwap = location.read().state;
+
+    layout.swapEntries();
+    await router.settled();
+
+    expect(location.read().state).not.toEqual(browserStateBeforeSwap);
+    const second = layout
+      .snapshot()
+      .entries.find((entry) => entry.splitId !== first.splitId)!;
+    expect(layout.snapshot().entries[0]?.splitId).toBe(second.splitId);
+    expect(router.entry(first.splitId)?.state).toEqual({
+      breadcrumb: 'first',
+    });
+    expect(router.entry(second.splitId)?.state).toEqual({
+      breadcrumb: 'second',
     });
   });
 

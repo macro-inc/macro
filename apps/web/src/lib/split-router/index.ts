@@ -96,6 +96,7 @@ export type {
   SplitRouterHistorySnapshot,
   SplitRouterLayout,
   SplitRouterLayoutEntry,
+  SplitRouterLayoutOpenResult,
   SplitRouterLayoutSnapshot,
   SplitRouterMiddleware,
   SplitRouterMiddlewareConfig,

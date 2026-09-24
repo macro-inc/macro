@@ -924,6 +924,32 @@ describe('layoutManager', () => {
       dispose();
     });
 
+    it('applies a new-split location when an entity pane is reused', async () => {
+      const { manager, router, dispose } = ingressRouter('/channel/one', {
+        enabled: false,
+      });
+      await router.settled();
+      const split = manager.splits()[0];
+
+      router.navigate(split.id, '/channel/one', {
+        target: 'new-split',
+        allowDuplicate: true,
+        search: {
+          'channel-detail': { messageId: ['second'] },
+        },
+      });
+      await router.settled();
+
+      expect(manager.splits()).toHaveLength(1);
+      expect(manager.splits()[0].content.entryMetadata).toMatchObject({
+        search: {
+          'channel-detail': { messageId: ['second'] },
+        },
+      });
+      router.dispose();
+      dispose();
+    });
+
     it('normalizes every external URL and restores targets through browser history', async () => {
       const { manager, location, router, dispose } = ingressRouter(
         '/mail/one?email_message_id=first'

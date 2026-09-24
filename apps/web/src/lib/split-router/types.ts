@@ -427,8 +427,9 @@ export type SplitRoutes<TComponent = unknown> = {
   basePath?: string | readonly string[];
 };
 
-export type SplitRouterLayoutEntry<TSplitId> = SplitRouterEntry & {
+export type SplitRouterLayoutEntry<TSplitId> = {
   splitId: TSplitId;
+  location: SplitLocation;
 };
 
 export type SplitRouterLayoutSnapshot<TSplitId> = {
@@ -444,19 +445,22 @@ export type SplitRouterHistorySnapshot = {
   index: number;
 };
 
+export type SplitRouterLayoutOpenResult<TSplitId> =
+  | { status: 'applied'; splitId: TSplitId }
+  | { status: 'unavailable' };
+
 export interface SplitRouterLayout<TSplitId> {
   snapshot(): SplitRouterLayoutSnapshot<TSplitId>;
-  updateCurrentEntry(
+  updateCurrentLocation(
     splitId: TSplitId,
-    update: (current: SplitRouterLayoutEntry<TSplitId>) => SplitRouterEntry
+    update: (current: SplitRouterLayoutEntry<TSplitId>) => SplitLocation
   ): void;
-  open(
-    request: SplitRouterEntry & {
-      target?: TSplitId | 'new-split';
-      replace?: boolean;
-    }
-  ): void;
-  reconcile(entries: SplitRouterEntry[]): void;
+  open(request: {
+    location: SplitLocation;
+    target?: TSplitId | 'new-split';
+    replace?: boolean;
+  }): SplitRouterLayoutOpenResult<TSplitId>;
+  reconcile(locations: SplitLocation[]): void;
   activate(splitId: TSplitId): void;
   subscribe(listener: (change: SplitRouterSettledChange) => void): () => void;
 }

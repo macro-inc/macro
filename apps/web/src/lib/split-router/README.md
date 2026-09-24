@@ -120,9 +120,10 @@ field in browser `history.state`; the URL remains route-and-search only. Copied 
 direct URLs therefore have no entry state, and views must provide a route-derived
 fallback. Malformed or positionally mismatched browser metadata is ignored.
 
-Host layout adapters preserve the complete `SplitRouterEntry` as integration metadata,
-separate from runtime `SplitContent.state`. Key/state-only changes must not remount the
-view.
+Host layout adapters own pane identity and the current location only. Entry keys,
+route state, and per-pane history remain router-owned. Key/state-only navigation does
+not write layout metadata or remount the view. Opening reports the pane that accepted
+the requested location, or reports that no pane was available.
 
 ## Claims
 

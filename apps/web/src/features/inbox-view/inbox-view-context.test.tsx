@@ -1,7 +1,7 @@
 import {
   SplitRouter,
-  type SplitRouterEntry,
   type SplitRouterLayout,
+  type SplitRouterLayoutEntry,
   type SplitRouterSettledChange,
   useSplitRouter,
 } from '@app/lib/split-router';
@@ -132,22 +132,22 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 }));
 
 function createLayout(): SplitRouterLayout<string> {
-  let current: (SplitRouterEntry & { splitId: string }) | undefined;
+  let current: SplitRouterLayoutEntry<string> | undefined;
   const listeners = new Set<(change: SplitRouterSettledChange) => void>();
   const notify = () => {
     for (const listener of listeners) listener({ history: 'push' });
   };
   return {
     snapshot: () => ({ entries: current ? [current] : [] }),
-    updateCurrentEntry(_splitId, update) {
+    updateCurrentLocation(_splitId, update) {
       if (!current) return;
-      current = { splitId: current.splitId, ...update(current) };
+      current = { splitId: current.splitId, location: update(current) };
       notify();
     },
-    open: () => {},
-    reconcile(entries) {
-      const next = entries[0];
-      current = next ? { splitId: 'split', ...next } : undefined;
+    open: () => ({ status: 'unavailable' }),
+    reconcile(locations) {
+      const location = locations[0];
+      current = location ? { splitId: 'split', location } : undefined;
       notify();
     },
     activate: () => {},

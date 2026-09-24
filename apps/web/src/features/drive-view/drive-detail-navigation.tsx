@@ -124,7 +124,7 @@ export function DriveDetailNavigationProvider(
     const result: DriveDetailHistoryEntry[] = [];
     for (let index = 0; index <= snapshot.index; index += 1) {
       const target = targetFromParams(
-        routeParams(snapshot.entries[index]?.route) as DriveRouteParams
+        routeParams(snapshot.entries[index]?.location.route) as DriveRouteParams
       );
 
       if (!target) {

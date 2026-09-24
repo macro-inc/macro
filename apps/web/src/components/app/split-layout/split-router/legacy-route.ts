@@ -11,7 +11,6 @@ import {
   type SplitLocation,
   type SplitRouteMatch,
   type SplitRouterEntry,
-  type SplitRouterEntryState,
   type UnmatchedSplitPathHandler,
 } from '@app/lib/split-router';
 import {
@@ -230,10 +229,10 @@ export function splitLocationFromContent(
 }
 
 /** Resolve legacy/persisted metadata before it reaches router state. */
-export function resolveContentEntry(
+export function resolveContentLocation(
   routes: SplitRoutesManifest,
   content: SplitContent
-): SplitRouterEntry {
+): SplitLocation {
   let metadata: Record<string, unknown> | undefined;
   if (isRecord(content.entryMetadata)) metadata = content.entryMetadata;
 
@@ -273,13 +272,7 @@ export function resolveContentEntry(
   );
   const location: SplitLocation = { route };
   if (search) location.search = search;
-
-  const entry: SplitRouterEntry = { location };
-  if (typeof metadata?.key === 'string') entry.key = metadata.key;
-  if (metadata && Object.hasOwn(metadata, 'state')) {
-    entry.state = metadata.state as SplitRouterEntryState;
-  }
-  return entry;
+  return location;
 }
 
 export function splitContentFromLocation(

@@ -26,6 +26,7 @@ import type {
   SplitRouterEntry,
   SplitRouterEntryState,
   SplitRouterExternalLocationValue,
+  SplitRouterLayoutSnapshot,
   SplitRouterOptions,
   SplitRouterStateUpdate,
 } from './types';
@@ -121,7 +122,8 @@ export function createSplitRouter<TSplitId>(
   const entryControllers = new Map<unknown, AbortController>();
   const subscribers = new Set<(splitId: TSplitId | undefined) => void>();
   let accepted: SplitRouterEntry[] = [];
-  let expectedLayout: SplitRouterEntry[] | undefined;
+  let acceptedIds: TSplitId[] = [];
+  let expectedLayout: SplitRouterLayoutSnapshot<TSplitId> | undefined;
   let layoutChangeQueued = false;
   let queuedHistory: BrowserHistoryIntent = 'push';
   let ready = false;
@@ -143,9 +145,7 @@ export function createSplitRouter<TSplitId>(
     mode: 'move' | 'write'
   ) => {
     histories.reconcile(
-      layout
-        .snapshot()
-        .entries.map(({ splitId, ...entry }) => ({ id: splitId, entry })),
+      accepted.map((entry, index) => ({ id: acceptedIds[index]!, entry })),
       intent,
       mode
     );
@@ -163,20 +163,19 @@ export function createSplitRouter<TSplitId>(
       !entry.key &&
       previous !== undefined &&
       deepEqual(previous.location, entry.location);
-    let state: SplitRouterEntryState;
-    if (Object.hasOwn(entry, 'state')) {
-      state = entry.state;
-    } else if (preservePrevious && previous) {
-      state = previous.state;
-    }
-
-    const parsed = parseRouteEntryState(routes, entry.location.route, state);
+    const hasEntryState = Object.hasOwn(entry, 'state');
     let parsedState: SplitRouterEntry['state'];
-    if (parsed.success && parsed.value !== undefined) {
-      try {
-        parsedState = structuredClone(parsed.value);
-      } catch {
-        parsedState = undefined;
+    if (!hasEntryState && preservePrevious && previous) {
+      parsedState = previous.state;
+    } else {
+      const state = hasEntryState ? entry.state : undefined;
+      const parsed = parseRouteEntryState(routes, entry.location.route, state);
+      if (parsed.success && parsed.value !== undefined) {
+        try {
+          parsedState = structuredClone(parsed.value);
+        } catch {
+          parsedState = undefined;
+        }
       }
     }
     let key = entry.key;
@@ -193,6 +192,33 @@ export function createSplitRouter<TSplitId>(
     entries: SplitRouterEntry[],
     previous: readonly (SplitRouterEntry | undefined)[] = []
   ) => entries.map((entry, index) => normalizeEntry(entry, previous[index]));
+
+  const acceptedById = () => {
+    const entries = new Map<TSplitId, SplitRouterEntry>();
+    accepted.forEach((entry, index) => {
+      entries.set(acceptedIds[index] as TSplitId, entry);
+    });
+    return entries;
+  };
+
+  const acceptedInLayoutOrder = () => {
+    const byId = acceptedById();
+    return layout.snapshot().entries.map(({ splitId, location }) => {
+      const entry = byId.get(splitId);
+      if (!entry || !deepEqual(entry.location, location)) return;
+      return entry;
+    });
+  };
+
+  const bindAccepted = (entries: SplitRouterEntry[]) => {
+    const snapshot = layout.snapshot().entries;
+    accepted = snapshot.map(({ location }, index) => {
+      const entry = entries[index];
+      if (entry && deepEqual(entry.location, location)) return entry;
+      return normalizeEntry({ location });
+    });
+    acceptedIds = snapshot.map(({ splitId }) => splitId);
+  };
 
   const validateRedirectedState = (
     entry: SplitRouterEntry,
@@ -221,8 +247,14 @@ export function createSplitRouter<TSplitId>(
       }
     },
   });
-  const findEntry = (splitId: TSplitId) =>
-    transitions.pending(splitId) ?? layout.find(splitId);
+  const findEntry = (splitId: TSplitId) => {
+    const pending = transitions.pending(splitId);
+    if (pending) return pending;
+
+    const index = acceptedIds.findIndex((id) => Object.is(id, splitId));
+    if (index < 0) return;
+    return accepted[index];
+  };
 
   const findClaimedSplit = (
     claim: SplitRouteClaim,
@@ -264,7 +296,7 @@ export function createSplitRouter<TSplitId>(
   };
 
   const expectLayoutEcho = () => {
-    expectedLayout = layout.entries();
+    expectedLayout = layout.snapshot();
   };
 
   const reconcileEntries = (
@@ -280,7 +312,7 @@ export function createSplitRouter<TSplitId>(
   };
 
   const commitLayout = (commit: CommitOptions) => {
-    locationSync.commit(layout.entries(), commit);
+    locationSync.commit(accepted, commit);
   };
 
   const abortAllTransitions = (publish = true) => {
@@ -297,7 +329,7 @@ export function createSplitRouter<TSplitId>(
 
   const applyDecoded = (entries: SplitRouterEntry[]) => {
     const layoutChanged = reconcileEntries(layout.entries(), entries);
-    accepted = layout.entries();
+    bindAccepted(entries);
     reconcileHistories('replace', 'move');
     commitLayout({ history: 'replace', preserveHash: true });
     const becameReady = !ready;
@@ -309,7 +341,7 @@ export function createSplitRouter<TSplitId>(
     abortAllTransitions();
     let previous: Array<SplitRouterEntry | undefined> = [];
     if (transition.cause === 'layout') {
-      previous = accepted;
+      previous = acceptedInLayoutOrder();
     } else if (transition.cause === 'external') {
       previous = accepted.map((entry) => {
         if (Object.hasOwn(entry, 'state')) return;
@@ -372,7 +404,7 @@ export function createSplitRouter<TSplitId>(
     });
   };
 
-  accepted = layout.entries();
+  bindAccepted(normalizeEntries(layout.entries()));
 
   const applyPrepared = (
     original: SplitRouterEntry[],
@@ -382,7 +414,7 @@ export function createSplitRouter<TSplitId>(
     const before = accepted;
 
     reconcileEntries(original, prepared);
-    accepted = layout.entries();
+    bindAccepted(prepared);
     reconcileHistories(history, 'move');
     commitLayout({
       history,
@@ -398,10 +430,15 @@ export function createSplitRouter<TSplitId>(
   const onLayoutChange = (history: BrowserHistoryIntent) => {
     if (disposed) return;
 
-    const entries = layout.entries();
-    if (expectedLayout && layout.layoutsEqual(expectedLayout, entries)) {
+    const snapshot = layout.snapshot();
+    const entries = snapshot.entries.map(
+      ({ splitId: _splitId, ...entry }) => entry
+    );
+    if (
+      expectedLayout &&
+      layout.snapshotsEqual(expectedLayout.entries, snapshot.entries)
+    ) {
       expectedLayout = undefined;
-      accepted = entries;
       return;
     }
     expectedLayout = undefined;
@@ -414,16 +451,26 @@ export function createSplitRouter<TSplitId>(
   };
 
   const applyEntry = (config: ApplyOptions<TSplitId>): boolean => {
-    const changed = layout.apply({
+    const previousById = acceptedById();
+    const result = layout.apply({
       entry: config.entry,
       target: config.target,
       replace: config.replace,
       requireExistingTarget: config.requireTarget,
     });
-    if (!changed) return false;
+    if (!result.changed) return false;
 
-    expectLayoutEcho();
-    accepted = layout.entries();
+    if (result.layoutChanged) expectLayoutEcho();
+
+    const snapshot = layout.snapshot().entries;
+    accepted = snapshot.map(({ splitId, location }) => {
+      if (Object.is(result.splitId, splitId)) return config.entry;
+
+      const previous = previousById.get(splitId);
+      if (previous && deepEqual(previous.location, location)) return previous;
+      return normalizeEntry({ location });
+    });
+    acceptedIds = snapshot.map(({ splitId }) => splitId);
     if (config.recordHistory !== false) {
       reconcileHistories(config.history, 'write');
     }
