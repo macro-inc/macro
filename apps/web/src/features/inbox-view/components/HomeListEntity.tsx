@@ -6,6 +6,7 @@ import { Entity, MaybeEntityRow } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { getDocumentCommentNotification } from '@notifications/document-comment-notification';
+import { getNotificationAgentSender } from '@notifications/notification-sender';
 import type { UnifiedNotification } from '@notifications/types';
 import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
 import ChatTeardropIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-solid';
@@ -180,10 +181,13 @@ function HomeCommentTitle(props: {
 }) {
   const sender = () => {
     const senderId = props.notification.sender_id;
-    return senderId
-      ? getDisplayName(tryMacroId(senderId), { emailFallback: 'local-part' }) ||
-          'Someone'
-      : 'Someone';
+    if (senderId) {
+      return (
+        getDisplayName(tryMacroId(senderId), { emailFallback: 'local-part' }) ||
+        'Someone'
+      );
+    }
+    return getNotificationAgentSender(props.notification)?.name ?? 'Someone';
   };
   const action = () =>
     match(props.notification.notification_metadata.tag)

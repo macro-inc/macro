@@ -1,12 +1,19 @@
-import { UserGroup } from '@core/component/UserGroup';
+import { BotIcon } from '@channel/Message/BotIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import type { NotificationStack } from '@notifications';
-import { Avatar } from '@ui';
-import { Match, Show, Switch } from 'solid-js';
+import {
+  getNotificationAgentSender,
+  getUniqueAgentSenders,
+  type NotificationAgentSender,
+} from '@notifications/notification-sender';
+import { Avatar, AvatarGroup } from '@ui';
+import { createMemo, For, Match, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { Notification } from '../types/notification';
 import {
   getGithubSenderAvatarUrl,
   getGithubSenderLogin,
+  getUniqueSenderIds,
   isGithubNotificationType,
 } from './notification-description-helpers';
 
@@ -16,23 +23,14 @@ interface NotificationSenderIconProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
-/**
- * Gets unique sender IDs from a notification stack
- */
-function getUniqueSenderIds(notifications: Notification[]): string[] {
-  const senderIds = new Set<string>();
-  for (const notification of notifications) {
-    if (notification.sender_id) {
-      senderIds.add(notification.sender_id);
-    }
-  }
-  return Array.from(senderIds);
-}
+type Sender =
+  | { kind: 'user'; id: string }
+  | { kind: 'agent'; agent: NotificationAgentSender };
 
 /**
  * Displays the sender icon(s) for a notification
- * - Single sender: shows UserIcon
- * - Multiple senders: shows UserGroup with overlapping avatars
+ * - Single sender: shows UserIcon, or BotIcon for an agent
+ * - Multiple senders: shows overlapping avatars
  */
 export function NotificationSenderIcon(props: NotificationSenderIconProps) {
   const size = () => props.size ?? 'sm';
@@ -65,8 +63,40 @@ export function NotificationSenderIcon(props: NotificationSenderIconProps) {
     return [];
   };
 
-  const hasSenders = () => senderIds().length > 0;
-  const hasMultipleSenders = () => senderIds().length > 1;
+  // Agents carry no `sender_id`; they come from the notification metadata.
+  const agentSenders = (): NotificationAgentSender[] => {
+    if (props.notification) {
+      const agent = getNotificationAgentSender(props.notification);
+      return agent ? [agent] : [];
+    }
+    if (props.stack) {
+      return getUniqueAgentSenders(props.stack.notifications);
+    }
+    return [];
+  };
+
+  const senders = createMemo((): Sender[] => [
+    ...senderIds().map((id) => ({ kind: 'user' as const, id })),
+    ...agentSenders().map((agent) => ({ kind: 'agent' as const, agent })),
+  ]);
+
+  const maxShown = () => (senders().length === 2 ? 2 : 1);
+  const remaining = () => Math.max(0, senders().length - maxShown());
+
+  const renderSender = (sender: Sender) =>
+    match(sender)
+      .with({ kind: 'user' }, (user) => (
+        <UserIcon
+          id={user.id}
+          size={size()}
+          suppressClick
+          showTooltip={false}
+        />
+      ))
+      .with({ kind: 'agent' }, ({ agent }) => (
+        <BotIcon name={agent.name} avatarUrl={agent.avatarUrl} size={size()} />
+      ))
+      .exhaustive();
 
   return (
     <Switch>
@@ -77,26 +107,16 @@ export function NotificationSenderIcon(props: NotificationSenderIconProps) {
           </Avatar>
         )}
       </Match>
-      <Match when={hasSenders()}>
-        <Show
-          when={hasMultipleSenders()}
-          fallback={
-            <UserIcon
-              id={senderIds()[0]}
-              size={size()}
-              suppressClick
-              showTooltip={false}
-            />
-          }
-        >
-          <UserGroup
-            userIds={senderIds()}
-            maxUsers={senderIds().length === 2 ? 2 : 1}
-            size={size()}
-            suppressClick
-            showTooltip={false}
-          />
-        </Show>
+      <Match when={senders().length === 1 && senders()[0]}>
+        {(sender) => renderSender(sender())}
+      </Match>
+      <Match when={senders().length > 1}>
+        <AvatarGroup size={size()}>
+          <For each={senders().slice(0, maxShown())}>{renderSender}</For>
+          <Show when={remaining()}>
+            <AvatarGroup.Count size={size()}>+{remaining()}</AvatarGroup.Count>
+          </Show>
+        </AvatarGroup>
       </Match>
     </Switch>
   );
