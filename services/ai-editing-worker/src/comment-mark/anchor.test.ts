@@ -141,6 +141,14 @@ describe('$addCommentMark', () => {
     expect(result).toMatchObject({ ok: false, reason: 'not_found' });
   });
 
+  it('leaves a mark it already placed alone when asked again', () => {
+    const { session } = setup('Alpha beta gamma.');
+    edit(session, () => $addCommentMark(MARK, 'beta'));
+    const again = edit(session, () => $addCommentMark(MARK, 'beta'));
+    expect(again).toMatchObject({ ok: true, markedText: 'beta' });
+    expect(marks(session)).toHaveLength(1);
+  });
+
   it('overlaps an existing comment mark without disturbing it', () => {
     const { session } = setup('Alpha beta gamma delta.');
     edit(session, () => $addCommentMark(OTHER, 'beta gamma'));

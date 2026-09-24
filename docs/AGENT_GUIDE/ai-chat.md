@@ -387,7 +387,12 @@ stream over the app's websocket, not the HTTP response.
 When asked, the agent also answers document comments in place. A reply row reads
 **Replied to a comment on** (or **Commented on** for a new Discussion comment) followed
 by the document, and expands to the posted text; a resolve row reads **Resolved** or
-**Reopened a comment on** the document. The comment is posted as the agent with a
+**Reopened a comment on** the document. Asked to comment on part of a markdown
+document, the agent starts an inline comment on the quoted passage: the row reads
+**Commented on text in** the document and expands to the quoted text and the comment,
+and the passage is highlighted in the document with the comment floating beside it.
+A passage that is missing, spans blocks, or repeats with no occurrence chosen is
+refused with no highlight left behind. The comment is posted as the agent with a
 **from <user>** pill, and needs the user's comment access to the document.
 
 ## Agent sessions asking a question

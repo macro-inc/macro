@@ -157,7 +157,8 @@ function $documentText(): string {
  * Wrap the `occurrence`th (1-based) appearance of `text` in a committed comment
  * mark `markId`. Refuses rather than guesses: text that is not in the
  * document, that crosses from one block into another, or that appears more
- * than once with no occurrence chosen leaves the document untouched. Must run
+ * than once with no occurrence chosen leaves the document untouched, as does
+ * a mark `markId` the document already carries. Must run
  * inside an editor update.
  */
 export function $addCommentMark(
@@ -165,6 +166,11 @@ export function $addCommentMark(
   text: string,
   occurrence?: number
 ): AnchorResult {
+  // A retried request finds its mark already placed; wrapping again would
+  // nest the mark inside itself.
+  const placed = $getCommentMarkContext(markId);
+  if (placed) return { ok: true, ...placed };
+
   const needle = text.trim();
   const found = needle ? $occurrences(needle) : [];
 
