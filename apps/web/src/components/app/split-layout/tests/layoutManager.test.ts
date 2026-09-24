@@ -934,6 +934,35 @@ describe('layoutManager', () => {
       dispose();
     });
 
+    it.each([
+      ['/component/preview-empty', '/inbox'],
+      ['/component/non-member-channel', '/inbox'],
+      ['/component/inbox', '/inbox'],
+      ['/component/documents', '/drive'],
+      ['/component/settings', '/settings/account'],
+    ])('upgrades the legacy component URL %s', async (incoming, expected) => {
+      const { location, router, dispose } = ingressRouter(incoming);
+      await router.settled();
+      expect(location.read().pathname).toBe(expected);
+      expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
+    it.each([
+      ['/email/thread-1', '/mail/thread-1'],
+      ['/channel/channel-1', '/channels/channel-1'],
+      ['/task/task-1', '/tasks/task-1'],
+      ['/md/document-1', '/drive/md/document-1'],
+    ])('upgrades the legacy block URL %s', async (incoming, expected) => {
+      const { location, router, dispose } = ingressRouter(incoming);
+      await router.settled();
+      expect(location.read().pathname).toBe(expected);
+      expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
     it('upgrades the legacy Calendar block URL to the preferred period route', async () => {
       localStorage.setItem(
         CALENDAR_PREFERENCES_KEY,
