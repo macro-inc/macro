@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, HealthHandlerData, HealthHandlerResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
+import type { CopyCalendarEventData, CopyCalendarEventErrors, CopyCalendarEventResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, HealthHandlerData, HealthHandlerResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -91,6 +91,21 @@ export class Sdk extends HeyApiClient {
     public updateCalendarEvent<ThrowOnError extends boolean = false>(options: Options<UpdateCalendarEventData, ThrowOnError>): RequestResult<UpdateCalendarEventResponses, UpdateCalendarEventErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<UpdateCalendarEventResponses, UpdateCalendarEventErrors, ThrowOnError>({
             url: '/events/{event_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Add a private copy of an event shared with one of the requester's
+     * channels to their own calendar and return the synced copy.
+     */
+    public copyCalendarEvent<ThrowOnError extends boolean = false>(options: Options<CopyCalendarEventData, ThrowOnError>): RequestResult<CopyCalendarEventResponses, CopyCalendarEventErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CopyCalendarEventResponses, CopyCalendarEventErrors, ThrowOnError>({
+            url: '/events/{event_id}/copy',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

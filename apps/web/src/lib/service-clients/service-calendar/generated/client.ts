@@ -7,6 +7,7 @@
 import type {
   CalendarEvent,
   CalendarMutationApiError,
+  CopyCalendarEventRequest,
   CreateCalendarEventRequest,
   DeleteCalendarEventParams,
   ListCalendarsResponse,
@@ -321,6 +322,89 @@ export const updateCalendarEvent = async (
     status: res.status,
     headers: res.headers,
   } as updateCalendarEventResponse;
+};
+
+/**
+ * @summary Add a private copy of an event shared with one of the requester's
+channels to their own calendar and return the synced copy.
+ */
+export type copyCalendarEventResponse201 = {
+  data: CalendarEvent;
+  status: 201;
+};
+
+export type copyCalendarEventResponse400 = {
+  data: CalendarMutationApiError;
+  status: 400;
+};
+
+export type copyCalendarEventResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type copyCalendarEventResponse403 = {
+  data: CalendarMutationApiError;
+  status: 403;
+};
+
+export type copyCalendarEventResponse404 = {
+  data: CalendarMutationApiError;
+  status: 404;
+};
+
+export type copyCalendarEventResponse409 = {
+  data: CalendarMutationApiError;
+  status: 409;
+};
+
+export type copyCalendarEventResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type copyCalendarEventResponseSuccess = copyCalendarEventResponse201 & {
+  headers: Headers;
+};
+export type copyCalendarEventResponseError = (
+  | copyCalendarEventResponse400
+  | copyCalendarEventResponse401
+  | copyCalendarEventResponse403
+  | copyCalendarEventResponse404
+  | copyCalendarEventResponse409
+  | copyCalendarEventResponse503
+) & {
+  headers: Headers;
+};
+
+export type copyCalendarEventResponse =
+  | copyCalendarEventResponseSuccess
+  | copyCalendarEventResponseError;
+
+export const getCopyCalendarEventUrl = (eventId: string) => {
+  return `/events/${eventId}/copy`;
+};
+
+export const copyCalendarEvent = async (
+  eventId: string,
+  copyCalendarEventRequest: CopyCalendarEventRequest,
+  options?: RequestInit
+): Promise<copyCalendarEventResponse> => {
+  const res = await fetch(getCopyCalendarEventUrl(eventId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(copyCalendarEventRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: copyCalendarEventResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as copyCalendarEventResponse;
 };
 
 /**

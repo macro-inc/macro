@@ -219,6 +219,15 @@ impl CalendarMutationService for MockMutations {
     ) -> Result<(), CalendarMutationError> {
         unreachable!("no calendar tool disconnects calendars")
     }
+
+    async fn copy_shared_event(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+    ) -> Result<crate::domain::models::CalendarEvent, CalendarMutationError> {
+        unreachable!("no calendar tool copies shared events")
+    }
 }
 
 struct MockOccurrences {
@@ -277,6 +286,14 @@ impl CalendarOccurrenceService for MockOccurrences {
         _requester_id: &str,
     ) -> Result<Option<String>, rootcause::Report> {
         unreachable!("no calendar tool resolves the primary time zone")
+    }
+
+    async fn event_ics(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<String>, rootcause::Report> {
+        unreachable!("no calendar tool exports events")
     }
 }
 

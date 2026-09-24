@@ -760,6 +760,10 @@ also shares it read-only with the channel's current members: a member without a 
 own sees the mention's title and time, and its hover card adds a `Shared with you · not on
 your calendar` line with no open action. Clicking such a mention shows that hover card
 instead of opening the calendar. Private and confidential events are never shared this way.
+That hover card also offers `Add to calendar`, which imports a private copy (no guests, no
+join link, guests are not notified) onto the viewer's primary calendar, or onto one they pick
+from a menu when they have more than one writable calendar; the mention then opens that copy.
+`Download .ics` saves the event as an iCalendar file.
 Every calendar mention's hover card shows the schedule, location, organizer and attendee
 count, plus the first lines of the event description (its links open), and no last-updated
 byline.

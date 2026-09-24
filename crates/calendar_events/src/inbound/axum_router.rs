@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, Query, State},
-    http::StatusCode,
+    extract::{FromRef, Path, Query, State},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -79,6 +79,7 @@ where
             "/calendar-events/team-out-of-office",
             get(list_team_out_of_office::<S, Auth>),
         )
+        .route("/calendar-events/{event_id}/ics", get(event_ics::<S, Auth>))
         .with_state(state)
 }
 
@@ -413,6 +414,58 @@ pub struct CalendarMentionPreviewItem {
 #[serde(rename_all = "camelCase")]
 pub struct CalendarMentionPreviewResponse {
     items: Vec<CalendarMentionPreviewItem>,
+}
+
+/// Export an event the requester can see — their own, or one shared with a
+/// channel they belong to — as an iCalendar file.
+#[tracing::instrument(skip_all, fields(event_id = %event_id), err)]
+#[utoipa::path(
+    get,
+    path = "/calendar-events/{event_id}/ics",
+    tag = "calendar_events",
+    params(("event_id" = Uuid, Path, description = "Calendar event entity id")),
+    responses(
+        (status = 200, description = "The event as an iCalendar document", content_type = "text/calendar", body = String),
+        (status = 401, description = "Authentication required"),
+        (status = 404, description = "Event not found or not visible to the requester"),
+        (status = 500, description = "Calendar query failed"),
+    )
+)]
+pub async fn event_ics<S, Auth>(
+    State(state): State<CalendarRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(event_id): Path<Uuid>,
+) -> Result<Response, CalendarApiError>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+{
+    let document = state
+        .service
+        .event_ics(user.authorization.user.macro_user_id.as_ref(), event_id)
+        .await
+        .map_err(|error| {
+            tracing::error!(error=?error, "failed to export calendar event");
+            CalendarApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "calendar event export failed",
+            }
+        })?
+        .ok_or(CalendarApiError {
+            status: StatusCode::NOT_FOUND,
+            message: "calendar event was not found",
+        })?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "text/calendar; charset=utf-8"),
+            (
+                header::CONTENT_DISPOSITION,
+                "attachment; filename=\"event.ics\"",
+            ),
+        ],
+        document,
+    )
+        .into_response())
 }
 
 /// Resolve mentioned calendar events to the requester's own projections.

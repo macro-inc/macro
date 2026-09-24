@@ -2,6 +2,7 @@ import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { CalendarEvent as CalendarEventEntity } from '@service-calendar/generated/schemas/calendarEvent';
+import type { CopyCalendarEventRequest } from '@service-calendar/generated/schemas/copyCalendarEventRequest';
 import type { CreateCalendarEventRequest } from '@service-calendar/generated/schemas/createCalendarEventRequest';
 import type { UpdateCalendarEventRequest } from '@service-calendar/generated/schemas/updateCalendarEventRequest';
 import {
@@ -10,6 +11,7 @@ import {
   type CalendarUpdateScope,
   emailClient,
 } from '@service-email/client';
+import { storageServiceClient } from '@service-storage/client';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarEventSourceContent } from '@service-storage/generated/schemas/calendarEventSourceContent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
@@ -549,5 +551,51 @@ export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
       },
       callbacks
     ),
+  }));
+}
+
+type CopySharedEventArgs = CopyCalendarEventRequest & { eventId: string };
+
+type CopySharedEventCallbacks = MutationCallbacks<
+  CalendarEventEntity,
+  Error,
+  CopySharedEventArgs,
+  unknown
+>;
+
+/**
+ * Adds a private copy of an event shared with one of the viewer's channels
+ * to their own calendar. The copy keeps the meeting's iCalendar UID, so once
+ * it lands the mention preview resolves to it and the chip opens it.
+ */
+export function useCopySharedCalendarEventMutation(
+  callbacks?: CopySharedEventCallbacks
+) {
+  return useMutation(() => ({
+    mutationFn: async ({ eventId, ...args }: CopySharedEventArgs) =>
+      await throwOnErr(() => emailClient.copyCalendarEvent(eventId, args)),
+    ...withCallbacks<CalendarEventEntity, Error, CopySharedEventArgs>(
+      {
+        onSettled: (_data, _error, args) => {
+          invalidateCalendarEventPreviews(args.eventId);
+          return invalidateCalendarOccurrences();
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+/**
+ * Fetches an event the viewer can see as an iCalendar document, for saving
+ * to a calendar Macro does not write to.
+ */
+export function useDownloadCalendarEventIcsMutation(
+  callbacks?: MutationCallbacks<Uint8Array, Error, string, unknown>
+) {
+  return useMutation(() => ({
+    mutationFn: async (eventId: string) =>
+      await throwOnErr(() => storageServiceClient.getCalendarEventIcs(eventId)),
+    ...withCallbacks<Uint8Array, Error, string>({}, callbacks),
   }));
 }

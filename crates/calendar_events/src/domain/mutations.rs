@@ -14,10 +14,10 @@ use uuid::Uuid;
 use super::{
     models::{
         ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
-        CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
-        CalendarEventPatch, CalendarEventUpsert, DisconnectedGoogleCalendar, EventReminders,
-        EventTime, OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
-        REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
+        CalendarCreationTarget, CalendarEvent, CalendarEventCopyAccess, CalendarEventDraft,
+        CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert,
+        DisconnectedGoogleCalendar, EventReminders, EventTime, EventType, OccurrenceRange,
+        REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventChange,
@@ -255,6 +255,53 @@ where
                 &access_token,
                 &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
                 &draft,
+            )
+            .await
+            .map_err(provider_error)?;
+        self.persist_echo(target.actor.as_ref(), upsert).await
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn copy_shared_event(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
+        let source = self
+            .repository
+            .get_event_copy_source(requester_id, event_id)
+            .await
+            .map_err(internal)?
+            .ok_or(CalendarMutationError::NotFound)?;
+        // A second projection under the same UID would shadow the one the
+        // requester already has instead of adding anything.
+        if source.access == CalendarEventCopyAccess::OwnCopy {
+            return Err(CalendarMutationError::AlreadyOnCalendar);
+        }
+        // Google imports only regular events; status events such as
+        // out-of-office belong to their owner's calendar alone.
+        if source.event_type != EventType::Default {
+            return Err(CalendarMutationError::InvalidInput(
+                "only regular events can be added to a calendar".to_string(),
+            ));
+        }
+        let target = self
+            .repository
+            .get_creation_target(requester_id, None, calendar_id)
+            .await
+            .map_err(internal)?
+            .ok_or(CalendarMutationError::NoWritableCalendar)?;
+        if target.is_read_only {
+            return Err(CalendarMutationError::ReadOnly);
+        }
+        let access_token = self.fetch_token(&target.token_identity).await?;
+        let upsert = self
+            .provider
+            .import_event(
+                &access_token,
+                &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
+                &source,
             )
             .await
             .map_err(provider_error)?;

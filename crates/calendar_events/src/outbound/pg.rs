@@ -15,16 +15,16 @@ use crate::domain::{
         CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD, CalendarAttendee, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
         CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
-        CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
-        CalendarEventSourceContent, CalendarEventUpsert, CalendarGrantIntent,
-        CalendarLinkTokenIdentity, CalendarMentionEvent, CalendarMentionPreview,
-        CalendarMentionRequestItem, CalendarOccurrence, CalendarOccurrenceCursor,
-        CalendarReminderFiring, CalendarSyncStatus, CalendarWatchRelease, ConferenceProvider,
-        DisconnectedGoogleCalendar, DueCalendarReminder, EventReminderOverride, EventReminders,
-        EventStart, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
-        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
-        OccurrenceContent, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
-        TeamOutOfOffice, VisibleCalendar, is_system_calendar,
+        CalendarEventCopyAccess, CalendarEventCopySource, CalendarEventMutationTarget,
+        CalendarEventOverride, CalendarEventSource, CalendarEventSourceContent,
+        CalendarEventUpsert, CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarMentionEvent,
+        CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
+        CalendarOccurrenceCursor, CalendarReminderFiring, CalendarSyncStatus, CalendarWatchRelease,
+        ConferenceProvider, DisconnectedGoogleCalendar, DueCalendarReminder, EventReminderOverride,
+        EventReminders, EventStart, EventStatus, EventTime, EventTransparency, EventType,
+        EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet,
+        GoogleWatchChannel, OccurrenceContent, OccurrenceRange, ProviderCalendar,
+        StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar, is_system_calendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -345,6 +345,25 @@ struct MentionPreviewRow {
     occurrence_start_date: Option<NaiveDate>,
     occurrence_end_date: Option<NaiveDate>,
     attendee_count: Option<i64>,
+}
+
+struct CopySourceRow {
+    is_channel_shared: bool,
+    ical_uid: String,
+    sequence: i32,
+    event_type: String,
+    title: String,
+    description: Option<String>,
+    location: Option<String>,
+    starts_at: Option<DateTime<Utc>>,
+    ends_at: Option<DateTime<Utc>>,
+    start_date: Option<NaiveDate>,
+    end_date: Option<NaiveDate>,
+    time_zone: Option<String>,
+    recurrence_lines: Vec<String>,
+    organizer_email: Option<String>,
+    organizer_name: Option<String>,
+    updated_at: DateTime<Utc>,
 }
 
 struct OverrideAttendeeRow {
@@ -2123,6 +2142,122 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&self.pool)
         .await
         .map_err(report)
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn get_event_copy_source(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Option<CalendarEventCopySource>, Report> {
+        // Same resolution as the mention preview: any live projection of the
+        // meeting on the requester's own or linked calendars wins, and only
+        // without one does a channel share of the mentioned row count.
+        let row = sqlx::query_as!(
+            CopySourceRow,
+            r#"
+            SELECT
+                resolved.is_channel_shared AS "is_channel_shared!",
+                resolved.ical_uid AS "ical_uid!",
+                resolved.sequence AS "sequence!",
+                resolved.event_type AS "event_type!",
+                resolved.title AS "title!",
+                resolved.description,
+                resolved.location,
+                resolved.starts_at,
+                resolved.ends_at,
+                resolved.start_date,
+                resolved.end_date,
+                resolved.time_zone,
+                resolved.recurrence_lines AS "recurrence_lines!",
+                resolved.organizer_email,
+                resolved.organizer_name,
+                resolved.updated_at AS "updated_at!"
+            FROM calendar_events mentioned
+            CROSS JOIN LATERAL (
+                SELECT
+                    false AS is_channel_shared,
+                    (candidate.owner_id = $1) AS is_owned,
+                    (candidate.id = mentioned.id) AS is_mentioned,
+                    candidate.id,
+                    candidate.ical_uid,
+                    candidate.sequence,
+                    candidate.event_type,
+                    candidate.title,
+                    candidate.description,
+                    candidate.location,
+                    candidate.starts_at,
+                    candidate.ends_at,
+                    candidate.start_date,
+                    candidate.end_date,
+                    candidate.time_zone,
+                    candidate.recurrence_lines,
+                    candidate.organizer_email,
+                    candidate.organizer_name,
+                    candidate.updated_at
+                FROM calendar_events candidate
+                WHERE candidate.ical_uid = mentioned.ical_uid
+                  AND candidate.status <> 'cancelled'
+                  AND (
+                        candidate.owner_id = $1
+                        OR EXISTS (
+                            SELECT 1
+                            FROM macro_user_links link
+                            WHERE link.link_id = candidate.source_link_id
+                              AND link.primary_macro_id = $1
+                        )
+                  )
+                UNION ALL
+                SELECT
+                    true,
+                    false,
+                    true,
+                    mentioned.id,
+                    mentioned.ical_uid,
+                    mentioned.sequence,
+                    mentioned.event_type,
+                    mentioned.title,
+                    mentioned.description,
+                    mentioned.location,
+                    mentioned.starts_at,
+                    mentioned.ends_at,
+                    mentioned.start_date,
+                    mentioned.end_date,
+                    mentioned.time_zone,
+                    mentioned.recurrence_lines,
+                    mentioned.organizer_email,
+                    mentioned.organizer_name,
+                    mentioned.updated_at
+                WHERE mentioned.visibility IN ('default', 'public')
+                  AND EXISTS (
+                        SELECT 1
+                        FROM entity_access grant_row
+                        JOIN comms_channel_participants participant
+                          ON participant.channel_id::text = grant_row.source_id
+                         AND participant.user_id = $1
+                         AND participant.left_at IS NULL
+                        WHERE grant_row.entity_id = mentioned.id
+                          AND grant_row.entity_type = 'calendar_event'
+                          AND grant_row.source_type = 'channel'
+                  )
+                ORDER BY
+                    is_channel_shared,
+                    is_owned DESC,
+                    is_mentioned DESC,
+                    updated_at DESC,
+                    id
+                LIMIT 1
+            ) resolved
+            WHERE mentioned.id = $2
+              AND mentioned.status <> 'cancelled'
+            "#,
+            requester_id,
+            event_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(report)?;
+        row.map(copy_source_from_row).transpose()
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -4065,6 +4200,35 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
             updated_at: row.updated_at.unwrap_or(DateTime::<Utc>::MIN_UTC),
         },
     )))
+}
+
+fn copy_source_from_row(row: CopySourceRow) -> Result<CalendarEventCopySource, Report> {
+    Ok(CalendarEventCopySource {
+        access: if row.is_channel_shared {
+            CalendarEventCopyAccess::ChannelShared
+        } else {
+            CalendarEventCopyAccess::OwnCopy
+        },
+        time: row_time(
+            row.starts_at,
+            row.ends_at,
+            row.start_date,
+            row.end_date,
+            row.time_zone,
+        )?,
+        ical_uid: row.ical_uid,
+        sequence: u32::try_from(row.sequence).unwrap_or_default(),
+        event_type: event_type(&row.event_type),
+        title: row.title,
+        description: row
+            .description
+            .filter(|description| !description.trim().is_empty()),
+        location: row.location,
+        recurrence_lines: row.recurrence_lines,
+        organizer_email: row.organizer_email,
+        organizer_name: row.organizer_name,
+        updated_at: row.updated_at,
+    })
 }
 
 fn event_from_join(

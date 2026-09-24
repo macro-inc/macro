@@ -1097,6 +1097,46 @@
         }
       }
     },
+    "/calendar-events/{event_id}/ics": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Export an event the requester can see — their own, or one shared with a\nchannel they belong to — as an iCalendar file.",
+        "operationId": "event_ics",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The event as an iCalendar document",
+            "content": {
+              "text/calendar": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Event not found or not visible to the requester"
+          },
+          "500": {
+            "description": "Calendar query failed"
+          }
+        }
+      }
+    },
     "/call/active": {
       "get": {
         "tags": ["call::inbound::axum_router"],

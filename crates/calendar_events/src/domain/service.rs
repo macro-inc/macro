@@ -177,6 +177,20 @@ where
         self.repository.primary_time_zone(requester_id).await
     }
 
+    /// Export an event the requester can see as an iCalendar document.
+    #[tracing::instrument(skip(self, requester_id), err)]
+    pub async fn event_ics(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Option<String>, Report> {
+        let source = self
+            .repository
+            .get_event_copy_source(requester_id, event_id)
+            .await?;
+        Ok(source.as_ref().map(super::ics::render_event_ics))
+    }
+
     /// Re-arm the watched inbox's sync job for a push notification whose
     /// channel token the adapter already verified. Returns whether the
     /// notification matched an active channel.
@@ -252,6 +266,14 @@ where
         requester_id: &str,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send {
         CalendarService::primary_time_zone(self, requester_id)
+    }
+
+    fn event_ics(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<String>, Report>> + Send {
+        CalendarService::event_ics(self, requester_id, event_id)
     }
 }
 

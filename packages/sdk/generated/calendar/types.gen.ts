@@ -256,7 +256,7 @@ export type CalendarMutationApiError = {
 /**
  * Machine-readable failure category for calendar mutations.
  */
-export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
+export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'already_on_calendar' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
 
 /**
  * How much of a recurring series an RSVP applies to.
@@ -299,6 +299,17 @@ export type ConferenceChange = 'google_meet' | 'none';
  * so an unrelated edit never disturbs it.
  */
 export type ConferenceProvider = 'google_meet' | 'other';
+
+/**
+ * Request body adding a shared event to the requester's calendar.
+ */
+export type CopyCalendarEventRequest = {
+    /**
+     * Calendar to add the copy to; defaults to the requester's primary
+     * inbox's primary calendar.
+     */
+    calendarId?: string | null;
+};
 
 /**
  * Request body creating a calendar event on the requester's calendar.
@@ -765,6 +776,56 @@ export type UpdateCalendarEventResponses = {
 };
 
 export type UpdateCalendarEventResponse = UpdateCalendarEventResponses[keyof UpdateCalendarEventResponses];
+
+export type CopyCalendarEventData = {
+    body: CopyCalendarEventRequest;
+    path: {
+        /**
+         * Shared calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/events/{event_id}/copy';
+};
+
+export type CopyCalendarEventErrors = {
+    /**
+     * The event cannot be copied
+     */
+    400: CalendarMutationApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only or needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * Event not found or not shared with the requester
+     */
+    404: CalendarMutationApiError;
+    /**
+     * Already on the requester's calendar, no writable calendar, or the provider rejected the copy
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type CopyCalendarEventError = CopyCalendarEventErrors[keyof CopyCalendarEventErrors];
+
+export type CopyCalendarEventResponses = {
+    /**
+     * The copy on the requester's calendar
+     */
+    201: CalendarEvent;
+};
+
+export type CopyCalendarEventResponse = CopyCalendarEventResponses[keyof CopyCalendarEventResponses];
 
 export type RsvpCalendarEventData = {
     body: RsvpCalendarEventRequest;

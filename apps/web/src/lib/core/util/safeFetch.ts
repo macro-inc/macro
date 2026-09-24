@@ -319,7 +319,10 @@ export async function safeFetch<
           return ok({ contentType, body: text } as T);
         }
 
-        if (contentType.includes('application/octet-stream')) {
+        if (
+          contentType.includes('application/octet-stream') ||
+          contentType.includes('text/calendar')
+        ) {
           return ok(new Uint8Array(await response.arrayBuffer()) as T);
         }
 

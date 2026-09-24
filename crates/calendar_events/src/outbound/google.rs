@@ -11,12 +11,13 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
-        CalendarEvent, CalendarEventDraft, CalendarEventOverride, CalendarEventPatch,
-        CalendarEventSource, CalendarEventUpsert, CalendarOccurrence, ConferenceChange,
-        ConferenceProvider, EventReminderOverride, EventReminders, EventStart, EventStatus,
-        EventTime, EventTransparency, EventType, EventVisibility, GoogleCalendarTarget,
-        GoogleEventSource, GoogleEventSyncBatch, GoogleSyncPlan, GoogleWatchChannel,
-        GoogleWatchConfig, OccurrenceRange, OutOfOfficeProperties, ProviderCalendar,
+        CalendarEvent, CalendarEventCopySource, CalendarEventDraft, CalendarEventOverride,
+        CalendarEventPatch, CalendarEventSource, CalendarEventUpsert, CalendarOccurrence,
+        ConferenceChange, ConferenceProvider, EventReminderOverride, EventReminders, EventStart,
+        EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+        GoogleCalendarTarget, GoogleEventSource, GoogleEventSyncBatch, GoogleSyncPlan,
+        GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, OutOfOfficeProperties,
+        ProviderCalendar,
     },
     ports::{
         CalendarRsvpScope, GoogleCalendarMutationProvider, GoogleCalendarProvider,
@@ -1325,6 +1326,42 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         }
     }
 
+    #[tracing::instrument(
+        skip(self, access_token, target, source),
+        fields(provider_calendar_id = %target.provider_calendar_id),
+        err
+    )]
+    async fn import_event(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        source: &CalendarEventCopySource,
+    ) -> Result<CalendarEventUpsert, GoogleProviderError> {
+        let calendar = urlencoding::encode(&target.provider_calendar_id);
+        let body = import_body(source);
+        self.gate.acquire(target.email_link_id).await?;
+        // Import never notifies anyone, so it takes no `sendUpdates`.
+        let request = self
+            .client
+            .post(format!(
+                "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/import"
+            ))
+            .bearer_auth(access_token)
+            .json(&body);
+        let imported: GoogleEvent = send_google(GoogleRequestKind::Mutation, request).await?;
+        // Unlike an insert, a repeated import of the same UID updates the
+        // copy in place, but a readback miss still must not invite a retry
+        // that races the import it follows.
+        self.mutation_readback(access_token, target, imported)
+            .await?
+            .ok_or_else(|| {
+                GoogleProviderError::new(
+                    GoogleProviderErrorKind::Permanent,
+                    "Google Calendar dropped the event immediately after import",
+                )
+            })
+    }
+
     #[tracing::instrument(skip(self, access_token), err)]
     async fn stop_watch_channel(
         &self,
@@ -1689,6 +1726,37 @@ fn draft_body(draft: &CalendarEventDraft) -> serde_json::Value {
         body["transparency"] =
             serde_json::Value::String(EventTransparency::Opaque.as_str().to_string());
         body["outOfOfficeProperties"] = google_out_of_office_body(out_of_office);
+    }
+    body
+}
+
+/// A private copy of another calendar's event: the meeting's UID and
+/// organizer with its content, without attendees or conference, so importing
+/// it invites no one and grants no join link the share did not expose.
+fn import_body(source: &CalendarEventCopySource) -> serde_json::Value {
+    let (start, end) = google_time_body(&source.time);
+    let mut body = serde_json::json!({
+        "iCalUID": source.ical_uid,
+        "summary": source.title,
+        "start": start,
+        "end": end,
+        "sequence": source.sequence,
+    });
+    if let Some(description) = &source.description {
+        body["description"] = serde_json::Value::String(description.clone());
+    }
+    if let Some(location) = source.location.as_deref().filter(|value| !value.is_empty()) {
+        body["location"] = serde_json::Value::String(location.to_string());
+    }
+    if !source.recurrence_lines.is_empty() {
+        body["recurrence"] = serde_json::json!(source.recurrence_lines);
+    }
+    if let Some(email) = &source.organizer_email {
+        let mut organizer = serde_json::json!({ "email": email });
+        if let Some(name) = &source.organizer_name {
+            organizer["displayName"] = serde_json::Value::String(name.clone());
+        }
+        body["organizer"] = organizer;
     }
     body
 }

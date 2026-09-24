@@ -86,6 +86,10 @@ where
             "/events/{event_id}/rsvp",
             put(rsvp_calendar_event::<S, Auth>),
         )
+        .route(
+            "/events/{event_id}/copy",
+            post(copy_calendar_event::<S, Auth>),
+        )
         .with_state(state)
 }
 
@@ -287,6 +291,8 @@ pub enum CalendarMutationErrorCode {
     NoWritableCalendar,
     /// The connected account is not an attendee of the event.
     NotAttendee,
+    /// The meeting is already on one of the requester's calendars.
+    AlreadyOnCalendar,
     /// The request was invalid.
     InvalidInput,
     /// The calendar grant must be re-consented.
@@ -352,6 +358,11 @@ impl From<CalendarMutationError> for CalendarMutationApiError {
                 StatusCode::CONFLICT,
                 CalendarMutationErrorCode::NotAttendee,
                 "the connected account is not an attendee of this event".to_string(),
+            ),
+            CalendarMutationError::AlreadyOnCalendar => (
+                StatusCode::CONFLICT,
+                CalendarMutationErrorCode::AlreadyOnCalendar,
+                "this event is already on one of your calendars".to_string(),
             ),
             CalendarMutationError::InvalidInput(message) => (
                 StatusCode::BAD_REQUEST,
@@ -438,6 +449,55 @@ where
             request.email_link_id,
             request.calendar_id,
             draft,
+        )
+        .await?;
+    Ok((StatusCode::CREATED, Json(event)))
+}
+
+/// Request body adding a shared event to the requester's calendar.
+#[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyCalendarEventRequest {
+    /// Calendar to add the copy to; defaults to the requester's primary
+    /// inbox's primary calendar.
+    pub calendar_id: Option<Uuid>,
+}
+
+/// Add a private copy of an event shared with one of the requester's
+/// channels to their own calendar and return the synced copy.
+#[tracing::instrument(skip_all, fields(event_id = %event_id), err)]
+#[utoipa::path(
+    post,
+    path = "/events/{event_id}/copy",
+    tag = "calendar_events",
+    params(("event_id" = Uuid, Path, description = "Shared calendar event entity id")),
+    request_body = CopyCalendarEventRequest,
+    responses(
+        (status = 201, description = "The copy on the requester's calendar", body = CalendarEvent),
+        (status = 400, description = "The event cannot be copied", body = CalendarMutationApiError),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "Calendar is read-only or needs reauthorization", body = CalendarMutationApiError),
+        (status = 404, description = "Event not found or not shared with the requester", body = CalendarMutationApiError),
+        (status = 409, description = "Already on the requester's calendar, no writable calendar, or the provider rejected the copy", body = CalendarMutationApiError),
+        (status = 503, description = "Transient provider failure", body = CalendarMutationApiError),
+    )
+)]
+pub async fn copy_calendar_event<S, Auth>(
+    State(state): State<CalendarMutationRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(event_id): Path<Uuid>,
+    Json(request): Json<CopyCalendarEventRequest>,
+) -> Result<(StatusCode, Json<CalendarEvent>), CalendarMutationApiError>
+where
+    S: CalendarMutationService,
+    Auth: MacroAuthorizationService,
+{
+    let event = state
+        .service
+        .copy_shared_event(
+            user.authorization.user.macro_user_id.as_ref(),
+            event_id,
+            request.calendar_id,
         )
         .await?;
     Ok((StatusCode::CREATED, Json(event)))

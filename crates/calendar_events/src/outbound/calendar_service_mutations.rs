@@ -133,6 +133,7 @@ fn error_from_response(status: StatusCode, body: Option<String>) -> CalendarMuta
         "read_only" => CalendarMutationError::ReadOnly,
         "no_writable_calendar" => CalendarMutationError::NoWritableCalendar,
         "not_attendee" => CalendarMutationError::NotAttendee,
+        "already_on_calendar" => CalendarMutationError::AlreadyOnCalendar,
         "invalid_input" => CalendarMutationError::InvalidInput(error.message),
         "reauth_required" => CalendarMutationError::ReauthRequired(error.message),
         "provider_rejected" => CalendarMutationError::ProviderRejected(error.message),
@@ -282,6 +283,24 @@ impl CalendarMutationService for CalendarServiceMutations {
         self.event_from(
             self.request(reqwest::Method::POST, "/events", requester_id)
                 .json(&create_body(email_link_id, calendar_id, &draft)),
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn copy_shared_event(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
+        self.event_from(
+            self.request(
+                reqwest::Method::POST,
+                &format!("/events/{event_id}/copy"),
+                requester_id,
+            )
+            .json(&serde_json::json!({ "calendarId": calendar_id })),
         )
         .await
     }

@@ -6554,3 +6554,102 @@ async fn retiring_an_unrelated_copy_keeps_a_fresher_schedule_written_through_ano
     assert_eq!(occurrence.time, timed(moved_start));
     assert_primary_content(&entity_content(&pool, event_id).await);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn copy_source_resolves_own_copies_before_channel_shares(pool: PgPool) {
+    let author_id = "macro|copy-author@example.com";
+    let attendee_id = "macro|copy-attendee@example.com";
+    let member_id = "macro|copy-member@example.com";
+    let stranger_id = "macro|copy-stranger@example.com";
+    let author_link = insert_link(&pool, author_id).await;
+    let attendee_link = insert_link(&pool, attendee_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let author_provider = provider_ids(&repo, author_link).await;
+    let attendee_provider = provider_ids(&repo, attendee_link).await;
+
+    let mut author_copy = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "copy@example.com",
+        "Offsite",
+        1,
+    );
+    // Longer than the preview truncates to: the copy carries it whole.
+    let description = "a".repeat(MENTION_PREVIEW_DESCRIPTION_MAX_CHARS as usize + 10);
+    author_copy.event.description = Some(description.clone());
+    let recurrence_lines = author_copy.event.recurrence_lines.clone();
+    let shared_event_id = author_copy.event.id;
+    repo.upsert_event_fixture(author_copy).await.unwrap();
+    let attendee_copy = timed_upsert(
+        attendee_id,
+        attendee_link,
+        attendee_provider,
+        "copy@example.com",
+        "Offsite",
+        1,
+    );
+    repo.upsert_event_fixture(attendee_copy).await.unwrap();
+    let mut private_copy = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "copy-private@example.com",
+        "Private",
+        1,
+    );
+    private_copy.event.visibility = EventVisibility::Private;
+    let private_event_id = private_copy.event.id;
+    repo.upsert_event_fixture(private_copy).await.unwrap();
+
+    let channel_id = insert_channel(&pool, author_id, &[author_id, attendee_id, member_id]).await;
+    share_with_channel(&pool, shared_event_id, channel_id).await;
+    share_with_channel(&pool, private_event_id, channel_id).await;
+
+    let shared = repo
+        .get_event_copy_source(member_id, shared_event_id)
+        .await
+        .unwrap()
+        .expect("a channel member sees the shared event");
+    assert_eq!(shared.access, CalendarEventCopyAccess::ChannelShared);
+    assert_eq!(shared.ical_uid, "copy@example.com");
+    assert_eq!(shared.title, "Offsite");
+    assert_eq!(shared.description.as_deref(), Some(description.as_str()));
+    assert_eq!(shared.recurrence_lines, recurrence_lines);
+
+    // Anyone holding a projection of the meeting already has it.
+    for holder in [author_id, attendee_id] {
+        let own = repo
+            .get_event_copy_source(holder, shared_event_id)
+            .await
+            .unwrap()
+            .expect("a holder sees their own copy");
+        assert_eq!(own.access, CalendarEventCopyAccess::OwnCopy, "{holder}");
+    }
+
+    // Private events stay hidden despite the grant, and outsiders see nothing.
+    assert_eq!(
+        repo.get_event_copy_source(member_id, private_event_id)
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        repo.get_event_copy_source(stranger_id, shared_event_id)
+            .await
+            .unwrap(),
+        None
+    );
+
+    sqlx::query("UPDATE calendar_events SET status = 'cancelled' WHERE id = $1")
+        .bind(shared_event_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.get_event_copy_source(member_id, shared_event_id)
+            .await
+            .unwrap(),
+        None
+    );
+}
