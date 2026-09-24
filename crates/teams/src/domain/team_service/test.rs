@@ -39,6 +39,7 @@ use crate::domain::{
     contacts_enqueuer::ContactsEnqueuer,
     crm_enqueuer::{CrmEnqueuer, NoOpCrmEnqueuer},
     events::TeamCreatedMetadata,
+    open_seat_release::OpenSeatRelease,
     team_analytics::{TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::NoOpTeamCrmSettingsRepository,
 };
@@ -1390,6 +1391,33 @@ impl ContactsEnqueuer for RecordingContactsEnqueuer {
         } else {
             Ok(())
         }
+    }
+}
+
+#[derive(Clone, Default)]
+struct RecordingOpenSeatRelease {
+    releases: Arc<Mutex<Vec<(uuid::Uuid, MacroUserIdStr<'static>)>>>,
+}
+
+impl RecordingOpenSeatRelease {
+    fn releases(&self) -> Vec<(uuid::Uuid, MacroUserIdStr<'static>)> {
+        self.releases.lock().unwrap().clone()
+    }
+}
+
+impl OpenSeatRelease for RecordingOpenSeatRelease {
+    type Err = std::convert::Infallible;
+
+    async fn release(
+        &self,
+        team_id: uuid::Uuid,
+        member: &MacroUserIdStr<'_>,
+    ) -> Result<(), Self::Err> {
+        self.releases
+            .lock()
+            .unwrap()
+            .push((team_id, member.clone().into_owned()));
+        Ok(())
     }
 }
 
@@ -4589,6 +4617,75 @@ async fn test_remove_user_from_team_decrements_customer_seat_count() {
         .await
         .unwrap();
 
+    assert_eq!(
+        *decrement_calls.lock().unwrap(),
+        vec![(subscription_id.to_string(), 1)]
+    );
+    assert!(increment_calls.lock().unwrap().is_empty());
+    assert_eq!(*rollback_remove_calls.lock().unwrap(), 0);
+    assert_eq!(
+        *remove_channel_calls.lock().unwrap(),
+        vec![(team_id, member_id.as_ref().to_string())]
+    );
+    assert_eq!(remove_role_calls.lock().unwrap().len(), 1);
+    assert!(ensure_dms_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn remove_user_from_team_releases_open_seat_before_returning() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.removed_member = Some(TeamMember {
+        team_id,
+        user_id: member_id.clone().into_owned(),
+        role: TeamRole::Member,
+        plan: SeatPlan::Premium,
+    });
+    team_repo.team_subscription_id = Some(subscription_id.clone());
+    let rollback_remove_calls = team_repo.rollback_remove_calls.clone();
+
+    let customer_repo = MockCustomerRepository {
+        subscription_id: subscription_id.clone(),
+        ..Default::default()
+    };
+    let increment_calls = customer_repo.increment_calls.clone();
+    let decrement_calls = customer_repo.decrement_calls.clone();
+
+    let channels_repo = RecordingChannelService::default();
+    let remove_channel_calls = channels_repo.leave_calls.clone();
+    let ensure_dms_calls = channels_repo.ensure_dms_calls.clone();
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let remove_role_calls = roles_service.remove_calls.clone();
+    let open_seat_release = RecordingOpenSeatRelease::default();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo,
+        channels_repo,
+        roles_service,
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_open_seat_release(open_seat_release.clone());
+
+    service
+        .remove_user_from_team(
+            test_team_receipt::<AdminTeamRole>(team_id, &owner_id),
+            &member_id,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        open_seat_release.releases(),
+        vec![(team_id, member_id.clone().into_owned())]
+    );
     assert_eq!(
         *decrement_calls.lock().unwrap(),
         vec![(subscription_id.to_string(), 1)]
