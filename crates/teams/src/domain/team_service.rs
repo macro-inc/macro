@@ -368,6 +368,51 @@ where
         }
     }
 
+    async fn restore_after_channels_left(
+        &self,
+        removed_member: &TeamMember<'_>,
+        subscription_id: Option<&stripe::SubscriptionId>,
+        user_id: &MacroUserIdStr<'_>,
+        left_channel_ids: &[uuid::Uuid],
+        failed_step: &'static str,
+    ) {
+        self.channel_service
+            .restore_by_channel_ids(user_id, left_channel_ids)
+            .await
+            .inspect_err(|rollback_err| {
+                tracing::error!(
+                    error = ?rollback_err,
+                    failed_step,
+                    "unable to rollback team channel membership after {failed_step} failed"
+                );
+            })
+            .ok();
+        if let Some(subscription_id) = subscription_id {
+            self.customer_repository
+                .increment_seat_count(subscription_id, removed_member.plan, 1)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error = ?rollback_err,
+                        failed_step,
+                        "unable to rollback customer seat count after {failed_step} failed"
+                    );
+                })
+                .ok();
+        }
+        self.team_repository
+            .rollback_remove_user_from_team(removed_member)
+            .await
+            .inspect_err(|rollback_err| {
+                tracing::error!(
+                    error = ?rollback_err,
+                    failed_step,
+                    "unable to rollback removed team member after {failed_step} failed"
+                );
+            })
+            .ok();
+    }
+
     #[allow(
         dead_code,
         reason = "team mutations publish events in follow-up changes"
@@ -915,10 +960,32 @@ where
             .get_team_enterprise_status(&team_id)
             .await?;
 
-        let removed_member = self
+        let roles_to_remove = team_member_roles_to_remove();
+        let current_roles = self
+            .user_roles_and_permissions_service
+            .get_user_roles(user_id)
+            .await
+            .map_err(RemoveUserFromTeamError::RemoveRolesFromUserError)?;
+        let roles_to_restore: Vec<RoleId> = roles_to_remove
+            .iter()
+            .filter(|role| current_roles.contains(*role))
+            .cloned()
+            .collect();
+
+        let removed_member = match self
             .team_repository
             .remove_user_from_team(&team_id, user_id)
-            .await?;
+            .await
+        {
+            Ok(removed_member) => removed_member,
+            Err(RemoveUserFromTeamError::UserNotInTeam) => {
+                if let Err(error) = self.open_seat_release.release(team_id, user_id).await {
+                    return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
+                }
+                return Err(RemoveUserFromTeamError::UserNotInTeam);
+            }
+            Err(error) => return Err(error),
+        };
 
         let subscription_id = if enterprise {
             None
@@ -1000,7 +1067,6 @@ where
             }
         };
 
-        let roles_to_remove = team_member_roles_to_remove();
         let roles = non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap();
 
         if let Err(e) = self
@@ -1008,39 +1074,39 @@ where
             .dangerous_remove_roles_from_user(user_id, &roles)
             .await
         {
-            self.channel_service
-                .restore_by_channel_ids(user_id, &left_channel_ids)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback team channel membership after removing team member roles failed"
-                    );
-                })
-                .ok();
-            if let Some(subscription_id) = subscription_id.as_ref() {
-                self.customer_repository
-                    .increment_seat_count(subscription_id, removed_member.plan, 1)
+            self.restore_after_channels_left(
+                &removed_member,
+                subscription_id.as_ref(),
+                user_id,
+                &left_channel_ids,
+                "removing team member roles",
+            )
+            .await;
+            return Err(RemoveUserFromTeamError::RemoveRolesFromUserError(e));
+        }
+
+        if let Err(error) = self.open_seat_release.release(team_id, user_id).await {
+            if let Some(restore) = non_empty::NonEmpty::new(roles_to_restore.as_slice()) {
+                self.user_roles_and_permissions_service
+                    .dangerous_upsert_roles_for_user(user_id, restore)
                     .await
                     .inspect_err(|rollback_err| {
                         tracing::error!(
-                            error=?rollback_err,
-                            "unable to rollback customer seat count after removing team member roles failed"
+                            error = ?rollback_err,
+                            "unable to restore member roles after releasing the open seat failed"
                         );
                     })
                     .ok();
             }
-            self.team_repository
-                .rollback_remove_user_from_team(&removed_member)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback removed team member after removing team member roles failed"
-                    );
-                })
-                .ok();
-            return Err(RemoveUserFromTeamError::RemoveRolesFromUserError(e));
+            self.restore_after_channels_left(
+                &removed_member,
+                subscription_id.as_ref(),
+                user_id,
+                &left_channel_ids,
+                "releasing the open seat",
+            )
+            .await;
+            return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
         }
 
         // Best-effort: ask the email service to tear down CRM rows

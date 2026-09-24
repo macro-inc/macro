@@ -3,8 +3,9 @@
 
 use super::ledger::SettlementPolicy;
 use super::models::{
-    AllowanceDecision, BillingPeriod, BillingSettings, Entitlement, OverageChargeStatus,
-    PeriodAllowance, PeriodLedger, Result, SeatAllowance, SeatUsage, UsageSnapshot,
+    AllowanceDecision, AllowanceStore, BillingPeriod, BillingSettings, Entitlement,
+    OpenPeriodStart, OverageChargeStatus, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
+    SeatGeneration, SeatUsage, UsageSnapshot,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -23,6 +24,14 @@ pub trait EntitlementSource: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<String>>> + Send;
+
+    /// The payer for `team_id`, if the team exists.
+    ///
+    /// Missing teams are `Ok(None)`. The payer is the team owner.
+    fn team_payer(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Option<MacroUserIdStr<'static>>>> + Send;
 }
 
 /// Reads recorded, metered AI usage at Macro's list rate.
@@ -116,14 +125,29 @@ pub trait BillingRepo: Send + Sync + 'static {
         period_start: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<PeriodAllowance>>> + Send;
 
-    /// Record each seat's live allowance against the open period. Upserts so
-    /// a mid-period plan or seat change is reflected until the period closes;
-    /// callers must only pass the current period's start.
-    fn remember_period_allowance(
+    /// Record each seat's allowance for the open period when `observed` is still
+    /// the payer's seat generation.
+    ///
+    /// Returns [`AllowanceStore::Conflict`] when the generation moved, without
+    /// writing the arrays. An unchanged roster does not touch `updated_at`.
+    fn store_open_allowance(
         &self,
         payer: &MacroUserIdStr<'_>,
-        period_start: DateTime<Utc>,
+        period: OpenPeriodStart,
         seats: &[SeatAllowance],
+        observed: SeatGeneration,
+    ) -> impl Future<Output = Result<AllowanceStore>> + Send;
+
+    /// Remove `member` and the paired included cents from the payer's open period.
+    ///
+    /// A missing allowance row, or a row that does not contain `member`, is
+    /// success and does not change that row. The payer's seat generation still
+    /// moves forward, including when no allowance row exists.
+    fn release_open_seat(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period: OpenPeriodStart,
+        member: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Book a credit purchase. Returns `false` when `stripe_reference` was
