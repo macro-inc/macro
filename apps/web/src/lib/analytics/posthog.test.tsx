@@ -1,6 +1,7 @@
 import type { RemoteFlag } from '@core/constant/featureFlags';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { FeatureFlagResult, PostHog } from 'posthog-js';
+import { type JSX, lazy, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PosthogProvider, ShowFeatureFlag, useFeatureFlag } from './posthog';
 
@@ -19,7 +20,7 @@ const channelTags: RemoteFlag = {
   override: undefined,
 };
 
-function receiveFlags(
+async function receiveFlags(
   result: FeatureFlagResult | undefined,
   flags = result?.enabled ? [channelTags.key] : []
 ) {
@@ -27,6 +28,7 @@ function receiveFlags(
   const callback = posthog.onFeatureFlags.mock.calls[0]?.[0];
   if (!callback) throw new Error('PostHog provider is not mounted');
   callback(flags, result ? { [result.key]: result.enabled } : {});
+  await new Promise((resolve) => setTimeout(resolve));
 }
 
 function flagResult(enabled: boolean, payload?: string): FeatureFlagResult {
@@ -61,7 +63,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('reactive PostHog flags', () => {
-  it('hides unknown flags and applies rollout changes without remounting', () => {
+  it('hides unknown flags and applies rollout changes without remounting', async () => {
     const view = renderFlag();
 
     expect(view.result()).toEqual({
@@ -71,15 +73,15 @@ describe('reactive PostHog flags', () => {
     });
     expect(screen.queryByRole('button', { name: 'New label' })).toBeNull();
 
-    receiveFlags(undefined);
+    await receiveFlags(undefined);
     expect(view.result().loading).toBe(false);
     expect(screen.queryByRole('button', { name: 'New label' })).toBeNull();
 
-    receiveFlags(flagResult(true));
+    await receiveFlags(flagResult(true));
     expect(view.result().enabled).toBe(true);
     expect(screen.getByRole('button', { name: 'New label' })).toBeTruthy();
 
-    receiveFlags(flagResult(false));
+    await receiveFlags(flagResult(false));
     expect(view.result().enabled).toBe(false);
     expect(screen.queryByRole('button', { name: 'New label' })).toBeNull();
     expect(view.mount).toHaveBeenCalledOnce();
@@ -88,21 +90,50 @@ describe('reactive PostHog flags', () => {
     expect(posthog.unsubscribe).toHaveBeenCalledOnce();
   });
 
-  it('refreshes payloads when the enabled flag list is unchanged', () => {
+  it('refreshes payloads when the enabled flag list is unchanged', async () => {
     const view = renderFlag();
     const flags = [channelTags.key];
 
-    receiveFlags(flagResult(true, 'first'), flags);
+    await receiveFlags(flagResult(true, 'first'), flags);
     expect(view.result().payload).toBe('first');
 
-    receiveFlags(flagResult(true, 'second'), flags);
+    await receiveFlags(flagResult(true, 'second'), flags);
     expect(view.result().payload).toBe('second');
     expect(view.mount).toHaveBeenCalledOnce();
   });
 
+  it('keeps painted content while a flag-enabled lazy view loads', async () => {
+    let resolveView!: (view: { default: () => JSX.Element }) => void;
+    const LazyView = lazy(
+      () =>
+        new Promise<{ default: () => JSX.Element }>((r) => (resolveView = r))
+    );
+    render(() => (
+      <PosthogProvider>
+        <Suspense fallback={<p>Suspense fallback</p>}>
+          <ShowFeatureFlag flag={channelTags} fallback={<p>Painted</p>}>
+            <LazyView />
+          </ShowFeatureFlag>
+        </Suspense>
+      </PosthogProvider>
+    ));
+    expect(screen.getByText('Painted')).toBeTruthy();
+
+    await receiveFlags(flagResult(true));
+    expect(screen.queryByText('Suspense fallback')).toBeNull();
+    expect(screen.getByText('Painted')).toBeTruthy();
+
+    resolveView({ default: () => <button>New label</button> });
+    expect(
+      await screen.findByRole('button', { name: 'New label' })
+    ).toBeTruthy();
+    expect(screen.queryByText('Painted')).toBeNull();
+    expect(screen.queryByText('Suspense fallback')).toBeNull();
+  });
+
   it.each([false, true])(
     'keeps the explicit %s override authoritative',
-    (override) => {
+    async (override) => {
       const view = renderFlag({ ...channelTags, override });
 
       expect(view.result()).toEqual({
@@ -111,7 +142,7 @@ describe('reactive PostHog flags', () => {
         loading: false,
       });
 
-      receiveFlags(flagResult(!override, 'remote'));
+      await receiveFlags(flagResult(!override, 'remote'));
       expect(view.result()).toEqual({
         enabled: override,
         payload: 'fallback',
