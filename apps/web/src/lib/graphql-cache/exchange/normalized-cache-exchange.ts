@@ -772,15 +772,26 @@ export function normalizedCacheExchange(
       const subscriptionGenerations = new Map<number, object>();
       let attemptInFlight = false;
       let drainRunning = false;
+      let drainRequested = false;
       let deferredUntil: number | undefined;
       let drainTimer: ReturnType<typeof setTimeout> | undefined;
 
       function scheduleDrain(delayMs = 0): void {
         if (drainTimer !== undefined) clearTimeout(drainTimer);
-        drainTimer = setTimeout(() => {
-          drainTimer = undefined;
-          void drainQueue();
-        }, delayMs);
+        drainTimer = setTimeout(
+          () => {
+            drainTimer = undefined;
+            void drainQueue();
+          },
+          drainRequested ? 0 : delayMs
+        );
+      }
+
+      function wakeDrain(): void {
+        // Keep the wakeup until the runner can claim again. An interrupted
+        // claim/settlement may still be unwinding and scheduling its backoff.
+        drainRequested = true;
+        scheduleDrain();
       }
 
       function resolveLiveOperationsAsQueued(): void {
@@ -883,6 +894,8 @@ export function normalizedCacheExchange(
         }
         if (drainRunning) return;
         drainRunning = true;
+        if (drainRequested) deferredUntil = undefined;
+        drainRequested = false;
         try {
           const now = Date.now();
           const claimed = await host.claimNextMutation(
@@ -908,6 +921,7 @@ export function normalizedCacheExchange(
           scheduleDrain(EMPTY_QUEUE_POLL_MS);
         } finally {
           drainRunning = false;
+          if (drainRequested) scheduleDrain();
         }
       }
 
@@ -1525,8 +1539,12 @@ export function normalizedCacheExchange(
 
       if (!host.disabled) {
         scheduleDrain();
+        // Includes BFCache restoration, even with no active query keys. The
+        // host gates claims on initialization; durable leases still decide
+        // which head is runnable after reconnecting.
+        host.onCacheGenerationChanged(wakeDrain);
         if (typeof addEventListener === 'function') {
-          addEventListener('online', () => scheduleDrain());
+          addEventListener('online', wakeDrain);
         }
       }
       void unsubscribePush;

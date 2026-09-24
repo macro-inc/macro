@@ -1,3 +1,6 @@
+import { type Client, createClient, gql, stringifyDocument } from '@urql/core';
+import { filter, map, pipe } from 'wonka';
+import { normalizedCacheExchange } from '../../exchange/normalized-cache-exchange';
 import type { CacheHost } from '../../host/types';
 import { createWorkerCacheHost } from '../../host/worker-host';
 import { clearRegisteredCaches, registerCacheHost } from '../../lifecycle';
@@ -38,6 +41,9 @@ const affectedOperations: number[][] = [];
 let cacheChanges = 0;
 let pageRestores = 0;
 let watchingNavigation = false;
+let mutationRunner: Client | undefined;
+let mutationReplays = 0;
+const settledMutations: string[] = [];
 addEventListener('pageshow', (event: PageTransitionEvent) => {
   if (event.persisted) pageRestores += 1;
 });
@@ -147,6 +153,80 @@ const api = {
       variables: variables(1),
     });
   },
+  async queueMutationForRestore(): Promise<string> {
+    const host = requireOwner();
+    const mutation = gql`
+      mutation CacheLifecycleMutation($input: SetEntityPropertyInput!) {
+        setEntityProperty(input: $input) { id displayName }
+      }
+    `;
+    const response = {
+      setEntityProperty: { id: 'restored-property', displayName: 'Restored' },
+    };
+    if (!mutationRunner) {
+      const firstClaim = Promise.withResolvers<void>();
+      host.onMutationSettled(({ transactionId }) =>
+        settledMutations.push(transactionId)
+      );
+      mutationRunner = createClient({
+        url: 'http://cache-lifecycle.test/graphql',
+        exchanges: [
+          normalizedCacheExchange({
+            ...host,
+            async claimNextMutation(...args) {
+              const claimed = await host.claimNextMutation(...args);
+              firstClaim.resolve();
+              return claimed;
+            },
+          }),
+          () => (operations) =>
+            pipe(
+              operations,
+              filter((operation) => operation.kind === 'mutation'),
+              map((operation) => {
+                mutationReplays += 1;
+                return {
+                  operation,
+                  data: response,
+                  stale: false,
+                  hasNext: false,
+                };
+              })
+            ),
+        ],
+      });
+      // Let the initial empty-queue poll finish before inserting runnable work.
+      await firstClaim.promise;
+    }
+    const nowMs = Date.now();
+    const owner = 'browser-test-seed';
+    const queued = await host.enqueueOptimisticMutation(
+      {
+        uuid: crypto.randomUUID(),
+        query: stringifyDocument(mutation),
+        variables: {
+          input: {
+            entityType: 'DOCUMENT',
+            entityId: 'restored-document',
+            propertyDefinitionId: 'restored-definition',
+            value: { string: 'restored' },
+          },
+        },
+        data: response,
+      },
+      { owner, nowMs, leaseExpiresAtMs: nowMs + 300_000 }
+    );
+    if (queued.initialClaim.kind !== 'claimed') {
+      throw new Error('expected to claim the browser-test mutation');
+    }
+    await host.deferOptimisticWrite(
+      queued.transactionId,
+      { owner, generation: queued.initialClaim.mutation.leaseGeneration },
+      nowMs,
+      'runnable on restore'
+    );
+    return queued.transactionId;
+  },
   navigationState() {
     return {
       clientId: requireOwner().clientId,
@@ -154,6 +234,8 @@ const api = {
       affectedOperations: [...affectedOperations],
       cacheChanges,
       pageRestores,
+      mutationReplays,
+      settledMutations: [...settledMutations],
     };
   },
   async startLogoutHost(): Promise<void> {

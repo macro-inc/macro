@@ -6,8 +6,10 @@ A browser back/forward-cache restore reconnects the GraphQL cache worker and
 live subscriptions in place; it must not reload the app or discard in-memory
 editor state. For lifecycle verification, navigate to another document and Back,
 confirm `pageshow.persisted` is true (otherwise this was a fresh load), then check
-that cached reads, live updates, and the existing editor still work. Switching
-tabs or navigating an in-app route is not a back/forward-cache restore.
+that cached reads, live updates, and the existing editor still work. Runnable
+queued mutations should resume promptly, without waiting for the old poll or
+local retry timer; durable leases and server-retry deadlines still apply.
+Switching tabs or navigating an in-app route is not a back/forward-cache restore.
 
 ## Direct URLs (all under the frontend origin)
 

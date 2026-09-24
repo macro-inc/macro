@@ -57,6 +57,9 @@ test('Cache reconnects in place across persisted page lifecycle events', async (
     window.cacheLifecycleHarness.navigationState()
   );
   for (let cycle = 0; cycle < 2; cycle += 1) {
+    const transactionId = await page.evaluate(() =>
+      window.cacheLifecycleHarness.queueMutationForRestore()
+    );
     const result = await page.evaluate(async () => {
       dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
       let cancellation: string | undefined;
@@ -82,9 +85,17 @@ test('Cache reconnects in place across persisted page lifecycle events', async (
         )
       )
       .toBeGreaterThan(original.cacheChanges + cycle);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.cacheLifecycleHarness.navigationState().settledMutations
+        )
+      )
+      .toContain(transactionId);
     const restored = await page.evaluate(() =>
       window.cacheLifecycleHarness.navigationState()
     );
+    expect(restored.mutationReplays).toBe(cycle + 1);
     expect(restored.clientId).toBe(original.clientId);
     expect(restored.affectedOperations).toContainEqual([4242]);
     expect(restored.restoredGenerations).toContain('reset');
@@ -133,6 +144,9 @@ test('Cache preserves editor state and reconnects after a real back-forward-cach
     const before = await page.evaluate(() =>
       window.cacheLifecycleHarness.navigationState()
     );
+    const transactionId = await page.evaluate(() =>
+      window.cacheLifecycleHarness.queueMutationForRestore()
+    );
     await page.goto(`${path}?treatment=false`);
     await page.goBack({ waitUntil: 'commit' });
     expect(await page.locator('#unsaved-editor').inputValue()).toBe(
@@ -145,6 +159,18 @@ test('Cache preserves editor state and reconnects after a real back-forward-cach
       window.cacheLifecycleHarness.navigationState()
     );
     expect(restored.pageRestores).toBe(1);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.cacheLifecycleHarness.navigationState().settledMutations
+        )
+      )
+      .toContain(transactionId);
+    expect(
+      await page.evaluate(
+        () => window.cacheLifecycleHarness.navigationState().mutationReplays
+      )
+    ).toBe(1);
     expect(restored.clientId).toBe(before.clientId);
     expect(restored.affectedOperations).toContainEqual([4242]);
     await page.evaluate(() =>
