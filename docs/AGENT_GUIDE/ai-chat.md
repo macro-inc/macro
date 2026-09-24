@@ -1,5 +1,10 @@
 # AI Chat (Agents)
 
+User-sent messages in chat and agent transcripts use an ink-colored bubble with
+`InvertUtil` in light themes. Dark themes use `Layer depth={3}` for the slightly
+lighter bubble with the normal text palette. Preview Markdown and controls at
+`/app/debug/ui?ui=invert-util` under **User-sent AI message**.
+
 ## Uploading files with AI
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB

@@ -1,6 +1,7 @@
 import {
   createRoutesManifest,
   decodeRoute,
+  encodeRoute,
 } from '@app/lib/split-router/routes';
 import { describe, expect, it, vi } from 'vitest';
 import { appSplitRoutes } from '../split-router/app-routes';
@@ -18,6 +19,9 @@ vi.mock('@service-connection/websocket', () => ({
 
 vi.mock('@app/features/activity/views/my-activity-view', () => {
   throw new Error('Route declarations must not eagerly load activity views');
+});
+vi.mock('../componentRegistry', () => {
+  throw new Error('Route declarations must not eagerly load the registry');
 });
 vi.mock('@app/features/agents-view/views/AgentsView', () => {
   throw new Error('Route declarations must not eagerly load agent views');
@@ -63,6 +67,17 @@ vi.mock('@app/features/tasks-view/components/TasksDetailView', () => {
 });
 
 describe('application route import isolation', () => {
+  it('routes debug views and canonicalizes their legacy URLs', () => {
+    const routes = createRoutesManifest(appSplitRoutes);
+    for (const id of ['ui', 'icon-gallery']) {
+      const route = decodeRoute(routes, ['debug', id]);
+      expect(route?.location.route.matches[0].id).toBe(`view-${id}`);
+      const legacy = decodeRoute(routes, ['component', id]);
+      expect(legacy).toEqual(route);
+      expect(encodeRoute(routes, legacy!)).toEqual(['debug', id]);
+    }
+  });
+
   it('builds and decodes routes without initializing view modules', () => {
     const routes = createRoutesManifest(appSplitRoutes);
     for (const path of [
