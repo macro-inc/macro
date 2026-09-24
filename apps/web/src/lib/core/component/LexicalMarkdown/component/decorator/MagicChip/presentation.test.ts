@@ -2,6 +2,7 @@ import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
 import {
   deriveMagicChipPresentation,
+  flattenToLine,
   presentationStatus,
 } from './presentation';
 
@@ -325,38 +326,6 @@ describe('deriveMagicChipPresentation', () => {
     });
   });
 
-  it("shows a classified failure in the runtime's words for the person", () => {
-    const presentation = deriveMagicChipPresentation({
-      persistedStatus: 'acp_ready',
-      response: response({
-        parts: [],
-        stop: {
-          kind: 'failed',
-          message: 'Cursor usage limit reached. Raise the limit.',
-          notice: {
-            kind: 'provider_usage_limit',
-            title: 'Cursor usage limit reached',
-            body: 'Raise the spending limit in your Cursor dashboard, then send it again.',
-            link: {
-              label: 'Manage Cursor usage',
-              url: 'https://www.cursor.com/dashboard?tab=settings',
-            },
-          },
-        },
-      }),
-    });
-
-    expect(presentation).toEqual({
-      kind: 'working',
-      activity: {
-        label: 'Cursor usage limit reached',
-        detail:
-          'Raise the spending limit in your Cursor dashboard, then send it again.',
-        busy: false,
-      },
-    });
-  });
-
   it("shows the runtime's reason under a failed turn", () => {
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'acp_ready',
@@ -551,5 +520,25 @@ describe('presentationStatus', () => {
     expect(presentationStatus({ kind: 'settled', markdown: 'Fixed.' })).toEqual(
       { label: 'Done', busy: false }
     );
+  });
+});
+
+describe('flattenToLine', () => {
+  it('collapses block structure onto one line', () => {
+    expect(
+      flattenToLine('## Fixed\n\n- The **batch** fold now\n  buffers it.')
+    ).toBe('Fixed The batch fold now buffers it.');
+  });
+
+  it('keeps snake_case identifiers whole but drops emphasis', () => {
+    expect(flattenToLine('It buffers `turn_ended` _before_ the replay.')).toBe(
+      'It buffers turn_ended before the replay.'
+    );
+  });
+
+  it('drops fenced code entirely', () => {
+    expect(
+      flattenToLine('Run it:\n\n```sh\ncargo test\n```\n\nThen look.')
+    ).toBe('Run it: Then look.');
   });
 });

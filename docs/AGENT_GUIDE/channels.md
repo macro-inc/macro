@@ -142,17 +142,17 @@ A follow-up sent while that session is still working stops the current turn,
 posts a new Magic Chip on the follow-up message, and steers the agent with
 that text — the chip appears at the follow-up, not after the cancelled turn
 finishes.
-The reply renders a Magic Chip: a rounded card of constant height that is present
-from the moment the session boots. Its header names the persona (`Macro Agent`,
-`Cursor Agent`), the model, and what the turn is doing (`Booting agent`, `Running
-command · cargo test`, `Waiting for you`, `Done`); clicking the header or its arrow
-(`Open in session`) opens the agent session. The area under the header holds the agent's
-latest passage: a pulsing star while the agent is busy before it writes, the passage as it
-streams, and the final passage once the turn ends - the last text the agent wrote, not the
-whole turn, and a finished turn with nothing said leaves the area empty. The area is
-cropped at the chip's height with a fade at its foot; clicking it expands it in place, and
-clicking again collapses it. Before anything is there to expand, clicking the area also
-opens the session.
+The reply renders a Magic Chip: a compact two-row card, present from the moment the
+session boots and the same height in every state. Its status row starts with a dot that
+pulses while the turn works, turns amber while it waits on a question, and becomes a green
+check once the turn is over; then the persona (`Cursor Agent`, or a custom agent's name),
+what the turn is doing (`Booting agent`, `Running command · cargo test`, `Waiting for
+you`, `Done`), and a `View session` pill. The row beneath holds one line of the agent's
+latest prose (`Nothing written yet` before it has written; the question itself while it
+waits), with the pull request the session opened as a pill beside it once there is one.
+The whole card is one control: clicking anywhere on it, or `View session`, opens the agent
+session, which is where the passage whole and any question are read and answered. The
+card never expands in place.
 
 `@codex` and `@claude` are offered to every user before account setup. The built-in
 `@cursor` entry requires the `enable-cursor-agents` rollout flag (local override:

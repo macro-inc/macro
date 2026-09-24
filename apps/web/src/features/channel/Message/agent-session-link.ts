@@ -24,9 +24,15 @@ export type SplitMessageContent = {
  * The exact serialization `I_AGENT_SESSION_MENTION` reads - one JSON object
  * inside the tag, with no line breaks - anchored to the start, plus the
  * blank line the harness puts after it.
+ *
+ * The node has to be the whole first line. `crates/prompt` tells agents to
+ * write session mentions in their own replies, so a bot that opens one with
+ * a chip and keeps writing on the same line ("<chip> - picked this up
+ * there") means it as prose; only a node standing alone as its own
+ * paragraph is the chrome the harness prefixed.
  */
 const LEADING_AGENT_SESSION_MENTION =
-  /^<m-agent-session-mention>(.*?)<\/m-agent-session-mention>[ \t]*(?:\r?\n)*/;
+  /^<m-agent-session-mention>(.*?)<\/m-agent-session-mention>[ \t]*(?:(?:\r?\n)+|$)/;
 
 function isAgentSessionMentionInfo(value: unknown): value is { id: string } {
   return (
