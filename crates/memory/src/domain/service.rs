@@ -1,12 +1,14 @@
 use super::ports::*;
 use agent::types::{ChatMessage, ChatMessageContent, Role};
 use agent::{AgentLoop, PredefinedModel, StreamPart};
+use ai_billing::domain::AiAdmissionService;
 use ai_tools::{ToolServiceContext, ToolSetWithPrompt};
+use ai_usage::AiFeature;
 use chrono::Utc;
 use futures::stream::StreamExt;
 use macro_env::Environment;
 use serde::Deserialize;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 static GENERATION_MODEL: PredefinedModel = PredefinedModel::Smart;
 static JUDGE_MODEL: PredefinedModel = PredefinedModel::Sonnet4_6;
@@ -109,38 +111,24 @@ where
         &self,
         user: macro_user_id::user_id::MacroUserIdStr<'static>,
     ) -> super::Result<Option<Memory>> {
-        let record = self.memory_repo.get_latest_memory(user.clone()).await?;
-
-        let needs_generation = match &record {
-            Some(r) => {
-                let age = Utc::now() - r.updated_at;
-                age > chrono::Duration::from_std(MAX_AGE).unwrap_or(chrono::TimeDelta::MAX)
-            }
-            None => true,
-        };
-
-        let env = Environment::new_or_prod();
-        if needs_generation && !matches!(env, Environment::Local) {
-            let previous_memory = record.as_ref().map(|r| r.memory.clone());
-            let repo = self.memory_repo.clone();
-            let tool_context = self.tool_context.clone();
-            let toolset = self.tools.toolset.clone();
-            let prompt: Box<dyn std::fmt::Display + Send + Sync> =
-                Box::new(self.tools.prompt.to_string());
-            tokio::spawn(async move {
-                let tools = ToolSetWithPrompt { toolset, prompt };
-                let svc = MemoryServiceImpl::new(repo, tool_context, tools);
-                match svc.generate_memory(user.clone(), previous_memory).await {
-                    Ok(_) => tracing::info!(%user, "memory generated"),
-                    Err(MemoryError::Rejected(reason)) => {
-                        tracing::warn!(%user, %reason, "memory rejected by judge")
-                    }
-                    Err(e) => tracing::error!(%user, error = ?e, "memory generation failed"),
+        read_memory_with_regeneration(
+            &self.memory_repo,
+            user.clone(),
+            !matches!(Environment::new_or_prod(), Environment::Local),
+            |previous_memory| {
+                let repo = self.memory_repo.clone();
+                let tool_context = self.tool_context.clone();
+                let tools = ToolSetWithPrompt {
+                    toolset: self.tools.toolset.clone(),
+                    prompt: Box::new(self.tools.prompt.to_string()),
+                };
+                async move {
+                    let svc = MemoryServiceImpl::new(repo, tool_context, tools);
+                    svc.generate_memory(user, previous_memory).await
                 }
-            });
-        }
-
-        Ok(record.map(|r| r.memory))
+            },
+        )
+        .await
     }
 }
 
@@ -152,6 +140,20 @@ where
     // must never be captured as a span field or it ends up verbatim in logs.
     #[tracing::instrument(skip(self, previous_memory), err)]
     async fn generate_memory(
+        &self,
+        user: macro_user_id::user_id::MacroUserIdStr<'static>,
+        previous_memory: Option<Memory>,
+    ) -> super::Result<Memory> {
+        generate_memory_with(
+            &self.memory_repo,
+            self.tool_context.admission.as_ref(),
+            user.clone(),
+            self.generate_and_judge_memory(user, previous_memory),
+        )
+        .await
+    }
+
+    async fn generate_and_judge_memory(
         &self,
         user: macro_user_id::user_id::MacroUserIdStr<'static>,
         previous_memory: Option<Memory>,
@@ -209,9 +211,62 @@ where
         // 2nd pass: judge the memory quality
         judge_memory(&memory, user.clone(), self.tool_context.recorder.as_ref()).await?;
 
-        self.memory_repo.save_memory(&memory, user).await?;
         Ok(memory)
     }
+}
+
+// Keep cached reads independent of background admission and generation failures.
+async fn read_memory_with_regeneration<Rpo, F, Fut>(
+    repo: &Rpo,
+    user: macro_user_id::user_id::MacroUserIdStr<'static>,
+    generation_enabled: bool,
+    generate: F,
+) -> super::Result<Option<Memory>>
+where
+    Rpo: MemoryRepo,
+    F: FnOnce(Option<Memory>) -> Fut + Send,
+    Fut: Future<Output = super::Result<Memory>> + Send + 'static,
+{
+    let record = repo.get_latest_memory(user.clone()).await?;
+    let needs_generation = match &record {
+        Some(record) => {
+            let age = Utc::now() - record.updated_at;
+            age > chrono::Duration::from_std(MAX_AGE).unwrap_or(chrono::TimeDelta::MAX)
+        }
+        None => true,
+    };
+
+    if needs_generation && generation_enabled {
+        let generation = generate(record.as_ref().map(|record| record.memory.clone()));
+        tokio::spawn(async move {
+            match generation.await {
+                Ok(_) => tracing::info!(%user, "memory generated"),
+                Err(MemoryError::Admission(error)) => {
+                    tracing::warn!(%user, error = ?error, "memory generation skipped: admission failed")
+                }
+                Err(MemoryError::Rejected(reason)) => {
+                    tracing::warn!(%user, %reason, "memory rejected by judge")
+                }
+                Err(error) => tracing::error!(%user, error = ?error, "memory generation failed"),
+            }
+        });
+    }
+
+    Ok(record.map(|record| record.memory))
+}
+
+// One admission covers the entire generation and quality-judge future. Do not
+// poll it before admission or recheck allowance between its model calls.
+async fn generate_memory_with<Rpo: MemoryRepo>(
+    repo: &Rpo,
+    admission: &dyn AiAdmissionService,
+    user: macro_user_id::user_id::MacroUserIdStr<'static>,
+    generation: impl Future<Output = super::Result<Memory>> + Send,
+) -> super::Result<Memory> {
+    admission.admit(&user, AiFeature::Memory).await?;
+    let memory = generation.await?;
+    repo.save_memory(&memory, user).await?;
+    Ok(memory)
 }
 
 /// Extract the memory body from the agent's final message.
@@ -279,66 +334,4 @@ async fn judge_memory(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use macro_user_id::user_id::MacroUserIdStr;
-
-    fn user_id(value: &str) -> MacroUserIdStr<'static> {
-        MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
-    }
-
-    #[test]
-    fn generation_system_prompt_includes_previous_memory_when_present() {
-        let user = user_id("macro|memory-test@example.com");
-        let prompt = build_generation_system_prompt(
-            "base tools prompt",
-            &user,
-            "Mon, 08 Jun 2026 12:00:00 +0000",
-            Some("previous durable facts"),
-        );
-
-        assert!(prompt.contains("base tools prompt"));
-        assert!(prompt.contains("<user_id>macro|memory-test@example.com</user_id>"));
-        assert!(prompt.contains("<datetime>Mon, 08 Jun 2026 12:00:00 +0000</datetime>"));
-        assert!(prompt.contains("<previous_memory>\nprevious durable facts\n</previous_memory>"));
-    }
-
-    #[test]
-    fn extract_memory_body_strips_surrounding_narration() {
-        let content = "I have enough context. Let me write the memory.\n\
-            <memory>\nEric is an engineer at Macro.\n</memory>\nDone!";
-        assert_eq!(
-            extract_memory_body(content),
-            Some("Eric is an engineer at Macro.")
-        );
-    }
-
-    #[test]
-    fn extract_memory_body_rejects_missing_tags() {
-        assert_eq!(extract_memory_body("Eric is an engineer at Macro."), None);
-        assert_eq!(extract_memory_body("<memory>unterminated"), None);
-        assert_eq!(extract_memory_body("</memory>backwards<memory>"), None);
-    }
-
-    #[test]
-    fn extract_memory_body_uses_last_closing_tag() {
-        let content = "<memory>uses </memory> in prose</memory>";
-        assert_eq!(
-            extract_memory_body(content),
-            Some("uses </memory> in prose")
-        );
-    }
-
-    #[test]
-    fn generation_system_prompt_omits_previous_memory_when_absent() {
-        let user = user_id("macro|memory-test@example.com");
-        let prompt = build_generation_system_prompt(
-            "base tools prompt",
-            &user,
-            "Mon, 08 Jun 2026 12:00:00 +0000",
-            None,
-        );
-
-        assert!(!prompt.contains("<previous_memory>"));
-    }
-}
+mod test;
