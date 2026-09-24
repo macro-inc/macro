@@ -12,7 +12,6 @@ const client = vi.hoisted(() => ({
   getMeeting: vi.fn(),
   getMeetings: vi.fn(),
   getActiveMeetings: vi.fn(),
-  getMeetingInvitePermissions: vi.fn(),
   inviteMeetingUsers: vi.fn(),
 }));
 vi.mock('@service-call/client', () => ({ callServiceClient: client }));
@@ -25,7 +24,6 @@ import {
   useCallLinkQuery,
   useInviteMeetingUsersMutation,
   useJoinMeetingMutation,
-  useMeetingInvitePermissionsQuery,
   useMeetingQuery,
   useMeetingsQuery,
 } from './meetings';
@@ -53,38 +51,6 @@ function setupMutation() {
 }
 
 describe('meeting query capabilities', () => {
-  it('checks invitation permission only in creator setup and isolates it by account', async () => {
-    client.getMeetingInvitePermissions
-      .mockResolvedValueOnce(ok({ canInvite: true }))
-      .mockResolvedValueOnce(ok({ canInvite: false }));
-    const queryClient = new QueryClient();
-    const [userId, setUserId] = createSignal<string | undefined>('alice');
-    const [enabled, setEnabled] = createSignal(false);
-    let query!: ReturnType<typeof useMeetingInvitePermissionsQuery>;
-    function Probe() {
-      query = useMeetingInvitePermissionsQuery(() => 'secret', userId, enabled);
-      return null;
-    }
-    render(() => (
-      <QueryClientProvider client={queryClient}>
-        <Probe />
-      </QueryClientProvider>
-    ));
-    expect(query.fetchStatus).toBe('idle');
-    expect(client.getMeetingInvitePermissions).not.toHaveBeenCalled();
-    setEnabled(true);
-    await vi.waitFor(() => expect(query.isSuccess).toBe(true));
-    expect(query.data).toEqual({ canInvite: true });
-    setUserId('bob');
-    expect(query.isPending).toBe(true);
-    await vi.waitFor(() => expect(query.isSuccess).toBe(true));
-    expect(query.data).toEqual({ canInvite: false });
-    setUserId(undefined);
-    expect(query.fetchStatus).toBe('idle');
-    expect(query.data).toBeUndefined();
-    queryClient.clear();
-  });
-
   it('rings one explicit teammate batch and propagates failure for retry', async () => {
     client.inviteMeetingUsers
       .mockResolvedValueOnce(
@@ -183,7 +149,7 @@ describe('meeting query capabilities', () => {
     expect(client.getActiveMeetings).toHaveBeenCalledTimes(2);
     queryClient.clear();
   });
-  it('stops retries and polling on older servers, but allows a manual retry', async () => {
+  it('stops retries on older servers, but allows a manual retry', async () => {
     client.getMeetings.mockResolvedValue(
       err([{ code: 'MEETINGS_UNAVAILABLE', message: 'Unavailable' }])
     );
@@ -192,7 +158,7 @@ describe('meeting query capabilities', () => {
     });
     let query!: ReturnType<typeof useMeetingsQuery>;
     function Probe() {
-      query = useMeetingsQuery({ refetchInterval: 10 });
+      query = useMeetingsQuery();
       return null;
     }
     render(() => (
@@ -201,7 +167,6 @@ describe('meeting query capabilities', () => {
       </QueryClientProvider>
     ));
     await vi.waitFor(() => expect(query.isError).toBe(true));
-    await new Promise((resolve) => setTimeout(resolve, 40));
     expect(client.getMeetings).toHaveBeenCalledTimes(1);
     client.getMeetings.mockResolvedValue(ok([]));
     await query.refetch();

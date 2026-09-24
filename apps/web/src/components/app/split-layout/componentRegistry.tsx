@@ -331,10 +331,6 @@ if (import.meta.env.DEV) {
     lazy(() => import('@app/features/meetings/debug/IncomingCallPreview'))
   );
   registerComponent(
-    'calls-preview',
-    lazy(() => import('@app/features/meetings/debug/CallsPreview'))
-  );
-  registerComponent(
     'call-join-preview',
     lazy(async () => ({
       default: (await import('@app/features/meetings/debug/CallsPreview'))

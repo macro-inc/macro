@@ -9,7 +9,11 @@ fn call_invitation_links_directly_to_guest_join_and_escapes_titles() {
         recipient_email: "guest@outside.example".to_string(),
     };
     let email = invitation.format_email();
-    assert!(email.body.contains("/app/meet/server-issued-test-token"));
+    assert!(
+        email
+            .body
+            .contains("/app/meet/join/server-issued-test-token")
+    );
     assert!(email.body.contains("No Macro account needed"));
     assert!(!email.body.contains("/signup"));
     assert!(!email.body.contains("<script>"));

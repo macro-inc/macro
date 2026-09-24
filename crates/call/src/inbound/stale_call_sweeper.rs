@@ -1,6 +1,4 @@
-//! Periodically asks the call service to reconcile active calls against
-//! their RTC rooms, so calls end even when a `participant_left` webhook is
-//! missed.
+//! Periodic call reconciliation for missed RTC leave webhooks.
 
 use std::sync::Arc;
 use std::time::Duration;

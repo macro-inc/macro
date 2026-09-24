@@ -41,8 +41,7 @@ export function createMeetingNavigation(
       !shareToken
     )
       return;
-    // Associate the newly created token with its existing draft/session owner
-    // before replacing the route. This is identity bookkeeping, not UI state.
+    // Keep the draft owner when its new token replaces the setup URL.
     if (owner.kind === 'new') owner.shareToken = shareToken;
     setConnection({ owner, connected, shareToken });
   }
@@ -61,8 +60,7 @@ export function createMeetingNavigation(
     capabilities.returnToApp();
   }
 
-  // Synchronize the external router with the owned session, including Back and
-  // a direct visit to an active URL. URL shape never starts a connection.
+  // Reflect session state in the URL; visiting an active URL does not join.
   createEffect(() => {
     const current = connection();
     const owner = entry();

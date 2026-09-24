@@ -2080,7 +2080,11 @@ where
 
     /// Non-account guests who attended the call.
     async fn guests(&self) -> Vec<GraphqlSoupCallGuest> {
-        self.0.guests.iter().map(GraphqlSoupCallGuest::new).collect()
+        self.0
+            .guests
+            .iter()
+            .map(GraphqlSoupCallGuest::new)
+            .collect()
     }
 
     #[graphql(flatten)]

@@ -40,17 +40,6 @@ describe('meeting transport authorization', () => {
       expect(error.code).toBe(code);
     }
   );
-  it('requires a signed-in sender for guest invitations and sends the email to the call endpoint', async () => {
-    await callServiceClient.inviteToMeeting('secret', 'guest@outside.example');
-    expect(requests.authenticated).toHaveBeenCalledWith(
-      'https://gateway.example/dss/call/meetings/invite/secret',
-      {
-        method: 'POST',
-        body: JSON.stringify({ email: 'guest@outside.example' }),
-      }
-    );
-    expect(requests.public).not.toHaveBeenCalled();
-  });
   it('loads public metadata without Macro session credentials', async () => {
     await callServiceClient.getMeeting('secret');
     expect(requests.public).toHaveBeenCalledWith(

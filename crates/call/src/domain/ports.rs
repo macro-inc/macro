@@ -375,14 +375,10 @@ pub trait CallRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Vec<CallRecordPreview>, Self::Err>> + Send;
 
-    /// Fetch the most recent call records visible to the given user, spanning
-    /// both active (`calls`) and archived (`call_records`) tables. Each record
-    /// includes viewer-specific status derived from call participation and
-    /// current channel membership. Transcript data is intentionally omitted.
-    /// Calls without a channel are discoverable only through individual user
-    /// grants (creator, attendees, or explicitly shared people), never group grants.
-    /// Results are ordered by start time descending and capped at `limit`.
-    /// An optional filter tree can narrow results (e.g. by channel_id or status).
+    /// Fetch visible active and archived records, without transcripts. Status
+    /// reflects the user's participation and current channel membership.
+    /// Standalone calls require an individual user grant, never a group grant.
+    /// Apply `filter`, order by start time descending, and return at most `limit`.
     fn get_call_records_by_user<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -872,28 +868,21 @@ pub trait CallService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
-    /// Edits a [`CallRecord`].
-    ///
-    /// Team sharing (`sharePermission.teamShareAccessLevel`, or the legacy
-    /// `shareWithTeam` alias) only accepts `view`. While the call is live it
-    /// sets the pending intent any Edit-level caller may toggle; once archived
-    /// it is authorized against the persisted creator, not the receipt's
-    /// effective access. Calls without a channel cannot enable team sharing;
-    /// clearing an existing intent or grant remains allowed. Other fields keep
-    /// requiring the receipt's Edit access.
+    /// Edit a [`CallRecord`] with the receipt's Edit access. Team sharing
+    /// (`sharePermission.teamShareAccessLevel` or legacy `shareWithTeam`) accepts
+    /// only `view`: any Edit caller may set the live intent, but only the persisted
+    /// creator may change archived sharing. Standalone calls may clear existing
+    /// team intent or grants but cannot enable them.
     fn edit_call_record(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         request: EditCallRecordRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
-    /// Toggle the live `share_with_team` intent on the active call identified
-    /// by the receipt. Authorization is carried in the receipt produced by
-    /// `CallAccessLevelExtractor`; the entity on the receipt must be
-    /// `EntityType::Call` and its `entity_id` must be the call's UUID. The
-    /// intent becomes canonical team sharing when the call is archived.
-    /// Returns the new value; archived calls answer [`CallError::Conflict`].
-    /// Calls without a channel may only clear an existing enabled intent.
+    /// Toggle live `share_with_team` intent and return its new value. The receipt
+    /// must authorize `EntityType::Call` with the call UUID as its `entity_id`.
+    /// Intent becomes canonical sharing on archive; archived calls return
+    /// [`CallError::Conflict`]. Standalone calls may only clear enabled intent.
     fn toggle_share_with_team(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,

@@ -53,17 +53,15 @@ afterEach(cleanup);
 
 function setup() {
   const [calls, setCalls] = createSignal<ActiveQuickCall[]>([]);
-  const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string>();
   const source: CallSidebarSources['active'] = {
     calls,
-    loading,
     error,
     refresh: vi.fn(),
   };
   mocks.source.mockReturnValue(source);
   render(() => <ChannelsLiveCallsSidebar />);
-  return { setCalls, setLoading, setError };
+  return { setCalls, setError };
 }
 
 it('does not mount the active-call source when calls are disabled', () => {
@@ -74,9 +72,8 @@ it('does not mount the active-call source when calls are disabled', () => {
 });
 
 it('shows Live only while active calls exist, without empty loading or error UI', () => {
-  const { setCalls, setLoading, setError } = setup();
+  const { setCalls, setError } = setup();
   expect(screen.queryByRole('region', { name: 'Live' })).toBeNull();
-  setLoading(false);
   setError('Could not load active calls.');
   expect(screen.queryByRole('region', { name: 'Live' })).toBeNull();
   expect(screen.queryByText('Could not load active calls.')).toBeNull();
@@ -150,7 +147,6 @@ it('isolates a pending active-call source from the surrounding navigation', asyn
     const [calls] = createResource(() => response);
     return {
       calls: () => calls() ?? [],
-      loading: () => calls.loading,
       error: () => undefined,
       refresh: vi.fn(),
     } satisfies CallSidebarSources['active'];

@@ -67,11 +67,7 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   /** Macro-account participants, both active and historic. */
   readonly participants = this.field('participants');
 
-  /**
-   * Non-account guests, both active and historic. A guest's `id` matches its
-   * transcript speaker id. Guests only ever exist on standalone meeting
-   * calls, never on channel calls.
-   */
+  /** Current and past guests; each id matches its transcript speaker id. */
   readonly guests = this.field('guests');
 
   /**

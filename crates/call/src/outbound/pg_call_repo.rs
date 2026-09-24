@@ -1456,16 +1456,9 @@ impl CallRepository for PgCallRepo {
         limit: u32,
         filter: &LiteralTree<CallLiteral>,
     ) -> Result<Vec<CallRecord>, Self::Err> {
-        // Fetch call headers from both active and archived tables, ordered by
-        // start time descending. We intentionally exclude transcripts (too
-        // large for the soup feed).
-        //
-        // Visibility is derived from the `entity_access` table: a call is
-        // visible to the user if there's an entity_access row whose
-        // `source_id` matches one of the user's source ids (their
-        // channel memberships, team memberships, or their own user id).
-        // Calls without a channel are discoverable only through individual
-        // user grants; group grants must not add them to team memory.
+        // Fetch active and archived headers without transcripts. Channel calls
+        // accept matching user, channel, or team grants; standalone calls require
+        // an individual user grant so group grants cannot add them to team memory.
         let channel_ids = extract_channel_ids(filter);
         let has_channel_filter = !channel_ids.is_empty();
         let call_ids = extract_call_ids(filter);

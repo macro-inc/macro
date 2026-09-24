@@ -84,9 +84,8 @@ where
             return Ok(());
         }
 
-        // Discovery belongs to this live session, not the reusable meeting link.
-        // Commit before publishing so recipients can fetch Live immediately,
-        // including after declining or missing the transient ring notification.
+        // Persist session-scoped discovery before publishing so Live survives
+        // a dismissed or missed notification.
         if let Some(call_id) = meeting.call_id {
             self.repo
                 .add_meeting_invitees(&meeting.id, &call_id, &recipients)

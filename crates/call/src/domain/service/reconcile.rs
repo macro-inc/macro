@@ -1,10 +1,4 @@
-//! Reconciling persisted call state against the RTC rooms.
-//!
-//! `participant_left` webhooks are how a call normally learns someone left.
-//! When one is missed (a dropped delivery, a closed tab without an explicit
-//! leave, an environment the RTC provider cannot reach) the participant stays
-//! "present" and the call never ends. This backstop compares each active call
-//! with who is actually connected and settles the difference.
+//! Reconcile RTC presence after missed leave webhooks and archive empty calls.
 
 use std::collections::HashSet;
 

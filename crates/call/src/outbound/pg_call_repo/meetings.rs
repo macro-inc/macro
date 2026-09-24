@@ -313,10 +313,8 @@ impl PgCallRepo {
         name: &str,
     ) -> Result<(), CallError> {
         let mut tx = self.pool.begin().await?;
-        // Serialize against archival: `archive_session` locks the calls row,
-        // so a guest join racing the last leave either lands before the
-        // emptiness check or fails here with NotFound instead of inserting a
-        // row for a call that no longer exists.
+        // Serialize with archival so the guest is counted before the emptiness
+        // check or rejected after the call is deleted.
         lifecycle::lock_active_call(&mut tx, call_id).await?;
         sqlx::query!(
             "INSERT INTO call_guests (id, call_id, display_name) VALUES ($1, $2, $3)",

@@ -2,18 +2,12 @@ import { CallStateProvider } from '@channel/Call/CallContext';
 import { CallOverlay } from '@channel/Call/CallOverlay';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { useNavigate } from '@solidjs/router';
-import { Button } from '@ui';
 import { type Accessor, createSignal, Show } from 'solid-js';
-import { CalendarActiveCallNotice } from '../components/calendar-active-call-notice';
 import { MeetingCallHeading } from '../components/meeting-call-heading';
 import { MeetingCopyButton } from '../components/meeting-copy-button';
-import type { CalendarCallItem } from '../core/calendar-calls';
 import type { MeetingRouteTarget } from '../core/meeting-navigation';
 import { createMeetingNavigation } from '../primitives/meeting-navigation';
 import { createMeetingSessionLifecycle } from '../primitives/meeting-session-lifecycle';
-import { CalendarCalls } from '../views/calendar-calls';
-import { CalendarCreateMenuView as CalendarCreateMenu } from '../views/calendar-create-menu';
-import { CallInvite } from '../views/call-invite';
 import { MeetingInvite } from '../views/meeting-invite';
 import { MeetingPage } from '../views/meeting-page';
 import { createPreviewCallState } from './preview-call-state';
@@ -22,197 +16,17 @@ const previewUrl = 'https://macro.com/app/meet/preview-only';
 const people = [
   {
     name: 'Eric Hayes',
-    email: 'eric.hayes@macro.com',
-    organizer: true,
-    status: 'accepted',
     photoUrl: '/sam.png',
   },
   {
     name: 'Marcus Oduya',
-    email: 'marcus@northwind.co',
-    status: 'accepted',
     photoUrl: '/ness.png',
   },
   {
     name: 'Priya Natarajan',
-    email: 'priya@macro.com',
-    status: 'tentative',
     photoUrl: '/teo.png',
   },
 ];
-function previewItems(): CalendarCallItem[] {
-  const now = Date.now();
-  const start = new Date(now + 46 * 60_000).toISOString();
-  const end = new Date(now + 91 * 60_000).toISOString();
-  const record = {
-    id: 'preview-live',
-    title: 'Design sync',
-    startedAt: new Date(now - 12 * 60_000).toISOString(),
-    active: true,
-    people: people.map((person) => person.name),
-    participants: people,
-    participantCount: 6,
-    channelId: 'preview-channel',
-    channelName: 'design',
-  };
-  return [
-    {
-      id: 'live',
-      title: 'Design sync',
-      group: 'live',
-      start: record.startedAt,
-      record,
-    },
-    {
-      id: 'upcoming',
-      title: 'Northwind kickoff',
-      group: 'scheduled',
-      start,
-      end,
-      link: {
-        id: 'preview-link',
-        title: 'Northwind kickoff',
-        url: previewUrl,
-        shareToken: 'preview-only',
-      },
-      event: {
-        eventId: 'preview-event',
-        occurrenceKey: 'preview-occurrence',
-        title: 'Northwind kickoff',
-        start,
-        end,
-        url: previewUrl,
-        account: 'eric.hayes@macro.com',
-        attendees: people,
-        canEdit: true,
-        canInvite: true,
-      },
-    },
-    {
-      id: 'recent',
-      title: 'Weekly planning',
-      group: 'recent',
-      start: new Date(now - 86400_000).toISOString(),
-      record: {
-        ...record,
-        id: 'preview-record',
-        title: 'Weekly planning',
-        active: false,
-        channelId: undefined,
-        durationMs: 3600_000,
-        summary: 'Aligned on the launch plan and next milestones.',
-      },
-    },
-    {
-      id: 'room',
-      title: 'Eric’s room',
-      group: 'instant',
-      link: {
-        id: 'preview-room',
-        title: 'Eric’s room',
-        url: previewUrl,
-        shareToken: 'preview-only',
-      },
-    },
-  ];
-}
-
-export default function CallsPreview() {
-  const [items, setItems] = createSignal(previewItems());
-  const [notice, setNotice] = createSignal('');
-  return (
-    <div class="flex size-full min-h-0 flex-col bg-surface text-ink">
-      <div class="border-b border-edge-muted p-3 text-xs text-ink-muted">
-        Calls preview · sample data. Hover or click a call to inspect it.
-        Actions are simulated.
-      </div>
-      <Show when={notice()}>
-        <p role="status" class="px-4 pt-3 text-xs">
-          {notice()}
-        </p>
-      </Show>
-      <div class="flex min-h-0 flex-1 flex-col sm:flex-row">
-        <aside
-          aria-label="Calendar sidebar preview"
-          class="flex shrink-0 flex-col gap-4 border-b border-edge-muted bg-panel p-3 sm:w-56 sm:border-r sm:border-b-0"
-        >
-          <CalendarCreateMenu
-            pending={false}
-            onEvent={() => setNotice('Preview: create event')}
-            onQuickCall={() =>
-              setNotice('Open the join preview to try a Quick Call.')
-            }
-          />
-          <CalendarActiveCallNotice
-            title="Quick Call"
-            description="Quick Call · not on the calendar"
-            onJoin={() =>
-              setNotice('Open the join preview to try joining a call.')
-            }
-            onShowCalls={() => setNotice('You are viewing the Calls preview.')}
-          />
-        </aside>
-        <CalendarCalls
-          source={{
-            items,
-            loading: () => false,
-            refreshing: () => false,
-            error: () => undefined,
-            hasMore: () => false,
-            refresh: () => {},
-            loadMore: () => {},
-          }}
-          startCall={
-            <div class="flex items-center gap-3 rounded-xl border border-edge-muted bg-panel p-3">
-              <input
-                class="min-w-0 flex-1 bg-transparent text-sm outline-none"
-                placeholder="Start a Quick Call: add people by name or email…"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  setNotice('Open the join preview to try joining a call.')
-                }
-              >
-                Call
-              </Button>
-            </div>
-          }
-          renderInvite={() => (
-            <CallInvite
-              onInvite={async (email) => {
-                setNotice(`Preview invitation to ${email}. No email was sent.`);
-              }}
-            />
-          )}
-          actions={{
-            schedule: () => setNotice('Preview: create event'),
-            join: async () => {
-              setNotice('Open the join preview to try joining a call.');
-            },
-            copy: (url) => writeClipboardData({ 'text/plain': url }),
-            resolveLink: async () => previewUrl,
-            openRecord: () => setNotice('Preview: recording and transcript'),
-            openEvent: () => setNotice('Preview: calendar event'),
-            editEvent: () => setNotice('Preview: edit calendar event'),
-            rename: async (id, title) => {
-              setItems((all) =>
-                all.map((item) =>
-                  item.link?.id === id ? { ...item, title } : item
-                )
-              );
-            },
-            revoke: async (id) => {
-              setItems((all) => all.filter((item) => item.link?.id !== id));
-            },
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
 export function JoinCallPreview(props: { startInCall?: boolean }) {
   const navigate = useNavigate();
   const lifecycle = createMeetingSessionLifecycle();

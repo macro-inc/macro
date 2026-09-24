@@ -9,11 +9,9 @@ import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { CallTokenResponse as ApiCallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
 import type { CreateMeetingRequest } from '@service-storage/generated/schemas/createMeetingRequest';
 import type { EditCallRecordRequest } from '@service-storage/generated/schemas/editCallRecordRequest';
-import type { InviteMeetingRequest } from '@service-storage/generated/schemas/inviteMeetingRequest';
 import type { InviteMeetingUsersRequest } from '@service-storage/generated/schemas/inviteMeetingUsersRequest';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
 import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/meeting';
-import type { MeetingInvitePermissions } from '@service-storage/generated/schemas/meetingInvitePermissions';
 import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 
@@ -27,26 +25,11 @@ export type ActiveMeeting = Required<ApiActiveMeeting>;
 const host: string = SERVER_HOSTS['document-storage-service'];
 
 export const callServiceClient = {
-  getMeetingInvitePermissions(shareToken: string) {
-    return fetchWithToken<MeetingInvitePermissions>(
-      `${host}/call/meetings/invite/${encodeURIComponent(shareToken)}`
-    );
-  },
   inviteMeetingUsers(shareToken: string, userIds: string[]) {
     const body: InviteMeetingUsersRequest = { userIds };
     return fetchWithToken<Record<string, never>>(
       `${host}/call/meetings/invite/${encodeURIComponent(shareToken)}/users`,
       { method: 'POST', body: JSON.stringify(body) }
-    );
-  },
-  inviteToMeeting(shareToken: string, email: string) {
-    const body: InviteMeetingRequest = { email };
-    return fetchWithToken<Record<string, never>>(
-      `${host}/call/meetings/invite/${encodeURIComponent(shareToken)}`,
-      {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }
     );
   },
   createMeeting(body: CreateMeetingRequest) {
@@ -98,7 +81,7 @@ export const callServiceClient = {
     ).map((result) => result.meetings);
   },
 
-  /** Live Quick Calls created or attended by the current user. */
+  /** Live Quick Calls the current user created, attended, or was invited to. */
   async getActiveMeetings() {
     return (
       await fetchWithToken<{ meetings: ActiveMeeting[] }>(

@@ -448,8 +448,9 @@ describe('scheduling a Macro call', () => {
     );
     try {
       await editor.save(values);
-      const url = editor.macroCallUrl();
-      expect(url).toContain('/meet/');
+      const linkedDescription =
+        mocks.updateEvent.mock.lastCall?.[0].patch.description;
+      expect(linkedDescription).toContain('/meet/');
       expect(editor.saveError()).toContain('Save again to retry');
       expect(saved).not.toHaveBeenCalled();
       await editor.save({ ...values, title: 'Updated planning' });
@@ -458,8 +459,8 @@ describe('scheduling a Macro call', () => {
       expect(mocks.updateMeeting).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'Updated planning' })
       );
-      expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toContain(
-        url
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toBe(
+        linkedDescription
       );
       expect(saved).toHaveBeenCalledOnce();
     } finally {

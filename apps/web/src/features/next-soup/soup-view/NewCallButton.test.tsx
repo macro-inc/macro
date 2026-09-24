@@ -105,20 +105,4 @@ describe('NewCallButton', () => {
       expect(mocks.joinChannelCall).toHaveBeenCalledWith('channel-123');
     });
   });
-
-  it('starts a selected channel from the inline calendar picker', async () => {
-    render(() => <NewCallButton inline />);
-    expect(
-      (screen.getByRole('button', { name: 'Call' }) as HTMLButtonElement)
-        .disabled
-    ).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Choose channel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Call' }));
-    await waitFor(() =>
-      expect(mocks.joinChannelCall).toHaveBeenCalledWith('channel-123')
-    );
-    expect(
-      screen.queryByRole('button', { name: 'New channel call' })
-    ).toBeNull();
-  });
 });

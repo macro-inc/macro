@@ -201,18 +201,13 @@ impl<S: CallService> WebhookRouterState<S> {
     }
 }
 
-/// Webhook router for endpoints outside the user-auth layer; each handler
-/// validates its own credentials.
+/// Routes outside user authentication; each handler validates its credentials.
 ///
-/// Routes:
-/// - `GET /join/{token}` — public meeting lookup (bearer capability in the
-///   path; per-IP rate limited)
+/// - `GET /join/{token}` — public capability lookup (per-IP rate limited)
 /// - `POST /join/{token}` — public guest join (per-IP rate limited)
-/// - `POST /join/{token}/leave` — leave with the LiveKit JWT as bearer
-///   (per-IP rate limited)
-/// - `POST /webhook` — ingest a webhook event from LiveKit (signed by LiveKit)
-/// - `GET /ring-status/{call_id}` — per-user ring status, authenticated with
-///   the LiveKit JWT delivered in the VoIP push payload
+/// - `POST /join/{token}/leave` — RTC-token-authorized leave (per-IP rate limited)
+/// - `POST /webhook` — signed LiveKit events
+/// - `GET /ring-status/{call_id}` — status authorized by the VoIP-delivered RTC token
 pub fn webhook_router<S, R, T>(state: WebhookRouterState<S>, rate_limiter: R) -> Router<T>
 where
     S: CallService,
@@ -225,9 +220,8 @@ where
             get(meetings::lookup::<S>).post(meetings::guest_join::<S>),
         )
         .route("/join/{token}/leave", post(meetings::leave::<S>))
-        // route_layer wraps only the routes added above: the LiveKit webhook
-        // and ring-status endpoints authenticate every request and must not
-        // share a budget with anonymous traffic.
+        // Apply the anonymous budget only to the routes above, not signed
+        // LiveKit webhooks or authenticated ring-status requests.
         .route_layer(axum::middleware::from_fn_with_state(
             rate_limiter,
             meetings::enforce_public_rate_limit::<R>,

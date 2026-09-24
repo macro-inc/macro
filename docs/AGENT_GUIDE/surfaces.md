@@ -826,9 +826,9 @@ byline.
 ## Calls — `/app/component/calls`
 
 Tabs `All` / `Missed` / `Unattended`; `New call` offers `Call a channel or contact`
-and `Manage call links`. Create Quick Calls with `New Call` in Calendar's right side
-panel. Scheduled calls are created through Calendar and can be shared with people
-who do not have a Macro account.
+and `Manage call links`. Create Quick Calls with `New Call` beside Calendar's
+`New event`, or with `Create` → `Call` (`C C`). Scheduled calls are created through
+Calendar and can be shared with people who do not have a Macro account.
 The channel/contact option opens the recipient picker.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
@@ -898,8 +898,8 @@ read-only name.
 
 ### Local call previews
 
-Local development previews are mounted at `/app/component/calls-preview`,
-`/app/component/call-join-preview`, `/app/component/call-preview`,
+Local development previews are mounted at `/app/component/call-join-preview`,
+`/app/component/call-preview`,
 `/app/component/call-incoming-preview`, and `/app/component/call-lifecycle-preview`.
 They use sample data, participant photos, and simulated media/actions, including
 guest and signed-in joining, leaving for Macro, call controls, and details.
@@ -909,12 +909,6 @@ Join, leave, reopen from Live, then join again with `Hold leave cleanup` checked
 the second join must wait with one join request until `Finish pending leave` is
 pressed. Live stays available until `End simulated call`.
 Preview invitations send no email or rings and preview controls request no media access.
-
-The calls preview includes a sample create menu, active-call notice, people/email
-picker, and `Recent` / `Upcoming` tabs. Hover a row for its details card; click a
-call title or choose `Call details` to open the details dialog. Join, invite,
-rename, and revoke actions are simulated within the preview; copy actions put
-the sample link on the clipboard.
 
 ### Sharing a call
 

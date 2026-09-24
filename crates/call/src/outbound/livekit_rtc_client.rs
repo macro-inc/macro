@@ -167,7 +167,7 @@ impl CallRtcClient for LivekitRtcClient {
         Ok(token)
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(err, skip(self))]
     async fn generate_guest_token(
         &self,
         room_name: &str,
@@ -189,7 +189,7 @@ impl CallRtcClient for LivekitRtcClient {
             .to_jwt()?)
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(err, skip(self))]
     async fn remove_guest(&self, room_name: &str, guest_id: GuestId) -> anyhow::Result<()> {
         interpret_remove_participant_result(
             self.room_client
@@ -360,9 +360,7 @@ impl CallRtcClient for LivekitRtcClient {
             None => (None, None),
         };
 
-        // Identities are classified by namespace: Macro users are `macro|…`,
-        // guests are the opaque UUIDs this server minted for them. Anything
-        // else (e.g. the transcription agent) matches neither and is dropped.
+        // Keep UUID guests separate from Macro users and agent identities.
         let guest_identity = event
             .participant
             .as_ref()

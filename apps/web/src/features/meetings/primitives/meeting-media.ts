@@ -5,8 +5,7 @@ export type MeetingMediaAccess = {
   request: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
 };
 
-// Matches LiveKit's default camera capture, so a handed-off preview track is
-// published at the same quality the call would have captured itself.
+// Match LiveKit's capture quality when publishing preview tracks.
 const CAMERA_CONSTRAINTS: MediaTrackConstraints = {
   width: { ideal: 1280 },
   height: { ideal: 720 },
@@ -47,11 +46,7 @@ function mediaErrorMessage(device: 'microphone' | 'camera', error: unknown) {
   }
 }
 
-/**
- * Local setup streams never connect to a room. Joining hands the live tracks
- * of enabled devices to the call so it does not re-open (and re-prompt for)
- * them; everything else is released.
- */
+/** Hand preview tracks to the call without reopening devices; release all others. */
 export function createMeetingMedia(access?: MeetingMediaAccess) {
   type Device = 'microphone' | 'camera';
   const devices: Device[] = ['microphone', 'camera'];
@@ -123,11 +118,7 @@ export function createMeetingMedia(access?: MeetingMediaAccess) {
         setDevicePending(device, false);
     }
   }
-  /**
-   * Asks for both permissions in one browser prompt. Returns the devices the
-   * combined request could not provide, which are then requested one by one
-   * so each reports its own error (a remembered denial does not re-prompt).
-   */
+  /** Request both permissions once; retry missing devices for individual errors. */
   async function requestTogether(current: number): Promise<Device[]> {
     if (!access || disposed) return [];
     devices.forEach(stop);

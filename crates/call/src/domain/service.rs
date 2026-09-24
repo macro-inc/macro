@@ -2081,9 +2081,7 @@ where
         .get_enhanced_call_record_transcripts(call_record_id)
         .await
         .map_err(Into::into)?;
-    // External speakers are never relabeled as account holders by inference.
-    // Guest speaker ids are the opaque UUIDs minted at join; Macro speaker
-    // ids are `macro|…`, so the namespaces cannot collide.
+    // Never infer a Macro account identity for a guest speaker.
     transcripts.retain(|segment| {
         super::meetings::GuestId::parse_rtc_identity(&segment.speaker_id).is_none()
     });

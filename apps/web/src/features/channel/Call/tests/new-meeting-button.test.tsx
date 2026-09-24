@@ -19,14 +19,7 @@ vi.mock('@ui', () => {
 });
 afterEach(cleanup);
 
-describe('calendar creation entry', () => {
-  it('hides the external instant-call creation flow', () => {
-    render(() => <NewMeetingButton />);
-    expect(
-      screen.queryByRole('button', { name: /Start instant call/ })
-    ).toBeNull();
-    expect(screen.queryByRole('button', { name: /Schedule call/ })).toBeNull();
-  });
+describe('calls list creation entry', () => {
   it('keeps the existing channel calling entry available', () => {
     const onChannelCall = vi.fn();
     render(() => <NewMeetingButton onChannelCall={onChannelCall} />);
@@ -37,7 +30,7 @@ describe('calendar creation entry', () => {
   });
 
   it('keeps call-link management available', () => {
-    render(() => <NewMeetingButton />);
+    render(() => <NewMeetingButton onChannelCall={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Manage call links' }));
     expect(screen.getByRole('dialog')).toBeTruthy();
   });

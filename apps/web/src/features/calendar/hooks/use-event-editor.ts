@@ -127,10 +127,6 @@ export function useEventEditor(props: UseEventEditorProps) {
     url: string;
     shareToken: string;
   }>();
-  const macroCallUrl = () =>
-    createdMeeting()?.url ??
-    (props.event() ? calendarMacroCallUrl(props.event()!) : undefined);
-
   const meetingSchedule = (values: EventEditorSubmitValues) =>
     values.time.kind === 'timed'
       ? {
@@ -330,7 +326,6 @@ export function useEventEditor(props: UseEventEditorProps) {
           },
         });
       } else if (needsCall && canManageCall && existingMeetingUrl) {
-        // The URL was extracted from the event body, so the token has no model.
         const shareToken = getMeetingShareToken(existingMeetingUrl);
         if (shareToken) await syncScheduledMeeting(shareToken, values);
       }
@@ -383,7 +378,6 @@ export function useEventEditor(props: UseEventEditorProps) {
     showRecurringEditNotice,
     pending,
     saveError,
-    macroCallUrl,
     eventCreated: () => createdEvent() !== undefined,
     save,
   };

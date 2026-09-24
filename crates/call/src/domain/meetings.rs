@@ -159,8 +159,7 @@ impl GuestId {
         Self(Uuid::now_v7())
     }
 
-    /// Classify an RTC participant identity that is not a Macro user id.
-    /// Returns `None` for agents and any identity this server never minted.
+    /// Parse a UUID guest identity; callers must verify its call membership.
     pub fn parse_rtc_identity(identity: &str) -> Option<Self> {
         Uuid::parse_str(identity).ok().map(Self)
     }

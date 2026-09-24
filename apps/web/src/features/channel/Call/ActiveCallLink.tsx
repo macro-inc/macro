@@ -6,9 +6,7 @@ import { getMeetingUrl } from './call-link';
 
 function ActiveCallLinkContent() {
   const call = useCallContext();
-  // Creating a share link is a server-side grant (POST /call/record/{id}/link),
-  // so it only happens on explicit request — never as a render side effect of
-  // opening the call tab.
+  // Creating a share link grants access, so require an explicit request.
   const [requested, setRequested] = createSignal(false);
   const link = useCallLinkQuery(() =>
     requested() ? (call.activeCallId() ?? undefined) : undefined

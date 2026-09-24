@@ -18,32 +18,6 @@ export function useMeetingQuery(shareToken: Accessor<string>) {
   }));
 }
 
-export function useInviteToMeetingMutation() {
-  return useMutation(() => ({
-    mutationFn: (args: { shareToken: string; email: string }) =>
-      throwOnErr(() =>
-        callServiceClient.inviteToMeeting(args.shareToken, args.email)
-      ),
-  }));
-}
-
-export function useMeetingInvitePermissionsQuery(
-  shareToken: Accessor<string>,
-  userId: Accessor<string | undefined>,
-  enabled: Accessor<boolean>
-) {
-  return useQuery(() => ({
-    queryKey: callKeys.meetingInvitePermissions(shareToken(), userId() ?? '')
-      .queryKey,
-    queryFn: () =>
-      throwOnErr(() =>
-        callServiceClient.getMeetingInvitePermissions(shareToken())
-      ),
-    enabled: enabled() && Boolean(userId()) && Boolean(shareToken()),
-    retry: false,
-  }));
-}
-
 export function useInviteMeetingUsersMutation() {
   return useMutation(() => ({
     gcTime: 0,
@@ -54,18 +28,12 @@ export function useInviteMeetingUsersMutation() {
   }));
 }
 
-export function useMeetingsQuery(options?: {
-  refetchInterval?: number | false;
-}) {
+export function useMeetingsQuery() {
   return useQuery(() => ({
     queryKey: callKeys.meetings.queryKey,
     queryFn: () => throwOnErr(() => callServiceClient.getMeetings()),
     retry: (count, error) =>
       !thrownResultErrorHasCode(error, 'MEETINGS_UNAVAILABLE') && count < 3,
-    refetchInterval: (query) =>
-      thrownResultErrorHasCode(query.state.error, 'MEETINGS_UNAVAILABLE')
-        ? false
-        : options?.refetchInterval,
     refetchOnWindowFocus: (query) =>
       !thrownResultErrorHasCode(query.state.error, 'MEETINGS_UNAVAILABLE'),
   }));
@@ -146,14 +114,6 @@ export function useCallLinkQuery(callId: Accessor<string | undefined>) {
     staleTime: Infinity,
     retry: false,
   }));
-}
-
-export function fetchCallLink(callId: string) {
-  return queryClient.fetchQuery({
-    queryKey: callKeys.link(callId).queryKey,
-    queryFn: () => throwOnErr(() => callServiceClient.getCallLink(callId)),
-    staleTime: Infinity,
-  });
 }
 
 export function useJoinMeetingMutation() {

@@ -32,8 +32,7 @@ impl<
                 "Only the meeting owner can send invitations".to_string(),
             ));
         }
-        // The invitation email promises "no Macro account needed", which is
-        // only true of standalone meetings — channel calls never admit guests.
+        // Email invitations admit guests; channel calls require Macro accounts.
         if meeting.channel_id.is_some() {
             return Err(CallError::Forbidden(
                 "Channel calls cannot be shared with people outside Macro".to_string(),
@@ -255,9 +254,7 @@ impl<
     ) -> Result<CallTokenResponse, CallError> {
         let name = request.validate()?;
         let meeting = self.resolve_invitation(&token).await?;
-        // Guests are only ever admitted to standalone meetings. A channel
-        // call's link is a member convenience; letting it admit outsiders
-        // would turn every View-level share into an invite-externals grant.
+        // A channel link cannot grant access to non-account guests.
         if meeting.channel_id.is_some() {
             return Err(CallError::Forbidden(
                 "Sign in to join this call".to_string(),
@@ -265,9 +262,7 @@ impl<
         }
         let call = self.prepare_meeting_call(&meeting).await?;
         let guest_id = GuestId::generate();
-        // Persist before minting: a join racing archival fails here (the
-        // guest row takes the active-call lock) instead of handing out a
-        // token for a room that is about to be deleted.
+        // Lock and persist before minting so a join racing archival fails here.
         self.repo.add_guest(&call.id, guest_id, &name).await?;
         let rtc_token = match self
             .rtc_client
@@ -276,9 +271,7 @@ impl<
         {
             Ok(token) => token,
             Err(error) => {
-                // Mark the never-connected guest as left so the row cannot
-                // hold the call open; best-effort, the webhook can't help
-                // because this guest never reaches LiveKit.
+                // This guest never connected, so no webhook can release its row.
                 self.repo
                     .reconcile_guest(&call.id, guest_id, false)
                     .await
@@ -298,9 +291,7 @@ impl<
         })
     }
 
-    /// A user is active in one call at a time, so joining a call switches
-    /// them out of any other: their participation ends, they are removed from
-    /// its RTC room, and it is archived if they were its last participant.
+    /// Leave the user's other active call and archive it if empty.
     #[tracing::instrument(err, skip(self))]
     pub(super) async fn leave_other_active_call(
         &self,

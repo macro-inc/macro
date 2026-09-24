@@ -1123,11 +1123,7 @@ function createCallState() {
 
   // --- mutations ---
 
-  /**
-   * Publishes a live prejoin track as if LiveKit had captured it, so muting
-   * still releases the device and unmuting re-acquires it with the same
-   * constraints.
-   */
+  /** Adopt prejoin tracks so LiveKit can release and reacquire their devices. */
   async function publishPrejoinTrack(
     targetRoom: Room,
     source: keyof CallPrejoinTracks,
@@ -1159,10 +1155,7 @@ function createCallState() {
     }
   }
 
-  /**
-   * Enables a device from its prejoin track when one was handed off, and
-   * otherwise (or if publishing it fails) lets LiveKit open the device.
-   */
+  /** Reuse the prejoin track, falling back to device capture if it fails. */
   async function enablePrejoinOrDevice(
     targetRoom: Room,
     source: keyof CallPrejoinTracks,

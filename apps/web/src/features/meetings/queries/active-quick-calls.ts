@@ -21,7 +21,6 @@ export function useActiveQuickCallsSource(
             url: getMeetingUrl(meeting.shareToken),
           }))
         : [],
-    loading: () => Boolean(userId()) && query.isPending,
     error: () =>
       userId() && query.isError ? 'Could not load active calls.' : undefined,
     refresh: () => {

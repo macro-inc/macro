@@ -32,11 +32,7 @@ export type CallSessionConnectMetadata = {
   channelTitle?: string | null;
   microphoneEnabled?: boolean;
   cameraEnabled?: boolean;
-  /**
-   * Owned by the session once passed: published instead of re-opening the
-   * devices (which re-prompts in browsers that don't persist the grant), and
-   * stopped when unused.
-   */
+  /** Session-owned tracks: reuse without prompting again, or stop if unused. */
   localTracks?: CallPrejoinTracks;
   /** Public meeting pages use the browser media controls on every platform. */
   useBrowserSession?: boolean;

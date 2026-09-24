@@ -1,8 +1,5 @@
 /**
- * Guest identities belong to a call session, not to a Macro account. A call
- * record lists guests separately from `participants` (Macro users only), and
- * guest transcript segments use the guest's bare uuid as `speakerId`, so a
- * guest is recognized by membership in the record's `guests` list.
+ * Guest transcript speakers use session UUIDs listed in the record's guests.
  */
 export function isCallGuestId(
   record: { guests: Array<{ id: string }> } | undefined,

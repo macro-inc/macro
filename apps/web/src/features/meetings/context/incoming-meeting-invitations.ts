@@ -1,7 +1,7 @@
 import { type Accessor, createContext, useContext } from 'solid-js';
 import type { IncomingMeetingInvitation } from '../core/meeting-invitations';
 
-export type IncomingMeetingInvitations = {
+type IncomingMeetingInvitations = {
   invitations: Accessor<IncomingMeetingInvitation[]>;
   answer: (invitation: IncomingMeetingInvitation) => void;
   dismiss: (invitation: IncomingMeetingInvitation) => void;

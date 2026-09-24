@@ -401,8 +401,7 @@ export const storageBacklog = [
   'listTeamOutOfOffice',
   'listUserApiKeys',
   'messageTimeline',
-  // Durable meeting management is available through the generated client;
-  // a hand-written meeting entity remains to be added.
+  // Meeting management uses the generated client.
   'meetingCancel',
   'meetingCreate',
   'meetingInvite',

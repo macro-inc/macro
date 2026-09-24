@@ -17,7 +17,6 @@ export type CallSidebarSources = {
   };
   active: {
     calls: Accessor<ActiveQuickCall[]>;
-    loading: Accessor<boolean>;
     error: Accessor<string | undefined>;
     refresh: () => void;
   };

@@ -15,9 +15,7 @@ use rate_limit::{
     inbound::{RateLimitExtractable, RateLimitExtractor},
 };
 
-/// Per-IP budget for the unauthenticated meeting endpoints. Generous enough
-/// for a guest reloading a join page; tight enough that scanning the 244-bit
-/// token space is pointless.
+/// Per-IP budget for unauthenticated meeting requests.
 pub struct PerIpPublicMeetingAccess(ClientIp);
 
 impl<S> RateLimitExtractable<S> for PerIpPublicMeetingAccess
@@ -53,9 +51,7 @@ where
     }
 }
 
-/// Enforce the per-IP budget before the handler runs. Unlike the shared
-/// `rate_limit_middleware`, this never rolls back on failure responses:
-/// probing unknown tokens must consume budget or scanning is unthrottled.
+/// Consume budget before the handler, including for failed token lookups.
 pub async fn enforce_public_rate_limit<R>(
     _permit: RateLimitExtractor<PerIpPublicMeetingAccess, R>,
     req: axum::extract::Request,

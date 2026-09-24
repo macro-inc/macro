@@ -66,9 +66,8 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     activeAttempt?.abort();
     const controller = new AbortController();
     activeAttempt = controller;
-    // A cancelled token request may still create a participant server-side.
-    // This barrier survives route disposal, so its late cleanup cannot remove
-    // a newer owner's participant with the same RTC identity.
+    // Wait across route owners: late token cleanup must finish before reusing
+    // the same RTC identity.
     const attemptLifecycle = capabilities.lifecycle.begin();
     setJoining(true);
     setError(undefined);

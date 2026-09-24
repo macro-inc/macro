@@ -82,7 +82,6 @@ it('retains live calls on a failed background refresh and clears its error after
   source.refresh();
   await vi.waitFor(() => expect(source.error()).toBeDefined());
   expect(source.calls()).toHaveLength(1);
-  expect(source.loading()).toBe(false);
   list.mockResolvedValue(ok([]));
   source.refresh();
   await vi.waitFor(() => expect(source.error()).toBeUndefined());
