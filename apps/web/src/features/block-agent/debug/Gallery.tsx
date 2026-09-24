@@ -828,6 +828,47 @@ function PromptAuthorDemo() {
 }
 
 /**
+ * A prompt as the channel sends one: a private context node ahead of it, and
+ * prose carrying the markdown a bubble has to hold — inline code, a mention, a
+ * quote, a fenced block. Everything inside the bubble styles itself from the
+ * bubble's own foreground, so this is where that is eyeballed.
+ */
+const FIXTURE_CONTEXT_PROMPT = [
+  `<m-agent-context>${JSON.stringify({
+    version: 1,
+    text: [
+      'Conversation parent: {"type":"channel","id":"0195ceb6-ec2e-7023-80e4-6e084fa6cccd"}',
+      'Prior message 1:\nSender: macro|jacob@macro.com\nContent: iOS notifications for messages seem to be broken to some extent.',
+      'Prior message 2:\nSender: macro|peter@macro.com\nContent: that is fixed, there is an issue with auto phone updates that I am looking into',
+    ].join('\n\n'),
+  })}</m-agent-context>`,
+  'text selection in the ai user text bubble is invisible, because the bubble is `ink` colored. all text styling on the ink bubbles needs to be "inverted" <m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5","email":"Cursor","displayName":"Cursor"}</m-user-mention>',
+  '> the chip, the hairline and the selection wash all come from the page',
+  '- start with `UserMessageBubble`\n- then the `AgentContext` disclosure',
+  '```ts\nconst bubble = "ink";\n```',
+  'Notes live in [the style guide](https://example.com/style-guide).',
+].join('\n\n');
+
+/** That prompt, in the bubble, exactly as a session renders it. */
+function ContextPromptDemo() {
+  const userId = useUserId();
+  return (
+    <Message
+      message={{
+        agentSessionId: 'demo',
+        requestId: null,
+        pending: false,
+        turn: 0,
+        author: { kind: 'user', userId: userId() ?? null },
+        stop: null,
+        parts: [{ kind: 'text', text: FIXTURE_CONTEXT_PROMPT }],
+      }}
+      inFlight={false}
+    />
+  );
+}
+
+/**
  * The Claude Code colour question after the fold collapsed its custom pair,
  * plus one of every other field type, so the form's controls can be eyeballed.
  */
@@ -1306,6 +1347,10 @@ export default function AgentUiGallery() {
 
           <Item label="AgentMessage (prompts: yours, then another participant's)">
             <PromptAuthorDemo />
+          </Item>
+
+          <Item label="AgentMessage (prompt with channel context and markdown)">
+            <ContextPromptDemo />
           </Item>
         </div>
       </div>
