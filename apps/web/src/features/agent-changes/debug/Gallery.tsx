@@ -6,8 +6,9 @@
  */
 
 import { SAMPLE_PATCH } from '@app/components/diff-view/debug/fixtures';
+import { QueuedPrompts } from '@app/features/block-agent/ui';
 import { Button } from '@ui';
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
 import { createPaneViewState } from '../pane-view-state';
 import { createAgentChanges } from '../primitives/create-agent-changes';
@@ -19,6 +20,12 @@ import {
   ReviewNotesDock,
 } from '../views/SessionChangesControls';
 import { gallerySummary } from './gallery-fixture';
+
+const GALLERY_QUEUE = Array.from({ length: 12 }, (_, index) => ({
+  actionId: `gallery-queued-${index + 1}`,
+  kind: 'prompt',
+  prompt: `Queued follow-up #${index + 1}: tighten the unread rail query.`,
+}));
 
 export default function AgentChangesGallery() {
   const context = createMockAgentChangesContext({
@@ -114,6 +121,13 @@ export default function AgentChangesGallery() {
           <div class="mx-auto flex w-full max-w-4xl shrink-0 flex-col gap-2 px-4 pb-4">
             <ChangesHandoff />
             <ReviewNotesDock />
+            <Show when={queued()}>
+              <QueuedPrompts
+                items={GALLERY_QUEUE}
+                onEdit={() => {}}
+                onRemove={() => {}}
+              />
+            </Show>
             <div class="rounded-2xl border border-edge px-4 py-3 text-sm text-ink-placeholder">
               Message the agent, @mention anything
             </div>
