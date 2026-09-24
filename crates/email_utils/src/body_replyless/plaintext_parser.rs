@@ -1,8 +1,8 @@
-use super::constants::PLAINTEXT_SPLITTER_RE;
+use super::constants::{PLAINTEXT_SPLITTER_RE, is_forward_subject};
 
 /// Extracts the latest reply from a plaintext email string.
 pub fn extract_reply_plaintext(subject: Option<&str>, text_content: &str) -> String {
-    if subject.is_some() && subject.unwrap().starts_with("Fwd:") {
+    if is_forward_subject(subject) {
         return text_content.to_string();
     }
 
