@@ -13,6 +13,7 @@ export const AGENT_SESSION_RENAMED_EVENT = 'agent_session_renamed';
  */
 export const AGENT_SESSION_QUEUE_EVENT = 'agent_session_queue';
 
+import type { TurnState } from '@service-agent-fold/generated/types';
 import type {
   AgentSessionLogEntryDto,
   QueuedActionDto,
@@ -29,6 +30,13 @@ import type {
 export type AgentSessionLogEvent = {
   agentSessionId: string;
   entries: AgentSessionLogEntryDto[];
+  /**
+   * Where the server's own fold stood after these entries. The frames are
+   * the payload; this is the check on whether a reader holds all of them —
+   * the protocol has no sequence numbers, so a batch that never arrives is
+   * otherwise indistinguishable from one that has not been sent yet.
+   */
+  turnState?: TurnState | null;
 };
 
 /** Mirrors `AgentSessionRenamedEvent` in the backend realtime adapter. */
