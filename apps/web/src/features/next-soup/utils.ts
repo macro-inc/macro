@@ -1663,7 +1663,7 @@ export async function executeMarkEntitiesUndone(args: {
   emailIds: string[];
   notificationIds: string[];
   reminderIds?: string[];
-}): Promise<void> {
+}): Promise<EmailArchiveDisposition> {
   const { emailIds, notificationIds, reminderIds = [] } = args;
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
@@ -1728,6 +1728,7 @@ export async function executeMarkEntitiesUndone(args: {
       refetchType: 'none',
     }),
   ]);
+  return hasQueuedEmail ? 'queued' : 'committed';
 }
 
 import { agentMessageParams } from '@app/features/block-agent/core/search-location';

@@ -422,6 +422,7 @@ type ArchiveThreadParams = {
 };
 type ArchiveThreadContext = {
   previousData: InfiniteData<Thread, number> | undefined;
+  disposition?: EmailArchiveDisposition;
 };
 
 /** Optimistically set `inbox_visible` when archiving a thread. */
@@ -466,8 +467,9 @@ export async function trackExternalThreadArchive(
     threadId,
     archive,
   });
+  let disposition: unknown;
   try {
-    await archived;
+    disposition = await archived;
   } catch {
     if (previousData) {
       queryClient.setQueryData(
@@ -476,10 +478,12 @@ export async function trackExternalThreadArchive(
       );
     }
   } finally {
-    queryClient.invalidateQueries({
-      queryKey: emailKeys.threadMessages(threadId).queryKey,
-    });
-    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    if (disposition !== 'queued') {
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(threadId).queryKey,
+      });
+      queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    }
   }
 }
 
@@ -488,7 +492,9 @@ export async function trackExternalThreadArchive(
  * call, rollback on failure, invalidate on settle. Mirrors what
  * `useUndoableArchiveThreadMutation` does through its mutation callbacks.
  */
-async function replayThreadArchive(params: ArchiveThreadParams): Promise<void> {
+async function replayThreadArchive(
+  params: ArchiveThreadParams
+): Promise<EmailArchiveDisposition> {
   const { previousData } = await threadArchiveOnMutate(params);
   let disposition: EmailArchiveDisposition | undefined;
   try {
@@ -496,6 +502,7 @@ async function replayThreadArchive(params: ArchiveThreadParams): Promise<void> {
       { id: params.threadId, value: params.archive },
       params.linkId
     );
+    return disposition;
   } catch (err) {
     if (previousData) {
       queryClient.setQueryData(
@@ -524,7 +531,8 @@ export function useUndoableArchiveThreadMutation(options: {
   /** Bind side effects (e.g. an undo toast) to the pushed undo entry. */
   onPushed?: (
     handle: UndoHandle,
-    params: ArchiveThreadParams
+    params: ArchiveThreadParams,
+    disposition: () => EmailArchiveDisposition | undefined
   ) => { onUndone?: () => void; onRedone?: () => void } | void;
   onError?: (params: ArchiveThreadParams) => void;
 }) {
@@ -541,6 +549,9 @@ export function useUndoableArchiveThreadMutation(options: {
       );
     },
     onMutate: async (params) => await threadArchiveOnMutate(params),
+    onSuccess: (disposition, _params, context) => {
+      if (context) context.disposition = disposition;
+    },
     onError: (_err, params, context) => {
       if (context?.previousData) {
         queryClient.setQueryData(
@@ -557,11 +568,20 @@ export function useUndoableArchiveThreadMutation(options: {
       });
       queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     },
-    undoFn: async (params) =>
-      replayThreadArchive({ ...params, archive: !params.archive }),
-    redoFn: async (params) => replayThreadArchive(params),
+    undoFn: async (params, context) => {
+      const disposition = await replayThreadArchive({
+        ...params,
+        archive: !params.archive,
+      });
+      if (context) context.disposition = disposition;
+    },
+    redoFn: async (params, context) => {
+      const disposition = await replayThreadArchive(params);
+      if (context) context.disposition = disposition;
+    },
     undoLabel: (params) => (params.archive ? 'Mark Done' : 'Mark Not Done'),
-    onPushed: (handle, params) => options.onPushed?.(handle, params),
+    onPushed: (handle, params, context) =>
+      options.onPushed?.(handle, params, () => context?.disposition),
   }));
 }
 
