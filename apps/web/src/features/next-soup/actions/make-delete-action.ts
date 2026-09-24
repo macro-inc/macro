@@ -11,7 +11,10 @@ import {
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import type { SoupRow } from '../create-soup-state';
 import { restoreSoupFocus, trashEmails } from '../utils';
-import type { EntityActionListState } from './entity-action-context';
+import type {
+  EntityActionListState,
+  EntityActionNavigationHandler,
+} from './entity-action-context';
 
 type MakeDeleteOptions = {
   userId: () => string | undefined;
@@ -139,7 +142,8 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
 
   const executeWithSoup = async (
     entities: EntityData[],
-    soup: EntityActionListState
+    soup: EntityActionListState,
+    onNavigate?: EntityActionNavigationHandler
   ) => {
     const currentIndex = soup.focus.index();
     const nextRow =
@@ -215,6 +219,10 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
       const next = nextSurvivingRow();
       if (next || hadPartialDeletion) soup.focus.set(next?.id);
       restoreSoupFocus(next?.id);
+      onNavigate?.({
+        actionId: 'delete',
+        entity: next?.original,
+      });
     };
 
     const trashEmailEntities = () => {
@@ -264,6 +272,10 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
       });
 
       restoreSoupFocus(next?.id);
+      onNavigate?.({
+        actionId: 'delete',
+        entity: next?.original,
+      });
     };
 
     if (nonEmailEntities.length > 0) {

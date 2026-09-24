@@ -511,7 +511,12 @@ export function createSoupEntityActions(): {
         id: 'delete',
         label: 'Delete',
         hotkeyToken: TOKENS.entity.action.delete,
-        onClick: handle(deleteAction.executeWithSoup),
+        onClick: () =>
+          deleteAction.executeWithSoup(
+            entities,
+            soup,
+            createActionNavigationHandler?.()
+          ),
         destructive: true,
       });
     }
