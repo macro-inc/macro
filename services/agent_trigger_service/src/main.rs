@@ -105,7 +105,8 @@ async fn run() -> anyhow::Result<()> {
                 entity_access::outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
-    );
+    )
+    .with_admission(ai_billing::composition::ai_admission_service(pool.clone()));
     let channel_types = ChannelRepoTypeLookup::new(PgChannelsRepo::new(pool));
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())?,

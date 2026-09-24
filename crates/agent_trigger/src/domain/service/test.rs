@@ -3,6 +3,7 @@ use super::*;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSession, AgentSessionId, SessionStatus, ThreadSession};
 use agent_session::domain::ports::MockAgentSessionRepo;
+use ai_billing::domain::{AiAdmissionError, DenyReason};
 use bots::domain::models::{Agent, AgentChannelScope, AgentMcpServers, Bot, BotKind, BotOwner};
 use channel_sender::ChannelSender;
 use chrono::Utc;
@@ -10,8 +11,54 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::models::SimpleMention;
+use std::sync::Mutex;
 
 use crate::domain::broker_events::TriggerDecision;
+
+#[derive(Clone, Copy)]
+enum AdmissionOutcome {
+    Allow,
+    Deny(DenyReason),
+    Unavailable,
+}
+
+struct TestAdmission {
+    outcome: AdmissionOutcome,
+    calls: Mutex<Vec<(MacroUserIdStr<'static>, AiFeature)>>,
+}
+
+impl TestAdmission {
+    fn new(outcome: AdmissionOutcome) -> Arc<Self> {
+        Arc::new(Self {
+            outcome,
+            calls: Mutex::new(Vec::new()),
+        })
+    }
+}
+
+impl AiAdmissionService for TestAdmission {
+    fn admit<'a>(
+        &'a self,
+        user: &'a MacroUserIdStr<'_>,
+        feature: AiFeature,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = std::result::Result<(), AiAdmissionError>> + Send + 'a>,
+    > {
+        self.calls
+            .lock()
+            .unwrap()
+            .push((user.clone().into_owned(), feature));
+        Box::pin(async move {
+            match self.outcome {
+                AdmissionOutcome::Allow => Ok(()),
+                AdmissionOutcome::Deny(reason) => Err(AiAdmissionError::Denied(reason)),
+                AdmissionOutcome::Unavailable => {
+                    UnconfiguredAiAdmissionService.admit(user, feature).await
+                }
+            }
+        })
+    }
+}
 
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|trigger-service-test@macro.com")
@@ -193,6 +240,7 @@ fn service_reading(
         judge,
         history,
     )
+    .with_admission(TestAdmission::new(AdmissionOutcome::Allow))
 }
 
 fn allow_invocation(
@@ -729,6 +777,133 @@ async fn a_message_the_judge_reads_as_addressed_triggers_as_inferred() {
     let events = service.evaluate(&posted).await.expect("evaluate message");
     let metadata = existing_channel_metadata(&events);
     assert_eq!(metadata.kind, ThreadMessageKind::Inferred);
+}
+
+#[tokio::test]
+async fn classification_requires_sender_admission_for_channels_and_documents() {
+    for parent in [
+        MessageParent::Channel(Uuid::from_u128(1)),
+        MessageParent::parse("document", "doc").unwrap(),
+    ] {
+        for outcome in [
+            AdmissionOutcome::Allow,
+            AdmissionOutcome::Deny(DenyReason::AllowanceExhausted),
+            AdmissionOutcome::Deny(DenyReason::OverageLimitReached),
+            AdmissionOutcome::Deny(DenyReason::OveragePaymentFailed),
+            AdmissionOutcome::Unavailable,
+        ] {
+            let mut posted = message(vec![]);
+            posted.parent = parent.clone();
+            let mut session = thread_session(AgentSessionId::TEST_A, BotId::TEST_A);
+            session.thread_parent = Some(parent.clone());
+            let admission = TestAdmission::new(outcome);
+            let allowed = matches!(outcome, AdmissionOutcome::Allow);
+            let judge = if allowed {
+                judge_saying(Ok(true))
+            } else {
+                MockImplicitTriggerJudge::new()
+            };
+            let mut history = MockThreadHistory::new();
+            history
+                .expect_authorize_invocation()
+                .once()
+                .returning(allow_invocation);
+            history
+                .expect_thread_messages()
+                .times(usize::from(allowed))
+                .returning(|_| Box::pin(async { Ok(vec![]) }));
+            let service = service_reading(
+                implicit_sessions(vec![session]),
+                agent_bots(),
+                extractor(Ok(None)),
+                judge,
+                history,
+            )
+            .with_admission(admission.clone());
+
+            let events = service.evaluate(&posted).await.unwrap();
+            assert_eq!(events.len(), usize::from(allowed));
+            if allowed {
+                assert_eq!(
+                    existing_channel_metadata(&events).kind,
+                    ThreadMessageKind::Inferred
+                );
+            }
+            assert_eq!(
+                *admission.calls.lock().unwrap(),
+                vec![(user(), AiFeature::Automation)]
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn deterministic_triggers_do_not_require_classification_admission() {
+    for outcome in [
+        AdmissionOutcome::Deny(DenyReason::AllowanceExhausted),
+        AdmissionOutcome::Unavailable,
+    ] {
+        for explicit_reply in [false, true] {
+            let admission = TestAdmission::new(outcome);
+            let (posted, sessions, replies) = if explicit_reply {
+                (
+                    message(vec![]),
+                    implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]),
+                    extractor(Ok(Some(reply_to_bot(BotId::TEST_A)))),
+                )
+            } else {
+                (
+                    message(vec![mention_of(BotId::TEST_A)]),
+                    sessions_without_existing(),
+                    MockExplicitReplyExtractor::new(),
+                )
+            };
+            let service = service(
+                sessions,
+                agent_bots(),
+                replies,
+                MockImplicitTriggerJudge::new(),
+            )
+            .with_admission(admission.clone());
+            let events = service.evaluate(&posted).await.unwrap();
+            assert_eq!(events.len(), 1);
+            assert!(admission.calls.lock().unwrap().is_empty());
+        }
+    }
+}
+
+#[tokio::test]
+async fn unauthorized_messages_do_not_check_admission() {
+    let mut history = MockThreadHistory::new();
+    history
+        .expect_authorize_invocation()
+        .once()
+        .return_once(|_, _, _| Box::pin(async { Ok(None) }));
+    let admission = TestAdmission::new(AdmissionOutcome::Allow);
+    let service = service_reading(
+        MockAgentSessionRepo::new(),
+        MockAgentBotLookup::new(),
+        MockExplicitReplyExtractor::new(),
+        MockImplicitTriggerJudge::new(),
+        history,
+    )
+    .with_admission(admission.clone());
+    assert!(service.evaluate(&message(vec![])).await.unwrap().is_empty());
+    assert!(admission.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn unconfigured_classification_fails_closed() {
+    let service = AgentTriggerService::new(
+        implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]),
+        agent_bots(),
+        MockTeamMembershipLookup::new(),
+        MockChannelParticipationLookup::new(),
+        extractor(Ok(None)),
+        MockImplicitTriggerJudge::new(),
+        thread_of(vec![]),
+    );
+    assert!(service.evaluate(&message(vec![])).await.unwrap().is_empty());
 }
 
 #[tokio::test]
