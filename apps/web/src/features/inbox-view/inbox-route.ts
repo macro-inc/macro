@@ -7,6 +7,7 @@ import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import type { BlockName } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
+import { documentCommentLocation } from '@notifications/document-comment-location';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 import type { InboxPreviewRouteParams } from './inbox-route-schema';
@@ -64,6 +65,7 @@ export const inboxPreviewSearch = {
     sourceThreadId: z.string(),
     targetMessageId: z.string(),
     targetThreadId: z.string(),
+    targetCommentId: z.string(),
     eventId: z.string(),
     occurrenceKey: z.string(),
     calendarTimeKind: z.enum(calendarTimeKinds),
@@ -86,6 +88,7 @@ export const inboxPreviewSearch = {
     sourceThreadId: '',
     targetMessageId: '',
     targetThreadId: '',
+    targetCommentId: '',
     eventId: '',
     occurrenceKey: '',
     calendarTimeKind: '' as const,
@@ -244,6 +247,9 @@ function decodedSelection(
             },
           }
         : {}),
+      ...(search.targetCommentId
+        ? { commentTarget: { commentId: search.targetCommentId } }
+        : {}),
     }))
     .with('foreign', () => ({
       type: 'foreign',
@@ -324,6 +330,15 @@ export function inboxPreviewSelection(
     : fallbackSelection(params);
 }
 
+function legacyCommentParams(search: InboxPreviewSearchParams) {
+  return search.targetCommentId
+    ? documentCommentLocation(search.targetCommentId, {
+        fileType: search.fileType,
+        subType: search.subType ? { type: search.subType } : undefined,
+      }).params
+    : undefined;
+}
+
 /** Full-block compatibility target for disabled or touch-only view surfaces. */
 export function inboxPreviewLegacyTarget(
   params: InboxPreviewRouteParams,
@@ -341,7 +356,18 @@ export function inboxPreviewLegacyTarget(
       documentSubType === 'snippet' ||
       documentSubType === 'skill')
   ) {
-    return { type: documentSubType, id: params.previewId };
+    return {
+      type: documentSubType,
+      id: params.previewId,
+      params: legacyCommentParams(search),
+    };
+  }
+  if (search.selectionType === 'document' && search.targetCommentId) {
+    return {
+      type: params.blockType,
+      id: params.previewId,
+      params: legacyCommentParams(search),
+    };
   }
   if (params.blockType === 'channel' && search.targetMessageId) {
     return {

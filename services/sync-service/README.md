@@ -154,3 +154,22 @@ CRDT roots or labels updates as Markdown. The `search-service` feature continues
 to control these notifications for compatibility with existing build commands.
 
 Deploy DSS first, then roll out Sync and the AI editing worker together.
+
+Content edits collect the editing socket's verified actor, or its user ID for
+human editors, in an in-memory list. Existing snapshot/search notifications
+flush distinct editors to DSS; collecting an editor adds no storage writes,
+network requests, background tasks, or timers to Sync. Anonymous edits,
+duplicate updates, and idle peers do not add editors.
+
+DSS's independent Activity consumer records one event at the start of editing
+and refreshes a shared five-minute inactivity window on each subsequent batch.
+An edit after five quiet minutes starts another session. Timing follows the
+existing snapshot notification cadence. Redis or notification failures may drop
+Activity hints; they never block document saving or search extraction. If Redis
+applies a session refresh before timing out, that session can remain suppressed
+without an Activity row until five minutes of inactivity. This is an accepted
+best-effort delivery limit, rather than a reason to retry or emit on every batch.
+
+Deploy DSS before Sync to enable Activity hints immediately. If an older DSS
+rejects the optional `editors` field, Sync retries once without it so search
+continues working. Old Sync requests and old Kafka events remain supported.

@@ -17,9 +17,12 @@ import {
   routeParams,
   type SerializedSearchParams,
   type SplitRouterMiddleware,
+  type SplitRouterMiddlewareContext,
+  type SplitRouterMiddlewareResult,
 } from '@app/lib/split-router';
 import { replaceSplitSearchParams } from '@app/lib/split-router/search';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
+import { match } from 'ts-pattern';
 import { appSplitRoutes } from './app-routes';
 import { decodeLegacyPair } from './legacy-route';
 
@@ -28,111 +31,146 @@ type NewAppViewsState = {
   loading: boolean;
 };
 
-export function createAppSplitRouterMiddleware(options: {
+type AppMiddlewareState = {
   newAppViews: () => NewAppViewsState;
   isTouchDevice: () => boolean;
-}): readonly SplitRouterMiddleware[] {
-  return [
-    ({ to, redirect }) => {
-      if (
-        to.location.route.matches[0].id === 'drive' &&
-        options.isTouchDevice()
-      ) {
-        const params = routeParams(to.location.route);
-        if (
-          typeof params.documentType === 'string' &&
-          typeof params.documentId === 'string'
-        ) {
-          return redirect(
-            `/${driveDocumentBlockType(params.documentType)}/${encodeURIComponent(params.documentId)}`
-          );
-        }
-      }
-      if (to.location.route.matches[0].id !== 'legacy-content') return;
-      const params = routeParams(to.location.route);
-      const type = typeof params.type === 'string' ? params.type : undefined;
-      const id = typeof params.id === 'string' ? params.id : undefined;
-      if (type === 'component' && id) {
-        if (id === 'preview-empty' || id === 'non-member-channel')
-          return redirect('/inbox');
-        if (id === 'documents') return redirect('/drive');
-        if (id === 'settings') return redirect('/settings');
-        if (id === CALENDAR_VIEW_ID) {
-          return redirect(calendarPath(getPreferredCalendarPeriodView()));
-        }
-        if (
-          appSplitRoutes.definitions.some((route) => route.id === `view-${id}`)
-        ) {
-          return redirect(`/${id}`);
-        }
-      }
+};
 
-      const content = type && id ? decodeLegacyPair(type, id) : undefined;
-      if (!content) return;
-      if (content.type === 'component' && content.id === CALENDAR_VIEW_ID) {
-        return redirect(calendarPath(getPreferredCalendarPeriodView()));
-      }
-      const flag = options.newAppViews();
-      const canRenderDetail =
-        !flag.loading && flag.enabled && !options.isTouchDevice();
-      if (!canRenderDetail) return;
+/** Upgrade legacy component and block URLs when supported; on touch, keep
+ * document details in their full-block routes instead of inline Drive views. */
+function redirectLegacyRoutes(
+  { to, redirect }: SplitRouterMiddlewareContext,
+  options: AppMiddlewareState
+): SplitRouterMiddlewareResult {
+  const route = to.location.route;
 
-      if (content.type === 'email') {
-        return redirect(`/mail/${encodeURIComponent(content.id)}`);
-      }
-      if (content.type === 'channel') {
-        return redirect(`/channels/${encodeURIComponent(content.id)}`);
-      }
-      if (type === 'task') {
-        return redirect(`/tasks/${encodeURIComponent(content.id)}`);
-      }
+  const isTouch = options.isTouchDevice();
 
+  if (route.matches[0].id === 'drive' && isTouch) {
+    const { documentType, documentId } = routeParams(route);
+    if (typeof documentType === 'string' && typeof documentId === 'string') {
+      return redirect(
+        `/${driveDocumentBlockType(documentType)}/${encodeURIComponent(documentId)}`
+      );
+    }
+  }
+
+  if (route.matches[0].id !== 'legacy-content') return;
+
+  const { type, id } = routeParams(route);
+
+  if (typeof type !== 'string' || typeof id !== 'string') return;
+
+  const content = decodeLegacyPair(type, id);
+  if (!content) return;
+
+  const path = match(content)
+    .with({ type: 'component', id: 'documents' }, () => '/drive')
+    .with({ type: 'component', id: 'settings' }, () => '/settings')
+    .with({ type: 'component', id: CALENDAR_VIEW_ID }, () =>
+      calendarPath(getPreferredCalendarPeriodView())
+    )
+    .with({ type: 'component' }, ({ id }) =>
+      appSplitRoutes.definitions.some((route) => route.id === `view-${id}`)
+        ? `/${id}`
+        : undefined
+    )
+    .when(
+      () => {
+        if (isTouch) return true;
+        const flag = options.newAppViews();
+        return flag.loading || !flag.enabled;
+      },
+      () => undefined
+    )
+    .with({ type: 'email' }, ({ id }) => `/mail/${encodeURIComponent(id)}`)
+    .with(
+      { type: 'channel' },
+      ({ id }) => `/channels/${encodeURIComponent(id)}`
+    )
+    .with({ type: 'task' }, ({ id }) => `/tasks/${encodeURIComponent(id)}`)
+    .otherwise((content) => {
       const document = driveDocumentFromContent(content);
-      if (!document) return;
-      return redirect(drivePath({ kind: 'tab', tab: 'owned' }, document));
-    },
-    ({ to, path, cause, externalSearch, redirect }) => {
-      if (cause !== 'initial' && cause !== 'external') return;
-      if (!externalSearch) return;
+      return document
+        ? drivePath({ kind: 'tab', tab: 'owned' }, document)
+        : undefined;
+    });
 
-      const leafId = to.location.route.matches.at(-1)?.id;
-      let namespace: string;
-      let fields: [string, string][];
-      if (leafId === 'mail-thread') {
-        namespace = EMAIL_DETAIL_SEARCH_NAMESPACE;
-        fields = [[EMAIL_URL_PARAMS.messageId, 'messageId']];
-      } else if (leafId === 'channels-channel') {
-        namespace = CHANNEL_DETAIL_SEARCH_NAMESPACE;
-        fields = [
-          [CHANNEL_URL_PARAMS.message, 'messageId'],
-          [CHANNEL_URL_PARAMS.thread, 'threadId'],
-        ];
-      } else if (leafId === CALENDAR_ROUTE_ID) {
-        namespace = CALENDAR_SEARCH_NAMESPACE;
-        fields = [['eventId', 'eventId']];
-      } else {
-        return;
-      }
+  if (!path) return;
 
-      const raw = new URLSearchParams(externalSearch);
-      const current = to.location.search?.[namespace] ?? {};
-      const additions: SerializedSearchParams = {};
-      for (const [legacyKey, field] of fields) {
-        // Explicit canonical values, including empty ones, take precedence.
-        if (Object.hasOwn(current, field)) continue;
-        const values = raw.getAll(legacyKey);
-        if (values.length) additions[field] = values;
-      }
-      if (!Object.keys(additions).length) return;
+  return redirect(path);
+}
 
-      const search = {
-        ...to.location.search,
-        [namespace]: { ...current, ...additions },
-      };
-      const query = new URLSearchParams();
-      // Middleware redirects describe one entry; the router assigns its pane index.
-      replaceSplitSearchParams(query, [{ location: { search } }]);
-      return redirect(`${path}?${query}`);
-    },
+/** On external entry, copy legacy detail query keys into the destination pane.
+ * Keep repeated values and let explicit pane-local values take precedence. */
+function migrateLegacySearch({
+  to,
+  path,
+  cause,
+  externalSearch,
+  redirect,
+}: SplitRouterMiddlewareContext): SplitRouterMiddlewareResult {
+  if (cause !== 'initial' && cause !== 'external') return;
+
+  if (!externalSearch) return;
+
+  const leafId = to.location.route.matches.at(-1)?.id;
+
+  const mapping = match(leafId)
+    .with('mail-thread', () => ({
+      namespace: EMAIL_DETAIL_SEARCH_NAMESPACE,
+      fields: [[EMAIL_URL_PARAMS.messageId, 'messageId']] as const,
+    }))
+    .with('channels-channel', () => ({
+      namespace: CHANNEL_DETAIL_SEARCH_NAMESPACE,
+      fields: [
+        [CHANNEL_URL_PARAMS.message, 'messageId'],
+        [CHANNEL_URL_PARAMS.thread, 'threadId'],
+      ] as const,
+    }))
+    .with(CALENDAR_ROUTE_ID, () => ({
+      namespace: CALENDAR_SEARCH_NAMESPACE,
+      fields: [['eventId', 'eventId']] as const,
+    }))
+    .otherwise(() => undefined);
+
+  if (!mapping) return;
+
+  const { namespace, fields } = mapping;
+
+  const raw = new URLSearchParams(externalSearch);
+  const current = to.location.search?.[namespace] ?? {};
+  const additions: SerializedSearchParams = {};
+
+  for (const [legacyKey, field] of fields) {
+    // Explicit canonical values, including empty ones, take precedence.
+    if (Object.hasOwn(current, field)) continue;
+
+    const values = raw.getAll(legacyKey);
+
+    if (values.length) additions[field] = values;
+  }
+
+  if (!Object.keys(additions).length) return;
+
+  const search = {
+    ...to.location.search,
+    [namespace]: { ...current, ...additions },
+  };
+
+  const query = new URLSearchParams();
+
+  // Middleware redirects describe one entry; the router assigns its pane index.
+  replaceSplitSearchParams(query, [{ location: { search } }]);
+
+  return redirect(`${path}?${query}`);
+}
+
+export function createAppSplitRouterMiddleware(
+  state: AppMiddlewareState
+): readonly SplitRouterMiddleware[] {
+  return [
+    (context) => redirectLegacyRoutes(context, state),
+    migrateLegacySearch,
   ];
 }

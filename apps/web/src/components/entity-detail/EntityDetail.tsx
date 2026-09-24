@@ -26,13 +26,16 @@ import {
   VideoDetail,
   type VideoDetailContext,
 } from '@app/features/drive-view/views/VideoDetail';
+import { getChannelEntityTarget } from '@app/features/next-soup/utils';
 import type { MarkdownDocumentKind } from '@block-md/types';
+import { ChannelDetail } from '@channel/Channel/ChannelDetail';
+import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { type JSX, Match, Switch } from 'solid-js';
+import { createMemo, type JSX, Match, Switch, untrack } from 'solid-js';
 import type { EntityDetailTarget } from './EntityDetailNavigationStack';
 
 export type EntityDetailContext =
@@ -100,10 +103,48 @@ export function entityDetailBlockType(
   }
 }
 
+type ChannelDetailTarget = {
+  channelId: string;
+  target: ChannelTargetRequest | undefined;
+  fallbackName?: string;
+};
+
+function channelDetailTarget(
+  target: EntityDetailTarget
+): ChannelDetailTarget | undefined {
+  if (
+    target.type !== 'channel' &&
+    target.type !== 'channel_message' &&
+    target.type !== 'channel_thread'
+  ) {
+    return undefined;
+  }
+  const clickTarget = getChannelEntityTarget(target);
+  return {
+    channelId: target.type === 'channel' ? target.id : target.channelId,
+    target:
+      clickTarget?.kind === 'message'
+        ? {
+            kind: 'message',
+            messageId: clickTarget.messageId,
+            threadId: clickTarget.threadId,
+          }
+        : clickTarget,
+    fallbackName: target.fallbackName,
+  };
+}
+
 export function EntityDetail(props: EntityDetailProps) {
   const documentTarget = () =>
     props.target.type === 'document' ? props.target : undefined;
   const blockType = () => entityDetailBlockType(props.target);
+  // Resolved once per entry (untracked): a channel row's aim must not shift
+  // and re-scroll when its notifications reconcile to read — PreviewPanel
+  // applied the same rule by keying navigation on the explicit target only.
+  const channelTarget = createMemo(() => {
+    const target = props.target;
+    return untrack(() => channelDetailTarget(target));
+  });
   const renderChildren = (context: EntityDetailContext) =>
     props.children?.(context);
 
@@ -184,6 +225,15 @@ export function EntityDetail(props: EntityDetailProps) {
         >
           {(context) => <>{renderChildren(context)}</>}
         </UnknownDetail>
+      </Match>
+      <Match when={channelTarget()}>
+        {(channel) => (
+          <ChannelDetail
+            channelId={channel().channelId}
+            target={channel().target}
+            fallbackName={channel().fallbackName}
+          />
+        )}
       </Match>
       <Match when={true}>
         <PreviewPanelEntityDetail

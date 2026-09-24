@@ -72,11 +72,17 @@ function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
 /** Mirrors the Email view's tab, inbox, and facet scoping for service-backed search. */
 export function buildEmailSearchRequest(
   context: EmailQueryContext,
-  search: SoupSearchRequest
+  search: SoupSearchRequest,
+  admittedIds?: readonly string[]
 ): SearchSoupQueryArgs {
   const emailFilters: EmailFilters = {
     ...tabFilters(context.tab),
-    ...facetFilters(context.facets),
+    ...facetFilters(
+      admittedIds ? { ...context.facets, read: [] } : context.facets
+    ),
+    ...(admittedIds
+      ? { email_thread_ids: admittedIds.length ? [...admittedIds] : [NIL_UUID] }
+      : {}),
   };
 
   if (context.inboxIds !== undefined) {

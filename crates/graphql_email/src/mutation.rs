@@ -35,6 +35,14 @@ pub trait EmailMutationService: Send + Sync + 'static {
         thread_id: Uuid,
     ) -> impl Future<Output = Result<(), EmailErr>> + Send;
 
+    /// Archive or unarchive an owned/delegated thread through its owning inbox.
+    fn set_email_thread_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        archived: bool,
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
+
     /// Add or remove one label from every message in an accessible email thread.
     fn update_email_thread_label(
         &self,
@@ -80,6 +88,15 @@ where
         thread_id: Uuid,
     ) -> Result<(), EmailErr> {
         self.mark_thread_unread(user_id, thread_id).await
+    }
+
+    async fn set_email_thread_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        archived: bool,
+    ) -> Result<(), EmailErr> {
+        self.set_thread_archived(user_id, thread_id, archived).await
     }
 
     async fn update_email_thread_label(
@@ -159,6 +176,15 @@ pub struct MarkEmailThreadSeenInput {
 pub struct MarkEmailThreadUnreadInput {
     /// Email thread to mark unread; its inbox determines the UNREAD label.
     pub thread_id: ID,
+}
+
+/// Input for archive-based Done and its inverse. No client label lookup is needed.
+#[derive(InputObject)]
+pub struct SetEmailThreadArchivedInput {
+    /// Thread whose inbox membership should change.
+    pub thread_id: ID,
+    /// True for Done; false for Mark Not Done or Undo.
+    pub archived: bool,
 }
 
 /// Input for adding or removing a label from an email thread.
@@ -383,15 +409,16 @@ fn draft_mutation_error(error: &EmailErr) -> async_graphql::Error {
         }
         EmailErr::Unauthorized => ("not authorized to modify email draft", "UNAUTHORIZED"),
         EmailErr::RepoErr(_) => {
-            return retryable_draft_error(async_graphql::Error::new("email draft mutation failed"));
+            return retryable_email_error(async_graphql::Error::new("email draft mutation failed"));
         }
         _ => ("email draft mutation failed", "INTERNAL"),
     };
     async_graphql::Error::new(message).extend_with(|_, extensions| extensions.set("code", code))
 }
 
-/// Draft writes use stable identities, so retrying an uncertain outcome is safe.
-fn retryable_draft_error(error: async_graphql::Error) -> async_graphql::Error {
+/// State-setting writes and draft handles are idempotent; an uncertain reply
+/// must not roll back the client after the domain write already committed.
+fn retryable_email_error(error: async_graphql::Error) -> async_graphql::Error {
     error.extend_with(|_, extensions| {
         extensions.set("code", "INTERNAL");
         extensions.set("retryable", true);
@@ -403,6 +430,9 @@ fn mutation_error(error: &EmailErr) -> async_graphql::Error {
         EmailErr::ThreadNotFound | EmailErr::ThreadEmpty => "email thread not found",
         EmailErr::LabelNotFound => "email label not found",
         EmailErr::EmptyProviderLabelId => "email label is invalid",
+        EmailErr::ThreadHasNoInboundMessages => {
+            "thread has no received messages and cannot be unarchived"
+        }
         EmailErr::Unauthorized => "not authorized to update email thread",
         _ => "email thread mutation failed",
     };
@@ -414,9 +444,13 @@ async fn reload_thread<O: EmailThreadMutationOutput>(
     user_id: MacroUserIdStr<'static>,
     thread_id: Uuid,
 ) -> async_graphql::Result<O::Thread> {
-    O::load_email_thread(ctx, user_id, thread_id)
-        .await?
-        .ok_or_else(|| async_graphql::Error::new("updated email thread is unavailable"))
+    async {
+        O::load_email_thread(ctx, user_id, thread_id)
+            .await?
+            .ok_or_else(|| async_graphql::Error::new("updated email thread is unavailable"))
+    }
+    .await
+    .map_err(retryable_email_error)
 }
 
 /// GraphQL email mutations.
@@ -477,6 +511,25 @@ where
                 mutation_error(&error)
             })?;
 
+        reload_thread::<O>(ctx, user_id, thread_id).await
+    }
+
+    /// Set archive-based Done and return the primary-backed canonical thread.
+    #[tracing::instrument(skip_all, err(Debug))]
+    async fn set_email_thread_archived(
+        &self,
+        ctx: &Context<'_>,
+        input: SetEmailThreadArchivedInput,
+    ) -> async_graphql::Result<O::Thread> {
+        let user_id = require_authenticated_user(ctx)?;
+        let thread_id = parse_id(input.thread_id, "threadId")?;
+        ctx.data::<Arc<S>>()?
+            .set_email_thread_archived(user_id.clone(), thread_id, input.archived)
+            .await
+            .map_err(|error| {
+                tracing::error!(error = ?error, %user_id, %thread_id, "failed to set email thread archive state");
+                mutation_error(&error)
+            })?;
         reload_thread::<O>(ctx, user_id, thread_id).await
     }
 
@@ -544,7 +597,7 @@ where
         let draft_id = saved.draft.db_id;
         let thread = reload_thread::<O>(ctx, user_id, saved.draft.thread_db_id)
             .await
-            .map_err(retryable_draft_error)?;
+            .map_err(retryable_email_error)?;
         Ok(SaveEmailDraftPayload {
             draft_id,
             draft: GraphqlSoupEmailMessage::from_content(EmailContentMessage::from(

@@ -52,12 +52,6 @@ export const CHANNEL_EVENT_TYPES = [
   'document_mention',
 ] as const;
 
-export const DOCUMENT_COMMENT_EVENT_TYPES = [
-  'mentioned_in_document_comment',
-  'replied_to_document_comment_thread',
-  'commented_on_document',
-] as const;
-
 type NotificationsByEntity = Record<CompositeEntity, UnifiedNotification[]>;
 
 type UnsubscribeFn = () => void;

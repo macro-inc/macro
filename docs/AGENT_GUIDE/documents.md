@@ -281,6 +281,10 @@ service; the frontend alone cannot test their hosted path.
 
 ## Create and type
 
+Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts
+it to an agent mention, just like the legacy `/app/agent/<uuid>` URL. Link query
+parameters are retained, except for referral codes.
+
 1. `Create` → `Document D`. The app navigates to `/app/md/<uuid>` with the **title field
    focused**.
 2. `type_text` the title, then `submitKey: "Enter"` to drop into the body.
@@ -370,7 +374,7 @@ The `@` menu includes `Recent agent sessions` after Channels and before
 Companies. Search by session or persona name within the 500 most recently
 updated accessible sessions. Menu rows show the
 session title followed by a muted persona name, including `@Cursor` and
-`@macro(new)` for built-in personas. Names from the session API take precedence;
+`@Macro` for built-in personas. Names from the session API take precedence;
 older responses use the shared built-in name resolver or cached custom bots.
 Selecting one inserts an
 inline reference showing the shared agent icon and an underlined session title.
@@ -559,6 +563,9 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   three newest, a `View all activities` toggle row (dotted connector, caret glyph), and the
   oldest fetched entry (usually `created this`) pinned last; the toggle flips to `Show less`
   once expanded.
+  Human content edits appear after the next sync flush. Continued editing creates
+  one Activity event until that editor has been inactive for five minutes; their
+  next edit then starts another event. Opening a document alone creates no edit.
 - Header: `Share`, `Copy Share Link`, overflow menu — use `Share` to inspect or change the
   doc's visibility/permissions. Documents, AI chats, and folders have a `Team access`
   control (None / View / Comment / Edit) for sharing directly with the owner's team.

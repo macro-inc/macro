@@ -4866,6 +4866,7 @@ export const ReadContentResponse = z.object({
           }),
           z.object({
             anchorId: z.string().uuid(),
+            markedText: z.union([z.string(), z.null()]).optional(),
             type: z.literal('pdfHighlight'),
           }),
           z.object({ anchorId: z.string().uuid(), type: z.literal('pdfPin') }),

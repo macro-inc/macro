@@ -9,6 +9,9 @@ use crate::domain::models::queue_message::{
 };
 use crate::domain::ports::{NotificationIngressQueue, NotificationQueue};
 
+#[cfg(test)]
+mod test;
+
 /// SQS-backed implementation of the notification queue ports.
 ///
 /// A single type implements both [`NotificationQueue`] (delivery/egress queue)
@@ -109,22 +112,35 @@ impl NotificationIngressQueue for SqsQueue {
             .send()
             .await?;
 
-        let messages = result
-            .messages
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|msg| {
-                let body_str = msg.body?;
-                let body = serde_json::from_str(&body_str)
-                    .inspect_err(|e| tracing::error!(error=?e, payload_length=body_str.len(), "failed to deserialize ingress queue message"))
-                    .ok()?;
-                let receipt_handle = msg.receipt_handle?;
-                Some(RawIngressQueueMessage {
+        let mut messages = Vec::new();
+        for msg in result.messages.unwrap_or_default() {
+            let (Some(body_str), Some(receipt_handle)) = (msg.body, msg.receipt_handle) else {
+                continue;
+            };
+            match serde_json::from_str(&body_str) {
+                Ok(body) => messages.push(RawIngressQueueMessage {
                     body,
                     receipt_handle,
-                })
-            })
-            .collect();
+                }),
+                Err(error) => {
+                    tracing::warn!(
+                        error = ?error,
+                        message_id = ?msg.message_id,
+                        payload_length = body_str.len(),
+                        "failed to deserialize ingress queue message; discarding message"
+                    );
+                    // Acknowledge malformed payloads rather than retrying them into the DLQ.
+                    // A failed delete must not prevent valid messages in this batch from processing.
+                    let _ = self.delete(&receipt_handle).await.inspect_err(|error| {
+                        tracing::error!(
+                            error = ?error,
+                            message_id = ?msg.message_id,
+                            "failed to delete malformed ingress queue message"
+                        );
+                    });
+                }
+            }
+        }
 
         Ok(messages)
     }

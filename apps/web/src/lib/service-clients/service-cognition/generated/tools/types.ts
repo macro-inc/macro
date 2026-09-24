@@ -991,6 +991,10 @@ export type CommentAnchor =
        * The highlight annotation.
        */
       anchorId: string;
+      /**
+       * The text the highlight covers; absent when the highlight carries none.
+       */
+      markedText?: string | null;
       type: 'pdfHighlight';
     }
   | {

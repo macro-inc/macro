@@ -192,6 +192,56 @@ function textNodeRects(inputRange: Range) {
   return result;
 }
 
+function textNodesOf(root: Node) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
+  return nodes;
+}
+
+/** Narrows `range` to the part that falls inside `textLayer`, or null when they do not overlap. */
+function clipRangeToTextLayer(range: Range, textLayer: HTMLElement) {
+  const nodes = textNodesOf(textLayer).filter((node) =>
+    range.intersectsNode(node)
+  );
+  const first = nodes.at(0);
+  const last = nodes.at(-1);
+  if (!first || !last) return null;
+
+  const clipped = range.cloneRange();
+  if (!textLayer.contains(range.startContainer)) clipped.setStart(first, 0);
+  if (!textLayer.contains(range.endContainer))
+    clipped.setEnd(last, last.length);
+  return clipped;
+}
+
+/**
+ * Bounding rect of the selected glyphs on the page that owns `textLayer`. Text
+ * layer spans are padded out to the page edges to widen their selection hit
+ * area, so the span's own rect covers far more than the words it holds.
+ */
+export function selectedTextBounds(
+  range: Range,
+  textLayer: HTMLElement
+): DOMRect | null {
+  const pageRange = clipRangeToTextLayer(range, textLayer);
+  if (!pageRange) return null;
+
+  const textLayerRect = textLayer.getBoundingClientRect();
+  const rects = sortAndFilterDOMRects(
+    textNodeRects(pageRange).filter(
+      (rect) => !isPaddingBounds(textLayerRect, rect)
+    )
+  );
+  if (rects.length === 0) return null;
+
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const right = Math.max(...rects.map((rect) => rect.right));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  return new DOMRect(left, top, right - left, bottom - top);
+}
+
 function rangeToHighlightByPageIndex(
   range: Range,
   text: string,

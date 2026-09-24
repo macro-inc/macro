@@ -36,6 +36,7 @@ import {
   CountSummary,
   DiffChanges,
   ElicitationForm,
+  FailureNoticeCard,
   PierreDiff,
   QuestionAnswers,
   type QuoteInsert,
@@ -1078,6 +1079,21 @@ export default function AgentUiGallery() {
               label="An error was encountered with your session. Send another message to continue — Internal error: Bad Request: bad request: Authorization header is badly formatted"
               detail="Internal error: Bad Request: bad request: Authorization header is badly formatted"
               failed
+            />
+          </Item>
+
+          <Item label="FailureNoticeCard">
+            <FailureNoticeCard
+              notice={{
+                kind: 'provider_usage_limit',
+                title: 'Cursor usage limit reached',
+                body: "Your Cursor account has no background-agent budget left, so this message wasn't sent. Raise the spending limit in your Cursor dashboard, then send it again.",
+                link: {
+                  label: 'Manage Cursor usage',
+                  url: 'https://www.cursor.com/dashboard?tab=settings',
+                },
+              }}
+              onOpenLink={(url) => window.open(url, '_blank', 'noopener')}
             />
           </Item>
 

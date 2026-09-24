@@ -1,4 +1,8 @@
-import { getChannelEntityTarget } from '@app/features/next-soup/utils';
+import {
+  calendarEventTimeForEntity,
+  getChannelEntityTarget,
+  getDocumentCommentTarget,
+} from '@app/features/next-soup/utils';
 import type { CalendarBlockProps } from '@block-calendar/types';
 import {
   type PreviewPanelSelection,
@@ -12,9 +16,10 @@ import type { InboxPreviewRouteParams } from './inbox-route-schema';
 
 function calendarSearch(
   params: CalendarBlockProps | undefined,
-  time: Extract<PreviewPanelSelection, { type: 'calendar_event' }>['time']
+  selection: Extract<PreviewPanelSelection, { type: 'calendar_event' }>
 ): Partial<InboxPreviewSearchParams> {
   const range = params?.range;
+  const time = calendarEventTimeForEntity(selection);
   return {
     eventId: params?.eventId ?? '',
     occurrenceKey: params?.occurrenceKey ?? '',
@@ -70,6 +75,7 @@ function selectionSearch(
         ...base,
         fileType: selection.fileType ?? '',
         subType: selection.subType?.type ?? '',
+        targetCommentId: getDocumentCommentTarget(selection)?.commentId ?? '',
       };
     case 'foreign':
       return { ...base, foreignSource: selection.foreignSource };
@@ -91,7 +97,7 @@ function selectionSearch(
         ...base,
         ...calendarSearch(
           blockParams as CalendarBlockProps | undefined,
-          selection.time
+          selection
         ),
       };
     case 'reminder':

@@ -21,6 +21,7 @@
  */
 
 import { AgentSession } from '@core/agent-session/AgentSession';
+import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   CreateAgentSessionRequest,
@@ -107,6 +108,7 @@ export function startPendingSession(
       // Normally the id this tab minted; a service that predates the field
       // mints its own, and the block adopts that one the way it always did.
       const created = result.value.session.id;
+      void refetchSoupEntity(created, 'agentSession', { created: true });
       // The block adopts the session the moment it exists. The first prompt
       // then goes through the shared session like any other, so it is folded
       // speculatively - bubble and working line on screen at once - while

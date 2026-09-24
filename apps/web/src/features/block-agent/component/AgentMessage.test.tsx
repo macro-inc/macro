@@ -72,7 +72,16 @@ vi.mock('../ui', () => ({
   WorkingLine: (props: { label?: string }) => (
     <div data-testid="working">{props.label}</div>
   ),
-  ActionLine: (props: { label: string }) => <div>{props.label}</div>,
+  ActionLine: (props: { label: string }) => (
+    <div data-testid="action-line">{props.label}</div>
+  ),
+  FailureNoticeCard: (props: {
+    notice: { title: string; body: string; link?: { url: string } | null };
+  }) => (
+    <div data-link={props.notice.link?.url} data-testid="failure-notice">
+      {props.notice.title}
+    </div>
+  ),
   ToolGroup: (props: {
     count: number;
     active: boolean;
@@ -571,5 +580,50 @@ describe('Message prompt attribution', () => {
     ));
     expect(view.queryByTestId('prompt-author')).toBeNull();
     expect(view.getByTestId('bubble')).toBeTruthy();
+  });
+});
+
+describe('Message failed turns', () => {
+  it('reads an opaque failure as an action line carrying the runtime message', () => {
+    const view = render(() => (
+      <Message
+        message={message([], {
+          kind: 'failed',
+          message: 'Internal error: something broke',
+        })}
+        inFlight={false}
+      />
+    ));
+    expect(view.getByTestId('action-line').textContent).toContain(
+      'Internal error: something broke'
+    );
+    expect(view.queryByTestId('failure-notice')).toBeNull();
+  });
+
+  it("shows a classified failure as a notice card, not the runtime's message", () => {
+    const view = render(() => (
+      <Message
+        message={message([], {
+          kind: 'failed',
+          message: 'Cursor usage limit reached. Raise the limit.',
+          notice: {
+            kind: 'provider_usage_limit',
+            title: 'Cursor usage limit reached',
+            body: 'Raise the spending limit in your Cursor dashboard.',
+            link: {
+              label: 'Manage Cursor usage',
+              url: 'https://www.cursor.com/dashboard?tab=settings',
+            },
+          },
+        })}
+        inFlight={false}
+      />
+    ));
+    const notice = view.getByTestId('failure-notice');
+    expect(notice.textContent).toBe('Cursor usage limit reached');
+    expect(notice.dataset.link).toBe(
+      'https://www.cursor.com/dashboard?tab=settings'
+    );
+    expect(view.queryByTestId('action-line')).toBeNull();
   });
 });

@@ -36,7 +36,7 @@ import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left
 import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
 import BellSimpleIcon from '@phosphor-icons/core/regular/bell-simple.svg?component-solid';
 import CalendarBlankIcon from '@phosphor-icons/core/regular/calendar-blank.svg?component-solid';
-import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?component-solid';
+import ChatTeardropIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-solid';
 import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
@@ -269,19 +269,18 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     .with('ai_response', () => () => (
       <EntityIcon class={AVATAR_GLYPH_CLASS} targetType="chat" size="fill" />
     ))
-    .with('channel_mention', 'mentioned_in_document_comment', () => () => (
-      <AtIcon class={AVATAR_GLYPH_CLASS} />
-    ))
+    .with('channel_mention', () => () => <AtIcon class={AVATAR_GLYPH_CLASS} />)
+    .with(
+      'mentioned_in_document_comment',
+      'replied_to_document_comment_thread',
+      'commented_on_document',
+      () => () => <ChatTeardropIcon class={AVATAR_GLYPH_CLASS} />
+    )
     .with('document_mention', () => () => (
       <FilesIcon class={AVATAR_GLYPH_CLASS} />
     ))
-    .with(
-      'channel_message_reply',
-      'replied_to_document_comment_thread',
-      () => () => <ArrowBendUpLeftIcon class={AVATAR_GLYPH_CLASS} />
-    )
-    .with('commented_on_document', () => () => (
-      <ChatCircleIcon class={AVATAR_GLYPH_CLASS} />
+    .with('channel_message_reply', () => () => (
+      <ArrowBendUpLeftIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('channel_message_send', () => () => (
       <ChatTextIcon class={AVATAR_GLYPH_CLASS} />
@@ -1019,7 +1018,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
       return {
         action: buildActionLabel({
           sender: senderName(),
-          action: 'mentioned you',
+          action: 'mentioned you in a comment',
         }),
         content,
       };
@@ -1027,7 +1026,10 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
 
     if (metadata?.tag === 'replied_to_document_comment_thread') {
       return {
-        action: buildActionLabel({ sender: senderName(), action: 'replied' }),
+        action: buildActionLabel({
+          sender: senderName(),
+          action: 'replied to a comment',
+        }),
         content,
       };
     }

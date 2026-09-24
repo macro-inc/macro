@@ -3,6 +3,7 @@ use crate::model::stream::ToolSet;
 use agent::structured_output::DynamicSchema;
 use agent::types::{ChatMessage, ChatMessageContent, Role};
 use agent::{AgentLoop, StreamAccumulator};
+use ai_billing::BillingService;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -35,6 +36,9 @@ pub struct StructuredCompletionError {
     pub error: String,
     #[serde(skip)]
     pub status: StatusCode,
+    /// Stable machine-readable code for payment-required errors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
 }
 
 impl fmt::Display for StructuredCompletionError {
@@ -72,6 +76,24 @@ pub async fn structured_completion(
     let model = model_access.best_model();
 
     let user_id = user.authorization.user.macro_user_id.clone();
+
+    // Paid users draw on a monthly AI allowance (then credits, then overage).
+    // A gate failure is logged and lets the request through.
+    if model_access.professional() {
+        match ctx.ai_billing.check_allowance(&user_id).await {
+            Ok(ai_billing::AllowanceDecision::Allow) => {}
+            Ok(ai_billing::AllowanceDecision::Deny(reason)) => {
+                return Err(StructuredCompletionError {
+                    error: reason.message().to_string(),
+                    status: StatusCode::PAYMENT_REQUIRED,
+                    code: Some(reason.code().to_string()),
+                });
+            }
+            Err(e) => {
+                tracing::error!(error = ?e, user_id = %user_id, "ai billing gate failed; allowing request");
+            }
+        }
+    }
 
     let tools_prompt: &(dyn std::fmt::Display + Sync) = match request.toolset {
         ToolSet::All => &ctx.all_tools_prompt,
@@ -116,6 +138,7 @@ pub async fn structured_completion(
             .map_err(|e| StructuredCompletionError {
                 error: format!("Agent loop failed: {e}"),
                 status: StatusCode::INTERNAL_SERVER_ERROR,
+                code: None,
             })?;
 
     let mut accumulator = StreamAccumulator::new();
@@ -128,6 +151,7 @@ pub async fn structured_completion(
                 return Err(StructuredCompletionError {
                     error: format!("Agent loop error: {e}"),
                     status: StatusCode::INTERNAL_SERVER_ERROR,
+                    code: None,
                 });
             }
         }
@@ -169,6 +193,7 @@ pub async fn structured_completion(
     .map_err(|e| StructuredCompletionError {
         error: format!("Structured completion failed: {e}"),
         status: StatusCode::INTERNAL_SERVER_ERROR,
+        code: None,
     })?;
 
     Ok(Json(StructuredCompletionResponse { result }))

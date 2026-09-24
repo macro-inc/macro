@@ -1,5 +1,16 @@
 # Navigation and App Structure
 
+## Returning from another page
+
+A browser back/forward-cache restore reconnects the GraphQL cache worker and
+live subscriptions in place; it must not reload the app or discard in-memory
+editor state. For lifecycle verification, navigate to another document and Back,
+confirm `pageshow.persisted` is true (otherwise this was a fresh load), then check
+that cached reads, live updates, and the existing editor still work. Runnable
+queued mutations should resume promptly, without waiting for the old poll or
+local retry timer; durable leases and server-retry deadlines still apply.
+Switching tabs or navigating an in-app route is not a back/forward-cache restore.
+
 ## Direct URLs (all under the frontend origin)
 
 | Route | Surface |
@@ -34,7 +45,7 @@
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/automation/<uuid>` | Cron routine editor; event routines show a backend-managed notice |
-| `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
+| `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
@@ -421,13 +432,13 @@ Shared Mail restart rules still apply.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
 
-Settings → Agents and Settings → Harness render while their requests are pending.
+Settings → Agents → Agents / Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 
 With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
-Settings → Harness, above Cursor, with the
-Anthropic logo. Settings → Agents selects an agent's harness but does not host
+Settings → Agents → Runtimes, above Cursor, with the
+Anthropic logo. Settings → Agents → Agents selects an agent's runtime but does not host
 Claude's connection form. **Connect Claude** starts authorization and opens sign-in
 on the first click; a fallback link remains if the browser blocks the tab.
 Approve on Claude's page, copy the complete `code#state`, then use **Finish

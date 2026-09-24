@@ -17,10 +17,9 @@ use channels::domain::{
 };
 use cowlike::CowLike;
 use crm::domain::service::CrmService;
-use doppleganger::Mirror;
 use either::Either;
 use email::domain::{
-    models::{EnrichedEmailThreadPreview, GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
+    models::{GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
     ports::EmailPreviewServiceReadOnly,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -52,10 +51,6 @@ use models_soup::{
     call_record::SoupCallRecord,
     comms::{SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
-    email_thread::{
-        SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview,
-        SoupLabel,
-    },
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
     reminder::SoupReminder,
@@ -1073,26 +1068,10 @@ where
         let items: Vec<SoupItem<()>> = email_response
             .items
             .into_iter()
-            .map(
-                |EnrichedEmailThreadPreview {
-                     thread,
-                     attachments,
-                     labels,
-                     mut frecency_score,
-                     participants,
-                     ..
-                 }| {
-                    frecency_scores.push(frecency_score.take());
-                    let soup_email = SoupEnrichedEmailThreadPreview {
-                        thread: SoupEmailThreadPreview::mirror(thread),
-                        attachments: Vec::<SoupAttachment>::mirror(attachments),
-                        participants: Vec::<SoupContact>::mirror(participants),
-                        labels: Vec::<SoupLabel>::mirror(labels),
-                        extra: (),
-                    };
-                    SoupItem::EmailThread(soup_email)
-                },
-            )
+            .map(|mut preview| {
+                frecency_scores.push(preview.frecency_score.take());
+                SoupItem::EmailThread(preview.into())
+            })
             .collect();
 
         Ok(Either::Right(items.into_iter().zip(frecency_scores).map(

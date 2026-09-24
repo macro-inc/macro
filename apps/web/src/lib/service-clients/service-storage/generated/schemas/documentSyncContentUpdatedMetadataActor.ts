@@ -6,7 +6,6 @@
  */
 
 /**
- * Who mechanically changed the content. Absent on events published
-before attribution, and on human-only collab sessions.
+ * Legacy single-editor attribution; newer Sync callers send `editors`.
  */
 export type DocumentSyncContentUpdatedMetadataActor = string | null;

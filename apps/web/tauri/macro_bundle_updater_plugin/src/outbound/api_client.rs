@@ -47,6 +47,7 @@ impl BundleClient {
         let mut url = self.base.clone();
         url.path_segments_mut()
             .map_err(|_| BundleClientErr::CannotBeABase(self.base.clone()))?
+            .pop_if_empty()
             .push("update")
             .push("bundle")
             .push(request.target.into())
