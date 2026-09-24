@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT overage_enabled, overage_limit_cents, overage_suspended_at,\n                   period_start, period_end\n            FROM ai_billing_account\n            WHERE user_id = $1\n            ",
+  "query": "\n            SELECT overage_enabled, overage_limit_cents, overage_suspended_at,\n                   period_start, period_end, seat_generation\n            FROM ai_billing_account\n            WHERE user_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "ordinal": 4,
         "name": "period_end",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "seat_generation",
+        "type_info": "Int8"
       }
     ],
     "parameters": {
@@ -39,8 +44,9 @@
       false,
       true,
       true,
-      true
+      true,
+      false
     ]
   },
-  "hash": "904248cdade2f9b74f4612195cfee182ca877615bc144fd491c251b70003eb37"
+  "hash": "2b085d52dfc73a35dd75163a923febcc32c778880e83d4eb497c6a78067aa0d8"
 }
