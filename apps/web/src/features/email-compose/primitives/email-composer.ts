@@ -417,6 +417,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
   const cancelSchedule = async () => {
     if (!(await schedule.cancel())) return false;
     session.dispatch({ type: 'schedule-cancelled' });
+    // An in-place schedule marked the composer complete; a host that keeps it
+    // mounted must get an editable draft back, as Undo does.
+    setCompleted(false);
     return true;
   };
   const markDirtyAndScheduleSave = () => {

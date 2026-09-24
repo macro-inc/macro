@@ -524,6 +524,25 @@ it('keeps the confirmed time authoritative until update or cancellation succeeds
   root.dispose();
 });
 
+it('unlocks a composer that stays mounted after its schedule is cancelled', async () => {
+  const composeContext = createComposeContext();
+  const root = mountEmailComposer(composeContext);
+  root.edit('Schedule, then change my mind');
+  expect(
+    root.state.context.schedule.onSelect(new Date('2026-12-01T12:00:00Z'))
+  ).toBe(true);
+  root.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.delivery.schedule).toHaveBeenCalledOnce();
+  expect(root.state.context.disabled()).toBe(true);
+
+  expect(await root.state.context.schedule.onCancel()).toBe(true);
+  expect(root.state.context.schedule.state().type).toBe('editing');
+  expect(root.state.context.disabled()).toBe(false);
+  expect(root.state.context.primaryActionDisabled()).toBe(false);
+  root.dispose();
+});
+
 it('blocks a past local time at submission without sending immediately', async () => {
   const composeContext = createComposeContext();
   const root = mountEmailComposer(composeContext);
