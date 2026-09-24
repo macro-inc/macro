@@ -103,9 +103,10 @@ export type EmailComposerOptions = {
 
 export function createEmailComposer(props: EmailComposerOptions) {
   const initialDraftId = props.draft?.db_id ?? props.draftId;
-  const restoredSnapshot = initialDraftId
-    ? composeUndo.take(initialDraftId)
-    : undefined;
+  // Only the compose view an undo reopens restores its snapshot; the thread
+  // view's composer for the same, still scheduled draft must leave it be.
+  const restoredSnapshot =
+    props.draftId && !props.draft ? composeUndo.take(props.draftId) : undefined;
   const hasPaidAccess = props.hasPaidAccess;
 
   const form = createEmailFormState(
@@ -404,10 +405,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
     lifecycleState: lifecycle.state,
     reconcile: lifecycle.refresh,
     reconcileIdentity: lifecycle.refreshIdentity,
-    onScheduleUndone: ({ draftId }) => {
+    onScheduleUndone: async ({ draftId, threadId, inboxId }) => {
       session.dispatch({ type: 'schedule-cancelled' });
       setCompleted(false);
-      props.host?.showDraft?.(draftId);
+      await restoreAfterUndoSend(draftId, threadId, inboxId);
     },
     onViewScheduled: ({ draftId, threadId }) => {
       if (threadId) props.host?.showThread?.(threadId);
@@ -464,6 +465,22 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
   const [validationError, setValidationError] =
     createSignal<ComposeValidationError | null>(null);
+
+  // Snapshot the form before any watermark so an undo can reopen it as it was.
+  const rememberForUndo = (draftId: string, inboxId: string) => {
+    const currentEditor = editor();
+    if (!currentEditor) return;
+    composeUndo.remember({
+      inboxId,
+      draftId,
+      threadId: currentThreadId(),
+      recipients: structuredClone(unwrap(form.recipients())),
+      subject: form.subject(),
+      bodyHtml: currentEditor.read(() => $generateHtmlFromNodes(currentEditor)),
+      attachments: [...form.attachments.list()],
+      includeSignature: includeSignature(),
+    });
+  };
 
   // Everything that follows a successful unschedule: scrub the new thread's
   // cache, restore the server-side draft, and remount the compose view so it
@@ -602,6 +619,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
     if (scheduleAction === 'schedule' || scheduleAction === 'update') {
       const result = await schedule.submit();
       if (result === 'scheduled') {
+        const scheduledDraftId = currentDraftId();
+        if (scheduledDraftId) rememberForUndo(scheduledDraftId, currentLink.id);
         setCompleted(true);
         const threadId = currentThreadId();
         try {
@@ -648,23 +667,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
       const draftId = identity.kind === 'server' ? identity.draftId : undefined;
       // Snapshot editor state before watermark so undo-send can restore it
-      if (currentEditor) {
-        const snapshotHtml = currentEditor.read(() =>
-          $generateHtmlFromNodes(currentEditor)
-        );
-        if (draftId) {
-          composeUndo.remember({
-            inboxId: currentLink.id,
-            draftId,
-            threadId: currentThreadId(),
-            recipients: structuredClone(unwrap(form.recipients())),
-            subject: form.subject(),
-            bodyHtml: snapshotHtml,
-            attachments: [...form.attachments.list()],
-            includeSignature: includeSignature(),
-          });
-        }
-      }
+      if (draftId) rememberForUndo(draftId, currentLink.id);
 
       // Append watermark after all validation passes so failed sends don't
       // leave orphaned watermark nodes in the editor tree.
@@ -801,8 +804,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
   let lastScheduledTime = schedule.confirmedTime()?.toISOString();
   let handledTerminalIdentity: string | undefined;
+  const lifecycleInputs = () =>
+    [lifecycle.state(), scheduling(), movingInbox(), submitting()] as const;
   createEffect(
-    on([lifecycle.state, scheduling, movingInbox], ([state, , moving]) => {
+    on(lifecycleInputs, ([state, , moving, sending]) => {
+      // While this composer sends, the draft turning into a sent message is
+      // its own doing; the send settles the composer and replays the rest.
       if (
         !state ||
         !session.serverConfirmed() ||
@@ -810,6 +817,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
         state.threadId !== currentThreadId() ||
         (state.inboxId !== undefined && state.inboxId !== persistedInboxId()) ||
         moving ||
+        sending ||
         discarding()
       )
         return;
@@ -840,6 +848,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
         schedule.observe(state);
         if (wasScheduled && schedule.state().type === 'editing') {
           session.dispatch({ type: 'schedule-cancelled' });
+          setCompleted(false);
           lastScheduledTime = undefined;
           props.notices.feedback.success(
             'Schedule cancelled. This email is editable again.'
@@ -850,11 +859,16 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
       if (handledTerminalIdentity === `${state.draftId}:${state.type}`) return;
       handledTerminalIdentity = `${state.draftId}:${state.type}`;
+      // Only a confirmed schedule makes a delivery "the scheduled email"; any
+      // other draft was sent from another tab or device.
+      const wasScheduled = schedule.state().type === 'scheduled';
       if (editVersion > persistedEditVersion) {
         detachFromObsoleteDraft(
-          state.type === 'sent'
-            ? 'The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.'
-            : 'The draft changed elsewhere. Your newer text was kept as a new draft.'
+          state.type !== 'sent'
+            ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
+            : wasScheduled
+              ? 'The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.'
+              : 'This email was already sent. Your newer text was kept as a new draft and was not sent.'
         );
         return;
       }
@@ -866,7 +880,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
       setCompleted(true);
       setTerminalState(state.type);
       if (state.type === 'sent') {
-        props.notices.feedback.success('Scheduled email sent');
+        if (wasScheduled)
+          props.notices.feedback.success('Scheduled email sent');
+        else props.notices.feedback.alert('This email was already sent');
         props.host?.showThread?.(state.threadId);
       } else {
         props.notices.feedback.alert('This draft is no longer available.');
