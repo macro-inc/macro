@@ -1,30 +1,42 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { ChatProviderIcon } from '@entity/components/ChatProviderIcon';
+import type { AgentSessionEntity, ChatEntity } from '@entity/types/entity';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import {
   type SoupItemsQueryArgs,
   useSoupItemsQuery,
 } from '@queries/soup/items';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { ErrorBoundary, For, Show, Suspense } from 'solid-js';
+import { ErrorBoundary, For, Match, Show, Suspense, Switch } from 'solid-js';
 
 const DEFAULT_LIMIT = 3;
 
-/** Chats only, most recently updated first. */
-const RECENT_CHATS_ARGS: SoupItemsQueryArgs = {
+type RecentSession = ChatEntity | AgentSessionEntity;
+
+/** Chats and agent sessions, most recently updated first. */
+const RECENT_SESSIONS_ARGS: SoupItemsQueryArgs = {
   params: { sort_method: 'updated_at', limit: 10 },
-  body: { ...QUERY_FILTERS_BASE, chat_filters: undefined },
+  body: {
+    ...QUERY_FILTERS_BASE,
+    chat_filters: undefined,
+    agent_session_filters: undefined,
+  },
 };
 
-/** The user's most recently updated AI chats, newest first. */
+function isRecentSession(entity: { type: string }): entity is RecentSession {
+  return entity.type === 'chat' || entity.type === 'agent_session';
+}
+
+/** The user's most recently updated AI chats and agent sessions, newest first. */
 export function useRecentChatSessions(limit = DEFAULT_LIMIT) {
-  const query = useSoupItemsQuery(() => RECENT_CHATS_ARGS);
+  const query = useSoupItemsQuery(() => RECENT_SESSIONS_ARGS);
   return () =>
     (query.data ?? [])
-      .filter((entity) => entity.type === 'chat')
-      .filter((chat) => chat.name)
+      .filter(isRecentSession)
+      .filter((session) => session.name)
       .slice(0, limit);
 }
 
@@ -47,12 +59,13 @@ function RecentSessionsContent(props: { limit?: number }) {
   const sessions = useRecentChatSessions(props.limit);
   const splitPanel = useSplitPanel();
 
-  const openChat = (id: string, event: MouseEvent) => {
+  const openSession = (session: RecentSession, event: MouseEvent) => {
+    const splitType = session.type === 'agent_session' ? 'agent' : 'chat';
     if (splitPanel && !event.shiftKey) {
-      splitPanel.handle.replace({ next: { type: 'chat', id } });
+      splitPanel.handle.replace({ next: { type: splitType, id: session.id } });
     } else {
       globalSplitManager()?.openWithSplit(
-        { type: 'chat', id },
+        { type: splitType, id: session.id },
         { activate: true, preferNewSplit: event.shiftKey }
       );
     }
@@ -70,13 +83,24 @@ function RecentSessionsContent(props: { limit?: number }) {
               <button
                 type="button"
                 class="group flex w-full items-center gap-3.5 rounded-xl border border-edge-muted bg-active px-4 py-3 text-left transition-colors hover:bg-hover"
-                onClick={(event) => openChat(session.id, event)}
+                onClick={(event) => openSession(session, event)}
               >
-                <ChatProviderIcon
-                  id={session.id}
-                  model={session.model}
-                  class="size-4 shrink-0"
-                />
+                <Switch>
+                  <Match when={session.type === 'agent_session'}>
+                    <EntityIcon
+                      targetType="agent"
+                      size="fill"
+                      class="size-4 shrink-0"
+                    />
+                  </Match>
+                  <Match when={session.type === 'chat'}>
+                    <ChatProviderIcon
+                      id={session.id}
+                      model={(session as ChatEntity).model}
+                      class="size-4 shrink-0"
+                    />
+                  </Match>
+                </Switch>
                 <span class="flex-1 truncate text-sm font-medium text-ink">
                   {session.name}
                 </span>

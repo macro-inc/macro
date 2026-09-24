@@ -20,7 +20,9 @@ vi.mock('@core/component/AI/util/storage', () => ({
   getChatStoredModel: () => undefined,
 }));
 vi.mock('@core/component/EntityIcon', () => ({
-  EntityIcon: () => <svg data-entity-type="chat" />,
+  EntityIcon: (props: { targetType: string }) => (
+    <svg data-entity-type={props.targetType} />
+  ),
 }));
 vi.mock('@queries/soup/items', () => ({
   useSoupItemsQuery: () => ({
@@ -38,6 +40,13 @@ vi.mock('@queries/soup/items', () => ({
         model: 'anthropic/claude-sonnet-5',
       },
       { type: 'chat', id: 'unknown-chat', name: 'Unknown conversation' },
+      {
+        type: 'agent_session',
+        id: 'agent-session-1',
+        name: 'Code review session',
+        botId: 'bot-1',
+        status: 'completed',
+      },
     ],
   }),
 }));
@@ -82,4 +91,15 @@ it('keeps normal clicks in the source split and opens Shift-clicks in a new spli
     { type: 'chat', id: 'gpt-chat' },
     { activate: true, preferNewSplit: true }
   );
+});
+
+it('renders agent sessions with agent icon and opens them with type agent', () => {
+  render(() => <RecentSessionsSection limit={5} />);
+  const button = screen.getByRole('button', { name: 'Code review session' });
+  expect(button.querySelector('[data-entity-type="agent"]')).not.toBeNull();
+
+  fireEvent.click(button);
+  expect(navigation.replace).toHaveBeenCalledWith({
+    next: { type: 'agent', id: 'agent-session-1' },
+  });
 });
