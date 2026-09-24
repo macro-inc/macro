@@ -1,4 +1,6 @@
 /** Email queries adapted to the entity data model. */
+
+import { throwOnErr } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import { emailClient } from '@service-email/client';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
@@ -25,21 +27,19 @@ const fetchPaginatedEmails = async ({
     headers: { Authorization },
   };
 
-  const result = await emailClient.getPreviews(
-    {
-      view,
-      limit: params.limit,
-      sort_method: params.sort_method,
-      cursor: params.cursor,
-    },
-    init
+  // Throw the result error itself so a 401 keeps its UNAUTHORIZED code and the
+  // token retry helper can recognize it.
+  return throwOnErr(() =>
+    emailClient.getPreviews(
+      {
+        view,
+        limit: params.limit,
+        sort_method: params.sort_method,
+        cursor: params.cursor,
+      },
+      init
+    )
   );
-
-  if (result.isErr()) {
-    throw new Error('Failed to fetch email');
-  }
-
-  return result.value;
 };
 
 type EmailPreviewPage = Awaited<ReturnType<typeof fetchPaginatedEmails>>;

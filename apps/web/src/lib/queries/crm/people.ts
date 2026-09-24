@@ -2,13 +2,21 @@ import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filter
 import type { CrmPerson } from '@companies/core/crm-people';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
-import { infiniteQueryOptions, useInfiniteQuery } from '@tanstack/solid-query';
+import {
+  infiniteQueryOptions,
+  type QueryClient,
+  useInfiniteQuery,
+  useQueryClient,
+} from '@tanstack/solid-query';
 import { type Accessor, createEffect } from 'solid-js';
-import { queryClient } from '../client';
 import { soupKeys } from '../soup/keys';
 import { crmKeys } from './keys';
 
-function crmPeopleQueryOptions(teamId: string | undefined) {
+// The observer's client is app- or test-level state, safe to retain.
+function crmPeopleQueryOptions(
+  queryClient: QueryClient,
+  teamId: string | undefined
+) {
   return infiniteQueryOptions({
     queryKey: soupKeys.crmPeople(teamId ?? '').queryKey,
     enabled: !!teamId,
@@ -67,7 +75,10 @@ function crmPeopleQueryOptions(teamId: string | undefined) {
  * Pages appear progressively; at most four company requests run at once.
  */
 export function useCrmPeopleQuery(teamId: Accessor<string | undefined>) {
-  const query = useInfiniteQuery(() => crmPeopleQueryOptions(teamId()));
+  const queryClient = useQueryClient();
+  const query = useInfiniteQuery(() =>
+    crmPeopleQueryOptions(queryClient, teamId())
+  );
 
   // Drive progressive network pagination while this directory is mounted.
   createEffect(() => {

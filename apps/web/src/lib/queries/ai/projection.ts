@@ -7,10 +7,9 @@ import type { RefreshCadence } from '@service-cognition/generated/schemas/refres
 import type { TargetType } from '@service-cognition/generated/schemas/targetType';
 import type { UpsertProjectionRequest } from '@service-cognition/generated/schemas/upsertProjectionRequest';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
-import { queryOptions, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { z } from 'zod';
-import { queryClient } from '../client';
 
 const AI_PROJECTION_UPDATED_MESSAGE_TYPE = 'ai_projection_updated';
 
@@ -73,18 +72,43 @@ function toOutputSchema(schema: z.ZodType): Record<string, unknown> {
   }) as Record<string, unknown>;
 }
 
-// Cached past unmount: closes over the request snapshot, not the options
-// accessor, so an unmounted caller can be collected.
+/** Builds the upsert request from one options snapshot. Schema conversion can
+ * throw, so callers run this inside the query function (or `refresh`) where
+ * the error surfaces through the query rather than during component setup. */
+function buildProjectionRequest(
+  opts: CreateAIProjectionOptions<z.ZodType>,
+  overrides?: Partial<UpsertProjectionRequest>
+): UpsertProjectionRequest {
+  return {
+    id: opts.id,
+    prompt: opts.prompt,
+    target_type: opts.targetType ?? 'user',
+    refresh_cadence: opts.refreshCadence ?? 'medium',
+    expiry: opts.expiry ?? 'week',
+    ...(opts.model === undefined ? {} : { model: opts.model }),
+    ...(opts.schema === undefined
+      ? {}
+      : { output_schema: toOutputSchema(opts.schema) }),
+    await: opts.awaitGeneration ?? false,
+    ...overrides,
+  };
+}
+
+// Cached past unmount: closes over the caller's plain options snapshot, not
+// the options accessor, so an unmounted caller can be collected.
 function aiProjectionQueryOptions(
   queryKey: ReturnType<typeof aiProjectionQueryKey>,
-  request: UpsertProjectionRequest,
+  opts: CreateAIProjectionOptions<z.ZodType>,
   enabled: boolean
 ) {
   return queryOptions({
     queryKey,
     queryFn: async () =>
       throwOnErr(
-        async () => await cognitionApiServiceClient.upsertAiProjection(request)
+        async () =>
+          await cognitionApiServiceClient.upsertAiProjection(
+            buildProjectionRequest(opts)
+          )
       ),
     enabled,
     staleTime: PROJECTION_STALE_TIME,
@@ -138,33 +162,14 @@ export function createAIProjection<Schema extends z.ZodType>(
 ) {
   const targetType = () => options().targetType ?? 'user';
   const queryKey = () => aiProjectionQueryKey(options().id, targetType());
-
-  const buildRequest = (
-    overrides?: Partial<UpsertProjectionRequest>
-  ): UpsertProjectionRequest => {
-    const opts = options();
-    return {
-      id: opts.id,
-      prompt: opts.prompt,
-      target_type: targetType(),
-      refresh_cadence: opts.refreshCadence ?? 'medium',
-      expiry: opts.expiry ?? 'week',
-      ...(opts.model === undefined ? {} : { model: opts.model }),
-      ...(opts.schema === undefined
-        ? {}
-        : { output_schema: toOutputSchema(opts.schema) }),
-      await: opts.awaitGeneration ?? false,
-      ...overrides,
-    };
-  };
-
-  // Memoized so the schema is only re-serialized when the options change.
-  const request = createMemo(() => buildRequest());
+  // Write through the same client the query observes so tests and hosts that
+  // provide their own QueryClient see refreshes and gateway pushes.
+  const queryClient = useQueryClient();
 
   const query = useQuery(() =>
     aiProjectionQueryOptions(
       queryKey(),
-      request(),
+      options(),
       (options().enabled ?? true) && !!options().id && !!options().prompt
     )
   );
@@ -196,7 +201,7 @@ export function createAIProjection<Schema extends z.ZodType>(
     const state = await throwOnErr(
       async () =>
         await cognitionApiServiceClient.upsertAiProjection(
-          buildRequest({ regenerate: true })
+          buildProjectionRequest(options(), { regenerate: true })
         )
     );
     queryClient.setQueryData(key, state);

@@ -975,6 +975,11 @@ export const SoupViewContextProvider: FlowComponent<
   // Everything the cache membership filter needs, read at options time so the
   // options accessor tracks it. The filter itself is built at module scope so
   // the cached query never retains this provider's scope.
+  // Declared before the query hooks below: their options accessors run
+  // synchronously at setup and read this ref through `itemFilterSnapshot`.
+  // Written by `admittedByStatusFilter` once it exists.
+  const admittedIdsRef = createLatestRef<ReadonlySet<string>>(new Set());
+
   const itemFilterSnapshot = (
     view: ListView | undefined
   ): SoupViewItemFilterSnapshot => ({
@@ -1109,7 +1114,6 @@ export const SoupViewContextProvider: FlowComponent<
   // nothing — and the list would keep rendering the previous visit's rows.
   // Mirrors the memo for the cache membership filter, which must read the
   // current set without holding this provider's reactive graph.
-  const admittedIdsRef = createLatestRef<ReadonlySet<string>>(new Set());
   const admittedByStatusFilter = createMemo<{
     scope: string;
     ids: Set<string>;

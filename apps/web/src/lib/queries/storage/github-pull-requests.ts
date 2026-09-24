@@ -9,9 +9,12 @@ import type {
   GithubPullRequest,
   GithubPullRequestsResponse,
 } from '@service-storage/generated/schemas';
-import { useQuery } from '@tanstack/solid-query';
+import {
+  type QueryClient,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import { queryClient } from '../client';
 import { documentGithubPullRequestsKeys } from './keys';
 
 const DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME = 60 * 1000;
@@ -156,8 +159,10 @@ export async function fetchDocumentGithubPullRequests(
   return mergedResponse;
 }
 
-// Cached callbacks outlive the caller; only the resolved id enters them.
+// Cached callbacks outlive the caller; only the resolved id and the observer's
+// client (an app- or test-level object, not component state) enter them.
 function documentGithubPullRequestsQueryOptions(
+  queryClient: QueryClient,
   documentId: string | null | undefined,
   enabled: boolean
 ) {
@@ -188,8 +193,10 @@ export function useDocumentGithubPullRequestsQuery(
   documentId: DocumentIdInput,
   enabled?: EnabledInput
 ) {
+  const queryClient = useQueryClient();
   return useQuery(() =>
     documentGithubPullRequestsQueryOptions(
+      queryClient,
       readDocumentId(documentId),
       readEnabled(enabled)
     )
