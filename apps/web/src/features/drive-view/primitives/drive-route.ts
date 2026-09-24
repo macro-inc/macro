@@ -9,12 +9,12 @@ import {
   type SplitRouteParams,
   takeLast,
 } from '@app/split-router';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { z } from 'zod';
 import type { DriveLocation, DriveTab } from '../core/types';
 import {
   DRIVE_DOCUMENT_TYPES,
   type DriveDocumentType,
-  driveDocumentBlockType,
 } from './drive-route-schema';
 
 export type DriveDocumentRoute = { id: string; type: DriveDocumentType };
@@ -62,22 +62,18 @@ export function driveDocumentRoute(document: {
   fileType: string;
   subType?: string;
 }): DriveDocumentRoute {
-  return {
-    id: document.id,
-    type:
-      documentType.safeParse(
-        driveDocumentBlockType(document.subType ?? document.fileType)
-      ).data ?? 'unknown',
-  };
+  const type = documentType.safeParse(
+    fileTypeToBlockName(document.subType ?? document.fileType)
+  ).data;
+  return { id: document.id, type: type ?? 'unknown' };
 }
 
 export function driveDocumentFromContent(content: {
   type: string;
   id: string;
 }): DriveDocumentRoute | undefined {
-  const type = documentType.safeParse(
-    driveDocumentBlockType(content.type)
-  ).data;
+  if (content.type === 'component') return;
+  const type = documentType.safeParse(fileTypeToBlockName(content.type)).data;
   return type ? { id: content.id, type } : undefined;
 }
 

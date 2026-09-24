@@ -572,8 +572,11 @@ details include Print, and DOCX files include Download DOCX. Markdown details
 use the document menu, which already includes Download. Spreadsheets keep the
 editor's Import and export menu for Excel and CSV downloads. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
-entries. Opening a list row or sidebar favorite starts a new detail path; only
-navigation originating inside a detail appends to that path. Cmd/Ctrl-clicking a
+entries. Opening a list row or sidebar favorite pushes a new one-item detail path;
+sidebar favorites start from My Files instead of inheriting a previously selected
+folder. Only navigation originating inside a detail appends to that path. Browser
+Back and Forward restore the exact path saved with each entry, and renamed files
+update in mounted ancestor breadcrumbs without rewriting history. Cmd/Ctrl-clicking a
 row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Enter
 opens the focused row in a new split. Cmd/Ctrl-clicking a row's folder link or
 search hit opens a new tab. Short filtered pages load more results automatically;
