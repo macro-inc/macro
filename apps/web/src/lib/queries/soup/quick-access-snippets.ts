@@ -37,8 +37,8 @@ export function useQuickAccessSnippetsQuery() {
     () => ({ staleTime: STALE_TIME, enabled: snippetsFlag().enabled })
   );
 
-  const snippets = createMemo<SnippetEntity[]>(
-    () => query.data?.filter(isSnippetEntity) ?? []
+  const snippets = createMemo<SnippetEntity[]>(() =>
+    query.isSuccess ? (query.data?.filter(isSnippetEntity) ?? []) : []
   );
 
   return { query, snippets };
