@@ -3,13 +3,57 @@ use std::sync::Arc;
 use crate::model::types::Model;
 use rig_core::{client::CompletionClient, providers::openai};
 
+/// Fireworks' Chat Completions `model` field is the account-scoped path, not
+/// the short catalog slug. Routing ids stay `fireworks/<slug>` so the picker,
+/// usage, and pricing can use the bare name.
+fn completion_model_id(model: &Model<'_>) -> String {
+    if model.provider() == "fireworks" && !model.name().starts_with("accounts/") {
+        format!("accounts/fireworks/models/{}", model.name())
+    } else {
+        model.name().to_string()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::completion_model_id;
+    use crate::model::types::Model;
+
+    #[test]
+    fn fireworks_short_name_becomes_the_account_path() {
+        let model = Model::try_from("fireworks/kimi-k3").expect("routable id");
+        assert_eq!(
+            completion_model_id(&model),
+            "accounts/fireworks/models/kimi-k3"
+        );
+    }
+
+    #[test]
+    fn fireworks_account_path_is_sent_verbatim() {
+        let model = Model::try_from("fireworks/accounts/fireworks/models/kimi-k3")
+            .expect("full path is still one provider segment");
+        assert_eq!(
+            completion_model_id(&model),
+            "accounts/fireworks/models/kimi-k3"
+        );
+    }
+
+    #[test]
+    fn other_compatible_providers_keep_the_catalog_name() {
+        let model = Model::try_from("cerebras/gpt-oss-120b").expect("routable id");
+        assert_eq!(completion_model_id(&model), "gpt-oss-120b");
+    }
+}
+
 /// A model served over the OpenAI-compatible **Chat Completions** API.
 ///
 /// OpenAI-compatible providers differ only by the
 /// [`CompletionsClient`](openai::CompletionsClient)'s base URL and key, never
 /// by Rust type, so routing can hold any number of them without new variants.
 /// Which provider serves an id is decided by routing (the `provider/…`
-/// segment), so there is no id classification here.
+/// segment). Fireworks is the one exception on the wire: its API wants the
+/// account-scoped path, which [`completion_model_id`] derives from the
+/// catalog slug.
 pub struct OpenAiChatCompletionsModel<'a> {
     model: Model<'a>,
     client: Arc<openai::CompletionsClient>,
@@ -31,7 +75,8 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
     /// Unlike the Responses API, the Chat Completions API does not coerce tools
     /// into a strict subset, so tools are already sent verbatim.
     pub fn completion(&self) -> openai::completion::CompletionModel {
-        self.client.completion_model(self.model.name().to_string())
+        self.client
+            .completion_model(completion_model_id(&self.model))
     }
 
     /// Best-effort reasoning config, flattened into the request by rig, or

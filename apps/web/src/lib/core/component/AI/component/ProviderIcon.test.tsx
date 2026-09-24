@@ -17,6 +17,12 @@ describe('AI provider icons', () => {
     ['o3', 'openai'],
     ['google/gemini-pro', 'google'],
     ['gemini-2.5-pro', 'google'],
+    ['fireworks/kimi-k3', 'kimi'],
+    ['kimi-k3', 'kimi'],
+    ['fireworks/deepseek-v4-pro-0813', 'deepseek'],
+    ['deepseek-v4-pro-0813', 'deepseek'],
+    ['fireworks/muse-glimmer-30b', 'muse'],
+    ['muse-glimmer-30b', 'muse'],
   ])('recognizes %s as %s', (model, provider) => {
     expect(modelProvider(model)).toBe(provider);
   });

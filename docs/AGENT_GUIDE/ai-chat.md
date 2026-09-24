@@ -61,8 +61,10 @@ permission failures should display a failed tool call without a successful resul
 - The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
   grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
   Macro’s available models with readable names (for example, **Sonnet 5**) and
-  provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
-  Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
+  provider or model icons aligned with the agent icons. The in-memory catalog
+  offers the closed Anthropic and OpenAI chat models plus Fireworks-hosted
+  **Kimi K3**, **DeepSeek V4 Pro**, and **Muse Glimmer**; older Sonnet and Opus
+  versions are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
   The built-in Macro agent is the only agent excluded from these sections; its models remain available.

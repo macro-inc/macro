@@ -84,6 +84,7 @@ fn emits_required_keys() {
         "LIVEKIT_API_KEY",
         "LIVEKIT_API_SECRET",
         "OPENAI_API_KEY",
+        "FIREWORKS_API_KEY",
         "COHERE_API_KEY",
         "CAL_WEBHOOK_SECRET_KEY",
         "CAL_EVENT_TYPE_CONTENT_NAMES_KEY",

@@ -13,6 +13,20 @@
 
 import { MODEL_PRETTYNAME, type Model } from './model';
 
+/**
+ * House names for in-memory Macro models that are not in the closed chat
+ * {@link Model} set. Looked up by routed id and by the bare slug a session
+ * row may store.
+ */
+const HARNESS_PRETTYNAME: Record<string, string> = {
+  'fireworks/kimi-k3': 'Kimi K3',
+  'kimi-k3': 'Kimi K3',
+  'fireworks/deepseek-v4-pro-0813': 'DeepSeek V4 Pro',
+  'deepseek-v4-pro-0813': 'DeepSeek V4 Pro',
+  'fireworks/muse-glimmer-30b': 'Muse Glimmer',
+  'muse-glimmer-30b': 'Muse Glimmer',
+};
+
 /** Vendor acronyms that read as shouting only when they are not shouted. */
 const ACRONYMS = new Set(['gpt', 'ai', 'llm']);
 
@@ -67,12 +81,14 @@ export function modelLabel(id: string | undefined, name?: string): string {
   if (!id) return 'Model';
   const pretty =
     MODEL_PRETTYNAME[id as Model] ??
-    MODEL_PRETTYNAME[`anthropic/${id}` as Model];
+    MODEL_PRETTYNAME[`anthropic/${id}` as Model] ??
+    HARNESS_PRETTYNAME[id] ??
+    HARNESS_PRETTYNAME[id.replace(/^[\w.-]+\//, '')];
   if (pretty) return pretty;
   const reported = name?.trim();
   if (reported && reported !== id.trim())
     return reported
-      .replace(/^(anthropic|openai|google)\//, '')
+      .replace(/^(anthropic|openai|google|fireworks)\//, '')
       .replace(/^Claude /, '');
   return humanizeModelId(id);
 }

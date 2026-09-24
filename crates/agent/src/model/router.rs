@@ -12,7 +12,7 @@
 //!   (e.g. `agent_loop`) hold one type and never fan out.
 //!
 //! Ids are addressed as `provider/model` (e.g. `anthropic/claude-opus-4-8`,
-//! `groq/llama-3.3-70b`); routing picks the provider from the segment, never by
+//! `fireworks/kimi-k3`); routing picks the provider from the segment, never by
 //! sniffing the id. Unroutable ids fall back to the default model.
 
 use std::collections::HashMap;
@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 use ai_toolset::RequestContext;
 use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt;
-use macro_env_var::env_var;
+use macro_env_var::{env_var, maybe_env_var};
 use rig_agent::agent::{Agent, AgentBuilder, MultiTurnStreamItem};
 use rig_agent::streaming::StreamingPrompt;
 use rig_agent::tool::server::ToolServerHandle;
@@ -49,6 +49,10 @@ env_var! {
     }
 }
 
+maybe_env_var! {
+    struct FireworksApiKey;
+}
+
 /// Provider segment for native Anthropic.
 const ANTHROPIC_PROVIDER: &str = "anthropic";
 /// Provider segment the built-in OpenAI client is registered under.
@@ -58,6 +62,11 @@ const OPENAI_PROVIDER: &str = "openai";
 const CEREBRAS_PROVIDER: &str = "cerebras";
 /// Cerebras inference endpoint (OpenAI-compatible Chat Completions API).
 const CEREBRAS_BASE_URL: &str = "https://api.cerebras.ai/v1";
+/// Provider segment Fireworks is registered under (OpenAI-compatible Chat
+/// Completions). Open-weight models on the in-memory Macro agent route here.
+const FIREWORKS_PROVIDER: &str = "fireworks";
+/// Fireworks inference endpoint (OpenAI-compatible Chat Completions API).
+const FIREWORKS_BASE_URL: &str = "https://api.fireworks.ai/inference/v1";
 
 /// A routed model id bound to the provider client that serves it.
 pub(crate) enum RoutedModel<'a> {
@@ -267,7 +276,9 @@ impl ModelRouter {
     /// Build a router with the built-in providers from the environment.
     ///
     /// Requires `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `CEREBRAS_API_KEY`.
-    /// Chain [`with_openai_provider`](Self::with_openai_provider) to add more.
+    /// Registers Fireworks when `FIREWORKS_API_KEY` is set so `fireworks/<model>`
+    /// ids resolve. Chain [`with_openai_provider`](Self::with_openai_provider)
+    /// to add more.
     pub fn try_from_env() -> Result<Self, AgentError> {
         let env = ApiKeys::new()?;
         let anthropic = anthropic::Client::builder()
@@ -280,11 +291,18 @@ impl ModelRouter {
             .build()?;
         // Cerebras speaks the OpenAI Chat Completions API, so it rides the
         // compatible-provider registry: `cerebras/<model>` ids route to it.
-        Self::new(anthropic, openai).with_openai_provider(
+        let router = Self::new(anthropic, openai).with_openai_provider(
             CEREBRAS_PROVIDER,
             CEREBRAS_BASE_URL,
             &env.cerebras_api_key,
-        )
+        )?;
+        // Fireworks is additive: a missing key leaves `fireworks/` ids
+        // unroutable (they fall back to the default model) so existing
+        // deployments keep booting until the secret is in Doppler.
+        match FireworksApiKey::new() {
+            Some(key) => router.with_openai_provider(FIREWORKS_PROVIDER, FIREWORKS_BASE_URL, &*key),
+            None => Ok(router),
+        }
     }
 
     /// The process-wide full router, built from the environment on first use.

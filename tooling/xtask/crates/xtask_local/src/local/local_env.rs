@@ -707,6 +707,9 @@ impl BootStubEnv {
         env.insert("LIVEKIT_API_KEY".into(), "local-livekit-key".into());
         env.insert("LIVEKIT_API_SECRET".into(), "local-livekit-secret".into());
         env.insert("OPENAI_API_KEY".into(), "local-openai-key".into());
+        // Optional for the agent router; present so local `fireworks/` ids
+        // resolve. Real Fireworks calls still fail on the dummy key.
+        env.insert("FIREWORKS_API_KEY".into(), "local-fireworks-key".into());
         env.insert("COHERE_API_KEY".into(), "local-cohere-key".into());
         env.insert(
             "CAL_WEBHOOK_SECRET_KEY".into(),

@@ -73,3 +73,20 @@ fn registered_openai_compatible_provider_routes_to_chat_completions() {
         RoutedModel::OpenAiChatCompletions(_)
     ));
 }
+
+#[test]
+fn fireworks_provider_routes_to_chat_completions() {
+    let router = test_router().with_openai_client(
+        "fireworks",
+        openai::CompletionsClient::builder()
+            .api_key("test-fireworks-key")
+            .base_url("https://api.fireworks.ai/inference/v1")
+            .build()
+            .unwrap(),
+    );
+
+    let routed = router.route("fireworks/kimi-k3").unwrap();
+    assert!(matches!(routed, RoutedModel::OpenAiChatCompletions(_)));
+    assert_eq!(routed.provider(), "fireworks");
+    assert_eq!(routed.model_name(), "kimi-k3");
+}
