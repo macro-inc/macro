@@ -50,7 +50,8 @@ env_var! {
 }
 
 maybe_env_var! {
-    struct FireworksApiKey;
+    /// Doppler name is `FIREWORK_API_KEY` (singular), from `shared_ai`.
+    struct FireworkApiKey;
 }
 
 /// Provider segment for native Anthropic.
@@ -276,7 +277,7 @@ impl ModelRouter {
     /// Build a router with the built-in providers from the environment.
     ///
     /// Requires `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `CEREBRAS_API_KEY`.
-    /// Registers Fireworks when `FIREWORKS_API_KEY` is set so `fireworks/<model>`
+    /// Registers Fireworks when `FIREWORK_API_KEY` is set so `fireworks/<model>`
     /// ids resolve. Chain [`with_openai_provider`](Self::with_openai_provider)
     /// to add more.
     pub fn try_from_env() -> Result<Self, AgentError> {
@@ -298,8 +299,9 @@ impl ModelRouter {
         )?;
         // Fireworks is additive: a missing key leaves `fireworks/` ids
         // unroutable (they fall back to the default model) so existing
-        // deployments keep booting until the secret is in Doppler.
-        match FireworksApiKey::new() {
+        // deployments keep booting until the secret is in Doppler
+        // (`shared_ai` → `FIREWORK_API_KEY`).
+        match FireworkApiKey::new() {
             Some(key) => router.with_openai_provider(FIREWORKS_PROVIDER, FIREWORKS_BASE_URL, &*key),
             None => Ok(router),
         }

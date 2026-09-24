@@ -709,7 +709,8 @@ impl BootStubEnv {
         env.insert("OPENAI_API_KEY".into(), "local-openai-key".into());
         // Optional for the agent router; present so local `fireworks/` ids
         // resolve. Real Fireworks calls still fail on the dummy key.
-        env.insert("FIREWORKS_API_KEY".into(), "local-fireworks-key".into());
+        // Doppler's shared_ai name is singular: FIREWORK_API_KEY.
+        env.insert("FIREWORK_API_KEY".into(), "local-firework-key".into());
         env.insert("COHERE_API_KEY".into(), "local-cohere-key".into());
         env.insert(
             "CAL_WEBHOOK_SECRET_KEY".into(),
