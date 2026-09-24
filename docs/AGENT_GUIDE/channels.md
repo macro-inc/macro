@@ -533,8 +533,13 @@ after the network failure must remain usable without erasing the refresh error.
 If more unread notifications
 remain, the limited edge must refresh to the next one rather than staying empty.
 Refreshing unread indicators while composing must preserve the conversation,
-scroll position, and input focus. The backend must support the new edge arguments
-before deploying the frontend that requests them.
+scroll position, and input focus. To check stale-cache recovery, mark notifications
+read/done in another tab, then repeat the action in a stale tab. Empty or partial
+changed-row responses must still reconcile mounted Soup and notification readers,
+without resetting loaded pages or starting an unused global notification feed.
+Undo must use only the mutation's returned IDs, not IDs from the subsequent refresh.
+The backend must support the new edge arguments before deploying the frontend
+that requests them.
 
 ## Call lifecycle
 
