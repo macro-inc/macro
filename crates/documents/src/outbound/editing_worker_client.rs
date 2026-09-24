@@ -108,17 +108,16 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
     ) -> anyhow::Result<crate::domain::ports::editing::CommentMarkPlacement> {
         use crate::domain::ports::editing::CommentMarkPlacement;
 
+        let mut change = serde_json::json!({
+            "action": "add",
+            "markId": mark_id,
+            "text": text,
+        });
+        if let Some(occurrence) = occurrence {
+            change["occurrence"] = occurrence.into();
+        }
         let response = self
-            .comment_mark(
-                document_id,
-                document_token,
-                serde_json::json!({
-                    "action": "add",
-                    "markId": mark_id,
-                    "text": text,
-                    "occurrence": occurrence,
-                }),
-            )
+            .comment_mark(document_id, document_token, change)
             .await?;
         let status = response.status();
         let body = response

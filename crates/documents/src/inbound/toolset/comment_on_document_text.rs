@@ -5,6 +5,7 @@ use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolR
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
+use macro_sync_service_jwt::DocumentPermissionToken;
 use messages::domain::models::{
     MessageAttribution, NewThreadAnchor, PostMessage, PostMessageNotificationPolicy,
 };
@@ -38,6 +39,7 @@ pub struct CommentOnDocumentText {
     pub text: String,
 
     #[schemars(
+        range(min = 1),
         description = "Which appearance of the passage to comment on, counting from 1 in document order. Only needed when the passage appears more than once."
     )]
     pub occurrence: Option<u32>,
@@ -81,6 +83,14 @@ where
         ctx: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
+        if self.occurrence == Some(0) {
+            return Err(ToolCallError {
+                description:
+                    "occurrence counts from 1: pass 1 for the first appearance of the text"
+                        .to_string(),
+                internal_error: anyhow::anyhow!("occurrence 0"),
+            });
+        }
         let access = ctx
             .require_comment_write(&request_context, self.document_id)
             .await?;
@@ -124,7 +134,7 @@ where
         // posted first would already have notified people of a comment that
         // cannot be placed.
         let mark_id = Uuid::now_v7();
-        let placement = ctx
+        let placement = match ctx
             .editing
             .add_comment_mark(
                 &document_id,
@@ -134,10 +144,18 @@ where
                 self.occurrence,
             )
             .await
-            .map_err(|e| ToolCallError {
-                description: "unable to anchor the comment to the text".to_string(),
-                internal_error: e,
-            })?;
+        {
+            Ok(placement) => placement,
+            Err(err) => {
+                // The worker may have pushed the mark before the failure reached
+                // us, as when the sync service never acknowledged it.
+                remove_mark(ctx.editing.as_ref(), &document_id, &document_token, mark_id).await;
+                return Err(ToolCallError {
+                    description: "unable to anchor the comment to the text".to_string(),
+                    internal_error: err,
+                });
+            }
+        };
         let marked_text = match placement {
             CommentMarkPlacement::Placed { marked_text } => marked_text,
             CommentMarkPlacement::Refused(reason) => {
@@ -171,14 +189,7 @@ where
         let message = match posted {
             Ok(message) => message,
             Err(err) => {
-                // A mark with no thread would highlight text nobody commented on.
-                if let Err(cleanup) = ctx
-                    .editing
-                    .remove_comment_mark(&document_id, &document_token, mark_id)
-                    .await
-                {
-                    tracing::error!(error = ?cleanup, %mark_id, "comment mark left without its thread");
-                }
+                remove_mark(ctx.editing.as_ref(), &document_id, &document_token, mark_id).await;
                 return Err(comment_error("unable to post the comment")(err));
             }
         };
@@ -189,5 +200,21 @@ where
             comment_id: message.id,
             marked_text,
         })
+    }
+}
+
+/// Best-effort removal of a mark whose thread was never posted: left in place
+/// it would highlight text nobody commented on.
+async fn remove_mark<EDSvc: EditingWorkerService>(
+    editing: &EDSvc,
+    document_id: &str,
+    document_token: &DocumentPermissionToken,
+    mark_id: Uuid,
+) {
+    if let Err(error) = editing
+        .remove_comment_mark(document_id, document_token, mark_id)
+        .await
+    {
+        tracing::error!(error = ?error, %mark_id, "comment mark left without its thread");
     }
 }

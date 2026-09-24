@@ -554,3 +554,53 @@ async fn comment_on_text_rejects_documents_that_are_not_markdown() {
     );
     assert!(editing.added_comment_marks.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn comment_on_text_removes_the_mark_when_placing_it_fails() {
+    let messages = FakeMessages::default();
+    let editing = FakeEditingWorker::failing_comment_marks();
+    let error = comment_on_text("ships on Friday", None)
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "md",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.description,
+        "unable to anchor the comment to the text"
+    );
+    let placed = editing.added_comment_marks.lock().unwrap()[0].mark_id;
+    assert_eq!(*editing.removed_comment_marks.lock().unwrap(), vec![placed]);
+    assert!(messages.posts.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn comment_on_text_rejects_occurrence_zero() {
+    let editing = FakeEditingWorker::default();
+    let error = comment_on_text("ships on Friday", Some(0))
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                FakeMessages::default(),
+                "md",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        error.description.contains("counts from 1"),
+        "{}",
+        error.description
+    );
+    assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+}

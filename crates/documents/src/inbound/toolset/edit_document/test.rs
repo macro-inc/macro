@@ -414,11 +414,20 @@ pub(in crate::inbound::toolset) struct FakeEditingWorker {
     tokens: Arc<Mutex<Vec<DocumentPermissionToken>>>,
     /// Answer every comment mark placement with this refusal.
     comment_mark_refusal: Option<String>,
+    /// Fail every comment mark placement as a worker whose push was never acked.
+    comment_mark_fails: bool,
     pub(in crate::inbound::toolset) added_comment_marks: Arc<Mutex<Vec<AddedCommentMark>>>,
     pub(in crate::inbound::toolset) removed_comment_marks: Arc<Mutex<Vec<Uuid>>>,
 }
 
 impl FakeEditingWorker {
+    pub(in crate::inbound::toolset) fn failing_comment_marks() -> Self {
+        Self {
+            comment_mark_fails: true,
+            ..Self::default()
+        }
+    }
+
     pub(in crate::inbound::toolset) fn refusing_comment_marks(reason: &str) -> Self {
         Self {
             comment_mark_refusal: Some(reason.to_owned()),
@@ -464,6 +473,9 @@ impl EditingWorkerService for FakeEditingWorker {
                 text: text.to_owned(),
                 occurrence,
             });
+        if self.comment_mark_fails {
+            anyhow::bail!("sync service did not acknowledge 1 comment mark update(s)");
+        }
         Ok(match &self.comment_mark_refusal {
             Some(reason) => CommentMarkPlacement::Refused(reason.clone()),
             None => CommentMarkPlacement::Placed {

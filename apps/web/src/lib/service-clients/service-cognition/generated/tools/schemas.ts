@@ -604,7 +604,7 @@ export const SpreadsheetResponse = z.any().superRefine((x, ctx) => {
 export const CommentOnDocumentText = z.object({
   documentId: z.string().uuid(),
   text: z.string(),
-  occurrence: z.union([z.number().int().gte(0), z.null()]).optional(),
+  occurrence: z.union([z.number().int().gte(1), z.null()]).optional(),
   content: z.string(),
 });
 

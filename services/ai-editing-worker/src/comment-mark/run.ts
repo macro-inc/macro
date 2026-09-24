@@ -12,7 +12,12 @@ import type { AnchorResult } from './anchor';
 import { $addCommentMark, $removeCommentMark } from './anchor';
 
 export type CommentMarkChange =
-  | { action: 'add'; markId: string; text: string; occurrence?: number }
+  | {
+      action: 'add';
+      markId: string;
+      text: string;
+      occurrence?: number | null;
+    }
   | { action: 'remove'; markId: string };
 
 export type CommentMarkChangeResult =
@@ -67,7 +72,11 @@ export async function applyCommentMarkChange(
       () => {
         result =
           change.action === 'add'
-            ? $addCommentMark(change.markId, change.text, change.occurrence)
+            ? $addCommentMark(
+                change.markId,
+                change.text,
+                change.occurrence ?? undefined
+              )
             : { ok: true, removed: $removeCommentMark(change.markId) };
       },
       { discrete: true }
@@ -75,6 +84,13 @@ export async function applyCommentMarkChange(
     if (result.ok) {
       await workspace.flush();
       await wal.flush();
+      // A flush the server never acknowledged resolves all the same; the
+      // caller must not be told a mark landed that nobody else has.
+      const { dirty } = await wal.summary();
+      if (dirty > 0)
+        throw new Error(
+          `sync service did not acknowledge ${dirty} comment mark update(s)`
+        );
     }
     return result;
   } finally {

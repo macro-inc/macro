@@ -145,12 +145,12 @@ function $occurrences(needle: string): Occurrence[] {
   return out;
 }
 
-function $documentText(): string {
+function $blockTexts(): string[] {
   const blocks: string[] = [];
   for (const { node } of $dfs($getRoot())) {
     if ($isTextBlock(node)) blocks.push($blockText(node).text);
   }
-  return blocks.join('\n');
+  return blocks;
 }
 
 /**
@@ -175,8 +175,16 @@ export function $addCommentMark(
   const found = needle ? $occurrences(needle) : [];
 
   if (found.length === 0) {
+    // Only text that is in no single block but runs across the join of two is
+    // reported as crossing blocks; a whitespace slip inside one block is not.
     const collapse = (value: string) => value.replace(/\s+/g, ' ');
-    if (needle && collapse($documentText()).includes(collapse(needle)))
+    const quote = collapse(needle);
+    const blocks = $blockTexts().map(collapse);
+    if (
+      needle &&
+      !blocks.some((block) => block.includes(quote)) &&
+      blocks.join(' ').includes(quote)
+    )
       return {
         ok: false,
         reason: 'spans_blocks',
@@ -187,7 +195,7 @@ export function $addCommentMark(
       ok: false,
       reason: 'not_found',
       message:
-        'The text was not found in the document. Quote it exactly as the document reads, without markdown syntax such as ** or links, and read the document again if it may have changed.',
+        'The text was not found in the document. Quote it exactly as the document reads, including its spacing and line breaks, without markdown syntax such as ** or links, and read the document again if it may have changed.',
     };
   }
 

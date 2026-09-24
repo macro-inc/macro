@@ -96,6 +96,12 @@ describe('$addCommentMark', () => {
     expect(marks(session)).toHaveLength(0);
   });
 
+  it('does not call a spacing slip inside one block a cross-block quote', () => {
+    const { session } = setup('Alpha beta gamma.');
+    const result = edit(session, () => $addCommentMark(MARK, 'beta  gamma'));
+    expect(result).toMatchObject({ ok: false, reason: 'not_found' });
+  });
+
   it('refuses repeated text with no occurrence and lists each one', () => {
     const { session } = setup('Owner: TBD.\n\nDeadline: TBD.');
     const result = edit(session, () => $addCommentMark(MARK, 'TBD'));

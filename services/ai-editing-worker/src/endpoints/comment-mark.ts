@@ -14,7 +14,7 @@ const CommentMarkBody = z.object({
       action: z.literal('add'),
       markId: z.uuid(),
       text: z.string().min(1).max(10_000),
-      occurrence: z.number().int().min(1).optional(),
+      occurrence: z.number().int().min(1).nullish(),
     }),
     z.object({ action: z.literal('remove'), markId: z.uuid() }),
   ]),
