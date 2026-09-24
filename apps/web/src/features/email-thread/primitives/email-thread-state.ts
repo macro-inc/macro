@@ -67,7 +67,12 @@ export type EmailThreadState = {
   replyRequest: {
     messageId: Accessor<string | undefined>;
     replyType: Accessor<ReplyType | undefined>;
-    set: (messageId: string, replyType: ReplyType) => void;
+    suggestedBody: Accessor<string | undefined>;
+    set: (
+      messageId: string,
+      replyType: ReplyType,
+      suggestedBody?: string
+    ) => void;
     clear: () => void;
   };
   thread: Accessor<EmailThread | undefined>;
@@ -129,6 +134,7 @@ export function createEmailThreadState(
   const [replyRequest, setReplyRequest] = createSignal<{
     messageId: string;
     replyType: ReplyType;
+    suggestedBody?: string;
   }>();
   const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
     Record<string, boolean>
@@ -277,8 +283,9 @@ export function createEmailThreadState(
     replyRequest: {
       messageId: () => replyRequest()?.messageId,
       replyType: () => replyRequest()?.replyType,
-      set: (messageId: string, replyType: ReplyType) => {
-        setReplyRequest({ messageId, replyType });
+      suggestedBody: () => replyRequest()?.suggestedBody,
+      set: (messageId, replyType, suggestedBody) => {
+        setReplyRequest({ messageId, replyType, suggestedBody });
       },
       clear: () => {
         setReplyRequest(undefined);

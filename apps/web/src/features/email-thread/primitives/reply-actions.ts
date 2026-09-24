@@ -9,6 +9,7 @@ export function openEmailReplyComposerForMessage(args: {
   isMobile: boolean;
   message: EmailMessage;
   replyType: ReplyType;
+  suggestedBody?: string;
   isLastMessage?: boolean;
   setShowReply?: Setter<boolean>;
 }) {
@@ -19,7 +20,7 @@ export function openEmailReplyComposerForMessage(args: {
   // composer's effect applies them to its own (seed-keyed) form instance.
   // Writing to the form registry from here would target the wrong entry —
   // the registry key includes a seed only the composer knows.
-  args.ctx.replyRequest.set(messageId, args.replyType);
+  args.ctx.replyRequest.set(messageId, args.replyType, args.suggestedBody);
 
   if (args.isMobile) {
     args.ctx.mobileReplyComposer.openForMessage(messageId);

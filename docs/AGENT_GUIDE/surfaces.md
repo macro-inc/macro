@@ -448,6 +448,12 @@ does not add an accent-colored ring; keyboard focus has a neutral outline.
 Replies appear inline on desktop and in a composer drawer on touch devices.
 Desktop draft bodies and app-controlled message text use 15px, matching channels.
 HTML messages with preserved sender typography retain their explicit sizes.
+For a latest inbound message, the collapsed reply area automatically drafts up
+to three context-aware reply choices. Selecting one opens the ordinary reply-all
+composer with the complete suggestion inserted as editable, unsent text; choosing
+Reply directly still opens an empty composer. Suggestions do not appear when the
+latest message came from any of the viewer's connected inboxes. Verify that a
+suggested reply can be edited before sending on both desktop and touch layouts.
 Desktop reply actions sit together at the bottom right: discard, attach, schedule,
 then Send, with circular hover backgrounds inside the card's 16px padding.
 Standalone compose uses one right-aligned row inside its 16px content padding:

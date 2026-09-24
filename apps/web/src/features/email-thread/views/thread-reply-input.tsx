@@ -60,8 +60,12 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
     const encoded = props.draft?.body_html_sanitized;
     if (!encoded) {
       const plainText = props.draft?.body_text;
-      if (!plainText) return '';
-      return plainTextToHtml(plainText);
+      if (plainText) return plainTextToHtml(plainText);
+      const suggestedBody =
+        ctx.replyRequest.messageId() === props.replyingTo()?.db_id
+          ? ctx.replyRequest.suggestedBody()
+          : undefined;
+      return suggestedBody ? plainTextToHtml(suggestedBody) : '';
     }
     const decodedHtml = decodeBase64Utf8(encoded);
     return decodedHtml;

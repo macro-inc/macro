@@ -8,14 +8,17 @@ import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowUp from '@phosphor/arrow-up.svg';
 import CheckIcon from '@phosphor/check.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
-import { type Component, Show } from 'solid-js';
+import { type Component, For, Show } from 'solid-js';
 import type { EmailThreadListNavigation } from '../context/email-thread-context';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
+import type { SuggestedReply } from '../core/suggested-replies';
 import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
+import { createSuggestedReplies } from '../queries/suggested-replies';
 
 function ReplyActionButton(props: {
   icon: Component<{ class?: string }>;
@@ -59,8 +62,23 @@ export function BottomReplyButtons(props: {
   const ctx = useEmailThreadState();
   const viewContext = useEmailThreadViewContext();
   const currentUserEmail = viewContext.thread.viewerEmail;
+  const suggested = createSuggestedReplies({
+    threadId: () => ctx.thread()?.db_id ?? props.lastMessage.thread_db_id,
+    latestMessage: () => props.lastMessage,
+    viewerEmails: () => {
+      const viewerEmail = currentUserEmail();
+      return [
+        ...(viewerEmail ? [viewerEmail] : []),
+        ...viewContext.compose.accounts
+          .inboxes()
+          .map((inbox) => inbox.email_address),
+      ];
+    },
+    enabled: () => ctx.permissions().isOwner,
+    hasProfessionalFeatures: viewContext.compose.hasPaidAccess,
+  });
 
-  const open = (type: ReplyType) =>
+  const open = (type: ReplyType, suggestedBody?: string) =>
     createCallback(() => {
       const messageId = props.lastMessage.db_id;
       if (!messageId) return;
@@ -69,9 +87,47 @@ export function BottomReplyButtons(props: {
         ctx,
         message: props.lastMessage,
         replyType: type,
+        suggestedBody,
         isLastMessage: true,
       });
     });
+
+  const chooseSuggestedReply = (reply: SuggestedReply) => {
+    open('reply-all', reply.body)();
+  };
+
+  const SuggestedReplyButtons = () => (
+    <Show
+      when={suggested.replies()?.length}
+      fallback={
+        <Show when={suggested.isGenerating()}>
+          <div class="flex items-center gap-1.5 text-xs text-ink-placeholder">
+            <SparkleIcon class="size-3 animate-pulse" />
+            <span>Drafting replies…</span>
+          </div>
+        </Show>
+      }
+    >
+      <div
+        class="flex min-w-0 items-center gap-2 overflow-x-auto"
+        aria-label="Suggested replies"
+      >
+        <For each={suggested.replies()}>
+          {(reply) => (
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0 rounded-full"
+              tooltip={reply.body}
+              onClick={() => chooseSuggestedReply(reply)}
+            >
+              {reply.label}
+            </Button>
+          )}
+        </For>
+      </div>
+    </Show>
+  );
 
   const currentUserIconProps = () => {
     const email = currentUserEmail();
@@ -98,25 +154,31 @@ export function BottomReplyButtons(props: {
     <Show
       when={viewContext.thread.isTouch()}
       fallback={
-        <div class="flex w-full items-center pt-4">
-          <button
-            type="button"
-            class="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left text-sm text-ink-placeholder hover:text-ink-muted"
-            onClick={open('reply-all')}
-          >
-            <UserIcon
-              {...currentUserIconProps()}
-              size="md"
-              showTooltip={false}
-              suppressClick
-            />
-            <span class="truncate">Reply...</span>
-          </button>
+        <div class="flex w-full flex-col gap-3 pt-4">
+          <SuggestedReplyButtons />
+          <div class="flex items-center">
+            <button
+              type="button"
+              class="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left text-sm text-ink-placeholder hover:text-ink-muted"
+              onClick={open('reply-all')}
+            >
+              <UserIcon
+                {...currentUserIconProps()}
+                size="md"
+                showTooltip={false}
+                suppressClick
+              />
+              <span class="truncate">Reply...</span>
+            </button>
+          </div>
         </div>
       }
     >
       <FloatRegionOrInline region="accessory">
         <div class="w-full p-2 pb-2 pt-4 touch:px-(--mobile-chrome-gutter) touch:py-0">
+          <div class="mb-2 touch:pointer-events-auto">
+            <SuggestedReplyButtons />
+          </div>
           <div class="flex flex-row flex-wrap items-center gap-2 justify-between touch:pointer-events-auto">
             <div class="flex flex-row items-center gap-2">
               <ReplyActionButton
