@@ -28,7 +28,11 @@ import {
 } from '@app/features/drive-view/views/VideoDetail';
 import { getChannelEntityTarget } from '@app/features/next-soup/utils';
 import type { MarkdownDocumentKind } from '@block-md/types';
-import { ChannelDetail } from '@channel/Channel/ChannelDetail';
+import {
+  ChannelDetail,
+  type ChannelDetailContext,
+  ChannelDetailTopBar,
+} from '@channel/Channel/ChannelDetail';
 import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
@@ -36,10 +40,17 @@ import { previewBlockTarget } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { createMemo, type JSX, Match, Switch, untrack } from 'solid-js';
+import {
+  children,
+  createMemo,
+  type JSX,
+  Match,
+  Switch,
+  untrack,
+} from 'solid-js';
 import type { EntityDetailTarget } from './EntityDetailNavigationStack';
 
-export type EntityDetailContext =
+type DocumentDetailContext =
   | MarkdownDetailContext
   | CodeDetailContext
   | CanvasDetailContext
@@ -48,6 +59,10 @@ export type EntityDetailContext =
   | PdfDetailContext
   | UnknownDetailContext;
 
+export type EntityDetailContext =
+  | ({ type: 'document' } & DocumentDetailContext)
+  | ({ type: 'channel' } & ChannelDetailContext);
+
 export type EntityDetailProps = {
   target: EntityDetailTarget;
   shareOpen?: boolean;
@@ -55,6 +70,18 @@ export type EntityDetailProps = {
   previewHeaderLeading?: JSX.Element;
   children?: (context: EntityDetailContext) => JSX.Element;
 };
+
+function ResolvedEntityDetailChildren(props: {
+  render?: EntityDetailProps['children'];
+  context: EntityDetailContext;
+  fallback?: JSX.Element;
+}) {
+  const resolved = children(() => {
+    if (props.render) return props.render(props.context);
+    return props.fallback;
+  });
+  return <>{resolved()}</>;
+}
 
 function PreviewPanelEntityDetail(props: EntityDetailProps) {
   const orchestrator = useGlobalBlockOrchestrator();
@@ -146,8 +173,12 @@ export function EntityDetail(props: EntityDetailProps) {
     const target = props.target;
     return untrack(() => channelDetailTarget(target));
   });
-  const renderChildren = (context: EntityDetailContext) =>
-    props.children?.(context);
+  const renderChildren = (context: DocumentDetailContext) => (
+    <ResolvedEntityDetailChildren
+      render={props.children}
+      context={{ type: 'document', ...context }}
+    />
+  );
 
   return (
     <Switch>
@@ -233,7 +264,20 @@ export function EntityDetail(props: EntityDetailProps) {
             channelId={channel().channelId}
             target={channel().target}
             fallbackName={channel().fallbackName}
-          />
+          >
+            {(context) => (
+              <ResolvedEntityDetailChildren
+                render={props.children}
+                context={{ type: 'channel', ...context }}
+                fallback={
+                  <ChannelDetailTopBar
+                    channelId={context.channelId}
+                    fallbackName={channel().fallbackName}
+                  />
+                }
+              />
+            )}
+          </ChannelDetail>
         )}
       </Match>
       <Match when={true}>

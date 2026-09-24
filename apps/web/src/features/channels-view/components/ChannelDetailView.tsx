@@ -1,5 +1,8 @@
 import { getChannelEntityTarget } from '@app/features/next-soup/utils';
-import { ChannelDetail } from '@channel/Channel/ChannelDetail';
+import {
+  ChannelDetail,
+  ChannelDetailTopBar,
+} from '@channel/Channel/ChannelDetail';
 import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
 import type { ChannelEntity } from '@entity';
 import { createMemo } from 'solid-js';
@@ -36,6 +39,13 @@ export function ChannelDetailView(props: { channel: ChannelEntity }) {
       target={target()}
       fallbackName={props.channel.name}
       autofocus={false}
-    />
+    >
+      {(channel) => (
+        <ChannelDetailTopBar
+          channelId={channel.channelId}
+          fallbackName={props.channel.name}
+        />
+      )}
+    </ChannelDetail>
   );
 }
