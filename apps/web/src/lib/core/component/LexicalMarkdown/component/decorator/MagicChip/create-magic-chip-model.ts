@@ -62,7 +62,7 @@ function agentName(
   session: { harness?: string; botId?: string },
   bot: Pick<SessionBot, 'id' | 'name'> | undefined
 ): string | undefined {
-  const personaName = bot?.name.trim();
+  const personaName = bot?.name?.trim();
   if (bot && personaName && !firstPartyBotName(bot.id)) return personaName;
   const harness = sessionHarnessSlug(session);
   if (!harness) return undefined;
