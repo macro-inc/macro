@@ -27,6 +27,12 @@ export type AgentChatReplyBody =
 /** A chat agent's message in its thread, in one of its states. */
 export type AgentChatReply = {
   sessionId: string;
+  /**
+   * What the session link reads as - the bot's name - on the sender line
+   * and wherever the markdown is shown as text. Generic wording when the
+   * caller has none.
+   */
+  label?: string;
   body: AgentChatReplyBody;
 };
 
@@ -55,7 +61,7 @@ export function composeAgentChatReply(reply: AgentChatReply): string {
         $createParagraphNode().append(
           $createAgentSessionMentionNode({
             id: reply.sessionId,
-            label: AGENT_SESSION_LINK_LABEL,
+            label: reply.label?.trim() || AGENT_SESSION_LINK_LABEL,
           })
         )
       );

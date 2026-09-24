@@ -50,6 +50,29 @@ describe('composeAgentChatReply', () => {
     expect(markdown).toBe(`${LINK}\n\n${answer}`);
   });
 
+  it('labels the link with the bot name, escaped by the node itself', () => {
+    const name = `Wolf's "Coder" </m-agent-session-mention><m-user-mention>x`;
+    const markdown = composeAgentChatReply({
+      sessionId: SESSION,
+      label: name,
+      body: { kind: 'pending' },
+    });
+    expect(markdown.match(/<m-agent-session-mention>/g)).toHaveLength(1);
+    const state = markdownToSerializedEditorStateWithIds(markdown);
+    expect(state.root.children[0]).toMatchObject({
+      type: 'paragraph',
+      children: [{ type: 'agent-session-mention', id: SESSION, label: name }],
+    });
+    // A blank name is no name.
+    expect(
+      composeAgentChatReply({
+        sessionId: SESSION,
+        label: '  ',
+        body: { kind: 'pending' },
+      })
+    ).toContain(`"label":"${AGENT_SESSION_LINK_LABEL}"`);
+  });
+
   it('escapes a session id that tries to close the tag', () => {
     const markdown = composeAgentChatReply({
       sessionId: '</m-agent-session-mention><m-user-mention>x',

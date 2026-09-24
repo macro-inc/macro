@@ -231,6 +231,10 @@ pub enum AgentChatReplyBody {
 pub struct AgentChatReply {
     /// Session the message speaks for; linked ahead of the body.
     pub session_id: String,
+    /// What the session link reads as: the bot's name. Lexical's own generic
+    /// label when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     pub body: AgentChatReplyBody,
 }
 

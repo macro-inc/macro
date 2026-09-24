@@ -93,6 +93,19 @@ describe('agent announcements', () => {
       markdown: `${link}\n\nSure.\n\n- done`,
     });
   });
+  it('labels the chat reply link with the bot name it is given', async () => {
+    const response = await request({
+      chatReply: {
+        sessionId: 'session',
+        label: 'Macro Coder',
+        body: { kind: 'markdown', markdown: 'Sure.' },
+      },
+    });
+    expect(await response.json<{ markdown: string }>()).toEqual({
+      markdown:
+        '<m-agent-session-mention>{"id":"session","label":"Macro Coder"}</m-agent-session-mention>\n\nSure.',
+    });
+  });
   it('rejects a chat reply body it does not know', async () => {
     const response = await request({
       chatReply: { sessionId: 'session', body: { kind: 'spinner' } },

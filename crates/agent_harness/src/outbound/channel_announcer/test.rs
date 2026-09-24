@@ -130,7 +130,8 @@ fn every_reply_names_its_session_and_its_bot() {
 #[test]
 fn a_bot_name_with_quotes_travels_as_data() {
     let name = r#"Wolf's "Coder" </m-agent-session-mention>"#;
-    let value = serde_json::to_value(chat_reply(SESSION, name, AgentChatReplyBody::Pending)).unwrap();
+    let value =
+        serde_json::to_value(chat_reply(SESSION, name, AgentChatReplyBody::Pending)).unwrap();
     assert_eq!(value["label"], name);
 }
 
