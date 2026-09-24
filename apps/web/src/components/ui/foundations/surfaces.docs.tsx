@@ -1,8 +1,13 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import { For } from 'solid-js';
+import { For, lazy, Suspense } from 'solid-js';
 import { Button } from '../components/Button';
+import { Input } from '../components/Input';
+import { InvertUtil } from '../components/InvertUtil';
 import { Layer } from '../components/Layer';
 import { Panel } from '../components/Panel';
+
+// Keep the renderer's app dependencies out of unrelated gallery pages.
+const InvertedMarkdown = lazy(() => import('./InvertedMarkdown'));
 
 // #region demo:depths
 function DepthsDemo() {
@@ -94,14 +99,63 @@ function ControlsOnDepthDemo() {
 }
 // #endregion
 
+// #region demo:inverted
+function InvertedDemo() {
+  return (
+    <div class="w-full rounded-lg bg-ink p-4">
+      <InvertUtil>
+        <div class="flex flex-col gap-3">
+          <p>Inverted section</p>
+          <p class="text-sm text-ink-muted">
+            Text, borders, controls, and nested layers use the local palette.
+          </p>
+          <Input aria-label="Inverted input" placeholder="Write something…" />
+          <div class="flex flex-wrap gap-2">
+            <Button variant="ghost">Ghost</Button>
+            <Button variant="outline">Outline</Button>
+            <Button variant="strong">Strong</Button>
+            <Button disabled>Disabled</Button>
+          </div>
+          <Layer offset={1}>
+            <div class="rounded-md border border-edge-muted bg-surface p-3 text-ink">
+              Raised surface
+            </div>
+          </Layer>
+          <InvertUtil>
+            <div class="rounded-md bg-surface p-3 text-ink">
+              A nested inversion restores the original foreground and
+              background.
+            </div>
+          </InvertUtil>
+          <div class="min-w-0 border-t border-edge-muted pt-4">
+            <Suspense>
+              <InvertedMarkdown />
+            </Suspense>
+          </div>
+        </div>
+      </InvertUtil>
+    </div>
+  );
+}
+// #endregion
+
 export default defineDoc({
   name: 'Surfaces & Depth',
   category: 'Foundations',
   description:
     'Depth, not a chosen color, is how backgrounds are set. A container declares its depth and everything inside reads `bg-surface` and `bg-inset` relative to it — so the same component looks right wherever it is nested.',
-  exports: ['Layer', 'Surface'],
-  import: "import { Layer, Panel, Surface } from '@ui';",
+  exports: ['Layer', 'Surface', 'InvertUtil'],
+  import: "import { InvertUtil, Layer, Panel, Surface } from '@ui';",
   demos: [
+    {
+      id: 'inverted',
+      title: 'Inverted sections',
+      description:
+        'Place InvertUtil inside a bg-ink section, or wrap a bg-surface section in it. This example includes the app’s StaticMarkdown renderer with headings, nested lists, quotes, tables, and code. It starts at depth 0 and inherits theme changes. Portals outside the boundary keep the surrounding app palette.',
+      render: InvertedDemo,
+      fill: true,
+      depth: 0,
+    },
     {
       id: 'depths',
       title: 'The depth scale',

@@ -116,6 +116,7 @@ export type {
   InputGroupVariantProps,
 } from './components/InputGroup';
 export { InputGroup, inputGroupVariants } from './components/InputGroup';
+export { InvertUtil } from './components/InvertUtil';
 export { Item, type ItemProps } from './components/Item';
 export { Layer } from './components/Layer';
 export { LogoProgress } from './components/LogoProgress';

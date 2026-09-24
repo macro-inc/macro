@@ -248,6 +248,61 @@ body.tauri-ios {
   --layer-inset: var(--color-surface-3);
 }
 
+/* Capture on a separate element so swapping the palette cannot create a
+   custom-property cycle. Nested InvertUtil boundaries capture the local colors. */
+[data-invert-source] {
+  --invert-surface: var(--color-ink);
+  --invert-ink: var(--color-page);
+}
+
+[data-invert] {
+  --theme-surface: initial;
+  --theme-inset: initial;
+  --theme-panel: initial;
+  --color-surface-0: var(--invert-surface);
+  --color-surface-1: color-mix(in oklch, var(--invert-surface) 96%, var(--invert-ink));
+  --color-surface-2: color-mix(in oklch, var(--invert-surface) 92%, var(--invert-ink));
+  --color-surface-3: color-mix(in oklch, var(--invert-surface) 88%, var(--invert-ink));
+  --color-surface-4: color-mix(in oklch, var(--invert-surface) 84%, var(--invert-ink));
+  --color-content-0: var(--invert-ink);
+  --color-content-1: color-mix(in oklch, var(--invert-ink) 80%, var(--invert-surface));
+  --color-content-2: color-mix(in oklch, var(--invert-ink) 65%, var(--invert-surface));
+  --color-content-3: color-mix(in oklch, var(--invert-ink) 40%, var(--invert-surface));
+  --color-content-4: color-mix(in oklch, var(--invert-ink) 55%, var(--invert-surface));
+  --color-edge: var(--color-surface-4);
+  --color-edge-muted: var(--color-surface-3);
+  /* Inherited aliases are already resolved; rebind them to the local ramp. */
+  --color-ink: var(--color-content-0);
+  --color-ink-muted: var(--color-content-1);
+  --color-ink-subtle: var(--color-content-2);
+  --color-ink-disabled: var(--color-content-3);
+  --color-ink-placeholder: var(--color-content-4);
+  --color-page: var(--color-surface-0);
+  --color-panel: var(--color-surface-1);
+  --color-dialog: var(--color-surface-2);
+  --color-menu: var(--color-surface-2);
+  --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
+  --color-tooltip: var(--color-surface-2);
+  --color-toast: var(--color-surface-2);
+  --color-input: transparent;
+  --color-input-focus: var(--color-surface-1);
+  --color-message: var(--color-surface-1);
+  --color-composer: var(--color-surface-2);
+  --color-composer-ink: var(--color-ink);
+  --color-composer-placeholder: var(--color-ink-placeholder);
+  --color-composer-action: var(--color-ink);
+  --color-composer-action-ink: var(--color-panel);
+  --color-code-buffer: color-mix(in srgb, var(--color-surface-0) 60%, var(--color-surface-1));
+  --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
+  --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
+  --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
+
+  --color-ink-extra-muted: var(--color-ink-subtle);
+  --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
+  --color-list-hover: var(--color-hover);
+  --color-list-highlighted: var(--color-hover);
+}
+
 /* Scope the panel semantic itself so nested bg-panel consumers share the same
    inactive split chrome instead of only tinting the outer panel element. */
 .split-panel-inactive {
@@ -561,7 +616,8 @@ html[data-touch-device='true'] {
   -webkit-tap-highlight-color: initial;
 }
 
-html:not([data-touch-device="true"]) {
+html:not([data-touch-device="true"]),
+html:not([data-touch-device="true"]) [data-invert] {
   --color-menu-glass: var(--color-menu);
 }
 
