@@ -118,7 +118,17 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
         });
       }
       if ('chatReply' in body) {
-        return c.json({ markdown: composeAgentChatReply(body.chatReply) });
+        const { sessionId, body: replyBody } = body.chatReply;
+        // The schema requires a body, but the discriminated union does not
+        // survive chanfana's OpenAPI round-trip as required, so it arrives
+        // typed as optional. Refuse rather than invent a state: a reply with
+        // no body is a caller bug, and guessing one would post it to a thread.
+        if (!replyBody) {
+          throw new Error('chatReply needs a body');
+        }
+        return c.json({
+          markdown: composeAgentChatReply({ sessionId, body: replyBody }),
+        });
       }
       const { parent, channelId, ...target } = body.replyTarget;
       // Callers that predate message parents send only `channelId`; the
