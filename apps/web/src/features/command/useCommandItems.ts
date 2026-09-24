@@ -379,6 +379,10 @@ function useQuickAccessCategory(
 
   return {
     items,
+    isLoadingEntities: () => {
+      const list = activeList();
+      return !!list?.isLoading() && list.items().length === 0;
+    },
     pagination: {
       hasMore: () => activeList()?.hasMore() ?? false,
       isLoadingMore: () => activeList()?.isLoadingMore() ?? false,
@@ -508,6 +512,7 @@ export function useCommandItems(
 
   return {
     items: filteredItems,
+    isLoadingEntities: category.isLoadingEntities,
     pagination: category.pagination,
   };
 }

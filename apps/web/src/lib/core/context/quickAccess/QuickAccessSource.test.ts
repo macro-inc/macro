@@ -271,6 +271,7 @@ function renderRetainedList(client: QueryClient) {
     const node = document.createElement('main');
     node.dataset.testid = 'retained-shell';
     createRenderEffect(() => {
+      node.dataset.loading = String(list.isLoading());
       node.textContent = list
         .items()
         .map((item) => `${item.id}@${item.sortTimestamp}`)
@@ -293,6 +294,92 @@ function renderRetainedList(client: QueryClient) {
 }
 
 describe('Quick Access source integration', () => {
+  it('lets initially empty cached channels populate during hydration and replays the last change', async () => {
+    const first = retainedQueryData.channels;
+    const latest = [{ ...first[0], name: 'Updated channel' }];
+    let finishFirst!: (data: typeof first) => void;
+    let finishLatest!: (data: typeof first) => void;
+    const fetch = vi
+      .fn<() => Promise<typeof first>>()
+      .mockResolvedValueOnce([])
+      .mockReturnValueOnce(
+        new Promise<typeof first>((resolve) => {
+          finishFirst = resolve;
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise<typeof first>((resolve) => {
+          finishLatest = resolve;
+        })
+      );
+    let query: UseQueryResult<unknown[]> | undefined;
+    mocks.queries.channels = () =>
+      (query = useQuery(() => ({
+        queryKey: ['channel-burst'],
+        queryFn: fetch,
+        retry: false,
+      })));
+    const client = new QueryClient();
+    const rendered = renderRetainedList(client);
+    try {
+      await vi.waitFor(() => expect(query?.isSuccess).toBe(true));
+      vi.useFakeTimers();
+      mocks.changed?.();
+      for (let i = 0; i < 8; i++) {
+        mocks.changed?.();
+        await vi.advanceTimersByTimeAsync(250);
+      }
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(rendered.getByTestId('retained-shell').dataset.loading).toBe(
+        'true'
+      );
+      finishFirst(first);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(rendered.getByTestId('retained-shell').textContent).toBe(
+        retainedListText.channels
+      );
+      expect(fetch).toHaveBeenCalledTimes(3);
+      finishLatest(latest);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(query?.data).toEqual(latest);
+      expect(fetch).toHaveBeenCalledTimes(3);
+      expect(rendered.getByTestId('retained-shell').dataset.loading).toBe(
+        'false'
+      );
+    } finally {
+      rendered.unmount();
+      client.clear();
+    }
+  });
+
+  it.each(['history', 'channels'] as const)(
+    'reports loading while the %s fallback is initially pending',
+    async (source) => {
+      let finish!: (data: unknown[]) => void;
+      mocks.queries[source] = () =>
+        useQuery(() => ({
+          queryKey: ['initial-loading', source],
+          queryFn: () =>
+            new Promise<unknown[]>((resolve) => {
+              finish = resolve;
+            }),
+          retry: false,
+        }));
+      const client = new QueryClient();
+      const rendered = renderRetainedList(client);
+      try {
+        const shell = rendered.getByTestId('retained-shell');
+        await vi.waitFor(() => expect(shell.dataset.loading).toBe('true'));
+        finish(retainedQueryData[source]);
+        await vi.waitFor(() => expect(shell.dataset.loading).toBe('false'));
+        expect(shell.textContent).toBe(retainedListText[source]);
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+
   it.each(
     (['history', 'channels', 'recently-viewed'] as const).flatMap((source) =>
       (['resolve', 'reject'] as const).map((settlement) => ({
