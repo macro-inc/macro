@@ -28,7 +28,7 @@ describe('scrollToRenderedTarget', () => {
     const root = document.body.appendChild(document.createElement('div'));
     const target = renderTarget(root, 'm1');
 
-    scrollToRenderedTarget(root, '[data-message-id="m1"]');
+    scrollToRenderedTarget(root, 'm1');
 
     expect(scrollIntoView).toHaveBeenCalledOnce();
     expect(scrollIntoView.mock.contexts[0]).toBe(target);
@@ -36,7 +36,7 @@ describe('scrollToRenderedTarget', () => {
 
   it('waits for the target to render, then scrolls once', async () => {
     const root = document.body.appendChild(document.createElement('div'));
-    scrollToRenderedTarget(root, '[data-message-id="m1"]');
+    scrollToRenderedTarget(root, 'm1');
     expect(scrollIntoView).not.toHaveBeenCalled();
 
     renderTarget(root, 'other');
@@ -52,7 +52,7 @@ describe('scrollToRenderedTarget', () => {
 
   it('never scrolls after the user starts scrolling', async () => {
     const root = document.body.appendChild(document.createElement('div'));
-    scrollToRenderedTarget(root, '[data-message-id="m1"]');
+    scrollToRenderedTarget(root, 'm1');
 
     window.dispatchEvent(new WheelEvent('wheel'));
     renderTarget(root, 'm1');
@@ -63,7 +63,7 @@ describe('scrollToRenderedTarget', () => {
 
   it('gives up after the timeout', async () => {
     const root = document.body.appendChild(document.createElement('div'));
-    scrollToRenderedTarget(root, '[data-message-id="m1"]', {
+    scrollToRenderedTarget(root, 'm1', {
       timeoutMs: 100,
     });
 
@@ -74,9 +74,20 @@ describe('scrollToRenderedTarget', () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
+  it('matches an id with selector metacharacters literally', () => {
+    const root = document.body.appendChild(document.createElement('div'));
+    renderTarget(root, 'm1');
+    const target = renderTarget(root, 'm1"], [data-message-id="m1');
+
+    expect(() =>
+      scrollToRenderedTarget(root, 'm1"], [data-message-id="m1')
+    ).not.toThrow();
+    expect(scrollIntoView.mock.contexts).toEqual([target]);
+  });
+
   it('stops waiting when cancelled', async () => {
     const root = document.body.appendChild(document.createElement('div'));
-    const cancel = scrollToRenderedTarget(root, '[data-message-id="m1"]');
+    const cancel = scrollToRenderedTarget(root, 'm1');
 
     cancel();
     renderTarget(root, 'm1');

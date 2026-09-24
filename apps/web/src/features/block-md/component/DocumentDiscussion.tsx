@@ -105,12 +105,7 @@ export function MessageDocumentDiscussion(props: {
     on(scrollRequest, (request) => {
       if (!request || !container || request.key === scrolledKey) return;
       scrolledKey = request.key;
-      onCleanup(
-        scrollToRenderedTarget(
-          container,
-          `[data-message-id="${request.commentId}"]`
-        )
-      );
+      onCleanup(scrollToRenderedTarget(container, request.commentId));
     })
   );
   return (
