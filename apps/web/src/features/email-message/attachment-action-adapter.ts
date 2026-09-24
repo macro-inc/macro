@@ -1,15 +1,14 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { Telemetry } from '@macro-inc/observability';
 import {
   getEmailAttachmentDocument,
   getEmailAttachmentMetadata,
 } from '@queries/email/integration';
 import { refetchSoupEntity } from '@queries/soup/cache';
-import { FileTypeMap } from '@service-storage/fileTypeMap';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { EmailAttachment } from './core/email-message';
+import { resolveEmailAttachmentBlockName } from './resolve-attachment-block';
+
 export function createEmailAttachmentOpener() {
   const { openWithSplit } = useSplitLayout();
   const openAttachment = async (attachment: EmailAttachment) => {
@@ -39,12 +38,11 @@ export function createEmailAttachmentOpener() {
 
     refetchSoupEntity(document_id, 'document');
 
-    const fileType = Object.values(FileTypeMap).findLast(
-      (type) => type.mime === attachment.mime_type
-    )?.extension;
-    const blockName = fileType
-      ? fileTypeToBlockName(fileType as FileType)
-      : 'unknown';
+    const blockName = resolveEmailAttachmentBlockName({
+      filename: attachment.filename,
+      mimeType: attachment.mime_type,
+      documentFileType: maybeDocumentMetadata.value.documentMetadata.fileType,
+    });
     openWithSplit(
       { type: blockName, id: document_id },
       { preferNewSplit: true }

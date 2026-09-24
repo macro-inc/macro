@@ -18,6 +18,11 @@ export const definition = defineBlock({
   accepted: {
     pdf: 'application/pdf',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    // Illustrator / PostScript: modern .ai files embed PDF; older uploads may
+    // have been stored as ps/eps because application/postscript is shared.
+    ai: 'application/postscript',
+    eps: 'application/postscript',
+    ps: 'application/postscript',
   },
   component: lazy(() => import('./component/Block')),
   liveTrackingEnabled: true,

@@ -545,7 +545,7 @@ export const FileTypeMap = {
   },
   ics: { extension: 'ics', mime: 'text/calendar', app: 'data' },
   vcf: { extension: 'vcf', mime: 'text/vcard', app: 'data' },
-  ai: { extension: 'ai', mime: 'application/postscript', app: 'vector' },
+  ai: { extension: 'ai', mime: 'application/postscript', app: 'pdf' },
   eps: { extension: 'eps', mime: 'application/postscript', app: 'vector' },
   ps: { extension: 'ps', mime: 'application/postscript', app: 'vector' },
   dxf: { extension: 'dxf', mime: 'image/vnd.dxf', app: 'vector' },
