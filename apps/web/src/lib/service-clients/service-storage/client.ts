@@ -40,6 +40,8 @@ import type { ApiChannelParticipant } from './generated/schemas/apiChannelPartic
 import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
 import type { BotToken } from './generated/schemas/botToken';
+import type { CalendarJoinRequest } from './generated/schemas/calendarJoinRequest';
+import type { CalendarJoinRequestsResponse } from './generated/schemas/calendarJoinRequestsResponse';
 import type { CalendarMentionPreviewRequest } from './generated/schemas/calendarMentionPreviewRequest';
 import type { CalendarMentionPreviewResponse } from './generated/schemas/calendarMentionPreviewResponse';
 import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
@@ -438,6 +440,20 @@ export const storageServiceClient = {
         { method: 'GET', signal }
       )
     ).map((result) => result);
+  },
+
+  async requestToJoinCalendarEvent(eventId: string) {
+    return await dssFetch<CalendarJoinRequest>(
+      `/calendar-events/${eventId}/join-requests`,
+      { method: 'POST' }
+    );
+  },
+
+  async listCalendarEventJoinRequests(eventId: string) {
+    return await dssFetch<CalendarJoinRequestsResponse>(
+      `/calendar-events/${eventId}/join-requests`,
+      { method: 'GET' }
+    );
   },
 
   async getCalendarEventIcs(eventId: string) {

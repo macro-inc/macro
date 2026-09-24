@@ -347,6 +347,24 @@ function getSupportedHandler(
           );
         };
       })
+      .with('calendar_event_join_request', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'calendar_event_join_request') return null;
+
+        // The owner answers the request from the event's details, so the
+        // notification opens their calendar focused on the event.
+        return async (lm: SplitManager, newSplit: boolean = false) => {
+          if (!isFeatureEnabled(enableCalendarUi)) return;
+          openCalendarView(
+            { eventId: meta.content.eventId },
+            {
+              manager: lm,
+              handle: sourceHandle,
+              openInNewSplit: newSplit,
+            }
+          );
+        };
+      })
       .with('inbox_reauth_required', () => null)
       .exhaustive()
   );

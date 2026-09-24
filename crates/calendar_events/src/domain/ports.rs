@@ -11,13 +11,14 @@ use super::models::{
     CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
     CalendarBackfillJobKey, CalendarCreationTarget, CalendarEvent, CalendarEventCopySource,
     CalendarEventDraft, CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert,
-    CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarMentionPreview,
-    CalendarMentionRequestItem, CalendarOccurrence, CalendarOccurrenceCursor,
-    CalendarReminderDeliveryOutcome, CalendarReminderDispatchMessage, CalendarReminderFiring,
-    CalendarReminderSweepSummary, CalendarSyncStatus, DisconnectedGoogleCalendar,
-    DueCalendarReminder, GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch,
-    GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange,
-    ProviderCalendar, StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
+    CalendarGrantIntent, CalendarJoinRequest, CalendarJoinRequestStatus, CalendarJoinTarget,
+    CalendarLinkTokenIdentity, CalendarMentionPreview, CalendarMentionRequestItem,
+    CalendarOccurrence, CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome,
+    CalendarReminderDispatchMessage, CalendarReminderFiring, CalendarReminderSweepSummary,
+    CalendarSyncStatus, DisconnectedGoogleCalendar, DueCalendarReminder,
+    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet,
+    GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
+    StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -651,6 +652,47 @@ pub trait CalendarRepository: Send + Sync + 'static {
         event_id: Uuid,
     ) -> impl Future<Output = Result<Option<CalendarEventCopySource>, Report>> + Send;
 
+    /// Facts for deciding whether the requester may ask to join an event:
+    /// how they see it (resolved like
+    /// [`get_event_copy_source`](Self::get_event_copy_source)), who owns the
+    /// mentioned row, and whether that owner can add guests. `None` covers
+    /// an unknown or cancelled event and one they cannot see.
+    fn get_join_target(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CalendarJoinTarget>, Report>> + Send;
+
+    /// Record a pending request from the requester, reopening a declined
+    /// one. Returns the request and whether it became pending just now, so
+    /// a repeated ask does not notify the owner twice.
+    fn open_join_request(
+        &self,
+        event_id: Uuid,
+        requester_id: &str,
+        requester_email: &str,
+    ) -> impl Future<Output = Result<(CalendarJoinRequest, bool), Report>> + Send;
+
+    /// Pending requests to join an event, oldest first.
+    fn list_pending_join_requests(
+        &self,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<CalendarJoinRequest>, Report>> + Send;
+
+    /// One join request by id.
+    fn get_join_request(
+        &self,
+        request_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CalendarJoinRequest>, Report>> + Send;
+
+    /// Move a pending request to `status`. `None` when the request is gone
+    /// or no longer pending, so two owners answering at once resolve it once.
+    fn resolve_join_request(
+        &self,
+        request_id: Uuid,
+        status: CalendarJoinRequestStatus,
+    ) -> impl Future<Output = Result<Option<CalendarJoinRequest>, Report>> + Send;
+
     /// Retire a Google source the provider confirmed deleted (a recurring
     /// master also retires its expanded instances), restoring the best
     /// surviving source or removing the entity, mirroring feed tombstones.
@@ -662,6 +704,56 @@ pub trait CalendarRepository: Send + Sync + 'static {
         calendar_id: Uuid,
         provider_event_id: &str,
     ) -> impl Future<Output = Result<Vec<RetiredCalendarEvent>, Report>> + Send;
+}
+
+/// Tells an event's owner that a channel member asked to join it. Best
+/// effort: implementations log and swallow delivery failures, since the
+/// request is already recorded and shows on the event.
+pub trait CalendarJoinRequestNotifier: Send + Sync + 'static {
+    /// Notify `owner_id` about a new pending request.
+    fn notify_join_request(
+        &self,
+        owner_id: &str,
+        request: &CalendarJoinRequest,
+        event_title: &str,
+    ) -> impl Future<Output = ()> + Send;
+}
+
+/// Failures asking to join a shared event or listing its requests.
+#[derive(Debug, thiserror::Error)]
+pub enum CalendarJoinRequestError {
+    /// The event does not exist or is not visible to the requester.
+    #[error("calendar event was not found")]
+    NotFound,
+    /// The meeting is already on one of the requester's calendars.
+    #[error("the event is already on one of the requester's calendars")]
+    AlreadyOnCalendar,
+    /// The owner is a guest who may not invite others; only the organizer
+    /// can add the requester.
+    #[error("only the organizer can add guests to this event")]
+    OrganizerOnly,
+    /// Persistence failed.
+    #[error("calendar join request failed: {0}")]
+    Internal(Report),
+}
+
+/// Inbound service port for asking to join an event shared with a channel
+/// and for owners reading the requests on their events.
+pub trait CalendarJoinRequestService: Send + Sync + 'static {
+    /// Ask the owner of a channel-shared event to add the requester as a
+    /// guest, notifying them the first time.
+    fn request_to_join(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<CalendarJoinRequest, CalendarJoinRequestError>> + Send;
+
+    /// Pending requests on one of the requester's own events.
+    fn list_join_requests(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<CalendarJoinRequest>, CalendarJoinRequestError>> + Send;
 }
 
 /// Outbound port that nudges a connected inbox's calendar viewers — the link
@@ -755,6 +847,17 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         event_id: Uuid,
         calendar_id: Option<Uuid>,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
+
+    /// Answer a join request on one of the requester's events: accepting
+    /// adds the asker as a guest at the provider, which invites them;
+    /// declining only records the answer. Answering a request that is no
+    /// longer pending returns it unchanged.
+    fn respond_to_join_request(
+        &self,
+        requester_id: &str,
+        request_id: Uuid,
+        accept: bool,
+    ) -> impl Future<Output = Result<CalendarJoinRequest, CalendarMutationError>> + Send;
 
     /// Turn calendar off for one of the requester's own connected inboxes:
     /// its calendar data is removed, the calendar scopes leave the recorded

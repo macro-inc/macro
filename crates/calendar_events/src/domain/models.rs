@@ -886,6 +886,13 @@ pub struct CalendarMentionEvent {
     pub attendee_count: usize,
     /// Entity update time of the previewed copy.
     pub updated_at: DateTime<Utc>,
+    /// For a channel-shared preview, whether the event's owner can add the
+    /// requester as a guest. Always false for the requester's own copy.
+    #[serde(default)]
+    pub can_request_to_join: bool,
+    /// For a channel-shared preview, the requester's join request, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_request_status: Option<CalendarJoinRequestStatus>,
 }
 
 /// How a requester can see an event they might copy onto their own
@@ -930,6 +937,88 @@ pub struct CalendarEventCopySource {
     pub organizer_name: Option<String>,
     /// Entity update time.
     pub updated_at: DateTime<Utc>,
+}
+
+/// Lifecycle of a request to be added as a guest of a shared event.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum CalendarJoinRequestStatus {
+    /// Waiting on the event's owner.
+    Pending,
+    /// The owner added the requester as a guest.
+    Accepted,
+    /// The owner turned the request down.
+    Declined,
+}
+
+impl CalendarJoinRequestStatus {
+    /// Database representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Accepted => "accepted",
+            Self::Declined => "declined",
+        }
+    }
+
+    /// Parse the database representation; unknown values read as pending.
+    pub fn from_db(value: &str) -> Self {
+        match value {
+            "accepted" => Self::Accepted,
+            "declined" => Self::Declined,
+            _ => Self::Pending,
+        }
+    }
+}
+
+/// A channel member's request to be added as a guest of an event they see
+/// only through a channel share.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarJoinRequest {
+    /// Request identifier.
+    pub id: Uuid,
+    /// The owner's event entity that was shared with the channel.
+    pub event_id: Uuid,
+    /// Macro user asking to join.
+    pub requester_id: String,
+    /// Address the owner invites when accepting.
+    pub requester_email: String,
+    /// Where the request stands.
+    pub status: CalendarJoinRequestStatus,
+    /// When the request was made, or last reopened.
+    pub created_at: DateTime<Utc>,
+}
+
+/// What deciding a join request needs to know about the requester and the
+/// shared event.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarJoinTarget {
+    /// How the requester sees the event.
+    pub access: CalendarEventCopyAccess,
+    /// The owner's event entity that was shared with the channel.
+    pub event_id: Uuid,
+    /// Owner of that event entity, who receives the request.
+    pub owner_id: String,
+    /// Event title, for the owner's notification.
+    pub title: String,
+    /// Whether one of the owner's inboxes organizes the event.
+    pub owner_is_organizer: bool,
+    /// Whether the organizer lets guests invite others (Google's
+    /// `guestsCanInviteOthers`, true when unset).
+    pub guests_can_invite_others: bool,
+    /// The requester's primary connected inbox, when they have one.
+    pub requester_inbox_email: Option<String>,
+}
+
+impl CalendarJoinTarget {
+    /// Whether accepting would be allowed at the provider: organizers can
+    /// always add guests, other guests only when the organizer permits it.
+    pub fn owner_can_invite(&self) -> bool {
+        self.owner_is_organizer || self.guests_can_invite_others
+    }
 }
 
 /// Inclusive/exclusive viewport range for occurrence queries.

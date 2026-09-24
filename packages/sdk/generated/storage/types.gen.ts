@@ -1739,6 +1739,71 @@ export type CalendarEventSourceContent = {
 };
 
 /**
+ * A channel member's request to be added as a guest of an event they see
+ * only through a channel share.
+ */
+export type CalendarJoinRequest = {
+    /**
+     * When the request was made, or last reopened.
+     */
+    createdAt: string;
+    /**
+     * The owner's event entity that was shared with the channel.
+     */
+    eventId: string;
+    /**
+     * Request identifier.
+     */
+    id: string;
+    /**
+     * Address the owner invites when accepting.
+     */
+    requesterEmail: string;
+    /**
+     * Macro user asking to join.
+     */
+    requesterId: string;
+    /**
+     * Where the request stands.
+     */
+    status: CalendarJoinRequestStatus;
+};
+
+/**
+ * HTTP error body returned by join-request endpoints.
+ */
+export type CalendarJoinRequestApiError = {
+    /**
+     * Machine-readable failure category.
+     */
+    code: CalendarJoinRequestErrorCode;
+    /**
+     * Human-readable failure description.
+     */
+    message: string;
+};
+
+/**
+ * Machine-readable join-request failure category.
+ */
+export type CalendarJoinRequestErrorCode = 'not_found' | 'already_on_calendar' | 'organizer_only' | 'internal';
+
+/**
+ * Lifecycle of a request to be added as a guest of a shared event.
+ */
+export type CalendarJoinRequestStatus = 'pending' | 'accepted' | 'declined';
+
+/**
+ * Pending requests to join one event.
+ */
+export type CalendarJoinRequestsResponse = {
+    /**
+     * Oldest first.
+     */
+    requests: Array<CalendarJoinRequest>;
+};
+
+/**
  * Meeting-level fields shown in a calendar event mention preview, taken from
  * the requester's own projection of the meeting, or — when the requester has
  * none — from the mentioned projection a channel they belong to was given.
@@ -1749,6 +1814,11 @@ export type CalendarMentionEvent = {
      */
     attendeeCount: number;
     /**
+     * For a channel-shared preview, whether the event's owner can add the
+     * requester as a guest. Always false for the requester's own copy.
+     */
+    canRequestToJoin?: boolean;
+    /**
      * Provider description, plain text or HTML, truncated for the preview.
      * Clients must sanitize it before rendering.
      */
@@ -1757,6 +1827,7 @@ export type CalendarMentionEvent = {
      * Whether the event repeats.
      */
     isRecurring: boolean;
+    joinRequestStatus?: null | CalendarJoinRequestStatus;
     /**
      * Location label, when set.
      */
@@ -11325,6 +11396,86 @@ export type EventIcsResponses = {
 };
 
 export type EventIcsResponse = EventIcsResponses[keyof EventIcsResponses];
+
+export type ListJoinRequestsData = {
+    body?: never;
+    path: {
+        /**
+         * Calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/calendar-events/{event_id}/join-requests';
+};
+
+export type ListJoinRequestsErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Event not found or not editable by the requester
+     */
+    404: CalendarJoinRequestApiError;
+    /**
+     * Listing failed
+     */
+    500: CalendarJoinRequestApiError;
+};
+
+export type ListJoinRequestsError = ListJoinRequestsErrors[keyof ListJoinRequestsErrors];
+
+export type ListJoinRequestsResponses = {
+    /**
+     * Pending join requests, oldest first
+     */
+    200: CalendarJoinRequestsResponse;
+};
+
+export type ListJoinRequestsResponse = ListJoinRequestsResponses[keyof ListJoinRequestsResponses];
+
+export type RequestToJoinData = {
+    body?: never;
+    path: {
+        /**
+         * Shared calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/calendar-events/{event_id}/join-requests';
+};
+
+export type RequestToJoinErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Event not found or not shared with the requester
+     */
+    404: CalendarJoinRequestApiError;
+    /**
+     * Already on the requester's calendar, or only the organizer can add guests
+     */
+    409: CalendarJoinRequestApiError;
+    /**
+     * Join request failed
+     */
+    500: CalendarJoinRequestApiError;
+};
+
+export type RequestToJoinError = RequestToJoinErrors[keyof RequestToJoinErrors];
+
+export type RequestToJoinResponses = {
+    /**
+     * The requester's join request
+     */
+    200: CalendarJoinRequest;
+};
+
+export type RequestToJoinResponse = RequestToJoinResponses[keyof RequestToJoinResponses];
 
 export type GetActiveCallsData = {
     body?: never;

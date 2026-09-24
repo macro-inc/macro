@@ -6,6 +6,8 @@ pub mod acting;
 pub mod events;
 /// iCalendar export of calendar events.
 pub mod ics;
+/// Asking to join calendar events shared with a channel.
+pub mod join_requests;
 /// Domain models.
 pub mod models;
 /// User-initiated calendar mutation policy.

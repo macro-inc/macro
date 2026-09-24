@@ -688,7 +688,9 @@ function calendarReminderTimestamp(
   for (const notification of notifications ?? []) {
     if (
       !notification.deleted_at &&
-      notification.notification_metadata.tag === 'calendar_event_reminder'
+      (notification.notification_metadata.tag === 'calendar_event_reminder' ||
+        notification.notification_metadata.tag ===
+          'calendar_event_join_request')
     ) {
       include(notification.created_at);
     }

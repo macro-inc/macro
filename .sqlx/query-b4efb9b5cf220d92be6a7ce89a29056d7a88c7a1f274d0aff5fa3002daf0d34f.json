@@ -1,0 +1,61 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH previous AS (\n                SELECT status\n                FROM calendar_event_join_requests\n                WHERE event_id = $2 AND requester_id = $3\n            )\n            INSERT INTO calendar_event_join_requests\n                (id, event_id, requester_id, requester_email, status)\n            VALUES ($1, $2, $3, $4, 'pending')\n            ON CONFLICT (event_id, requester_id) DO UPDATE SET\n                status = CASE\n                    WHEN calendar_event_join_requests.status = 'declined' THEN 'pending'\n                    ELSE calendar_event_join_requests.status\n                END,\n                requester_email = CASE\n                    WHEN calendar_event_join_requests.status = 'declined'\n                        THEN EXCLUDED.requester_email\n                    ELSE calendar_event_join_requests.requester_email\n                END,\n                created_at = CASE\n                    WHEN calendar_event_join_requests.status = 'declined' THEN now()\n                    ELSE calendar_event_join_requests.created_at\n                END,\n                resolved_at = CASE\n                    WHEN calendar_event_join_requests.status = 'declined' THEN NULL\n                    ELSE calendar_event_join_requests.resolved_at\n                END\n            RETURNING\n                id,\n                event_id,\n                requester_id,\n                requester_email,\n                status,\n                created_at,\n                (\n                    status = 'pending'\n                    AND COALESCE((SELECT status FROM previous), 'declined') = 'declined'\n                ) AS \"opened!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "requester_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "requester_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "opened!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "b4efb9b5cf220d92be6a7ce89a29056d7a88c7a1f274d0aff5fa3002daf0d34f"
+}

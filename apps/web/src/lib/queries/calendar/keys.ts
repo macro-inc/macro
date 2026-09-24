@@ -29,4 +29,7 @@ export const calendarKeys = createQueryKeys('calendar', {
   mentionPreview: (eventId: string, occurrenceKey: string | undefined) => ({
     queryKey: [eventId, occurrenceKey],
   }),
+  joinRequests: (eventId: string) => ({
+    queryKey: [eventId],
+  }),
 });

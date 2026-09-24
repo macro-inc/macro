@@ -3,15 +3,16 @@
 use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
-    AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
-    CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, DocumentMentionMetadata,
-    GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind,
-    GithubPrEventAction, GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation,
-    GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState, GithubPrStatusChanged,
-    GithubReviewRequested, InboxReauthRequiredMetadata, InviteToTeamMetadata,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent, NotificationDocumentSubType,
-    ReminderMetadata, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
+    AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventJoinRequestMetadata,
+    CalendarEventReminderMetadata, CallStartedMetadata, ChannelInviteMetadata,
+    ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
+    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
+    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
+    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
+    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
+    NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
+    TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -836,6 +837,33 @@ impl GraphqlCalendarEventReminderMetadata {
     }
 }
 
+/// GraphQL wrapper for calendar event join request metadata.
+pub struct GraphqlCalendarEventJoinRequestMetadata(CalendarEventJoinRequestMetadata);
+
+/// Metadata for a request to be added as a guest of a shared calendar event.
+#[Object]
+impl GraphqlCalendarEventJoinRequestMetadata {
+    /// The owner's calendar event identifier.
+    async fn event_id(&self) -> ID {
+        ID(self.0.event_id.to_string())
+    }
+
+    /// Join request identifier.
+    async fn request_id(&self) -> ID {
+        ID(self.0.request_id.to_string())
+    }
+
+    /// Event display title when the request was made.
+    async fn title(&self) -> &str {
+        &self.0.title
+    }
+
+    /// Address the owner would invite.
+    async fn requester_email(&self) -> &str {
+        &self.0.requester_email
+    }
+}
+
 /// GraphQL wrapper for AI response metadata.
 pub struct GraphqlAiResponseMetadata(AiResponseMetadata);
 
@@ -1217,6 +1245,8 @@ pub enum GraphqlNotifEvent {
     Reminder(GraphqlReminderMetadata),
     /// Calendar event reminder metadata.
     CalendarEventReminder(GraphqlCalendarEventReminderMetadata),
+    /// Calendar event join request metadata.
+    CalendarEventJoinRequest(GraphqlCalendarEventJoinRequestMetadata),
     /// AI response metadata.
     AiResponse(GraphqlAiResponseMetadata),
     /// GitHub pull-request lifecycle metadata.
@@ -1284,6 +1314,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::Reminder(metadata) => Self::Reminder(GraphqlReminderMetadata(metadata)),
             NotifEvent::CalendarEventReminder(metadata) => {
                 Self::CalendarEventReminder(GraphqlCalendarEventReminderMetadata(metadata))
+            }
+            NotifEvent::CalendarEventJoinRequest(metadata) => {
+                Self::CalendarEventJoinRequest(GraphqlCalendarEventJoinRequestMetadata(metadata))
             }
             NotifEvent::AiResponse(metadata) => {
                 Self::AiResponse(GraphqlAiResponseMetadata(metadata))

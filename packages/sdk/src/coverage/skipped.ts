@@ -135,6 +135,8 @@ export const calendarExcluded = [
   'copyCalendarEvent',
   // Health probe is infra, not SDK surface.
   'healthHandler',
+  // Answering a request to join a channel-shared event is a web-app action.
+  'respondToJoinRequest',
 ] as const satisfies readonly (keyof CalendarSdk)[];
 
 export const calendarBacklog =
@@ -297,6 +299,9 @@ export const storageExcluded = [
   'ensureCollabSurface',
   // The .ics download behind the web app's calendar mention card.
   'eventIcs',
+  // Asking to join a channel-shared event, and its owner's request list.
+  'listJoinRequests',
+  'requestToJoin',
   'deleteHistoryHandler',
   'deleteUserDocumentViewLocation',
   'deleteViewHandler',

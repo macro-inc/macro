@@ -12,6 +12,7 @@ import {
   eventEmailRecipients,
   guestEmails,
 } from '@app/features/calendar/utils/guest-emails';
+import { EventJoinRequests } from '@app/features/calendar-view/components/EventJoinRequests';
 import { EventRsvpSection } from '@app/features/calendar-view/components/EventRsvpSection';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useOpenEventEmail } from '@app/features/calendar-view/components/use-open-event-email';
@@ -302,6 +303,10 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
               onDelete={deleteDialog.open}
               onReschedule={openEditor}
             />
+            <EventJoinRequests
+              eventId={props.event.eventId}
+              canModify={canModify()}
+            />
             <div class="px-3">
               <EventDetails
                 event={props.event}
@@ -557,6 +562,10 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                   canModify={canModify()}
                   onDelete={deleteDialog.open}
                   onReschedule={openEditor}
+                />
+                <EventJoinRequests
+                  eventId={props.event.eventId}
+                  canModify={canModify()}
                 />
                 <div class="px-3 pb-3">
                   <EventDetails

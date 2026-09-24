@@ -24,6 +24,13 @@ export async function copyNotificationLink(notification: UnifiedNotification) {
     });
     return;
   }
+  if (metadata.tag === 'calendar_event_join_request') {
+    await copyCalendarEventMentionTarget({
+      eventId: metadata.content.eventId,
+      title: metadata.content.title,
+    });
+    return;
+  }
 
   const { params } = getChannelNotificationParams(notification);
   await navigator.clipboard.writeText(

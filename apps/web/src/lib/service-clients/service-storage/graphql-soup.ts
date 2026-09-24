@@ -996,6 +996,19 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'calendar_event_reminder'>
     )
     .with(
+      { __typename: 'GraphqlCalendarEventJoinRequestMetadata' },
+      (metadata) =>
+        ({
+          tag: 'calendar_event_join_request',
+          content: {
+            eventId: metadata.calendarEventJoinRequestEventId,
+            requestId: metadata.calendarEventJoinRequestRequestId,
+            title: metadata.calendarEventJoinRequestTitle,
+            requesterEmail: metadata.calendarEventJoinRequestRequesterEmail,
+          },
+        }) satisfies NotifEventMember<'calendar_event_join_request'>
+    )
+    .with(
       { __typename: 'GraphqlAiResponseMetadata' },
       (metadata) =>
         ({

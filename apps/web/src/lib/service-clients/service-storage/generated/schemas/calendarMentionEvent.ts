@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CalendarMentionEventDescription } from './calendarMentionEventDescription';
+import type { CalendarMentionEventJoinRequestStatus } from './calendarMentionEventJoinRequestStatus';
 import type { CalendarMentionEventLocation } from './calendarMentionEventLocation';
 import type { CalendarMentionEventOccurrenceKey } from './calendarMentionEventOccurrenceKey';
 import type { CalendarMentionEventOrganizerEmail } from './calendarMentionEventOrganizerEmail';
@@ -23,11 +24,15 @@ export interface CalendarMentionEvent {
    * @minimum 0
    */
   attendeeCount: number;
+  /** For a channel-shared preview, whether the event's owner can add the
+requester as a guest. Always false for the requester's own copy. */
+  canRequestToJoin?: boolean;
   /** Provider description, plain text or HTML, truncated for the preview.
 Clients must sanitize it before rendering. */
   description?: CalendarMentionEventDescription;
   /** Whether the event repeats. */
   isRecurring: boolean;
+  joinRequestStatus?: CalendarMentionEventJoinRequestStatus;
   /** Location label, when set. */
   location?: CalendarMentionEventLocation;
   /** Key of the previewed instance, absent when no occurrence is

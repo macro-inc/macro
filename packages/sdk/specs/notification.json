@@ -1274,6 +1274,31 @@
           }
         }
       },
+      "CalendarEventJoinRequestMetadata": {
+        "type": "object",
+        "description": "A channel member who sees a calendar event only through a channel share\nasked its owner to add them as a guest. Sent to the owner, with the\nrequester as sender.",
+        "required": ["eventId", "requestId", "title", "requesterEmail"],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The owner's calendar event entity the request is for."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The join request, answered from the event."
+          },
+          "requesterEmail": {
+            "type": "string",
+            "description": "Address the owner would invite."
+          },
+          "title": {
+            "type": "string",
+            "description": "Event display title when the request was made."
+          }
+        }
+      },
       "CalendarEventReminderMetadata": {
         "type": "object",
         "description": "A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.",
@@ -2412,6 +2437,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["calendar_event_reminder"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A channel member asked to be added as a guest of a shared event.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CalendarEventJoinRequestMetadata",
+                "description": "A channel member asked to be added as a guest of a shared event."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["calendar_event_join_request"]
               }
             }
           },

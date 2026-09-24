@@ -158,6 +158,45 @@ impl CalendarRepository for FakeRepo {
         unreachable!("event export is not exercised by sync tests")
     }
 
+    async fn get_join_target(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<crate::domain::models::CalendarJoinTarget>, Report> {
+        unreachable!("join requests are not exercised by sync tests")
+    }
+
+    async fn open_join_request(
+        &self,
+        _event_id: Uuid,
+        _requester_id: &str,
+        _requester_email: &str,
+    ) -> Result<(crate::domain::models::CalendarJoinRequest, bool), Report> {
+        unreachable!("join requests are not exercised by sync tests")
+    }
+
+    async fn list_pending_join_requests(
+        &self,
+        _event_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::CalendarJoinRequest>, Report> {
+        unreachable!("join requests are not exercised by sync tests")
+    }
+
+    async fn get_join_request(
+        &self,
+        _request_id: Uuid,
+    ) -> Result<Option<crate::domain::models::CalendarJoinRequest>, Report> {
+        unreachable!("join requests are not exercised by sync tests")
+    }
+
+    async fn resolve_join_request(
+        &self,
+        _request_id: Uuid,
+        _status: crate::domain::models::CalendarJoinRequestStatus,
+    ) -> Result<Option<crate::domain::models::CalendarJoinRequest>, Report> {
+        unreachable!("join requests are not exercised by sync tests")
+    }
+
     async fn remove_google_source(
         &self,
         _account_id: Uuid,

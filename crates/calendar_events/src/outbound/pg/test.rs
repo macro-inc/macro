@@ -6653,3 +6653,178 @@ async fn copy_source_resolves_own_copies_before_channel_shares(pool: PgPool) {
         None
     );
 }
+
+async fn link_email(pool: &PgPool, link_id: Uuid) -> String {
+    sqlx::query_scalar::<_, String>("SELECT email_address::text FROM email_links WHERE id = $1")
+        .bind(link_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn join_requests_follow_the_share_and_the_organizers_guest_policy(pool: PgPool) {
+    let author_id = "macro|join-author@example.com";
+    let member_id = "macro|join-member@example.com";
+    let author_link = insert_link(&pool, author_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let author_provider = provider_ids(&repo, author_link).await;
+
+    let mut organized = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "join-organized@example.com",
+        "Offsite",
+        1,
+    );
+    organized.event.organizer_email = Some(link_email(&pool, author_link).await);
+    let organized_id = organized.event.id;
+    repo.upsert_event_fixture(organized).await.unwrap();
+
+    // The author is only a guest here, and the organizer bars guests from
+    // inviting others.
+    let mut guested = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "join-guested@example.com",
+        "Board",
+        1,
+    );
+    guested.event.organizer_email = Some("someone-else@example.com".to_string());
+    let CalendarEventSource::Google(source) = &mut guested.source;
+    source.raw_payload = serde_json::json!({ "guestsCanInviteOthers": false });
+    let guested_id = guested.event.id;
+    repo.upsert_event_fixture(guested).await.unwrap();
+
+    let channel_id = insert_channel(&pool, author_id, &[author_id, member_id]).await;
+    share_with_channel(&pool, organized_id, channel_id).await;
+    share_with_channel(&pool, guested_id, channel_id).await;
+
+    let target = repo
+        .get_join_target(member_id, organized_id)
+        .await
+        .unwrap()
+        .expect("a channel member sees the shared event");
+    assert_eq!(target.access, CalendarEventCopyAccess::ChannelShared);
+    assert_eq!(target.owner_id, author_id);
+    assert_eq!(target.title, "Offsite");
+    assert!(target.owner_is_organizer);
+    assert!(target.guests_can_invite_others);
+    assert_eq!(target.requester_inbox_email, None);
+
+    let guest_target = repo
+        .get_join_target(member_id, guested_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!guest_target.owner_is_organizer);
+    assert!(!guest_target.guests_can_invite_others);
+    assert!(!guest_target.owner_can_invite());
+
+    let own = repo
+        .get_join_target(author_id, organized_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(own.access, CalendarEventCopyAccess::OwnCopy);
+    assert_eq!(
+        repo.get_join_target("macro|join-stranger@example.com", organized_id)
+            .await
+            .unwrap(),
+        None
+    );
+
+    // Opening, repeating, declining, and reopening a request.
+    let (first, opened) = repo
+        .open_join_request(organized_id, member_id, "member@example.com")
+        .await
+        .unwrap();
+    assert!(opened);
+    assert_eq!(first.status, CalendarJoinRequestStatus::Pending);
+    let (again, opened) = repo
+        .open_join_request(organized_id, member_id, "member@example.com")
+        .await
+        .unwrap();
+    assert!(!opened);
+    assert_eq!(again.id, first.id);
+    assert_eq!(
+        repo.list_pending_join_requests(organized_id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let now = Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap();
+    let preview = |event_id| {
+        let repo = &repo;
+        async move {
+            let previews = repo
+                .mention_previews(
+                    member_id,
+                    vec![CalendarMentionRequestItem {
+                        event_id,
+                        occurrence_key: None,
+                    }],
+                    now,
+                )
+                .await
+                .unwrap();
+            let CalendarMentionPreview::Accessible(event) = previews.into_iter().next().unwrap()
+            else {
+                panic!("the shared event previews");
+            };
+            *event
+        }
+    };
+    let shared = preview(organized_id).await;
+    assert!(shared.can_request_to_join);
+    assert_eq!(
+        shared.join_request_status,
+        Some(CalendarJoinRequestStatus::Pending)
+    );
+    let barred = preview(guested_id).await;
+    assert!(!barred.can_request_to_join);
+    assert_eq!(barred.join_request_status, None);
+
+    let declined = repo
+        .resolve_join_request(first.id, CalendarJoinRequestStatus::Declined)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(declined.status, CalendarJoinRequestStatus::Declined);
+    assert_eq!(
+        repo.resolve_join_request(first.id, CalendarJoinRequestStatus::Accepted)
+            .await
+            .unwrap(),
+        None,
+        "an answered request is not answered again"
+    );
+    assert!(
+        repo.list_pending_join_requests(organized_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    let (reopened, opened) = repo
+        .open_join_request(organized_id, member_id, "member@work.example.com")
+        .await
+        .unwrap();
+    assert!(opened);
+    assert_eq!(reopened.id, first.id);
+    assert_eq!(reopened.status, CalendarJoinRequestStatus::Pending);
+    assert_eq!(reopened.requester_email, "member@work.example.com");
+
+    repo.resolve_join_request(first.id, CalendarJoinRequestStatus::Accepted)
+        .await
+        .unwrap();
+    let (after_accept, opened) = repo
+        .open_join_request(organized_id, member_id, "member@example.com")
+        .await
+        .unwrap();
+    assert!(!opened);
+    assert_eq!(after_accept.status, CalendarJoinRequestStatus::Accepted);
+}

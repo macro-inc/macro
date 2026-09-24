@@ -17,7 +17,8 @@ use crate::domain::{
         CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
         CalendarEventCopyAccess, CalendarEventCopySource, CalendarEventMutationTarget,
         CalendarEventOverride, CalendarEventSource, CalendarEventSourceContent,
-        CalendarEventUpsert, CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarMentionEvent,
+        CalendarEventUpsert, CalendarGrantIntent, CalendarJoinRequest, CalendarJoinRequestStatus,
+        CalendarJoinTarget, CalendarLinkTokenIdentity, CalendarMentionEvent,
         CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
         CalendarOccurrenceCursor, CalendarReminderFiring, CalendarSyncStatus, CalendarWatchRelease,
         ConferenceProvider, DisconnectedGoogleCalendar, DueCalendarReminder, EventReminderOverride,
@@ -345,6 +346,28 @@ struct MentionPreviewRow {
     occurrence_start_date: Option<NaiveDate>,
     occurrence_end_date: Option<NaiveDate>,
     attendee_count: Option<i64>,
+    can_request_to_join: Option<bool>,
+    join_request_status: Option<String>,
+}
+
+struct JoinRequestRow {
+    id: Uuid,
+    event_id: Uuid,
+    requester_id: String,
+    requester_email: String,
+    status: String,
+    created_at: DateTime<Utc>,
+}
+
+fn join_request_from_row(row: JoinRequestRow) -> CalendarJoinRequest {
+    CalendarJoinRequest {
+        id: row.id,
+        event_id: row.event_id,
+        requester_id: row.requester_id,
+        requester_email: row.requester_email,
+        status: CalendarJoinRequestStatus::from_db(&row.status),
+        created_at: row.created_at,
+    }
 }
 
 struct CopySourceRow {
@@ -1188,7 +1211,9 @@ impl CalendarRepository for PgCalendarRepository {
                 occurrence.ends_at AS "occurrence_ends_at?",
                 occurrence.start_date AS "occurrence_start_date?",
                 occurrence.end_date AS "occurrence_end_date?",
-                attendees.attendee_count AS "attendee_count?"
+                attendees.attendee_count AS "attendee_count?",
+                join_ability.can_request AS "can_request_to_join?",
+                join_request.status AS "join_request_status?"
             FROM unnest($2::uuid[], $3::text[])
                 WITH ORDINALITY AS requested(event_id, occurrence_key, ord)
             LEFT JOIN calendar_events mentioned
@@ -1301,6 +1326,33 @@ impl CalendarRepository for PgCalendarRepository {
                 FROM calendar_event_attendees attendee
                 WHERE attendee.event_id = viewer_event.id
             ) attendees ON true
+            -- A channel-shared viewer can ask to join when the row's owner can
+            -- add guests: they organize it, or the organizer lets guests invite
+            -- others (Google omits guestsCanInviteOthers when it is true).
+            LEFT JOIN LATERAL (
+                SELECT (
+                    EXISTS (
+                        SELECT 1
+                        FROM email_links owner_link
+                        WHERE owner_link.macro_id = mentioned.owner_id
+                          AND lower(owner_link.email_address) = lower(mentioned.organizer_email)
+                    )
+                    OR COALESCE((
+                        SELECT bool_and(COALESCE(
+                            (source.raw_payload ->> 'guestsCanInviteOthers')::boolean,
+                            true
+                        ))
+                        FROM calendar_event_sources source
+                        WHERE source.event_id = mentioned.id
+                          AND source.source_kind = 'google'
+                    ), true)
+                ) AS can_request
+                WHERE viewer_event.is_channel_shared
+            ) join_ability ON true
+            LEFT JOIN calendar_event_join_requests join_request
+                ON viewer_event.is_channel_shared
+               AND join_request.event_id = mentioned.id
+               AND join_request.requester_id = $1
             ORDER BY requested.ord
             "#,
             requester_id,
@@ -2258,6 +2310,237 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         row.map(copy_source_from_row).transpose()
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn get_join_target(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Option<CalendarJoinTarget>, Report> {
+        // Access resolves exactly like the copy source: any live projection
+        // of the meeting on the requester's calendars is their own copy, and
+        // only without one does a channel share of the mentioned row count.
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                mentioned.id AS "event_id!",
+                mentioned.owner_id AS "owner_id!",
+                mentioned.title AS "title!",
+                EXISTS (
+                    SELECT 1
+                    FROM calendar_events candidate
+                    WHERE candidate.ical_uid = mentioned.ical_uid
+                      AND candidate.status <> 'cancelled'
+                      AND (
+                            candidate.owner_id = $1
+                            OR EXISTS (
+                                SELECT 1
+                                FROM macro_user_links link
+                                WHERE link.link_id = candidate.source_link_id
+                                  AND link.primary_macro_id = $1
+                            )
+                      )
+                ) AS "has_own_copy!",
+                (
+                    mentioned.visibility IN ('default', 'public')
+                    AND EXISTS (
+                        SELECT 1
+                        FROM entity_access grant_row
+                        JOIN comms_channel_participants participant
+                          ON participant.channel_id::text = grant_row.source_id
+                         AND participant.user_id = $1
+                         AND participant.left_at IS NULL
+                        WHERE grant_row.entity_id = mentioned.id
+                          AND grant_row.entity_type = 'calendar_event'
+                          AND grant_row.source_type = 'channel'
+                    )
+                ) AS "is_channel_shared!",
+                EXISTS (
+                    SELECT 1
+                    FROM email_links owner_link
+                    WHERE owner_link.macro_id = mentioned.owner_id
+                      AND lower(owner_link.email_address) = lower(mentioned.organizer_email)
+                ) AS "owner_is_organizer!",
+                -- Google omits guestsCanInviteOthers when it is true.
+                COALESCE((
+                    SELECT bool_and(COALESCE(
+                        (source.raw_payload ->> 'guestsCanInviteOthers')::boolean,
+                        true
+                    ))
+                    FROM calendar_event_sources source
+                    WHERE source.event_id = mentioned.id
+                      AND source.source_kind = 'google'
+                ), true) AS "guests_can_invite_others!",
+                (
+                    SELECT requester_link.email_address::text
+                    FROM email_links requester_link
+                    WHERE requester_link.macro_id = $1
+                    ORDER BY requester_link.is_primary DESC, requester_link.created_at
+                    LIMIT 1
+                ) AS "requester_inbox_email?"
+            FROM calendar_events mentioned
+            WHERE mentioned.id = $2
+              AND mentioned.status <> 'cancelled'
+            "#,
+            requester_id,
+            event_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(row.and_then(|row| {
+            let access = if row.has_own_copy {
+                CalendarEventCopyAccess::OwnCopy
+            } else if row.is_channel_shared {
+                CalendarEventCopyAccess::ChannelShared
+            } else {
+                return None;
+            };
+            Some(CalendarJoinTarget {
+                access,
+                event_id: row.event_id,
+                owner_id: row.owner_id,
+                title: row.title,
+                owner_is_organizer: row.owner_is_organizer,
+                guests_can_invite_others: row.guests_can_invite_others,
+                requester_inbox_email: row.requester_inbox_email,
+            })
+        }))
+    }
+
+    #[tracing::instrument(skip(self, requester_id, requester_email), err)]
+    async fn open_join_request(
+        &self,
+        event_id: Uuid,
+        requester_id: &str,
+        requester_email: &str,
+    ) -> Result<(CalendarJoinRequest, bool), Report> {
+        // xmax = 0 identifies a freshly inserted row; an update reports
+        // whether it reopened a declined request or left an open one alone.
+        let row = sqlx::query!(
+            r#"
+            WITH previous AS (
+                SELECT status
+                FROM calendar_event_join_requests
+                WHERE event_id = $2 AND requester_id = $3
+            )
+            INSERT INTO calendar_event_join_requests
+                (id, event_id, requester_id, requester_email, status)
+            VALUES ($1, $2, $3, $4, 'pending')
+            ON CONFLICT (event_id, requester_id) DO UPDATE SET
+                status = CASE
+                    WHEN calendar_event_join_requests.status = 'declined' THEN 'pending'
+                    ELSE calendar_event_join_requests.status
+                END,
+                requester_email = CASE
+                    WHEN calendar_event_join_requests.status = 'declined'
+                        THEN EXCLUDED.requester_email
+                    ELSE calendar_event_join_requests.requester_email
+                END,
+                created_at = CASE
+                    WHEN calendar_event_join_requests.status = 'declined' THEN now()
+                    ELSE calendar_event_join_requests.created_at
+                END,
+                resolved_at = CASE
+                    WHEN calendar_event_join_requests.status = 'declined' THEN NULL
+                    ELSE calendar_event_join_requests.resolved_at
+                END
+            RETURNING
+                id,
+                event_id,
+                requester_id,
+                requester_email,
+                status,
+                created_at,
+                (
+                    status = 'pending'
+                    AND COALESCE((SELECT status FROM previous), 'declined') = 'declined'
+                ) AS "opened!"
+            "#,
+            Uuid::now_v7(),
+            event_id,
+            requester_id,
+            requester_email,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok((
+            CalendarJoinRequest {
+                id: row.id,
+                event_id: row.event_id,
+                requester_id: row.requester_id,
+                requester_email: row.requester_email,
+                status: CalendarJoinRequestStatus::from_db(&row.status),
+                created_at: row.created_at,
+            },
+            row.opened,
+        ))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_pending_join_requests(
+        &self,
+        event_id: Uuid,
+    ) -> Result<Vec<CalendarJoinRequest>, Report> {
+        let rows = sqlx::query_as!(
+            JoinRequestRow,
+            r#"
+            SELECT id, event_id, requester_id, requester_email, status, created_at
+            FROM calendar_event_join_requests
+            WHERE event_id = $1 AND status = 'pending'
+            ORDER BY created_at, id
+            "#,
+            event_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(rows.into_iter().map(join_request_from_row).collect())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_join_request(
+        &self,
+        request_id: Uuid,
+    ) -> Result<Option<CalendarJoinRequest>, Report> {
+        let row = sqlx::query_as!(
+            JoinRequestRow,
+            r#"
+            SELECT id, event_id, requester_id, requester_email, status, created_at
+            FROM calendar_event_join_requests
+            WHERE id = $1
+            "#,
+            request_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(row.map(join_request_from_row))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn resolve_join_request(
+        &self,
+        request_id: Uuid,
+        status: CalendarJoinRequestStatus,
+    ) -> Result<Option<CalendarJoinRequest>, Report> {
+        let row = sqlx::query_as!(
+            JoinRequestRow,
+            r#"
+            UPDATE calendar_event_join_requests
+            SET status = $2, resolved_at = now()
+            WHERE id = $1 AND status = 'pending'
+            RETURNING id, event_id, requester_id, requester_email, status, created_at
+            "#,
+            request_id,
+            status.as_str(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(row.map(join_request_from_row))
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -4198,6 +4481,12 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
             attendee_count: usize::try_from(row.attendee_count.unwrap_or_default())
                 .unwrap_or_default(),
             updated_at: row.updated_at.unwrap_or(DateTime::<Utc>::MIN_UTC),
+            can_request_to_join: is_channel_shared && row.can_request_to_join.unwrap_or_default(),
+            join_request_status: row
+                .join_request_status
+                .as_deref()
+                .filter(|_| is_channel_shared)
+                .map(CalendarJoinRequestStatus::from_db),
         },
     )))
 }

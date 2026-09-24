@@ -15,6 +15,7 @@ use utoipa::OpenApi;
         calendar_events::inbound::mutation_router::delete_calendar_event,
         calendar_events::inbound::mutation_router::rsvp_calendar_event,
         calendar_events::inbound::mutation_router::copy_calendar_event,
+        calendar_events::inbound::mutation_router::respond_to_join_request,
     ),
     components(schemas(
         calendar_events::inbound::mutation_router::CreateCalendarEventRequest,
@@ -23,6 +24,10 @@ use utoipa::OpenApi;
         calendar_events::inbound::mutation_router::UpdateCalendarEventRequest,
         calendar_events::inbound::mutation_router::RsvpCalendarEventRequest,
         calendar_events::inbound::mutation_router::CopyCalendarEventRequest,
+        calendar_events::inbound::mutation_router::RespondToJoinRequestRequest,
+        calendar_events::inbound::mutation_router::CalendarJoinRequestDecision,
+        calendar_events::domain::models::CalendarJoinRequest,
+        calendar_events::domain::models::CalendarJoinRequestStatus,
         calendar_events::inbound::mutation_router::CalendarAttendeeInputBody,
         calendar_events::inbound::mutation_router::CalendarMutationApiError,
         calendar_events::inbound::mutation_router::CalendarMutationErrorCode,

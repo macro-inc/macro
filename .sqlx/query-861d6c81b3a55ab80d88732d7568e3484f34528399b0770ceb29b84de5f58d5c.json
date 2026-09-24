@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendar_event_join_requests\n            SET status = $2, resolved_at = now()\n            WHERE id = $1 AND status = 'pending'\n            RETURNING id, event_id, requester_id, requester_email, status, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "requester_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "requester_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "861d6c81b3a55ab80d88732d7568e3484f34528399b0770ceb29b84de5f58d5c"
+}

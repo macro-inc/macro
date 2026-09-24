@@ -12,16 +12,16 @@ pub use device::DeviceType;
 pub use metadata::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
     AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AiResponseMetadata,
-    CalendarEventReminderMetadata, CallStartedMetadata, ChannelInviteMetadata,
-    ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
-    CommentedOnDocumentMetadata, CommonChannelMetadata, DocumentMentionMetadata, GithubPrCheckRun,
-    GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
-    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
-    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
-    InboxReauthRequiredMetadata, InviteToTeamMetadata, ItemSharedMetadata,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
-    NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    TaskAssignedMetadata,
+    CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
+    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
+    ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, CommonChannelMetadata,
+    DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
+    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
+    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
+    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
+    NotificationDocumentSubType, NotificationTitle, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -221,6 +221,9 @@ define_notif_event!(
         /// A calendar event alarm came due.
         CalendarEventReminder(CalendarEventReminderMetadata),
 
+        /// A channel member asked to be added as a guest of a shared event.
+        CalendarEventJoinRequest(CalendarEventJoinRequestMetadata),
+
         /// An AI assistant responded to a chat.
         AiResponse(AiResponseMetadata),
 
@@ -294,6 +297,9 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::CalendarEventReminder(calendar_event_reminder_metadata) => {
                 calendar_event_reminder_metadata.format_title(sender_id)
             }
+            NotifEvent::CalendarEventJoinRequest(calendar_event_join_request_metadata) => {
+                calendar_event_join_request_metadata.format_title(sender_id)
+            }
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_title(sender_id)
             }
@@ -356,6 +362,9 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::Reminder(reminder_metadata) => reminder_metadata.format_body(sender_id),
             NotifEvent::CalendarEventReminder(calendar_event_reminder_metadata) => {
                 calendar_event_reminder_metadata.format_body(sender_id)
+            }
+            NotifEvent::CalendarEventJoinRequest(calendar_event_join_request_metadata) => {
+                calendar_event_join_request_metadata.format_body(sender_id)
             }
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_body(sender_id)

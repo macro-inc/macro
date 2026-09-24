@@ -766,6 +766,11 @@ pick from a menu when they have several; the mention then opens that copy. If Go
 the meeting on that calendar (an invitation not yet synced), nothing is imported and the card
 reports it is already on their calendar.
 `Download .ics` saves the event as an iCalendar file.
+`Ask to join` (shown when the sharer organizes the event, or its organizer lets guests invite
+others) asks the sharer to add the viewer as a guest; the card then shows `Requested`, and
+`Invited` once accepted. The sharer gets a `calendar_event_join_request` notification that opens
+the event, whose details list each request with `Add as guest` and `Decline`. Adding sends the
+Google invitation, after which the mention opens the viewer's own copy.
 Every calendar mention's hover card shows the schedule, location, organizer and attendee
 count, plus the first lines of the event description (its links open), and no last-updated
 byline.

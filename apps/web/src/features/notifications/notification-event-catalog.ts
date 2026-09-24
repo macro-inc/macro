@@ -97,6 +97,12 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         label: 'Event reminders',
         description: 'When a calendar event is about to start',
       },
+      {
+        type: 'calendar_event_join_request',
+        label: 'Join requests',
+        description:
+          'When someone asks to join an event you shared in a channel',
+      },
     ],
   },
   {
