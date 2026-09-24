@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: namespace-profile-linux-xsmall
+    runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
       contents: read
     steps:
