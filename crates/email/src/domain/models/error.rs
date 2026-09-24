@@ -42,6 +42,9 @@ pub enum EmailErr {
     /// No messages found for thread.
     #[error("No messages found for thread")]
     ThreadEmpty,
+
+    #[error("thread has no received messages and cannot be unarchived")]
+    ThreadHasNoInboundMessages,
     /// Thread not found.
     #[error("Thread not found")]
     ThreadNotFound,

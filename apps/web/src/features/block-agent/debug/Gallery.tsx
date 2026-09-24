@@ -7,6 +7,8 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
+import { MarkdownImage } from '@core/component/LexicalMarkdown/component/decorator/MarkdownImage';
+import { MediaLoadingPlaceholder } from '@core/component/LexicalMarkdown/component/decorator/MediaLoadingPlaceholder';
 import { useUserId } from '@core/context/user';
 import FileText from '@phosphor/file-text.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
@@ -34,6 +36,7 @@ import {
   CountSummary,
   DiffChanges,
   ElicitationForm,
+  FailureNoticeCard,
   PierreDiff,
   QuestionAnswers,
   type QuoteInsert,
@@ -110,16 +113,31 @@ const FIXTURE_MODELS: ModelOption[] = [
   },
 ];
 
+/**
+ * A Macro Agent catalog: the in-memory harness keeps no display names, so
+ * every option arrives named after its own slug.
+ */
+const FIXTURE_INMEM_MODELS: ModelOption[] = [
+  'anthropic/claude-sonnet-5',
+  'anthropic/claude-opus-5',
+  'anthropic/claude-haiku-4-5',
+  'openai/gpt-5.5',
+  'openai/gpt-5-mini',
+].map((id) => ({ id, name: id, description: null, group: null }));
+
 /** The composer as the block mounts it, with the model control wired. */
-function ModelSelectorDemo() {
-  const [model, setModel] = createSignal<string | null>('grok-4.6-high-fast');
+function ModelSelectorDemo(props: {
+  options: ModelOption[];
+  initialModel: string;
+}) {
+  const [model, setModel] = createSignal<string | null>(props.initialModel);
   return (
     <AgentInput
       onSend={(content) => console.info('[gallery] send', content)}
       modelControl={
         <AgentModelSelector
           model={model()}
-          options={FIXTURE_MODELS}
+          options={props.options}
           onSelect={(id) => {
             console.info('[gallery] model', id);
             setModel(id);
@@ -1064,6 +1082,21 @@ export default function AgentUiGallery() {
             />
           </Item>
 
+          <Item label="FailureNoticeCard">
+            <FailureNoticeCard
+              notice={{
+                kind: 'provider_usage_limit',
+                title: 'Cursor usage limit reached',
+                body: "Your Cursor account has no background-agent budget left, so this message wasn't sent. Raise the spending limit in your Cursor dashboard, then send it again.",
+                link: {
+                  label: 'Manage Cursor usage',
+                  url: 'https://www.cursor.com/dashboard?tab=settings',
+                },
+              }}
+              onOpenLink={(url) => window.open(url, '_blank', 'noopener')}
+            />
+          </Item>
+
           <Item label="ToolCard">
             <ToolCard
               title="Shell"
@@ -1221,12 +1254,58 @@ export default function AgentUiGallery() {
             />
           </Item>
 
-          <Item label="AgentInput with model selector">
-            <ModelSelectorDemo />
+          <Item label="AgentInput with model selector (harness names)">
+            <ModelSelectorDemo
+              options={FIXTURE_MODELS}
+              initialModel="grok-4.6-high-fast"
+            />
+          </Item>
+
+          <Item label="AgentInput with model selector (slug-named catalog)">
+            <p class="text-xs text-ink-muted">
+              What Macro Agent reports: names that are only ids, shown as names
+              with their provider's logo.
+            </p>
+            <ModelSelectorDemo
+              options={FIXTURE_INMEM_MODELS}
+              initialModel="anthropic/claude-sonnet-5"
+            />
           </Item>
 
           <Item label="AgentMessage (end-to-end)">
             <Message message={FIXTURE_MESSAGE} inFlight={false} />
+          </Item>
+
+          <Item label="AgentMessage (multi-artifact loading)">
+            <p class="text-xs text-ink-muted">
+              Walkthrough files without a known size reserve a 16:9 card each,
+              named from the file, instead of a stack of floating spinners.
+            </p>
+            <div class="max-w-xl text-base">
+              <p class="mb-1 text-sm text-ink-muted">Thoughted</p>
+              <p class="mb-2">Done and looking good.</p>
+              <MarkdownImage
+                key="artifact-image-1"
+                srcType="url"
+                id=""
+                url=""
+                alt="walkthrough.png"
+                width={0}
+                height={0}
+                scale={1}
+              />
+              <MarkdownImage
+                key="artifact-image-2"
+                srcType="url"
+                id=""
+                url=""
+                alt="agents_list.png"
+                width={0}
+                height={0}
+                scale={1}
+              />
+              <MediaLoadingPlaceholder kind="video" label="demo.mp4" />
+            </div>
           </Item>
 
           <Item label="AgentMessage (Cursor turn in flight)">

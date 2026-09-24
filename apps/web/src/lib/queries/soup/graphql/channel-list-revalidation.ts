@@ -1,11 +1,16 @@
-import { ChannelListSoupDocument } from '@service-storage/graphql/generated/graphql';
+import {
+  ChannelListSoupDocument,
+  ChannelUnreadPresenceDocument,
+} from '@service-storage/graphql/generated/graphql';
 import type { Client } from '@urql/core';
 import { getActiveGraphqlSoupRevalidations } from './active-queries';
 
 /** Filtered notification membership must be re-evaluated after status writes. */
 export function getChannelListRevalidations() {
   return getActiveGraphqlSoupRevalidations().filter(
-    (query) => query.document === ChannelListSoupDocument
+    (query) =>
+      query.document === ChannelListSoupDocument ||
+      query.document === ChannelUnreadPresenceDocument
   );
 }
 

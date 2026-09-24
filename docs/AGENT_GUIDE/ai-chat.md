@@ -40,10 +40,11 @@ permission failures should display a failed tool call without a successful resul
   shows the same three-dot working wave as the transcript in place of the
   leading icon; the row's accessible name appends `Starting` or `Working`.
   Sessions with a linked PR show
-  **View PR #<number> in GitHub** beneath the title; clicking it opens the synced
+  **#<number>** beneath the title (icon colored by open / merged / closed; no
+  status word). Clicking it opens the synced
   GitHub PR entity in a split (the same destination as the session header chip
   and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
-  tab. Either click leaves the session unopened. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
+  tab. Either click leaves the session unopened. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Delete, and the other session actions.
@@ -76,7 +77,7 @@ permission failures should display a failed tool call without a successful resul
   Clicking an agent directly uses its default; choosing a submenu model selects
   both the agent and that model. A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
-  Disconnected Cursor offers **Connect Cursor**, opening Settings → Harness.
+  Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
   The built-in sandbox and paired macrod runtimes are not offered here.
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
@@ -136,11 +137,25 @@ permission failures should display a failed tool call without a successful resul
   its mode and conversation. Newly created sessions replace their temporary
   URL with the real id without remounting the composer or adding a temporary
   history step.
-- **Agents page** (inside the workspace; Settings → Agents is unchanged):
-  **Close** returns to the composer. **Agents / Coding agents** tabs split
-  the roster into Team and Private, with Edit / Delete actions. The coding
-  tab includes runtime setup. The create/edit dialog has sharing, name,
-  `@tag`, runtime, default model, connections, channels, and instructions.
+- **Agents page** uses the same **Agents** management screen as Settings.
+  **Agents** lists Team and Private agents with Edit / Delete actions; **Runtimes**
+  configures built-in providers and paired machines. **New agent** and **New runtime**
+  replace the list with full-page forms, not dialogs. Back/Cancel returns to the list;
+  use **New conversation** in the sidebar to return to the composer. The animated
+  **Bring your own agent** card appears only in **Runtimes**, below the tabs and
+  above the runtime lists. It links directly to runtime pairing and its setup guide.
+  The **Paired runtimes** section appears once you have a paired runtime; an empty
+  list does not repeat the pairing action from **Bring your own agent**.
+  **New runtime** shows three steps: install macrod from the linked release,
+  run `./macrod` and configure your agent in Quickstart, then enter your pairing
+  code and click **Look up**. Review the request and click **Approve** to connect.
+  The setup guide contains configuration and pairing screenshots in that order.
+  Enter the code from your own terminal, not the example screenshot.
+  The agent form retains sharing, name, `@tag`, runtime, default model, connections,
+  channels, instructions, and permission policy.
+  Runtime and short model lists use styled dropdown buttons: open the field and
+  choose an option (or use arrow keys and Enter). Escape dismisses the menu.
+  Large model lists retain the searchable model picker.
 - **Session**: the header has the sidebar reopen control, a linked PR status chip,
   favorite, Share, and Side panel. The top-left title uses the same provider icon,
   saved-title precedence, and title menu as `/app/agent/<id>`; click the caret
@@ -259,6 +274,20 @@ documents:
   change it; someone with inherited owner access gets a "Failed to change team
   access" toast.
 
+## AI usage limits
+
+Paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
+usage rates). When it is used up and no credits or usage billing cover the
+request, sending a message answers HTTP 402 and the app opens the
+**AI usage limit** dialog (title `You've used this month's included AI`, or the
+spending-limit / failed-charge variants). It shows the same meter and controls
+as Settings → Billing: credit-pack buttons, the `Usage billing` toggle, an
+`Open billing settings` button, and `Upgrade to Max` for Premium payers (on a
+team this moves only the payer's own seat). Team members who are not the payer
+see a note to ask the team owner, or a team admin to move their seat to Max.
+Each team seat has its own allowance; unused allowance never moves between
+members. The team owner's prepaid credits and usage-billing cap are shared.
+
 ## Start a doc-scoped chat
 
 Open a doc → side panel `Actions` → `Ask Macro`. Opens a chat pane with the document already
@@ -311,7 +340,10 @@ Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
-- Model picker button showing the current model (e.g. `Haiku 4.5`).
+- Model picker button showing the current model (e.g. `Haiku 4.5`). Paid plans list
+  `Sonnet 5`, `Opus 5`, `Fable 5.1`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
+  heavy models carry a `2.5× usage` / `5× usage` hint. On the free plan everything but `Haiku 4.5` is
+  dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
 
 On desktop, production AI, new agent, and channel composers use 28px circular
@@ -351,6 +383,12 @@ The chat auto-titles itself after the first exchange (route stays stable, title 
 The agent has workspace tools (it can list your documents, read channels, create tasks,
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
+
+When asked, the agent also answers document comments in place. A reply row reads
+**Replied to a comment on** (or **Commented on** for a new Discussion comment) followed
+by the document, and expands to the posted text; a resolve row reads **Resolved** or
+**Reopened a comment on** the document. The comment is posted as the agent with a
+**from <user>** pill, and needs the user's comment access to the document.
 
 ## Agent sessions asking a question
 
@@ -393,6 +431,9 @@ used in chat and channels; they serialize as mention-chip tags in the prompt
 the agent sees (`<m-document-mention>` for docs/channels/chats/tasks/emails/calendar
 events/skills, `<m-date-mention>` for a day or time, `<m-agent-session-mention>`
 for an agent session, `<m-user-mention>` for a person, and the other chip tags).
+Clicking a chip while it still sits in the composer (Home, the Agents page, or
+an agent session) opens the mentioned item in a new split and leaves the draft
+and caret untouched; it does not send anything.
 Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread). An agent-session chip with
 `"expanded":true` renders as the Magic Chip card that follows the session's
@@ -424,9 +465,11 @@ text stays a link.
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
-sits on top and a footer row holds the model name (left, e.g. `Auto ⌄`) and
-**Send** (right). Tapping the model name opens a bottom sheet listing every
-model with a check on the current one — pick a row to switch. On desktop the
+sits on top and a footer row holds the model (left, as a provider logo and
+name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). Tapping the model opens a
+bottom sheet listing every model the same way, with a check on the current one
+— pick a row to switch. Models read as names even when the runtime reports
+only ids: Macro Agent's `anthropic/claude-sonnet-5` shows as **Sonnet 5**. On desktop the
 transcript and composer use the shared channel message width so expanding **Context** only
 grows vertically; your messages are right-aligned bubbles and the model pill
 sits above the box. Tap the session title
@@ -502,7 +545,7 @@ There is no breadcrumb because Agents has no subspaces. Unknown model providers
 fall back to the chat icon. The toggle (or `]`) opens the session's Details, Plan,
 Changes, Activity, and References sections when available, beside the transcript in wide
 layouts or over it in narrow layouts; it does not open another split.
-Details lists Status, Agent, Model, and dates for every session; the Harness
+Details lists Status, Agent, Model, and dates for every session; the Runtime
 row appears only for coding runtimes, never for in-memory chat agents.
 `References` is the same section documents show: one row per channel message that
 `@`-mentioned or shared the session (sender, channel chip, time, and a two-line
@@ -705,13 +748,13 @@ must stay hidden; subsequent live messages must still appear.
   Several permissions may be pending alongside one question; answering one leaves
   the others available. Controls disappear when their turn ends, is stopped, or
   disconnects, and old transcript requests cannot answer a later turn's request.
-- **Harness bypass consent.** Settings → Harnesses → Connect a harness offers
+- **Runtime bypass consent.** Settings → Agents → Runtimes → New runtime offers
   `Allow bypassing permission requests`, off by default. Enabling it warns that
   agents may run commands and edit files on the machine without approval.
   Macrod Quickstart and Config also offer `Full Access`, off by
   default. The choice applies at the next pairing: off disables bypass in the
-  approval dialog; on preselects bypass with a warning, and the approving user
-  can turn it off. Older daemons leave this choice to the approval dialog.
+  pairing page; on preselects bypass with a warning, and the approving user
+  can turn it off. Older daemons leave this choice to the pairing page.
 - **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
   and `Always bypass` only for local macrod harnesses. Macrod defaults to prompts;
   bypass requires both harness consent and the agent's explicit choice. Built-in

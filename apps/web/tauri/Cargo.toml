@@ -16,6 +16,13 @@ members = [
 package.edition = "2024"
 resolver = "2"
 
+# Run the latency-critical SQL VM like production while keeping the app and
+# cache adapters debuggable. Turso's debug-only per-cell validation makes large
+# read-only temporary sets orders of magnitude slower than release execution.
+[profile.dev.package.turso_core]
+opt-level = 3
+debug-assertions = false
+
 [workspace.dependencies]
 pollster = "0.4"
 reqwest = "0.13"

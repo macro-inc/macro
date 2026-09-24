@@ -287,6 +287,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         sync_service_client.as_ref().clone(),
         test_editing_client,
         "test-jwt-secret".to_string(),
+        ai_tools::build_message_service_without_side_effects(
+            pool.clone(),
+            std::sync::Arc::new(test_lexical_client.clone()),
+        ),
     );
 
     let search_service_client = Arc::new(search_service_client);
@@ -370,7 +374,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         call_tool_context: call_tool_context.clone(),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             pool.clone(),
-            "http://localhost:0".to_string(),
+            macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
         ),
         notification_tool_context: notification_tool_context.clone(),
@@ -515,6 +519,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         search_service_client,
         email_service_client_external,
         authorization_state: authorization_state.clone(),
+        ai_billing: Arc::new(ai_billing::domain::BillingServiceImpl::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                (*user_permissions_service).clone(),
+                teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+            ),
+            ai_billing::outbound::PgUsageReader::new(pool.clone()),
+            ai_billing::outbound::PgBillingRepo::new(pool.clone()),
+            ai_billing::outbound::NoOpPaymentGateway,
+        )),
         user_permissions_service,
         config: Arc::new(Config::new_empty_for_test()),
         internal_api_key: InternalApiKey::Comptime("testing"),

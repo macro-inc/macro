@@ -1602,7 +1602,13 @@ export const mentionPreviewsResponse = zod
                   attendeeCount: zod
                     .number()
                     .min(mentionPreviewsResponseItemsItemEventAttendeeCountMin)
-                    .describe("Number of attendees on the requester's copy."),
+                    .describe('Number of attendees on the previewed copy.'),
+                  description: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering.'
+                    ),
                   isRecurring: zod
                     .boolean()
                     .describe('Whether the event repeats.'),
@@ -1663,15 +1669,16 @@ export const mentionPreviewsResponse = zod
                   title: zod.string().describe('Display title.'),
                   updatedAt: zod.iso
                     .datetime({})
-                    .describe("Entity update time of the requester's copy."),
+                    .describe('Entity update time of the previewed copy.'),
                   viewerEventId: zod
                     .uuid()
+                    .nullish()
                     .describe(
-                      "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee."
+                      "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee.\nAbsent when the meeting is on none of the requester's calendars and\nthey see it only because it was shared with one of their channels:\nthat preview is read-only and there is no event of theirs to open."
                     ),
                 })
                 .describe(
-                  "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting."
+                  "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting, or — when the requester has\nnone — from the mentioned projection a channel they belong to was given."
                 ),
             ])
             .optional(),
@@ -28641,6 +28648,12 @@ export const messageTimelineResponse = zod
                               anchor_id: zod
                                 .uuid()
                                 .describe('Highlight annotation UUID.'),
+                              marked_text: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                                ),
                               type: zod.enum(['pdf_highlight']),
                             })
                             .describe(
@@ -28654,7 +28667,7 @@ export const messageTimelineResponse = zod
                               type: zod.enum(['pdf_placeable']),
                             })
                             .describe(
-                              'A comment-only placeable PDF annotation.'
+                              'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
                             ),
                         ])
                         .describe(
@@ -28997,6 +29010,12 @@ export const entityMessageCreateBody = zod
       .optional()
       .describe('Initial attachments.'),
     content: zod.string().describe('Macro Markdown body.'),
+    id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Client-minted UUIDv7 for the new message, so an optimistic message\nalready carries its final id; the server mints one when absent.'
+      ),
     mentions: zod
       .array(
         zod
@@ -30180,6 +30199,12 @@ export const entityMessageGetThreadResponse = zod
                     anchor_id: zod
                       .uuid()
                       .describe('Highlight annotation UUID.'),
+                    marked_text: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                      ),
                     type: zod.enum(['pdf_highlight']),
                   })
                   .describe('An independently existing PDF highlight.'),
@@ -30190,7 +30215,9 @@ export const entityMessageGetThreadResponse = zod
                       .describe('Placeable annotation UUID.'),
                     type: zod.enum(['pdf_placeable']),
                   })
-                  .describe('A comment-only placeable PDF annotation.'),
+                  .describe(
+                    'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
+                  ),
               ])
               .describe(
                 "A thread's location within its document. Geometry remains annotation-owned."
@@ -30266,6 +30293,12 @@ export const entityMessageDeleteThreadResponse = zod
             zod
               .object({
                 anchor_id: zod.uuid().describe('Highlight annotation UUID.'),
+                marked_text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                  ),
                 type: zod.enum(['pdf_highlight']),
               })
               .describe('An independently existing PDF highlight.'),
@@ -30274,7 +30307,9 @@ export const entityMessageDeleteThreadResponse = zod
                 anchor_id: zod.uuid().describe('Placeable annotation UUID.'),
                 type: zod.enum(['pdf_placeable']),
               })
-              .describe('A comment-only placeable PDF annotation.'),
+              .describe(
+                'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
+              ),
           ])
           .describe(
             "A thread's location within its document. Geometry remains annotation-owned."
@@ -30363,6 +30398,12 @@ export const entityMessagePatchThreadResponse = zod
             zod
               .object({
                 anchor_id: zod.uuid().describe('Highlight annotation UUID.'),
+                marked_text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                  ),
                 type: zod.enum(['pdf_highlight']),
               })
               .describe('An independently existing PDF highlight.'),
@@ -30371,7 +30412,9 @@ export const entityMessagePatchThreadResponse = zod
                 anchor_id: zod.uuid().describe('Placeable annotation UUID.'),
                 type: zod.enum(['pdf_placeable']),
               })
-              .describe('A comment-only placeable PDF annotation.'),
+              .describe(
+                'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
+              ),
           ])
           .describe(
             "A thread's location within its document. Geometry remains annotation-owned."

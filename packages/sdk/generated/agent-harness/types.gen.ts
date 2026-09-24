@@ -623,6 +623,15 @@ export type CreateAgentSessionRequest = {
      */
     botId?: string | null;
     /**
+     * Id to create the session under, minted by the caller. Lets a surface
+     * open on the session's final id - URL, history row, references - the
+     * moment the user acts, rather than after this request answers (which
+     * for a managed sandbox can take a while). Omitted, the service mints
+     * one. Managed sessions only. Answers 409 if a session already holds
+     * the id.
+     */
+    id?: string | null;
+    /**
      * Instructions the session's runtime works under, for its whole life.
      *
      * Recorded on the session whichever runtime serves it. Only the

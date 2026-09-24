@@ -12,6 +12,7 @@ mod project_scope_dynamic_query;
 mod settings;
 mod signal_flag;
 mod thread;
+mod thread_archive;
 mod thread_labels;
 mod thread_unread;
 

@@ -128,6 +128,10 @@ type CompleteMutationRoot {
 	"""
 	markEmailThreadUnread(input: MarkEmailThreadUnreadInput!): GraphqlSoupEmailThread!
 	"""
+	Set archive-based Done and return the primary-backed canonical thread.
+	"""
+	setEmailThreadArchived(input: SetEmailThreadArchivedInput!): GraphqlSoupEmailThread!
+	"""
 	Add or remove one label from an accessible email thread and return its authoritative cache record.
 	"""
 	updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!
@@ -6285,6 +6289,20 @@ type SaveEmailDraftPayload {
 	The draft's thread, reloaded as its authoritative cache record.
 	"""
 	thread: GraphqlSoupEmailThread!
+}
+
+"""
+Input for archive-based Done and its inverse. No client label lookup is needed.
+"""
+input SetEmailThreadArchivedInput {
+	"""
+	Thread whose inbox membership should change.
+	"""
+	threadId: ID!
+	"""
+	True for Done; false for Mark Not Done or Undo.
+	"""
+	archived: Boolean!
 }
 
 """

@@ -254,7 +254,7 @@ where
         };
         let defaults = self.inner.defaults.for_bot(bot_id);
         let sandbox_size = self.inner.sessions.user_sandbox_size(&owner_user).await?;
-        let session_id = AgentSessionId::new();
+        let session_id = request.id.unwrap_or_else(AgentSessionId::new);
         // Same ordering as the trigger path's open: the token has to be minted
         // before the row, because the row is what carries the hash that makes
         // it mean anything.

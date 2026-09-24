@@ -115,6 +115,18 @@ pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServ
 
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 
+/// The AI billing service: plan allowances, prepaid credits, and overage,
+/// resolved through roles + teams and collected through Stripe.
+pub(crate) type AiBillingServiceType = ai_billing::domain::BillingServiceImpl<
+    ai_billing::outbound::RolesTeamsEntitlementSource<
+        UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+        teams::outbound::team_repo::TeamRepositoryImpl,
+    >,
+    ai_billing::outbound::PgUsageReader,
+    ai_billing::outbound::PgBillingRepo,
+    ai_billing::outbound::StripePaymentGateway,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
@@ -129,6 +141,7 @@ pub(crate) struct ApiContext {
     pub stripe_client: Arc<stripe::Client>,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
+    pub user_deletion: Arc<authentication_service::outbound::user_deletion::UserDeletionAdapter>,
     pub email_service_client: Arc<email::outbound::EmailServiceHttpClient>,
     pub ses_client: Arc<ses_client::Ses>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
@@ -153,8 +166,10 @@ pub(crate) struct ApiContext {
     pub referral_service: Arc<ReferralServiceType>,
     pub gtm_invite_service: Arc<GtmInviteServiceType>,
     pub rate_limit_service: RateLimiter,
-    /// The stripe price id
-    pub stripe_price_id: String,
+    /// The stripe price ids for each paid plan's seat
+    pub stripe_prices: crate::api::user::stripe::StripePrices,
+    /// AI allowances, credits, and overage
+    pub ai_billing_service: Arc<AiBillingServiceType>,
     /// Whether Gmail link consent requests the Google Calendar scope.
     pub calendar_scope_enabled: bool,
 }

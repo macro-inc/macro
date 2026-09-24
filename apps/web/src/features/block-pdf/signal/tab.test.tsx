@@ -19,6 +19,11 @@ vi.mock('../queries/annotations', () => ({
   getPdfComments: vi.fn(async () => []),
 }));
 
+vi.mock('@queries/messages/document-messages', () => ({
+  useMessageRootsQuery: () => ({ data: [] }),
+  useMessageActions: () => ({}),
+}));
+
 afterEach(cleanup);
 
 type TabTestApi = {

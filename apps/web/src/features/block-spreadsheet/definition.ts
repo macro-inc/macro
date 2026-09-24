@@ -1,11 +1,5 @@
-import {
-  defineBlock,
-  type ExtractLoadType,
-  LoadErrors,
-  loadResult,
-} from '@core/block';
-import { fetchDocumentLocation } from '@queries/storage/document-location';
-import { fetchDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
+import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
+import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
 import { lazy } from 'solid-js';
@@ -24,20 +18,16 @@ export const definition = defineBlock({
     if (!isSpreadsheetEnabledForCurrentUser()) return LoadErrors.UNAUTHORIZED;
     if (source.type !== 'sync-service') return LoadErrors.INVALID;
     if (intent === 'preload') return ok({ type: 'preload', origin: source });
-    const [bundle, location] = await Promise.all([
-      fetchDocumentLoadBundle(source.id),
-      loadResult(fetchDocumentLocation({ documentId: source.id })),
-    ]);
-    if (bundle.isErr()) return err(bundle.error);
-    if (location.isErr()) return err(location.error);
-    if (location.value.type !== 'syncServiceContent') return LoadErrors.INVALID;
+    const context = await fetchSyncDocumentOpenContext(source.id);
+    if (context.isErr()) return err(context.error);
     const { source: syncSource, doInitialSync } = createSyncServiceSource(
       source.id,
-      bundle.value.token
+      context.value.token,
+      context.value.authorization
     );
     return ok({
-      documentMetadata: bundle.value.documentMetadata,
-      userAccessLevel: bundle.value.userAccessLevel,
+      documentMetadata: context.value.documentMetadata,
+      userAccessLevel: context.value.userAccessLevel,
       syncSource,
       doInitialSync,
     });

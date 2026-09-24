@@ -1,7 +1,8 @@
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { Button, confirmDialog } from '@ui';
+import { createSignal, Show } from 'solid-js';
+import { SettingsSelect } from '../../components/settings-select';
 import { HarnessIcon } from '../../integration-ui';
 import type { CodexConnectionDisplay, CodexLoginDisplay } from '../core/types';
 
@@ -35,16 +36,28 @@ export function CodexConnection(props: {
     selectedEnvironment() !== (props.connection?.environmentId ?? '');
   const connected = () => props.connection?.connected === true;
   const loginPending = () => props.login?.status === 'pending';
+  const disconnect = async () => {
+    if (props.pending) return;
+    const confirmed = await confirmDialog({
+      title: 'Disconnect ChatGPT?',
+      body: 'Remove your ChatGPT connection from Macro? Existing Codex cloud sessions keep running. You can reconnect at any time.',
+      confirmLabel: 'Disconnect',
+      tone: 'danger',
+    });
+    if (!confirmed || props.pending) return;
+    setEnvironment(undefined);
+    props.onDisconnect();
+  };
   return (
     <section class="flex gap-4 px-6 py-5" aria-label="Codex connection">
       <HarnessIcon>
         <OpenAiIcon />
       </HarnessIcon>
       <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2">
-          <h2 class="text-sm font-medium text-ink">Codex</h2>
+        <div class="flex min-h-5 items-start justify-between gap-3">
+          <h2 class="min-w-0 text-sm/5 font-medium text-ink">Codex</h2>
           <Show when={connected()}>
-            <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
+            <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md bg-success-bg px-2 text-[11px]/none font-medium text-success">
               Connected
             </span>
           </Show>
@@ -142,38 +155,26 @@ export function CodexConnection(props: {
               </p>
             </Show>
             <div class="mt-4 flex flex-col gap-3">
-              <label
-                class="flex flex-col gap-1.5 text-xs text-ink"
-                for="codex-environment"
-              >
-                Cloud environment
-                <select
-                  id="codex-environment"
-                  class="settings-input w-full max-w-sm"
+              <div class="flex w-full max-w-60 flex-col gap-1.5">
+                <span class="text-xs font-medium text-ink">
+                  Cloud environment
+                </span>
+                <SettingsSelect
+                  label="Cloud environment"
+                  placeholder="Choose an environment"
+                  options={props.environments.map((item) => ({
+                    id: item.id,
+                    name: `${item.label ?? item.id}${
+                      item.repositories.length
+                        ? ` — ${item.repositories.map((repo) => repo.fullName).join(', ')}`
+                        : ''
+                    }`,
+                  }))}
                   value={selectedEnvironment()}
                   disabled={props.environmentsLoading || props.pending}
-                  onChange={(event) => {
-                    setEnvironment(event.currentTarget.value);
-                  }}
-                >
-                  <option value="" disabled selected={!selectedEnvironment()}>
-                    Choose an environment
-                  </option>
-                  <For each={props.environments}>
-                    {(item) => (
-                      <option
-                        value={item.id}
-                        selected={selectedEnvironment() === item.id}
-                      >
-                        {item.label ?? item.id}
-                        {item.repositories.length
-                          ? ` — ${item.repositories.map((repo) => repo.fullName).join(', ')}`
-                          : ''}
-                      </option>
-                    )}
-                  </For>
-                </select>
-              </label>
+                  onChange={setEnvironment}
+                />
+              </div>
               <p class="text-xs text-ink-extra-muted">
                 Choose and save an environment before using @codex. New sessions
                 always start from the main branch.
@@ -267,10 +268,7 @@ export function CodexConnection(props: {
                 class="shrink-0"
                 aria-label="Disconnect ChatGPT"
                 disabled={props.pending}
-                onClick={() => {
-                  setEnvironment(undefined);
-                  props.onDisconnect();
-                }}
+                onClick={() => void disconnect()}
               >
                 Disconnect
               </Button>

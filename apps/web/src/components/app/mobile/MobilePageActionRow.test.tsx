@@ -40,9 +40,12 @@ vi.mock('@app/features/command/Launcher', () => ({
       keyDownHandler: () => mocks.createItem(label),
     })),
 }));
-vi.mock('@block-calendar/components/use-open-event-composer', () => ({
-  useOpenEventComposer: () => mocks.openEvent,
-}));
+vi.mock(
+  '@app/features/calendar-view/components/use-open-event-composer',
+  () => ({
+    useOpenEventComposer: () => mocks.openEvent,
+  })
+);
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarUiFlag: () => () => true,
 }));

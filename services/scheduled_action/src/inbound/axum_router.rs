@@ -1,23 +1,69 @@
 use std::sync::Arc;
 
-use axum::extract::{FromRef, Path, State};
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use axum::routing::{get, post, put};
-use axum::{Json, Router};
-use chrono::Utc;
-use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
-};
-use macro_uuid::Uuid;
-use model::response::EmptyResponse;
-use model_owner::Owner;
-
+use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
-    ActionExecutionRecord, AlreadyRunningError, CreateScheduledAction, InProgressExecution,
-    OwnerNotUserError, ScheduledAction, UpdateScheduledAction,
+    ActionExecutionRecord, ActionPolicyError, AlreadyRunningError, CreateScheduledAction,
+    InProgressExecution, OwnerNotUserError, Schedule, ScheduledAction, UpdateScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
+use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::routing::{delete, get, post, put};
+use axum::{Json, Router};
+use chrono_tz::Tz;
+use macro_authorization::{
+    InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOrInternal,
+};
+use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
+use model::response::EmptyResponse;
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
+
+#[cfg(test)]
+mod test;
+
+/// Canonical trigger plus deprecated cron fields for existing clients. Event
+/// responses omit legacy fields rather than inventing a schedule or timezone.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ScheduledActionResponse {
+    #[serde(flatten)]
+    pub action: ScheduledAction,
+    /// Deprecated: use `trigger.schedule`. Present only for cron actions.
+    #[deprecated(note = "use trigger.schedule")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
+    pub schedule: Option<Schedule>,
+    /// Deprecated: use `trigger.timezone`. Present only for cron actions.
+    #[deprecated(note = "use trigger.timezone")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
+    pub timezone: Option<Tz>,
+}
+
+impl From<ScheduledAction> for ScheduledActionResponse {
+    #[expect(deprecated, reason = "compatibility response populates legacy fields")]
+    fn from(action: ScheduledAction) -> Self {
+        let (schedule, timezone) = match &action.trigger {
+            ActionTrigger::Cron { schedule, timezone } => (Some(schedule.clone()), Some(*timezone)),
+            ActionTrigger::Events { .. } => (None, None),
+        };
+        Self {
+            action,
+            schedule,
+            timezone,
+        }
+    }
+}
+
+#[derive(Debug, Default, Deserialize, IntoParams)]
+pub struct ListActionsQuery {
+    /// Backend clients must opt in to event actions; defaults to false (cron-only).
+    #[param(default = false)]
+    pub include_events: Option<bool>,
+}
 
 pub struct ScheduledActionRouterState<S, Auth> {
     pub service: Arc<S>,
@@ -49,6 +95,10 @@ where
 {
     Router::new()
         .route(
+            "/scheduled-actions/user/{user_id}",
+            delete(delete_user_actions::<S, Auth>),
+        )
+        .route(
             "/scheduled-actions",
             get(list_actions::<S, Auth>).post(create_action::<S, Auth>),
         )
@@ -65,6 +115,15 @@ where
             get(list_history::<S, Auth>),
         )
         .with_state(state)
+}
+
+async fn delete_user_actions<S: ScheduledActionService, Auth: MacroAuthorizationService>(
+    State(state): State<ScheduledActionRouterState<S, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(user_id): Path<MacroUserIdStr<'static>>,
+) -> Result<StatusCode, ScheduledActionApiError> {
+    state.service.delete_user_actions(user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
@@ -87,7 +146,8 @@ pub async fn health() -> impl IntoResponse {
     operation_id = "create_scheduled_action",
     request_body = CreateScheduledAction,
     responses(
-        (status = 201, body = ScheduledAction),
+        (status = 201, body = ScheduledActionResponse),
+        (status = 400, body = String),
         (status = 401, body = String),
         (status = 500, body = String),
     )
@@ -98,29 +158,17 @@ pub async fn create_action<
 >(
     State(state): State<ScheduledActionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Json(req): Json<CreateScheduledAction>,
+    body: Result<Json<CreateScheduledAction>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
-    let now = Utc::now();
-    let next_run_at = req
-        .schedule
-        .next_run_after_now(req.timezone)
-        .ok_or_else(|| anyhow::anyhow!("schedule has no future firings"))?;
-    let action = ScheduledAction {
-        id: None,
-        owner: Owner::User(user.authorization.user.macro_user_id.clone()),
-        name: req.name,
-        schedule: req.schedule,
-        kind: req.kind,
-        created_at: now,
-        updated_at: now,
-        timezone: req.timezone,
-        task: req.task,
-        claimed: None,
-        next_run_at,
-        enabled: req.enabled,
-    };
-    let created = state.service.create_action(action).await?;
-    Ok((StatusCode::CREATED, Json(created)))
+    let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let created = state
+        .service
+        .create_action(req, user.authorization.user.macro_user_id.clone())
+        .await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(ScheduledActionResponse::from(created)),
+    ))
 }
 
 #[utoipa::path(
@@ -128,8 +176,10 @@ pub async fn create_action<
     path = "/scheduled-actions",
     tag = "scheduled actions",
     operation_id = "list_scheduled_actions",
+    params(ListActionsQuery),
     responses(
-        (status = 200, body = Vec<ScheduledAction>),
+        (status = 200, body = Vec<ScheduledActionResponse>),
+        (status = 400, body = String),
         (status = 401, body = String),
         (status = 500, body = String),
     )
@@ -140,12 +190,21 @@ pub async fn list_actions<
 >(
     State(state): State<ScheduledActionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(query): Query<ListActionsQuery>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
     let actions = state
         .service
-        .get_actions(user.authorization.user.macro_user_id.clone())
+        .get_actions(
+            user.authorization.user.macro_user_id.clone(),
+            query.include_events.unwrap_or(false),
+        )
         .await?;
-    Ok(Json(actions))
+    Ok(Json(
+        actions
+            .into_iter()
+            .map(ScheduledActionResponse::from)
+            .collect::<Vec<_>>(),
+    ))
 }
 
 #[utoipa::path(
@@ -156,7 +215,9 @@ pub async fn list_actions<
     params(("id" = String, Path, description = "ID of the scheduled action")),
     request_body = UpdateScheduledAction,
     responses(
-        (status = 200, body = ScheduledAction),
+        (status = 200, body = ScheduledActionResponse),
+        (status = 400, body = String),
+        (status = 409, body = String, description = "Configuration changed or execution is active"),
         (status = 401, body = String),
         (status = 404, body = String),
         (status = 500, body = String),
@@ -169,32 +230,14 @@ pub async fn update_action<
     State(state): State<ScheduledActionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(id): Path<Uuid>,
-    Json(req): Json<UpdateScheduledAction>,
+    body: Result<Json<UpdateScheduledAction>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
-    let now = Utc::now();
-    let next_run_at = req
-        .schedule
-        .next_run_after_now(req.timezone)
-        .ok_or_else(|| anyhow::anyhow!("schedule has no future firings"))?;
-    let action = ScheduledAction {
-        id: Some(id),
-        owner: Owner::User(user.authorization.user.macro_user_id.clone()),
-        name: req.name,
-        schedule: req.schedule,
-        kind: req.kind,
-        created_at: now,
-        updated_at: now,
-        timezone: req.timezone,
-        task: req.task,
-        claimed: None,
-        next_run_at,
-        enabled: req.enabled,
-    };
+    let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
     let updated = state
         .service
-        .update_action(action, user.authorization.user.macro_user_id.clone())
+        .update_action(&id, req, user.authorization.user.macro_user_id.clone())
         .await?;
-    Ok(Json(updated))
+    Ok(Json(ScheduledActionResponse::from(updated)))
 }
 
 #[utoipa::path(
@@ -233,6 +276,7 @@ pub async fn delete_action<
     params(("id" = String, Path, description = "ID of the scheduled action")),
     responses(
         (status = 200, body = InProgressExecution),
+        (status = 400, body = String),
         (status = 401, body = String),
         (status = 404, body = String),
         (status = 409, body = String, description = "Action is already running"),
@@ -282,25 +326,49 @@ pub async fn list_history<
     Ok(Json(records))
 }
 
-pub struct ScheduledActionApiError(anyhow::Error);
+pub enum ScheduledActionApiError {
+    InvalidRequest(JsonRejection),
+    Service(anyhow::Error),
+}
 
 impl From<anyhow::Error> for ScheduledActionApiError {
     fn from(err: anyhow::Error) -> Self {
-        Self(err)
+        Self::Service(err)
     }
 }
 
 impl IntoResponse for ScheduledActionApiError {
     fn into_response(self) -> axum::response::Response {
-        if let Some(already_running) = self.0.downcast_ref::<AlreadyRunningError>() {
+        let error = match self {
+            Self::InvalidRequest(rejection) => {
+                let status = if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
+                    StatusCode::PAYLOAD_TOO_LARGE
+                } else {
+                    StatusCode::BAD_REQUEST
+                };
+                return (status, "invalid scheduled action request").into_response();
+            }
+            Self::Service(error) => error,
+        };
+        if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
+            let status = match policy {
+                ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
+                ActionPolicyError::UpdateConflict => StatusCode::CONFLICT,
+                ActionPolicyError::NoFutureFirings | ActionPolicyError::EventManagementDisabled => {
+                    StatusCode::BAD_REQUEST
+                }
+            };
+            return (status, policy.to_string()).into_response();
+        }
+        if let Some(already_running) = error.downcast_ref::<AlreadyRunningError>() {
             tracing::info!(error=%already_running, "scheduled action already running");
             return (StatusCode::CONFLICT, already_running.to_string()).into_response();
         }
-        if let Some(owner_not_user) = self.0.downcast_ref::<OwnerNotUserError>() {
+        if let Some(owner_not_user) = error.downcast_ref::<OwnerNotUserError>() {
             tracing::warn!(error=%owner_not_user, "scheduled action owner is not a user");
             return (StatusCode::BAD_REQUEST, owner_not_user.to_string()).into_response();
         }
-        tracing::error!(error=?self.0, "scheduled action api error");
-        (StatusCode::INTERNAL_SERVER_ERROR, self.0.to_string()).into_response()
+        tracing::error!(error=?error, "scheduled action api error");
+        (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response()
     }
 }

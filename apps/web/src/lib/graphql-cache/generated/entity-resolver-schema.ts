@@ -14,6 +14,10 @@ export const entityResolverSchema = {
       targets: ['GraphqlChannelActivity'],
       argumentPaths: [['input', 'channelId']],
     },
+    setEmailThreadArchived: {
+      targets: ['GraphqlSoupEmailThread'],
+      argumentPaths: [['input', 'threadId']],
+    },
     setEntityProperty: {
       targets: ['GraphqlProperty'],
       argumentPaths: [

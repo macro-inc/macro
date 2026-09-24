@@ -180,7 +180,9 @@ describe('shared model selector', () => {
       />
     ));
     const trigger = screen.getByRole('button', { name: 'Model' });
-    expect(trigger.textContent).toContain('gpt-5');
+    // The id is all the selector has until the catalog lands; it still reads
+    // as a name rather than a slug.
+    expect(trigger.textContent).toContain('GPT-5');
     fireEvent.keyDown(trigger, { key: 'Enter' });
     expect(screen.getByRole('status').textContent).toContain(
       'Waiting for the agent'

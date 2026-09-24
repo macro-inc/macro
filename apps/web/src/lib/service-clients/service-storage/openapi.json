@@ -17198,9 +17198,8 @@
       },
       "CalendarMentionEvent": {
         "type": "object",
-        "description": "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting.",
+        "description": "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting, or — when the requester has\nnone — from the mentioned projection a channel they belong to was given.",
         "required": [
-          "viewerEventId",
           "title",
           "time",
           "isRecurring",
@@ -17210,8 +17209,12 @@
         "properties": {
           "attendeeCount": {
             "type": "integer",
-            "description": "Number of attendees on the requester's copy.",
+            "description": "Number of attendees on the previewed copy.",
             "minimum": 0
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering."
           },
           "isRecurring": {
             "type": "boolean",
@@ -17244,12 +17247,12 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time",
-            "description": "Entity update time of the requester's copy."
+            "description": "Entity update time of the previewed copy."
           },
           "viewerEventId": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
-            "description": "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee."
+            "description": "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee.\nAbsent when the meeting is on none of the requester's calendars and\nthey see it only because it was shared with one of their channels:\nthat preview is read-only and there is no event of theirs to open."
           }
         }
       },
@@ -17265,7 +17268,7 @@
               },
               {
                 "$ref": "#/components/schemas/CalendarMentionEvent",
-                "description": "Preview of the requester's own copy, present only with access."
+                "description": "Preview of the requester's own copy, or of the channel-shared copy,\npresent only with access."
               }
             ]
           },
@@ -21819,7 +21822,7 @@
         "properties": {
           "actor": {
             "type": ["string", "null"],
-            "description": "Who mechanically changed the content. Absent on events published\nbefore attribution, and on human-only collab sessions."
+            "description": "Legacy single-editor attribution; newer Sync callers send `editors`."
           },
           "document_id": {
             "type": "string",
@@ -21828,6 +21831,13 @@
           "document_version_id": {
             "type": ["string", "null"],
             "description": "Version marker for the sync snapshot, when the caller supplies one."
+          },
+          "editors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentSyncEditor"
+            },
+            "description": "Distinct editors since the preceding snapshot notification."
           },
           "file_type": {
             "$ref": "#/components/schemas/FileType",
@@ -21841,6 +21851,28 @@
               {
                 "$ref": "#/components/schemas/MacroUserIdStr",
                 "description": "The user whose feed this edit belongs on, when different from\n[`Self::actor`]."
+              }
+            ]
+          }
+        }
+      },
+      "DocumentSyncEditor": {
+        "type": "object",
+        "description": "An editor reported by Sync from an authenticated session.",
+        "required": ["actor"],
+        "properties": {
+          "actor": {
+            "type": "string",
+            "description": "User or bot that performed the edit."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User represented by an agent, if any."
               }
             ]
           }
@@ -26669,6 +26701,11 @@
             "type": "string",
             "description": "Macro Markdown body."
           },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Client-minted UUIDv7 for the new message, so an optimistic message\nalready carries its final id; the server mints one when absent."
+          },
           "mentions": {
             "type": "array",
             "items": {
@@ -30329,6 +30366,10 @@
                 "format": "uuid",
                 "description": "Highlight annotation UUID."
               },
+              "marked_text": {
+                "type": ["string", "null"],
+                "description": "The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text."
+              },
               "type": {
                 "type": "string",
                 "enum": ["pdf_highlight"]
@@ -30337,7 +30378,7 @@
           },
           {
             "type": "object",
-            "description": "A comment-only placeable PDF annotation.",
+            "description": "A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.",
             "required": ["anchor_id", "type"],
             "properties": {
               "anchor_id": {

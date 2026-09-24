@@ -157,7 +157,7 @@ opens the session.
 regardless of which harness they use.
 A mention without a connected account creates no session and replies in the thread
 with a **Connect Cursor**, **Connect Codex**, or **Connect Claude** chip. Each chip
-opens Settings → Harness, where all three connection cards are visible. The same
+opens Settings → Agents → Runtimes, where all three connection cards are visible. The same
 chip reads **connected** after setup; mention the bot again to start a session.
 Codex also prompts for a cloud environment when ChatGPT is connected but no
 environment has been saved. New sessions use that environment on
@@ -171,7 +171,7 @@ a configured backend for end-to-end verification.
 Within the Cursor rollout, `@cursor` is offered whether connected or not. A mention from someone with
 no Cursor API key opens no session: the Cursor bot replies in the thread that
 `@cursor` runs on their own account and is not connected yet, followed by a
-**Connect Cursor** chip. Clicking the chip opens Settings → Harness; once a key
+**Connect Cursor** chip. Clicking the chip opens Settings → Agents → Runtimes; once a key
 is saved the same chip reads **Cursor connected** and stops navigating. The
 original mention is not replayed - mention `@cursor` again after connecting.
 
@@ -278,7 +278,8 @@ an incoming selection must not mark the Home item done or edit the thread root.
 Press `Escape` to clear selection; the parent Home shortcut is then available
 again. Typing `e` in the composer or inline editor should still enter text.
 Returning through split navigation restores the saved message position and expanded
-threads. Switching channel tabs currently opens Messages at latest. The `Scroll to bottom` control appears when scrolling down through history;
+threads. Switching channel tabs and returning restores the Messages position,
+expanded threads, and pending reply from when the tab was left. The `Scroll to bottom` control appears when scrolling down through history;
 it returns to the latest page even after opening a link into old history.
 The jump waits for that page to reach the rendered list.
 A newer message navigation cancels a pending jump to latest. Scrolling manually
@@ -314,6 +315,11 @@ records `path` (`catch_up` or `full`) and `reason`
 
 ## Chat navigation rail
 
+Following a channel mention or browser notification for the conversation already
+shown in Chat activates that workspace and jumps to the targeted message or reply. It keeps
+the existing preview and does not show a **Content already open** toast. The
+same applies to a channel preview in Home; a closed channel opens normally.
+
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
 **Show navigation** (the hamburger) immediately before the conversation title,
 or in the Chat header when no conversation is selected. Chat remembers this
@@ -323,16 +329,11 @@ the shared 256px default sidebar width and resize limits. In splits narrower tha
 with the same full sidebar contents. There is no separate skinny sidebar mode.
 
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
-optional `Favorites` section, an optional `Unread` section, and the
+optional `Favorites` section and the
 independently paginated `Channels` and `DMs` sections. Favorites appears when
 the user has channel favorites and only lists channels. Channel favorites open
 in the channel preview. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead.
-
-`Unread` appears only while at least one channel (not DM) has unread activity.
-It is a flat list, newest unread notification first, with each row's timestamp
-always visible, and a count pill on its heading. Marking a channel read drops
-it from the list. It is capped at a third of the column and scrolls inside.
 
 ### Channel labels
 
@@ -375,9 +376,8 @@ channels, including non-team channels and other teams' channels in shared labels
 Names are unique within the team or account, case-insensitively.
 
 Layout: labels come first in creation order, each showing its visible channels
-A→Z, followed by ungrouped channels in the section's selected sort order. The
-`Unread` section remains ordered by activity. A label row has an unread count,
-a `···` menu (`Rename`, `Mark all as read`, `Delete label`), and a disclosure caret.
+A→Z, followed by ungrouped channels in the section's selected sort order. A label
+row has an unread count, a `···` menu (`Rename`, `Mark all as read`, `Delete label`), and a disclosure caret.
 Clicking the row or pressing Enter toggles it; `h` / `l` on a label or one of its
 channels collapses or expands that label. `[` / `]` jump between section headings.
 
@@ -470,7 +470,7 @@ keyboard activation still toggles the highlighted section.
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances
 into the appended rows. If the section has no next page, navigation proceeds
-to the next section. `[` and `]` jump between the visible Favorites, Unread,
+to the next section. `[` and `]` jump between the visible Favorites,
 Channels, and DMs section headers.
 
 On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
@@ -479,6 +479,21 @@ With `enable-graphql-soup` enabled, open an unread conversation from each tab
 and return to the list: its top-level notifications should be read, including
 ones older than the global notification feed's loaded page. Notifications for
 separate thread stacks remain unread until that thread is opened.
+
+With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
+channel IDs and at most one unread notification ID/state per channel, with a
+500-channel candidate bound and no history, message previews, or metadata. It
+shares the channel lists' refreshes after notification patches, mark-read, and
+reconnect. Merely rendering that badge, subscribing to realtime notifications,
+or applying local read/done overrides must not start the full `SoupNotifications`
+feed. Check this with document-mention notifications disabled too (the production
+default): mention cleanup must wait until a real data/status reader activates the
+feed, then continue cleaning up loaded mentions. Full notification selection and
+pagination remain unchanged. Automatic/debounced read markers log failures and
+leave failed reads unread; they must not produce unhandled promise rejections or
+block the separate email read marker. Cold bulk actions wait for loading
+and report failures rather than treating pending data as an empty list. The
+Inbox badge still uses its own full Soup query for channel/thread membership.
 
 With GraphQL enabled, channel lists request at most one unread message notification
 per channel through an aliased, filtered `notifications` edge. An empty edge means
@@ -495,7 +510,17 @@ open the last selected conversation, not a slower earlier request.
 Check cached Home → Chat navigation, All/Recent/search, and unread state after a
 read, a new notification, deletion, and reconnect. Cache reads remain asynchronous:
 a brief spinner can still appear, but cached rows must not wait for a background
-network refresh. If more unread notifications
+network refresh. Conversely, `cache-and-network` refreshes must start without
+waiting for a busy cache worker. Successful foreground query results display
+before cache persistence finishes; a delayed acknowledgement must not replay old
+rows or overwrite an optimistic update. Check initial and continuation pages with
+a slow cache, overlapping refreshes, and leaving/reopening Chat during a write.
+A cache write failure must not discard successful network rows. Mutations and
+cache-only hydration still wait for their durable/cache-projection work.
+A late cache snapshot must not replace newer network rows. Check a cold offline
+open too: a cache hit arriving
+after the network failure must remain usable without erasing the refresh error.
+If more unread notifications
 remain, the limited edge must refresh to the next one rather than staying empty.
 Refreshing unread indicators while composing must preserve the conversation,
 scroll position, and input focus. The backend must support the new edge arguments
@@ -544,6 +569,13 @@ appears while a call is in progress. `Ask Macro` opens a new chat pane with the 
 already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
 `...` drawer instead. Clicking the radio input can time out — click the adjacent label text
 instead.
+
+In the Chat workspace — and wherever a channel opens inline inside another
+view's detail stack (a channel mention followed from the email view, say) — the
+conversation renders an inline detail whose top bar holds the channel avatar
+and name, the same tab strip, live viewer avatars, and the `Call` and
+`Ask Macro` buttons. The title `...` menu (rename, channel picture) is not
+offered there; open the channel as a split (shift-click a rail row) to use it.
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and

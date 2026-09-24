@@ -39,6 +39,7 @@ vi.mock('../context/AgentSessionContext', () => ({
         : undefined,
     metadata: () => undefined,
     loadFailed: () => mocks.failed(),
+    accessDenied: () => false,
     loadRetryable: () => true,
     retryLoad: vi.fn(),
     pending: () => false,
@@ -92,9 +93,6 @@ vi.mock('@core/component/TopBar/ShareButton', () => ({
   },
   ShareModal: () => null,
   ShareTrigger: () => null,
-}));
-vi.mock('@core/linked-conversation', () => ({
-  LinkedConversationDrawer: () => null,
 }));
 vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
   FloatRegionOrInline: (props: { children: JSX.Element }) => props.children,

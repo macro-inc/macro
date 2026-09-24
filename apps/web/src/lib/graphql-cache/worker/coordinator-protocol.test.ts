@@ -333,11 +333,62 @@ describe('coordinator runtime protocol', () => {
       tabId: 'tab',
       ownerEpoch: 1,
     },
-    { ...version, kind: 'engine-replaced', ownerEpoch: 2 },
+    {
+      ...version,
+      kind: 'engine-replaced',
+      ownerEpoch: 2,
+      openOutcome: 'opened-existing',
+    },
     { ...version, kind: 'protocol-error', error: 'bad envelope' },
     { ...version, kind: 'terminal-error', error: 'recovery exhausted' },
   ])('accepts coordinator-to-tab envelope $kind', (message) => {
     expect(validateCoordinatorToTabEnvelope(message).ok).toBe(true);
+  });
+
+  it.each([
+    'opened-existing',
+    'opened-new',
+    'reset-incompatible',
+    'reset-corrupt',
+    'reset-storage-uncertain',
+  ])(
+    'retains the validated storage outcome %s on replacement',
+    (openOutcome) => {
+      const message = {
+        ...version,
+        kind: 'engine-replaced',
+        ownerEpoch: 2,
+        openOutcome,
+      };
+      expect(validateCoordinatorToTabEnvelope(message)).toEqual({
+        ok: true,
+        value: message,
+      });
+    }
+  );
+
+  it.each([undefined, null, 'open-existing', 'unknown'])(
+    'rejects ambiguous replacement storage outcome %s',
+    (openOutcome) => {
+      expect(
+        validateCoordinatorToTabEnvelope({
+          ...version,
+          kind: 'engine-replaced',
+          ownerEpoch: 2,
+          openOutcome,
+        }).ok
+      ).toBe(false);
+    }
+  );
+
+  it('rejects the old protocol rather than guessing whether storage survived', () => {
+    expect(
+      validateCoordinatorToTabEnvelope({
+        coordinatorVersion: 3,
+        kind: 'engine-replaced',
+        ownerEpoch: 2,
+      }).ok
+    ).toBe(false);
   });
 
   it('validates activation and both direct-port directions', () => {

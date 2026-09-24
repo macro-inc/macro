@@ -5,6 +5,8 @@ use email::domain::models::{AttachmentDraft, AttachmentForwarded, MessageAttachm
 
 use super::*;
 
+mod archive;
+
 struct QueryRoot;
 
 #[Object]
@@ -23,6 +25,11 @@ enum CapturedMutation {
     Unread {
         user_id: String,
         thread_id: Uuid,
+    },
+    Archive {
+        user_id: String,
+        thread_id: Uuid,
+        archived: bool,
     },
     Label {
         user_id: String,
@@ -56,11 +63,29 @@ struct CapturingEmailMutationService {
     attachments_draft: Vec<AttachmentDraft>,
     attachments_forwarded: Vec<AttachmentForwarded>,
     reject_unread: bool,
+    reject_archive: bool,
 }
 
 const TEST_THREAD_ID: Uuid = Uuid::from_u128(0x7ead);
 
 impl EmailMutationService for CapturingEmailMutationService {
+    async fn set_email_thread_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        archived: bool,
+    ) -> Result<(), EmailErr> {
+        self.calls.lock().unwrap().push(CapturedMutation::Archive {
+            user_id: user_id.to_string(),
+            thread_id,
+            archived,
+        });
+        if self.reject_archive {
+            return Err(EmailErr::ThreadNotFound);
+        }
+        Ok(())
+    }
+
     async fn mark_email_thread_seen(
         &self,
         user_id: MacroUserIdStr<'static>,

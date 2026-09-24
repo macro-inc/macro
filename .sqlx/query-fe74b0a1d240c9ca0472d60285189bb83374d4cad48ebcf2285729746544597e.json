@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT schedule, timezone, trigger_type\n            FROM scheduled_action\n            WHERE id = $1\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "schedule",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "timezone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "trigger_type",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "fe74b0a1d240c9ca0472d60285189bb83374d4cad48ebcf2285729746544597e"
+}

@@ -70,6 +70,10 @@ maybe_env_vars! {
     pub struct GtmInvitePromoCode;
     /// Hours a GTM invite link stays openable after creation. Defaults to 48.
     pub struct GtmInviteLinkTtlHours;
+    /// Stripe price id for the Max plan seat. Optional so the service can
+    /// deploy before the price exists in Stripe; until it is set, Max checkout
+    /// and plan changes answer 400 and every subscription maps to Premium.
+    pub struct StripeMaxPriceId;
 }
 
 /// The configuration parameters for the application.
@@ -156,13 +160,20 @@ pub struct Config {
     ///
     /// All `@macro.com` email addresses are allowed by the Develop policy automatically.
     pub development_signup_allowlist_json: DevelopmentSignupAllowlistJson,
+    /// Whether Develop allows every public signup without reading
+    /// `DEVELOPMENT_SIGNUP_ALLOWLIST_JSON`. Production and Local ignore it.
+    #[macro_config_default(false)]
+    pub development_bypass_signup_allowlist: bool,
     /// Stripe promotion code applied at checkout for accounts that signed up
     /// through a GTM invite link (optional, defaults to `1MF`).
     pub gtm_invite_promo_code: GtmInvitePromoCode,
     /// Hours a GTM invite link can be opened and redeemed (optional, defaults to 48).
     pub gtm_invite_link_ttl_hours: GtmInviteLinkTtlHours,
-    /// The stripe price id
+    /// The stripe price id for the Premium plan seat
     pub stripe_price_id: StripePriceId,
+    /// The stripe price id for the Max plan seat (optional, see
+    /// [`StripeMaxPriceId`])
+    pub stripe_max_price_id: StripeMaxPriceId,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
@@ -241,7 +252,11 @@ impl Config {
         &self,
         environment: Environment,
     ) -> anyhow::Result<SignupPolicy> {
-        resolve_signup_policy(environment, &self.development_signup_allowlist_json)
+        resolve_signup_policy(
+            environment,
+            self.development_bypass_signup_allowlist,
+            &self.development_signup_allowlist_json,
+        )
     }
 
     /// Resolves the offer GTM invite links carry.
@@ -282,10 +297,14 @@ fn resolve_microsoft_credentials(
 
 fn resolve_signup_policy(
     environment: Environment,
+    development_bypass_signup_allowlist: bool,
     development_signup_allowlist_json: &DevelopmentSignupAllowlistJson,
 ) -> anyhow::Result<SignupPolicy> {
     match environment {
         Environment::Production | Environment::Local => Ok(SignupPolicy::allow_all()),
+        Environment::Develop if development_bypass_signup_allowlist => {
+            Ok(SignupPolicy::allow_all())
+        }
         Environment::Develop => {
             let raw_allowlist = nonblank_value(development_signup_allowlist_json.value())
                 .context("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON is required in Develop")?;

@@ -49,6 +49,9 @@ impl WorkExecutor for Dispatcher {
                 content,
             } => {
                 let request = CreateAgentSessionRequest {
+                    // The service mints the id: nothing here opens a surface
+                    // on it before the create answers.
+                    id: None,
                     // A harness serves many agents, so the token implies no
                     // bot: name the mentioned agent, and the service verifies
                     // it is bound to this harness.

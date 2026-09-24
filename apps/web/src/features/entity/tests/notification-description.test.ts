@@ -198,7 +198,7 @@ describe('notification-description helpers', () => {
 
     it('returns correct verb for mentioned_in_document_comment', () => {
       expect(getActionVerb('mentioned_in_document_comment')).toBe(
-        'mentioned you'
+        'mentioned you in a comment'
       );
     });
 

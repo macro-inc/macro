@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action_event_run\n            SET state = 'started', claim_token = $3, started_at = $4, deadline = $5\n            WHERE action_id = $1 AND event_id = $2 AND state = 'pending'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b04c62d7d0a3b20e37e05ff0c391888b910e5523923798f0eef7817ae2bca80"
+}

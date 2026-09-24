@@ -16,6 +16,14 @@ const FROM_CLIENT_TAG: &str = "from_client";
 const FROM_SERVICE_TAG: &str = "from_service";
 const FRONTIERS_ID_SEPERATOR: &str = "|";
 
+/// Result of applying an update, before any persistence awaits.
+pub struct ImportedUpdate {
+    /// Whether the operation log gained new operations.
+    pub changed: bool,
+    /// Lexical node IDs used by the existing blame tracking.
+    pub touched_nodes: Vec<String>,
+}
+
 #[derive(Debug)]
 pub struct DocumentState {
     pub loro_doc: LoroDoc,
@@ -89,9 +97,9 @@ impl DocumentState {
             .unwrap_context("last_export mutex poisoned") = Some(Instant::now());
     }
 
-    /// Import an update into the document. Returns the set of Lexical node IDs
-    /// whose backing Loro containers were touched, deduplicated.
-    pub fn import(&self, update: &[u8]) -> Result<Vec<String>> {
+    /// Import an update and report whether it changed the operation log plus
+    /// the deduplicated Lexical node IDs used by blame tracking.
+    pub fn import(&self, update: &[u8]) -> Result<ImportedUpdate> {
         let before = self.loro_doc.oplog_frontiers();
         self.loro_doc
             .import_with(update, FROM_CLIENT_TAG)
@@ -103,7 +111,10 @@ impl DocumentState {
             .lock()
             .unwrap_context("last_update mutex poisoned") = Some(Instant::now());
 
-        Ok(self.touched_lexical_ids(&before, &after))
+        Ok(ImportedUpdate {
+            changed: before != after,
+            touched_nodes: self.touched_lexical_ids(&before, &after),
+        })
     }
 
     /// Diff the two frontiers and return the Lexical node IDs whose backing
@@ -237,7 +248,13 @@ mod tests {
             })
             .unwrap();
 
-        state.import(update.as_slice()).unwrap();
+        let imported = state.import(update.as_slice()).unwrap();
+        assert!(imported.changed);
+        assert!(
+            imported.touched_nodes.is_empty(),
+            "plain text has no Lexical IDs"
+        );
+        assert!(!state.import(update.as_slice()).unwrap().changed);
 
         let text = state.loro_doc.get_text("content");
         assert_eq!(text.to_string(), "01234");

@@ -52,9 +52,9 @@ use crate::{
         create::DocumentCreator,
         events::InteractionReason,
         models::{
-            CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
-            DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
-            ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
+            CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, DocumentTeamShareResponse,
+            EditDocumentServiceArgs, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+            LocationQueryParams, TaskBranchName,
         },
         ports::{DocumentContentEventService, DocumentService, create::DocumentCreationService},
         response::{
@@ -107,8 +107,7 @@ struct ContentUploadedCall {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct SyncContentCall {
     document_id: String,
-    actor: Option<String>,
-    on_behalf_of: Option<String>,
+    editors: Vec<crate::domain::events::DocumentSyncEditor>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -290,13 +289,6 @@ impl DocumentService for FakeDocumentService {
         panic!("unexpected get_document_text call")
     }
 
-    async fn get_document_comments(
-        &self,
-        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
-    ) -> Result<Vec<CommentThread>, DocumentError> {
-        panic!("unexpected get_document_comments call")
-    }
-
     async fn create_document(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -452,16 +444,14 @@ impl DocumentContentEventService for FakeDocumentService {
     async fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        actor: Option<String>,
-        on_behalf_of: Option<String>,
+        editors: Vec<crate::domain::events::DocumentSyncEditor>,
     ) -> Result<(), DocumentError> {
         self.sync_content_calls
             .lock()
             .unwrap()
             .push(SyncContentCall {
                 document_id: document_id.to_string(),
-                actor,
-                on_behalf_of,
+                editors,
             });
         Ok(())
     }

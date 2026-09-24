@@ -32,7 +32,7 @@ export function useChannelRailItemState(
 
     return {
       domId: domIdForRow(rail.railId, rowId),
-      selected: rail.selectedChannelId() === id,
+      selected: rail.selectedChannel()?.id === id,
       focused: rail.list.focus.key() === rowId,
       muted: isMutedItem(notificationSource.mutedEntities(), {
         item_id: id,
@@ -56,7 +56,7 @@ export function useChannelRailFavoriteItemState(favorite: Accessor<Favorite>) {
       domId: domIdForRow(rail.railId, rowId),
       selected:
         current.entityType === 'channel' &&
-        rail.selectedChannelId() === current.entityId,
+        rail.selectedChannel()?.id === current.entityId,
       focused: rail.list.focus.key() === rowId,
     };
   });
@@ -209,22 +209,6 @@ export function useChannelRailLabelState(label: Accessor<ChannelLabel>) {
         focusedRow?.kind === 'conversation' &&
         focusedRow.labelId === current.id,
       unreadCount: rail.labelUnreadCount(current),
-    };
-  });
-}
-
-export function useChannelRailUnreadState() {
-  const rail = useChannelsRail();
-
-  return createMemo(() => {
-    const rowId = rowKeyForSection('unread');
-
-    return {
-      items: rail.unreadChannels(),
-      open: rail.isGroupOpen('unread'),
-      focused: rail.list.focus.key() === rowId,
-      containsFocus: rail.list.focus.item()?.group === 'unread',
-      domId: domIdForRow(rail.railId, rowId),
     };
   });
 }

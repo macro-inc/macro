@@ -1,7 +1,6 @@
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { ContentLoading } from '@components/app/ContentLoading';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog, Panel } from '@ui';
@@ -21,7 +20,7 @@ import type {
 } from '../layoutManager';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 
-false && clickOutside;
+false;
 
 type PopoverSplitData = {
   id: string;
@@ -87,15 +86,14 @@ function PopoverSplitModal(props: {
     isSpotLight: () => false,
     isPopover: () => true,
     replace: () => {},
-    // A popover has no URL and no history to rewrite.
+    // A popover has no history to rewrite.
     adoptContentId: () => {},
+    updateCurrentEntry: () => {},
     removeFromHistory: () => {},
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
     previousContent: () => null,
     history: () => [],
-    getUrlSegments: () => [],
-    getUrl: () => '',
     meta: () =>
       props.popover.mount.kind === 'component'
         ? props.popover.mount.meta

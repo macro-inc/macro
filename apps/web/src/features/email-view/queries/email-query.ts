@@ -35,6 +35,17 @@ export const emailViewForTab = (tab: EmailTab): string =>
 
 const anyThread = (): TargetExpr => clause.not(clause.eq('threadId', NIL_UUID));
 
+// Preserve a shallow tree through both the REST and GraphQL AST compilers.
+// A flat 100-way clause.or becomes a linear tree and exceeds JSON ingress depth.
+function admittedThreads(ids: readonly string[]): TargetExpr {
+  if (ids.length < 2) return clause.eq('threadId', ids[0] ?? NIL_UUID);
+  const middle = Math.floor(ids.length / 2);
+  return clause.or(
+    admittedThreads(ids.slice(0, middle)),
+    admittedThreads(ids.slice(middle))
+  );
+}
+
 // Deliberately no `!isDraft` exclusion here: `isDraft` is thread-level, so
 // excluding it hid whole conversations the moment a reply draft saved (#5940).
 function tabClause(tab: EmailTab): TargetExpr {
@@ -78,17 +89,22 @@ function inboxClause(inboxIds: string[] | undefined): TargetExpr | undefined {
   return clause.or(...inboxIds.map((id) => clause.eq('emailLinkId', id)));
 }
 
-/** Builds the email-only Soup AST for the composable Email view. */
+/** Discovery keeps the server read filter ahead of pagination. ID-scoped
+ * admission lookups drop only read status; all other membership rules remain. */
 export function buildEmailQuery(
-  context: EmailQueryContext
+  context: EmailQueryContext,
+  admittedIds?: readonly string[]
 ): SoupAstItemsQueryArgs {
   const expressions = [tabClause(context.tab)];
+  if (admittedIds) {
+    expressions.push(admittedThreads(admittedIds));
+  }
   const inbox = inboxClause(context.inboxIds);
   if (inbox) expressions.push(inbox);
 
   const base = compileClause(confine({ ef: clause.and(...expressions) }));
   const refinements = compileFacets(
-    context.facets,
+    admittedIds ? { ...context.facets, read: [] } : context.facets,
     EMAIL_FACETS,
     context.facetContext
   );

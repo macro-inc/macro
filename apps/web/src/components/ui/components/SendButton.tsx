@@ -8,7 +8,7 @@ export type SendButtonProps = Omit<ButtonProps, 'size' | 'variant'> & {
   appearance?: 'default' | 'composer';
   /** Show a spinner instead of the arrow (e.g. while a send mutation is in-flight). */
   pending?: boolean;
-  /** Fade the button to fully transparent — used to hide on mobile when the input is empty. */
+  /** Drop the button from the layout — used to hide on mobile when the input is empty. */
   hidden?: boolean;
 };
 
@@ -41,7 +41,10 @@ export function SendButton(props: SendButtonProps) {
         'transition-transform ease-in-out duration-150',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',
         'active:not-disabled:scale-95',
-        local.hidden && 'opacity-0!',
+        // Out of the flow, not just invisible: a transparent send button
+        // holds its slot and strands whatever sits before it (the dictation
+        // button) well short of the composer's edge.
+        local.hidden && 'hidden',
         local.class
       )}
       {...rest}

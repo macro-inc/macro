@@ -5,7 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AiBillingErrorBody,
   AppleLoginRequest,
+  ChangePlanRequest,
+  ChangePlanResponse,
   CodexConfigRequest,
   CodexConnectionStatus,
   CodexEnvironment,
@@ -18,6 +21,8 @@ import type {
   CreatePortalSessionRequest,
   CreateTeamRequest,
   CreateUserRequest,
+  CreditCheckoutRequestBody,
+  CreditCheckoutResponse,
   CursorApiKeyStatus,
   CursorModelsResponse,
   EmptyResponse,
@@ -53,11 +58,13 @@ import type {
   PasswordRequest,
   PatchTeamCrmSettingsRequest,
   PatchTeamCrmSettingsResponse,
+  PatchTeamMemberPlanRequest,
   PatchTeamRequest,
   PatchUserGroupRequest,
   PatchUserOnboardingRequest,
   PatchUserTutorialRequest,
   Permission,
+  PlanCatalogResponse,
   PostGetNamesRequestBody,
   ProfilePictures,
   PublicGtmInviteLink,
@@ -75,9 +82,12 @@ import type {
   StripeSessionResponse,
   Team,
   TeamInvitesResponse,
+  TeamMember,
   TeamWithMembers,
   ToggleAutoJoinDomainResponse,
   ToggleNonAdminInvitesResponse,
+  UpdateOverageRequest,
+  UsageSnapshot,
   UserLinkResponse,
   UserName,
   UserNames,
@@ -85,6 +95,257 @@ import type {
   UserQuota,
   UserTokensResponse,
 } from './schemas';
+
+/**
+ * @summary Start a Stripe Checkout for a credit pack. Payer only.
+ */
+export type createAiCreditCheckoutResponse200 = {
+  data: CreditCheckoutResponse;
+  status: 200;
+};
+
+export type createAiCreditCheckoutResponse400 = {
+  data: AiBillingErrorBody;
+  status: 400;
+};
+
+export type createAiCreditCheckoutResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type createAiCreditCheckoutResponse402 = {
+  data: AiBillingErrorBody;
+  status: 402;
+};
+
+export type createAiCreditCheckoutResponse403 = {
+  data: AiBillingErrorBody;
+  status: 403;
+};
+
+export type createAiCreditCheckoutResponse500 = {
+  data: AiBillingErrorBody;
+  status: 500;
+};
+
+export type createAiCreditCheckoutResponseSuccess =
+  createAiCreditCheckoutResponse200 & {
+    headers: Headers;
+  };
+export type createAiCreditCheckoutResponseError = (
+  | createAiCreditCheckoutResponse400
+  | createAiCreditCheckoutResponse401
+  | createAiCreditCheckoutResponse402
+  | createAiCreditCheckoutResponse403
+  | createAiCreditCheckoutResponse500
+) & {
+  headers: Headers;
+};
+
+export type createAiCreditCheckoutResponse =
+  | createAiCreditCheckoutResponseSuccess
+  | createAiCreditCheckoutResponseError;
+
+export const getCreateAiCreditCheckoutUrl = () => {
+  return `/ai-billing/credits/checkout`;
+};
+
+export const createAiCreditCheckout = async (
+  creditCheckoutRequestBody: CreditCheckoutRequestBody,
+  options?: RequestInit
+): Promise<createAiCreditCheckoutResponse> => {
+  const res = await fetch(getCreateAiCreditCheckoutUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(creditCheckoutRequestBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createAiCreditCheckoutResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createAiCreditCheckoutResponse;
+};
+
+/**
+ * @summary Turn overage billing on or off and set the per-period cap. Payer only.
+ */
+export type updateAiBillingOverageResponse200 = {
+  data: UsageSnapshot;
+  status: 200;
+};
+
+export type updateAiBillingOverageResponse400 = {
+  data: AiBillingErrorBody;
+  status: 400;
+};
+
+export type updateAiBillingOverageResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type updateAiBillingOverageResponse402 = {
+  data: AiBillingErrorBody;
+  status: 402;
+};
+
+export type updateAiBillingOverageResponse403 = {
+  data: AiBillingErrorBody;
+  status: 403;
+};
+
+export type updateAiBillingOverageResponse500 = {
+  data: AiBillingErrorBody;
+  status: 500;
+};
+
+export type updateAiBillingOverageResponseSuccess =
+  updateAiBillingOverageResponse200 & {
+    headers: Headers;
+  };
+export type updateAiBillingOverageResponseError = (
+  | updateAiBillingOverageResponse400
+  | updateAiBillingOverageResponse401
+  | updateAiBillingOverageResponse402
+  | updateAiBillingOverageResponse403
+  | updateAiBillingOverageResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateAiBillingOverageResponse =
+  | updateAiBillingOverageResponseSuccess
+  | updateAiBillingOverageResponseError;
+
+export const getUpdateAiBillingOverageUrl = () => {
+  return `/ai-billing/overage`;
+};
+
+export const updateAiBillingOverage = async (
+  updateOverageRequest: UpdateOverageRequest,
+  options?: RequestInit
+): Promise<updateAiBillingOverageResponse> => {
+  const res = await fetch(getUpdateAiBillingOverageUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateOverageRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateAiBillingOverageResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateAiBillingOverageResponse;
+};
+
+/**
+ * @summary The plan catalog, credit packs, and overage cap bounds.
+ */
+export type getAiBillingPlansResponse200 = {
+  data: PlanCatalogResponse;
+  status: 200;
+};
+
+export type getAiBillingPlansResponseSuccess = getAiBillingPlansResponse200 & {
+  headers: Headers;
+};
+
+export type getAiBillingPlansResponse = getAiBillingPlansResponseSuccess;
+
+export const getGetAiBillingPlansUrl = () => {
+  return `/ai-billing/plans`;
+};
+
+export const getAiBillingPlans = async (
+  options?: RequestInit
+): Promise<getAiBillingPlansResponse> => {
+  const res = await fetch(getGetAiBillingPlansUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAiBillingPlansResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAiBillingPlansResponse;
+};
+
+/**
+ * Runs a settlement first so the position reflects any credits or overage
+that were waiting to be booked.
+ * @summary The caller's current-period AI usage, credits, and overage settings.
+ */
+export type getAiBillingSummaryResponse200 = {
+  data: UsageSnapshot;
+  status: 200;
+};
+
+export type getAiBillingSummaryResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type getAiBillingSummaryResponse500 = {
+  data: AiBillingErrorBody;
+  status: 500;
+};
+
+export type getAiBillingSummaryResponseSuccess =
+  getAiBillingSummaryResponse200 & {
+    headers: Headers;
+  };
+export type getAiBillingSummaryResponseError = (
+  | getAiBillingSummaryResponse401
+  | getAiBillingSummaryResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAiBillingSummaryResponse =
+  | getAiBillingSummaryResponseSuccess
+  | getAiBillingSummaryResponseError;
+
+export const getGetAiBillingSummaryUrl = () => {
+  return `/ai-billing/summary`;
+};
+
+export const getAiBillingSummary = async (
+  options?: RequestInit
+): Promise<getAiBillingSummaryResponse> => {
+  const res = await fetch(getGetAiBillingSummaryUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAiBillingSummaryResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAiBillingSummaryResponse;
+};
 
 export type getCodexConnectionResponse200 = {
   data: CodexConnectionStatus;
@@ -3842,6 +4103,88 @@ export const rejectInvitation = async (
 };
 
 /**
+ * Team admins and owners only. The team's subscription is re-billed for
+the seat at once (prorated); the member's tier role and individual AI
+allowance follow immediately.
+ * @summary Moves one team member's seat between paid plans.
+ */
+export type patchTeamMemberPlanResponse200 = {
+  data: TeamMember;
+  status: 200;
+};
+
+export type patchTeamMemberPlanResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type patchTeamMemberPlanResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type patchTeamMemberPlanResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
+export type patchTeamMemberPlanResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type patchTeamMemberPlanResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type patchTeamMemberPlanResponseSuccess =
+  patchTeamMemberPlanResponse200 & {
+    headers: Headers;
+  };
+export type patchTeamMemberPlanResponseError = (
+  | patchTeamMemberPlanResponse400
+  | patchTeamMemberPlanResponse401
+  | patchTeamMemberPlanResponse402
+  | patchTeamMemberPlanResponse404
+  | patchTeamMemberPlanResponse500
+) & {
+  headers: Headers;
+};
+
+export type patchTeamMemberPlanResponse =
+  | patchTeamMemberPlanResponseSuccess
+  | patchTeamMemberPlanResponseError;
+
+export const getPatchTeamMemberPlanUrl = (memberUserId: string) => {
+  return `/team/members/${memberUserId}/plan`;
+};
+
+export const patchTeamMemberPlan = async (
+  memberUserId: string,
+  patchTeamMemberPlanRequest: PatchTeamMemberPlanRequest,
+  options?: RequestInit
+): Promise<patchTeamMemberPlanResponse> => {
+  const res = await fetch(getPatchTeamMemberPlanUrl(memberUserId), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchTeamMemberPlanRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: patchTeamMemberPlanResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchTeamMemberPlanResponse;
+};
+
+/**
  * @summary Toggles whether non-admin members may invite users to the team. Teams
 start with this on (any member can invite); turning it off restricts
 inviting to team admins and owners. Requires the caller to be an Admin
@@ -5097,6 +5440,94 @@ export const createCheckoutSessionV2 = async (
     status: res.status,
     headers: res.headers,
   } as createCheckoutSessionV2Response;
+};
+
+/**
+ * On a team billed per seat this moves only the caller's seat (team admins
+and the owner may do so; teammates' seats are managed from team
+settings). Members of a free team, and solo subscribers, get the price on
+their own subscription's seat item swapped. The proration is invoiced
+immediately either way; roles and the AI allowance follow at once on a
+team and from the `customer.subscription.updated` webhook for a personal
+subscription.
+ * @summary Moves the caller's own seat between paid plans.
+ */
+export type changePlanResponse200 = {
+  data: ChangePlanResponse;
+  status: 200;
+};
+
+export type changePlanResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type changePlanResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
+export type changePlanResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type changePlanResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type changePlanResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type changePlanResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type changePlanResponseSuccess = changePlanResponse200 & {
+  headers: Headers;
+};
+export type changePlanResponseError = (
+  | changePlanResponse400
+  | changePlanResponse402
+  | changePlanResponse403
+  | changePlanResponse404
+  | changePlanResponse409
+  | changePlanResponse500
+) & {
+  headers: Headers;
+};
+
+export type changePlanResponse =
+  | changePlanResponseSuccess
+  | changePlanResponseError;
+
+export const getChangePlanUrl = () => {
+  return `/user/stripe/plan`;
+};
+
+export const changePlan = async (
+  changePlanRequest: ChangePlanRequest,
+  options?: RequestInit
+): Promise<changePlanResponse> => {
+  const res = await fetch(getChangePlanUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(changePlanRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: changePlanResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as changePlanResponse;
 };
 
 /**

@@ -1740,13 +1740,19 @@ export type CalendarEventSourceContent = {
 
 /**
  * Meeting-level fields shown in a calendar event mention preview, taken from
- * the requester's own projection of the meeting.
+ * the requester's own projection of the meeting, or — when the requester has
+ * none — from the mentioned projection a channel they belong to was given.
  */
 export type CalendarMentionEvent = {
     /**
-     * Number of attendees on the requester's copy.
+     * Number of attendees on the previewed copy.
      */
     attendeeCount: number;
+    /**
+     * Provider description, plain text or HTML, truncated for the preview.
+     * Clients must sanitize it before rendering.
+     */
+    description?: string | null;
     /**
      * Whether the event repeats.
      */
@@ -1779,14 +1785,17 @@ export type CalendarMentionEvent = {
      */
     title: string;
     /**
-     * Entity update time of the requester's copy.
+     * Entity update time of the previewed copy.
      */
     updatedAt: string;
     /**
      * The requester's own event entity for the mentioned meeting. Differs
      * from the mentioned id when the mention came from another attendee.
+     * Absent when the meeting is on none of the requester's calendars and
+     * they see it only because it was shared with one of their channels:
+     * that preview is read-only and there is no event of theirs to open.
      */
-    viewerEventId: string;
+    viewerEventId?: string | null;
 };
 
 /**
@@ -4959,8 +4968,7 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_descrip
  */
 export type DocumentSyncContentUpdatedMetadata = {
     /**
-     * Who mechanically changed the content. Absent on events published
-     * before attribution, and on human-only collab sessions.
+     * Legacy single-editor attribution; newer Sync callers send `editors`.
      */
     actor?: string | null;
     /**
@@ -4972,9 +4980,24 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
+     * Distinct editors since the preceding snapshot notification.
+     */
+    editors?: Array<DocumentSyncEditor>;
+    /**
      * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
+    on_behalf_of?: null | MacroUserIdStr;
+};
+
+/**
+ * An editor reported by Sync from an authenticated session.
+ */
+export type DocumentSyncEditor = {
+    /**
+     * User or bot that performed the edit.
+     */
+    actor: string;
     on_behalf_of?: null | MacroUserIdStr;
 };
 
@@ -7567,6 +7590,11 @@ export type PostMessage = {
      */
     content: string;
     /**
+     * Client-minted UUIDv7 for the new message, so an optimistic message
+     * already carries its final id; the server mints one when absent.
+     */
+    id?: string | null;
+    /**
      * Mentions tracked by the editor.
      */
     mentions?: Array<SimpleMention>;
@@ -9982,6 +10010,13 @@ export type ThreadAnchor = {
      * Highlight annotation UUID.
      */
     anchor_id: string;
+    /**
+     * The text the highlight covers, trimmed and bounded like a markdown
+     * snapshot. The highlight owns it and it can be edited there, so it is
+     * read from the highlight whenever the thread is, never stored on the
+     * thread. Absent when the highlight carries no text.
+     */
+    marked_text?: string | null;
     type: 'pdf_highlight';
 } | {
     /**

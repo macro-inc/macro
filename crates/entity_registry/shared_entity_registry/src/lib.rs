@@ -1,8 +1,9 @@
 #![deny(missing_docs)]
 //! Types shared by `entity_registry` and `entity_registry_db_utils`.
 //!
-//! Reads go through `entity_registry`. Transactional writes go through
-//! `entity_registry_db_utils`. Neither crate depends on the other.
+//! Reads and owner-grant policy live in `entity_registry`. Transactional writes
+//! go through `entity_registry_db_utils`, which applies that policy when
+//! registering owned entities.
 //!
 //! ```
 //! use model_entity::EntityType;
@@ -179,6 +180,12 @@ pub enum WriteOutcome {
 /// Failure kinds of the registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum EntityRegistryError {
+    /// An owned bot has no resolvable user/team sponsor.
+    #[error("bot sponsor is missing or invalid")]
+    InvalidBotSponsor,
+    /// An existing id has a different recorded owner or entity type.
+    #[error("entity registration conflicts with the recorded owner or type")]
+    RegistrationConflict,
     /// A stored row could not be decoded into a registry record.
     /// The attached id says which row.
     #[error("entity row is corrupt")]

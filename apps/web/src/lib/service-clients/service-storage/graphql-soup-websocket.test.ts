@@ -125,6 +125,57 @@ describe('GraphQL Soup subscription lifecycle', () => {
     for (const unsubscribe of unsubscribes)
       expect(unsubscribe).toHaveBeenCalledOnce();
   });
+  it('pauses subscriptions for navigation and reconnects in place exactly once per restore', () => {
+    const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn(() => {
+          const unsubscribe = vi.fn();
+          unsubscribes.push(unsubscribe);
+          return { unsubscribe };
+        }),
+      })),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle({
+      suspendOnPagehide: true,
+    });
+    lifecycle.replace(client as never, { disabled: false } as never);
+    expect(client.subscription).toHaveBeenCalledTimes(3);
+    for (let cycle = 0; cycle < 2; cycle += 1) {
+      dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      for (const unsubscribe of unsubscribes)
+        expect(unsubscribe).toHaveBeenCalledOnce();
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false }));
+      expect(client.subscription).toHaveBeenCalledTimes((cycle + 1) * 3);
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      expect(client.subscription).toHaveBeenCalledTimes((cycle + 2) * 3);
+    }
+    dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    lifecycle.dispose();
+    dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    expect(client.subscription).toHaveBeenCalledTimes(9);
+    for (const unsubscribe of unsubscribes)
+      expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('does not attach browser lifecycle behavior to the native client', () => {
+    const unsubscribe = vi.fn();
+    const client = {
+      subscription: vi.fn(() => ({ subscribe: () => ({ unsubscribe }) })),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle({
+      suspendOnPagehide: false,
+    });
+    lifecycle.replace(client as never);
+    dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    expect(client.subscription).toHaveBeenCalledTimes(2);
+    expect(unsubscribe).not.toHaveBeenCalled();
+    lifecycle.dispose();
+  });
+
   it('signals a terminal subscription failure once across both subscriptions', () => {
     toastFailure.mockClear();
     const receive: Array<(result: { error?: unknown }) => void> = [];

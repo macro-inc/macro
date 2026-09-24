@@ -11,6 +11,7 @@ import { useCreatePlaceable } from '@block-pdf/store/placeables';
 import { PayloadMode, type PayloadType } from '@block-pdf/type/placeables';
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
 import { useIsAuthenticated } from '@core/auth';
+import type { ThreadId } from '@core/comments/commentType';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import { cn } from '@ui';
 import { detect } from 'detect-browser';
@@ -57,7 +58,7 @@ export interface IHighlightObj {
   width: number;
   height: number;
   color: IColor;
-  threadId: number | null;
+  threadId: ThreadId | null;
   highlightId: string;
   rectId: string;
   text?: string;

@@ -7,7 +7,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { batch, createSignal, type JSX } from 'solid-js';
+import { batch, createSignal, type JSX, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +21,15 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(async () => {}),
 }));
 
+vi.mock('@app/lib/split-router', () => ({
+  SplitRouter: {
+    Outlet: (props: { fallback: () => JSX.Element }) => (
+      <Show when={mocks.selectedId()} fallback={props.fallback()}>
+        <ChannelDetailRouteView />
+      </Show>
+    ),
+  },
+}));
 vi.mock('@app/components/view-shell', () => ({
   ViewShell: {
     Root: mocks.pass,
@@ -64,6 +73,14 @@ vi.mock(
   () => ({ StaticMarkdownContext: mocks.pass })
 );
 vi.mock('@entity', () => ({ ListEntityMetadataQueryProvider: mocks.pass }));
+vi.mock('./components/ChannelDetailView', () => ({
+  ChannelDetailView: (props: { channel: ChannelEntity }) => (
+    <div data-testid="preview">
+      {props.channel.id}
+      <textarea aria-label="Composer" />
+    </div>
+  ),
+}));
 vi.mock('./components/ChannelsMobileView', () => ({
   ChannelsMobileView: () => null,
 }));
@@ -78,7 +95,10 @@ vi.mock('./channels-view-context', () => ({
       sortBy: { channels: 'updated_at', direct_messages: 'updated_at' },
     },
     mobileLayout: () => false,
-    previewChannelId: () => mocks.selectedId(),
+    selectedChannel: () =>
+      mocks.selectedId()
+        ? { type: 'channel', id: mocks.selectedId() }
+        : undefined,
     setAsideWidth: vi.fn(),
     setMobileTab: vi.fn(),
   }),
@@ -103,7 +123,7 @@ vi.mock('./queries', () => ({
   }),
 }));
 
-import { ChannelsView } from './channels-view';
+import { ChannelDetailRouteView, ChannelsView } from './channels-view';
 
 const row = (id: string, unreadId?: string): ChannelEntity => ({
   id,

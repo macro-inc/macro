@@ -18,6 +18,11 @@ vi.mock('../queries/annotations', () => ({
   getPdfComments: vi.fn(async () => []),
 }));
 
+vi.mock('@queries/messages/document-messages', () => ({
+  useMessageRootsQuery: () => ({ data: [] }),
+  useMessageActions: () => ({}),
+}));
+
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'user-1',
 }));
@@ -28,6 +33,7 @@ vi.mock('../signal/pdfViewer', () => ({
 
 vi.mock('./comments/commentOperations', () => ({
   useDeleteComment: () => vi.fn(),
+  useDeleteMessageCommentThread: () => vi.fn(),
   useDeleteNewComments: () => vi.fn(),
 }));
 

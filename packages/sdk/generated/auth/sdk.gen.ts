@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AppleLoginData, AppleLoginErrors, AppleLoginResponses, CancelCodexLoginData, CancelCodexLoginResponses, CheckGithubLinkStatusData, CheckGithubLinkStatusErrors, CheckGithubLinkStatusResponses, CheckGmailLinkStatusData, CheckGmailLinkStatusErrors, CheckGmailLinkStatusResponses, ConfigureCodexData, ConfigureCodexResponses, CreateCheckoutSessionV2Data, CreateCheckoutSessionV2Errors, CreateCheckoutSessionV2Responses, CreateGtmInviteLinkData, CreateGtmInviteLinkErrors, CreateGtmInviteLinkResponses, CreateInProgressLinkData, CreateInProgressLinkErrors, CreateInProgressLinkResponses, CreateMergeRequestData, CreateMergeRequestErrors, CreateMergeRequestResponses, CreatePortalSessionData, CreatePortalSessionErrors, CreatePortalSessionResponses, CreateTeamData, CreateTeamErrors, CreateTeamResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteCursorApiKeyData, DeleteCursorApiKeyErrors, DeleteCursorApiKeyResponses, DeleteGithubLinkData, DeleteGithubLinkErrors, DeleteGithubLinkResponses, DeleteTeamData, DeleteTeamErrors, DeleteTeamInviteHandlerData, DeleteTeamInviteHandlerErrors, DeleteTeamInviteHandlerResponses, DeleteTeamResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, DisconnectCodexData, DisconnectCodexResponses, EnrichGithubPullRequestsData, EnrichGithubPullRequestsErrors, EnrichGithubPullRequestsResponses, GenerateEmailLinkData, GenerateEmailLinkErrors, GenerateEmailLinkResponses, GetCodexConnectionData, GetCodexConnectionResponses, GetCursorApiKeyData, GetCursorApiKeyErrors, GetCursorApiKeyResponses, GetGtmInviteOfferData, GetGtmInviteOfferErrors, GetGtmInviteOfferResponses, GetLegacyUserPermissionsData, GetLegacyUserPermissionsErrors, GetLegacyUserPermissionsResponses, GetPermissionsData, GetPermissionsErrors, GetPermissionsResponses, GetReferralCodeData, GetReferralCodeErrors, GetReferralCodeResponses, GetTeamData, GetTeamErrors, GetTeamInvitesData, GetTeamInvitesErrors, GetTeamInvitesResponses, GetTeamResponses, GetUserInfoData, GetUserInfoErrors, GetUserInfoResponses, GetUserInvitesData, GetUserInvitesErrors, GetUserInvitesResponses, GetUserLinkExistsData, GetUserLinkExistsErrors, GetUserLinkExistsResponses, GetUserNameData, GetUserNameErrors, GetUserNameResponses, GetUserNamesData, GetUserNamesErrors, GetUserNamesResponses, GetUserNamesWithEmailData, GetUserNamesWithEmailErrors, GetUserNamesWithEmailResponses, GetUserOrganizationData, GetUserOrganizationErrors, GetUserOrganizationResponses, GetUserPermissionsData, GetUserPermissionsErrors, GetUserPermissionsResponses, GetUserQuotaData, GetUserQuotaErrors, GetUserQuotaResponses, GetUserTeamsData, GetUserTeamsErrors, GetUserTeamsResponses, HealthHandlerData, HealthHandlerResponses, InitGithubLinkData, InitGithubLinkErrors, InitGithubLinkResponses, InitGmailLinkData, InitGmailLinkErrors, InitGmailLinkResponses, InitOutlookLinkData, InitOutlookLinkErrors, InitOutlookLinkResponses, InviteToTeamData, InviteToTeamErrors, InviteToTeamResponses, JoinTeamData, JoinTeamErrors, JoinTeamResponses, ListCodexEnvironmentsData, ListCodexEnvironmentsResponses, ListCursorModelsData, ListCursorModelsErrors, ListCursorModelsResponses, ListGtmInviteLinksData, ListGtmInviteLinksErrors, ListGtmInviteLinksResponses, LogoutData, LogoutResponses, MacroApiTokenData, MacroApiTokenErrors, MacroApiTokenResponses, Oauth2CallbackData, Oauth2CallbackErrors, Oauth2CallbackResponses, OauthRedirectData, OauthRedirectErrors, OauthRedirectResponses, PasswordlessCallbackData, PasswordlessCallbackErrors, PasswordlessCallbackResponses, PasswordlessLoginData, PasswordlessLoginErrors, PasswordlessLoginResponses, PasswordLoginData, PasswordLoginErrors, PasswordLoginResponses, PatchTeamCrmSettingsData, PatchTeamCrmSettingsErrors, PatchTeamCrmSettingsResponses, PatchTeamData, PatchTeamErrors, PatchTeamResponses, PatchUserGroupData, PatchUserGroupErrors, PatchUserGroupResponses, PatchUserOnboardingData, PatchUserOnboardingErrors, PatchUserOnboardingResponses, PatchUserTutorialData, PatchUserTutorialErrors, PatchUserTutorialResponses, PollCodexLoginData, PollCodexLoginResponses, PostProfilePicturesData, PostProfilePicturesErrors, PostProfilePicturesResponses, PutCursorApiKeyData, PutCursorApiKeyErrors, PutCursorApiKeyResponses, PutCursorDefaultModelData, PutCursorDefaultModelErrors, PutCursorDefaultModelResponses, PutProfilePictureData, PutProfilePictureErrors, PutProfilePictureResponses, PutUserNameData, PutUserNameErrors, PutUserNameResponses, RedeemGtmInviteLinkData, RedeemGtmInviteLinkErrors, RedeemGtmInviteLinkResponses, RefreshData, RefreshErrors, RefreshResponses, RejectInvitationData, RejectInvitationErrors, RejectInvitationResponses, RemoveUserFromTeamData, RemoveUserFromTeamErrors, RemoveUserFromTeamResponses, ResendFusionauthVerifyUserEmailData, ResendFusionauthVerifyUserEmailErrors, ResendFusionauthVerifyUserEmailResponses, ResolveGtmInviteLinkData, ResolveGtmInviteLinkErrors, ResolveGtmInviteLinkResponses, RevokeGtmInviteLinkData, RevokeGtmInviteLinkErrors, RevokeGtmInviteLinkResponses, SendMobileWelcomeEmailData, SendMobileWelcomeEmailErrors, SendMobileWelcomeEmailResponses, SendReferralCodeData, SendReferralCodeErrors, SendReferralCodeResponses, SessionCreationData, SessionCreationErrors, SessionCreationResponses, SessionLoginData, SessionLoginErrors, SessionLoginResponses, SsoLoginData, SsoLoginErrors, SsoLoginResponses, StartCodexLoginData, StartCodexLoginResponses, ToggleTeamAutoJoinDomainData, ToggleTeamAutoJoinDomainErrors, ToggleTeamAutoJoinDomainResponses, ToggleTeamNonAdminInvitesData, ToggleTeamNonAdminInvitesErrors, ToggleTeamNonAdminInvitesResponses, VerifyEmailLinkData, VerifyEmailLinkErrors, VerifyEmailLinkResponses, VerifyFusionauthUserEmailData, VerifyFusionauthUserEmailErrors, VerifyFusionauthUserEmailResponses, VerifyMergeRequestData, VerifyMergeRequestErrors, VerifyMergeRequestResponses } from './types.gen';
+import type { AppleLoginData, AppleLoginErrors, AppleLoginResponses, CancelCodexLoginData, CancelCodexLoginResponses, ChangePlanData, ChangePlanErrors, ChangePlanResponses, CheckGithubLinkStatusData, CheckGithubLinkStatusErrors, CheckGithubLinkStatusResponses, CheckGmailLinkStatusData, CheckGmailLinkStatusErrors, CheckGmailLinkStatusResponses, ConfigureCodexData, ConfigureCodexResponses, CreateAiCreditCheckoutData, CreateAiCreditCheckoutErrors, CreateAiCreditCheckoutResponses, CreateCheckoutSessionV2Data, CreateCheckoutSessionV2Errors, CreateCheckoutSessionV2Responses, CreateGtmInviteLinkData, CreateGtmInviteLinkErrors, CreateGtmInviteLinkResponses, CreateInProgressLinkData, CreateInProgressLinkErrors, CreateInProgressLinkResponses, CreateMergeRequestData, CreateMergeRequestErrors, CreateMergeRequestResponses, CreatePortalSessionData, CreatePortalSessionErrors, CreatePortalSessionResponses, CreateTeamData, CreateTeamErrors, CreateTeamResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteCursorApiKeyData, DeleteCursorApiKeyErrors, DeleteCursorApiKeyResponses, DeleteGithubLinkData, DeleteGithubLinkErrors, DeleteGithubLinkResponses, DeleteTeamData, DeleteTeamErrors, DeleteTeamInviteHandlerData, DeleteTeamInviteHandlerErrors, DeleteTeamInviteHandlerResponses, DeleteTeamResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, DisconnectCodexData, DisconnectCodexResponses, EnrichGithubPullRequestsData, EnrichGithubPullRequestsErrors, EnrichGithubPullRequestsResponses, GenerateEmailLinkData, GenerateEmailLinkErrors, GenerateEmailLinkResponses, GetAiBillingPlansData, GetAiBillingPlansResponses, GetAiBillingSummaryData, GetAiBillingSummaryErrors, GetAiBillingSummaryResponses, GetCodexConnectionData, GetCodexConnectionResponses, GetCursorApiKeyData, GetCursorApiKeyErrors, GetCursorApiKeyResponses, GetGtmInviteOfferData, GetGtmInviteOfferErrors, GetGtmInviteOfferResponses, GetLegacyUserPermissionsData, GetLegacyUserPermissionsErrors, GetLegacyUserPermissionsResponses, GetPermissionsData, GetPermissionsErrors, GetPermissionsResponses, GetReferralCodeData, GetReferralCodeErrors, GetReferralCodeResponses, GetTeamData, GetTeamErrors, GetTeamInvitesData, GetTeamInvitesErrors, GetTeamInvitesResponses, GetTeamResponses, GetUserInfoData, GetUserInfoErrors, GetUserInfoResponses, GetUserInvitesData, GetUserInvitesErrors, GetUserInvitesResponses, GetUserLinkExistsData, GetUserLinkExistsErrors, GetUserLinkExistsResponses, GetUserNameData, GetUserNameErrors, GetUserNameResponses, GetUserNamesData, GetUserNamesErrors, GetUserNamesResponses, GetUserNamesWithEmailData, GetUserNamesWithEmailErrors, GetUserNamesWithEmailResponses, GetUserOrganizationData, GetUserOrganizationErrors, GetUserOrganizationResponses, GetUserPermissionsData, GetUserPermissionsErrors, GetUserPermissionsResponses, GetUserQuotaData, GetUserQuotaErrors, GetUserQuotaResponses, GetUserTeamsData, GetUserTeamsErrors, GetUserTeamsResponses, HealthHandlerData, HealthHandlerResponses, InitGithubLinkData, InitGithubLinkErrors, InitGithubLinkResponses, InitGmailLinkData, InitGmailLinkErrors, InitGmailLinkResponses, InitOutlookLinkData, InitOutlookLinkErrors, InitOutlookLinkResponses, InviteToTeamData, InviteToTeamErrors, InviteToTeamResponses, JoinTeamData, JoinTeamErrors, JoinTeamResponses, ListCodexEnvironmentsData, ListCodexEnvironmentsResponses, ListCursorModelsData, ListCursorModelsErrors, ListCursorModelsResponses, ListGtmInviteLinksData, ListGtmInviteLinksErrors, ListGtmInviteLinksResponses, LogoutData, LogoutResponses, MacroApiTokenData, MacroApiTokenErrors, MacroApiTokenResponses, Oauth2CallbackData, Oauth2CallbackErrors, Oauth2CallbackResponses, OauthRedirectData, OauthRedirectErrors, OauthRedirectResponses, PasswordlessCallbackData, PasswordlessCallbackErrors, PasswordlessCallbackResponses, PasswordlessLoginData, PasswordlessLoginErrors, PasswordlessLoginResponses, PasswordLoginData, PasswordLoginErrors, PasswordLoginResponses, PatchTeamCrmSettingsData, PatchTeamCrmSettingsErrors, PatchTeamCrmSettingsResponses, PatchTeamData, PatchTeamErrors, PatchTeamMemberPlanData, PatchTeamMemberPlanErrors, PatchTeamMemberPlanResponses, PatchTeamResponses, PatchUserGroupData, PatchUserGroupErrors, PatchUserGroupResponses, PatchUserOnboardingData, PatchUserOnboardingErrors, PatchUserOnboardingResponses, PatchUserTutorialData, PatchUserTutorialErrors, PatchUserTutorialResponses, PollCodexLoginData, PollCodexLoginResponses, PostProfilePicturesData, PostProfilePicturesErrors, PostProfilePicturesResponses, PutCursorApiKeyData, PutCursorApiKeyErrors, PutCursorApiKeyResponses, PutCursorDefaultModelData, PutCursorDefaultModelErrors, PutCursorDefaultModelResponses, PutProfilePictureData, PutProfilePictureErrors, PutProfilePictureResponses, PutUserNameData, PutUserNameErrors, PutUserNameResponses, RedeemGtmInviteLinkData, RedeemGtmInviteLinkErrors, RedeemGtmInviteLinkResponses, RefreshData, RefreshErrors, RefreshResponses, RejectInvitationData, RejectInvitationErrors, RejectInvitationResponses, RemoveUserFromTeamData, RemoveUserFromTeamErrors, RemoveUserFromTeamResponses, ResendFusionauthVerifyUserEmailData, ResendFusionauthVerifyUserEmailErrors, ResendFusionauthVerifyUserEmailResponses, ResolveGtmInviteLinkData, ResolveGtmInviteLinkErrors, ResolveGtmInviteLinkResponses, RevokeGtmInviteLinkData, RevokeGtmInviteLinkErrors, RevokeGtmInviteLinkResponses, SendMobileWelcomeEmailData, SendMobileWelcomeEmailErrors, SendMobileWelcomeEmailResponses, SendReferralCodeData, SendReferralCodeErrors, SendReferralCodeResponses, SessionCreationData, SessionCreationErrors, SessionCreationResponses, SessionLoginData, SessionLoginErrors, SessionLoginResponses, SsoLoginData, SsoLoginErrors, SsoLoginResponses, StartCodexLoginData, StartCodexLoginResponses, ToggleTeamAutoJoinDomainData, ToggleTeamAutoJoinDomainErrors, ToggleTeamAutoJoinDomainResponses, ToggleTeamNonAdminInvitesData, ToggleTeamNonAdminInvitesErrors, ToggleTeamNonAdminInvitesResponses, UpdateAiBillingOverageData, UpdateAiBillingOverageErrors, UpdateAiBillingOverageResponses, VerifyEmailLinkData, VerifyEmailLinkErrors, VerifyEmailLinkResponses, VerifyFusionauthUserEmailData, VerifyFusionauthUserEmailErrors, VerifyFusionauthUserEmailResponses, VerifyMergeRequestData, VerifyMergeRequestErrors, VerifyMergeRequestResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -55,6 +55,51 @@ export class Sdk extends HeyApiClient {
     }) {
         super(args);
         Sdk.__registry.set(this, args?.key);
+    }
+    
+    /**
+     * Start a Stripe Checkout for a credit pack. Payer only.
+     */
+    public createAiCreditCheckout<ThrowOnError extends boolean = false>(options: Options<CreateAiCreditCheckoutData, ThrowOnError>): RequestResult<CreateAiCreditCheckoutResponses, CreateAiCreditCheckoutErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateAiCreditCheckoutResponses, CreateAiCreditCheckoutErrors, ThrowOnError>({
+            url: '/ai-billing/credits/checkout',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Turn overage billing on or off and set the per-period cap. Payer only.
+     */
+    public updateAiBillingOverage<ThrowOnError extends boolean = false>(options: Options<UpdateAiBillingOverageData, ThrowOnError>): RequestResult<UpdateAiBillingOverageResponses, UpdateAiBillingOverageErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateAiBillingOverageResponses, UpdateAiBillingOverageErrors, ThrowOnError>({
+            url: '/ai-billing/overage',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * The plan catalog, credit packs, and overage cap bounds.
+     */
+    public getAiBillingPlans<ThrowOnError extends boolean = false>(options?: Options<GetAiBillingPlansData, ThrowOnError>): RequestResult<GetAiBillingPlansResponses, unknown, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetAiBillingPlansResponses, unknown, ThrowOnError>({ url: '/ai-billing/plans', ...options });
+    }
+    
+    /**
+     * The caller's current-period AI usage, credits, and overage settings.
+     *
+     * Runs a settlement first so the position reflects any credits or overage
+     * that were waiting to be booked.
+     */
+    public getAiBillingSummary<ThrowOnError extends boolean = false>(options?: Options<GetAiBillingSummaryData, ThrowOnError>): RequestResult<GetAiBillingSummaryResponses, GetAiBillingSummaryErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetAiBillingSummaryResponses, GetAiBillingSummaryErrors, ThrowOnError>({ url: '/ai-billing/summary', ...options });
     }
     
     public disconnectCodex<ThrowOnError extends boolean = false>(options?: Options<DisconnectCodexData, ThrowOnError>): RequestResult<DisconnectCodexResponses, unknown, ThrowOnError> {
@@ -655,6 +700,24 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Moves one team member's seat between paid plans.
+     *
+     * Team admins and owners only. The team's subscription is re-billed for
+     * the seat at once (prorated); the member's tier role and individual AI
+     * allowance follow immediately.
+     */
+    public patchTeamMemberPlan<ThrowOnError extends boolean = false>(options: Options<PatchTeamMemberPlanData, ThrowOnError>): RequestResult<PatchTeamMemberPlanResponses, PatchTeamMemberPlanErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchTeamMemberPlanResponses, PatchTeamMemberPlanErrors, ThrowOnError>({
+            url: '/team/members/{member_user_id}/plan',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
      * Toggles whether non-admin members may invite users to the team. Teams
      * start with this on (any member can invite); turning it off restricts
      * inviting to team admins and owners. Requires the caller to be an Admin
@@ -843,6 +906,28 @@ export class Sdk extends HeyApiClient {
     public createCheckoutSessionV2<ThrowOnError extends boolean = false>(options: Options<CreateCheckoutSessionV2Data, ThrowOnError>): RequestResult<CreateCheckoutSessionV2Responses, CreateCheckoutSessionV2Errors, ThrowOnError> {
         return (options.client ?? this.client).post<CreateCheckoutSessionV2Responses, CreateCheckoutSessionV2Errors, ThrowOnError>({
             url: '/user/stripe/checkoutv2',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Moves the caller's own seat between paid plans.
+     *
+     * On a team billed per seat this moves only the caller's seat (team admins
+     * and the owner may do so; teammates' seats are managed from team
+     * settings). Members of a free team, and solo subscribers, get the price on
+     * their own subscription's seat item swapped. The proration is invoiced
+     * immediately either way; roles and the AI allowance follow at once on a
+     * team and from the `customer.subscription.updated` webhook for a personal
+     * subscription.
+     */
+    public changePlan<ThrowOnError extends boolean = false>(options: Options<ChangePlanData, ThrowOnError>): RequestResult<ChangePlanResponses, ChangePlanErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ChangePlanResponses, ChangePlanErrors, ThrowOnError>({
+            url: '/user/stripe/plan',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

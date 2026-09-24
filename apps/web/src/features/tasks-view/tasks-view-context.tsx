@@ -1,8 +1,4 @@
-import {
-  type EntityDetailNavigationOptions,
-  entityDetailTarget,
-  useEntityDetailNavigationStack,
-} from '@app/components/entity-detail/EntityDetailNavigationStack';
+import type { EntityDetailNavigationOptions } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import {
   createListController,
   type ListActivation,
@@ -13,14 +9,27 @@ import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { makePersistedState } from '@app/lib/persistence';
 import {
+  createSearchParams,
+  useNavigate,
+  useRouteParams,
+} from '@app/lib/split-router';
+import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
+import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import type { ContextProviderProps } from '@solid-primitives/context';
-import { type Accessor, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  on,
+  onCleanup,
+} from 'solid-js';
 import {
   createStore,
   produce,
@@ -36,6 +45,8 @@ import {
   type TasksDataSourceItem,
   useTasksDataSource,
 } from './queries/use-tasks-query';
+import { taskDetailRoute, tasksSplitRoute } from './route';
+import { tasksTabSearch, tasksTabSearchCodec } from './tasks-tab-search';
 import type {
   TaskDetailTarget,
   TaskSortId,
@@ -90,7 +101,10 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   TasksViewProviderProps
 >('TasksView', (props) => {
   const panel = useSplitPanelOrThrow();
-  const navigationStack = useEntityDetailNavigationStack();
+  const navigate = useNavigate();
+  const routeParams = useRouteParams(taskDetailRoute);
+  const [tabSearch] = createSearchParams(tasksTabSearch);
+  const selectPreview = createPreviewSelectionGuard();
   const userId = useUserId();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
@@ -120,6 +134,25 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       restoreEntryState: props.initialState === undefined,
       restorePreferences: initial.collapsedSidebarSectionIds === undefined,
     })
+  );
+
+  createEffect(
+    on(
+      () => tabSearch.tab,
+      (tab) => {
+        if (state.tab === tab) return;
+        setState(
+          produce((draft) => {
+            draft.tab = tab;
+            draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
+            draft.facets = normalizeFacetSelection(
+              DEFAULT_TASK_FACET_SELECTION
+            );
+            draft.collapsedGroupIds = [];
+          })
+        );
+      }
+    )
   );
 
   const isGroupExpanded = (groupId: string) =>
@@ -161,54 +194,98 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     });
   };
 
-  const selectedTask = (): TaskDetailTarget | undefined => {
-    const taskEntry = navigationStack.entries.find(
-      (entry) =>
-        entry.data.type === 'document' && entry.data.subType?.type === 'task'
+  const selectedTask = createMemo<TaskDetailTarget | undefined>(() => {
+    const taskId = routeParams.taskId;
+    return typeof taskId === 'string' ? { id: taskId } : undefined;
+  });
+  const taskSelection = (taskId: string) => ({
+    type: 'document' as const,
+    id: taskId,
+    fileType: 'md' as const,
+    subType: { type: 'task' as const },
+  });
+  const opensInline = (options?: EntityDetailNavigationOptions) => {
+    const event = options?.event;
+    return (
+      !isTouchDevice() &&
+      !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
-    if (!taskEntry) return undefined;
-
-    if (
-      taskEntry.data.type !== 'document' ||
-      taskEntry.data.subType?.type !== 'task'
-    ) {
-      return undefined;
-    }
-    return {
-      id: taskEntry.data.id,
-      fallbackName: taskEntry.data.fallbackName,
-    };
   };
-
+  const closeTask = () =>
+    navigate(
+      { route: tasksSplitRoute, params: {} },
+      {
+        search: {
+          [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
+            tab: state.tab,
+          }),
+        },
+      }
+    );
   const openTask = (
     task: TaskDetailTarget,
     options?: EntityDetailNavigationOptions
   ) => {
-    const target = entityDetailTarget.document({
-      id: task.id,
-      fileType: 'md',
-      subType: { type: 'task' },
-      fallbackName: task.fallbackName,
-    });
-    if (!navigationStack.shouldNavigate(target, options)) return false;
-    // A refused reset already alerted; there is nothing to fall back to.
-    if (!navigationStack.reset(target)) return true;
-    const row = source
-      .items()
-      .find((item) => item.kind === 'entity' && item.entity.id === task.id);
-    if (row) {
-      list.focus.set(row.id, { reason: 'programmatic', force: true });
-      list.selection.setAnchor(row.id);
-    }
-
+    if (!opensInline(options)) return false;
+    if (!selectPreview.canSelect(taskSelection(task.id))) return true;
+    navigate(
+      { route: taskDetailRoute, params: { taskId: task.id } },
+      {
+        search: {
+          [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
+            tab: state.tab,
+          }),
+        },
+      }
+    );
     return true;
   };
-  const closeTask = navigationStack.clear;
+
+  createEffect(
+    on(selectedTask, (task, previous) => {
+      if (!selectPreview(task ? taskSelection(task.id) : undefined)) {
+        if (previous) {
+          navigate(
+            { route: taskDetailRoute, params: { taskId: previous.id } },
+            {
+              replace: true,
+              search: {
+                [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
+                  tab: state.tab,
+                }),
+              },
+            }
+          );
+        } else {
+          navigate(
+            { route: tasksSplitRoute, params: {} },
+            {
+              replace: true,
+              search: {
+                [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
+                  tab: state.tab,
+                }),
+              },
+            }
+          );
+        }
+        return;
+      }
+      if (!task) return;
+      const row = source
+        .items()
+        .find((item) => item.kind === 'entity' && item.entity.id === task.id);
+      if (!row) return;
+      list.focus.set(row.id, { reason: 'programmatic', force: true });
+      list.selection.setAnchor(row.id);
+    })
+  );
 
   const setTab = (tab: TaskTab) => {
-    closeTask();
-    if (state.tab === tab) return;
-
+    if (state.tab === tab) {
+      closeTask();
+      return;
+    }
     setState(
       produce((draft) => {
         draft.tab = tab;
@@ -217,6 +294,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         draft.collapsedGroupIds = [];
       })
     );
+    closeTask();
   };
 
   const setFacets = (facets: TasksViewState['facets']) => {

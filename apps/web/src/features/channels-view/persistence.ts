@@ -38,7 +38,6 @@ const channelsExpandedGroupsSchema = z.preprocess(
   },
   z.object({
     favorites: z.boolean().default(true),
-    unread: z.boolean().default(true),
     channels: z.boolean().default(true),
     direct_messages: z.boolean().default(true),
   })
@@ -50,10 +49,8 @@ const channelsEntryStateSchemaWithDefaults = z.object({
   mobileTab: z
     .enum(['channels', 'direct_messages', 'recents'])
     .default('channels'),
-  selectedChannelId: z.string().optional(),
   expandedGroups: channelsExpandedGroupsSchema.default({
     favorites: true,
-    unread: true,
     channels: true,
     direct_messages: true,
   }),
@@ -66,10 +63,8 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
   version: 1,
   tab: 'browse',
   mobileTab: 'channels',
-  selectedChannelId: undefined,
   expandedGroups: {
     favorites: true,
-    unread: true,
     channels: true,
     direct_messages: true,
   },
@@ -108,9 +103,6 @@ function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
     version: 1,
     tab: state.tab,
     mobileTab: state.mobileTab,
-    ...(state.selectedChannelId === undefined
-      ? {}
-      : { selectedChannelId: state.selectedChannelId }),
     expandedGroups: state.expandedGroups,
     collapsedLabels: state.collapsedLabels,
   };
@@ -127,7 +119,6 @@ function restoreChannelsEntryState(
     ...current,
     tab: restored.tab,
     mobileTab: restored.mobileTab,
-    selectedChannelId: restored.selectedChannelId,
     expandedGroups: restored.expandedGroups,
     collapsedLabels: restored.collapsedLabels,
   };

@@ -93,6 +93,14 @@ export type ChannelEntityTarget = {
 };
 
 /**
+ * The comment a document row opens at when it is not derived from the row's
+ * notifications, e.g. a preview rebuilt from its route.
+ */
+export type DocumentCommentTarget = {
+  commentId: string;
+};
+
+/**
  * The resolved click intent for a channel-family row. Either a specific
  * message to jump to and highlight, or `latest` — open the channel at its
  * newest message with no highlight. A whole `channel` row with no unread

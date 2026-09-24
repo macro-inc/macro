@@ -191,6 +191,44 @@ describe('composeAgentContextPrompt', () => {
     });
   });
 
+  it('prefers the live text and keeps the snapshot to show an edit', () => {
+    const composed = composeAgentContextPrompt({
+      promptMarkdown: 'what does this mean?',
+      anchor: {
+        markId: 'mark-1',
+        markedText: 'the old phrase',
+        currentMarkedText: 'the new phrase',
+        surroundingText: 'Before the new phrase after.',
+      },
+    });
+    const state = markdownToSerializedEditorStateWithIds(composed);
+
+    expect(state.root.children[0]).toMatchObject({
+      type: 'agent-context',
+      text:
+        'Comment anchor: {"markId":"mark-1","markedText":"the old phrase","currentMarkedText":"the new phrase","surroundingText":"Before the new phrase after."}\n' +
+        'currentMarkedText is what the mark covers in the document now and surroundingText the passage around it. markedText is what it covered when the comment was posted; if the two differ, the text was edited since.',
+    });
+  });
+
+  it('describes a live mark on a thread that predates snapshots', () => {
+    const composed = composeAgentContextPrompt({
+      promptMarkdown: 'what does this mean?',
+      anchor: {
+        markId: 'mark-1',
+        currentMarkedText: 'the phrase',
+        surroundingText: 'All of the phrase.',
+      },
+    });
+    const state = markdownToSerializedEditorStateWithIds(composed);
+
+    expect(state.root.children[0]).toMatchObject({
+      text:
+        'Comment anchor: {"markId":"mark-1","currentMarkedText":"the phrase","surroundingText":"All of the phrase."}\n' +
+        'currentMarkedText is what the mark covers in the document now and surroundingText the passage around it.',
+    });
+  });
+
   it('names a mark with no snapshot without claiming one', () => {
     const composed = composeAgentContextPrompt({
       promptMarkdown: 'what does this mean?',
@@ -201,6 +239,52 @@ describe('composeAgentContextPrompt', () => {
     expect(state.root.children[0]).toMatchObject({
       type: 'agent-context',
       text: 'Comment anchor: {"markId":"mark-1"}',
+    });
+  });
+
+  it('names the words a PDF highlight covers', () => {
+    const composed = composeAgentContextPrompt({
+      promptMarkdown: 'what does this mean?',
+      anchor: {
+        type: 'pdfHighlight',
+        anchorId: 'highlight-1',
+        markedText: 'indemnifies the lessor',
+      },
+    });
+    const state = markdownToSerializedEditorStateWithIds(composed);
+
+    expect(state.root.children[0]).toMatchObject({
+      text:
+        'Comment anchor: {"type":"pdfHighlight","anchorId":"highlight-1","markedText":"indemnifies the lessor"}\n' +
+        'markedText is the text the PDF highlight covers.',
+    });
+  });
+
+  it('says a PDF highlight without text covers unknown words', () => {
+    const composed = composeAgentContextPrompt({
+      promptMarkdown: 'what does this mean?',
+      anchor: { type: 'pdfHighlight', anchorId: 'highlight-1' },
+    });
+    const state = markdownToSerializedEditorStateWithIds(composed);
+
+    expect(state.root.children[0]).toMatchObject({
+      text:
+        'Comment anchor: {"type":"pdfHighlight","anchorId":"highlight-1"}\n' +
+        'The PDF highlight carries no text, so which words it covers is not known.',
+    });
+  });
+
+  it('says a PDF pin covers no words', () => {
+    const composed = composeAgentContextPrompt({
+      promptMarkdown: 'what does this mean?',
+      anchor: { type: 'pdfPin', anchorId: 'pin-1' },
+    });
+    const state = markdownToSerializedEditorStateWithIds(composed);
+
+    expect(state.root.children[0]).toMatchObject({
+      text:
+        'Comment anchor: {"type":"pdfPin","anchorId":"pin-1"}\n' +
+        'The comment is pinned to a point on a PDF page rather than to text, so it covers no words.',
     });
   });
 

@@ -1,4 +1,5 @@
 import type { ListController } from '@app/components/list';
+import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { ChannelEntity } from '@entity';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
@@ -28,14 +29,6 @@ export type ChannelRailRow =
       id: `favorite:${string}`;
       group: 'favorites';
       favorite: Favorite;
-    }
-  | {
-      /** A channel in the flat Unread list; the same channel also has a `conversation` row. */
-      kind: 'unread';
-      id: `unread:${string}`;
-      group: 'unread';
-      localIndex: number;
-      channel: ChannelEntity;
     }
   | {
       /** A team channel label heading inside the Channels section. */
@@ -108,9 +101,6 @@ export const rowKeyForSection = (group: ChannelsRailSection) =>
 
 export const rowKeyForLabel = (labelId: string) => `label:${labelId}` as const;
 
-export const rowKeyForUnread = (channelId: string) =>
-  `unread:${channelId}` as const;
-
 export const domIdForRow = (railId: string, rowId: string) =>
   `${railId}-${rowId}`;
 
@@ -126,7 +116,7 @@ export type ChannelsRailContext = {
   selectTab: (tab: ChannelsTab) => void;
   sources: ChannelsSources;
   favorites: Accessor<readonly Favorite[]>;
-  selectedChannelId: Accessor<string | undefined>;
+  selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
   isGroupOpen: (group: ChannelsRailSection) => boolean;
   toggleGroup: (group: ChannelsRailSection) => void;
   /** Whether channel labels and smart tags are enabled for this user. */
@@ -141,8 +131,6 @@ export type ChannelsRailContext = {
   toggleLabel: (labelId: string) => void;
   /** The Channels section's rendered rows: label headings and channels. */
   channelSectionRows: Accessor<readonly ChannelSectionRow[]>;
-  /** Channels with unread activity, newest first, for the Unread section. */
-  unreadChannels: Accessor<readonly ChannelEntity[]>;
   /** Number of channels in the label with unread activity. */
   labelUnreadCount: (label: ChannelLabel) => number;
   /**

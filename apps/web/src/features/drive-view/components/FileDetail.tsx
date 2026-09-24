@@ -26,6 +26,7 @@ import {
   type Setter,
   Suspense,
   Switch,
+  useContext,
 } from 'solid-js';
 
 export type FileDetailShareProps = {
@@ -44,6 +45,7 @@ export type FileDetailLayoutProps = ParentProps<
 >;
 
 export function FileDetailLayout(props: FileDetailLayoutProps) {
+  const parentShareContext = useContext(ShareDialogContext);
   const [localShareOpen, setLocalShareOpen] = createSignal(false);
   const shareOpen = () => props.shareOpen ?? localShareOpen();
   const setShareOpen: Setter<boolean> = (next) => {
@@ -62,6 +64,7 @@ export function FileDetailLayout(props: FileDetailLayoutProps) {
         isOpen: shareOpen,
         open: () => setShareOpen(true),
         close: () => setShareOpen(false),
+        copyLink: parentShareContext?.copyLink,
       }}
     >
       <SidePanel.Layout
