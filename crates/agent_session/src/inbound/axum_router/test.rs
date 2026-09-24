@@ -868,12 +868,14 @@ async fn an_owner_starts_their_macrod_agent_from_the_composer() {
     assert_eq!(response.status(), StatusCode::CREATED);
     assert!(opener.managed.lock().unwrap().is_empty());
     assert!(opener.opened.lock().unwrap().is_empty());
-    let requested = requests.requested.lock().unwrap();
-    assert_eq!(requested.len(), 1);
-    assert_eq!(requested[0].bot_id, BotId::TEST_A);
-    assert_eq!(requested[0].owner.as_ref(), OWNER);
-    assert_eq!(requested[0].session_id.as_uuid(), minted);
-    assert_eq!(requested[0].model.as_deref(), Some("claude-opus-5"));
+    {
+        let requested = requests.requested.lock().unwrap();
+        assert_eq!(requested.len(), 1);
+        assert_eq!(requested[0].bot_id, BotId::TEST_A);
+        assert_eq!(requested[0].owner.as_ref(), OWNER);
+        assert_eq!(requested[0].session_id.as_uuid(), minted);
+        assert_eq!(requested[0].model.as_deref(), Some("claude-opus-5"));
+    }
 
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
