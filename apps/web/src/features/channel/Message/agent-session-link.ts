@@ -12,6 +12,8 @@ import { isBotSenderId } from '@queries/messages/message-sender';
  */
 export type AgentSessionLink = {
   sessionId: string;
+  /** What the link reads as: the bot's name, when the harness sent one. */
+  label?: string;
 };
 
 /** A message split into the chrome the harness prefixed and its body. */
@@ -28,13 +30,18 @@ export type SplitMessageContent = {
 const LEADING_AGENT_SESSION_MENTION =
   /^<m-agent-session-mention>(.*?)<\/m-agent-session-mention>[ \t]*(?:\r?\n)*/;
 
-function isAgentSessionMentionInfo(value: unknown): value is { id: string } {
+function isAgentSessionMentionInfo(
+  value: unknown
+): value is { id: string; label?: string } {
   return (
     typeof value === 'object' &&
     value !== null &&
     'id' in value &&
     typeof value.id === 'string' &&
-    value.id.length > 0
+    value.id.length > 0 &&
+    (!('label' in value) ||
+      value.label === undefined ||
+      typeof value.label === 'string')
   );
 }
 
@@ -56,8 +63,9 @@ export function splitLeadingAgentSessionLink(
   if (!isAgentSessionMentionInfo(parsed)) {
     return { link: undefined, body: content };
   }
+  const label = parsed.label?.trim();
   return {
-    link: { sessionId: parsed.id },
+    link: label ? { sessionId: parsed.id, label } : { sessionId: parsed.id },
     body: content.slice(match[0].length),
   };
 }

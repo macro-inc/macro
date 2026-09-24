@@ -27,6 +27,8 @@ const live = vi.hoisted(() => ({
     messages: [] as unknown[],
     metadata: {} as unknown,
   },
+  /** The bot the log's load names; a chip reads the persona's name from it. */
+  bot: {} as unknown,
   listeners: new Set<(events: unknown[]) => void>(),
 }));
 const serviceClient = vi.hoisted(() => ({ get: vi.fn() }));
@@ -49,7 +51,7 @@ vi.mock('@core/agent-session/AgentSession', () => ({
       live.acquire(id);
       return {
         id,
-        load: () => Promise.resolve({ session: {}, bot: {} }),
+        load: () => Promise.resolve({ session: {}, bot: live.bot }),
         snapshot: () => Promise.resolve(live.snapshot),
         subscribe: (listener: (events: unknown[]) => void) => {
           live.listeners.add(listener);
@@ -73,6 +75,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn(), success: vi.fn() },
 }));
 
+import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { createMagicChipModel } from './create-magic-chip-model';
 
 /** Fold events, as the session would deliver them. */
@@ -162,6 +165,7 @@ describe('createMagicChipModel', () => {
     queryClient.clear();
     vi.clearAllMocks();
     live.listeners.clear();
+    live.bot = {};
     live.snapshot = { messages: [prompt, response], metadata: metadata(null) };
     serviceClient.get.mockResolvedValue({
       isOk: () => true,
@@ -361,6 +365,56 @@ describe('createMagicChipModel', () => {
       expect(serviceClient.get).toHaveBeenCalledTimes(calls);
     }
   );
+
+  it('names a persona by its own name, verbatim', async () => {
+    serviceClient.get.mockResolvedValue({
+      isOk: () => true,
+      isErr: () => false,
+      value: {
+        status: { kind: 'disconnected' },
+        harness: 'cursor',
+        botId: '019a0000-0000-7000-8000-000000000123',
+        model: '',
+        canEdit: true,
+      },
+    });
+    live.bot = {
+      id: '019a0000-0000-7000-8000-000000000123',
+      name: 'WolfCoderPro',
+      handle: 'wolfcoderpro',
+    };
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const dispose = createRoot((dispose) => {
+      model = createModel(props);
+      return dispose;
+    });
+    await settle();
+    expect(model.header()?.agent).toBe('WolfCoderPro');
+    dispose();
+  });
+
+  it('names a first-party bot for its runtime, not its bot row', async () => {
+    serviceClient.get.mockResolvedValue({
+      isOk: () => true,
+      isErr: () => false,
+      value: {
+        status: { kind: 'disconnected' },
+        harness: 'cursor',
+        botId: CURSOR_BOT_ID,
+        model: '',
+        canEdit: true,
+      },
+    });
+    live.bot = { id: CURSOR_BOT_ID, name: 'Cursor', handle: 'cursor' };
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const dispose = createRoot((dispose) => {
+      model = createModel(props);
+      return dispose;
+    });
+    await settle();
+    expect(model.header()?.agent).toBe('Cursor Agent');
+    dispose();
+  });
 
   it.each(['in-memory', 'macro-inmem', 'sandbox'])(
     'names the %s session Macro Agent, not Macro Agent Agent',

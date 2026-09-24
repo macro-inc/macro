@@ -9,11 +9,15 @@ type AgentSessionLinkProps = {
   class?: string;
 };
 
+/** What the pill reads as when the harness sent no bot name. */
+const GENERIC_LABEL = 'Open Session';
+
 /**
- * A quiet "Open Session" chip on the sender line of a message an agent
- * posted from a session, opening that session in its own split. Rendered
- * only when the message leads with the harness's session node; see
- * `agent-session-link`.
+ * A quiet pill on the sender line of a message an agent posted from a
+ * session, opening that session in its own split. Named after the bot whose
+ * session it is ("Macro Coder", "WolfCoderPro") when the harness sent its
+ * name, generically otherwise. Rendered only when the message leads with
+ * the harness's session node; see `agent-session-link`.
  */
 export function AgentSessionLink(props: AgentSessionLinkProps) {
   const message = useMessage();
@@ -40,7 +44,7 @@ export function AgentSessionLink(props: AgentSessionLinkProps) {
             );
           }}
         >
-          Open Session
+          {link().label ?? GENERIC_LABEL}
           <ArrowUpRightIcon class="size-3" aria-hidden="true" />
         </button>
       )}

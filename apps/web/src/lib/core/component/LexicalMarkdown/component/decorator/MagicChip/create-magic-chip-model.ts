@@ -18,13 +18,17 @@ import {
   type MagicChipStatus,
 } from '@macro-inc/lexical-core';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
+import { firstPartyBotName } from '@queries/bots/first-party-bot-name';
 import { queryReadyGate } from '@queries/gate';
 import type {
   FoldedMessage,
   FoldedStreamEvent,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
-import type { SessionStatusDto } from '@service-agent-harness/generated/schemas';
+import type {
+  SessionBot,
+  SessionStatusDto,
+} from '@service-agent-harness/generated/schemas';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   deriveMagicChipPresentation,
@@ -48,14 +52,18 @@ type SessionIdentity = {
 };
 
 /**
- * The persona as the header names it: the runtime's product name, with
+ * The persona as the header names it. A bot somebody created is called by
+ * its own name, verbatim ("WolfCoderPro"). A first-party bot has no persona
+ * of its own, so it is named for its runtime: the product name, with
  * "Agent" appended when that name does not already end in it (`Macro Agent`,
  * `Cursor Agent`). A titled slug for a runtime the composer does not name.
  */
-function agentName(session: {
-  harness?: string;
-  botId?: string;
-}): string | undefined {
+function agentName(
+  session: { harness?: string; botId?: string },
+  bot: Pick<SessionBot, 'id' | 'name'> | undefined
+): string | undefined {
+  const personaName = bot?.name.trim();
+  if (bot && personaName && !firstPartyBotName(bot.id)) return personaName;
   const harness = sessionHarnessSlug(session);
   if (!harness) return undefined;
   const known = harnessDisplayName(harness);
@@ -118,6 +126,8 @@ export function createMagicChipModel(props: MagicChipData): {
     return (status ? magicChipStatus(status) : undefined) ?? props.status;
   };
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
+  // The bot the session runs as, which only the log's load names.
+  const [bot, setBot] = createSignal<SessionBot>();
   const pending = () => metadata()?.pendingInteractions ?? [];
   // The last system event's wire name, which the fold carries as status.
   const latestEvent = () => metadata()?.status ?? undefined;
@@ -133,7 +143,10 @@ export function createMagicChipModel(props: MagicChipData): {
   const unsubscribe = live.subscribe(applyEvents);
   void live
     .load()
-    .then(() => live.snapshot())
+    .then((record) => {
+      setBot(record.bot);
+      return live.snapshot();
+    })
     .then((snapshot) => {
       setMessages(snapshot.messages);
       setMetadata(snapshot.metadata);
@@ -213,7 +226,7 @@ export function createMagicChipModel(props: MagicChipData): {
 
   const header = createMemo((): MagicChipHeader | undefined => {
     const current = session();
-    const agent = current ? agentName(current) : undefined;
+    const agent = current ? agentName(current, bot()) : undefined;
     const model = modelName(metadata(), session());
     const pullRequestUrl = session()?.pullRequestUrl ?? undefined;
     return agent || model || pullRequestUrl
