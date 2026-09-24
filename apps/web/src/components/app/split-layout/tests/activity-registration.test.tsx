@@ -29,6 +29,11 @@ vi.mock('../layoutUtils', () => ({
 vi.mock('@core/component/LoadingBlock', () => ({
   LoadingBlock: () => <div>Authenticating</div>,
 }));
+vi.mock('@core/constant/allBlocks', () => ({
+  fileTypeToBlockName: (type: string) => type,
+  isBlockAlias: () => false,
+  resolveBlockAlias: (type: string) => type,
+}));
 vi.mock('@app/features/activity/views/my-activity-view', () => ({
   MyActivityView: () => {
     state.mountActivity();
