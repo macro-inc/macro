@@ -143,8 +143,8 @@ colors; unknown foreign sources use the generic file icon.
 New agent-session rows always use a sparkle in the left slot, including while
 working. A coding session adds a second line with repository, captured working
 branch (when available), and PR number/status. Non-coding sessions stay on one
-line. Their timestamps and unread dots stay visible; hovering reveals the full
-title, activity, and repository/branch. Missing repository metadata is omitted.
+line. Their timestamps and unread dots stay visible. Missing repository metadata
+is omitted.
 The Agents workspace uses a single left dot for activity and unread state in
 place of the sparkle. Opening a loaded session from Home or Agents marks its
 notifications read after the viewing delay, including notifications arriving
