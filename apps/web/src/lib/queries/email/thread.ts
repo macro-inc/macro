@@ -42,7 +42,10 @@ import {
   fetchGraphqlEmailThread,
   mapGraphqlThreadError,
 } from './graphql/thread';
-import { archiveEmailThread } from './integration';
+import {
+  archiveEmailThread,
+  type EmailArchiveDisposition,
+} from './integration';
 import { emailKeys } from './keys';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
@@ -487,8 +490,9 @@ export async function trackExternalThreadArchive(
  */
 async function replayThreadArchive(params: ArchiveThreadParams): Promise<void> {
   const { previousData } = await threadArchiveOnMutate(params);
+  let disposition: EmailArchiveDisposition | undefined;
   try {
-    await archiveEmailThread(
+    disposition = await archiveEmailThread(
       { id: params.threadId, value: params.archive },
       params.linkId
     );
@@ -501,10 +505,12 @@ async function replayThreadArchive(params: ArchiveThreadParams): Promise<void> {
     }
     throw err;
   } finally {
-    queryClient.invalidateQueries({
-      queryKey: emailKeys.threadMessages(params.threadId).queryKey,
-    });
-    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    if (disposition !== 'queued') {
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(params.threadId).queryKey,
+      });
+      queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    }
   }
 }
 
@@ -523,13 +529,13 @@ export function useUndoableArchiveThreadMutation(options: {
   onError?: (params: ArchiveThreadParams) => void;
 }) {
   return useUndoableMutation<
-    void,
+    EmailArchiveDisposition,
     Error,
     ArchiveThreadParams,
     ArchiveThreadContext
   >(() => ({
     mutationFn: async (params: ArchiveThreadParams) => {
-      await archiveEmailThread(
+      return await archiveEmailThread(
         { id: params.threadId, value: params.archive },
         params.linkId
       );
@@ -544,7 +550,8 @@ export function useUndoableArchiveThreadMutation(options: {
       }
       options.onError?.(params);
     },
-    onSettled: (_data, _error, params) => {
+    onSettled: (disposition, _error, params) => {
+      if (disposition === 'queued') return;
       queryClient.invalidateQueries({
         queryKey: emailKeys.threadMessages(params.threadId).queryKey,
       });

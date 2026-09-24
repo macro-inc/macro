@@ -86,7 +86,10 @@ import {
 } from '@notifications';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
-import { archiveEmailThread } from '@queries/email/integration';
+import {
+  archiveEmailThread,
+  type EmailArchiveDisposition,
+} from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
 import { fetchAndCacheThread } from '@queries/email/thread';
 import {
@@ -1017,18 +1020,21 @@ async function _archiveEmail(
     queryClient.setQueryData(key, applyEmailOptimistic(data));
   }
 
+  let disposition: EmailArchiveDisposition | undefined;
   try {
-    await archiveEmailThread({ value: options.archive, id });
+    disposition = await archiveEmailThread({ value: options.archive, id });
   } catch (_err) {
     soupTxn.rollback();
     for (const [key, data] of previousEmail) {
       queryClient.setQueryData(key, data);
     }
   } finally {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
-      invalidateSoupEntity(id),
-    ]);
+    if (disposition !== 'queued') {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+        invalidateSoupEntity(id),
+      ]);
+    }
   }
 }
 
@@ -1599,6 +1605,11 @@ export async function executeMarkEntitiesDone(args: {
     ...setRemindersCompleted(reminderIds, true),
   ]);
 
+  const hasQueuedEmail = results
+    .slice(0, emailIds.length)
+    .some(
+      (result) => result.status === 'fulfilled' && result.value === 'queued'
+    );
   const rejected = results.find(
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
@@ -1610,9 +1621,13 @@ export async function executeMarkEntitiesDone(args: {
     // them back, so they have to be reconciled too, not just the emails.
     invalidateRemindersById(reminderIds, { refetch: true });
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+      ...(!hasQueuedEmail
+        ? [
+            queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+            ...emailIds.map((id) => invalidateSoupEntity(id)),
+          ]
+        : []),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
-      ...emailIds.map((id) => invalidateSoupEntity(id)),
       ...reminderIds.map((id) => invalidateSoupEntity(id)),
     ]);
     throw rejected.reason ?? new Error('Failed to mark as done');
@@ -1620,15 +1635,21 @@ export async function executeMarkEntitiesDone(args: {
 
   invalidateRemindersById(reminderIds);
   await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.all.email,
-      refetchType: 'none',
-    }),
+    // A shared REST list can contain both committed and queued threads. Do
+    // not fetch its pre-write server state over any queued optimistic row.
+    ...(!hasQueuedEmail
+      ? [
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.all.email,
+            refetchType: 'none',
+          }),
+          ...emailIds.map((id) => invalidateSoupEntity(id)),
+        ]
+      : []),
     queryClient.invalidateQueries({
       queryKey: notificationKeys.user._def,
       refetchType: 'none',
     }),
-    ...emailIds.map((id) => invalidateSoupEntity(id)),
   ]);
 
   return authoritativeNotificationIds;
@@ -1657,6 +1678,11 @@ export async function executeMarkEntitiesUndone(args: {
     ...setRemindersCompleted(reminderIds, false),
   ]);
 
+  const hasQueuedEmail = results
+    .slice(0, emailIds.length)
+    .some(
+      (result) => result.status === 'fulfilled' && result.value === 'queued'
+    );
   const rejected = results.find(
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
@@ -1668,9 +1694,13 @@ export async function executeMarkEntitiesUndone(args: {
     // unarchived thread would sit there still showing as done.
     invalidateRemindersById(reminderIds, { refetch: true });
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+      ...(!hasQueuedEmail
+        ? [
+            queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+            ...emailIds.map((id) => invalidateSoupEntity(id)),
+          ]
+        : []),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
-      ...emailIds.map((id) => invalidateSoupEntity(id)),
       ...reminderIds.map((id) => invalidateSoupEntity(id)),
     ]);
     throw rejected.reason ?? new Error('Failed to undo');
@@ -1679,20 +1709,24 @@ export async function executeMarkEntitiesUndone(args: {
   invalidateRemindersById(reminderIds);
 
   await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.all.email,
-      refetchType: 'none',
-    }),
+    ...(!hasQueuedEmail
+      ? [
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.all.email,
+            refetchType: 'none',
+          }),
+          // Refetch open thread views only after the unarchive has committed.
+          ...emailIds.map((id) =>
+            queryClient.invalidateQueries({
+              queryKey: emailKeys.threadMessages(id).queryKey,
+            })
+          ),
+        ]
+      : []),
     queryClient.invalidateQueries({
       queryKey: notificationKeys.user._def,
       refetchType: 'none',
     }),
-    // Refetch open thread views so the unarchive restores `inbox_visible`.
-    ...emailIds.map((id) =>
-      queryClient.invalidateQueries({
-        queryKey: emailKeys.threadMessages(id).queryKey,
-      })
-    ),
   ]);
 }
 

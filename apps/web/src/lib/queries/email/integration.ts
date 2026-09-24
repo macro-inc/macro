@@ -16,12 +16,14 @@ import {
 export const scheduleEmailMessage = (
   ...args: Parameters<typeof emailClient.scheduleMessage>
 ) => throwOnErr(() => emailClient.scheduleMessage(...args));
+export type EmailArchiveDisposition = 'committed' | 'queued';
+
 /** Shared archive path for Done, Not Done, send completion, and Undo/Redo.
  * GraphQL owns optimistic state and durable replay; queued writes must not
  * refetch the server's pre-write membership over the optimistic update. */
 export async function archiveEmailThread(
   ...args: Parameters<typeof emailClient.flagArchived>
-) {
+): Promise<EmailArchiveDisposition> {
   if (isFeatureEnabled(enableGraphqlSoup)) {
     const [{ id, value }] = args;
     const disposition = await setGraphqlEmailThreadArchived(
@@ -33,9 +35,10 @@ export async function archiveEmailThread(
     if (disposition === 'committed') {
       await refreshActiveGraphqlSoupQueries();
     }
-    return;
+    return disposition;
   }
-  return await throwOnErr(() => emailClient.flagArchived(...args));
+  await throwOnErr(() => emailClient.flagArchived(...args));
+  return 'committed';
 }
 export const unscheduleEmailMessage = (
   ...args: Parameters<typeof emailClient.unscheduleMessage>

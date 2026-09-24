@@ -79,7 +79,7 @@ describe('GraphQL email archive writes', () => {
       expect(mocks.archive).not.toHaveBeenCalled();
       expect(mocks.refresh).not.toHaveBeenCalled();
       finish();
-      await result;
+      await expect(result).resolves.toBe('committed');
       expect(mocks.refresh).toHaveBeenCalledOnce();
     }
   );
@@ -123,7 +123,9 @@ describe('GraphQL email archive writes', () => {
         },
       }),
     });
-    await archiveEmailThread({ id: 'thread', value: true });
+    await expect(
+      archiveEmailThread({ id: 'thread', value: true })
+    ).resolves.toBe('queued');
     expect(
       mocks.mutation.mock.calls[0][2].normalizedCacheOptimistic.revalidations
     ).toEqual(
@@ -164,7 +166,9 @@ describe('GraphQL email archive writes', () => {
     async (value) => {
       mocks.graphql = false;
       mocks.archive.mockResolvedValue(ok(undefined));
-      await archiveEmailThread({ id: 'thread', value }, 'secondary');
+      await expect(
+        archiveEmailThread({ id: 'thread', value }, 'secondary')
+      ).resolves.toBe('committed');
       expect(mocks.archive).toHaveBeenCalledWith(
         { id: 'thread', value },
         'secondary'
