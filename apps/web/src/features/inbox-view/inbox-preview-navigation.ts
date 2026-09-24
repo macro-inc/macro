@@ -1,4 +1,5 @@
 import {
+  calendarEventTimeForEntity,
   getChannelEntityTarget,
   getDocumentCommentTarget,
 } from '@app/features/next-soup/utils';
@@ -15,9 +16,10 @@ import type { InboxPreviewRouteParams } from './inbox-route-schema';
 
 function calendarSearch(
   params: CalendarBlockProps | undefined,
-  time: Extract<PreviewPanelSelection, { type: 'calendar_event' }>['time']
+  selection: Extract<PreviewPanelSelection, { type: 'calendar_event' }>
 ): Partial<InboxPreviewSearchParams> {
   const range = params?.range;
+  const time = calendarEventTimeForEntity(selection);
   return {
     eventId: params?.eventId ?? '',
     occurrenceKey: params?.occurrenceKey ?? '',
@@ -95,7 +97,7 @@ function selectionSearch(
         ...base,
         ...calendarSearch(
           blockParams as CalendarBlockProps | undefined,
-          selection.time
+          selection
         ),
       };
     case 'reminder':

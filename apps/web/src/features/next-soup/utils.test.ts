@@ -1,3 +1,4 @@
+import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import { previewBlockTarget } from '@components/app/previewTarget';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -400,6 +401,47 @@ describe('calendar view navigation', () => {
       }),
       expect.any(Object)
     );
+  });
+
+  it('keeps a recurring reminder on its instance through the Inbox preview route', () => {
+    const result = inboxPreviewNavigation({
+      type: 'calendar_event',
+      id: 'event-1',
+      time: {
+        kind: 'timed',
+        startsAt: '2026-05-18T22:00:00Z',
+        endsAt: '2026-05-18T22:30:00Z',
+      },
+      notifications: () => [
+        {
+          notification_metadata: {
+            tag: 'calendar_event_reminder',
+            content: {
+              eventId: 'event-1',
+              occurrenceKey: '2026-09-23T22:00:00+00:00',
+              startsAt: '2026-09-23T22:00:00Z',
+              endsAt: '2026-09-23T22:30:00Z',
+            },
+          },
+        } as UnifiedNotification,
+      ],
+    } as never);
+    expect(result.search).toMatchObject({
+      occurrenceKey: '2026-09-23T22:00:00+00:00',
+      startsAt: '2026-09-23T22:00:00Z',
+      endsAt: '2026-09-23T22:30:00Z',
+    });
+
+    const selection = inboxPreviewSelection(result.params, result.search);
+    expect(previewBlockTarget(selection!).params).toMatchObject({
+      eventId: 'event-1',
+      occurrenceKey: '2026-09-23T22:00:00+00:00',
+      range: createCalendarRange({
+        kind: 'timed',
+        startsAt: '2026-09-23T22:00:00Z',
+        endsAt: '2026-09-23T22:30:00Z',
+      }),
+    });
   });
 });
 

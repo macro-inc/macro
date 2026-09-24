@@ -1,7 +1,10 @@
 import { isListViewID } from '@app/constants/list-views';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
-import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
+import {
+  type CalendarEventTime,
+  createCalendarRange,
+} from '@app/features/calendar-view/calendar-range';
 import {
   calendarFocusedEventSearchKey,
   calendarPath,
@@ -871,19 +874,28 @@ export function calendarEventLinkTarget(entity: CalendarPreviewSelection): {
   return { eventId: eventId ?? entity.id, occurrenceKey };
 }
 
-/** Build a Calendar view focus target for an event row's occurrence. */
-export function calendarViewTargetForEntity(
-  entity: CalendarPreviewSelection
-): CalendarViewTarget {
+function calendarReminderContent(entity: CalendarPreviewSelection) {
   const notifications = isWithNotification(entity)
     ? (entity.notifications?.() ?? [])
     : [];
   const metadata = notifications
     .map((notification) => notification.notification_metadata)
     .find((candidate) => candidate?.tag === 'calendar_event_reminder');
-  const content =
-    metadata?.tag === 'calendar_event_reminder' ? metadata.content : undefined;
-  const time = content?.startsAt
+  return metadata?.tag === 'calendar_event_reminder'
+    ? metadata.content
+    : undefined;
+}
+
+/**
+ * The time of the instance an event row points at. A reminder names the
+ * instance that is starting, while a recurring row's own time is the series'
+ * first instance.
+ */
+export function calendarEventTimeForEntity(
+  entity: CalendarPreviewSelection
+): CalendarEventTime | undefined {
+  const content = calendarReminderContent(entity);
+  return content?.startsAt
     ? {
         kind: 'timed' as const,
         startsAt: content.startsAt,
@@ -892,6 +904,14 @@ export function calendarViewTargetForEntity(
     : content?.startDate
       ? { kind: 'allDay' as const, startDate: content.startDate }
       : entity.time;
+}
+
+/** Build a Calendar view focus target for an event row's occurrence. */
+export function calendarViewTargetForEntity(
+  entity: CalendarPreviewSelection
+): CalendarViewTarget {
+  const content = calendarReminderContent(entity);
+  const time = calendarEventTimeForEntity(entity);
 
   return {
     eventId: content?.eventId ?? entity.id,
