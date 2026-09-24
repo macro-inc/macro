@@ -21,6 +21,7 @@ import {
   getEntityNotifications,
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
+import { isRecord } from '@app/lib/split-router/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
@@ -759,6 +760,26 @@ export const openEntityInSplitFromUnifiedList = async (
   let splitContent: SplitContent = driveDocument
     ? driveSplitContent({ kind: 'tab', tab: 'owned' }, driveDocument)
     : { ...content, params };
+  const callTranscriptId =
+    entity.type === 'call' && location?.type === 'call_record'
+      ? location.transcriptId
+      : undefined;
+  if (callTranscriptId) {
+    splitContent = {
+      ...splitContent,
+      entryMetadata: {
+        ...(isRecord(splitContent.entryMetadata)
+          ? splitContent.entryMetadata
+          : {}),
+        search: {
+          'call-detail': {
+            transcriptId: [callTranscriptId],
+            seek: [`${Date.now()}-${Math.random()}`],
+          },
+        },
+      },
+    };
+  }
   if (splitHandle && referredFrom && isListViewID(referredFrom)) {
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
@@ -783,8 +804,21 @@ export const openEntityInSplitFromUnifiedList = async (
     toast.alert('Content already open');
   }
 
-  // Navigate to specific location if provided
-  if (location) {
+  // Routed calls have no block handle. Update a reused split's route search
+  // instead of waiting for a legacy block method that will never register.
+  if (location?.type === 'call_record') {
+    if (result.status === 'reused' && result.split && callTranscriptId) {
+      result.split.replace({
+        next: {
+          ...result.split.content(),
+          entryMetadata: splitContent.entryMetadata,
+        },
+        mergeHistory: true,
+      });
+    } else if (result.status === 'reused' && !result.split) {
+      await navigateToLocation(content.id, location, blockOrchestrator);
+    }
+  } else if (location) {
     await navigateToLocation(content.id, location, blockOrchestrator);
   } else if (channelMessageTarget) {
     // NOTE: This will force target message navigation in case the split is already open.

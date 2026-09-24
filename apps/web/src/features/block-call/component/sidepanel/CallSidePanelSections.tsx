@@ -2,7 +2,6 @@ import { EntityActivitySectionConditional } from '@app/features/activity/views/e
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { SidePanel } from '@components/app/side-panel';
-import { useBlockId } from '@core/block';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
@@ -22,11 +21,10 @@ import { formatCallDuration } from '../../utils';
 
 interface CallSidePanelSectionsProps {
   record: Accessor<CallRecord>;
+  callId: string;
 }
 
 export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
-  const blockId = useBlockId();
-
   return (
     <>
       <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
@@ -48,7 +46,7 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
         entityType="CALL_RECORD"
         order={40}
       />
-      <ReferencesSectionConditional callId={blockId} />
+      <ReferencesSectionConditional callId={props.callId} />
     </>
   );
 }
@@ -229,7 +227,7 @@ function ReferencesSectionConditional(props: { callId: string }) {
     () => 'call'
   );
 
-  const count = () => references.data?.length ?? 0;
+  const count = () => (references.isSuccess ? references.data.length : 0);
 
   return (
     <Show when={count() > 0}>

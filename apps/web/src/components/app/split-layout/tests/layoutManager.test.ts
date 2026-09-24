@@ -908,6 +908,88 @@ describe('layoutManager', () => {
       dispose();
     });
 
+    it('opens a call on its detail route with the existing block content identity', async () => {
+      const { manager, location, router, dispose } =
+        ingressRouter('/call/call-1');
+      await router.settled();
+      const split = manager.splits()[0];
+      expect(split.content).toMatchObject({ type: 'call', id: 'call-1' });
+      expect(router.route(split.id)?.matches).toEqual([
+        { id: 'call-detail', params: { callId: 'call-1' } },
+      ]);
+      expect(location.read().pathname).toBe('/call/call-1');
+      router.dispose();
+      dispose();
+    });
+
+    it('uses the call detail route for existing split navigation', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/inbox');
+      await router.settled();
+      manager.getSplit(manager.splits()[0].id)!.replace({
+        next: { type: 'call', id: 'call-2' },
+      });
+      await router.settled();
+      expect(location.read().pathname).toBe('/call/call-2');
+      router.dispose();
+      dispose();
+    });
+
+    it('retains pane-local transcript targeting during call navigation', async () => {
+      const { manager, router, dispose } = ingressRouter('/inbox');
+      await router.settled();
+      const split = manager.getSplit(manager.splits()[0].id)!;
+      split.replace({
+        next: {
+          type: 'call',
+          id: 'call-2',
+          entryMetadata: {
+            search: { 'call-detail': { transcriptId: ['segment-2'] } },
+          },
+        },
+      });
+      await router.settled();
+      expect(router.search(split.id, 'call-detail')).toEqual({
+        transcriptId: ['segment-2'],
+      });
+      const mount = split.mount;
+      split.replace({
+        next: {
+          type: 'call',
+          id: 'call-2',
+          entryMetadata: {
+            search: {
+              'call-detail': { transcriptId: ['segment-2'], seek: ['again'] },
+            },
+          },
+        },
+        mergeHistory: true,
+      });
+      await router.settled();
+      expect(router.search(split.id, 'call-detail')).toEqual({
+        transcriptId: ['segment-2'],
+        seek: ['again'],
+      });
+      expect(split.mount).toBe(mount);
+      router.dispose();
+      dispose();
+    });
+
+    it('restores a call transcript target from a copied link', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/call/call-1?call_transcript_id=segment-1'
+      );
+      await router.settled();
+      const split = manager.splits()[0];
+      expect(router.search(split.id, 'call-detail')).toEqual({
+        transcriptId: ['segment-1'],
+      });
+      expect(
+        new URLSearchParams(location.read().search).get('call_transcript_id')
+      ).toBe('segment-1');
+      router.dispose();
+      dispose();
+    });
+
     it('keeps Drive list routes on touch', async () => {
       const { location, router, dispose } = ingressRouter(
         '/drive/~/drive/shared/~/drive/folder/folder',

@@ -239,6 +239,14 @@ export function splitLocationFromContent(
     };
   }
 
+  if (content.type === 'call') {
+    return {
+      route: {
+        matches: [{ id: 'call-detail', params: { callId: content.id } }],
+      },
+    };
+  }
+
   if (content.type === 'component' && content.id === 'documents') {
     return { route: { matches: [{ id: 'drive', params: {} }] } };
   }
@@ -333,6 +341,13 @@ export function splitContentFromLocation(
       return { type: 'pr', id: foreignEntityId };
     }
     throw new Error('Invalid PR detail split route');
+  }
+  if (root.id === 'call-detail') {
+    const { callId } = routeParams(location.route);
+    if (typeof callId === 'string' && callId.length > 0) {
+      return { type: 'call', id: callId };
+    }
+    throw new Error('Invalid call detail split route');
   }
 
   const params = routeParams(location.route);
