@@ -384,9 +384,12 @@ marked done.
 
 ## In channels
 
-Mention `@Macro` in any channel message for the classic in-channel reply. Mention
-`@macro-new` (or `@coder` / `@cursor`) to open an **agent session** — a dedicated
-transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
+Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
+the classic in-channel reply; with it, the same mention opens an **agent session** — a
+dedicated transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
+`@coder` / `@cursor` always open a session. There is only ever one Macro entry in the
+mention menu; which of the two answers is the rollout's decision, not a second choice in
+the menu.
 
 ## Agent sessions
 

@@ -123,7 +123,9 @@ message; ordinary Markdown blockquotes remain presentation-only and do not count
 The composer always keeps an editable empty line after a block reference, including after
 the user deletes that line, so clicking below the reference can restore the text caret.
 
-`@Macro` answers in the thread (classic bot). Its tool calls execute immediately — there is
+The mention menu offers a single `@Macro`; the `enable-chat-v3-agents` rollout decides
+whether it answers in the thread as the classic bot or opens an agent session. Without the
+rollout, `@Macro` answers in the thread (classic bot). Its tool calls execute immediately — there is
 no composer or pending-confirmation card in a channel, so asking it to create a calendar
 event without attendees creates the event right away (unlike AI chat, where creation waits
 for the user to confirm a composer card). For an event with attendees the bot is prompted to
@@ -132,7 +134,8 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` / `@claude` open
+bot asks before scheduling a specific clock time. Within the rollout, `@Macro` — plus
+`@coder` / `@cursor` / `@codex` / `@claude` for everyone — opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 A follow-up sent while that session is still working stops the current turn,
