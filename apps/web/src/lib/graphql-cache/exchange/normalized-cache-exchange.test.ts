@@ -2514,6 +2514,89 @@ describe('normalizedCacheExchange', () => {
         vi.restoreAllMocks();
       });
 
+      it.each([
+        { wake: 'online', whileDeferring: false },
+        { wake: 'online', whileDeferring: true },
+        { wake: 'restore', whileDeferring: false },
+        { wake: 'restore', whileDeferring: true },
+      ])(
+        'preserves short retry deadlines after $wake (while deferring: $whileDeferring)',
+        async ({ wake, whileDeferring }) => {
+          // Isolate the online listener from other exchanges in this suite.
+          const events = new EventTarget();
+          vi.spyOn(globalThis, 'addEventListener').mockImplementation(
+            events.addEventListener.bind(events)
+          );
+          const deferring = deferred<void>();
+          const defer = host.deferOptimisticWrite.bind(host);
+          const deferSpy = vi.spyOn(host, 'deferOptimisticWrite');
+          if (whileDeferring) {
+            deferSpy.mockImplementationOnce(async (...args) => {
+              const result = await defer(...args);
+              await deferring.promise;
+              return result;
+            });
+          }
+          const error = new CombinedError({
+            networkError: new Error('offline'),
+          });
+          let attempts = 0;
+          const { ops, forwarded } = harness(
+            host,
+            () =>
+              ++attempts <= 5
+                ? { error, data: undefined }
+                : { data: optimistic },
+            { shouldRetryMutation: () => true }
+          );
+          ops.next(makeMutationOp(1, optimistic));
+          await vi.advanceTimersByTimeAsync(0);
+
+          for (const delay of [1_000, 2_000, 4_000, 8_000, 16_000]) {
+            const retryAt = deferSpy.mock.calls.at(-1)![2];
+            expect(retryAt - Date.now()).toBe(delay);
+            const sendsBeforeWake = forwarded.length;
+            await vi.advanceTimersByTimeAsync(100);
+            if (wake === 'online') events.dispatchEvent(new Event('online'));
+            else host.pushGeneration({ storage: 'reset' });
+            await vi.advanceTimersByTimeAsync(1);
+            deferring.resolve();
+            await vi.advanceTimersByTimeAsync(1);
+            expect(forwarded).toHaveLength(sendsBeforeWake);
+
+            await vi.advanceTimersByTimeAsync(retryAt - Date.now() - 1);
+            expect(forwarded).toHaveLength(sendsBeforeWake);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(forwarded).toHaveLength(sendsBeforeWake + 1);
+          }
+          expect(host.begins).toHaveLength(1);
+          expect(host.defers).toHaveLength(5);
+          expect(host.commits).toHaveLength(1);
+          expect(host.rollbacks).toHaveLength(0);
+        }
+      );
+
+      it('retires an expired retry hint if another runner owns the head', async () => {
+        const error = new CombinedError({ networkError: new Error('offline') });
+        const { ops, forwarded } = harness(
+          host,
+          () => ({ error, data: undefined }),
+          { shouldRetryMutation: () => true }
+        );
+        ops.next(makeMutationOp(1, optimistic));
+        await vi.advanceTimersByTimeAsync(0);
+        const claim = vi
+          .spyOn(host, 'claimNextMutation')
+          .mockResolvedValue(undefined);
+        await vi.advanceTimersByTimeAsync(100);
+        host.pushGeneration({ storage: 'reset' });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(claim).toHaveBeenCalledOnce();
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(claim).toHaveBeenCalledTimes(2);
+        expect(forwarded).toHaveLength(1);
+      });
+
       it.each([false, true])(
         'resumes an interrupted claim without waiting for the poll (restore while pending: %s)',
         async (restoreWhilePending) => {

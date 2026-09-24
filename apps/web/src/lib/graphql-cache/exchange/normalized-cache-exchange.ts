@@ -894,10 +894,15 @@ export function normalizedCacheExchange(
         }
         if (drainRunning) return;
         drainRunning = true;
-        if (drainRequested) deferredUntil = undefined;
         drainRequested = false;
         try {
           const now = Date.now();
+          // A wakeup probes immediately, but must retain a future retry
+          // deadline if the durable head is not eligible yet. Consume expired
+          // hints so a head leased by another runner cannot cause a busy loop.
+          if (deferredUntil !== undefined && deferredUntil <= now) {
+            deferredUntil = undefined;
+          }
           const claimed = await host.claimNextMutation(
             queueOwner,
             now,
@@ -905,10 +910,15 @@ export function normalizedCacheExchange(
           );
           if (!claimed) {
             resolveLiveOperationsAsQueued();
+            // Short retries keep their deadline; uncertain five-minute lease
+            // backoffs must not prevent regular polling after a wakeup.
             scheduleDrain(
               deferredUntil === undefined
                 ? EMPTY_QUEUE_POLL_MS
-                : Math.max(0, deferredUntil - Date.now())
+                : Math.min(
+                    EMPTY_QUEUE_POLL_MS,
+                    Math.max(0, deferredUntil - Date.now())
+                  )
             );
             return;
           }
