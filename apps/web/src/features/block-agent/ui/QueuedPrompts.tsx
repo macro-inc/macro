@@ -93,28 +93,34 @@ export function QueuedPrompts(props: QueuedPromptsProps) {
     onCleanup(() => props.registerFocusFromBelow?.(undefined));
   });
 
+  // A long queue scrolls within a capped height rather than pushing the
+  // transcript away. `flex-col-reverse` around the single list anchors the
+  // scroll at the bottom, so the next-to-dispatch row stays in view, without
+  // reordering the DOM (focus order still runs newest to next).
   return (
-    <div class="flex flex-col gap-1" data-testid="agent-queued-prompts">
-      <For each={orderedIds()}>
-        {(id) => (
-          <Show when={itemById(id)}>
-            {(item) => (
-              <QueuedRow
-                item={item()}
-                disabled={props.disabled}
-                registerFocus={(focus) => {
-                  if (focus) focusFns.set(id, focus);
-                  else focusFns.delete(id);
-                }}
-                onMoveUp={() => moveFocus(id, -1)}
-                onMoveDown={() => moveFocus(id, 1)}
-                onEdit={(prompt) => props.onEdit(id, prompt)}
-                onRemove={() => props.onRemove(id)}
-              />
-            )}
-          </Show>
-        )}
-      </For>
+    <div class="flex max-h-[min(40vh,24rem)] flex-col-reverse overflow-y-auto overscroll-contain">
+      <div class="flex flex-col gap-1" data-testid="agent-queued-prompts">
+        <For each={orderedIds()}>
+          {(id) => (
+            <Show when={itemById(id)}>
+              {(item) => (
+                <QueuedRow
+                  item={item()}
+                  disabled={props.disabled}
+                  registerFocus={(focus) => {
+                    if (focus) focusFns.set(id, focus);
+                    else focusFns.delete(id);
+                  }}
+                  onMoveUp={() => moveFocus(id, -1)}
+                  onMoveDown={() => moveFocus(id, 1)}
+                  onEdit={(prompt) => props.onEdit(id, prompt)}
+                  onRemove={() => props.onRemove(id)}
+                />
+              )}
+            </Show>
+          )}
+        </For>
+      </div>
     </div>
   );
 }
