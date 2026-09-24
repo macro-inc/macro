@@ -14,15 +14,10 @@ import { lazy, Show } from 'solid-js';
 import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { channelsSearch } from './channels-route';
+import { ChannelDetailRouteView, ChannelsView } from './channels-view';
 
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-const ChannelsView = lazy(async () => ({
-  default: (await import('./channels-view')).ChannelsView,
-}));
-const ChannelDetailRouteView = lazy(async () => ({
-  default: (await import('./channels-view')).ChannelDetailRouteView,
 }));
 
 function LegacyChannelsView() {

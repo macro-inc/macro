@@ -28,6 +28,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazy, Show } from 'solid-js';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '../email-thread/core/location';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
+import { InboxEntityDetailRouteView } from './components/InboxEntityDetailRouteView';
 import {
   inboxCalendarLegacyTarget,
   inboxDetailParamsFromRoute,
@@ -39,22 +40,14 @@ import {
   inboxBaseBlockType,
   inboxPreviewRouteParams,
 } from './inbox-route-schema';
+import {
+  InboxCalendarRouteView,
+  InboxDetailRouteView,
+  InboxView,
+} from './inbox-view';
 
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-const InboxView = lazy(async () => ({
-  default: (await import('./inbox-view')).InboxView,
-}));
-const InboxDetailRouteView = lazy(async () => ({
-  default: (await import('./inbox-view')).InboxDetailRouteView,
-}));
-const InboxEntityDetailRouteView = lazy(async () => ({
-  default: (await import('./components/InboxEntityDetailRouteView'))
-    .InboxEntityDetailRouteView,
-}));
-const InboxCalendarRouteView = lazy(async () => ({
-  default: (await import('./inbox-view')).InboxCalendarRouteView,
 }));
 
 type InboxDetailParams = Partial<InboxPreviewRouteParams> & {
