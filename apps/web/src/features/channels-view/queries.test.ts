@@ -11,7 +11,7 @@ const useSoupAstItemsQuery = vi.hoisted(() =>
     ) => ({
       isEnabled: true,
       isLoading: false,
-      data: { entities: [] },
+      data: { entities: [] as unknown[] },
     })
   )
 );
