@@ -77,6 +77,14 @@ function cancelSoupQueries() {
 export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   partial: SoupEntityPartial<T>
 ): SoupTransaction {
+  return updateSoupEntity(partial, true);
+}
+
+/** Server hydration must not cancel the list revalidation it accompanies. */
+function updateSoupEntity<T extends SoupEntityTag>(
+  partial: SoupEntityPartial<T>,
+  cancelRefetches: boolean
+): SoupTransaction {
   const normalizer = getSoupNormalizer();
   const normKey = getNormalizationObjectKey(partial);
 
@@ -89,7 +97,7 @@ export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   // list refetching on mount): the fetch dies and nothing retries it.
   // Skip cold initial fetches (data === undefined); cancelling those can leave
   // the query stuck pending, which is why cancelSoupQueries has the same guard.
-  for (const queryKey of dependentKeys) {
+  for (const queryKey of cancelRefetches ? dependentKeys : []) {
     if (
       partialMatchKey(queryKey, soupKeys.items._def) ||
       partialMatchKey(queryKey, soupKeys.astItems._def)
@@ -228,7 +236,9 @@ export function invalidateSoupEntity(entityId: string): void {
   const normalizer = getSoupNormalizer();
   const keys = normalizer.getDependentQueriesByIds([soupNormKey(entityId)]);
   for (const queryKey of keys) {
-    queryClient.invalidateQueries({ queryKey });
+    // Normy JSON-roundtrips complete keys, turning undefined array slots into
+    // null. Exact matching uses the same hash; partial matching misses them.
+    void queryClient.invalidateQueries({ queryKey, exact: true });
   }
 }
 
@@ -808,7 +818,7 @@ export async function refetchSoupEntity(
       item = { ...item, touched_at: ownTouchStamp(itemId) };
     }
     if (hasSoupEntity(itemId)) {
-      optimisticUpdateSoupEntity(item);
+      updateSoupEntity(item, false);
     } else {
       insertSoupEntity(item);
       if (options?.ownTouch) {
