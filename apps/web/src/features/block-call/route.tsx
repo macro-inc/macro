@@ -6,8 +6,8 @@ import { z } from 'zod';
 import { callDetailSearch } from './call-route';
 import { URL_PARAMS } from './constants';
 
-const CallDetailView = lazy(async () => ({
-  default: (await import('./views/CallDetailView')).CallDetailView,
+const StandaloneCallDetail = lazy(async () => ({
+  default: (await import('./views/CallDetailView')).StandaloneCallDetail,
 }));
 
 const CallDetailRouteView = withAuth(() => {
@@ -20,7 +20,7 @@ const CallDetailRouteView = withAuth(() => {
       entityId: params.callId,
     });
   });
-  return <CallDetailView callId={params.callId} />;
+  return <StandaloneCallDetail callId={params.callId} />;
 });
 
 export const callDetailRoute = defineRoute({

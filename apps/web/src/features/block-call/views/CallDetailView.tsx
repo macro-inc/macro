@@ -26,6 +26,7 @@ import {
   type Accessor,
   createEffect,
   createSignal,
+  type JSX,
   Match,
   on,
   onMount,
@@ -38,31 +39,68 @@ import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody'
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
 import type { CallTranscriptTarget } from '../constants';
 
-function CallDetailContent(props: {
+function callDetailName(record: CallRecord): string {
+  return record.customName ?? record.channelName ?? 'Call Recording';
+}
+export function CallDetailActions(props: {
   callId: string;
   record: Accessor<CallRecord>;
-  transcriptTarget: Accessor<CallTranscriptTarget | undefined>;
 }) {
   const panel = useSplitPanelOrThrow();
-  const [shareOpen, setShareOpen] = createSignal(false);
   const call = useCall(() => props.record().channelId);
-  const callName = () =>
-    props.record().customName ?? props.record().channelName ?? 'Call Recording';
-
-  onMount(() => {
-    optimisticUpdateSoupItemViewedAt(props.callId);
-    if (!hasSoupEntity(props.callId)) {
-      void refetchSoupEntity(props.callId, 'call');
-    }
-  });
-
-  const handleJoin = async () => {
+  const join = async () => {
     try {
       await call.joinCall();
     } catch (error) {
       console.error('Failed to join call from recording', error);
     }
   };
+
+  return (
+    <div class="ml-auto flex shrink-0 items-center gap-2">
+      <Show when={!isMobile() && !props.record().isActive}>
+        <Button variant="outline" size="sm" onClick={join}>
+          <PhoneCallIcon class="size-4" />
+          Call Again
+        </Button>
+      </Show>
+      <ChatWithAgentButton
+        entity={{
+          type: 'document',
+          id: props.callId,
+          name: callDetailName(props.record()),
+          fileType: 'call',
+        }}
+      />
+      <ShareTrigger
+        id={props.callId}
+        blockType="call"
+        hotkeyScope={panel.splitHotkeyScope}
+      />
+      <SidePanel.Toggle />
+    </div>
+  );
+}
+
+export type CallDetailContext = {
+  record: Accessor<CallRecord>;
+  name: Accessor<string>;
+};
+
+function CallDetailContent(props: {
+  callId: string;
+  record: Accessor<CallRecord>;
+  transcriptTarget: Accessor<CallTranscriptTarget | undefined>;
+  children: (context: CallDetailContext) => JSX.Element;
+}) {
+  const [shareOpen, setShareOpen] = createSignal(false);
+  const callName = () => callDetailName(props.record());
+  onMount(() => {
+    optimisticUpdateSoupItemViewedAt(props.callId);
+    if (!hasSoupEntity(props.callId)) {
+      void refetchSoupEntity(props.callId, 'call');
+    }
+  });
 
   return (
     <ShareDialogContext.Provider
@@ -72,48 +110,26 @@ function CallDetailContent(props: {
         close: () => setShareOpen(false),
       }}
     >
-      <SidePanel.Layout
-        persistKey={`call:${props.callId}`}
-        headerToggle={false}
-      >
-        <CallSidePanelSections callId={props.callId} record={props.record} />
+      <SidePanel.Root persistKey={`call:${props.callId}`}>
         <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-          <ViewShell.TopBar class="touch:flex">
-            <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-            <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
-            <span class="min-w-0 truncate text-sm font-semibold">
-              {callName()}
-            </span>
-            <div class="ml-auto flex shrink-0 items-center gap-2">
-              <Show when={!isMobile() && !props.record().isActive}>
-                <Button variant="outline" size="sm" onClick={handleJoin}>
-                  <PhoneCallIcon class="size-4" />
-                  Call Again
-                </Button>
-              </Show>
-              <ChatWithAgentButton
-                entity={{
-                  type: 'document',
-                  id: props.callId,
-                  name: callName(),
-                  fileType: 'call',
-                }}
+          {props.children({ record: props.record, name: callName })}
+          <div class="relative min-h-0 min-w-0 flex-1">
+            <SidePanel.Layout headerToggle={false}>
+              <CallSidePanelSections
+                callId={props.callId}
+                record={props.record}
               />
-              <ShareTrigger
-                id={props.callId}
-                blockType="call"
-                hotkeyScope={panel.splitHotkeyScope}
-              />
-              <SidePanel.Toggle />
-            </div>
-          </ViewShell.TopBar>
-          <CallRecordingBody
-            data={props.record}
-            callId={props.callId}
-            transcriptTarget={props.transcriptTarget}
-          />
+              <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+                <CallRecordingBody
+                  data={props.record}
+                  callId={props.callId}
+                  transcriptTarget={props.transcriptTarget}
+                />
+              </div>
+            </SidePanel.Layout>
+          </div>
         </div>
-      </SidePanel.Layout>
+      </SidePanel.Root>
       <Suspense>
         <ShareModal
           isSharePermOpen={shareOpen()}
@@ -132,7 +148,24 @@ function CallDetailContent(props: {
   );
 }
 
-export function CallDetailView(props: { callId: string }) {
+export function StandaloneCallDetail(props: { callId: string }) {
+  return (
+    <CallDetailView callId={props.callId}>
+      {({ record, name }) => (
+        <ViewShell.TopBar class="touch:flex">
+          <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+          <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
+          <span class="min-w-0 truncate text-sm font-semibold">{name()}</span>
+          <CallDetailActions callId={props.callId} record={record} />
+        </ViewShell.TopBar>
+      )}
+    </CallDetailView>
+  );
+}
+export function CallDetailView(props: {
+  callId: string;
+  children: (context: CallDetailContext) => JSX.Element;
+}) {
   const callRecord = useCallRecordQuery(() => props.callId);
   const [searchParams] = createSearchParams(callDetailSearch);
   const initialTranscriptId = searchParams.transcriptId;
@@ -192,6 +225,7 @@ export function CallDetailView(props: { callId: string }) {
             callId={props.callId}
             record={record}
             transcriptTarget={transcriptTarget}
+            children={props.children}
           />
         )}
       </Match>

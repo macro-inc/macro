@@ -2,7 +2,11 @@ import {
   defineRoute,
   routeParams,
   type SplitRouterEntry,
+  useParams,
+  useRouteParams,
 } from '@app/lib/split-router';
+import { callDetailSearch } from '@block-call/call-route';
+import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as MARKDOWN_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -34,6 +38,13 @@ const DriveView = lazy(async () => ({
 const DriveDetailView = lazy(async () => ({
   default: (await import('./components/DriveDetailView')).DriveDetailView,
 }));
+const DriveCallDetail = lazy(async () => ({
+  default: (await import('./views/DriveCallDetail')).DriveCallDetail,
+}));
+const StandaloneCallDetail = lazy(async () => ({
+  default: (await import('@block-call/views/CallDetailView'))
+    .StandaloneCallDetail,
+}));
 
 type DriveRouteViewProps = DriveViewProps & {
   initialFilters?: Query;
@@ -42,6 +53,7 @@ type DriveRouteViewProps = DriveViewProps & {
 
 export const DriveRouteView = withAuth(() => {
   const panel = useSplitPanelOrThrow();
+  const params = useParams<{ callId?: string }>();
   const props = (): DriveRouteViewProps => {
     const content = panel.handle.content();
     return content.type === 'component'
@@ -88,12 +100,28 @@ export const DriveRouteView = withAuth(() => {
           initialGroupBy={preset?.groupBy}
         />
       }
+      detailRequested={() => !!params.callId}
+      detailFallback={<StandaloneCallDetail callId={params.callId!} />}
     >
       <DriveView initialFacets={props().initialFacets} />
     </NewAppView>
   );
 });
 
+function DriveCallRouteView() {
+  const params = useRouteParams(driveCallRoute);
+  return <DriveCallDetail callId={params.callId} />;
+}
+
+export const driveCallRoute = defineRoute({
+  id: 'drive-call',
+  path: 'call/:callId',
+  params: z.object({ callId: z.string().min(1) }),
+  search: [callDetailSearch.namespace],
+  component: DriveCallRouteView,
+  remountKey: ({ callId }) => callId,
+  claim: ({ callId }) => ({ namespace: 'block', id: `call:${callId}` }),
+});
 const driveDocumentParams = z.object({
   documentType: z.enum(DRIVE_DOCUMENT_TYPES),
   documentId: z.string().min(1),
@@ -177,7 +205,17 @@ export const driveSplitRoute = defineRoute({
       return Object.values(MARKDOWN_URL_PARAMS);
     }
     if (type === 'pdf') return Object.values(PDF_URL_PARAMS);
+    if (
+      typeof routeParams<{ callId?: string }>(entry.location.route).callId ===
+      'string'
+    )
+      return [CALL_URL_PARAMS.transcriptId];
     return [];
   },
-  children: [driveFolderRoute, driveTabRoute, driveRootDocumentRoute],
+  children: [
+    driveFolderRoute,
+    driveTabRoute,
+    driveRootDocumentRoute,
+    driveCallRoute,
+  ],
 });

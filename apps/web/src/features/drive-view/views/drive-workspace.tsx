@@ -63,7 +63,7 @@ export function DriveWorkspace() {
             </ViewShell.Aside>
             <ViewShell.Main>
               <Show
-                when={navigation.active()}
+                when={navigation.active() || navigation.activeCallId()}
                 fallback={
                   <>
                     <DriveHeader />

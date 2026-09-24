@@ -1143,3 +1143,63 @@ describe('getRowClickFallbackLocation', () => {
     expect(getRowClickFallbackLocation(entity)).toBeUndefined();
   });
 });
+
+describe('call navigation', () => {
+  it('opens calls in Drive without mounting a call block', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      getOrchestrator: () => ({}),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(searchEntity('call', null), {});
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'documents',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'drive', params: {} },
+              { id: 'drive-call', params: { callId: 'call-1' } },
+            ],
+          },
+        },
+      },
+      expect.objectContaining({ allowDuplicate: true })
+    );
+  });
+
+  it('carries a transcript target into the Drive call route', async () => {
+    const openWithSplit = vi.fn((..._args: unknown[]) => ({
+      status: 'unavailable',
+    }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      getOrchestrator: () => ({}),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(searchEntity('call', null), {
+      location: {
+        type: 'call_record',
+        callId: 'call-1',
+        transcriptId: 'segment-1',
+      },
+    });
+    expect(openWithSplit.mock.calls[0]?.[0]).toMatchObject({
+      type: 'component',
+      id: 'documents',
+      entryMetadata: {
+        route: {
+          matches: [
+            { id: 'drive', params: {} },
+            { id: 'drive-call', params: { callId: 'call-1' } },
+          ],
+        },
+        search: { 'call-detail': { transcriptId: ['segment-1'] } },
+      },
+    });
+  });
+});

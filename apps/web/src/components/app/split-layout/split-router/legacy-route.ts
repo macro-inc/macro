@@ -9,14 +9,11 @@ import {
   calendarSearchCodec,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
-import type { DriveLocation } from '@app/features/drive-view/core/types';
-import type { DriveDocumentRoute } from '@app/features/drive-view/primitives/drive-route';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import {
   defineRoute,
   routeParams,
   type SplitLocation,
-  type SplitRouteMatch,
   type SplitRouterEntry,
   type UnmatchedSplitPathHandler,
 } from '@app/lib/split-router';
@@ -169,39 +166,6 @@ export function encodeLegacyContent(content: SplitContent): string[] {
       : content.aliasContext?.alias || content.type,
     content.id,
   ];
-}
-
-export function driveSplitContent(
-  location: DriveLocation,
-  document?: DriveDocumentRoute
-): SplitContent {
-  const matches: [SplitRouteMatch, ...SplitRouteMatch[]] = [
-    { id: 'drive', params: {} },
-  ];
-  if (location.kind === 'folder') {
-    matches.push({
-      id: 'drive-folder',
-      params: { view: 'folder', folderId: location.id ?? undefined },
-    });
-  } else if (location.tab !== 'owned') {
-    matches.push({ id: 'drive-tab', params: { tab: location.tab } });
-  }
-  if (document) {
-    matches.push({
-      id:
-        location.kind === 'folder'
-          ? 'drive-folder-document'
-          : location.tab === 'owned'
-            ? 'drive-document'
-            : 'drive-tab-document',
-      params: { documentId: document.id, documentType: document.type },
-    });
-  }
-  return {
-    type: 'component',
-    id: 'documents',
-    entryMetadata: { route: { matches } },
-  };
 }
 
 export function splitLocationFromContent(

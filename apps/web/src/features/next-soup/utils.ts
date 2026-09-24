@@ -13,7 +13,7 @@ import {
   CALENDAR_VIEW_ID,
   type CalendarViewTarget,
 } from '@app/features/calendar-view/types';
-import { driveDocumentFromContent } from '@app/features/drive-view/primitives/drive-route';
+import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
@@ -38,7 +38,6 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
-import { driveSplitContent } from '@components/app/split-layout/split-router/legacy-route';
 import { toast } from '@core/component/Toast/Toast';
 import {
   fileTypeToBlockName,
@@ -748,18 +747,12 @@ export const openEntityInSplitFromUnifiedList = async (
       : undefined;
   const referredFrom = options.referredFrom ?? sourceListView;
 
-  // Documents are hosted by Drive. Construct the canonical routed content
-  // before opening the split so the layout manager does not mount a legacy
-  // block and immediately replace it during router feedback.
-  // A comment target opens the document block itself, exactly like a copied
-  // comment link, because Drive-hosted documents cannot take a comment target.
-  const driveDocument =
-    !isTouchDevice() && !commentParams
-      ? driveDocumentFromContent(content)
-      : undefined;
-  let splitContent: SplitContent = driveDocument
-    ? driveSplitContent({ kind: 'tab', tab: 'owned' }, driveDocument)
-    : { ...content, params };
+  // Construct routed Drive content before opening the split so hosted entities
+  // do not mount a legacy block. Comment targets keep their document block.
+  const hostedContent = driveHostedContent(content, {
+    allowDocuments: !isTouchDevice() && !commentParams,
+  });
+  let splitContent: SplitContent = hostedContent ?? { ...content, params };
   const callTranscriptId =
     entity.type === 'call' && location?.type === 'call_record'
       ? location.transcriptId

@@ -56,6 +56,12 @@ function redirectLegacyRoutes(
     }
   }
 
+  if (route.matches[0].id === 'call-detail') {
+    const { callId } = routeParams(route);
+    if (typeof callId === 'string') {
+      return redirect(`/drive/call/${encodeURIComponent(callId)}`);
+    }
+  }
   if (route.matches[0].id !== 'legacy-content') return;
 
   const { type, id } = routeParams(route);
@@ -133,7 +139,7 @@ function migrateLegacySearch({
       namespace: CALENDAR_SEARCH_NAMESPACE,
       fields: [['eventId', 'eventId']] as const,
     }))
-    .with('call-detail', () => ({
+    .with('call-detail', 'drive-call', () => ({
       namespace: 'call-detail',
       fields: [[CALL_URL_PARAMS.transcriptId, 'transcriptId']] as const,
     }))
