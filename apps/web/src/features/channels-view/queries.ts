@@ -256,7 +256,8 @@ function useChannelsDataSource(
       ),
       sortMethod()
     );
-    if (key && !query.isPlaceholderData) retainedRailChannels.set(key, channels);
+    if (key && !query.isPlaceholderData)
+      retainedRailChannels.set(key, channels);
     return channels;
   }, []);
 
