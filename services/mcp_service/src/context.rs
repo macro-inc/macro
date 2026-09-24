@@ -381,8 +381,11 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     );
 
     let search_service_client = Arc::new(search_service_client);
-    let skill_tool_context =
-        ai_tools::build_skill_tool_context(search_service_client.clone(), soup_service.clone());
+    let skill_tool_context = ai_tools::build_skill_tool_context(
+        search_service_client.clone(),
+        soup_service.clone(),
+        &document_tool_context,
+    );
     let initiative_tool_context = ai_tools::build_initiative_tool_context(
         db.clone(),
         &document_tool_context,
