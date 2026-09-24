@@ -16,6 +16,10 @@ export {
   usePlatformNotificationState,
 } from './components/PlatformNotificationProvider';
 export { NotificationsPlayground } from './components/Playground';
+export {
+  documentCommentLocation,
+  getDocumentCommentLocation,
+} from './document-comment-location';
 export { getDocumentCommentNotification } from './document-comment-notification';
 export {
   createEffectOnEntityTypeNotification,
@@ -45,9 +49,7 @@ export {
   shouldShowNotificationTarget,
 } from './notification-metadata';
 export {
-  documentCommentLocation,
   getChannelNotificationParams,
-  getDocumentCommentLocation,
   openNotification,
   openNotificationFromId,
   openSingleStackNotification,

@@ -7,7 +7,7 @@ import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import type { BlockName } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
-import { documentCommentLocation } from '@notifications';
+import { documentCommentLocation } from '@notifications/document-comment-location';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 import type { InboxPreviewRouteParams } from './inbox-route-schema';
