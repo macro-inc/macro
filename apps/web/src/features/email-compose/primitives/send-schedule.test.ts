@@ -1,4 +1,6 @@
-import { createSignal } from 'solid-js';
+import { emailKeys } from '@queries/email/keys';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { createComponent, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import type {
@@ -6,9 +8,18 @@ import type {
   PersistedEmailIdentity,
 } from '../context/compose-capabilities';
 import { decodeBase64Utf8 } from '../core/decode-base64';
+import { emailDraftLifecycleSource } from '../queries/draft-lifecycle';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
+
+const fetchLifecycleThread = vi.hoisted(() => vi.fn());
+vi.mock('@queries/email/thread', () => ({
+  fetchFreshEmailThread: fetchLifecycleThread,
+}));
+vi.mock('@core/cross-tab/cross-tab-bus', () => ({
+  createCrossTabBus: () => ({ publish() {}, subscribe: () => () => {} }),
+}));
 
 function composer(
   kind: 'standalone' | 'reply',
@@ -18,29 +29,362 @@ function composer(
     const state = mountReplyComposer(composeContext);
     return {
       dispose: state.dispose,
+      edit: state.edit,
+      switchInbox: state.persistDraftOnSenderSwitch,
+      selectedInbox: state.activeInboxId,
+      disabled: state.editingDisabled,
+      selectedTime: state.selectedSendTime,
+      confirmedTime: state.confirmedSendTime,
+      scheduleState: state.scheduleState,
       send: () => state.sendEmail(),
-      schedule: state.handleSendTimeChange,
+      selectTime: state.handleSendTimeChange,
+      cancelSchedule: state.cancelSchedule,
     };
   }
   const root = mountEmailComposer(composeContext);
   root.edit('Ready to send');
   return {
     dispose: root.dispose,
+    edit: root.edit,
+    switchInbox: root.state.context.onSelectInbox!,
+    selectedInbox: () => root.state.context.selectedInboxId?.(),
+    disabled: root.state.context.disabled,
+    selectedTime: root.state.context.schedule.selectedTime,
+    confirmedTime: root.state.context.schedule.confirmedTime,
+    scheduleState: root.state.context.schedule.state,
     send: root.state.context.onSend,
-    schedule: root.state.context.onSendTimeChange!,
+    selectTime: root.state.context.schedule.onSelect,
+    cancelSchedule: root.state.context.schedule.onCancel,
+  };
+}
+
+function composerWithLifecycleQuery(
+  kind: 'standalone' | 'reply',
+  context: EmailComposeContext
+) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
+  let state!: ReturnType<typeof composer>;
+  const disposeProvider = createRoot((dispose) => {
+    createComponent(QueryClientProvider, {
+      client,
+      get children() {
+        state = composer(kind, {
+          ...context,
+          draftLifecycle: emailDraftLifecycleSource,
+        });
+        return null;
+      },
+    });
+    return dispose;
+  });
+  return {
+    ...state,
+    client,
+    dispose() {
+      state.dispose();
+      disposeProvider();
+      client.clear();
+    },
   };
 }
 
 describe('send and schedule ordering', () => {
+  it.each(['standalone', 'reply'] as const)(
+    '%s does not report a syncing failure after delivery invalidates a pending schedule save',
+    async (kind) => {
+      const context = createComposeContext();
+      const state = composer(kind, context);
+      const pending = Promise.withResolvers<PersistedEmailIdentity>();
+      try {
+        state.edit('Previously saved');
+        await vi.advanceTimersByTimeAsync(600);
+        vi.mocked(context.drafts.saveDraft).mockReturnValueOnce(
+          pending.promise
+        );
+        state.selectTime(new Date('2026-12-01T12:00:00Z'));
+        state.send();
+        await vi.advanceTimersByTimeAsync(0);
+        context.setDraftLifecycle({
+          type: 'sent',
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+          observedAt: Date.now(),
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.notices.feedback.success).toHaveBeenCalledWith(
+          'Scheduled email sent'
+        );
+        pending.resolve({
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.delivery.schedule).not.toHaveBeenCalled();
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+        expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+      } finally {
+        pending.resolve({
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+        });
+        state.dispose();
+      }
+    }
+  );
+
+  it.each(['standalone', 'reply'] as const)(
+    '%s keeps an unconfirmed time local across an editing refresh',
+    async (kind) => {
+      const context = createComposeContext();
+      const state = composer(kind, context);
+      const selected = new Date('2026-12-01T12:00:00Z');
+      try {
+        expect(state.selectTime(selected)).toBe(true);
+        context.setDraftLifecycle({
+          type: 'editing',
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+          observedAt: Date.now(),
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(state.selectedTime()).toEqual(selected);
+        expect(state.scheduleState().type).toBe('editing');
+        expect(state.disabled()).toBe(false);
+        expect(context.delivery.schedule).not.toHaveBeenCalled();
+        expect(context.delivery.unschedule).not.toHaveBeenCalled();
+        expect(context.delivery.archive).not.toHaveBeenCalled();
+      } finally {
+        state.dispose();
+      }
+    }
+  );
+
+  it.each(['standalone', 'reply'] as const)(
+    '%s discards deferred missing state when migration and its refresh fail',
+    async (kind) => {
+      const context = createComposeContext();
+      context.accounts.inboxes = () => [
+        { id: 'inbox', email_address: 'me@example.com', settings: {} },
+        { id: 'other', email_address: 'other@example.com', settings: {} },
+      ];
+      fetchLifecycleThread.mockReset().mockResolvedValueOnce({
+        messages: [message('draft', { is_draft: true })],
+      });
+      const state = composerWithLifecycleQuery(kind, context);
+      const notifications: VoidFunction[] = [];
+      let queueNotification: ReturnType<typeof vi.spyOn> | undefined;
+      try {
+        state.edit('Keep this draft');
+        await vi.advanceTimersByTimeAsync(600);
+        const moving = Promise.withResolvers<PersistedEmailIdentity>();
+        vi.mocked(context.drafts.saveDraft).mockReturnValueOnce(moving.promise);
+        state.switchInbox('other');
+        await vi.advanceTimersByTimeAsync(0);
+        expect(state.disabled()).toBe(true);
+
+        // A read during migration cannot establish the final draft state.
+        fetchLifecycleThread.mockResolvedValueOnce({ messages: [] });
+        await state.client.invalidateQueries({
+          queryKey: emailKeys.composeDraftState._def,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+
+        const failure = new Error('Lifecycle unavailable');
+        fetchLifecycleThread.mockRejectedValueOnce(failure);
+        queueNotification = vi
+          .spyOn(globalThis, 'queueMicrotask')
+          .mockImplementation((callback) => notifications.push(callback));
+        moving.reject(new Error('Move failed'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.notices.reportError).toHaveBeenCalledWith(failure);
+        expect(context.drafts.saveDraft).toHaveBeenCalledTimes(2);
+        expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+        expect(state.disabled()).toBe(false);
+
+        queueNotification.mockRestore();
+        for (const notify of notifications.splice(0)) notify();
+        fetchLifecycleThread.mockResolvedValueOnce({
+          messages: [message('draft', { is_draft: true })],
+        });
+        await state.client.invalidateQueries({
+          queryKey: emailKeys.composeDraftState._def,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.drafts.saveDraft).toHaveBeenCalledTimes(2);
+        expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+      } finally {
+        queueNotification?.mockRestore();
+        for (const notify of notifications) notify();
+        state.dispose();
+      }
+    }
+  );
+
+  it('does not send a reply when delivery overtakes its pre-send save', async () => {
+    const context = createComposeContext();
+    const state = mountReplyComposer(context);
+    state.edit('Previously saved');
+    await vi.advanceTimersByTimeAsync(600);
+    const pending = Promise.withResolvers<PersistedEmailIdentity>();
+    vi.mocked(context.drafts.saveDraft)
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue({
+        draftId: 'recovered',
+        threadId: 'thread',
+        inboxId: 'inbox',
+      });
+    state.edit('Keep this newer reply unsent');
+    const sending = state.sendEmail();
+    await vi.advanceTimersByTimeAsync(0);
+    context.setDraftLifecycle({
+      type: 'sent',
+      draftId: 'draft',
+      threadId: 'thread',
+      inboxId: 'inbox',
+      observedAt: Date.now(),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    pending.resolve({ draftId: 'draft', threadId: 'thread', inboxId: 'inbox' });
+    await sending;
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+    expect(state.savedDraftId()).toBe('recovered');
+    expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
+      'Keep this newer reply unsent'
+    );
+    state.dispose();
+  });
+
+  it.each(['standalone', 'reply'] as const)(
+    '%s observes the persisted inbox and ignores missing responses during migration',
+    async (kind) => {
+      const context = createComposeContext();
+      context.accounts = {
+        ...context.accounts,
+        inboxes: () => [
+          { id: 'inbox', email_address: 'me@example.com', settings: {} },
+          { id: 'other', email_address: 'other@example.com', settings: {} },
+          { id: 'third', email_address: 'third@example.com', settings: {} },
+        ],
+      };
+      const state = composer(kind, context);
+      state.edit('Move this draft');
+      await vi.advanceTimersByTimeAsync(600);
+      const identity = vi.mocked(context.draftLifecycle.observe).mock
+        .calls[0][0];
+      const pending = Promise.withResolvers<PersistedEmailIdentity>();
+      vi.mocked(context.drafts.saveDraft).mockReturnValueOnce(pending.promise);
+      state.switchInbox('other');
+      await vi.advanceTimersByTimeAsync(0);
+      state.switchInbox('third');
+      expect(state.selectedInbox()).toBe('other');
+      expect(identity.inboxId()).toBe('inbox');
+      expect(identity.draftId()).toBe('draft');
+      context.setDraftLifecycle({
+        type: 'missing',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'other',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      // The server deletes the old inbox's draft before the migration response.
+      context.setDraftLifecycle({
+        type: 'missing',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+      pending.resolve({
+        draftId: 'moved',
+        threadId: 'moved-thread',
+        inboxId: 'other',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect([
+        identity.draftId(),
+        identity.threadId(),
+        identity.inboxId(),
+      ]).toEqual(['moved', 'moved-thread', 'other']);
+      expect(context.drafts.saveDraft).toHaveBeenCalledTimes(2);
+      expect(state.selectedInbox()).toBe('other');
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+      expect(state.disabled()).toBe(false);
+      state.dispose();
+    }
+  );
+
+  it.each(['standalone', 'reply'] as const)(
+    '%s defers stale observations until schedule reconciliation completes',
+    async (kind) => {
+      const context = createComposeContext();
+      const state = composer(kind, context);
+      const pending = Promise.withResolvers<void>();
+      vi.mocked(context.delivery.archive).mockReturnValueOnce(pending.promise);
+      const lifecycle = vi.mocked(context.draftLifecycle.observe).mock
+        .results[0].value;
+      const scheduled = {
+        type: 'scheduled' as const,
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        sendTime: '2026-12-01T12:00:00Z',
+        observedAt: Date.now(),
+      };
+      vi.mocked(lifecycle.refresh).mockImplementationOnce(async () => {
+        context.setDraftLifecycle(scheduled);
+        return scheduled;
+      });
+      state.selectTime(new Date(scheduled.sendTime));
+      const scheduling = state.send();
+      await vi.advanceTimersByTimeAsync(0);
+      context.setDraftLifecycle({
+        type: 'editing',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(state.selectedTime()).toEqual(new Date(scheduled.sendTime));
+      pending.resolve();
+      await scheduling;
+      if (kind === 'standalone') {
+        expect(state.confirmedTime()).toEqual(new Date(scheduled.sendTime));
+        expect(state.disabled()).toBe(true);
+      } else {
+        // Inline reply follows its normal successful-submit convention and
+        // collapses; a stale editing observation must not surface a cancel.
+        expect(state.scheduleState().type).toBe('editing');
+      }
+      expect(context.notices.feedback.success).not.toHaveBeenCalledWith(
+        'Schedule cancelled. This email is editable again.'
+      );
+      state.dispose();
+    }
+  );
   it('keeps reply recipients unchanged while a schedule is pending', async () => {
     const context = createComposeContext();
     const pending = Promise.withResolvers<void>();
     vi.mocked(context.delivery.schedule).mockReturnValueOnce(pending.promise);
     const state = mountReplyComposer(context);
     const originalTo = [...state.form.recipients().to];
-    const schedule = state.handleSendTimeChange(
-      new Date('2026-12-01T12:00:00Z')
+    expect(state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'))).toBe(
+      true
     );
+    expect(context.delivery.schedule).not.toHaveBeenCalled();
+    const scheduling = state.sendEmail();
     try {
       await vi.advanceTimersByTimeAsync(0);
       expect(context.delivery.schedule).toHaveBeenCalledOnce();
@@ -50,15 +394,53 @@ describe('send and schedule ordering', () => {
       expect(state.form.recipients().to).toEqual(originalTo);
       expect(state.form.recipients().cc).toEqual([]);
       pending.resolve();
-      await schedule;
-      state.recipients.setRecipients('to', []);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(context.delivery.unschedule).toHaveBeenCalledOnce();
-      expect(state.form.sendTime()).toBeUndefined();
-      expect(state.sendActionDisabled()).toBe(false);
+      await scheduling;
+      expect(context.delivery.unschedule).not.toHaveBeenCalled();
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
     } finally {
       pending.resolve();
-      await schedule;
+      await scheduling;
+      state.dispose();
+    }
+  });
+
+  it('ignores confirmed-schedule edits and quoted-text toggles', async () => {
+    const context = createComposeContext();
+    const state = mountReplyComposer(context);
+    try {
+      state.edit('Persist before scheduling elsewhere');
+      await vi.advanceTimersByTimeAsync(600);
+      context.setDraftLifecycle({
+        type: 'scheduled',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        sendTime: '2026-12-01T12:00:00Z',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(state.confirmedSendTime()).toEqual(
+        new Date('2026-12-01T12:00:00Z')
+      );
+
+      state.scheduleDraftSave();
+      state.toggleQuotedText();
+      expect(state.form.replyAppended()).toBe(false);
+
+      context.setDraftLifecycle({
+        type: 'sent',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+      expect(context.notices.feedback.success).toHaveBeenCalledWith(
+        'Scheduled email sent'
+      );
+    } finally {
       state.dispose();
     }
   });
@@ -107,6 +489,44 @@ describe('send and schedule ordering', () => {
       );
       expect(undoFirst).toHaveBeenCalledOnce();
       expect(undoSecond).not.toHaveBeenCalled();
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('keeps a newer reply when undoing an immediate send without schedule wording', async () => {
+    const context = createComposeContext();
+    vi.mocked(context.delivery.sendMessage).mockResolvedValueOnce({
+      draftId: 'draft',
+      threadId: 'thread',
+      inboxId: 'inbox',
+    });
+    vi.mocked(context.delivery.undoSend).mockImplementation(
+      async ({ onUndone }) => {
+        await onUndone();
+      }
+    );
+    const state = mountReplyComposer(context);
+    try {
+      state.edit('Earlier reply');
+      await state.sendEmail();
+      const sentNotice = vi
+        .mocked(context.notices.feedback.success)
+        .mock.calls.find(([text]) => text === 'Email sent');
+
+      state.edit('Newer reply that must survive');
+      sentNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
+        'Newer reply that must survive'
+      );
+      expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+        'Your newer reply was kept. The earlier message was not reopened.'
+      );
+      expect(context.notices.feedback.alert).not.toHaveBeenCalledWith(
+        expect.stringContaining('Schedule cancelled')
+      );
     } finally {
       state.dispose();
     }
@@ -162,20 +582,191 @@ describe('send and schedule ordering', () => {
   it('does not add a scheduling notice after persistence already failed', async () => {
     const composeContext = createComposeContext();
     const failure = new Error('Draft save failed');
-    vi.mocked(composeContext.drafts.saveDraft).mockImplementationOnce(
-      async () => {
-        composeContext.notices.feedback.failure('Failed to save draft');
-        throw failure;
-      }
-    );
+    vi.mocked(composeContext.drafts.saveDraft).mockRejectedValueOnce(failure);
     const state = mountReplyComposer(composeContext);
     try {
-      await state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      expect(state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'))).toBe(
+        true
+      );
+      await state.sendEmail();
       expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
       expect(
         composeContext.notices.feedback.failure
       ).toHaveBeenCalledExactlyOnceWith('Failed to save draft');
       expect(composeContext.notices.reportError).toHaveBeenCalledWith(failure);
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('undoes a scheduled reply with its saved body, envelope, and attachments', async () => {
+    const composeContext = createComposeContext();
+    const state = mountReplyComposer(composeContext);
+    try {
+      state.form.setSubject('Scheduled reply subject');
+      state.form.attachments.add({
+        type: 'forwarded',
+        attachmentId: 'source-file',
+        fileName: 'review.txt',
+        mimeType: 'text/plain',
+        fileSize: 10,
+      });
+      state.edit('Restore this scheduled reply');
+      state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      await state.sendEmail();
+
+      const scheduledNotice = vi
+        .mocked(composeContext.notices.feedback.success)
+        .mock.calls.find(([text]) => text === 'Email scheduled');
+      scheduledNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(composeContext.delivery.unschedule).toHaveBeenCalledWith({
+        draftId: 'draft',
+        inboxId: 'inbox',
+      });
+      expect(composeContext.drafts.restoreDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+          draft: expect.objectContaining({
+            db_id: 'draft',
+            subject: 'Scheduled reply subject',
+          }),
+        })
+      );
+      expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
+        'Restore this scheduled reply'
+      );
+      expect(state.form.attachments.list()).toEqual([
+        expect.objectContaining({ attachmentId: 'source-file' }),
+      ]);
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('reports a partial undo when the cancelled draft cannot be reopened', async () => {
+    const composeContext = createComposeContext();
+    const restoreFailure = new Error('Draft restore failed');
+    vi.mocked(composeContext.drafts.restoreDraft).mockRejectedValueOnce(
+      restoreFailure
+    );
+    const state = mountReplyComposer(composeContext);
+    try {
+      state.edit('Keep this scheduled reply');
+      state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      await state.sendEmail();
+      const scheduledNotice = vi
+        .mocked(composeContext.notices.feedback.success)
+        .mock.calls.find(([text]) => text === 'Email scheduled');
+
+      scheduledNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(composeContext.notices.reportError).toHaveBeenCalledWith(
+        restoreFailure
+      );
+      expect(composeContext.notices.feedback.alert).toHaveBeenCalledWith(
+        'Schedule cancelled, but the draft could not be reopened. Check Drafts.'
+      );
+      expect(composeContext.notices.feedback.success).not.toHaveBeenCalledWith(
+        'Schedule cancelled.'
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('keeps a newer reply when undoing an older scheduled reply', async () => {
+    const composeContext = createComposeContext();
+    const state = mountReplyComposer(composeContext);
+    try {
+      state.edit('Older scheduled reply');
+      state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      await state.sendEmail();
+      const scheduledNotice = vi
+        .mocked(composeContext.notices.feedback.success)
+        .mock.calls.find(([text]) => text === 'Email scheduled');
+
+      state.edit('Newer reply that must survive');
+      scheduledNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
+        'Newer reply that must survive'
+      );
+      expect(composeContext.notices.feedback.alert).toHaveBeenCalledWith(
+        'Your newer reply was kept. The earlier message was not reopened.'
+      );
+      expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
+        'Schedule cancelled.'
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('keeps a different saved reply mounted after the scheduled reply is closed', async () => {
+    const composeContext = createComposeContext();
+    const parent = () => message('parent');
+    const scheduled = mountReplyComposer(composeContext, parent);
+    scheduled.edit('Older scheduled reply');
+    scheduled.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+    await scheduled.sendEmail();
+    const scheduledNotice = vi
+      .mocked(composeContext.notices.feedback.success)
+      .mock.calls.find(([text]) => text === 'Email scheduled');
+    scheduled.dispose();
+
+    const newer = mountReplyComposer(composeContext, parent, {
+      draft: message('newer-draft', {
+        is_draft: true,
+        replying_to_id: 'parent',
+      }),
+    });
+    try {
+      expect(newer.savedDraftId()).toBe('newer-draft');
+      scheduledNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(newer.savedDraftId()).toBe('newer-draft');
+      expect(composeContext.notices.feedback.alert).toHaveBeenCalledWith(
+        'Your newer reply was kept. The earlier message was not reopened.'
+      );
+    } finally {
+      newer.dispose();
+    }
+  });
+
+  it('does not treat another draft as proof that a lost undo response succeeded', async () => {
+    const composeContext = createComposeContext();
+    vi.mocked(composeContext.delivery.unschedule).mockRejectedValueOnce(
+      new Error('response lost')
+    );
+    const state = mountReplyComposer(composeContext);
+    try {
+      state.edit('Scheduled reply');
+      state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      await state.sendEmail();
+      composeContext.setDraftLifecycle({
+        type: 'editing',
+        draftId: 'different-draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      const scheduledNotice = vi
+        .mocked(composeContext.notices.feedback.success)
+        .mock.calls.find(([text]) => text === 'Email scheduled');
+      scheduledNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(composeContext.notices.feedback.failure).toHaveBeenCalledWith(
+        'Failed to undo scheduled send'
+      );
+      expect(composeContext.drafts.restoreDraft).not.toHaveBeenCalled();
     } finally {
       state.dispose();
     }
@@ -304,11 +895,11 @@ describe('send and schedule ordering', () => {
       state.form.setSelectedInbox('secondary');
       state.handleAddAttachments([new File(['attachment'], 'review.txt')]);
       await vi.advanceTimersByTimeAsync(500);
-      const scheduling = state.handleSendTimeChange(
-        new Date('2026-10-01T12:00:00Z')
+      expect(state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'))).toBe(
+        true
       );
+      const scheduling = state.sendEmail();
       await vi.advanceTimersByTimeAsync(0);
-      state.form.setSelectedInbox('inbox');
       expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
       finish();
       await scheduling;
@@ -413,11 +1004,39 @@ describe('send and schedule ordering', () => {
       state.edit('Forwarding');
       await vi.advanceTimersByTimeAsync(500);
       state.handleRemoveAttachment(attachment);
+      expect(
+        composeContext.attachmentStorage.removeForwardedAttachment
+      ).not.toHaveBeenCalled();
       finish({ draftId: 'draft', threadId: 'thread', inboxId: 'inbox' });
       await vi.advanceTimersByTimeAsync(0);
       expect(
         composeContext.attachmentStorage.addForwardedAttachments
       ).not.toHaveBeenCalled();
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('persists forwarded references once per committed reply save', async () => {
+    const context = createComposeContext();
+    const state = mountReplyComposer(context);
+    try {
+      state.form.attachments.add({
+        type: 'forwarded',
+        attachmentId: 'source-file',
+        fileName: 'review.txt',
+        mimeType: 'text/plain',
+        fileSize: 10,
+      });
+      state.edit('Forwarded content');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(
+        context.attachmentStorage.addForwardedAttachments
+      ).toHaveBeenCalledExactlyOnceWith({
+        draftId: 'draft',
+        inboxId: 'inbox',
+        attachments: [{ attachmentId: 'source-file' }],
+      });
     } finally {
       state.dispose();
     }
@@ -559,8 +1178,9 @@ describe('send and schedule ordering', () => {
       state.edit('Moving between inboxes');
       await vi.advanceTimersByTimeAsync(500);
       state.persistDraftOnSenderSwitch('b');
-      state.persistDraftOnSenderSwitch('c');
       finish({ draftId: 'draft-a', threadId: 'thread-a', inboxId: 'inbox' });
+      await vi.advanceTimersByTimeAsync(0);
+      state.persistDraftOnSenderSwitch('c');
       await vi.advanceTimersByTimeAsync(0);
       const inputs = vi
         .mocked(composeContext.drafts.saveDraft)
@@ -575,7 +1195,8 @@ describe('send and schedule ordering', () => {
         'draft-a',
         'draft-b',
       ]);
-      await state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'));
+      state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'));
+      await state.sendEmail();
       expect(composeContext.delivery.archive).toHaveBeenLastCalledWith(
         { threadId: 'thread-c', value: true },
         'c'
@@ -586,14 +1207,11 @@ describe('send and schedule ordering', () => {
   });
 
   it.each(['standalone', 'reply'] as const)(
-    '%s does not dispatch when scheduling starts during the pending draft save',
+    '%s rejects a time change after immediate submission has started',
     async (kind) => {
       const { promise: saving, resolve: finishSaving } =
         Promise.withResolvers<PersistedEmailIdentity>();
-      const { promise: scheduled, resolve: finishScheduling } =
-        Promise.withResolvers<void>();
       const composeContext = createComposeContext();
-      vi.mocked(composeContext.delivery.schedule).mockReturnValue(scheduled);
       vi.mocked(composeContext.drafts.saveDraft).mockImplementationOnce(
         () => saving
       );
@@ -602,18 +1220,15 @@ describe('send and schedule ordering', () => {
         state.send();
         await vi.advanceTimersByTimeAsync(0);
         expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
-        const scheduling = state.schedule(new Date('2026-10-01T12:00:00Z'));
-        await vi.advanceTimersByTimeAsync(0);
+        expect(state.selectTime(new Date('2026-10-01T12:00:00Z'))).toBe(false);
         finishSaving({
           draftId: 'draft',
           threadId: 'thread',
           inboxId: 'inbox',
         });
         await vi.advanceTimersByTimeAsync(0);
-        expect(composeContext.delivery.sendMessage).not.toHaveBeenCalled();
-        expect(composeContext.delivery.schedule).toHaveBeenCalledOnce();
-        finishScheduling();
-        await scheduling;
+        expect(composeContext.delivery.sendMessage).toHaveBeenCalledOnce();
+        expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
       } finally {
         state.dispose();
       }

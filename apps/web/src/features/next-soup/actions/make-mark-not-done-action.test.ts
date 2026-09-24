@@ -4,7 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   threadCanBeMarkedNotDone: vi.fn(async (_id: string) => true),
-  executeMarkEntitiesUndone: vi.fn(async () => {}),
+  executeMarkEntitiesUndone: vi.fn(
+    async (): Promise<'committed' | 'queued'> => 'committed'
+  ),
+  invalidateAllSoup: vi.fn(),
+  refetchSoupEntity: vi.fn(async () => {}),
   resolveMarkEntitiesDoneVariables: vi.fn(
     ({ entities }: { entities: EntityData[] }) => ({
       emailIds: entities.map((e) => e.id),
@@ -32,8 +36,8 @@ vi.mock('@queries/notification/user-notifications', () => ({
 }));
 
 vi.mock('@queries/soup/cache', () => ({
-  invalidateAllSoup: vi.fn(),
-  refetchSoupEntity: vi.fn(async () => {}),
+  invalidateAllSoup: mocks.invalidateAllSoup,
+  refetchSoupEntity: mocks.refetchSoupEntity,
 }));
 
 vi.mock('@app/features/next-soup/utils', () => ({
@@ -66,6 +70,20 @@ describe('makeMarkNotDoneAction', () => {
       expect.objectContaining({ emailIds: ['inbound'] })
     );
     expect(mocks.alert).not.toHaveBeenCalled();
+    expect(mocks.invalidateAllSoup).toHaveBeenCalledOnce();
+    expect(mocks.refetchSoupEntity).toHaveBeenCalledWith(
+      'inbound',
+      'emailThread'
+    );
+  });
+
+  it('does not refetch REST caches after a queued unarchive', async () => {
+    mocks.executeMarkEntitiesUndone.mockResolvedValueOnce('queued');
+    await expect(createAction().execute([doneEmail('inbound')])).resolves.toBe(
+      'queued'
+    );
+    expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
+    expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
   });
 
   // A send-only thread is permanently done: unarchiving reverts on the next

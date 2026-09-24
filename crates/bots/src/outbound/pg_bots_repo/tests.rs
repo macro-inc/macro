@@ -434,7 +434,7 @@ async fn bot_profiles_batch_persisted_system_deleted_and_missing_bots(
             .get(&bot_id::MACRO_NEW_BOT_ID)
             .expect("system bot profile")
             .name,
-        bot_id::MACRO_NEW_NAME
+        bot_id::MACRO_AI_NAME
     );
     assert!(!profiles.contains_key(&missing));
 

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COALESCE(SUM(amount_cents), 0)::bigint AS \"charged!\"\n        FROM ai_overage_charge\n        WHERE user_id = $1\n          AND period_start = $2\n          AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "charged!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3f55e29e4b01ea495af980ccec349f7e251bd2034994a95de309c89a4394d723"
+}

@@ -10,14 +10,25 @@
 //!
 //! | fact | notification | recipients |
 //! | --- | --- | --- |
-//! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it |
-//! | `waiting_for_input` | [`AgentSessionWaitingForInputMetadata`] | the same audience - anyone with edit access may answer, and these are the people already driving it |
+//! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it - unless the turn was a chat agent's announced reply, whose patched message already notifies the thread |
+//! | `waiting_for_input` | [`AgentSessionWaitingForInputMetadata`] | the same audience - anyone with edit access may answer, and these are the people already driving it - with the same exception for a chat agent's announced turn, whose reply is patched to say it is waiting |
 //! | `mentioned` | [`AgentSessionMentionedMetadata`] | the users the prompt named, who can now open the session |
 //!
-//! Everything else is nobody's news. Retracting a notification once it is
-//! stale (the question answered, the next turn started) is deliberately not
-//! done yet: the notification ingress has no producer-facing way to mark
-//! done, and adding one is its own change.
+//! Everything else is nobody's news.
+//!
+//! The session's [`AgentKind`] comes in beside the fact because the fact
+//! does not carry it: a chat agent's announced turn ends by patching its
+//! pending reply into the thread, and the message service notifies on that
+//! patch as if the answer had just been posted, so a `settled` notification
+//! on top would tell the same people the same thing twice. The same reply
+//! is patched when the turn stops to ask a question, so `waiting_for_input`
+//! is suppressed for it likewise. A coding agent's chip notifies nobody,
+//! and a chat turn nobody announced - one driven from the session view -
+//! has no message to speak through, so both keep every notification.
+//!
+//! Retracting a notification once it is stale (the question answered, the
+//! next turn started) is deliberately not done yet: the notification ingress
+//! has no producer-facing way to mark done, and adding one is its own change.
 //!
 //! # Ids
 //!
@@ -47,6 +58,8 @@ use model_notifications::{
 use notification::domain::models::apple::PushNotificationData;
 use notification::domain::models::request::SendNotificationRequestBuilder;
 use notification::domain::models::{Notification, SendNotificationRequest};
+
+use super::model::AgentKind;
 
 /// The namespace agent-session notification ids are derived in. Fixed
 /// forever: changing it would orphan every retraction of a notification
@@ -116,12 +129,12 @@ impl PlannedNotification {
     }
 }
 
-/// The notifications one lifecycle fact warrants.
+/// The notifications one lifecycle fact about a `kind` session warrants.
 #[must_use]
-pub fn plan(event: &AgentSessionLifecycleEvent) -> Vec<PlannedNotification> {
+pub fn plan(event: &AgentSessionLifecycleEvent, kind: AgentKind) -> Vec<PlannedNotification> {
     match event {
-        AgentSessionLifecycleEvent::Settled(settled) => plan_settled(settled),
-        AgentSessionLifecycleEvent::WaitingForInput(waiting) => plan_waiting(waiting),
+        AgentSessionLifecycleEvent::Settled(settled) => plan_settled(settled, kind),
+        AgentSessionLifecycleEvent::WaitingForInput(waiting) => plan_waiting(waiting, kind),
         AgentSessionLifecycleEvent::Mentioned(mentioned) => plan_mentioned(mentioned),
         AgentSessionLifecycleEvent::Opened(_)
         | AgentSessionLifecycleEvent::TurnStarted(_)
@@ -133,12 +146,17 @@ pub fn plan(event: &AgentSessionLifecycleEvent) -> Vec<PlannedNotification> {
     }
 }
 
-fn plan_settled(settled: &SessionSettledMetadata) -> Vec<PlannedNotification> {
+fn plan_settled(settled: &SessionSettledMetadata, kind: AgentKind) -> Vec<PlannedNotification> {
     // "Settled" without the turn's record is a fact nobody can act on: no
     // excerpt, no chip, no turn to key the id by.
     let Some(turn) = &settled.last_turn else {
         return Vec::new();
     };
+    // A chat agent's announced turn already told the thread: its pending
+    // reply was patched into the answer, and that patch notifies as a post.
+    if !kind.is_coding() && turn.announcement_message_id.is_some() {
+        return Vec::new();
+    }
     let (entity, secondary_entity) = entities(&settled.identity);
     vec![PlannedNotification::Settled(Notify {
         notification_id: settled_notification_id(settled.identity.session_id.as_uuid(), turn.turn),
@@ -155,7 +173,13 @@ fn plan_settled(settled: &SessionSettledMetadata) -> Vec<PlannedNotification> {
     })]
 }
 
-fn plan_waiting(waiting: &WaitingForInputMetadata) -> Vec<PlannedNotification> {
+fn plan_waiting(waiting: &WaitingForInputMetadata, kind: AgentKind) -> Vec<PlannedNotification> {
+    // A chat agent's announced turn tells its thread it is waiting the same
+    // way it tells it the answer: by patching its pending reply, which
+    // notifies as a post.
+    if !kind.is_coding() && waiting.announcement_message_id.is_some() {
+        return Vec::new();
+    }
     let (entity, secondary_entity) = entities(&waiting.identity);
     vec![PlannedNotification::WaitingForInput(Notify {
         notification_id: waiting_notification_id(

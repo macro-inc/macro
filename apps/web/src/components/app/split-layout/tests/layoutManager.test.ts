@@ -48,6 +48,7 @@ vi.mock('../componentRegistry', () => ({
 }));
 
 vi.mock('@core/constant/allBlocks', () => ({
+  fileTypeToBlockName: vi.fn((type: string) => type),
   isBlockAlias: vi.fn(() => false),
   resolveBlockAlias: vi.fn((type: string) => type),
 }));
@@ -934,6 +935,35 @@ describe('layoutManager', () => {
       dispose();
     });
 
+    it.each([
+      ['/component/preview-empty', '/inbox'],
+      ['/component/non-member-channel', '/inbox'],
+      ['/component/inbox', '/inbox'],
+      ['/component/documents', '/drive'],
+      ['/component/settings', '/settings/account'],
+    ])('upgrades the legacy component URL %s', async (incoming, expected) => {
+      const { location, router, dispose } = ingressRouter(incoming);
+      await router.settled();
+      expect(location.read().pathname).toBe(expected);
+      expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
+    it.each([
+      ['/email/thread-1', '/mail/thread-1'],
+      ['/channel/channel-1', '/channels/channel-1'],
+      ['/task/task-1', '/tasks/task-1'],
+      ['/md/document-1', '/drive/md/document-1'],
+    ])('upgrades the legacy block URL %s', async (incoming, expected) => {
+      const { location, router, dispose } = ingressRouter(incoming);
+      await router.settled();
+      expect(location.read().pathname).toBe(expected);
+      expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
     it('upgrades the legacy Calendar block URL to the preferred period route', async () => {
       localStorage.setItem(
         CALENDAR_PREFERENCES_KEY,
@@ -983,6 +1013,32 @@ describe('layoutManager', () => {
       ).toBe('code');
       expect(location.read().hash).toBe('#focus');
       expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
+    it('applies a new-split location when an entity pane is reused', async () => {
+      const { manager, router, dispose } = ingressRouter('/channel/one', {
+        enabled: false,
+      });
+      await router.settled();
+      const split = manager.splits()[0];
+
+      router.navigate(split.id, '/channel/one', {
+        target: 'new-split',
+        allowDuplicate: true,
+        search: {
+          'channel-detail': { messageId: ['second'] },
+        },
+      });
+      await router.settled();
+
+      expect(manager.splits()).toHaveLength(1);
+      expect(manager.splits()[0].content.entryMetadata).toMatchObject({
+        search: {
+          'channel-detail': { messageId: ['second'] },
+        },
+      });
       router.dispose();
       dispose();
     });

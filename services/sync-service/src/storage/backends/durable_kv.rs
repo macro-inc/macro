@@ -14,7 +14,10 @@ use worker::{
     wasm_bindgen::JsCast,
 };
 
-use crate::{error::ResultExt, state::DocumentState};
+use crate::{
+    error::ResultExt,
+    state::{DocumentState, ImportedUpdate},
+};
 
 /// When saving snapshot, we also write the version vector to durable object KV
 /// When we read a snapshot from Worker KV, we check it's version vector is >= version vector in LAST_VERSION_VECTOR.
@@ -97,7 +100,7 @@ impl DurableKVStorage {
         &self,
         document_state: &DocumentState,
         op_update: &[u8],
-    ) -> Result<Vec<String>> {
+    ) -> Result<ImportedUpdate> {
         self.apply_op_with_attribution(document_state, op_update, None)
             .await
     }
@@ -109,10 +112,10 @@ impl DurableKVStorage {
         document_state: &DocumentState,
         op_update: &[u8],
         attribution: Option<&crate::domain::document::DocumentAttribution>,
-    ) -> Result<Vec<String>> {
+    ) -> Result<ImportedUpdate> {
         let op_id = self.ids.id();
         let op_key = pending_op_key(&op_id);
-        let touched_nodes = document_state.import(op_update)?;
+        let imported = document_state.import(op_update)?;
         self.inner.put(&op_key, op_update).await?;
         self.applied_keys
             .write()
@@ -124,7 +127,7 @@ impl DurableKVStorage {
                 .context("failed to serialize signed document attribution")?;
             self.inner.put(&format!("actor/{op_id}"), metadata).await?;
         }
-        Ok(touched_nodes)
+        Ok(imported)
     }
 
     pub async fn apply_pending_ops(&self, snapshot: &DocumentState) -> Result<()> {

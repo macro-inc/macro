@@ -28,6 +28,7 @@ fn documents_map_to_events_with_matching_keys_and_exact_metadata() {
     assert_eq!(
         events[0].event().event,
         DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            editors: Vec::new(),
             document_id: "document-a".to_string(),
             file_type: FileType::Md,
             document_version_id: Some("version-42".to_string()),
@@ -39,6 +40,7 @@ fn documents_map_to_events_with_matching_keys_and_exact_metadata() {
     assert_eq!(
         events[1].event().event,
         DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            editors: Vec::new(),
             document_id: "document-b".to_string(),
             file_type: FileType::Pdf,
             document_version_id: None,

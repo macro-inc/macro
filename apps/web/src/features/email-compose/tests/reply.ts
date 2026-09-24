@@ -12,7 +12,10 @@ import { createEmailEditor, setEmailEditorText } from './editor';
 export function mountReplyComposer(
   composeContext: EmailComposeContext,
   replyingTo = () => message('parent'),
-  callbacks: Pick<ReplyComposerOptions, 'sideEffectOnSend' | 'onMarkDone'> = {}
+  callbacks: Pick<
+    ReplyComposerOptions,
+    'draft' | 'sideEffectOnSend' | 'onMarkDone'
+  > = {}
 ) {
   return createRoot((dispose) => {
     const editor = createEmailEditor('Ready to send');

@@ -1,6 +1,8 @@
 import {
+  getDocumentCommentTarget,
   navigateCalendarPreviewToTarget,
   navigateChannelEntityToTarget,
+  navigateDocumentEntityToComment,
 } from '@app/features/next-soup/utils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
@@ -45,6 +47,11 @@ export const [PreviewPanelContext, useMaybePreviewPanel] =
 
 export type PreviewPanelProps = {
   selectedEntity: PreviewPanelSelection | undefined;
+  /**
+   * Bumped by the host when the user re-opens the selection already shown, so
+   * the block navigates to its target again.
+   */
+  navigationRequest?: number;
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
   onFocusOut?: VoidFunction;
@@ -103,11 +110,29 @@ function PreviewPanelContent(
         entity.target?.threadId,
       ]);
     }
+    if (entity.type === 'document') {
+      return JSON.stringify([
+        entity.type,
+        entity.id,
+        getDocumentCommentTarget(entity)?.commentId,
+      ]);
+    }
     return entity;
   });
 
+  const navigation = createMemo(
+    () => ({
+      selection: navigationSelection(),
+      request: props.navigationRequest ?? 0,
+    }),
+    undefined,
+    {
+      equals: (a, b) => a.selection === b.selection && a.request === b.request,
+    }
+  );
+
   createRenderEffect(
-    on(navigationSelection, () => {
+    on(navigation, () => {
       const entity = props.selectedEntity;
       setInteractedWith(false);
       if (!blockInstance()) return;
@@ -119,6 +144,8 @@ function PreviewPanelContent(
         void navigateChannelEntityToTarget(entity, props.orchestrator);
       } else if (entity.type === 'calendar_event') {
         void navigateCalendarPreviewToTarget(entity, props.orchestrator);
+      } else if (entity.type === 'document') {
+        void navigateDocumentEntityToComment(entity, props.orchestrator);
       }
     })
   );

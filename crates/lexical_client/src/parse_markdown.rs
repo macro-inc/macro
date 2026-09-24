@@ -210,6 +210,36 @@ struct AgentConnectionPromptRequest<'a> {
     connection_prompt: &'a AgentConnectionPrompt,
 }
 
+/// What a chat agent's thread message says below its session link, in the
+/// shape the lexical service `/agent-announcement` endpoint validates.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AgentChatReplyBody {
+    /// The spinner while the turn runs.
+    Pending,
+    /// Prose, posted as written: the answer, or what the harness says for a
+    /// turn that answered with nothing or stopped to ask.
+    Markdown {
+        /// The prose, as channel markdown.
+        markdown: String,
+    },
+}
+
+/// A chat agent's thread message in one of its states.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentChatReply {
+    /// Session the message speaks for; linked ahead of the body.
+    pub session_id: String,
+    pub body: AgentChatReplyBody,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentChatReplyRequest<'a> {
+    chat_reply: &'a AgentChatReply,
+}
+
 /// A channel message included as context for an agent prompt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub struct AgentContextMessage<'a> {
@@ -221,19 +251,39 @@ pub struct AgentContextMessage<'a> {
 
 /// The document location of the comment thread an agent prompt was posted in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentContextAnchor<'a> {
-    /// Lexical mark the comment is attached to.
-    pub mark_id: &'a str,
-    /// The marked text when the comment was posted, when it was captured.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub marked_text: Option<&'a str>,
-    /// The text the mark covers in the document now, when it was resolved.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub current_marked_text: Option<&'a str>,
-    /// The passage around the mark now, when it was resolved.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub surrounding_text: Option<&'a str>,
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum AgentContextAnchor<'a> {
+    /// A comment mark in a markdown document.
+    Markdown {
+        /// Lexical mark the comment is attached to.
+        mark_id: &'a str,
+        /// The marked text when the comment was posted, when it was captured.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        marked_text: Option<&'a str>,
+        /// The text the mark covers in the document now, when it was resolved.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        current_marked_text: Option<&'a str>,
+        /// The passage around the mark now, when it was resolved.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        surrounding_text: Option<&'a str>,
+    },
+    /// A highlight on a PDF.
+    PdfHighlight {
+        /// Highlight annotation the comment is attached to.
+        anchor_id: &'a str,
+        /// The text the highlight covers, when it carries any.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        marked_text: Option<&'a str>,
+    },
+    /// A point pinned on a PDF page, which covers no text.
+    PdfPin {
+        /// Pin annotation the comment is attached to.
+        anchor_id: &'a str,
+    },
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -522,6 +572,24 @@ impl LexicalClient {
                 .json(&AgentConnectionPromptRequest {
                     connection_prompt: prompt,
                 })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentAnnouncementResponse =
+            response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
+    /// Compose a chat agent's thread message - its session link over the
+    /// spinner or its prose - through the lexical service's real nodes.
+    #[tracing::instrument(skip(self, reply), err)]
+    pub async fn compose_agent_chat_reply(&self, reply: &AgentChatReply) -> Result<String> {
+        let url = format!("{}/agent-announcement", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&AgentChatReplyRequest { chat_reply: reply })
                 .send()
                 .await?,
         )

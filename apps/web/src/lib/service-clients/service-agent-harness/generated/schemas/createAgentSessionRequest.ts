@@ -41,8 +41,9 @@ must supply a bot they own. */
 open on the session's final id - URL, history row, references - the
 moment the user acts, rather than after this request answers (which
 for a managed sandbox can take a while). Omitted, the service mints
-one. Managed sessions only. Answers 409 if a session already holds
-the id. */
+one. Answers 409 if a session already holds the id. On an external
+request it is how a runtime answering a composer request names the
+id it was handed, so the requester waiting on that id finds the session. */
   id?: CreateAgentSessionRequestId;
   /** Instructions the session's runtime works under, for its whole life.
 

@@ -19,6 +19,7 @@ import { mergeQuery } from '../next-soup/filters/filter-store/query-store';
 import type { Query } from '../next-soup/filters/filter-store/types';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import type { DriveViewProps } from './drive-view';
+import { driveDetailTrailSchema } from './primitives/drive-detail-trail';
 import {
   DRIVE_DOCUMENT_TYPES,
   driveDocumentBlockType,
@@ -102,6 +103,7 @@ export const driveRootDocumentRoute = defineRoute({
   id: 'drive-document',
   path: ':documentType/:documentId',
   params: driveDocumentParams,
+  state: driveDetailTrailSchema,
   component: DriveDetailView,
   claim: ({ documentType, documentId }) => ({
     namespace: 'block',
@@ -113,6 +115,7 @@ export const driveFolderDocumentRoute = defineRoute({
   id: 'drive-folder-document',
   path: ':documentType/:documentId',
   params: driveDocumentParams,
+  state: driveDetailTrailSchema,
   component: DriveDetailView,
   claim: ({ documentType, documentId }) => ({
     namespace: 'block',
@@ -124,6 +127,7 @@ export const driveTabDocumentRoute = defineRoute({
   id: 'drive-tab-document',
   path: ':documentType/:documentId',
   params: driveDocumentParams,
+  state: driveDetailTrailSchema,
   component: DriveDetailView,
   claim: ({ documentType, documentId }) => ({
     namespace: 'block',
@@ -136,7 +140,11 @@ export const driveFolderRoute = defineRoute({
   path: 'folder/:folderId?',
   params: z
     .object({ folderId: z.string().min(1).optional() })
-    .transform(({ folderId }) => ({ view: 'folder' as const, folderId })),
+    .transform(({ folderId }) => ({
+      view: 'folder' as const,
+      folderId,
+    })),
+  state: driveDetailTrailSchema,
   children: [driveFolderDocumentRoute],
 });
 
@@ -145,6 +153,7 @@ export const driveTabRoute = defineRoute({
   path: ':tab',
   aliases: ['tab/:tab'],
   params: z.object({ tab: z.enum(['recent', 'shared']) }),
+  state: driveDetailTrailSchema,
   children: [driveTabDocumentRoute],
 });
 
@@ -154,6 +163,7 @@ export const driveSplitRoute = defineRoute({
   aliases: ['drive/owned', 'drive/tab/owned'],
   component: DriveRouteView,
   search: ['drive'],
+  state: driveDetailTrailSchema,
   externalSearch: (entry: Readonly<SplitRouterEntry>) => {
     const type = routeParams<{ documentType?: string }>(
       entry.location.route
@@ -166,7 +176,8 @@ export const driveSplitRoute = defineRoute({
     ) {
       return Object.values(MARKDOWN_URL_PARAMS);
     }
-    return type === 'pdf' ? Object.values(PDF_URL_PARAMS) : [];
+    if (type === 'pdf') return Object.values(PDF_URL_PARAMS);
+    return [];
   },
   children: [driveFolderRoute, driveTabRoute, driveRootDocumentRoute],
 });

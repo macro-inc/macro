@@ -94,7 +94,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
         disabled={props.disabled || props.pending}
       >
         <ModelIcon model={props.value} />
-        <span class="min-w-0 truncate">
+        <span class="min-w-0 flex-1 truncate text-left">
           {props.triggerLabel ?? displayValue()}
         </span>
         <CaretDown class="size-3.5 shrink-0 rotate-[-90deg] opacity-70" />

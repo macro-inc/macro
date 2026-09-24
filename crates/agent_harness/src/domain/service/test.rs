@@ -2,6 +2,7 @@
 //! with in-memory persistence, mock containers, a fake agent, and a
 //! recording announcer. Only the edges are doubles.
 
+mod chat_reply;
 mod user_cleanup;
 
 use messages::domain::models::MessageParent;
@@ -906,7 +907,7 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
 #[tokio::test]
 async fn open_sends_the_comment_anchor_the_prompt_was_posted_on() {
     let context = ConversationContext {
-        anchor: Some(CommentAnchor {
+        anchor: Some(CommentAnchor::Mark {
             mark_id: "0199f3d4-0000-7000-8000-00000000000a".to_owned(),
             marked_text: Some("the marked phrase".to_owned()),
             current: None,
@@ -2354,6 +2355,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
 
 fn open_external_request(workspace: &str) -> OpenExternalAgentSession {
     OpenExternalAgentSession {
+        id: None,
         profile: None,
         instructions: None,
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),

@@ -1,5 +1,16 @@
 # Navigation and App Structure
 
+## Returning from another page
+
+A browser back/forward-cache restore reconnects the GraphQL cache worker and
+live subscriptions in place; it must not reload the app or discard in-memory
+editor state. For lifecycle verification, navigate to another document and Back,
+confirm `pageshow.persisted` is true (otherwise this was a fresh load), then check
+that cached reads, live updates, and the existing editor still work. Runnable
+queued mutations should resume promptly, without waiting for the old poll or
+local retry timer; durable leases and server-retry deadlines still apply.
+Switching tabs or navigating an in-app route is not a back/forward-cache restore.
+
 ## Direct URLs (all under the frontend origin)
 
 | Route | Surface |
@@ -34,7 +45,7 @@
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/automation/<uuid>` | Cron routine editor; event routines show a backend-managed notice |
-| `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
+| `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
@@ -400,7 +411,16 @@ email mentions keep their separate search-service path.
 
 Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
 must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. A failed background
+mounted and usable while the optional source loads or fails. When no entity rows
+are available yet, the menu shows **Loading results…** while keeping commands
+usable; a settled empty category shows **No results found**. Background history
+or channel refetches alone must not switch settled empty results back to loading,
+including when the active category does not use that source. Cache-update bursts
+must let in-flight history, channel, and menu-search reads publish their results,
+then catch up with one coalesced refresh. Verify with cache reads slower than the
+250 ms update throttle, starting from an empty cache: entities appear without
+waiting for background updates to stop. Changing the query/category or closing
+the menu still discards obsolete search results. A failed background
 refresh retains available history/channel items and recently-viewed ordering.
 Placeholder results also remain usable while replacement data loads. A normal cache-worker
 handoff between tabs preserves backfill cursors and watermarks; only a replacement
@@ -421,13 +441,13 @@ Shared Mail restart rules still apply.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
 
-Settings → Agents and Settings → Harness render while their requests are pending.
+Settings → Agents → Agents / Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 
 With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
-Settings → Harness, above Cursor, with the
-Anthropic logo. Settings → Agents selects an agent's harness but does not host
+Settings → Agents → Runtimes, above Cursor, with the
+Anthropic logo. Settings → Agents → Agents selects an agent's runtime but does not host
 Claude's connection form. **Connect Claude** starts authorization and opens sign-in
 on the first click; a fallback link remains if the browser blocks the tab.
 Approve on Claude's page, copy the complete `code#state`, then use **Finish

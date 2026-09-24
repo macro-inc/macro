@@ -156,7 +156,7 @@ describe('reduceDraftSession', () => {
     }
   });
 
-  it('nothing but emptied, reset, or already-sent leaves the latch', () => {
+  it('ordinary persistence events cannot clear a rejection latch', () => {
     const keepsLatch: DraftSessionEvent[] = [
       { type: 'minted', draftId: 'h-9' },
       {
@@ -174,6 +174,59 @@ describe('reduceDraftSession', () => {
     for (const event of keepsLatch) {
       expect(reduceDraftSession(latched, event).policy.kind).toBe('latched');
     }
+  });
+
+  it('adopts inbox, message, and thread atomically only after migration commits', () => {
+    const before = initialDraftSession({
+      draftId: 'draft-a',
+      threadId: 'thread-a',
+      inboxId: 'inbox-a',
+    });
+    const queued = reduceDraftSession(before, {
+      type: 'saved',
+      epoch: before.epoch,
+      identity: {
+        draftId: 'draft-b',
+        threadId: 'thread-b',
+        inboxId: 'inbox-b',
+        persistence: 'queued',
+      },
+    });
+    expect(queued.identity).toEqual({ ...before.identity, queued: true });
+    const committed = reduceDraftSession(queued, {
+      type: 'saved',
+      epoch: queued.epoch,
+      identity: {
+        draftId: 'draft-b',
+        threadId: 'thread-b',
+        inboxId: 'inbox-b',
+        persistence: 'committed',
+      },
+    });
+    expect(committed.identity).toEqual({
+      kind: 'server',
+      draftId: 'draft-b',
+      threadId: 'thread-b',
+      inboxId: 'inbox-b',
+      queued: false,
+    });
+  });
+
+  it('authoritative cancellation clears a schedule rejection without changing identity', () => {
+    const rejected: DraftSessionState = { ...seeded, policy: latched.policy };
+    const resumed = reduceDraftSession(rejected, {
+      type: 'schedule-cancelled',
+    });
+    expect(resumed.identity).toBe(rejected.identity);
+    expect(resumed.policy.kind).toBe('autosaving');
+    expect(resumed.epoch).toBe(rejected.epoch + 1);
+    const unauthorized: DraftSessionState = {
+      ...rejected,
+      policy: { kind: 'latched', code: 'UNAUTHORIZED' },
+    };
+    expect(
+      reduceDraftSession(unauthorized, { type: 'schedule-cancelled' })
+    ).toBe(unauthorized);
   });
 });
 

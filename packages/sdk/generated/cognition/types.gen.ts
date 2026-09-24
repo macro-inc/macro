@@ -293,6 +293,10 @@ export type ChatMessageContent = string | Array<AssistantMessagePart>;
  * Error response for chat message endpoints
  */
 export type ChatMessageError = {
+    /**
+     * Stable machine-readable code for payment-required errors.
+     */
+    code?: string | null;
     error: string;
     stream_id?: string | null;
 };
@@ -1410,6 +1414,10 @@ export type StringIdResponse = {
 };
 
 export type StructuredCompletionError = {
+    /**
+     * Stable machine-readable code for payment-required errors.
+     */
+    code?: string | null;
     error: string;
 };
 
@@ -2734,13 +2742,13 @@ export type SendChatMessageErrors = {
      */
     401: unknown;
     /**
-     * Payment required — user lacks access to the requested model
+     * Payment required — the user's AI allowance is used up
      */
-    402: unknown;
+    402: ChatMessageError;
     /**
-     * Forbidden
+     * Forbidden — user lacks access to the requested model
      */
-    403: unknown;
+    403: ChatMessageError;
 };
 
 export type SendChatMessageError = SendChatMessageErrors[keyof SendChatMessageErrors];

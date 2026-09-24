@@ -27,6 +27,7 @@ mod message;
 mod preview;
 mod preview_views;
 mod project;
+mod scheduled;
 mod settings;
 mod thread;
 
@@ -307,7 +308,7 @@ impl EmailRepo for EmailPgRepo {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> Result<Option<SettledDraftIds>, Self::Err> {
+    ) -> Result<Option<SettledDraftIds>, EmailErr> {
         draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
     }
 
@@ -355,6 +356,25 @@ impl EmailRepo for EmailPgRepo {
         is_read: bool,
     ) -> Result<(), Self::Err> {
         label::set_thread_read_state(&self.pool, thread_id, link_id, message_ids, is_read).await
+    }
+
+    async fn set_thread_inbox_state(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        message_ids: &[Uuid],
+        add: bool,
+        inbox_visible: bool,
+    ) -> Result<(), Self::Err> {
+        label::set_thread_inbox_state(
+            &self.pool,
+            thread_id,
+            link_id,
+            message_ids,
+            add,
+            inbox_visible,
+        )
+        .await
     }
 
     async fn update_message_read_status_batch(

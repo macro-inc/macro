@@ -7,19 +7,21 @@
 import type { DocumentSyncContentUpdatedMetadataActor } from './documentSyncContentUpdatedMetadataActor';
 import type { DocumentSyncContentUpdatedMetadataDocumentVersionId } from './documentSyncContentUpdatedMetadataDocumentVersionId';
 import type { DocumentSyncContentUpdatedMetadataOnBehalfOf } from './documentSyncContentUpdatedMetadataOnBehalfOf';
+import type { DocumentSyncEditor } from './documentSyncEditor';
 import type { FileType } from './fileType';
 
 /**
  * Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
  */
 export interface DocumentSyncContentUpdatedMetadata {
-  /** Who mechanically changed the content. Absent on events published
-before attribution, and on human-only collab sessions. */
+  /** Legacy single-editor attribution; newer Sync callers send `editors`. */
   actor?: DocumentSyncContentUpdatedMetadataActor;
   /** The id of the live-collab document whose content changed. */
   document_id: string;
   /** Version marker for the sync snapshot, when the caller supplies one. */
   document_version_id?: DocumentSyncContentUpdatedMetadataDocumentVersionId;
+  /** Distinct editors since the preceding snapshot notification. */
+  editors?: DocumentSyncEditor[];
   /** File type of the sync document, resolved by the document backend. */
   file_type: FileType;
   on_behalf_of?: DocumentSyncContentUpdatedMetadataOnBehalfOf;

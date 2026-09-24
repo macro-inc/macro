@@ -16,8 +16,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::error::{HarnessError, Result};
 use super::model::{
     AgentKind, AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, ConversationContext,
-    DeclinedMention, HarnessCommand, ProvisionedEgress, ReachableRepository, SandboxEgress,
-    SessionAnnouncement, SessionBlocker, SpawnContainer,
+    DeclinedMention, HarnessCommand, ProvisionedEgress, ReachableRepository, ResolvedReply,
+    SandboxEgress, SessionAnnouncement, SessionBlocker, SpawnContainer,
 };
 use super::notifications::PlannedNotification;
 use super::sandbox::SandboxResizeEffect;
@@ -254,13 +254,25 @@ impl AgentSessionNotifier for NoopAgentSessionNotifier {
     }
 }
 
-/// Posts a pointer to a new agent session into its originating thread.
+/// Speaks for an agent session in the thread that prompted it.
+///
+/// What gets said depends on the session's [`AgentKind`]: a coding agent's
+/// turn is announced as a magic chip that renders the session live, and a
+/// chat agent's as a pending reply that [`Self::resolve`] later turns into
+/// the answer. The domain names the kind and the facts; the adapter owns
+/// what either looks like.
 pub trait SessionAnnouncer: Send + Sync + 'static {
-    /// Publish one session announcement, returning the message it became.
+    /// Post the message a turn is answered through, returning what it became.
     fn announce(
         &self,
         announcement: SessionAnnouncement,
     ) -> impl Future<Output = Result<AnnouncedMessage>> + Send;
+
+    /// Replace a chat agent's pending reply with how its turn ended.
+    ///
+    /// A coding agent's magic chip renders the turn itself, so there is
+    /// nothing to replace and this does nothing for one.
+    fn resolve(&self, resolution: ResolvedReply) -> impl Future<Output = Result<()>> + Send;
 
     /// Tell a thread why its mention opened no session.
     ///

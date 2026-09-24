@@ -25,7 +25,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       }}
     >
       <div
-        class="relative"
+        class="relative min-w-0 w-full"
         classList={{
           isPersonal: props.isPersonal,
           'line-clamp-3': !props.isBodyExpanded(),

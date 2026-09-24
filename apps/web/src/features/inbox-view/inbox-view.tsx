@@ -154,12 +154,14 @@ function InboxViewRoot() {
 export function InboxDetailRouteView() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
-  const { previewEntity, closePreview } = useInboxView();
+  const { previewEntity, previewNavigationRequest, closePreview } =
+    useInboxView();
 
   return (
     <Suspense>
       <PreviewPanel
         selectedEntity={previewEntity()}
+        navigationRequest={previewNavigationRequest()}
         orchestrator={orchestrator}
         splitPanelContext={panel}
         headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}

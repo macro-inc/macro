@@ -12,6 +12,7 @@ import {
   HYDRATE_ONLY_CONTEXT_KEY,
   normalizedCacheExchange,
 } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
 import type { CacheHost } from '@graphql-cache/host/types';
 import {
   createTauriCacheHost,
@@ -321,7 +322,9 @@ function disposeUncachedRealtimeClient(): void {
 function getUncachedRealtimeClient(): Client {
   if (uncachedRealtimeClient) return uncachedRealtimeClient;
 
-  const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
+  const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle({
+    suspendOnPagehide: !isTauri(),
+  });
   const websocketClient = createGraphqlSoupWebSocketClient(
     subscriptionsLifecycle.connected
   );
@@ -414,11 +417,7 @@ export function getGraphqlSoupClient(): Client {
       try {
         // Navigation deliberately rejects outstanding reads. Do not turn that
         // expected shutdown into an error; unexpected disposal still reports.
-        if (
-          error instanceof Error &&
-          error.message === 'cache worker host was disposed for page navigation'
-        )
-          return;
+        if (error instanceof CacheNavigationError) return;
         // Caught cache failures never reach window.unhandledrejection. Report
         // them through the Datadog-bound exporter without query/variable data.
         Telemetry.error(error, {
@@ -434,7 +433,9 @@ export function getGraphqlSoupClient(): Client {
     let host: CacheHost | undefined;
     let websocketClient: GraphqlWsClient | undefined;
     let unregisterHost: () => void = () => undefined;
-    const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle({
+      suspendOnPagehide: !native,
+    });
     const cleanup = () => {
       unregisterHost();
       // Unsubscribing emits urql teardown operations; keep the cache host

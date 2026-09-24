@@ -107,14 +107,14 @@ export function isFeatureEnabled(flag: Flag): boolean {
 
 /**
  * Switches Inbox, Tasks, and Channels from the current SoupView implementations
- * to the new composable view implementations. Enabled by default in local
- * development; production follows PostHog. Override locally with
- * VITE_ENABLE_NEW_APP_VIEWS=false.
+ * to the new composable view implementations. On everywhere without waiting
+ * for PostHog: a late PostHog answer swaps the app shell after first paint.
+ * Override locally with VITE_ENABLE_NEW_APP_VIEWS=false.
  */
 export const enableNewAppViews = defineFlag({
   key: 'enable-new-app-views',
   env: 'ENABLE_NEW_APP_VIEWS',
-  default: DEV_MODE_ENV || undefined,
+  default: true,
 });
 
 /**
@@ -657,8 +657,10 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
-// AI agents: the Macro Coder mention entry and the folded agent-session view
-// in channels. Override with VITE_ENABLE_CHAT_V3_AGENTS.
+// AI agents: the Macro Coder mention entry, the folded agent-session view in
+// channels, and which bot the single `@macro` mention targets — the agent
+// session when on, the classic in-channel reply when off.
+// Override with VITE_ENABLE_CHAT_V3_AGENTS.
 export const enableChatV3Agents = defineFlag({
   key: 'enable-chat-v3-agents',
   env: 'ENABLE_CHAT_V3_AGENTS',

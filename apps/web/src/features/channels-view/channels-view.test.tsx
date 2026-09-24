@@ -73,6 +73,14 @@ vi.mock(
   () => ({ StaticMarkdownContext: mocks.pass })
 );
 vi.mock('@entity', () => ({ ListEntityMetadataQueryProvider: mocks.pass }));
+vi.mock('./components/ChannelDetailView', () => ({
+  ChannelDetailView: (props: { channel: ChannelEntity }) => (
+    <div data-testid="preview">
+      {props.channel.id}
+      <textarea aria-label="Composer" />
+    </div>
+  ),
+}));
 vi.mock('./components/ChannelsMobileView', () => ({
   ChannelsMobileView: () => null,
 }));

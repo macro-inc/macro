@@ -11,7 +11,13 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
-import { type Accessor, createEffect, createMemo, on } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+} from 'solid-js';
 import {
   createStore,
   produce,
@@ -47,6 +53,8 @@ export type InboxViewContext = {
   state: Store<InboxViewState>;
   setState: SetStoreFunction<InboxViewState>;
   previewEntity: Accessor<PreviewPanelSelection | undefined>;
+  /** Counts re-opens of the selection already previewed, such as a re-click. */
+  previewNavigationRequest: Accessor<number>;
   openPreview: (entity: PreviewPanelSelection) => boolean;
   closePreview: () => void;
   setTab: (tab: InboxTab) => void;
@@ -134,8 +142,24 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
         },
       }
     );
+  const [previewNavigationRequest, setPreviewNavigationRequest] =
+    createSignal(0);
+  // Re-opening the previewed selection leaves the route unchanged, so the
+  // preview sees no new selection; the request asks it to navigate again.
+  const isPreviewed = (entity: PreviewPanelSelection) => {
+    const current = previewEntity();
+    return (
+      current !== undefined &&
+      JSON.stringify(inboxPreviewNavigation(current)) ===
+        JSON.stringify(inboxPreviewNavigation(entity))
+    );
+  };
   const openPreview = (entity: PreviewPanelSelection) => {
     if (!selectPreview.canSelect(entity)) return false;
+    if (isPreviewed(entity)) {
+      setPreviewNavigationRequest((count) => count + 1);
+      return true;
+    }
     navigatePreview(entity);
     return true;
   };
@@ -178,6 +202,7 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
     state,
     setState,
     previewEntity,
+    previewNavigationRequest,
     openPreview,
     closePreview,
     setTab,

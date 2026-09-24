@@ -52,7 +52,11 @@ describe('split router middleware', () => {
         ],
       },
       {
-        to: legacyEntry,
+        to: {
+          ...legacyEntry,
+          key: 'entry-1',
+          state: { feature: 'state' },
+        },
         cause: 'navigate',
         signal: new AbortController().signal,
       }
@@ -60,6 +64,8 @@ describe('split router middleware', () => {
 
     expect(result).not.toBeInstanceOf(Promise);
     expect(result).toMatchObject({
+      key: 'entry-1',
+      state: { feature: 'state' },
       location: {
         route: {
           matches: [

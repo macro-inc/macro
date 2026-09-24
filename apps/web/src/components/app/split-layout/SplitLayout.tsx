@@ -62,6 +62,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
     pathname: () => `/${props.pairs.join('/')}`,
     search: () => location.search,
     hash: () => location.hash,
+    state: () => location.state,
     navigate,
   });
   const [, setTabTitle] = tabTitleSignal;

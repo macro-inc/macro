@@ -991,6 +991,10 @@ export type CommentAnchor =
        * The highlight annotation.
        */
       anchorId: string;
+      /**
+       * The text the highlight covers; absent when the highlight carries none.
+       */
+      markedText?: string | null;
       type: 'pdfHighlight';
     }
   | {
@@ -1026,15 +1030,6 @@ export type ProjectItemType = 'document' | 'chat' | 'project';
  */
 export type SearchSkillsMatchType = 'partial' | 'exact';
 /**
- * User tools are pending until a user executes them
- */
-export type UserToolResponseForSendEmailResponse =
-  | 'PendingUserExecution'
-  | 'Rejected'
-  | {
-      UserAction: SendEmailResponse;
-    };
-/**
  * Response from the SendEmail tool.
  */
 export type SendEmailResponse =
@@ -1055,6 +1050,15 @@ export type SendEmailResponse =
       convertedToDraft: {
         draft_id: string;
       };
+    };
+/**
+ * User tools are pending until a user executes them
+ */
+export type UserToolResponseForSendEmailResponse =
+  | 'PendingUserExecution'
+  | 'Rejected'
+  | {
+      UserAction: SendEmailResponse;
     };
 export type ToolEntityType =
   | 'document'
@@ -1615,6 +1619,48 @@ export interface SpreadsheetChange {
    * Affected range, when applicable.
    */
   range?: string | null;
+}
+/**
+ * Start a new inline comment on a passage of a Macro markdown document, on behalf of the user: the passage is highlighted in the document and the comment floats beside it, as when a person selects text and comments. Only use this when explicitly asked to comment on part of a document. Quote the passage exactly as the document reads, within a single paragraph, heading, list item or table cell. If the passage appears more than once the tool refuses and lists each occurrence so you can choose one; if the text is not found, read the document again rather than guessing. Use ReplyToDocumentComment to reply in an existing thread or to comment on the document as a whole.
+ */
+export interface CommentOnDocumentText {
+  /**
+   * The id of the markdown document to comment on.
+   */
+  documentId: string;
+  /**
+   * The passage to comment on, quoted exactly as the document reads: plain text without markdown syntax such as ** or link brackets. Keep it to the words the comment is about; a longer quote is more likely to be unique.
+   */
+  text: string;
+  /**
+   * Which appearance of the passage to comment on, counting from 1 in document order. Only needed when the passage appears more than once.
+   */
+  occurrence?: number | null;
+  /**
+   * Comment content in macro markdown format. This uses the same syntax as markdown documents.
+   */
+  content: string;
+}
+/**
+ * The inline comment that was started.
+ */
+export interface CommentOnDocumentTextResponse {
+  /**
+   * The document the comment was posted on.
+   */
+  documentId: string;
+  /**
+   * The new thread; replies and resolution address it by this id.
+   */
+  threadId: string;
+  /**
+   * The posted comment.
+   */
+  commentId: string;
+  /**
+   * The text the comment is anchored to, as the document reads.
+   */
+  markedText: string;
 }
 /**
  * Configure a manageable bot's profile. Provide only fields that should change. Use avatarUrl to set a profile picture from an image already uploaded to Macro static files or another reachable image URL; pass an empty string to clear the current picture. Passing an empty string for description clears it. Confirm handle changes because integrations and mentions may rely on the stable handle.
@@ -5582,7 +5628,7 @@ export interface RenameDocumentResponse {
   message: string;
 }
 /**
- * Reply in a comment thread on a document, or post a new comment in the document's Discussion panel, on behalf of the user. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. Cannot start a new inline comment on selected text.
+ * Reply in a comment thread on a document, or post a new comment in the document's Discussion panel, on behalf of the user. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. To start a new inline comment on a passage of the document, use CommentOnDocumentText.
  */
 export interface ReplyToDocumentComment {
   /**
@@ -5729,7 +5775,64 @@ export interface SendChannelMessageResponse {
   message_id: string;
 }
 /**
- * Draft, compose, and send an email. ALWAYS use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) — never write the email as plain text in the chat. This tool opens the email draft in the composer for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
+ * Send an email immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The email is always shown before it is sent, even when the user's request already spelled the whole thing out: in one turn write it into the thread - recipients, subject, body - ask whether to send it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific email, quoting that reply verbatim in userConfirmation. Being asked to send an email is a request to draft one, never approval to send it, so a userConfirmation quoting the request that asked you to write the email - rather than the reply approving the one you wrote - is wrong. Never call it in the agent session view or in chat: use SendEmail there, whose review card or composer is the confirmation. Takes the same fields as SendEmail; write the body in Markdown, which is rendered to HTML on send.
+ */
+export interface SendConfirmedEmail {
+  /**
+   * The subject line of the email.
+   */
+  subject: string;
+  /**
+   * The body of the email, written as Markdown. A host with a composer
+   * (chat) replaces this with the base64url-encoded HTML the composer
+   * exported before the tool runs; a host without one (an agent session)
+   * leaves the Markdown, and this tool renders it the same way.
+   */
+  body: string;
+  /**
+   * The primary recipients (To field).
+   */
+  to: EmailRecipient[];
+  /**
+   * Carbon copy recipients (optional).
+   */
+  cc?: EmailRecipient[];
+  /**
+   * Blind carbon copy recipients (optional).
+   */
+  bcc?: EmailRecipient[];
+  /**
+   * The ID of a message to reply to (optional). When set, the email is
+   * sent as a reply within the same thread.
+   */
+  replyingToId?: string | null;
+  /**
+   * Per-message signature override, set by the composer's signature preview —
+   * not normally by you. Omit to use the inbox's default policy (always on a
+   * new email; on replies/forwards only when the user enabled it). `false`
+   * excludes the signature for this one email.
+   */
+  includeSignature?: boolean | null;
+  /**
+   * The user's own message approving this specific email, quoted verbatim - for example their "yes, send it" in reply to the email you wrote out for them. It is a reply to your draft, never the earlier request that asked you to write one: if the user has not yet seen this email, there is nothing to quote here and the tool must not be called. Required: do not paraphrase it, and never supply it yourself.
+   */
+  userConfirmation: string;
+}
+/**
+ * A recipient for an email.
+ */
+export interface EmailRecipient {
+  /**
+   * The recipient's email address.
+   */
+  email: string;
+  /**
+   * The recipient's display name (optional).
+   */
+  name?: string | null;
+}
+/**
+ * Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
  */
 export interface SendEmail {
   /**
@@ -5767,19 +5870,6 @@ export interface SendEmail {
    * excludes the signature for this one email.
    */
   includeSignature?: boolean | null;
-}
-/**
- * A recipient for an email.
- */
-export interface EmailRecipient {
-  /**
-   * The recipient's email address.
-   */
-  email: string;
-  /**
-   * The recipient's display name (optional).
-   */
-  name?: string | null;
 }
 /**
  * Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.

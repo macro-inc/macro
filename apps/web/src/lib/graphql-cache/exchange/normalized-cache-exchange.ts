@@ -767,17 +767,31 @@ export function normalizedCacheExchange(
         }
       >();
       const subscriptionEffectChains = new Map<number, Promise<void>>();
+      // Teardown invalidates queued effects, including when the same operation
+      // is immediately resubscribed after a back/forward-cache restore.
+      const subscriptionGenerations = new Map<number, object>();
       let attemptInFlight = false;
       let drainRunning = false;
+      let drainRequested = false;
       let deferredUntil: number | undefined;
       let drainTimer: ReturnType<typeof setTimeout> | undefined;
 
       function scheduleDrain(delayMs = 0): void {
         if (drainTimer !== undefined) clearTimeout(drainTimer);
-        drainTimer = setTimeout(() => {
-          drainTimer = undefined;
-          void drainQueue();
-        }, delayMs);
+        drainTimer = setTimeout(
+          () => {
+            drainTimer = undefined;
+            void drainQueue();
+          },
+          drainRequested ? 0 : delayMs
+        );
+      }
+
+      function wakeDrain(): void {
+        // Keep the wakeup until the runner can claim again. An interrupted
+        // claim/settlement may still be unwinding and scheduling its backoff.
+        drainRequested = true;
+        scheduleDrain();
       }
 
       function resolveLiveOperationsAsQueued(): void {
@@ -880,8 +894,15 @@ export function normalizedCacheExchange(
         }
         if (drainRunning) return;
         drainRunning = true;
+        drainRequested = false;
         try {
           const now = Date.now();
+          // A wakeup probes immediately, but must retain a future retry
+          // deadline if the durable head is not eligible yet. Consume expired
+          // hints so a head leased by another runner cannot cause a busy loop.
+          if (deferredUntil !== undefined && deferredUntil <= now) {
+            deferredUntil = undefined;
+          }
           const claimed = await host.claimNextMutation(
             queueOwner,
             now,
@@ -889,10 +910,15 @@ export function normalizedCacheExchange(
           );
           if (!claimed) {
             resolveLiveOperationsAsQueued();
+            // Short retries keep their deadline; uncertain five-minute lease
+            // backoffs must not prevent regular polling after a wakeup.
             scheduleDrain(
               deferredUntil === undefined
                 ? EMPTY_QUEUE_POLL_MS
-                : Math.max(0, deferredUntil - Date.now())
+                : Math.min(
+                    EMPTY_QUEUE_POLL_MS,
+                    Math.max(0, deferredUntil - Date.now())
+                  )
             );
             return;
           }
@@ -905,6 +931,7 @@ export function normalizedCacheExchange(
           scheduleDrain(EMPTY_QUEUE_POLL_MS);
         } finally {
           drainRunning = false;
+          if (drainRequested) scheduleDrain();
         }
       }
 
@@ -1145,9 +1172,11 @@ export function normalizedCacheExchange(
       /** Applies operation cache effects serially and isolates every failure. */
       async function applyOperationCacheEffects(
         op: Operation,
-        effects: CacheEffect[]
+        effects: CacheEffect[],
+        isCurrent: () => boolean = () => true
       ): Promise<void> {
         for (const effect of effects) {
+          if (!isCurrent()) return;
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
@@ -1268,8 +1297,15 @@ export function normalizedCacheExchange(
           // result after its effects settle.
           const previousEffects =
             subscriptionEffectChains.get(op.key) ?? Promise.resolve();
+          const generation = subscriptionGenerations.get(op.key);
           const effects = previousEffects.then(() =>
-            applyOperationCacheEffects(op, operationCacheEffects(result.data))
+            applyOperationCacheEffects(
+              op,
+              operationCacheEffects(result.data),
+              () =>
+                generation !== undefined &&
+                subscriptionGenerations.get(op.key) === generation
+            )
           );
           subscriptionEffectChains.set(op.key, effects);
           try {
@@ -1492,7 +1528,11 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind !== 'query' && op.kind !== 'mutation'),
         tap((op) => {
+          if (op.kind === 'subscription') {
+            subscriptionGenerations.set(op.key, {});
+          }
           if (op.kind === 'teardown') {
+            subscriptionGenerations.delete(op.key);
             activeOps.delete(op.key);
             queryStates.delete(op.key);
             affectedRereads.forget(op.key);
@@ -1509,8 +1549,12 @@ export function normalizedCacheExchange(
 
       if (!host.disabled) {
         scheduleDrain();
+        // Includes BFCache restoration, even with no active query keys. The
+        // host gates claims on initialization; durable leases still decide
+        // which head is runnable after reconnecting.
+        host.onCacheGenerationChanged(wakeDrain);
         if (typeof addEventListener === 'function') {
-          addEventListener('online', () => scheduleDrain());
+          addEventListener('online', wakeDrain);
         }
       }
       void unsubscribePush;

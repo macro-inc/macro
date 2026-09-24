@@ -227,6 +227,37 @@ pub(super) async fn set_thread_read_state(
     tx.commit().await
 }
 
+/// Commit INBOX assignments and the canonical thread flag in one transaction.
+#[tracing::instrument(skip(pool, message_ids), err)]
+pub(super) async fn set_thread_inbox_state(
+    pool: &PgPool,
+    thread_id: Uuid,
+    link_id: Uuid,
+    message_ids: &[Uuid],
+    add: bool,
+    inbox_visible: bool,
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    if add {
+        insert_message_labels_batch(&mut *tx, message_ids, system_labels::INBOX, link_id).await?;
+    } else {
+        delete_message_labels_batch(&mut *tx, message_ids, system_labels::INBOX, link_id).await?;
+    }
+    sqlx::query!(
+        r#"
+        UPDATE email_threads
+        SET inbox_visible = $1, updated_at = NOW()
+        WHERE id = $2 AND link_id = $3
+        "#,
+        inbox_visible,
+        thread_id,
+        link_id,
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await
+}
+
 #[tracing::instrument(skip(executor), err)]
 pub(crate) async fn insert_message_labels_batch(
     executor: impl sqlx::PgExecutor<'_>,

@@ -8,6 +8,7 @@ import {
   MODEL_PROVIDER,
   Model,
   modelsForPlan,
+  modelUsageHint,
   type TModel,
 } from './model';
 
@@ -29,6 +30,23 @@ describe('modelsForPlan / defaultModelForPlan', () => {
     // The premium models are *not* in a free user's selectable set.
     expect(free).not.toContain(Model.opus5);
     expect(free).not.toContain(Model.gpt56);
+  });
+});
+
+describe('modelUsageHint', () => {
+  it('flags the heavy paid models and stays quiet for the default and cheaper', () => {
+    expect(modelUsageHint(Model.fable51)).toBe('5× usage');
+    expect(modelUsageHint(Model.gpt6Astra)).toBe('5× usage');
+    expect(modelUsageHint(Model.opus5)).toBe('2.5× usage');
+    expect(modelUsageHint(Model.sonnet5)).toBeUndefined();
+    expect(modelUsageHint(Model.haiku45)).toBeUndefined();
+  });
+
+  it('keeps Fable and Astra paid-only: free users see them locked, paid users select them', () => {
+    expect(modelsForPlan(false)).not.toContain(Model.fable51);
+    expect(modelsForPlan(false)).not.toContain(Model.gpt6Astra);
+    expect(modelsForPlan(true)).toContain(Model.fable51);
+    expect(modelsForPlan(true)).toContain(Model.gpt6Astra);
   });
 });
 

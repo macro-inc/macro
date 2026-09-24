@@ -1,6 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { McpConnections } from '@app/features/settings/McpConnections';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import {
@@ -17,21 +18,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import {
-  type AgentWithHarnessId,
-  type CreateAgentParams,
-  useCreateAgentMutation,
-  useDeleteAgentMutation,
-  useUpdateAgentMutation,
-} from '@queries/agents/agents';
-import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
-import {
-  useDeleteHarnessMutation,
-  useHarnessesQuery,
-} from '@queries/harnesses/harnesses';
 import { useSoupItemsQuery } from '@queries/soup/items';
-import { useCurrentTeamQuery } from '@queries/team/teams';
-import type { Harness } from '@service-storage/client';
 import {
   createEffect,
   createMemo,
@@ -46,7 +33,6 @@ import {
 import '../agents-view.css';
 import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentsSidebar } from '../components/AgentsSidebar';
-import { ConfirmDialog } from '../components/SimpleDialogs';
 import { Topbar } from '../components/Topbar';
 import { DataModeProvider, dataModeFor } from '../context/data-mode';
 import { type AgentKind, modeForKind } from '../core/agent-kind';
@@ -62,18 +48,12 @@ import {
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
-import { connectedRuntimes } from '../queries/connected-runtimes';
-import { AgentEditorDialog } from './AgentEditorDialog';
 import { NewChatPage, type StartConversation } from './NewChatPage';
-import { PairRuntimeDialog } from './PairRuntimeDialog';
-import { RosterPage } from './RosterPage';
 
 type SelectedConversation = {
   conversation: AgentConversationTarget;
   activeConversationId: string;
 };
-
-type EditorState = { agent?: AgentWithHarnessId; kind: AgentKind };
 
 function LoadingComposer() {
   return (
@@ -95,7 +75,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const mode = (): AgentsMode => props.initialRoute?.mode ?? 'chat';
   const dataMode = () => dataModeFor(mode());
   const [page, setPage] = createSignal<AgentsPage>('new');
-  const [rosterKind, setRosterKind] = createSignal<AgentKind>('agent');
   const [selected, setSelected] = createSignal<
     SelectedConversation | undefined
   >(
@@ -107,29 +86,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       : undefined
   );
   const [search, setSearch] = createSignal('');
-  const [editor, setEditor] = createSignal<EditorState>();
-  const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
-  const [pairing, setPairing] = createSignal(false);
-  const [removingRuntime, setRemovingRuntime] = createSignal<Harness>();
-
   const rosterSource = createAgentRosterSource();
-  const harnessesQuery = useHarnessesQuery();
-  const cursorStatus = useCursorApiKeyStatusQuery();
-  const currentTeamQuery = useCurrentTeamQuery();
-  const createAgent = useCreateAgentMutation();
-  const updateAgent = useUpdateAgentMutation();
-  const deleteAgent = useDeleteAgentMutation();
-  const deleteHarness = useDeleteHarnessMutation();
-  const cursorConnected = () =>
-    cursorStatus.isSuccess ? cursorStatus.data.registered : false;
-  const runtimes = () =>
-    connectedRuntimes(
-      cursorConnected(),
-      harnessesQuery.isSuccess ? harnessesQuery.data : []
-    );
-  const currentTeamId = () =>
-    currentTeamQuery.isSuccess ? currentTeamQuery.data?.team.id : undefined;
-
   const query = useSoupItemsQuery(
     () => {
       const ownerId = userId();
@@ -210,9 +167,8 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       }
     )
   );
-  const openRoster = (kind: AgentKind) => {
+  const openRoster = (_kind: AgentKind) => {
     setSelected(undefined);
-    setRosterKind(kind);
     setPage('agents');
   };
   const openConversation = (
@@ -276,57 +232,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       return { ...current, activeConversationId: sessionId };
     });
   };
-  const saveAgent = async (params: CreateAgentParams): Promise<boolean> => {
-    const current = editor();
-    try {
-      if (current?.agent) {
-        await updateAgent.mutateAsync({
-          ...params,
-          agentId: current.agent.bot.id,
-          ...(current.agent.bot.description
-            ? { description: current.agent.bot.description }
-            : {}),
-        });
-        toast.success('Agent updated');
-      } else {
-        await createAgent.mutateAsync(params);
-        toast.success('Agent created');
-      }
-      return true;
-    } catch {
-      toast.failure(
-        current?.agent ? 'Failed to update agent' : 'Failed to create agent'
-      );
-      return false;
-    }
-  };
-  const removeAgent = async () => {
-    const current = deletingAgent();
-    if (!current) return;
-    try {
-      await deleteAgent.mutateAsync({
-        agentId: current.bot.id,
-        channelIds: current.channel_ids,
-      });
-      setDeletingAgent(undefined);
-      setEditor(undefined);
-      toast.success('Agent deleted');
-    } catch {
-      toast.failure('Failed to delete agent');
-    }
-  };
-  const removeRuntime = async () => {
-    const current = removingRuntime();
-    if (!current) return;
-    try {
-      await deleteHarness.mutateAsync({ harnessId: current.id });
-      setRemovingRuntime(undefined);
-      toast.success('Runtime removed');
-    } catch {
-      toast.failure('Failed to remove runtime');
-    }
-  };
-
   const pageTitle = () => {
     if (page() === 'agents') return 'Agents';
     if (page() === 'connections') return 'Connections';
@@ -399,24 +304,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                 <McpConnections />
                               </Match>
                               <Match when={page() === 'agents'}>
-                                <RosterPage
-                                  kind={rosterKind()}
-                                  onKindChange={setRosterKind}
-                                  onClose={showComposer}
-                                  onCreate={(kind) => setEditor({ kind })}
-                                  onEdit={(agent) =>
-                                    setEditor({
-                                      agent,
-                                      kind:
-                                        agent.harness === 'in-memory'
-                                          ? 'agent'
-                                          : 'coder',
-                                    })
-                                  }
-                                  onDelete={setDeletingAgent}
-                                  onPairRuntime={() => setPairing(true)}
-                                  onRemoveRuntime={setRemovingRuntime}
-                                />
+                                <AgentSettings />
                               </Match>
                               <Match when={true}>
                                 <NewChatPage
@@ -477,59 +365,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
               </ViewShell.Main>
             </ViewShell.Root>
           </div>
-
-          <Show when={editor()} keyed>
-            {(state) => (
-              <AgentEditorDialog
-                agent={state.agent}
-                initialKind={state.kind}
-                runtimes={runtimes()}
-                currentTeamId={currentTeamId()}
-                canShareWithTeam={currentTeamId() !== undefined}
-                canMakePrivate={
-                  state.agent?.bot.owner?.type !== 'team' ||
-                  state.agent.bot.created_by === userId()
-                }
-                pending={createAgent.isPending || updateAgent.isPending}
-                onClose={() => setEditor(undefined)}
-                onSave={saveAgent}
-                onDelete={
-                  state.agent ? () => setDeletingAgent(state.agent) : undefined
-                }
-              />
-            )}
-          </Show>
-          <Show when={deletingAgent()} keyed>
-            {(agent) => (
-              <ConfirmDialog
-                title={`Delete ${agent.bot.name}?`}
-                body="This removes the agent from every channel and permanently deletes its configuration. This action cannot be undone."
-                confirmLabel="Delete agent"
-                pendingLabel="Deleting…"
-                danger
-                pending={deleteAgent.isPending}
-                onConfirm={() => void removeAgent()}
-                onClose={() => setDeletingAgent(undefined)}
-              />
-            )}
-          </Show>
-          <Show when={pairing()}>
-            <PairRuntimeDialog onClose={() => setPairing(false)} />
-          </Show>
-          <Show when={removingRuntime()} keyed>
-            {(harness) => (
-              <ConfirmDialog
-                title={`Remove ${harness.name}?`}
-                body="Agents using this runtime will stop running until it is reconnected. macrod on that machine will need to pair again."
-                confirmLabel="Remove runtime"
-                pendingLabel="Removing…"
-                danger
-                pending={deleteHarness.isPending}
-                onConfirm={() => void removeRuntime()}
-                onClose={() => setRemovingRuntime(undefined)}
-              />
-            )}
-          </Show>
         </DataModeProvider>
       </SplitPanel.Body>
     </SplitPanel.Root>

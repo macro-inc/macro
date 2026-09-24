@@ -38,8 +38,9 @@ use crate::domain::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
         PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
         RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
-        RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamWithMembers, ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
+        RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
+        TeamInvite, TeamInviteDetails, TeamMember, TeamWithMembers, ToggleAutoJoinDomainError,
+        TryJoinTeamByDomainError,
     },
     team_repo::TeamService,
 };
@@ -143,6 +144,20 @@ async fn remove_team_invite_not_found_response_is_preserved() {
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body_text, r#"{"message":"team invite does not exist"}"#);
+}
+
+#[tokio::test]
+async fn remove_user_from_team_open_seat_release_error_stays_generic() {
+    let error = RemoveUserFromTeamError::OpenSeatRelease(Box::new(std::io::Error::other(
+        "open seat release failed",
+    )));
+    let (status, body_text, _) = response_parts(error).await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        body_text,
+        r#"{"message":"unable to remove user from team"}"#
+    );
 }
 
 #[tokio::test]
@@ -365,6 +380,19 @@ impl TeamService for FakeTeamService {
         _req: &PatchTeamRequest,
     ) -> Result<(), TeamError> {
         panic!("unexpected patch_team call")
+    }
+
+    async fn set_team_member_plan(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        _user_id: &MacroUserIdStr<'_>,
+        _plan: SeatPlan,
+    ) -> Result<TeamMember<'static>, SetTeamMemberPlanError> {
+        panic!("unexpected set_team_member_plan call")
+    }
+
+    async fn team_bills_per_seat(&self, _team_id: &uuid::Uuid) -> Result<bool, TeamError> {
+        panic!("unexpected team_bills_per_seat call")
     }
 
     async fn get_team_user_permissions(

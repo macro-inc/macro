@@ -1,11 +1,12 @@
 import {
   SplitRouter,
-  type SplitRouterEntry,
   type SplitRouterLayout,
+  type SplitRouterLayoutEntry,
   type SplitRouterSettledChange,
   useSplitRouter,
 } from '@app/lib/split-router';
 import { createMemorySplitRouterLocation } from '@app/lib/split-router/integrations/memory';
+import type { PreviewPanelSelection } from '@components/app/previewTarget';
 import { appSplitRoutes } from '@components/app/split-layout/split-router/app-routes';
 import { cleanup, render } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -102,6 +103,7 @@ vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToResolvedBlockName: (type: string) =>
     ['task', 'snippet', 'skill'].includes(type) ? 'md' : type,
   isBlockAlias: () => false,
+  itemToBlockName: (item: { fileType?: string }) => item.fileType ?? 'md',
   resolveBlockAlias: (type: string) => type,
 }));
 vi.mock('@components/app/createPreviewSelectionGuard', () => ({
@@ -132,22 +134,22 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 }));
 
 function createLayout(): SplitRouterLayout<string> {
-  let current: (SplitRouterEntry & { splitId: string }) | undefined;
+  let current: SplitRouterLayoutEntry<string> | undefined;
   const listeners = new Set<(change: SplitRouterSettledChange) => void>();
   const notify = () => {
     for (const listener of listeners) listener({ history: 'push' });
   };
   return {
     snapshot: () => ({ entries: current ? [current] : [] }),
-    updateCurrentEntry(_splitId, update) {
+    updateCurrentLocation(_splitId, update) {
       if (!current) return;
-      current = { splitId: current.splitId, ...update(current) };
+      current = { splitId: current.splitId, location: update(current) };
       notify();
     },
-    open: () => {},
-    reconcile(entries) {
-      const next = entries[0];
-      current = next ? { splitId: 'split', ...next } : undefined;
+    open: () => ({ status: 'unavailable' }),
+    reconcile(locations) {
+      const location = locations[0];
+      current = location ? { splitId: 'split', location } : undefined;
       notify();
     },
     activate: () => {},
@@ -456,6 +458,34 @@ describe('InboxViewProvider route selection', () => {
     await router.settled();
     expect(location.read().pathname).toBe('/inbox');
     expect(context.previewEntity()).toBeUndefined();
+  });
+
+  it('asks the preview to navigate again when the previewed row is re-opened', async () => {
+    const { context, location, router } = mountProvider();
+    const row = {
+      type: 'document',
+      id: 'doc-1',
+      fileType: 'md',
+      commentTarget: { commentId: 'comment-1' },
+    } satisfies PreviewPanelSelection;
+
+    context.openPreview(row);
+    await router.settled();
+    const url = location.read().pathname + location.read().search;
+    expect(context.previewNavigationRequest()).toBe(0);
+
+    expect(context.openPreview({ ...row })).toBe(true);
+    expect(context.openPreview({ ...row })).toBe(true);
+    await router.settled();
+    expect(context.previewNavigationRequest()).toBe(2);
+    expect(location.read().pathname + location.read().search).toBe(url);
+
+    context.openPreview({ ...row, commentTarget: { commentId: 'comment-2' } });
+    await router.settled();
+    expect(context.previewNavigationRequest()).toBe(2);
+    expect(location.read().search).toContain(
+      's0.inbox-preview.targetCommentId=comment-2'
+    );
   });
 
   it('round-trips calendar, reminder, foreign, and document subtype targets', async () => {

@@ -1,27 +1,29 @@
+import { useSettingsState } from '@core/constant/SettingsState';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import { Show, Suspense } from 'solid-js';
+import { ConnectionsPage } from './connections/ConnectionsPage';
 import { IntegrationsSection } from './Integrations';
-import { PipedreamIntegrationsSection } from './PipedreamIntegrations';
 import { SettingsPage } from './primitives';
 
-/**
- * The agents sidebar's "Connections" page: MCP integrations only. Linking
- * personal accounts (Gmail, GitHub) lives on the Integrations settings tab
- * (see `ConnectedAccounts.tsx`), which keeps this page about what the agent
- * can reach.
- */
+/** Agent tool connections. Personal Gmail/GitHub accounts remain in Settings → Integrations. */
 export function McpConnections() {
   const pipedreamMcp = usePipedreamMcpFlag();
+  const { openSettings } = useSettingsState();
   return (
-    <SettingsPage
-      title="Connections"
-      description="Connect the tools your team already uses so Macro's agent can work in them."
+    <Show
+      when={pipedreamMcp()}
+      fallback={
+        <SettingsPage
+          title="Connections"
+          description="Connect the tools your team already uses so Macro's agent can work in them."
+        >
+          <Suspense>
+            <IntegrationsSection />
+          </Suspense>
+        </SettingsPage>
+      }
     >
-      <Suspense>
-        <Show when={pipedreamMcp()} fallback={<IntegrationsSection />}>
-          <PipedreamIntegrationsSection />
-        </Show>
-      </Suspense>
-    </SettingsPage>
+      <ConnectionsPage onOpenMacroMcp={() => openSettings('Agent')} />
+    </Show>
   );
 }

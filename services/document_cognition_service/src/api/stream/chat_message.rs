@@ -15,6 +15,7 @@ use crate::service::get_chat::get_chat;
 use crate::service::notification::notify;
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent};
 use agent::{AgentLoop, StreamAccumulator};
+use ai_billing::BillingService;
 use async_stream::stream;
 use attachment::FormattedParts;
 use axum::Json;
@@ -105,6 +106,9 @@ pub struct ChatMessageError {
     pub stream_id: Option<String>,
     #[serde(skip)]
     pub status: Option<StatusCode>,
+    /// Stable machine-readable code for payment-required errors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
 }
 
 impl fmt::Display for ChatMessageError {
@@ -132,8 +136,8 @@ impl IntoResponse for ChatMessageError {
         (status = 200, description = "Stream initiated successfully", body = SendChatMessageResponse),
         (status = 400, description = "Bad request", body = ChatMessageError),
         (status = 401, description = "Unauthorized"),
-        (status = 402, description = "Payment required — user lacks access to the requested model"),
-        (status = 403, description = "Forbidden"),
+        (status = 402, description = "Payment required — the user's AI allowance is used up", body = ChatMessageError),
+        (status = 403, description = "Forbidden — user lacks access to the requested model", body = ChatMessageError),
     )
 )]
 #[tracing::instrument(skip(state, model_access, user, bearer, request), fields(chat_id=?request.chat_id, user_id = %user.authorization.user.macro_user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.entity_id.as_ref()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
@@ -152,6 +156,23 @@ pub async fn send_chat_message(
         request,
     ))
     .await
+}
+
+/// Why the billing gate refuses this user right now, if it does. A gate
+/// failure (not a refusal) is logged and lets the request through: an outage
+/// in billing must not take AI down with it.
+async fn billing_denial(
+    ctx: &ApiContext,
+    user_id: &MacroUserIdStr<'_>,
+) -> Option<ai_billing::DenyReason> {
+    match ctx.ai_billing.check_allowance(user_id).await {
+        Ok(ai_billing::AllowanceDecision::Allow) => None,
+        Ok(ai_billing::AllowanceDecision::Deny(reason)) => Some(reason),
+        Err(e) => {
+            tracing::error!(error = ?e, user_id = %user_id, "ai billing gate failed; allowing request");
+            None
+        }
+    }
 }
 
 async fn send_chat_message_inner(
@@ -181,6 +202,18 @@ async fn send_chat_message_inner(
             error: format!("No access to model {}", request.model),
             stream_id: Some(stream_id.clone()),
             status: Some(StatusCode::FORBIDDEN),
+            code: None,
+        });
+    }
+    // Paid users draw on a monthly AI allowance (then credits, then overage).
+    if model_access.professional()
+        && let Some(reason) = billing_denial(&ctx, &user_id).await
+    {
+        return Err(ChatMessageError {
+            error: reason.message().to_string(),
+            stream_id: Some(stream_id.clone()),
+            status: Some(StatusCode::PAYMENT_REQUIRED),
+            code: Some(reason.code().to_string()),
         });
     }
     let model = request.model.clone();
@@ -207,6 +240,7 @@ async fn send_chat_message_inner(
                             error: format!("Permission check failed: {:?}", e),
                             stream_id: Some(stream_id),
                             status: None,
+                            code: None,
                         });
                     }
                     Ok(access) => match access {
@@ -215,6 +249,7 @@ async fn send_chat_message_inner(
                                 error: "Insufficient permissions to send messages".to_string(),
                                 stream_id: Some(stream_id),
                                 status: None,
+                                code: None,
                             });
                         }
                         _ => (),
@@ -258,6 +293,7 @@ async fn send_chat_message_inner(
                 error: "Failed to store message".to_string(),
                 stream_id: Some(stream_id.clone()),
                 status: None,
+                code: None,
             }
         })?;
     let user_message_id = resolved.message_id;
@@ -300,6 +336,7 @@ async fn send_chat_message_inner(
             error: "Failed to build request".to_string(),
             stream_id: Some(stream_id.clone()),
             status: None,
+            code: None,
         }
     })?;
 
@@ -376,6 +413,7 @@ async fn create_new_chat(
                     error: "Failed to create chat".to_string(),
                     stream_id: Some(stream_id.to_string()),
                     status: None,
+                    code: None,
                 }
             })?;
     let share_permission = SharePermissionV2::new_chat_share_permission(team_default);
@@ -397,6 +435,7 @@ async fn create_new_chat(
             error: "Failed to create chat".to_string(),
             stream_id: Some(stream_id.to_string()),
             status: None,
+            code: None,
         }
     })?;
 
@@ -425,6 +464,7 @@ async fn create_new_chat(
                 error: "Failed to get chat".to_string(),
                 stream_id: Some(stream_id.to_string()),
                 status: None,
+                code: None,
             }
         })?;
 

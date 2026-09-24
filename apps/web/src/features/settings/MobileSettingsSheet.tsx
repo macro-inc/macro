@@ -30,11 +30,15 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
   let mainScrollTop = 0;
   let scrollRef: HTMLDivElement | undefined;
   let headingRef: HTMLHeadingElement | undefined;
+  // Legacy runtime links share the single Agents management navigation entry.
+  const navigationPage = () =>
+    props.page === 'Harness' ? 'Agents' : props.page;
 
   const pageLabel = () =>
     props.groups
       .flatMap((group) => group.items)
-      .find((item) => item.tab === props.page)?.label ??
+      .find((item) => item.tab === navigationPage())?.label ??
+    (props.page === 'Harness' ? 'Agents' : undefined) ??
     props.page ??
     'Settings';
 
@@ -203,7 +207,9 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                     >
                       <Show
                         when={props.groups.some((group) =>
-                          group.items.some((item) => item.tab === page)
+                          group.items.some(
+                            (item) => item.tab === navigationPage()
+                          )
                         )}
                         fallback={
                           <div class="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">

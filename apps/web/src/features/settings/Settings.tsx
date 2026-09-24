@@ -119,6 +119,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const logout = useLogout();
 
   const variant = () => props.variant ?? 'split';
+  const activeNavigationTab = () =>
+    activeTabId() === 'Harness' ? 'Agents' : activeTabId();
 
   // Responsive state, driven by the panel's own width (see breakpoints above).
   const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
@@ -180,7 +182,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   }
 
   function getCurrentTabIndex() {
-    return flatTabs().findIndex((tab) => tab.tab === activeTabId());
+    return flatTabs().findIndex((tab) => tab.tab === activeNavigationTab());
   }
 
   function handleNextTab() {
@@ -288,7 +290,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
                 contentClass="px-(--mobile-chrome-gutter)"
                 items={tabItems()}
-                value={activeTabId()}
+                value={activeNavigationTab()}
                 onChange={handleTabChange}
               />
             }
@@ -308,7 +310,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
               <div class="mx-2 shrink-0">
                 <TabsInsetDropdown
                   list={tabItems()}
-                  value={activeTabId()}
+                  value={activeNavigationTab()}
                   onChange={handleTabChange}
                 />
               </div>
@@ -353,7 +355,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     {(item) => (
                       <SideNav.Item
                         icon={item.icon}
-                        active={activeTabId() === item.tab}
+                        active={activeNavigationTab() === item.tab}
                         onSelect={() => handleTabChange(item.tab)}
                         class="text-xs py-1.5"
                       >
@@ -399,7 +401,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   {backToApp()}
                   <TabsInsetDropdown
                     list={tabItems()}
-                    value={activeTabId()}
+                    value={activeNavigationTab()}
                     onChange={handleTabChange}
                   />
                   <div class="flex-1" />

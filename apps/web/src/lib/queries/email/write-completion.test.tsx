@@ -65,7 +65,11 @@ it('returns the saved identity when a subsequent cache refresh rejects', async (
   ).resolves.toEqual(response);
   expect(mocks.report).toHaveBeenCalledWith(failure);
   expect(mocks.failure).not.toHaveBeenCalled();
-  expect(mocks.save).toHaveBeenCalledOnce();
+  expect(mocks.save).toHaveBeenCalledExactlyOnceWith(
+    { draft: { subject: 'Saved' } },
+    undefined
+  );
+  expect(mocks.save.mock.calls[0][0]).not.toHaveProperty('send_time');
 });
 
 it('keeps send successful and reconciles caches when analytics throws', async () => {

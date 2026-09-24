@@ -19,6 +19,10 @@ import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
+import {
+  EmailScheduleBar,
+  EmailScheduleSummary,
+} from '../components/email-schedule-summary';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { MobileReplyToolbar } from '../components/mobile-reply-toolbar';
 import { SignaturePreview } from '../components/signature-preview';
@@ -40,6 +44,7 @@ type ReplyInputViewProps = Omit<
   | 'drafts'
   | 'attachmentStorage'
   | 'delivery'
+  | 'draftLifecycle'
   | 'notices'
   | 'accounts'
   | 'connectivity'
@@ -65,6 +70,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       drafts: composeContext.drafts,
       attachmentStorage: composeContext.attachmentStorage,
       delivery: composeContext.delivery,
+      draftLifecycle: composeContext.draftLifecycle,
       notices: composeContext.notices,
       accounts: composeContext.accounts,
       connectivity: composeContext.connectivity,
@@ -83,6 +89,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       sideEffectOnSend: props.sideEffectOnSend,
       onMarkDone: props.onMarkDone,
       setShowReply: props.setShowReply,
+      host: props.host,
     },
     editor,
     { container: () => composeContainerRef, footer: () => bottomBarRef },
@@ -110,8 +117,15 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     handleAddAttachments,
     handleRemoveAttachment,
     handleSendTimeChange,
+    scheduleState,
+    selectedSendTime,
+    scheduleActionLabel,
+    scheduleOperation,
+    cancelSchedule,
+    schedulePickerDisabled,
+    editingDisabled,
+    sendUnavailableReason,
     sendActionDisabled,
-    scheduleSendDisabled,
     toggleQuotedText,
   } = state;
   const sendActionHidden = () =>
@@ -153,6 +167,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     .onChange(state.onContentChange)
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
+        if (editingDisabled()) return;
         composeContext.editorFiles.uploadEditorFiles({
           editor: editor(),
           sourceId: props.sourceEntityId,
@@ -186,7 +201,6 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
-          if (form.sendTime()) return false;
           sendEmail();
           return true;
         },
@@ -200,7 +214,6 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         scopeId: composeHotkeyScope,
         description: 'Send and mark done',
         keyDownHandler: () => {
-          if (form.sendTime()) return false;
           sendEmail(true);
           return true;
         },
@@ -278,8 +291,10 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                       ? attachment.contentType
                       : attachment.mimeType,
               }}
-              removable
-              onRemove={() => handleRemoveAttachment(attachment)}
+              removable={!editingDisabled()}
+              onRemove={() => {
+                if (!editingDisabled()) handleRemoveAttachment(attachment);
+              }}
             />
           )}
         </For>
@@ -297,273 +312,337 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       }
       size="icon-composer"
       tooltip="Attach"
+      disabled={editingDisabled()}
     >
       <Paperclip />
     </Button>
   );
 
   return (
-    <Surface
-      class={cn(
-        'relative flex flex-col flex-1 max-w-full min-h-0',
-        isMobileDrawer() && 'min-h-full overflow-y-scroll overscroll-y-none',
-        props.unframed ? 'rounded-lg' : 'rounded-xl bg-menu-glass glass-input'
-      )}
-      style={props.unframed ? { 'background-color': 'transparent' } : undefined}
-      hideBorder={props.unframed}
-      ref={(el) => {
-        composeContainerRef = el;
-      }}
-      depth={2}
-      solid
-    >
-      <Show when={isMobileDrawer()}>
-        <MobileReplyToolbar
-          discardLabel={savedDraftId() ? 'Delete draft' : 'Discard draft'}
-          onDiscard={deleteDraftAndReset}
-          attachRef={(element) =>
-            fileSelector(element, () => ({
-              multiple: true,
-              onSelect: handleAddAttachments,
-            }))
-          }
-          sendDisabled={sendActionDisabled() || sendActionHidden()}
-          sending={isSending()}
-          onSend={() => sendEmail()}
-        />
-      </Show>
-      <ReplyEnvelope
-        fields={state.recipients}
-        values={form.recipients}
-        options={props.session.recipientOptions}
-        inboxes={composeContext.accounts.inboxes}
-        activeInboxId={activeInboxId}
-        senderEmail={activeInboxEmail}
-        onSenderChange={persistDraftOnSenderSwitch}
-        subject={form.subject}
-        onSubjectChange={(subject) => {
-          form.setSubject(subject);
-          scheduleDraftSave();
-        }}
-        showSubject={!!props.isEditingExisting}
-        mobile={isMobileDrawer}
-        portalScope={composePortalScope}
-        replyType={state.replyType}
-      />
-      <div
+    <>
+      <Surface
         class={cn(
-          isMobileDrawer()
-            ? 'relative flex-1 flex flex-col'
-            : 'size-full flex flex-col min-h-0',
-          state.recipients.showExpandedRecipients() && 'mt-4'
+          'relative flex flex-col flex-1 max-w-full min-h-0',
+          isMobileDrawer() && 'min-h-full overflow-y-scroll overscroll-y-none',
+          props.unframed ? 'rounded-lg' : 'rounded-xl bg-menu-glass glass-input'
         )}
+        style={
+          props.unframed ? { 'background-color': 'transparent' } : undefined
+        }
+        hideBorder={props.unframed}
+        ref={(el) => {
+          composeContainerRef = el;
+        }}
+        depth={2}
+        solid
       >
+        <Show when={isMobileDrawer()}>
+          <MobileReplyToolbar
+            discardLabel={savedDraftId() ? 'Delete draft' : 'Discard draft'}
+            onDiscard={deleteDraftAndReset}
+            attachRef={(element) =>
+              fileSelector(element, () => ({
+                multiple: true,
+                onSelect: handleAddAttachments,
+              }))
+            }
+            sendDisabled={sendActionDisabled() || sendActionHidden()}
+            sendLabel={scheduleActionLabel()}
+            sending={isSending()}
+            editingDisabled={editingDisabled()}
+            onSend={() => sendEmail()}
+            scheduleSummary={
+              <EmailScheduleSummary
+                state={scheduleState()}
+                operation={scheduleOperation()}
+                onSelectTime={handleSendTimeChange}
+                onCancelSchedule={cancelSchedule}
+              />
+            }
+            scheduleControl={
+              <Show when={composeContext.presentation.scheduleEnabled}>
+                <EmailDateSelector
+                  mobile
+                  compact
+                  state={scheduleState()}
+                  selectedTime={selectedSendTime()}
+                  onSelectTime={handleSendTimeChange}
+                  onCancelSchedule={cancelSchedule}
+                  operation={scheduleOperation()}
+                  disabled={schedulePickerDisabled()}
+                />
+              </Show>
+            }
+          />
+        </Show>
+        <ReplyEnvelope
+          fields={state.recipients}
+          values={form.recipients}
+          options={props.session.recipientOptions}
+          inboxes={composeContext.accounts.inboxes}
+          activeInboxId={activeInboxId}
+          senderEmail={activeInboxEmail}
+          onSenderChange={persistDraftOnSenderSwitch}
+          subject={form.subject}
+          onSubjectChange={(subject) => {
+            form.setSubject(subject);
+            scheduleDraftSave();
+          }}
+          showSubject={!!props.isEditingExisting}
+          mobile={isMobileDrawer}
+          portalScope={composePortalScope}
+          replyType={state.replyType}
+          disabled={editingDisabled}
+        />
         <div
-          ref={setScrollContainer}
           class={cn(
-            'relative min-h-8 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
             isMobileDrawer()
-              ? 'max-h-none flex-1 overflow-visible px-5 pt-6 pb-4'
-              : cn(
-                  'overflow-y-auto mobile:max-h-[calc(32*var(--dvh,1dvh))]',
-                  composerExpanded()
-                    ? // Cap to the thread viewport (minus composer chrome) so the
-                      // recipients row and send bar stay on screen together
-                      'max-h-[min(calc(60*var(--dvh,1dvh)),calc(var(--thread-height,9999px)-14rem))]'
-                    : 'max-h-56'
-                )
+              ? 'relative flex-1 flex flex-col'
+              : 'size-full flex flex-col min-h-0',
+            state.recipients.showExpandedRecipients() && 'mt-4'
           )}
-          onScroll={(e) => {
-            if (composerExpanded() || e.currentTarget.scrollTop <= 0) return;
-            setComposerExpanded(true);
-            // Keep the send bar pinned while the box grows
-            requestAnimationFrame(() => {
-              bottomBarRef?.scrollIntoView({ block: 'nearest' });
-            });
-          }}
-          onclick={() => {
-            editor()?.focus();
-          }}
-          use:fileFolderDrop={{
-            onDragStart: (valid) => setIsDragging(valid),
-            onDragEnd: () => setIsDragging(false),
-            onDrop: (files, directories, event) => {
-              const currentEditor = editor();
-              if (!currentEditor || !event) return;
-              composeContext.editorFiles.uploadEditorFiles({
-                editor: currentEditor,
-                sourceId: props.sourceEntityId,
-                files,
-                directories,
-                dropEvent: event,
-                onUploaded: (ids) => {
-                  setIsDragging(false);
-                  ids.forEach(composeContext.editorFiles.makePublic);
-                  scheduleDraftSave();
-                },
-              });
-            },
-          }}
         >
           <div
-            class={cn('absolute size-full inset-0', !isDragging() && 'hidden')}
-          >
-            <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
-          </div>
-          <MarkdownShell
-            config={editorConfig}
+            ref={setScrollContainer}
             class={cn(
-              'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible',
-              // Quoted thread collapses behind the "⋯" pill below
-              // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
-              // variants turn the underscore in .macro_quote into a space)
-              quoteCollapsed() && 'quote-collapsed',
-              isDragging() && 'blur'
-            )}
-            disabled={isSending()}
-            placeholder={
+              'relative min-h-8 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
               isMobileDrawer()
-                ? 'Use `@` to reference files'
-                : 'Reply — @mention to share or cc people'
-            }
-            portalScope={isMobileDrawer() ? 'local' : 'split'}
-            refFn={(el) => props.markdownDomRef?.(el)}
-            onConnect={handleEditorConnect}
-          />
-          <Show when={!hasPaidAccess()}>
-            <div class="text-ink/50 mt-[1lh]" data-watermark>
-              <MacroSignatureButton
-                visible={
-                  !composeContext.presentation.viewerLoading() &&
-                  !composeContext.hasPaidAccess()
-                }
-                onUpgrade={composeContext.presentation.onUpgrade}
-              />
-            </div>
-          </Show>
-          <Show when={isMobileDrawer()}>
-            <AttachmentsRow />
-          </Show>
-          <Show when={scrollAreaSignatureHtml()}>
-            {(html) => (
-              <SignaturePreview
-                mobile={composeContext.presentation.isMobile()}
-                prepareLinks={composeContext.presentation.prepareSignatureLinks}
-                html={html()}
-                onDismiss={() => {
-                  // Dismissal is composer-local state worth keeping — latch
-                  // the seed so a draft upgrade can't remount it away.
-                  props.onEngaged?.();
-                  setIncludeSignature(false);
-                }}
-              />
+                ? 'max-h-none flex-1 overflow-visible px-5 pt-6 pb-4'
+                : cn(
+                    'overflow-y-auto mobile:max-h-[calc(32*var(--dvh,1dvh))]',
+                    composerExpanded()
+                      ? // Cap to the thread viewport (minus composer chrome) so the
+                        // recipients row and send bar stay on screen together
+                        'max-h-[min(calc(60*var(--dvh,1dvh)),calc(var(--thread-height,9999px)-14rem))]'
+                      : 'max-h-56'
+                  )
             )}
-          </Show>
-        </div>
-        {/* Quoted-text controls live below the scroll area so they stay
+            onScroll={(e) => {
+              if (composerExpanded() || e.currentTarget.scrollTop <= 0) return;
+              setComposerExpanded(true);
+              // Keep the send bar pinned while the box grows
+              requestAnimationFrame(() => {
+                bottomBarRef?.scrollIntoView({ block: 'nearest' });
+              });
+            }}
+            onclick={() => {
+              editor()?.focus();
+            }}
+            use:fileFolderDrop={{
+              onDragStart: (valid) => setIsDragging(valid),
+              onDragEnd: () => setIsDragging(false),
+              onDrop: (files, directories, event) => {
+                if (editingDisabled()) return;
+                const currentEditor = editor();
+                if (!currentEditor || !event) return;
+                composeContext.editorFiles.uploadEditorFiles({
+                  editor: currentEditor,
+                  sourceId: props.sourceEntityId,
+                  files,
+                  directories,
+                  dropEvent: event,
+                  onUploaded: (ids) => {
+                    setIsDragging(false);
+                    ids.forEach(composeContext.editorFiles.makePublic);
+                    scheduleDraftSave();
+                  },
+                });
+              },
+            }}
+          >
+            <div
+              class={cn(
+                'absolute size-full inset-0',
+                !isDragging() && 'hidden'
+              )}
+            >
+              <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
+            </div>
+            <MarkdownShell
+              config={editorConfig}
+              class={cn(
+                'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible',
+                // Quoted thread collapses behind the "⋯" pill below
+                // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
+                // variants turn the underscore in .macro_quote into a space)
+                quoteCollapsed() && 'quote-collapsed',
+                isDragging() && 'blur'
+              )}
+              disabled={editingDisabled()}
+              placeholder={
+                isMobileDrawer()
+                  ? 'Use `@` to reference files'
+                  : 'Reply — @mention to share or cc people'
+              }
+              portalScope={isMobileDrawer() ? 'local' : 'split'}
+              refFn={(el) => props.markdownDomRef?.(el)}
+              onConnect={handleEditorConnect}
+            />
+            <Show when={!hasPaidAccess()}>
+              <div class="text-ink/50 mt-[1lh]" data-watermark>
+                <MacroSignatureButton
+                  visible={
+                    !composeContext.presentation.viewerLoading() &&
+                    !composeContext.hasPaidAccess()
+                  }
+                  onUpgrade={composeContext.presentation.onUpgrade}
+                />
+              </div>
+            </Show>
+            <Show when={isMobileDrawer()}>
+              <AttachmentsRow />
+            </Show>
+            <Show when={scrollAreaSignatureHtml()}>
+              {(html) => (
+                <SignaturePreview
+                  mobile={composeContext.presentation.isMobile()}
+                  prepareLinks={
+                    composeContext.presentation.prepareSignatureLinks
+                  }
+                  html={html()}
+                  dismissable={!editingDisabled()}
+                  onDismiss={() => {
+                    // Dismissal is composer-local state worth keeping — latch
+                    // the seed so a draft upgrade can't remount it away.
+                    props.onEngaged?.();
+                    setIncludeSignature(false);
+                  }}
+                />
+              )}
+            </Show>
+          </div>
+          {/* Quoted-text controls live below the scroll area so they stay
             anchored to the composer bottom instead of scrolling with (and
             floating over) tall content. */}
-        <Show when={form.replyAppended() && quoteCollapsed()}>
-          <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              class="rounded-md text-ink-extra-muted hover:text-ink-muted hover:bg-active"
-              tooltip="Show quoted text"
-              onclick={(e: MouseEvent) => {
-                e.stopPropagation();
-                setQuoteCollapsed(false);
-                setComposerExpanded(true);
-              }}
-            >
-              <DotsThree />
-            </Button>
-          </div>
-        </Show>
-        <Show
-          when={
-            props.replyingTo() &&
-            // The collapse pill above already covers this state
-            !(form.replyAppended() && quoteCollapsed())
-          }
-        >
-          <div
-            class="shrink-0 pt-1"
-            data-corvu-no-drag=""
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Tooltip
-              label={
-                form.replyAppended() ? 'Hide quoted text' : 'Show quoted text'
-              }
-            >
-              <KToggleButton
-                as={Button}
+          <Show when={form.replyAppended() && quoteCollapsed()}>
+            <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
+              <Button
                 variant="ghost"
                 size="icon-sm"
-                class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
-                pressed={form.replyAppended()}
-                onChange={toggleQuotedText}
+                class="rounded-md text-ink-extra-muted hover:text-ink-muted hover:bg-active"
+                tooltip="Show quoted text"
+                onclick={(e: MouseEvent) => {
+                  e.stopPropagation();
+                  setQuoteCollapsed(false);
+                  setComposerExpanded(true);
+                }}
               >
                 <DotsThree />
-              </KToggleButton>
-            </Tooltip>
-          </div>
-        </Show>
-        <Show when={!isMobileDrawer()}>
-          {/* Below the scroll area so quoted email content can never overlap it */}
-          <AttachmentsRow class="px-4" />
-          <Show when={footerSignatureHtml()}>
-            {(html) => (
-              <SignaturePreview
-                mobile={composeContext.presentation.isMobile()}
-                prepareLinks={composeContext.presentation.prepareSignatureLinks}
-                html={html()}
-                onDismiss={() => {
-                  // Dismissal is composer-local state worth keeping — latch
-                  // the seed so a draft upgrade can't remount it away.
-                  props.onEngaged?.();
-                  setIncludeSignature(false);
-                }}
-              />
-            )}
+              </Button>
+            </div>
           </Show>
-          {/* Keep the footer intrinsic-height so it cannot overlap the signature. */}
-          <div
-            ref={bottomBarRef}
-            class="shrink-0 flex items-center justify-end gap-1 pt-1.5"
+          <Show
+            when={
+              props.replyingTo() &&
+              // The collapse pill above already covers this state
+              !(form.replyAppended() && quoteCollapsed())
+            }
           >
-            <Button
-              onClick={deleteDraftAndReset}
-              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-              size="icon-composer"
+            <div
+              class="shrink-0 pt-1"
+              data-corvu-no-drag=""
+              onClick={(e) => e.stopPropagation()}
             >
-              <Trash />
-            </Button>
-            <AttachButton />
-            <Show
-              when={
-                composeContext.presentation.scheduleEnabled &&
-                !sendActionHidden()
-              }
-            >
-              <EmailDateSelector
-                mobile={false}
-                sendTime={form.sendTime() ?? null}
-                onSendTimeChange={handleSendTimeChange}
-                disabled={scheduleSendDisabled()}
-              />
+              <Tooltip
+                label={
+                  form.replyAppended() ? 'Hide quoted text' : 'Show quoted text'
+                }
+              >
+                <KToggleButton
+                  as={Button}
+                  variant="ghost"
+                  size="icon-sm"
+                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
+                  pressed={form.replyAppended()}
+                  disabled={editingDisabled()}
+                  onChange={toggleQuotedText}
+                >
+                  <DotsThree />
+                </KToggleButton>
+              </Tooltip>
+            </div>
+          </Show>
+          <Show when={!isMobileDrawer()}>
+            {/* Below the scroll area so quoted email content can never overlap it */}
+            <AttachmentsRow class="px-4" />
+            <Show when={footerSignatureHtml()}>
+              {(html) => (
+                <SignaturePreview
+                  mobile={composeContext.presentation.isMobile()}
+                  prepareLinks={
+                    composeContext.presentation.prepareSignatureLinks
+                  }
+                  html={html()}
+                  dismissable={!editingDisabled()}
+                  onDismiss={() => {
+                    // Dismissal is composer-local state worth keeping — latch
+                    // the seed so a draft upgrade can't remount it away.
+                    props.onEngaged?.();
+                    setIncludeSignature(false);
+                  }}
+                />
+              )}
             </Show>
-            <SendButton
-              appearance="composer"
-              disabled={sendActionDisabled()}
-              pending={isSending()}
-              hidden={sendActionHidden()}
-              onClick={() => sendEmail()}
-            />
-          </div>
-        </Show>
-      </div>
-    </Surface>
+            {/* Keep the footer intrinsic-height so it cannot overlap the signature. */}
+            <div
+              ref={bottomBarRef}
+              class="shrink-0 flex min-w-0 justify-end pt-1.5"
+            >
+              <div class="flex shrink-0 items-center gap-1">
+                <Button
+                  onClick={deleteDraftAndReset}
+                  tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
+                  size="icon-composer"
+                  disabled={editingDisabled()}
+                >
+                  <Trash />
+                </Button>
+                <AttachButton />
+                <Show
+                  when={
+                    composeContext.presentation.scheduleEnabled &&
+                    !sendActionHidden()
+                  }
+                >
+                  <div class="shrink-0">
+                    <EmailDateSelector
+                      mobile={false}
+                      compact
+                      state={scheduleState()}
+                      selectedTime={selectedSendTime()}
+                      onSelectTime={handleSendTimeChange}
+                      onCancelSchedule={cancelSchedule}
+                      operation={scheduleOperation()}
+                      disabled={schedulePickerDisabled()}
+                    />
+                  </div>
+                </Show>
+                <SendButton
+                  appearance="composer"
+                  disabled={sendActionDisabled()}
+                  pending={isSending()}
+                  hidden={sendActionHidden()}
+                  onClick={() => sendEmail()}
+                  tooltip={sendUnavailableReason() ?? scheduleActionLabel()}
+                  aria-label={scheduleActionLabel()}
+                />
+              </div>
+            </div>
+          </Show>
+        </div>
+      </Surface>
+      <Show when={!isMobileDrawer()}>
+        {/* The desktop reply sits in its message card; the bar spans the card's
+          padding so it reads as the card's footer, like the standalone
+          composer's drawer. */}
+        <EmailScheduleBar
+          state={scheduleState()}
+          operation={scheduleOperation()}
+          onSelectTime={handleSendTimeChange}
+          onCancelSchedule={cancelSchedule}
+          class="-mx-4 -mb-4 mt-3 rounded-b-[26.25px] border-t border-edge-muted px-4 py-2 touch:rounded-b-lg mobile:rounded-none"
+        />
+      </Show>
+    </>
   );
 }

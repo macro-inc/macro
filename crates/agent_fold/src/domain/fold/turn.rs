@@ -1,9 +1,9 @@
 //! Opening, closing, and failing turns.
 
 use crate::domain::error::FoldError;
-use crate::domain::model::{Author, FoldedMessage, MessagePart, StopReason, TurnId};
+use crate::domain::model::{Author, FailureNotice, FoldedMessage, MessagePart, StopReason, TurnId};
 use agent_client_protocol::RawJsonRpcParams;
-use agent_client_protocol::schema::v1::{PromptRequest, RequestId};
+use agent_client_protocol::schema::v1::{Error, PromptRequest, RequestId};
 use agent_runtime_protocol::domain::action::AgentActionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
@@ -186,7 +186,7 @@ impl FoldState {
     /// an agent message that exists: here the agent message is created if
     /// need be, so the failure has somewhere to live and the turn is
     /// unambiguously over.
-    pub(super) fn fail_turn(&mut self, response_id: &RequestId, message: &str) -> Option<Changed> {
+    pub(super) fn fail_turn(&mut self, response_id: &RequestId, error: &Error) -> Option<Changed> {
         let closes_the_open_turn = self
             .turn
             .as_ref()
@@ -204,7 +204,8 @@ impl FoldState {
             None => self.mint_agent_message(turn.id),
         };
         self.messages[agent].stop = Some(StopReason::Failed {
-            message: message.to_owned(),
+            message: error.message.clone(),
+            notice: FailureNotice::from_error_data(error.data.as_ref()),
         });
         Some(changed)
     }

@@ -23,6 +23,7 @@ import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { Telemetry } from '@macro-inc/observability';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowSquareOut from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
   useAddForwardedAttachmentsMutation,
@@ -77,6 +78,10 @@ import { decodeBase64Utf8 } from './core/decode-base64';
 import type { EmailDraft } from './core/email-draft';
 import { readDroppedEmailFiles } from './editor-adapter';
 import { makeAttachmentPublic } from './make-attachment-public';
+import {
+  emailDraftLifecycleSource,
+  publishDraftLifecycleChange,
+} from './queries/draft-lifecycle';
 import { createEmailInboxSource } from './queries/inbox-source';
 import { restoreDraftBodyAfterUndo, runUndoSend } from './undo-send';
 
@@ -113,9 +118,9 @@ export function createEmailComposeContext(
   const { users } = useCombinedRecipients();
   const notice = (options?: ComposeNoticeOptions) => ({
     ...options,
-    actions: options?.actions?.map((action) => ({
+    actions: options?.actions?.map(({ kind, ...action }) => ({
       ...action,
-      icon: ArrowCounterClockwise,
+      icon: kind === 'open' ? ArrowSquareOut : ArrowCounterClockwise,
     })),
   });
   const reportError = (error: unknown) =>
@@ -169,6 +174,7 @@ export function createEmailComposeContext(
   });
 
   return {
+    draftLifecycle: emailDraftLifecycleSource,
     recipientName: (id) => getDisplayName(tryMacroId(id)),
     recordMention: (sourceId, targetId) => {
       void trackMention(sourceId, 'document', targetId).catch(reportError);
@@ -298,6 +304,7 @@ export function createEmailComposeContext(
           skipSoupRefetch: completingThread,
         });
         try {
+          publishDraftLifecycleChange(input.draftId, inboxId);
           if (input.threadId) markThreadDraftSaved(input.threadId);
         } catch (error) {
           reportError(error);
@@ -336,6 +343,11 @@ export function createEmailComposeContext(
           skipSoupRefetch: completingThread,
         });
         try {
+          if (result.message.db_id)
+            publishDraftLifecycleChange(
+              result.message.db_id,
+              result.message.link_id
+            );
           if (result.message.thread_db_id)
             markThreadDraftSaved(result.message.thread_db_id);
         } catch (error) {
@@ -353,16 +365,33 @@ export function createEmailComposeContext(
           linkId: headerId(inboxId),
         });
         try {
+          publishDraftLifecycleChange(draftId, inboxId);
           invalidateSoupEntity(draftId);
         } catch (error) {
           reportError(error);
         }
       },
-      schedule: async ({ draftId, sendTime }, inboxId) => {
+      schedule: async ({ draftId, sendTime, includeSignature }, inboxId) => {
         await scheduleEmailMessage(
-          { draftID: draftId, send_time: sendTime },
+          {
+            draftID: draftId,
+            send_time: sendTime,
+            include_signature: includeSignature,
+          },
           headerId(inboxId)
         );
+        try {
+          publishDraftLifecycleChange(draftId, inboxId);
+          void queryClient
+            .invalidateQueries({
+              queryKey: emailKeys.scheduledMessages._def,
+            })
+            .catch(reportError);
+        } catch (error) {
+          // Cache and cross-tab notifications are post-commit UI work. A
+          // failure here must not make a successful schedule retryable.
+          reportError(error);
+        }
       },
       archive: async ({ threadId, value }, inboxId) => {
         await archiveEmailThread({ id: threadId, value }, headerId(inboxId));

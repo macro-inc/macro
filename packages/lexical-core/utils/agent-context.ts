@@ -20,8 +20,9 @@ export type AgentContextParent = {
   id: string;
 };
 
-/** Where in a document the comment thread a prompt was posted in sits. */
-export type AgentContextAnchor = {
+/** A comment mark in a markdown document. Older callers omit `type`. */
+export type MarkdownCommentAnchor = {
+  type?: 'markdown';
   markId: string;
   /** What the mark covered when the comment was posted; absent on threads anchored before it was captured. */
   markedText?: string;
@@ -30,6 +31,26 @@ export type AgentContextAnchor = {
   /** The passage around the mark now, when it could be resolved. */
   surroundingText?: string;
 };
+
+/** A highlight on a PDF. */
+export type PdfHighlightCommentAnchor = {
+  type: 'pdfHighlight';
+  anchorId: string;
+  /** The text the highlight covers; absent when the highlight carries none. */
+  markedText?: string;
+};
+
+/** A point pinned on a PDF page, which covers no text. */
+export type PdfPinCommentAnchor = {
+  type: 'pdfPin';
+  anchorId: string;
+};
+
+/** Where in a document the comment thread a prompt was posted in sits. */
+export type AgentContextAnchor =
+  | MarkdownCommentAnchor
+  | PdfHighlightCommentAnchor
+  | PdfPinCommentAnchor;
 
 /** Input used to compose an agent prompt with private conversation context. */
 export type AgentContextPrompt = {
@@ -45,10 +66,19 @@ export type AgentContextPrompt = {
  * nothing the agent can read maps that id back onto text, so the text travels
  * with it: as the document reads now when it could be resolved, and as it read
  * when the comment was posted, which is all there is when the live lookup
- * failed or the text has since been removed.
+ * failed or the text has since been removed. A PDF highlight carries its own
+ * text; a pin covers none, and says so rather than leaving the agent to guess.
  */
 function describeAnchor(anchor: AgentContextAnchor): string {
   const location = `Comment anchor: ${JSON.stringify(anchor)}`;
+  if (anchor.type === 'pdfPin') {
+    return `${location}\nThe comment is pinned to a point on a PDF page rather than to text, so it covers no words.`;
+  }
+  if (anchor.type === 'pdfHighlight') {
+    return anchor.markedText === undefined
+      ? `${location}\nThe PDF highlight carries no text, so which words it covers is not known.`
+      : `${location}\nmarkedText is the text the PDF highlight covers.`;
+  }
   if (anchor.currentMarkedText !== undefined) {
     const snapshot =
       anchor.markedText === undefined
@@ -58,6 +88,21 @@ function describeAnchor(anchor: AgentContextAnchor): string {
   }
   if (anchor.markedText === undefined) return location;
   return `${location}\nmarkedText is what the mark covered when the comment was posted; the document may have changed since.`;
+}
+
+/**
+ * Name the conversation a prompt came from, and that it came from there. A
+ * prompt driven from the agent session view carries no parent, so a parent
+ * is also the one signal that the reply is posted back into a thread nobody
+ * is watching the session for - which changes how the agent should ask the
+ * user anything.
+ */
+function describeParent(parent: AgentContextParent): string {
+  const surface =
+    parent.type === 'channel'
+      ? 'a channel thread'
+      : 'a document comment thread';
+  return `Conversation parent: ${JSON.stringify(parent)}\nOrigin: this prompt was posted in ${surface}, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.`;
 }
 
 function escapeAgentContextTags(markdown: string): string {
@@ -98,9 +143,7 @@ export function composeAgentContextPrompt(input: AgentContextPrompt): string {
             `Prior message ${index + 1}:\nSender: ${message.sender}\nContent: ${message.content}`
         )
         .join('\n\n');
-      const location = input.parent
-        ? `Conversation parent: ${JSON.stringify(input.parent)}`
-        : '';
+      const location = input.parent ? describeParent(input.parent) : '';
       const anchor = input.anchor ? describeAnchor(input.anchor) : '';
       const context = $createAgentContextNode({
         version: 1,

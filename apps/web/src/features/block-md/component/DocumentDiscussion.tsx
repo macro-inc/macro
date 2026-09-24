@@ -6,7 +6,10 @@ import {
   DiscussionProvider,
 } from '@core/comments/discussion';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { useUrlParams } from '@core/component/ParamsProvider';
+import {
+  useParamNavigationCount,
+  useUrlParams,
+} from '@core/component/ParamsProvider';
 import {
   enableUnifiedDocumentDiscussions,
   isFeatureEnabled,
@@ -15,11 +18,12 @@ import {
   DocumentConversation,
   DocumentConversationComposer,
 } from '@core/messages/DocumentConversation';
+import { scrollToRenderedTarget } from '@core/messages/scroll-to-rendered-target';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import type { MessageParent } from '@service-storage/messages';
-import { Show } from 'solid-js';
+import { createEffect, createMemo, on, onCleanup, Show } from 'solid-js';
 import { createDocumentDiscussionSource } from '../comments/documentDiscussionSource';
 import { URL_PARAMS } from '../constants';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -77,22 +81,51 @@ export function MessageDocumentDiscussion(props: {
   const parent: MessageParent = { type: 'document', id };
   const floating = () =>
     props.floatingComposerOnTouch === true && isTouchDevice();
+  let container: HTMLDivElement | undefined;
+  // Scroll to the linked message once per navigation of `comment_id`, as the
+  // margin does for anchored comments. A repeat navigation to the same message
+  // still scrolls; the URL value showing through after a navigation cleared it
+  // does not.
+  const commentNavigationCount = useParamNavigationCount(URL_PARAMS.commentId);
+  const scrollRequest = createMemo(
+    () => {
+      const commentId = params.commentId();
+      if (!commentId) return undefined;
+      const count = commentNavigationCount();
+      return {
+        commentId,
+        key: count === 0 ? `url:${commentId}` : `navigation:${count}`,
+      };
+    },
+    undefined,
+    { equals: (a, b) => a?.key === b?.key }
+  );
+  let scrolledKey: string | undefined;
+  createEffect(
+    on(scrollRequest, (request) => {
+      if (!request || !container || request.key === scrolledKey) return;
+      scrolledKey = request.key;
+      onCleanup(scrollToRenderedTarget(container, request.commentId));
+    })
+  );
   return (
     <>
-      <DocumentConversation
-        parent={parent}
-        canWrite={permissions.canComment()}
-        targetId={params.commentId()}
-        label={props.label}
-        buildLink={(message) =>
-          buildSimpleEntityUrl(
-            { type: blockName, id },
-            { [URL_PARAMS.commentId]: message.id }
-          )
-        }
-        hideComposer={floating()}
-        hideWhenEmpty={floating()}
-      />
+      <div ref={container} class="contents">
+        <DocumentConversation
+          parent={parent}
+          canWrite={permissions.canComment()}
+          targetId={params.commentId()}
+          label={props.label}
+          buildLink={(message) =>
+            buildSimpleEntityUrl(
+              { type: blockName, id },
+              { [URL_PARAMS.commentId]: message.id }
+            )
+          }
+          hideComposer={floating()}
+          hideWhenEmpty={floating()}
+        />
+      </div>
       <Show when={floating() && permissions.canComment()}>
         <StaticMarkdownContext>
           <MobileMessageComposer

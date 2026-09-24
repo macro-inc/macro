@@ -290,21 +290,12 @@ pub trait EmailRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<UpsertedContacts, Self::Err>> + Send;
 
     /// Insert a message within a transaction, including thread insert (if new),
-    /// recipients, scheduled message handling, thread metadata update, user
-    /// history, and any client-handle bindings the input carries (upserted so
-    /// replayed offline saves converge on the final row).
-    ///
-    /// A draft client handle is locked for the transaction and its binding
-    /// re-read under that lock, so concurrent first saves of one handle settle
-    /// on a single message and thread instead of each minting their own. The
-    /// returned IDs are therefore the authoritative ones — a save that adopted
-    /// a concurrent winner's row settled on IDs its own input never named.
-    ///
-    /// Returns `None` (rolling the transaction back) when the upsert's owner
-    /// guard rejected the write: the message ID already exists but belongs to
-    /// another inbox or is no longer an unsent draft. Defense-in-depth behind
-    /// the handle resolution — validation reads can be raced, the guarded
-    /// conflict clause cannot.
+    /// recipients, thread metadata update, and user history. Ordinary drafts never
+    /// schedule delivery; non-drafts may create an immediate-send undo window.
+    /// Lock and re-read client-handle bindings, bind handles to the final rows,
+    /// and return their authoritative IDs. Return None when an owner/sent guard
+    /// rejects the write; reject scheduled/processing identities transactionally.
+    /// If `new_thread` is Some, the thread is created inside the same transaction.
     fn insert_message(
         &self,
         input: &ResolvedDraftInput,
@@ -312,7 +303,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> impl Future<Output = Result<Option<SettledDraftIds>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<SettledDraftIds>, EmailErr>> + Send;
 
     /// Fetch a label by its database ID and link ID.
     fn get_label_by_id(
@@ -353,6 +344,19 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_id: Uuid,
         message_ids: &[Uuid],
         is_read: bool,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Atomically change INBOX assignments and the thread's visibility.
+    /// The message IDs belong to the authorized thread/inbox. Visibility is
+    /// separate from `add` so an enqueue failure can restore the prior flag
+    /// while reverting only the assignments changed by that operation.
+    fn set_thread_inbox_state(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        message_ids: &[Uuid],
+        add: bool,
+        inbox_visible: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Update the read status for a batch of messages, verified by link_id.
@@ -451,8 +455,9 @@ pub trait EmailRepo: Send + Sync + 'static {
     }
 }
 
-/// Read-only trait for fetching email thread previews.
-/// Used by soup to restrict access to only read email operations as it uses the read replica database.
+/// Read-only capability for fetching email thread previews. The composition
+/// root supplies the replica-backed service for ordinary REST/GraphQL Soup.
+/// Mutation replies reload through the primary-backed email writer instead.
 pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
     fn get_email_thread_previews(
         &self,
@@ -516,8 +521,9 @@ pub trait EmailContentService: Send + Sync + 'static {
 }
 
 /// Newtype adapter that restricts a full `EmailService` to read-only preview access.
-/// Wrapping is explicit so readonly wiring is intentional — a bare `EmailServiceImpl`
-/// will *not* silently satisfy `EmailPreviewServiceReadOnly`.
+/// This narrows capabilities, not consistency: the wrapped service may use a
+/// primary or replica pool. A bare `EmailServiceImpl` will not silently satisfy
+/// `EmailPreviewServiceReadOnly`.
 pub struct ReadonlyEmailPreviewAdapter<T>(pub T);
 
 impl<T: EmailService> EmailPreviewServiceReadOnly for ReadonlyEmailPreviewAdapter<T> {
@@ -684,6 +690,15 @@ pub trait EmailService: Send + Sync + 'static {
         thread_id: Uuid,
     ) -> impl Future<Output = Result<(), EmailErr>> + Send;
 
+    /// Archive or unarchive a caller-owned/delegated thread. The service
+    /// resolves the thread's inbox and system label, then queues provider sync.
+    fn set_thread_archived(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        archived: bool,
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
+
     /// Add or remove a label from a caller-accessible thread.
     fn update_thread_labels_for_user(
         &self,
@@ -845,6 +860,15 @@ impl EmailUserService for NoOpEmailService {
 }
 
 impl EmailService for NoOpEmailService {
+    async fn set_thread_archived(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+        _archived: bool,
+    ) -> Result<(), EmailErr> {
+        Err(no_op_email_err())
+    }
+
     async fn get_email_thread_previews(
         &self,
         _req: GetEmailsRequest,

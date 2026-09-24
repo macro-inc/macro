@@ -328,7 +328,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     onCleanup(
       subscribeToVisibleCacheChanges(cacheHost, () => {
         setCacheRevision((revision) => revision + 1);
-        void cachedChannelsQuery.refetch();
+        return cachedChannelsQuery.refetch({ cancelRefetch: false });
       })
     );
   }
@@ -1001,7 +1001,13 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       items: list,
       totalCount: () => list().length,
       hasMore: () => projected?.hasMore() ?? false,
-      isLoading: () => projected?.isLoading() ?? false,
+      isLoading: () =>
+        options?.enabled?.() !== false &&
+        Boolean(
+          projected?.isLoading() ||
+            historyQuery.isLoading ||
+            (cacheHost ? cachedChannelsQuery.isLoading : channelsLoading())
+        ),
       isLoadingMore: () => projected?.isLoadingMore() ?? false,
       loadMore: async () => {
         await projected?.loadMore();

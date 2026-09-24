@@ -18,6 +18,7 @@ import type {
 import {
   $createLineBreakNode,
   $createTextNode,
+  $isDecoratorNode,
   $isParagraphNode,
   type LexicalNode,
   LineBreakNode,
@@ -68,7 +69,9 @@ export const PRESERVE_LINES: ConversionOnlyTransformer<ElementTransformer> = {
   export: (node) => {
     if ($isParagraphNode(node)) {
       const content = node.getTextContent();
-      if (!content.trim()) {
+      // A decorator with no text content - an await spinner, say - is still
+      // a child worth exporting, not a blank line.
+      if (!content.trim() && !node.getChildren().some($isDecoratorNode)) {
         return '\n \n';
       }
     }

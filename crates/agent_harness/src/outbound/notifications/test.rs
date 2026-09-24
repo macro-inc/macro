@@ -14,6 +14,7 @@ use rootcause::Report;
 use serde::Serialize;
 
 use super::IngressAgentSessionNotifier;
+use crate::domain::model::AgentKind;
 use crate::domain::notifications::plan;
 use crate::domain::ports::AgentSessionNotifier;
 
@@ -75,7 +76,7 @@ async fn a_planned_notification_becomes_an_ingress_request() {
     let ingress = Arc::new(RecordingIngress::default());
     let notifier = IngressAgentSessionNotifier::new(Arc::clone(&ingress));
 
-    for notification in plan(&settled()) {
+    for notification in plan(&settled(), AgentKind::SandboxedCoder) {
         notifier.notify(notification).await;
     }
 
@@ -101,7 +102,7 @@ async fn an_ingress_failure_is_swallowed() {
     });
     let notifier = IngressAgentSessionNotifier::new(ingress);
 
-    for notification in plan(&settled()) {
+    for notification in plan(&settled(), AgentKind::SandboxedCoder) {
         notifier.notify(notification).await;
     }
 }

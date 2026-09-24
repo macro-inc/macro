@@ -1067,6 +1067,53 @@ async fn setting_an_unoffered_model_is_refused() {
     );
 }
 
+/// A refusal the person can act on answers the prompt with its notice in the
+/// error's `data` - where the fold reads it - and a one-sentence message,
+/// never the report with its source locations.
+#[tokio::test]
+async fn a_usage_limit_refusal_answers_the_prompt_with_a_notice() {
+    let cursor = FakeCursor::new();
+    cursor.script_usage_limit_rejection();
+    let (_service, mut client) = serve_over_channel(cursor, |_| {});
+
+    let session = expect_result(
+        &client
+            .call(
+                1,
+                "session/new",
+                serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+            )
+            .await,
+    )["sessionId"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+
+    let response = client
+        .call(
+            2,
+            "session/prompt",
+            serde_json::json!({
+                "sessionId": session,
+                "prompt": [{ "type": "text", "text": "do it" }],
+            }),
+        )
+        .await;
+
+    let error = response.get("error").expect("a refused prompt is an error");
+    assert_eq!(error["data"]["kind"], "provider_usage_limit");
+    assert_eq!(error["data"]["title"], "Cursor usage limit reached");
+    assert_eq!(
+        error["data"]["link"]["url"],
+        "https://www.cursor.com/dashboard?tab=settings"
+    );
+    let message = error["message"].as_str().expect("a message");
+    assert!(
+        !message.contains("usage_limit_exceeded") && !message.contains(".rs:"),
+        "cursor's body and the report stay in the logs: {message}"
+    );
+}
+
 /// A restored session's next run asks for the model it was using before the
 /// restart, params re-resolved from the live model table.
 ///
