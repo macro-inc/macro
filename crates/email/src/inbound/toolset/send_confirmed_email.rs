@@ -8,12 +8,18 @@
 //! thread, and this tool sends on that answer. Every host gets both tools;
 //! the prompt, not the toolset, says which to reach for.
 //!
-//! The gate is `userConfirmation`: the model must quote the user's approving
-//! message to call this. That is a cheap first pass, deliberately - it makes
-//! the model produce evidence rather than send silently, and the requirement
-//! is self-documenting in the schema - but nothing here checks the quote
-//! against the thread, so it is not a guarantee. Session-scoped proposal
-//! state that could verify it was considered and deferred.
+//! The email is always floated first. Being told to send one is a request to
+//! draft it, not permission to send it, so the agent writes the email into
+//! the thread and stops; only the user's reply to that draft authorizes the
+//! send. An instruction detailed enough to send from is still only a draft
+//! request - the point is that nothing leaves before the user has seen it.
+//!
+//! The gate is `userConfirmation`: the model must quote that approving reply
+//! to call this. That is a cheap first pass, deliberately - it makes the
+//! model produce evidence rather than send silently, and the requirement is
+//! self-documenting in the schema - but nothing here checks the quote against
+//! the thread, so it is not a guarantee. Session-scoped proposal state that
+//! could verify it was considered and deferred.
 
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolCallError,
@@ -36,7 +42,7 @@ use crate::domain::ports::{EmailService, GmailTokenProvider};
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "SendConfirmedEmail",
-    description = "Send an email immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in: describe the email to the user in prose there, ask whether to send it, wait for their reply, and call this tool only once they have approved that specific email - quoting their approving message in userConfirmation. Never call it without one, and never call it in the agent session view or in chat: use SendEmail there, whose review card or composer is the confirmation. Takes the same fields as SendEmail; write the body in Markdown, which is rendered to HTML on send."
+    description = "Send an email immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The email is always shown before it is sent, even when the user's request already spelled the whole thing out: in one turn write it into the thread - recipients, subject, body - ask whether to send it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific email, quoting that reply verbatim in userConfirmation. Being asked to send an email is a request to draft one, never approval to send it, so a userConfirmation quoting the request that asked you to write the email - rather than the reply approving the one you wrote - is wrong. Never call it in the agent session view or in chat: use SendEmail there, whose review card or composer is the confirmation. Takes the same fields as SendEmail; write the body in Markdown, which is rendered to HTML on send."
 )]
 #[serde(rename_all = "camelCase")]
 pub struct SendConfirmedEmail {
@@ -45,7 +51,7 @@ pub struct SendConfirmedEmail {
     pub email: SendEmail,
     /// The user's own words approving this send.
     #[schemars(
-        description = "The user's own message approving this specific email, quoted verbatim - for example their \"yes, send it\" after you described the email in prose. Required: do not call this tool without one, do not paraphrase it, and never supply it yourself."
+        description = "The user's own message approving this specific email, quoted verbatim - for example their \"yes, send it\" in reply to the email you wrote out for them. It is a reply to your draft, never the earlier request that asked you to write one: if the user has not yet seen this email, there is nothing to quote here and the tool must not be called. Required: do not paraphrase it, and never supply it yourself."
     )]
     pub user_confirmation: String,
 }
