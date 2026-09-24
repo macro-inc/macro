@@ -248,6 +248,13 @@ thread past the chat's right edge.
 
 ## Message scrolling and navigation
 
+Thread rails end at the last reply avatar when there is no inline composer or
+footer below it, including when the parent message was deleted. Grouped replies
+after that avatar do not extend the rail. On mobile (or with the unified
+composer), starting a first reply adds no rail to the parent; replying to an
+existing thread keeps its reply branches without a dangling composer segment.
+Desktop inline replies still connect to their composer.
+
 Channels open at the latest message, with short conversations aligned above the
 composer. Incoming messages and growing replies stay in view while the channel is
 at the bottom. Consecutive sends stay pinned through server acknowledgement and
