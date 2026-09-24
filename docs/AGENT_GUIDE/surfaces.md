@@ -855,6 +855,17 @@ and prevent dismissal; canceling leaves the underlying data unchanged.
 
 ## Settings — `/app/settings/<section>`
 
+### Email signatures
+
+In Integrations, **Edit signature** beside an owned inbox expands its editor.
+The editor uses the app's background and text colors, including in dark mode;
+explicit colors in signature content are preserved. **Close signature editor**
+(the X) or Escape while focused in that inbox row collapses it and returns focus
+to **Edit signature**. Unsaved edits remain when reopened; closing does not save
+or remove the signature.
+The inbox row's trash icon removes the inbox through the existing confirmation;
+it is separate from the signature editor's close control.
+
 ### Team membership
 
 Team membership has no size cap, including free teams. Invitations and domain
