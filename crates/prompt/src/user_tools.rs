@@ -7,6 +7,13 @@
 //! returns the outcome ([`SESSION_PROMPT`]). Hosts without either surface
 //! (the channel-mention bot, MCP) get toolsets where those tools execute
 //! directly or are absent, and neither section applies.
+//!
+//! Both hosts also carry `SendConfirmedEmail`, which sends with no review at
+//! all. It exists for the one surface an agent session reads prompts from
+//! that has nothing to review in - a channel or document thread - and the
+//! toolset is the same everywhere, so each section says when it is the right
+//! tool: in the session prompt, when the context block names a thread as the
+//! prompt's origin; in chat, never.
 
 use crate::types::StaticPrompt;
 
@@ -22,28 +29,46 @@ static INSTRUCTIONS: &str = r##"- User tools are tools that must be executed by 
   edit, and send — writing the email inline in chat does none of that and is wrong. Drafting and
   sending are the same tool: it always creates a draft for the user to confirm before anything is
   sent, so use it even when the user only wants a draft.
+
+- `SendConfirmedEmail` sends immediately, with no composer. It is for conversation threads that
+  have no composer, and this chat does, so never use it here: `SendEmail` and its composer are how
+  the user confirms an email in chat.
 "##;
 
 static INTENT: &str = "The model treats user tools as composer-confirmed: a PendingUserExecution \
 result means the user still has to finish the call, and email drafting or sending always goes \
-through the SendEmail tool rather than inline text in the chat.";
+through the SendEmail tool rather than inline text in the chat - never through SendConfirmedEmail, \
+which is for surfaces without a composer.";
 
 /// The user-tools prompt section for composer-capable chat hosts.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
 
 static SESSION_INSTRUCTIONS: &str = r##"- `SendEmail` and `CreateCalendarEvent` are reviewed by the user before they run. Calling one opens a review card in the session, the turn waits while the user edits, confirms or declines, and the tool then returns what happened: the sent email or created event, or "Rejected". Nothing is pending afterwards and there is no chat composer; do not tell the user to confirm anything, and do not ask for confirmation in prose before calling the tool - the review card is the confirmation.
 
-- IMPORTANT: When the user asks you to draft, write, compose, or send an email (or reply to one),
-  you MUST use the `SendEmail` tool to produce it. NEVER write the email body as plain text in your
-  reply. The review card is a real email composer the user can edit before it sends; inline text
-  does none of that and is wrong. Drafting and sending are the same tool: the user decides in the
-  card whether it goes out.
+- IMPORTANT: When the user asks you to draft, write, compose, or send an email (or reply to one)
+  from the session view, you MUST use the `SendEmail` tool to produce it. NEVER write the email
+  body as plain text in your reply. The review card is a real email composer the user can edit
+  before it sends; inline text does none of that and is wrong. Drafting and sending are the same
+  tool: the user decides in the card whether it goes out.
+
+- Some prompts reach you from a channel or document thread rather than the session view; the
+  context block says so when they do. Nobody is looking at the session, so a review card would
+  wait unseen and `AskUser` would ask a question nobody sees. The thread is the answer surface:
+  ask there, in prose. For an email from a thread, write the email out in your reply - recipients,
+  subject, body - and ask whether to send it, then end your turn. When the user replies approving
+  it, call `SendConfirmedEmail` with the same email and their approving message quoted verbatim
+  in `userConfirmation`. Never call `SendConfirmedEmail` without that reply, never paraphrase or
+  invent it, and never use it from the session view, where `SendEmail`'s review card is the
+  confirmation.
 "##;
 
 static SESSION_INTENT: &str = "The model treats user tools as reviewed in the turn: the call \
 opens a review card, waits for the user, and returns the outcome - so it never describes a \
 pending composer, never asks for confirmation in prose first, and drafts or sends email through \
-SendEmail rather than inline text.";
+SendEmail rather than inline text. When the context block says the prompt came from a channel or \
+document thread, it instead describes the email in prose there, asks whether to send it, and on \
+the user's approving reply calls SendConfirmedEmail quoting that reply - never AskUser, never a \
+review card nobody is watching.";
 
 /// The user-tools prompt section for an agent session, whose in-process
 /// agent finishes user tools in the turn through a review elicitation.

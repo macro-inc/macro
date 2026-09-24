@@ -193,6 +193,36 @@ mod tests {
     }
 
     #[test]
+    fn session_tool_use_prompt_routes_thread_prompts_to_prose_and_the_confirmed_send() {
+        // A prompt read out of a channel or document thread has no review
+        // card anyone is watching: the model asks in the thread, then sends
+        // on the user's reply through SendConfirmedEmail, quoting it.
+        let session = SESSION_TOOL_USE_PROMPT.to_string();
+        assert!(session.contains("channel or document thread"));
+        assert!(session.contains("context block says so"));
+        assert!(session.contains("`SendConfirmedEmail`"));
+        assert!(session.contains("quoted verbatim"));
+        assert!(session.contains("`userConfirmation`"));
+        assert!(session.contains("`AskUser`"));
+        assert!(session.contains("never use it from the session view"));
+    }
+
+    #[test]
+    fn chat_prompt_names_the_confirmed_send_only_to_rule_it_out() {
+        // The chat host has the same toolset and a composer, so the direct
+        // tool is visible there and must be steered away from; the direct
+        // prompt's hosts do not register it and say nothing about it.
+        let chat = TOOL_USE_PROMPT.to_string();
+        assert!(chat.contains("`SendConfirmedEmail`"));
+        assert!(chat.contains("never use it here"));
+        assert!(
+            !DIRECT_TOOL_USE_PROMPT
+                .to_string()
+                .contains("SendConfirmedEmail")
+        );
+    }
+
+    #[test]
     fn tool_use_prompt_also_carries_document_content_link_rules() {
         // The in-app prompt should keep the same guidance so behavior doesn't
         // diverge between surfaces.

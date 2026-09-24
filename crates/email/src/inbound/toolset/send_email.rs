@@ -111,8 +111,6 @@ where
         service_context: ServiceContext<EmailToolContext<T, G, E>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        println!("CALL SEND EMAIL {:?}", request_context);
-
         let acting_user = MacroUserIdStr((*request_context.user_id).clone());
         let link = service_context.resolve_link(acting_user.clone()).await?;
 
