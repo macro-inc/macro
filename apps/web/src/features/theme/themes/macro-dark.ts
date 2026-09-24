@@ -1,26 +1,29 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ThemeV3 } from '../types/themeTypes';
 
-/** Neutral dark surfaces with a true-black base and amber accent. */
+/** Near-black structural surfaces with a restrained neutral depth ramp and green accent. */
 export const macroDarkTheme = {
   id: 'Macro Dark',
   name: 'Macro Dark',
   version: 3,
   mode: 'dark',
   colorTokens: {
-    'surface-0': 'oklch(0 0 21deg)',
-    'surface-1': 'oklch(0.18 0 21deg)',
-    'surface-2': 'oklch(0.23 0 21deg)',
-    'surface-3': 'oklch(0.25 0 21deg)',
-    'surface-4': 'oklch(0.28 0 21deg)',
+    'surface-0': 'oklch(0.17 0 21deg)',
+    'surface-1':
+      'color-mix(in oklch, var(--color-surface-0) 94%, var(--color-content-0))',
+    'surface-2':
+      'color-mix(in oklch, var(--color-surface-0) 90%, var(--color-content-0))',
+    'surface-3':
+      'color-mix(in oklch, var(--color-surface-0) 86%, var(--color-content-0))',
+    'surface-4':
+      'color-mix(in oklch, var(--color-surface-0) 82%, var(--color-content-0))',
     'content-0': 'oklch(1 0 21deg)',
     'content-1': 'oklch(0.83 0 21deg)',
     'content-2': 'oklch(0.75 0 21deg)',
     'content-3': 'oklch(0.63 0 21deg)',
     'content-4': 'oklch(0.55 0 21deg)',
-    edge: 'oklch(0.28 0 21deg)',
-    'edge-muted': 'oklch(0.25 0 21deg)',
-    accent: 'oklch(0.75 0.2 59deg)',
+    edge: 'var(--color-surface-4)',
+    'edge-muted': 'var(--color-surface-2)',
+    accent: 'oklch(0.7 0.12 142deg)',
     red: 'oklch(0.75 0.2 25.331deg)',
     orange: 'oklch(0.75 0.2 47.604deg)',
     amber: 'oklch(0.75 0.2 70.08deg)',
@@ -44,10 +47,7 @@ export const macroDarkTheme = {
     'link-hover': 'var(--color-accent)',
     'link-visited': 'var(--color-accent)',
     page: 'var(--color-surface-0)',
-    // Full-frame mobile panels use the true-black base.
-    panel: isTouchDevice()
-      ? 'var(--color-surface-0)'
-      : 'var(--color-surface-1)',
+    panel: 'var(--color-surface-0)',
     dialog: 'var(--color-surface-2)',
     menu: 'var(--color-surface-2)',
     tooltip: 'var(--color-surface-2)',

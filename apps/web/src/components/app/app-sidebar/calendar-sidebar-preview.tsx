@@ -308,10 +308,10 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
               aria-label="New event"
               label="New event"
               tooltipPlacement="top"
-              variant="ghost"
+              variant="outline"
               size="icon-md"
               depth={4}
-              class="rounded-lg glass bg-surface"
+              class="rounded-lg bg-surface"
               onClick={() => openEventComposer()}
             >
               <PlusIcon class="size-4" />
@@ -321,10 +321,10 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
                 aria-label="Calendar settings"
                 label="Calendar settings"
                 tooltipPlacement="top"
-                variant="ghost"
+                variant="outline"
                 size="icon-md"
                 depth={4}
-                class="rounded-lg bg-surface shadow-menu ring ring-edge-muted"
+                class="rounded-lg bg-surface"
               >
                 <GearIcon class="size-4" />
               </Dropdown.Trigger>

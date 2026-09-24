@@ -57,7 +57,10 @@ export function SearchBar(props: SearchBarProps) {
   return (
     <Surface
       depth={2}
-      class={cn('h-10 w-full min-w-0 rounded-2xl text-ink', local.class)}
+      class={cn(
+        'h-10 w-full min-w-0 rounded-2xl text-ink input-active-outline',
+        local.class
+      )}
       data-search-bar=""
     >
       <TextField

@@ -777,6 +777,16 @@ html[data-theme-light='false'] {
   --glass-shadow-scale: 0.5;
 }
 
+/* A clear but quiet edge for composed input surfaces with an internal editor. */
+@utility input-active-outline {
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+
+  &:has(:is(input, textarea, [contenteditable]):focus) {
+    outline-color: color-mix(in oklch, var(--color-edge) 70%, var(--color-ink));
+  }
+}
+
 html[data-theme-light='true'] .glass-input {
   --glass-shadow-y: 4px;
   --glass-shadow-blur: 16px;
