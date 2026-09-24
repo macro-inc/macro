@@ -81,7 +81,10 @@ permission failures should display a failed tool call without a successful resul
   The built-in sandbox and paired macrod runtimes are not offered here.
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
-  when changing agents. **Create agent** stays pinned at the bottom of the dropdown
+  when changing agents. Unsent New conversation text and attachments also come
+  back after opening a session and returning, the same way channel replies persist
+  when switching channels. Sending or clearing the input removes the saved draft.
+  **Create agent** stays pinned at the bottom of the dropdown
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.
 - On Home and New conversation, selecting a coding agent expands the input even
