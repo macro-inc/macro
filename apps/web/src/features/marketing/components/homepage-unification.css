@@ -1,9 +1,14 @@
-.homepage-unification { position: relative; isolation: isolate; width: min(780px, calc(100% - 40px)); margin: 0 auto; padding: 80px 0 28px; color: var(--color-ink); }
+.homepage-unification { position: relative; isolation: isolate; overflow-x: clip; width: min(780px, calc(100% - 40px)); margin: 0 auto; padding: 80px 0 28px; color: var(--color-ink); }
 .homepage-unification .feature-flow { height: clamp(280px, 36vw, 370px); }
-.unification-copy { position: relative; max-width: 680px; margin: 58px auto 0; text-align: center; }
+.unification-copy { position: relative; max-width: 680px; margin: 72px auto 0; text-align: center; }
 .unification-copy h2, .unification-before { margin: 0; font-family: 'Roboto Slab Variable', display, serif; font-weight: 315; font-size: 48px; line-height: 1.12; letter-spacing: -.025em; }
 .unification-before { position: absolute; inset: 0 0 auto; visibility: hidden; }
 .unification-subtext { margin: 24px 0 0; font-size: 14px; line-height: 1.8; color: var(--color-ink-muted); }
+.unification-subtext-desktop { display: none; }
+@media (min-width: 768px) {
+  .unification-subtext-desktop { display: inline; }
+  .unification-subtext-mobile { display: none; }
+}
 .unification-travel { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .homepage-unification[data-motion=waiting] .feature-flow-node,
 .homepage-unification[data-motion=waiting] .feature-flow-core,
@@ -11,24 +16,41 @@
 .homepage-unification[data-motion=waiting] h2,
 .homepage-unification[data-motion=waiting] .unification-subtext { opacity: 0; }
 .homepage-unification[data-motion=scrubbing] .unification-before { visibility: visible; }
-/* Match the hero's 125% desktop scale with real layout dimensions, so native
-   scroll measurements and the traveling icon positions remain accurate. */
+/* Use layout dimensions, not a wrapper transform: the scroll animations measure
+   these nodes directly. Both window width and height constrain the artwork. */
 @media (min-width: 768px) {
-  .homepage-unification { width: min(975px, calc(100% - 40px)); padding: 100px 0 35px; }
-  .homepage-unification .feature-flow { height: 462.5px; }
-  .homepage-unification .feature-flow-core { width: 130px; height: 130px; }
-  .homepage-unification .feature-flow-core svg { width: 53.75px; height: 53.75px; }
-  .homepage-unification .feature-flow-icon { width: 95px; height: 95px; }
-  .homepage-unification .feature-flow-icon svg { width: 33.75px; height: 33.75px; }
-  .homepage-unification .feature-flow-node > span { top: calc(100% + 15px); font-size: 16.25px; }
-  .homepage-unification .feature-flow-halo { width: 525px; }
-  .unification-copy { max-width: 850px; margin-top: 72.5px; }
-  .unification-copy h2, .unification-before { font-size: 60px; }
-  .unification-subtext { margin-top: 30px; font-size: 17.5px; }
+  .homepage-unification { --graphic-unit: clamp(.72px, min(.095vw, .115svh), 1px); width: min(975px, calc(100% - 40px)); padding: calc(70 * var(--graphic-unit)) 0 35px; }
+  .unification-copy { max-width: 850px; margin-top: calc(72 * var(--graphic-unit)); }
+  .unification-copy h2, .unification-before { font-size: clamp(36px, min(4.5vw, 6.5svh), 60px); }
+  .unification-subtext { margin-top: clamp(20px, 3svh, 30px); font-size: clamp(14px, 1.4vw, 17.5px); }
 }
 @media(max-width: 639px) {
   .homepage-unification { padding: 60px 0 24px; }
-  .unification-copy { margin-top: 46px; }
+  .unification-copy { margin-top: 64px; }
   .unification-copy h2, .unification-before { font-size: 36px; }
   .unification-subtext { font-size: 13px; }
+}
+/* Earlier copy stays above icons traveling out of its section. */
+.homepage-unification { z-index: 2; }
+.unification-copy { z-index: 3; }
+
+/* Four staggered rows surround the logo. Reclaim the removed bottom row
+   without compressing the remaining icons or changing their travel paths. */
+.homepage-unification .feature-flow-expanded { width: min(100%, calc(780 * var(--graphic-unit, 1px))); height: max(360px, calc(460 * var(--graphic-unit, 1px))); margin-inline: auto; margin-bottom: calc(-90 * var(--graphic-unit, 1px)); }
+.homepage-unification .feature-flow-expanded .feature-flow-icon { width: calc(70 * var(--graphic-unit, 1px)); height: calc(70 * var(--graphic-unit, 1px)); }
+.homepage-unification .feature-flow-expanded .feature-flow-icon svg { width: calc(27 * var(--graphic-unit, 1px)); height: calc(27 * var(--graphic-unit, 1px)); }
+.homepage-unification .feature-flow-expanded .feature-flow-node > span { font-size: clamp(11px, calc(13 * var(--graphic-unit, 1px)), 13px); line-height: 1.3; top: calc(100% + 8px); }
+.homepage-unification .feature-flow-expanded .feature-flow-core { width: calc(100 * var(--graphic-unit, 1px)); height: calc(100 * var(--graphic-unit, 1px)); }
+.homepage-unification .feature-flow-expanded .feature-flow-core svg { width: calc(42 * var(--graphic-unit, 1px)); height: calc(42 * var(--graphic-unit, 1px)); }
+.homepage-unification .feature-flow-expanded .feature-flow-core { left: 50%; top: 49%; }
+.homepage-unification .feature-flow-expanded .feature-flow-halo { width: calc(400 * var(--graphic-unit, 1px)); opacity: .65; }
+@media (max-width: 767px) {
+  /* Clip the glow at the viewport edge, while keeping the artwork inset. */
+  .homepage-unification { width: 100%; padding-inline: 20px; }
+  .homepage-unification .feature-flow-expanded { height: clamp(340px, 65vw, 400px); margin-bottom: -66px; }
+  .homepage-unification .feature-flow-expanded .feature-flow-core { width: 66px; height: 66px; }
+  .homepage-unification .feature-flow-expanded .feature-flow-core svg { width: 33px; height: 33px; }
+  .homepage-unification .feature-flow-expanded .feature-flow-icon { width: 48px; height: 48px; }
+  .homepage-unification .feature-flow-expanded .feature-flow-icon svg { width: 21px; height: 21px; }
+  .homepage-unification .feature-flow-expanded .feature-flow-node > span { font-size: 10px; top: calc(100% + 10px); }
 }

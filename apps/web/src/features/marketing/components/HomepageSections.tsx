@@ -1,22 +1,37 @@
-import { type JSX, lazy, onCleanup, onMount, Show, Suspense } from 'solid-js';
-import { DocsAgentTeammateGraphic } from '../../../../marketing/src/app/components/featureGraphics/DocumentsGraphics';
-import { HomeIntroProof } from '../../../../marketing/src/app/components/sections/HomeIntroProof';
+import { type JSX, lazy, onCleanup, onMount, Show } from 'solid-js';
 import siteStyles from '../../../../marketing/src/app/main/index.css?inline';
+import { animateHomepageCta } from './animateHomepageCta';
+import { DeferredDemo, DemoPlaceholder } from './DeferredDemo';
+import { HomepageAgentLogos } from './HomepageAgentLogos';
+import { HomepageBlog } from './HomepageBlog';
 import {
   HomepageConversation,
   type HomepageMessage,
 } from './HomepageConversation';
+import { HomepageFeatureHeading } from './HomepageFeatureHeading';
 import { HomepageMention } from './HomepageMention';
-import { HomepageVersionHistory } from './HomepageVersionHistory';
+import { HomepageOpenSource } from './HomepageOpenSource';
+import { HomepageReassurance } from './HomepageReassurance';
+import { HomepageSidebar } from './HomepageSidebar';
+import { HomepageTestimonials } from './HomepageTestimonials';
 import './workspace-story.css';
 
-const HomepageTaskConversation = lazy(
-  () => import('./HomepageTaskConversation')
-);
-const HomepageEmailCompose = lazy(() => import('./HomepageEmailCompose'));
-const HomepageCollaborativeDoc = lazy(
-  () => import('./HomepageCollaborativeDoc')
-);
+const loadVersionHistory = () =>
+  import('./HomepageVersionHistory').then((module) => ({
+    default: module.HomepageVersionHistory,
+  }));
+const loadPullRequest = () => import('./HomepagePullRequest');
+const loadEmailCompose = () => import('./HomepageEmailCompose');
+const loadCollaborativeDoc = () => import('./HomepageCollaborativeDoc');
+const loadCrm = () => import('./HomepageCrm');
+const HomepageCrm = lazy(loadCrm);
+const loadSpreadsheet = () => import('./HomepageSpreadsheet');
+
+const HomepageVersionHistory = lazy(loadVersionHistory);
+const HomepagePullRequest = lazy(loadPullRequest);
+const HomepageEmailCompose = lazy(loadEmailCompose);
+const HomepageCollaborativeDoc = lazy(loadCollaborativeDoc);
+const HomepageSpreadsheet = lazy(loadSpreadsheet);
 
 const LaunchPlan = () => (
   <HomepageMention
@@ -26,12 +41,13 @@ const LaunchPlan = () => (
     href="#documents"
   />
 );
-const LaunchEmail = () => (
+
+const CustomersSheet = () => (
   <HomepageMention
-    kind="email"
-    label="Thursday’s launch"
-    description="Jacob → Dana · Launch confirmed for Thursday at 9 AM. The plan will follow."
-    href="#email"
+    kind="spreadsheet"
+    label="Customers to reach"
+    description="Top customers this month, compiled from PostHog. The list stays in the spreadsheet."
+    href="#spreadsheet"
   />
 );
 
@@ -41,40 +57,36 @@ const scopedStyles = siteStyles
   .replace(/@(font-face|property)[^{]*\{[^}]*\}/g, '')
   .replaceAll(':root', ':scope');
 
-function MarginNote(props: { children: JSX.Element }) {
-  return (
-    <aside
-      class="homepage-feature-note workspace-demo"
-      aria-label="About this feature"
-    >
-      <p class="homepage-enter">{props.children}</p>
-    </aside>
-  );
-}
-
 function Feature(props: {
   id: string;
-  label: string;
-  messages: readonly HomepageMessage[];
+  title: string;
+  description: string;
+  eyebrow?: JSX.Element;
+  messages?: readonly HomepageMessage[];
   children: JSX.Element;
-  reply?: readonly HomepageMessage[];
-  note?: string;
 }) {
   return (
-    <section class="homepage-feature" aria-label={props.label} id={props.id}>
-      <HomepageConversation messages={props.messages} />
+    <section
+      class="homepage-feature"
+      aria-labelledby={`${props.id}-title`}
+      id={props.id}
+    >
+      <HomepageFeatureHeading
+        id={`${props.id}-title`}
+        title={props.title}
+        description={props.description}
+      >
+        {props.eyebrow}
+      </HomepageFeatureHeading>
+      <Show when={props.messages}>
+        {(messages) => <HomepageConversation messages={messages()} />}
+      </Show>
       <div class="homepage-feature-visual">
         <div
           class={`homepage-feature-graphic homepage-enter homepage-feature-${props.id}`}
         >
           {props.children}
         </div>
-        <Show when={props.note}>
-          {(note) => <MarginNote>{note()}</MarginNote>}
-        </Show>
-      </div>
-      <div class="homepage-feature-reply">
-        <HomepageConversation messages={props.reply ?? []} />
       </div>
     </section>
   );
@@ -82,8 +94,10 @@ function Feature(props: {
 
 export function HomepageSections() {
   let root!: HTMLDivElement;
+  let appDestination!: HTMLDivElement;
 
   onMount(() => {
+    onCleanup(animateHomepageCta(root, appDestination));
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     const items = Array.from(
       root.querySelectorAll<HTMLElement>('.homepage-enter')
@@ -134,13 +148,13 @@ export function HomepageSections() {
       <style>{definitions}</style>
       <style>{`@scope (.homepage-sections) to (.workspace-demo) { ${scopedStyles} }`}</style>
       <div class="homepage-sections-inner">
-        <div class="homepage-compact-proof">
-          <HomeIntroProof />
-        </div>
+        <HomepageOpenSource>
+          <HomepageSidebar />
+        </HomepageOpenSource>
         <Feature
           id="email"
-          label="Sending the launch email"
-          note="A full email client, alongside your team’s conversations, documents, and tasks."
+          title="Email and chat"
+          description="A full email client, alongside your team’s conversations, documents, and tasks."
           messages={[
             {
               person: 'julia',
@@ -150,126 +164,169 @@ export function HomepageSections() {
               person: 'jacob',
               text: (
                 <>
-                  Yes. I’ll confirm the date, then we can put the plan together.
+                  <span class="homepage-person-mention">@Claude</span>, draft a
+                  follow-up email based on{' '}
+                  <HomepageMention
+                    kind="calendar"
+                    label="Demo Call Sep 14th"
+                    description="Jacob, Dana, and Julia · Product demo and next steps for Dana’s team."
+                    href="#email"
+                  />{' '}
+                  and{' '}
+                  <HomepageMention
+                    kind="call"
+                    label="Demo call transcript"
+                    description="Transcript of the September 14 demo with Dana · Team rollout, sales materials, and follow-up next steps."
+                    href="#email"
+                  />
+                  . Include the sales PDF and rollout doc, and cc Julia.
                 </>
               ),
-              reaction: { emoji: '👍', label: 'Thumbs up' },
             },
           ]}
         >
-          <Suspense
-            fallback={
-              <div class="homepage-compose-loading">Opening draft…</div>
-            }
+          <DeferredDemo
+            preload={loadEmailCompose}
+            fallback={<DemoPlaceholder label="Email draft preview" />}
           >
             <HomepageEmailCompose />
-          </Suspense>
+          </DeferredDemo>
         </Feature>
         <Feature
           id="documents"
-          label="Creating the shared launch plan"
-          note="Macro docs are collaborative, agent native, backed by CRDTs, and have version control."
+          title="Documents and tasks"
+          description="Write together, assign tasks, and link the context behind your work. Keep the plan and the work to ship it in one place."
           messages={[
             {
               person: 'jacob',
               text: (
                 <>
-                  Let’s put the owners and checklist in <LaunchPlan />. Julia,
-                  can you take the announcement? Gabriel, the invite check?
+                  Let’s put the plan, owners, and tasks in <LaunchPlan />.
+                  Julia, can you take the announcement? Gabriel, the invite
+                  check?
                 </>
               ),
             },
             {
               person: 'julia',
-              text: 'On it. I’m in the doc with Gabriel now.',
+              text: 'On it. I’ve linked the launch checklist so we can track it from the doc.',
             },
           ]}
         >
-          <Suspense
-            fallback={
-              <div class="homepage-compose-loading">
-                Opening shared document…
-              </div>
-            }
-          >
-            <HomepageCollaborativeDoc />
-          </Suspense>
+          <div id="tasks">
+            <DeferredDemo
+              preload={loadCollaborativeDoc}
+              fallback={
+                <DemoPlaceholder label="Collaborative document and tasks preview" />
+              }
+            >
+              <HomepageCollaborativeDoc />
+            </DeferredDemo>
+          </div>
+          <figure class="homepage-doc-history" id="version-control">
+            <figcaption>
+              <span>Every edit has a history.</span>
+              Compare changes and revisit earlier versions, whether the edits
+              came from a teammate or an agent.
+            </figcaption>
+            <DeferredDemo
+              preload={loadVersionHistory}
+              fallback={
+                <DemoPlaceholder label="Document version history preview" />
+              }
+            >
+              <HomepageVersionHistory />
+            </DeferredDemo>
+          </figure>
         </Feature>
         <Feature
-          id="agent-edits"
-          label="Editing the plan together"
-          note="People and agents edit the same document, using the conversation and linked sources as context."
+          id="coding-agents"
+          title="Agents and pull requests"
+          eyebrow={<HomepageAgentLogos />}
+          description="Bring your existing agent subs into channels and see the full agent trace inline through to PR."
+        >
+          <DeferredDemo
+            preload={loadPullRequest}
+            fallback={<DemoPlaceholder label="Agent session preview" />}
+          >
+            <HomepagePullRequest />
+          </DeferredDemo>
+        </Feature>
+        <Feature
+          id="spreadsheet"
+          title="Sheets and databases"
+          description="Live collaboration with humans and agents. Import your Google Sheets and Notion databases."
           messages={[
             {
-              person: 'julia',
+              person: 'gabriel',
               text: (
                 <>
-                  The old Friday date is still in <LaunchPlan />.{' '}
-                  <span class="homepage-person-mention">@Claude</span>, use{' '}
-                  <LaunchEmail /> to fix it. Keep our other edits.
+                  We should reach out personally to the people who already use
+                  Macro. <span class="homepage-person-mention">@Claude</span>,
+                  check PostHog and compile our top customers.
                 </>
               ),
             },
-          ]}
-          reply={[
             {
               person: 'claude',
-              text: 'Changed Friday to Thursday, 9 AM, to match the email. Your announcement and Gabriel’s checklist are untouched.',
-            },
-          ]}
-        >
-          <DocsAgentTeammateGraphic launchReview />
-        </Feature>
-        <Feature
-          id="version-control"
-          label="Reviewing the document history"
-          messages={[
-            {
-              person: 'jacob',
               text: (
                 <>
-                  Let me compare that with the previous version of{' '}
-                  <LaunchPlan /> before we send it.
+                  Checked PostHog. The most active accounts this month are in{' '}
+                  <CustomersSheet />.
                 </>
               ),
             },
           ]}
-          reply={[
+        >
+          <DeferredDemo
+            preload={loadSpreadsheet}
+            fallback={<DemoPlaceholder label="Spreadsheet preview" />}
+          >
+            <HomepageSpreadsheet />
+          </DeferredDemo>
+        </Feature>
+        <Feature
+          id="crm"
+          title="Sales and marketing"
+          description="CRM, outbound, and marketing automation. Connected across the customer lifecycle."
+          messages={[
             {
-              person: 'julia',
-              text: 'Date looks right now. I’ll try the invite as a new teammate before Dana gets it.',
-              reaction: { emoji: '👍', label: 'Thumbs up' },
+              person: 'valentina',
+              text: (
+                <>
+                  <span class="homepage-person-mention">@Claude</span>, update
+                  the CRM from{' '}
+                  <HomepageMention
+                    kind="call"
+                    label="Sales sync"
+                    description="Today’s sales call · Northwind requested a proposal, and Lumen signed."
+                    href="#crm"
+                  />
+                  . Northwind asked for a proposal, and Lumen signed. Move them
+                  to the right stages.
+                </>
+              ),
             },
           ]}
         >
-          <HomepageVersionHistory />
+          <DeferredDemo
+            preload={loadCrm}
+            fallback={<DemoPlaceholder label="CRM pipeline preview" />}
+          >
+            <HomepageCrm />
+          </DeferredDemo>
         </Feature>
-        <section
-          class="homepage-feature"
-          id="tasks"
-          aria-label="Turning the conversation into a task"
-        >
-          <div class="homepage-feature-visual">
-            <div class="homepage-feature-graphic homepage-enter">
-              <Suspense
-                fallback={
-                  <div class="homepage-compose-loading">Opening channel…</div>
-                }
-              >
-                <HomepageTaskConversation />
-              </Suspense>
-            </div>
-            <MarginNote>
-              A message can become a task. The owner, checklist, and agent
-              updates stay in the same conversation.
-            </MarginNote>
-          </div>
-        </section>
-        <div class="homepage-feature-end">
-          <a class="glass" href="/start">
-            Get started <span aria-hidden="true">→</span>
-          </a>
-        </div>
+        <HomepageTestimonials />
+        <HomepageBlog />
+        <footer class="homepage-feature-end workspace-demo">
+          <hr class="homepage-closing-rule" />
+          <div
+            ref={appDestination}
+            class="homepage-app-landing"
+            aria-hidden="true"
+          />
+          <HomepageReassurance />
+        </footer>
       </div>
     </div>
   );

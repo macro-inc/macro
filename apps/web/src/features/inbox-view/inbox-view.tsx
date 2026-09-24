@@ -3,7 +3,6 @@ import {
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
-import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
@@ -52,9 +51,6 @@ function HomeListPane(props: {
         showContent();
       }}
     >
-      <Show when={!isTouchDevice()}>
-        <ViewGettingStarted view="home" />
-      </Show>
       <Suspense fallback={<InboxFallback />}>
         <InboxList
           previewEntity={props.previewEntity}

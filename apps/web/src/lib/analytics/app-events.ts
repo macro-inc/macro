@@ -88,6 +88,12 @@ export type AppEvents = {
     index: number;
     state: 'viewed' | 'completed' | 'skipped';
   };
+  /** Final starting interests when Continue is pressed, including an empty selection. */
+  onboarding_v4_features_selected: {
+    features: string[];
+    feature_count: number;
+    source: 'public_onboarding' | 'app_onboarding';
+  };
   /** A connect-inbox row was clicked (OAuth may still be abandoned). */
   onboarding_v4_email_connect_clicked: { slot: string };
   /** An inbox finished linking while onboarding. */

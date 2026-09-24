@@ -1,0 +1,56 @@
+.homepage-testimonials {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 64px;
+  padding: 88px 0;
+  margin-top: 48px;
+  border-top: 1px solid var(--color-edge-muted);
+  text-align: center;
+}
+.homepage-testimonials figure { display: flex; flex-direction: column; margin: 0; }
+.homepage-testimonials blockquote {
+  margin: 0;
+  font-family: "Inter Variable", var(--font-sans);
+  font-weight: 400;
+  font-size: clamp(18px, 1.65vw, 22px);
+  line-height: 1.5;
+  letter-spacing: -.015em;
+  text-wrap: balance;
+}
+.homepage-testimonials figcaption { display: grid; gap: 8px; margin-bottom: 24px; font-family: "Inter Variable", var(--font-sans); font-size: 14px; line-height: 1.6; }
+.homepage-testimonials figcaption > :first-child { font-family: 'Roboto Slab Variable', serif; font-size: clamp(26px, 2.4vw, 32px); font-weight: 315; line-height: 1.2; letter-spacing: -.035em; color: var(--color-ink); }
+.homepage-testimonials figcaption > :last-child { color: var(--color-ink-muted); font-size: 14px; }
+.homepage-testimonials a { text-decoration: none; }
+.homepage-testimonials a:hover { text-decoration: underline; }
+.homepage-blog { padding: 40px 0 24px; border-top: 1px solid var(--color-edge-muted); }
+.homepage-blog > header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.homepage-blog h2 { font-family: 'Roboto Slab Variable', serif; font-size: clamp(26px, 3vw, 36px); font-weight: 315; letter-spacing: -.035em; text-wrap: balance; margin: 0; }
+.homepage-blog > header > a { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; font-size: 13px; color: var(--color-ink-muted); }
+.homepage-blog > header svg { width: 16px; height: 16px; }
+.homepage-blog-track { display: flex; list-style: none; padding: 0; margin: 0; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.homepage-blog-track::-webkit-scrollbar { display: none; }
+.homepage-blog-track > li { flex: 0 0 auto; min-width: 0; max-width: 100%; padding: 0 24px; border-left: 1px solid var(--color-edge-muted); scroll-snap-align: start; }
+.homepage-blog-track > li:first-child { padding-left: 0; border-left: 0; }
+.homepage-blog-track > li:last-child { padding-right: 0; }
+.homepage-blog-track a { display: flex; align-items: center; gap: 12px; min-height: 48px; text-decoration: none; color: inherit; }
+.homepage-blog-icon { --a0: var(--color-ink-muted); display: grid; flex: 0 0 22px; place-items: center; width: 22px; height: 22px; color: var(--color-ink-muted); }
+.homepage-blog-icon svg { width: 22px; height: 22px; }
+.homepage-blog h3 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Inter Variable', var(--font-sans); font-size: 16px; font-weight: 400; line-height: 24px; letter-spacing: -.015em; margin: 0; }
+.homepage-blog-track a:hover h3 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.homepage-blog-controls { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.homepage-blog-controls button { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--color-edge-muted); border-radius: 50%; background: transparent; color: var(--color-ink-muted); }
+.homepage-blog-controls button:disabled { opacity: .3; }
+.homepage-blog-controls button:hover:not(:disabled) { background: var(--color-hover); color: var(--color-ink); }
+.homepage-blog-controls svg { width: 18px; height: 18px; }
+.homepage-blog :focus-visible, .homepage-testimonials a:focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: -2px; }
+@media (max-width: 767px) {
+  .homepage-testimonials { grid-template-columns: 1fr; gap: 56px; padding: 56px 12px; margin-top: 32px; }
+  .homepage-testimonials figure:not(:first-child) { display: none; }
+}
+@media (max-width: 699px) {
+  .homepage-blog { padding-top: 44px; }
+  .homepage-blog > header { align-items: flex-start; gap: 20px; margin-bottom: 24px; }
+  .homepage-blog > header > a { margin-top: 8px; }
+  .homepage-blog-track > li { padding-inline: 20px; }
+  .homepage-blog h3 { font-size: 15px; }
+}

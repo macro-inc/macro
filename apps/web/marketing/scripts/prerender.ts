@@ -1,9 +1,9 @@
 /**
- * Build-time prerenderer (static-site generation, no browser).
+ * Build-time prerenderer (Solid SSR plus a browser snapshot of the public journey).
  *
  * Runs after `vite build` and `vite build -c vite.prerender.config.ts`:
- * renders every public route to HTML with Solid's renderToStringAsync and
- * writes it to `dist/<route>/index.html` (plus sitemap.xml and robots.txt).
+ * renders feature/blog routes with Solid's renderToStringAsync and
+ * writes them to `dist-site/<route>/index.html` (plus sitemap.xml and robots.txt).
  * The deployed S3 bucket then serves real, content-complete HTML to crawlers
  * and agents that don't execute JavaScript, while the client bundle still
  * boots and takes over in browsers (src/app/main/index.tsx clears #root
@@ -18,6 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Window as HappyWindow } from 'happy-dom';
 import type { PageSeo } from '../src/app/utils/utilSeo';
+import { prerenderJourney } from './prerenderJourney';
 
 // Scene modules parse their SVG sources with DOMParser at import time;
 // happy-dom (pure JS, no browser) provides it for the SSR render.
@@ -528,10 +529,30 @@ async function main(): Promise<void> {
 
 await main();
 
-// The public landing and /start share the resumable journey bundle.
-const journey = fs
-  .readFileSync(path.join(DIST_DIR, 'start.html'), 'utf8')
-  .replace(/<title>.*?<\/title>/, buildSeoTagsHtml(JOURNEY_SEO).join('\n'));
-fs.writeFileSync(path.join(DIST_DIR, 'index.html'), journey);
+// Keep the homepage and resumable signup flow distinct for crawlers.
+const journeyTemplate = fs.readFileSync(
+  path.join(DIST_DIR, 'start.html'),
+  'utf8'
+);
+function journeyHtml(seo: PageSeo, structuredData: string[] = []): string {
+  return journeyTemplate.replace(/<title>.*?<\/title>/, () =>
+    [...buildSeoTagsHtml(seo), ...structuredData].join('\n')
+  );
+}
+fs.writeFileSync(
+  path.join(DIST_DIR, 'index.html'),
+  journeyHtml(JOURNEY_SEO, buildJsonLd('/', JOURNEY_SEO, ''))
+);
+const start = journeyHtml({
+  ...JOURNEY_SEO,
+  path: '/start',
+  title: 'Get started with Macro',
+  noindex: true,
+});
 fs.mkdirSync(path.join(DIST_DIR, 'start'), { recursive: true });
-fs.writeFileSync(path.join(DIST_DIR, 'start/index.html'), journey);
+fs.writeFileSync(path.join(DIST_DIR, 'start/index.html'), start);
+fs.writeFileSync(path.join(DIST_DIR, 'start.html'), start);
+fs.writeFileSync(
+  path.join(DIST_DIR, 'index.html'),
+  await prerenderJourney(DIST_DIR)
+);

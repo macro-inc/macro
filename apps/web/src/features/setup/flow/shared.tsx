@@ -5,7 +5,7 @@ import { For, onCleanup, onMount } from 'solid-js';
 
 /** Where the flow persists its current step, so full-page OAuth round-trips
  * (adding a Gmail inbox, Stripe checkout aborts) resume where they left. */
-export const FLOW_STEP_STORAGE_KEY = 'onboarding-flow-step';
+export { ONBOARDING_FLOW_STEP_STORAGE_KEY as FLOW_STEP_STORAGE_KEY } from '../core/onboardingHandoff';
 
 /** Where the flow persists its `?next` deep link — the inbox-link OAuth
  * callback returns to bare /onboarding, which would otherwise drop it. */
@@ -118,31 +118,33 @@ export function SkipButton(props: {
   );
 }
 
+export const elevatedButtonStyle = {
+  '--glass-tint': 'var(--color-surface)',
+  background:
+    'linear-gradient(155deg, var(--color-ink) 35%, color-mix(in oklab, var(--color-ink) 72%, var(--color-surface)))',
+  'box-shadow':
+    'inset 0 2px 1px var(--color-ink), inset 0 -4px 3px color-mix(in oklab, var(--color-surface) 35%, transparent), 0 5px 0 color-mix(in oklab, var(--color-ink) 30%, var(--color-surface)), 0 10px 16px color-mix(in oklab, var(--color-surface) 80%, transparent)',
+};
+
 export function ContinueButton(props: {
   label?: string;
   disabled?: boolean;
   onClick: () => void;
 }) {
   return (
-    <div class="h-44 shrink-0">
-      <div class="pointer-events-none fixed inset-x-0 bottom-[max(100px,env(safe-area-inset-bottom))] z-30 flex justify-center">
+    <div class="mt-6 flex shrink-0 justify-center pb-3">
+      <div class="flex justify-center">
         <button
           type="button"
           aria-label={props.label ?? 'Continue'}
           title={props.label ?? 'Continue'}
           disabled={props.disabled}
           onClick={props.onClick}
-          class="glass pointer-events-auto flex min-h-20 min-w-48 max-w-[calc(100vw-48px)] items-center justify-center gap-6 rounded-full bg-ink px-8 py-5 text-lg font-medium text-surface after:p-[2px] focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-ink disabled:opacity-40"
-          style={{
-            '--glass-tint': 'var(--color-surface)',
-            background:
-              'linear-gradient(155deg, var(--color-ink) 35%, color-mix(in oklab, var(--color-ink) 72%, var(--color-surface)))',
-            'box-shadow':
-              'inset 0 2px 1px var(--color-ink), inset 0 -4px 3px color-mix(in oklab, var(--color-surface) 35%, transparent), 0 5px 0 color-mix(in oklab, var(--color-ink) 30%, var(--color-surface)), 0 10px 16px color-mix(in oklab, var(--color-surface) 80%, transparent)',
-          }}
+          class="glass flex min-h-14 min-w-44 max-w-full items-center justify-center gap-4 rounded-full bg-ink px-7 py-3.5 text-base font-medium text-surface after:p-[2px] focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-ink disabled:opacity-40"
+          style={elevatedButtonStyle}
         >
           <span>{props.label ?? 'Continue'}</span>
-          <ArrowRightIcon class="size-8 shrink-0" aria-hidden="true" />
+          <ArrowRightIcon class="size-5 shrink-0" aria-hidden="true" />
         </button>
       </div>
     </div>

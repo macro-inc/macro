@@ -1,65 +1,70 @@
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import {
   FEATURED_MCP_SERVERS,
-  type FeaturedMcpServer,
+  pipedreamAppAvailableInEnv,
 } from '@core/component/AI/constant/mcpServers';
-import { toast } from '@core/component/Toast/Toast';
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
-import {
-  createPipedreamCatalogConnect,
-  createPipedreamCatalogSearch,
-} from '@core/pipedream/catalog';
+import { createPipedreamCatalogSearch } from '@core/pipedream/catalog';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import { createMemo, createSignal, Show } from 'solid-js';
+import { IntegrationResults } from '../components/IntegrationResults';
+import { onboardingIntegrationEntries } from '../core/onboardingIntegrationCatalog';
+import type { OnboardingIntegration } from '../core/onboardingIntegrations';
 import {
-  useDeleteMcpServerMutation,
-  useMcpServersQuery,
-} from '@queries/mcp-servers';
-import {
-  useDeletePipedreamConnectionMutation,
-  usePipedreamConnectionsQuery,
-} from '@queries/pipedream-connectors';
-import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
-import { createEffect, createSignal, For, Show, Suspense } from 'solid-js';
-import { ToolTile } from '../components/ToolTile';
-import { createConnectorConnect } from '../useConnectorConnect';
-import type { OnboardingConnectorServerName } from './onboardingConnectorConfig';
-import { ONBOARDING_CONNECTORS } from './onboardingConnectorConfig';
-import { ContinueButton, SkipButton } from './shared';
+  ONBOARDING_CONNECTORS,
+  type OnboardingConnectorServerName,
+} from './onboardingConnectorConfig';
+import { ContinueButton } from './shared';
 
 export function ToolsStep(props: {
+  preview?: boolean;
   connectorNames: readonly OnboardingConnectorServerName[];
+  selected: readonly OnboardingIntegration[];
+  onSelectionChange: (items: OnboardingIntegration[]) => void;
   onContinue: () => void;
-  onSkip: () => void;
 }) {
-  const pipedream = usePipedreamMcpFlag();
+  const pipedream = props.preview ? () => true : usePipedreamMcpFlag();
   const hiddenSlugs = () =>
     new Set(
       ONBOARDING_CONNECTORS.filter(
-        (entry) => !props.connectorNames.includes(entry.serverName)
+        (entry) =>
+          !props.connectorNames.includes(entry.serverName) ||
+          !pipedreamAppAvailableInEnv(entry.key)
       ).map((entry) => entry.key)
     );
+  const toggle = (integration: OnboardingIntegration) => {
+    props.onSelectionChange(
+      props.selected.some((item) => item.id === integration.id)
+        ? props.selected.filter((item) => item.id !== integration.id)
+        : [...props.selected, integration]
+    );
+  };
   return (
-    <div class="flex flex-col gap-6">
-      <Suspense
+    <div class="flex flex-col gap-7">
+      <Show
+        when={pipedream()}
         fallback={
-          <p class="py-8 text-center text-sm text-ink-muted">
-            Loading your tools…
-          </p>
+          <FeaturedTools
+            hiddenSlugs={hiddenSlugs()}
+            selected={props.selected}
+            onToggle={toggle}
+          />
         }
       >
-        <Show
-          when={pipedream()}
-          fallback={<NativeTools connectorNames={props.connectorNames} />}
-        >
-          <CatalogTools hiddenSlugs={hiddenSlugs()} />
-        </Show>
-      </Suspense>
-      <p class="text-center text-xs leading-5 text-ink-muted">
-        Google email and calendar are managed in your connected accounts.
-      </p>
-      <SkipButton onClick={props.onSkip} />
-      <ContinueButton label="Can I trust it?" onClick={props.onContinue} />
+        <CatalogTools
+          preview={props.preview}
+          hiddenSlugs={hiddenSlugs()}
+          selected={props.selected}
+          onToggle={toggle}
+        />
+      </Show>
+      <ContinueButton
+        label={
+          props.selected.length
+            ? `Continue with ${props.selected.length} integration${props.selected.length === 1 ? '' : 's'}`
+            : 'Continue'
+        }
+        onClick={props.onContinue}
+      />
     </div>
   );
 }
@@ -69,240 +74,148 @@ function ToolSearch(props: {
   onInput: (value: string) => void;
 }) {
   return (
-    <label class="flex items-center gap-3 rounded-full border border-edge bg-input px-4 py-3 focus-within:ring-1 focus-within:ring-ink/30">
-      <SearchIcon class="size-4 shrink-0 text-ink-muted" />
+    <label class="flex items-center gap-3 rounded-full border border-edge bg-input px-5 py-4 shadow-sm focus-within:ring-1 focus-within:ring-ink/30">
+      <SearchIcon aria-hidden="true" class="size-5 shrink-0 text-ink/35" />
       <input
-        aria-label="Search tools"
-        placeholder="Search your tools…"
+        type="search"
+        aria-label="Search integrations and MCPs"
+        placeholder="Search integrations and MCPs"
         value={props.value}
         onInput={(event) => props.onInput(event.currentTarget.value)}
-        class="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-placeholder"
+        class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
       />
     </label>
   );
 }
 
-function NativeTools(props: {
-  connectorNames: readonly OnboardingConnectorServerName[];
-}) {
+interface PickerProps {
+  hiddenSlugs: ReadonlySet<string>;
+  selected: readonly OnboardingIntegration[];
+  onToggle: (integration: OnboardingIntegration) => void;
+}
+
+const featuredIntegrations: OnboardingIntegration[] = FEATURED_MCP_SERVERS.map(
+  (server) => ({ id: server.app_slug, name: server.server_name })
+);
+
+function FeaturedTools(props: PickerProps) {
   const [search, setSearch] = createSignal('');
-  const query = useMcpServersQuery({
-    refetchInterval: 4_000,
-    neverSuspend: true,
-  });
-  const servers = () =>
-    FEATURED_MCP_SERVERS.filter((server) => {
-      const configured = ONBOARDING_CONNECTORS.find(
-        (entry) => entry.serverName === server.server_name
-      );
-      return (
-        (!configured || props.connectorNames.includes(configured.serverName)) &&
-        server.server_name.toLowerCase().includes(search().trim().toLowerCase())
-      );
-    });
+  const entries = () =>
+    onboardingIntegrationEntries(
+      featuredIntegrations,
+      [],
+      props.hiddenSlugs,
+      search()
+    );
   return (
     <div class="flex flex-col gap-6">
       <ToolSearch value={search()} onInput={setSearch} />
-      <Show
-        when={!query.isError}
-        fallback={
-          <button
-            type="button"
-            onClick={() => void query.refetch()}
-            class="text-sm underline"
-          >
-            Couldn’t load connections. Try again.
-          </button>
-        }
+      <IntegrationResults
+        entries={entries()}
+        selected={props.selected}
+        onToggle={props.onToggle}
       >
-        <div class="grid grid-cols-3 gap-x-2 gap-y-5 sm:grid-cols-4">
-          <For each={servers()}>
-            {(server) => (
-              <NativeTool
-                server={server}
-                connected={(query.data ?? []).some(
-                  (entry) => entry.url === server.url
-                )}
-                authenticated={(query.data ?? []).some(
-                  (entry) => entry.url === server.url && entry.authenticated
-                )}
-                disabled={query.isPlaceholderData}
-              />
-            )}
-          </For>
-        </div>
-        <Show when={servers().length === 0}>
+        <Show when={!entries().length}>
           <p class="py-6 text-center text-sm text-ink-muted">
-            No tools match “{search()}”. Try another name.
+            No integrations match “{search()}”. Try another name.
           </p>
         </Show>
-      </Show>
+      </IntegrationResults>
     </div>
   );
 }
 
-function NativeTool(props: {
-  server: FeaturedMcpServer;
-  connected: boolean;
-  authenticated: boolean;
-  disabled: boolean;
-}) {
-  const analytics = useAnalytics();
-  let wasAuthenticated: boolean | undefined;
-  createEffect(() => {
-    if (props.disabled) return;
-    if (wasAuthenticated === false && props.authenticated) {
-      analytics.track('onboarding_v4_connector_connected', {
-        connector: props.server.server_name.toLowerCase(),
-      });
-    }
-    wasAuthenticated = props.authenticated;
-  });
-  const disconnect = useDeleteMcpServerMutation();
-  const connection = createConnectorConnect({
-    server: props.server,
-    connected: () => props.connected,
-    authenticated: () => props.authenticated,
-  });
-  return (
-    <ToolTile
-      name={props.server.server_name}
-      description={props.server.tagline}
-      icon={<props.server.icon />}
-      connected={props.authenticated}
-      busy={connection.busy() || disconnect.isPending}
-      disabled={props.disabled}
-      onConnect={() => void connection.connect()}
-      onDisconnect={() =>
-        disconnect.mutate(
-          { url: props.server.url },
-          {
-            onError: () =>
-              toast.failure(
-                `Couldn’t disconnect ${props.server.server_name}. Try again.`
-              ),
-          }
-        )
-      }
-    />
-  );
-}
-
-function CatalogTools(props: { hiddenSlugs: ReadonlySet<string> }) {
-  const connections = usePipedreamConnectionsQuery({
-    refetchInterval: 4_000,
-    neverSuspend: true,
-  });
+function CatalogTools(props: PickerProps & { preview?: boolean }) {
   const catalog = createPipedreamCatalogSearch(() => props.hiddenSlugs);
-  const [visibleCount, setVisibleCount] = createSignal(12);
-  const connected = (slug: string) =>
-    (connections.data ?? []).some((entry) => entry.app_slug === slug);
-  const entries = () => (catalog.query.isSuccess ? catalog.entries() : []);
+  let results: HTMLDivElement | undefined;
+  const entries = createMemo(() =>
+    onboardingIntegrationEntries(
+      featuredIntegrations,
+      (catalog.query.isSuccess || catalog.query.isFetchNextPageError
+        ? catalog.entries()
+        : []
+      ).map((entry) => ({
+        id: entry.app_slug,
+        name: entry.display_name,
+        iconUrl: entry.icon_url ?? undefined,
+      })),
+      props.hiddenSlugs,
+      catalog.searchInput()
+    )
+  );
+  const canLoadMore = () =>
+    !!catalog.query.hasNextPage &&
+    !catalog.query.isFetching &&
+    !catalog.query.isError &&
+    !catalog.query.isPlaceholderData &&
+    catalog.searchInput().trim() === catalog.search().trim();
+  let loadingMore = false;
+  const loadMore = async () => {
+    if (loadingMore || !canLoadMore()) return;
+    loadingMore = true;
+    try {
+      await catalog.query.fetchNextPage();
+    } finally {
+      loadingMore = false;
+    }
+  };
   return (
     <div class="flex flex-col gap-6">
       <ToolSearch
         value={catalog.searchInput()}
         onInput={(value) => {
-          setVisibleCount(12);
           catalog.onSearchInput(value);
+          results?.scrollTo({ top: 0 });
         }}
       />
-      <Show
-        when={!catalog.query.isError && !connections.isError}
-        fallback={
-          <button
-            type="button"
-            onClick={() => {
-              void catalog.query.refetch();
-              void connections.refetch();
-            }}
-            class="text-sm underline"
-          >
-            Couldn’t load tools. Try again.
-          </button>
-        }
+      <IntegrationResults
+        ref={(el) => {
+          results = el;
+        }}
+        entries={entries()}
+        selected={props.selected}
+        onToggle={props.onToggle}
+        canLoadMore={canLoadMore()}
+        onLoadMore={loadMore}
       >
-        <div class="grid grid-cols-3 gap-x-2 gap-y-5 sm:grid-cols-4">
-          <For each={entries().slice(0, visibleCount())}>
-            {(entry) => (
-              <CatalogTool
-                entry={entry}
-                connected={connected(entry.app_slug)}
-                disabled={connections.isPlaceholderData}
-              />
-            )}
-          </For>
-        </div>
+        <Show when={catalog.query.isError}>
+          <div class="flex flex-col items-center gap-3 py-6 text-center text-sm text-ink-muted">
+            <p>Couldn’t load the connector catalog.</p>
+            <Show when={props.preview}>
+              <a href="/app/login" class="underline underline-offset-4">
+                Sign in to browse all Pipedream connectors
+              </a>
+            </Show>
+            <button
+              type="button"
+              onClick={() =>
+                void (catalog.query.isFetchNextPageError
+                  ? catalog.query.fetchNextPage()
+                  : catalog.query.refetch())
+              }
+              class="underline underline-offset-4"
+            >
+              Try again
+            </button>
+          </div>
+        </Show>
         <Show when={catalog.query.isFetching}>
           <p role="status" class="text-center text-xs text-ink-muted">
-            Finding tools…
-          </p>
-        </Show>
-        <Show when={!catalog.query.isFetching && entries().length === 0}>
-          <p class="py-6 text-center text-sm text-ink-muted">
-            No tools found. Try another name.
+            Finding integrations…
           </p>
         </Show>
         <Show
-          when={entries().length > visibleCount() || catalog.query.hasNextPage}
-        >
-          <button
-            type="button"
-            disabled={catalog.query.isFetchingNextPage}
-            onClick={() => {
-              if (entries().length <= visibleCount())
-                void catalog.query.fetchNextPage();
-              setVisibleCount((value) => value + 12);
-            }}
-            class="self-center text-xs text-ink-muted underline underline-offset-4"
-          >
-            Show more tools
-          </button>
-        </Show>
-      </Show>
-    </div>
-  );
-}
-
-function CatalogTool(props: {
-  entry: PipedreamCatalogEntryResponse;
-  connected: boolean;
-  disabled: boolean;
-}) {
-  const analytics = useAnalytics();
-  const disconnect = useDeletePipedreamConnectionMutation();
-  const connection = createPipedreamCatalogConnect({
-    entry: () => props.entry,
-    onConnected: (entry) =>
-      analytics.track('onboarding_v4_connector_connected', {
-        connector: entry.app_slug,
-      }),
-  });
-  return (
-    <ToolTile
-      name={props.entry.display_name}
-      description={props.entry.description ?? undefined}
-      icon={
-        <PipedreamConnectorIcon
-          appSlug={props.entry.app_slug}
-          iconUrl={props.entry.icon_url}
-        />
-      }
-      connected={props.connected}
-      busy={connection.busy() || disconnect.isPending}
-      disabled={props.disabled}
-      onConnect={() => void connection.connect()}
-      onDisconnect={() =>
-        disconnect.mutate(
-          { app_slug: props.entry.app_slug },
-          {
-            onError: () =>
-              toast.failure(
-                `Couldn’t disconnect ${props.entry.display_name}. Try again.`
-              ),
+          when={
+            !catalog.query.isError &&
+            !catalog.query.isFetching &&
+            !entries().length
           }
-        )
-      }
-    />
+        >
+          <p class="py-6 text-center text-sm text-ink-muted">
+            No integrations found. Try another name.
+          </p>
+        </Show>
+      </IntegrationResults>
+    </div>
   );
 }

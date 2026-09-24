@@ -899,7 +899,7 @@ function PaletteRow(props: { row: MenuRow }) {
       class="mds-prow"
       style={{
         'background-color': props.row.active
-          ? 'color-mix(in srgb, var(--c1) 7%, transparent)'
+          ? 'color-mix(in srgb, var(--c1) 5%, transparent)'
           : 'transparent',
       }}
     >
@@ -929,8 +929,10 @@ function Palette(props: {
       class={`mds-palette${props.above ? ' up' : ''}`}
       style={{
         opacity: props.amount.toFixed(3),
-        // Rises out of the line it belongs to, whichever side of it it is on.
-        transform: `translateY(${((1 - props.amount) * (props.above ? 0.3 : -0.3)).toFixed(3)}em)`,
+        // Match MentionsMenu's fade/scale entrance, driven by the demo clock
+        // so pausing or seeking also holds the menu's transition.
+        transform: `translateY(${((1 - props.amount) * (props.above ? 2 : -2)).toFixed(3)}px) scale(${(0.96 + props.amount * 0.04).toFixed(4)})`,
+        'transform-origin': props.above ? 'bottom center' : 'top center',
         visibility: props.amount > 0.004 ? 'visible' : 'hidden',
       }}
     >
@@ -942,7 +944,9 @@ function Palette(props: {
             </Show>
             <span class="mds-phead">
               <span>{section.title}</span>
-              <span>View all ({section.count})</span>
+              <Show when={section.count > section.rows.length}>
+                <span>View all ({section.count})</span>
+              </Show>
             </span>
             <For each={section.rows}>{(row) => <PaletteRow row={row} />}</For>
           </>
@@ -981,7 +985,7 @@ const BEAM_W = 0.38;
 const BEAM_H = 0.98;
 const BEAM_PATH = 'M1.4 1.4H6.6V2.4H4.5V13.6H6.6V14.6H1.4V13.6H3.5V2.4H1.4Z';
 
-const Pointer = (p: { text?: boolean }) => (
+export const DocsDemoPointer = (p: { text?: boolean }) => (
   <Show
     when={p.text}
     fallback={
@@ -1491,10 +1495,14 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
         }
 
         .mds-palette {
-          background-color: color-mix(in srgb, var(--b1) 72%, var(--b0));
-          border: 1px solid color-mix(in srgb, var(--c4) 18%, transparent);
+          /* MentionsMenu's Surface depth=2 / bg-menu-glass and glass rim.
+             Marketing routes use the b/c theme ramp without app utilities. */
+          background-color: var(--color-menu-glass, color-mix(in oklch, var(--b2) 88%, transparent));
           border-radius: 0.72em;
-          box-shadow: var(--shadow-panel-lg);
+          box-shadow:
+            inset 0 1px 0 color-mix(in oklch, var(--c1) 6%, transparent),
+            inset 0 -1px 0 color-mix(in oklch, var(--b0) 40%, transparent),
+            0 14px 32px -22px rgb(0 0 0 / 0.55);
           box-sizing: border-box;
           display: block;
           left: 0;
@@ -1506,6 +1514,20 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
              and ellipsising it hides half of what the menu is claiming. */
           width: 21.5em;
           z-index: 6;
+        }
+        .mds-palette::after {
+          background: linear-gradient(135deg,
+            color-mix(in oklch, var(--c1) 13.5%, transparent) 0%,
+            transparent 24%, transparent 76%,
+            color-mix(in oklch, var(--c1) 9%, transparent) 100%);
+          border-radius: inherit;
+          content: '';
+          inset: 0;
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask-composite: exclude;
+          padding: 1px;
+          pointer-events: none;
+          position: absolute;
         }
         /* Opened over the line instead of under it. Same rule an editor
            follows near the foot of a viewport, and here it is what keeps the
@@ -1622,6 +1644,9 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
 
         @media (max-width: 699px) {
           .mds { --mds-body: 12.5px; padding: 1.44em 1.44em 1.12em; }
+          /* Skip the text-sized inline anchors while a menu is open so its
+             containing block is the full document line on small screens. */
+          .mds-run:has(.mds-palette), .mds-runtext:has(.mds-palette) { position: static; }
           /* Anchored to the line rather than to the @ down here, so the
              measure the menu must fit inside is the line's. max-width rather
              than width, because the inline width is the desktop one and a
@@ -1865,7 +1890,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
                                 top: `calc(100% + ${at().y.toFixed(3)}em)`,
                               }}
                             >
-                              <Pointer text={overText()} />
+                              <DocsDemoPointer text={overText()} />
                             </span>
                           );
                         })()}

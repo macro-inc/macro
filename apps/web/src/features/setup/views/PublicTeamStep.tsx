@@ -1,10 +1,11 @@
-import { createSignal, Index, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
+import { TeamSetup, TeamSetupFields } from '../components/TeamSetup';
+import { ContinueButton, isPlausibleEmail } from '../flow/shared';
 import {
-  ContinueButton,
-  FormInput,
-  isPlausibleEmail,
-  SkipButton,
-} from '../flow/shared';
+  PREFILL_CAP,
+  removeInviteSlot,
+  validInviteEmails,
+} from '../flow/teamInvites';
 
 const DRAFT_KEY = 'macro-public-team-draft';
 
@@ -15,109 +16,80 @@ export function PublicTeamStep(props: { onContinue: () => void }) {
       const value = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null');
       if (
         typeof value?.name === 'string' &&
-        typeof value?.invite === 'boolean' &&
         Array.isArray(value?.emails) &&
         value.emails.every((email: unknown) => typeof email === 'string')
       )
-        return value as { name: string; invite: boolean; emails: string[] };
+        return {
+          name: value.name as string,
+          emails: value.invite === false ? [''] : (value.emails as string[]),
+        };
     } catch {
       /* Storage can be unavailable. */
     }
-    return { name: '', invite: true, emails: ['', ''] };
+    return {
+      name: 'Northwind',
+      emails: ['alex@example.com', 'jordan@example.com', ''],
+    };
   })();
   const [name, setName] = createSignal(saved.name);
-  const [invite, setInvite] = createSignal(saved.invite);
   const [emails, setEmails] = createSignal<string[]>(saved.emails);
   const save = () => {
     try {
       localStorage.setItem(
         DRAFT_KEY,
-        JSON.stringify({ name: name(), invite: invite(), emails: emails() })
+        JSON.stringify({ name: name(), emails: emails() })
       );
     } catch {
       /* Keep the form usable without storage. */
     }
   };
   const invalid = () =>
-    invite() &&
     emails().some((email) => email.trim() && !isPlausibleEmail(email));
+  const tooManyInvites = () =>
+    validInviteEmails(emails(), undefined).length > PREFILL_CAP;
   return (
-    <div class="mx-auto flex max-w-md flex-col gap-6">
-      <header class="mb-3 text-center">
-        <h1 class="font-[Roboto_Slab_Variable] text-4xl font-[315] tracking-tight">
-          Better, together.
-        </h1>
-        <p class="mt-4 text-sm leading-6 text-ink-muted">
-          Create a shared space for your team.
-        </p>
-      </header>
-      <label class="flex flex-col gap-2 text-xs text-ink-muted">
-        Team name
-        <FormInput
-          id="public-team-name"
-          placeholder="Acme Inc."
-          value={name()}
-          onInput={(value) => {
+    <TeamSetup>
+      <div class="flex flex-col gap-4">
+        <TeamSetupFields
+          id="public-team"
+          name={name()}
+          emails={emails()}
+          onNameChange={(value) => {
             setName(value);
             save();
           }}
-        />
-      </label>
-      <label class="flex items-center gap-3 rounded-2xl border border-edge p-4 text-sm">
-        <input
-          type="checkbox"
-          class="size-4 accent-current"
-          checked={invite()}
-          onChange={(event) => {
-            setInvite(event.currentTarget.checked);
+          onEmailChange={(index, value) => {
+            setEmails((previous) =>
+              previous.map((entry, i) => (i === index ? value : entry))
+            );
             save();
           }}
-        />
-        Invite my team
-      </label>
-      <Show when={invite()}>
-        <div class="flex flex-col gap-3">
-          <Index each={emails()}>
-            {(email, index) => (
-              <FormInput
-                id={`public-teammate-${index}`}
-                label={`Teammate ${index + 1} email`}
-                type="email"
-                placeholder="teammate@company.com"
-                value={email()}
-                invalid={!!email().trim() && !isPlausibleEmail(email())}
-                onInput={(value) => {
-                  setEmails((previous) =>
-                    previous.map((entry, i) => (i === index ? value : entry))
-                  );
-                  save();
-                }}
-              />
-            )}
-          </Index>
-          <Show when={emails().length < 4}>
-            <button
-              type="button"
-              class="self-start text-sm text-ink-muted"
-              onClick={() => {
-                setEmails((previous) => [...previous, '']);
-                save();
-              }}
-            >
-              + Add teammate
-            </button>
+          onRemoveEmail={(index) => {
+            setEmails((previous) => removeInviteSlot(previous, index));
+            save();
+          }}
+          onAddEmail={() => {
+            setEmails((previous) => [...previous, '']);
+            save();
+          }}
+        >
+          <Show when={invalid()}>
+            <p role="alert" class="text-sm leading-6 text-failure">
+              Enter a valid email address for each teammate, or remove that row.
+            </p>
           </Show>
-        </div>
-      </Show>
-      <p class="text-xs leading-5 text-ink-extra-muted">
-        Save your team details here. No invitations are sent from this preview.
-      </p>
-      <SkipButton onClick={props.onContinue} />
-      <ContinueButton
-        label="Continue"
-        disabled={!name().trim() || invalid()}
-        onClick={props.onContinue}
-      />
-    </div>
+          <Show when={tooManyInvites()}>
+            <p role="alert" class="text-sm leading-6 text-failure">
+              Choose up to {PREFILL_CAP} teammates to invite during setup.
+            </p>
+          </Show>
+        </TeamSetupFields>
+        <ContinueButton
+          label="Finish preview"
+          disabled={!name().trim() || invalid() || tooManyInvites()}
+          onClick={props.onContinue}
+        />
+      </div>
+    </TeamSetup>
   );
 }

@@ -1,5 +1,6 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
+import { hasOnboardingHandoff } from '@app/features/setup/core/onboardingHandoff';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { updateUserAuth } from '@core/auth';
@@ -158,14 +159,15 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   // form-factor default — the list view on mobile, where the desktop settings
   // split doesn't exist and the toast is the confirmation.
   const navigateAfterLink = (linkId: string) => {
+    const user = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
     // A first-run user connected this inbox from the onboarding flow:
     // return straight to it. Landing in mail settings would mount the app
     // shell mid-onboarding just for NewOnboardingRedirect to bounce back.
     if (
-      onboardingV4().enabled &&
-      !isMobile() &&
+      (hasOnboardingHandoff(sessionStorage, user?.id) ||
+        (onboardingV4().enabled && !isMobile())) &&
       !isNativeMobilePlatform() &&
-      userInfoQuery.data?.tutorialComplete === false
+      user?.tutorialComplete === false
     ) {
       navigate('/onboarding', { replace: true });
       return;

@@ -8,7 +8,7 @@ import HubSpotIcon from '@icon/onboarding-hubspot.svg';
 import SuperhumanIcon from '@icon/onboarding-superhuman.svg';
 import ZoomIcon from '@icon/onboarding-zoom.svg';
 import PlayIcon from '@phosphor/play.svg';
-import { For } from 'solid-js';
+import { For, type JSX } from 'solid-js';
 import { ContinueButton, SkipButton } from '../flow/shared';
 import { MODULE_LOGOS } from '../moduleLogos';
 import { StoryContinue } from './StoryContinue';
@@ -124,7 +124,10 @@ export function ContextScene(props: { unified?: boolean } = {}) {
   );
 }
 
-export function WelcomeStep(props: { onContinue: () => void }) {
+export function WelcomeStep(props: {
+  onContinue: () => void;
+  action?: JSX.Element;
+}) {
   return (
     <div class="ob-welcome relative isolate flex flex-col items-center gap-7 overflow-x-clip [overflow-clip-margin:200px] text-center md:[--welcome-scale:1.25] md:gap-[35px] md:[overflow-clip-margin:250px]">
       <ContextScene />
@@ -142,15 +145,17 @@ export function WelcomeStep(props: { onContinue: () => void }) {
           data-welcome-copy
           class="mx-auto max-w-sm text-sm leading-6 text-ink-muted md:max-w-[480px] md:text-[17.5px] md:leading-[30px]"
         >
-          Your conversations, documents, and tools, together in a workspace that
-          connects the dots.
+          Work together with your agents, with every conversation, document, and
+          tool in one place.
         </p>
       </div>
       <div
         data-welcome-copy
         class="flex w-full justify-center md:[&>div]:mt-[50px] md:[&>div]:pb-[25px] md:[&_button]:gap-2.5 md:[&_button]:px-[25px] md:[&_button]:py-[15px] md:[&_button]:text-[15px] md:[&_svg]:size-5"
       >
-        <StoryContinue label="Why?" onClick={props.onContinue} />
+        {props.action ?? (
+          <StoryContinue label="Get started" onClick={props.onContinue} />
+        )}
       </div>
     </div>
   );

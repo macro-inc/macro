@@ -28,6 +28,7 @@ import { PropertyEditorModal } from '@app/features/property/editor/PropertyEdito
 import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { MobileSettings } from '@app/features/settings/MobileSettings';
+import { hasOnboardingHandoff } from '@app/features/setup/core/onboardingHandoff';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { GlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
 import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
@@ -310,7 +311,7 @@ function CollapsedSidebarIncomingCallWidget(props: {
 }
 
 /**
- * Sends first-time desktop users into the onboarding flow at /onboarding.
+ * Sends first-time desktop users and explicit web signups to /onboarding.
  * Fires from anywhere in the app (marketing SSO lands on /app, not /login),
  * but never off auth/full-screen routes — /onboarding itself included.
  */
@@ -321,13 +322,16 @@ function NewOnboardingRedirect() {
   const onboardingV4 = useOnboardingV4Flag();
 
   createEffect(() => {
-    if (!onboardingV4().enabled || isMobile() || isNativeMobilePlatform()) {
-      return;
-    }
-    const data = userInfoQuery.data;
+    if (isNativeMobilePlatform()) return;
+    const data = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
+    if (
+      !hasOnboardingHandoff(sessionStorage, data.id) &&
+      (!onboardingV4().enabled || isMobile())
+    )
+      return;
     if (AUTH_URLS.includes(location.pathname)) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite):
     // /setup carries it as ?next and its finish() returns there instead of

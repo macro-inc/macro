@@ -38,7 +38,9 @@
     "fix": "bunx --bun biome lint --write",
     "clean": "bun scripts/clean-env.js",
     "knip": "bunx --bun knip",
-    "build:site": "vite build -c marketing/vite.config.ts && vite build -c marketing/vite.prerender.config.ts && bun marketing/scripts/prerender.ts",
+    "build:site": "vite build -c marketing/vite.config.ts && vite build -c marketing/vite.prerender.config.ts && bun marketing/scripts/prerender.ts && bun marketing/scripts/verify-seo.ts",
+    "check:seo:live": "bun marketing/scripts/verify-seo-live.ts",
+    "check:seo": "bun marketing/scripts/verify-seo.ts",
     "build:all": "bun run build && bun run build:site"
   },
   "dependencies": {

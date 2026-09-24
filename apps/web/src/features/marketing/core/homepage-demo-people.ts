@@ -4,6 +4,7 @@ import gabriel from '../../../../marketing/src/assets/people/gabriel.webp';
 import jacob from '../../../../marketing/src/assets/people/jacob-work.webp';
 import julia from '../../../../marketing/src/assets/people/julia.webp';
 import teo from '../../../../marketing/src/assets/people/teo.webp';
+import valentina from '../../../../marketing/src/assets/people/valentina.webp';
 
 /** Local participants in the homepage's launch example. */
 export const homepagePeople = {
@@ -24,6 +25,12 @@ export const homepagePeople = {
     shortName: 'Gabriel',
     initials: 'GB',
     photo: gabriel,
+  },
+  valentina: {
+    name: 'Valentina',
+    shortName: 'Valentina',
+    initials: 'V',
+    photo: valentina,
   },
   teo: { name: 'Teo', shortName: 'Teo', initials: 'T', photo: teo },
   claude: { name: 'Claude', shortName: 'Claude', initials: 'C', photo: claude },

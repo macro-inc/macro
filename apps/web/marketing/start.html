@@ -1,5 +1,24 @@
 <!doctype html>
 <html lang="en" data-public-site>
-  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Macro — One unified interface for all your work.</title></head>
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Macro — One unified interface for all your work.</title>
+    <link rel="icon" href="/macro-favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#000000" />
+    <style>html,body{margin:0;background:#000;color:#fff}</style>
+    <script>
+      if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq.disablePushState = true;
+        fbq('init', '639142540393286');
+        fbq('track', 'PageView');
+      }
+    </script>
+</head>
   <body><div id="root" style="height: 100dvh"></div><script type="module" src="../src/features/setup/preview.tsx"></script></body>
 </html>

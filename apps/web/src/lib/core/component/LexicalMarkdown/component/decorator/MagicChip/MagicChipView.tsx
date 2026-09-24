@@ -22,6 +22,7 @@ import {
   type Component,
   createMemo,
   createSignal,
+  type JSX,
   Match,
   Show,
   Switch,
@@ -188,6 +189,8 @@ const ChipHeader: Component<{
   preview?: string;
   onOpen?: () => void;
   onCollapse?: () => void;
+  pullRequest?: JSX.Element;
+  headerActions?: JSX.Element;
 }> = (props) => (
   <div
     class="flex min-h-9 items-center gap-1.5 border-b border-edge-muted py-1 pr-1.5 pl-3 text-xs leading-5"
@@ -227,12 +230,21 @@ const ChipHeader: Component<{
       </Show>
       <ActivityText activity={props.status} />
     </button>
-    <Show when={props.header?.pullRequestUrl}>
-      {(url) => (
-        <div class="flex min-w-0 max-w-[40%] justify-end overflow-hidden">
-          <MagicChipPullRequest url={url()} />
-        </div>
-      )}
+    <Show
+      when={props.pullRequest}
+      fallback={
+        <Show when={props.header?.pullRequestUrl}>
+          {(url) => (
+            <div class="flex min-w-0 max-w-[40%] justify-end overflow-hidden">
+              <MagicChipPullRequest url={url()} />
+            </div>
+          )}
+        </Show>
+      }
+    >
+      <div class="flex min-w-0 max-w-[40%] justify-end overflow-hidden">
+        {props.pullRequest}
+      </div>
     </Show>
     <Show when={props.onCollapse}>
       <Button
@@ -259,6 +271,7 @@ const ChipHeader: Component<{
     >
       <ArrowUpRight />
     </Button>
+    {props.headerActions}
   </div>
 );
 
@@ -347,6 +360,12 @@ export const MagicChipView: Component<{
   answer?: MagicChipAnswer;
   onOpen?: () => void;
   onCollapse?: () => void;
+  /** Host-supplied PR link for surfaces that already own the entity data. */
+  pullRequest?: JSX.Element;
+  /** Host-owned actions at the end of the header. */
+  headerActions?: JSX.Element;
+  /** Open a host preview instead of expanding the answer in place. */
+  onExpand?: () => void;
 }> = (props) => {
   // Memoized: read from many places per flush, once per streamed chunk.
   const asking = createMemo(() =>
@@ -405,7 +424,8 @@ export const MagicChipView: Component<{
   // Before there is anything to expand, the whole card leads to the session.
   const onAreaClick = (event: MouseEvent & { currentTarget: Element }) => {
     if (isControl(event.target, event.currentTarget)) return;
-    if (expandable()) setExpanded((open) => !open);
+    if (props.onExpand) props.onExpand();
+    else if (expandable()) setExpanded((open) => !open);
     else props.onOpen?.();
   };
 
@@ -429,11 +449,15 @@ export const MagicChipView: Component<{
           preview={preview()}
           onOpen={props.onOpen}
           onCollapse={props.onCollapse}
+          pullRequest={props.pullRequest}
+          headerActions={props.headerActions}
         />
         <div
           role="button"
           tabIndex={0}
-          aria-expanded={expandable() ? expanded() : undefined}
+          aria-expanded={
+            !props.onExpand && expandable() ? expanded() : undefined
+          }
           class="flex min-h-41 min-w-0 flex-col text-left"
           classList={{ 'h-41': !expanded() }}
           data-magic-chip-answer
@@ -443,7 +467,8 @@ export const MagicChipView: Component<{
             if (event.key !== 'Enter' && event.key !== ' ') return;
             event.preventDefault();
             event.stopPropagation();
-            if (expandable()) setExpanded((open) => !open);
+            if (props.onExpand) props.onExpand();
+            else if (expandable()) setExpanded((open) => !open);
             else props.onOpen?.();
           }}
         >

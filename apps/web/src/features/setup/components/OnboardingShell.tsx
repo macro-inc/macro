@@ -1,15 +1,24 @@
+import ArrowDownIcon from '@phosphor/arrow-down.svg';
+import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import { cn } from '@ui';
-import type { JSX } from 'solid-js';
+import { createMemo, createUniqueId, type JSX, Show } from 'solid-js';
 import { PageVignette } from '../../marketing/components/PageVignette';
 import { SiteHeader } from '../../marketing/components/SiteHeader';
 import { NoiseBackground } from '../flow/shared';
 
 export function OnboardingShell(props: {
   wide?: boolean;
+  landing?: boolean;
+  onBack?: () => void;
   children: JSX.Element;
   overlay?: JSX.Element;
+  heroFooter?: JSX.Element;
   below?: JSX.Element;
+  explainer?: JSX.Element;
 }) {
+  const detailsId = createUniqueId();
+  const explainer = createMemo(() => props.explainer);
+  let details!: HTMLDivElement;
   return (
     <div
       class="onboarding-flow relative size-full overflow-hidden bg-surface font-sans text-ink"
@@ -50,11 +59,49 @@ export function OnboardingShell(props: {
       }</style>
 
       <NoiseBackground />
-      <SiteHeader />
+      <Show
+        when={props.landing}
+        fallback={
+          <header class="site-header">
+            <Show
+              when={props.onBack}
+              fallback={
+                <a
+                  href="/"
+                  aria-label="Back to home"
+                  class="site-menu-trigger pointer-events-auto"
+                >
+                  <ArrowLeftIcon class="size-7" aria-hidden="true" />
+                </a>
+              }
+            >
+              <button
+                type="button"
+                aria-label="Back to previous step"
+                onClick={() => props.onBack?.()}
+                class="site-menu-trigger pointer-events-auto"
+              >
+                <ArrowLeftIcon class="size-7" aria-hidden="true" />
+              </button>
+            </Show>
+          </header>
+        }
+      >
+        <SiteHeader />
+      </Show>
 
       {/* Keep long connector catalogs and summaries inside the fixed frame. */}
-      <div class="relative z-10 size-full overflow-x-hidden overflow-y-auto overscroll-contain">
-        <div class="flex min-h-full items-center justify-center px-6 pb-10 pt-24">
+      <div
+        data-onboarding-scroll
+        class="relative z-10 size-full overflow-x-hidden overflow-y-auto overscroll-contain"
+      >
+        <div
+          data-onboarding-hero
+          class={cn(
+            'relative z-[3] flex min-h-full items-center justify-center px-6 pt-24',
+            explainer() ? 'pb-32' : props.heroFooter ? 'pb-24' : 'pb-10'
+          )}
+        >
           <div
             class={cn(
               'w-full obf-card transition-[max-width] duration-300 md:[&:has(.ob-welcome)]:max-w-[720px]',
@@ -63,10 +110,39 @@ export function OnboardingShell(props: {
           >
             {props.children}
           </div>
+          {props.heroFooter}
+          <Show when={explainer()}>
+            <button
+              type="button"
+              aria-controls={detailsId}
+              class="absolute bottom-[30px] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2 rounded-lg px-4 py-1 text-xs leading-5 text-ink-extra-muted transition-colors hover:text-ink-muted focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-ink-muted"
+              onClick={() => {
+                details
+                  .querySelector<HTMLElement>('h2')
+                  ?.focus({ preventScroll: true });
+                details.scrollIntoView({
+                  block: 'start',
+                  behavior: window.matchMedia(
+                    '(prefers-reduced-motion: reduce)'
+                  ).matches
+                    ? 'instant'
+                    : 'smooth',
+                });
+              }}
+            >
+              Read more
+              <ArrowDownIcon class="size-5" aria-hidden="true" />
+            </button>
+          </Show>
         </div>
+        <Show when={explainer()}>
+          <div ref={details} id={detailsId} data-onboarding-details>
+            {explainer()}
+          </div>
+        </Show>
         {props.below}
       </div>
-      <PageVignette />
+      {props.landing && <PageVignette />}
       {props.overlay}
     </div>
   );

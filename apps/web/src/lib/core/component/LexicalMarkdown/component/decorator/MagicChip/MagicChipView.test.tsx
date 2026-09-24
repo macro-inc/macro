@@ -127,6 +127,52 @@ describe('Magic Chip inside an editor', () => {
 });
 
 describe('MagicChipView', () => {
+  it('opens a host preview by click or keyboard without expanding the answer', () => {
+    const onExpand = vi.fn();
+    const { container } = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={{ kind: 'settled', markdown: 'Ready for review' }}
+        onExpand={onExpand}
+      />
+    ));
+    const area = answerArea(container)!;
+    fireEvent.click(area);
+    fireEvent.keyDown(area, { key: 'Enter' });
+    fireEvent.keyDown(area, { key: ' ' });
+    expect(onExpand).toHaveBeenCalledTimes(3);
+    expect(area.getAttribute('aria-expanded')).toBeNull();
+    expect(area.className).toMatch(/(^|\s)h-41(\s|$)/);
+  });
+
+  it('uses a host PR link without resolving a second link or opening the trace', () => {
+    const onPr = vi.fn();
+    const onExpand = vi.fn();
+    const { container } = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={{ kind: 'settled', markdown: 'Ready for review' }}
+        header={{
+          pullRequestUrl: 'https://github.com/macro-inc/macro/pull/482',
+        }}
+        pullRequest={
+          <button type="button" onClick={onPr}>
+            PR #482
+          </button>
+        }
+        onOpen={onOpen}
+        onExpand={onExpand}
+      />
+    ));
+    expect(
+      container.querySelector('[data-testid="chip-pull-request"]')
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'PR #482' }));
+    expect(onPr).toHaveBeenCalledOnce();
+    expect(onExpand).not.toHaveBeenCalled();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
   it('reserves the answer height and reads the activity in the header while working', () => {
     const { container } = render(() => (
       <MagicChipView

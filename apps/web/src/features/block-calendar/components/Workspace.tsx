@@ -5,7 +5,6 @@ import {
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
-import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
@@ -105,7 +104,6 @@ function WorkspaceContent() {
   return (
     <>
       <Header />
-      <ViewGettingStarted view="calendar" />
       <SidePanelSections />
 
       <SelectedEventDetails

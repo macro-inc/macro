@@ -12,8 +12,8 @@ export function HomepageFounderLetter() {
   let section!: HTMLElement;
   let figure!: HTMLElement;
   let line!: SVGPathElement;
-  let topNode!: SVGCircleElement;
-  let bottomNode!: SVGCircleElement;
+  let lowerLine!: SVGPathElement;
+  let lowerHost!: HTMLDivElement;
 
   onMount(() => {
     const scroller = section.parentElement!;
@@ -27,11 +27,28 @@ export function HomepageFounderLetter() {
         : Math.max(0, Math.min(1, (scroller.scrollTop - start) / distance));
       // The connection draws first, then reveals the quote. Native scrolling is
       // the only clock, and the complete text remains selectable and accessible.
-      topNode.style.opacity = `${phase(progress, 0, 0.18)}`;
       line.style.opacity = `${phase(progress, 0.04, 0.25)}`;
       line.style.strokeDashoffset = `${1 - phase(progress, 0.08, 0.62)}`;
-      bottomNode.style.opacity = `${phase(progress, 0.54, 0.72)}`;
       figure.style.opacity = `${phase(progress, 0.58, 0.96)}`;
+
+      const lowerRect = lowerHost.getBoundingClientRect();
+      const lowerTop =
+        lowerRect.top -
+        scroller.getBoundingClientRect().top +
+        scroller.scrollTop;
+      const lowerStart = lowerTop - scroller.clientHeight * 0.78;
+      const lowerDistance = Math.max(
+        1,
+        lowerRect.height + scroller.clientHeight * 0.08
+      );
+      const lowerProgress = reduced.matches
+        ? 1
+        : Math.max(
+            0,
+            Math.min(1, (scroller.scrollTop - lowerStart) / lowerDistance)
+          );
+      lowerLine.style.opacity = `${phase(lowerProgress, 0.04, 0.3)}`;
+      lowerLine.style.strokeDashoffset = `${1 - phase(lowerProgress, 0.08, 0.85)}`;
     };
     const measure = () => {
       const rect = section.getBoundingClientRect();
@@ -59,38 +76,54 @@ export function HomepageFounderLetter() {
     <section
       ref={section}
       aria-label="A note from our founder"
-      class="relative mx-auto w-[min(480px,calc(100%-48px))] pb-3 text-center text-sm leading-[1.8] font-normal text-ink-muted md:w-[min(600px,calc(100%-48px))] md:pb-[15px] md:text-[17.5px]"
+      class="homepage-founder-letter relative mx-auto w-[min(480px,calc(100%-48px))] text-center text-[13px] leading-[1.45] font-normal text-[#717171] md:w-[min(600px,calc(100%-48px))]"
       style={{ 'font-family': '"Inter Variable", var(--font-sans)' }}
     >
       <svg
         aria-hidden="true"
         viewBox="0 0 16 104"
-        class="mx-auto mb-6 h-[104px] w-4 overflow-visible text-ink-extra-muted md:mb-[30px] md:h-[130px] md:w-5"
+        class="homepage-founder-rule mx-auto mb-6 h-[104px] w-4 overflow-visible md:mb-[30px] md:h-[130px]"
         fill="none"
       >
-        <circle ref={topNode} cx="8" cy="6" r="2.5" stroke="currentColor" />
         <path
           ref={line}
-          d="M8 9V95"
+          d="M8 0V104"
           pathLength="1"
           stroke="currentColor"
           stroke-width="1"
+          vector-effect="non-scaling-stroke"
           stroke-dasharray="1"
           stroke-dashoffset="1"
         />
-        <circle ref={bottomNode} cx="8" cy="98" r="2.5" stroke="currentColor" />
       </svg>
       <figure ref={figure} class="m-0">
         <blockquote class="m-0">
           <p class="m-0">{LETTER}</p>
         </blockquote>
-        <figcaption class="mt-5 flex flex-col gap-0.5 text-xs leading-5 md:mt-[25px] md:gap-[2.5px] md:text-[15px] md:leading-[25px]">
+        <figcaption class="mt-5 flex flex-col gap-0.5 md:mt-[25px]">
           <span>Jacob Beckerman</span>
-          <span class="text-ink-extra-muted">
-            Co-Founder &amp; CEO at Macro
-          </span>
+          <span>Co-Founder &amp; CEO at Macro</span>
         </figcaption>
       </figure>
+      <div ref={lowerHost}>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 16 104"
+          class="homepage-founder-rule mx-auto mt-6 h-[104px] w-4 overflow-visible md:mt-[30px] md:h-[130px]"
+          fill="none"
+        >
+          <path
+            ref={lowerLine}
+            d="M8 0V104"
+            pathLength="1"
+            stroke="currentColor"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+            stroke-dasharray="1"
+            stroke-dashoffset="1"
+          />
+        </svg>
+      </div>
     </section>
   );
 }

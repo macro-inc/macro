@@ -1,10 +1,10 @@
 {
-  "include": ["src/**/*", "scripts/prerender*.ts", "scripts/prerender*.tsx"],
+  "include": ["src/**/*", "scripts/*.ts", "scripts/*.tsx"],
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
     "jsxImportSource": "solid-js",
     "moduleResolution": "bundler",
-    "types": ["vite-plugin-solid-svg/types-component-solid", "vite/client", "node"],
+    "types": ["vite-plugin-solid-svg/types-component-solid", "vite/client", "node", "bun"],
     "esModuleInterop": true,
     "isolatedModules": true,
     "module": "ESNext",
@@ -13,6 +13,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "strict": true,
+    "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
       "@animal/*": ["src/lib/animal/*"],

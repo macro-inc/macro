@@ -49,7 +49,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { AgentAvatar } from '../components/AgentGlyph';
+import { AgentRosterRow } from '../components/AgentRosterRow';
 import { type AgentKind, kindForHarness } from '../core/agent-kind';
 import { relativeAge } from '../core/format-age';
 import { BYOA_AGENTS, BYOA_DOCS_URL } from '../core/links';
@@ -481,52 +481,39 @@ function Rows(props: {
     >
       <For each={props.rows}>
         {(row) => (
-          <div class="arow">
-            <AgentAvatar
-              agent={{
-                id: row.id,
-                botId: row.id,
-                name: row.name,
-                avatarUrl: row.avatarUrl,
-              }}
-              coder={row.kind === 'coder'}
-            />
-            <div class="info">
-              <div class="line">
-                <span class="nm truncate">{row.name}</span>
-                <span class="tag truncate">@{row.handle}</span>
-                <span class={row.share === 'system' ? 'badge system' : 'badge'}>
-                  {row.share}
-                </span>
-              </div>
-              <p class="sub truncate">
-                {row.kind === 'coder' ? `${row.runtime} · ` : ''}
-                {row.model} · {row.channels}
-              </p>
-            </div>
-            <div class="acts">
-              <Show when={row.agent && row.canEdit}>
-                <button
-                  type="button"
-                  class="icon-btn"
-                  aria-label={`Edit ${row.name}`}
-                  onClick={() => row.agent && props.onEdit(row.agent)}
-                >
-                  <PencilIcon class="ph" />
-                </button>
-              </Show>
-              <Show when={row.agent && row.canDelete}>
-                <button
-                  type="button"
-                  class="icon-btn neg"
-                  aria-label={`Delete ${row.name}`}
-                  onClick={() => row.agent && props.onDelete(row.agent)}
-                >
-                  <TrashIcon class="ph" />
-                </button>
-              </Show>
-            </div>
-          </div>
+          <AgentRosterRow
+            id={row.id}
+            name={row.name}
+            handle={row.handle}
+            avatarUrl={row.avatarUrl}
+            coder={row.kind === 'coder'}
+            share={row.share}
+            detail={`${row.kind === 'coder' ? `${row.runtime} · ` : ''}${row.model} · ${row.channels}`}
+            actions={
+              <>
+                <Show when={row.agent && row.canEdit}>
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    aria-label={`Edit ${row.name}`}
+                    onClick={() => row.agent && props.onEdit(row.agent)}
+                  >
+                    <PencilIcon class="ph" />
+                  </button>
+                </Show>
+                <Show when={row.agent && row.canDelete}>
+                  <button
+                    type="button"
+                    class="icon-btn neg"
+                    aria-label={`Delete ${row.name}`}
+                    onClick={() => row.agent && props.onDelete(row.agent)}
+                  >
+                    <TrashIcon class="ph" />
+                  </button>
+                </Show>
+              </>
+            }
+          />
         )}
       </For>
     </Show>

@@ -5,6 +5,7 @@ import {
   useBlockOwner,
   useMaybeBlockName,
 } from '@core/block';
+import { DocumentCardHeader } from '@core/component/DocumentCardHeader';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
@@ -35,7 +36,7 @@ import {
 } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { debounce } from '@solid-primitives/scheduled';
-import { Card, cn, Dropdown, Item } from '@ui';
+import { Card, cn, Dropdown } from '@ui';
 import {
   $addUpdateTag,
   $createNodeSelection,
@@ -357,99 +358,91 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     blockParams: DocumentCardDecoratorProps['blockParams'];
   }) => {
     return (
-      <Card.Header class="shrink-0 py-2.5">
-        <Item class="grid grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2 border-0 p-0">
-          <Item.Icon class="col-start-1 row-start-1">
-            <Show
-              when={props.blockName === 'task'}
-              fallback={<ItemEntityIcon size="xs" />}
+      <DocumentCardHeader
+        icon={
+          <Show
+            when={props.blockName === 'task'}
+            fallback={<ItemEntityIcon size="xs" />}
+          >
+            <Suspense
+              fallback={
+                <LoadingSpinner class="size-4 animate-spin text-ink-muted" />
+              }
             >
-              <Suspense
-                fallback={
-                  <LoadingSpinner class="size-4 animate-spin text-ink-muted" />
-                }
-              >
-                <TaskPropertiesPreview
-                  taskId={props.item.id}
-                  taskName={props.item.name}
-                  previewProperties={documentProperties()}
-                  mode="status"
-                />
-              </Suspense>
+              <TaskPropertiesPreview
+                taskId={props.item.id}
+                taskName={props.item.name}
+                previewProperties={documentProperties()}
+                mode="status"
+              />
+            </Suspense>
+          </Show>
+        }
+        title={
+          <BlockLink
+            id={props.item.id}
+            blockOrFileName={props.blockName}
+            params={props.blockParams}
+          >
+            <span
+              role="link"
+              tabIndex={0}
+              class="wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                event.stopPropagation();
+                event.currentTarget.click();
+              }}
+            >
+              {props.item.name}
+            </span>
+          </BlockLink>
+        }
+        description={
+          <Show when={props.item.owner || props.item.updatedAt}>
+            <Show when={props.item.owner}>
+              {(owner) =>
+                getDisplayName(tryMacroId(owner())) ||
+                owner().replace('macro|', '')
+              }
             </Show>
-          </Item.Icon>
-          <Item.Content class="col-start-2 row-start-1">
-            <Item.Title>
-              <BlockLink
-                id={props.item.id}
-                blockOrFileName={props.blockName}
-                params={props.blockParams}
-              >
-                <span
-                  role="link"
-                  tabIndex={0}
-                  class="wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter') return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.currentTarget.click();
-                  }}
-                >
-                  {props.item.name}
-                </span>
-              </BlockLink>
-            </Item.Title>
-            <Show when={props.item.owner || props.item.updatedAt}>
-              <Item.Description class="text-left wrap-anywhere">
-                <Show when={props.item.owner}>
-                  {(owner) =>
-                    getDisplayName(tryMacroId(owner())) ||
-                    owner().replace('macro|', '')
-                  }
-                </Show>
-                <Show when={props.item.owner && props.item.updatedAt}>
-                  {' - '}
-                </Show>
-                <Show when={props.item.updatedAt}>
-                  {(updatedAt) => formatDate(updatedAt())}
-                </Show>
-              </Item.Description>
+            <Show when={props.item.owner && props.item.updatedAt}>{' - '}</Show>
+            <Show when={props.item.updatedAt}>
+              {(updatedAt) => formatDate(updatedAt())}
             </Show>
-          </Item.Content>
-          <Item.Actions class="col-start-3 row-start-1 h-5">
-            <Dropdown open={dropdownOpen()} onOpenChange={setDropdownOpen}>
-              <Dropdown.Trigger
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Document card actions"
-              >
-                <DotsThree />
-              </Dropdown.Trigger>
-              <Dropdown.Content mount={portalMount()}>
-                <Dropdown.Group>
-                  <Dropdown.Item onSelect={convertToMention}>
-                    <Minimize class="size-4 shrink-0" />
-                    <span class="flex-1 truncate">
-                      Convert to Inline Mention
-                    </span>
-                  </Dropdown.Item>
-                  <Dropdown.Item onSelect={handleCopy}>
-                    <Clipboard class="size-4 shrink-0" />
-                    <span class="flex-1 truncate">Copy Link</span>
-                  </Dropdown.Item>
-                </Dropdown.Group>
-                <Dropdown.Group>
-                  <Dropdown.Item onSelect={deleteCard}>
-                    <TrashSimple class="size-4 shrink-0" />
-                    <span class="flex-1 truncate">Delete</span>
-                  </Dropdown.Item>
-                </Dropdown.Group>
-              </Dropdown.Content>
-            </Dropdown>
-          </Item.Actions>
-        </Item>
-      </Card.Header>
+          </Show>
+        }
+        actions={
+          <Dropdown open={dropdownOpen()} onOpenChange={setDropdownOpen}>
+            <Dropdown.Trigger
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Document card actions"
+            >
+              <DotsThree />
+            </Dropdown.Trigger>
+            <Dropdown.Content mount={portalMount()}>
+              <Dropdown.Group>
+                <Dropdown.Item onSelect={convertToMention}>
+                  <Minimize class="size-4 shrink-0" />
+                  <span class="flex-1 truncate">Convert to Inline Mention</span>
+                </Dropdown.Item>
+                <Dropdown.Item onSelect={handleCopy}>
+                  <Clipboard class="size-4 shrink-0" />
+                  <span class="flex-1 truncate">Copy Link</span>
+                </Dropdown.Item>
+              </Dropdown.Group>
+              <Dropdown.Group>
+                <Dropdown.Item onSelect={deleteCard}>
+                  <TrashSimple class="size-4 shrink-0" />
+                  <span class="flex-1 truncate">Delete</span>
+                </Dropdown.Item>
+              </Dropdown.Group>
+            </Dropdown.Content>
+          </Dropdown>
+        }
+      />
     );
   };
 

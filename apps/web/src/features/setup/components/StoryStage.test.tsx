@@ -9,6 +9,7 @@ const originalAnimate = Object.getOwnPropertyDescriptor(
 );
 afterEach(() => {
   cleanup();
+  sessionStorage.removeItem('macro:onboarding-features');
   if (originalAnimate)
     Object.defineProperty(Element.prototype, 'animate', originalAnimate);
   else Reflect.deleteProperty(Element.prototype, 'animate');
@@ -32,15 +33,15 @@ function setup(options: { reduced?: boolean; initial?: StoryStep } = {}) {
   });
   const [step, setStep] = createSignal<StoryStep>(options.initial ?? 'welcome');
   const next = vi.fn(() => {
-    const order: StoryStep[] = ['welcome', 'vision', 'tools', 'security'];
-    setStep(order[Math.min(order.indexOf(step()) + 1, 3)]);
+    const order: StoryStep[] = ['welcome', 'vision', 'security', 'tools'];
+    setStep(order[Math.min(order.indexOf(step()) + 1, order.length - 1)]);
   });
   const view = render(() => (
     <StoryStage step={step()} onNext={next}>
       <button data-tool-tile="Linear">
         <span data-tool-surface>Linear</span>
       </button>
-      <button onClick={next}>Can I trust it?</button>
+      <button onClick={next}>Continue</button>
     </StoryStage>
   ));
   const settle = async () => {
@@ -62,28 +63,94 @@ describe('opening story', () => {
     expect(view.step()).toBe('welcome');
   });
 
-  it('follows Why → How → connections → trust without a timed security interlude', async () => {
+  it('keeps independent feature choices when returning from security', async () => {
     const view = setup({ reduced: true });
-    fireEvent.click(view.getByRole('button', { name: 'Why?' }));
-    expect(view.getByRole('heading', { level: 1 }).textContent).toContain(
-      'Your whole workspace'
-    );
-    fireEvent.click(view.getByRole('button', { name: 'How?' }));
-    expect(view.step()).toBe('tools');
-    fireEvent.click(view.getByRole('button', { name: 'Can I trust it?' }));
+    fireEvent.click(view.getByRole('button', { name: 'Get started' }));
+    expect(view.step()).toBe('vision');
+    fireEvent.click(view.getByRole('button', { name: 'Calendar' }));
+    fireEvent.click(view.getByRole('button', { name: 'Docs' }));
+    expect(
+      view
+        .getByRole('button', { name: 'Calendar' })
+        .getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(
+      view.getByRole('button', { name: 'Docs' }).getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(view.queryByRole('status')).toBeNull();
+    expect(
+      view.getByRole('heading', {
+        name: 'Which features do you want to try first?',
+      })
+    ).toBeTruthy();
+    fireEvent.click(view.getByRole('button', { name: 'Calendar' }));
+    expect(
+      view
+        .getByRole('button', { name: 'Calendar' })
+        .getAttribute('aria-pressed')
+    ).toBe('false');
+    expect(
+      view.getByRole('button', { name: 'Docs' }).getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(view.queryByRole('status')).toBeNull();
+    fireEvent.keyDown(view.getByRole('button', { name: 'Calendar' }), {
+      key: 'Escape',
+    });
+    expect(
+      view.getByRole('button', { name: 'Docs' }).getAttribute('aria-pressed')
+    ).toBe('true');
+    fireEvent.click(view.getByRole('button', { name: 'Continue' }));
+    expect(view.next).toHaveBeenLastCalledWith(['Docs']);
     expect(view.step()).toBe('security');
-    expect(view.getByText('ISO 27001')).toBeTruthy();
-    expect(view.getByRole('button', { name: 'Create my team' })).toBeTruthy();
+    expect(view.getByLabelText('ISO 27001')).toBeTruthy();
+    expect(
+      view.getByRole('link', { name: /Open source/ }).getAttribute('href')
+    ).toBe('https://github.com/macro-inc/macro');
+    expect(view.getByText('$30M+ raised')).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Continue' })).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'How?' })).toBeNull();
     expect(view.animate).not.toHaveBeenCalled();
     await Promise.resolve();
     expect(document.activeElement?.tagName).toBe('H1');
+    expect(view.next).toHaveBeenCalledTimes(2);
+    view.setStep('vision');
+    expect(
+      view.getByRole('button', { name: 'Docs' }).getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(
+      view
+        .getByRole('button', { name: 'Calendar' })
+        .getAttribute('aria-pressed')
+    ).toBe('false');
+  });
+
+  it('allows continuing without choosing features and tolerates invalid saved choices', () => {
+    sessionStorage.setItem('macro:onboarding-features', '{invalid');
+    const view = setup({ reduced: true, initial: 'vision' });
+    expect(view.getAllByRole('button', { pressed: false })).toHaveLength(15);
+    fireEvent.click(view.getByRole('button', { name: 'Continue' }));
+    expect(view.next).toHaveBeenLastCalledWith([]);
+    expect(view.step()).toBe('security');
+  });
+
+  it('restores only supported feature choices after a fresh mount', () => {
+    sessionStorage.setItem(
+      'macro:onboarding-features',
+      JSON.stringify(['Docs', 'Email', 'Docs', 'Unknown', null])
+    );
+    const view = setup({ reduced: true, initial: 'vision' });
+    expect(view.getAllByRole('button', { pressed: true })).toHaveLength(2);
+    expect(view.queryByRole('status')).toBeNull();
+    expect(view.next).not.toHaveBeenCalled();
+    fireEvent.click(view.getByRole('button', { name: 'Continue' }));
+    expect(view.next).toHaveBeenLastCalledWith(['Email', 'Docs']);
   });
 
   it('blocks repeated advances while moving and restores focus after settling', async () => {
     const view = setup();
-    const why = view.getByRole('button', { name: 'Why?' });
-    fireEvent.click(why);
-    fireEvent.click(why);
+    const start = view.getByRole('button', { name: 'Get started' });
+    fireEvent.click(start);
+    fireEvent.click(start);
     expect(view.next).toHaveBeenCalledOnce();
     expect(
       view.container.querySelector<HTMLElement>('[data-story-stage]')?.inert
@@ -105,20 +172,30 @@ describe('opening story', () => {
     expect(view.next).not.toHaveBeenCalled();
   });
 
+  it('lets the full-slide handoff own motion without starting a nested transition', () => {
+    const view = setup();
+    view.container.setAttribute('data-security-handoff', '');
+    view.setStep('security');
+    expect(view.getByText('$30M+ raised')).toBeTruthy();
+    expect(view.animate).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-security-transition]')).toBeNull();
+    expect(document.querySelector('[data-story-transition]')).toBeNull();
+  });
+
   it('cleans up interrupted transitions and can continue from the selected slide', async () => {
     const view = setup();
-    fireEvent.click(view.getByRole('button', { name: 'Why?' }));
+    fireEvent.click(view.getByRole('button', { name: 'Get started' }));
     await Promise.resolve();
     view.setStep('tools');
     expect(view.cancel).toHaveBeenCalled();
     await view.settle();
-    expect(view.getByRole('button', { name: 'Can I trust it?' })).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Continue' })).toBeTruthy();
     expect(document.querySelector('[data-story-transition]')).toBeNull();
   });
 
   it('removes the outgoing snapshot when unmounted before measurement', async () => {
     const view = setup();
-    fireEvent.click(view.getByRole('button', { name: 'Why?' }));
+    fireEvent.click(view.getByRole('button', { name: 'Get started' }));
     view.unmount();
     await Promise.resolve();
     expect(view.animate).not.toHaveBeenCalled();

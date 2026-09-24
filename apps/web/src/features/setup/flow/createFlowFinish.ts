@@ -57,13 +57,27 @@ export function createFlowFinish(options?: {
   // deep link so it survives the round-trip.
   createEffect(() => {
     const next = sanitizeNext(searchParams.next);
-    if (next) sessionStorage.setItem(FLOW_NEXT_STORAGE_KEY, next);
+    if (next) {
+      try {
+        sessionStorage.setItem(FLOW_NEXT_STORAGE_KEY, next);
+      } catch {
+        /* Keep in-memory navigation usable. */
+      }
+    }
   });
 
-  const afterTarget = () =>
-    sanitizeNext(searchParams.next) ??
-    sanitizeNext(sessionStorage.getItem(FLOW_NEXT_STORAGE_KEY)) ??
-    AFTER_SETUP_ROUTE;
+  const afterTarget = () => {
+    const current = sanitizeNext(searchParams.next);
+    if (current) return current;
+    try {
+      return (
+        sanitizeNext(sessionStorage.getItem(FLOW_NEXT_STORAGE_KEY)) ??
+        AFTER_SETUP_ROUTE
+      );
+    } catch {
+      return AFTER_SETUP_ROUTE;
+    }
+  };
 
   /**
    * Mark the flow complete and verify it stuck: NewOnboardingRedirect keys
@@ -94,19 +108,24 @@ export function createFlowFinish(options?: {
       toast.failure("Couldn't finish setup — please try again");
       return false;
     }
-    sessionStorage.removeItem(FLOW_STEP_STORAGE_KEY);
-    sessionStorage.removeItem(FLOW_NEXT_STORAGE_KEY);
+    try {
+      sessionStorage.removeItem(FLOW_STEP_STORAGE_KEY);
+      sessionStorage.removeItem(FLOW_NEXT_STORAGE_KEY);
+    } catch {
+      /* Server completion remains authoritative. */
+    }
     return true;
   };
 
   /** Finish on the free plan (or a skipped plan step) and enter the app. */
   const finishFree = async (planSkipped = false) => {
     if (finishing()) return;
+    const target = afterTarget();
     setFinishing(true);
     try {
       if (await completeFlow()) {
         trackCompleted('free', planSkipped);
-        navigate(afterTarget(), { replace: true });
+        navigate(target, { replace: true });
       }
     } finally {
       setFinishing(false);
@@ -116,8 +135,8 @@ export function createFlowFinish(options?: {
   /**
    * Hand the page to Stripe WITHOUT completing the flow: the onboarding
    * redirect plus the persisted step bring both checkout legs (success and
-   * cancel) back to the plan step, which finishes only once payment is
-   * confirmed. On failure the user stays on the plan step and can retry or
+   * cancel) back to the plan step, then onward to the final team step after
+   * payment is confirmed. On failure the user stays on the plan step and can retry or
    * pick free.
    */
   const startPremiumCheckout = async (tier: PaidPlanTier) => {
@@ -137,11 +156,12 @@ export function createFlowFinish(options?: {
   /** Finish after checkout confirmed payment (or an existing license). */
   const finishPremium = async () => {
     if (finishing()) return;
+    const target = afterTarget();
     setFinishing(true);
     try {
       if (await completeFlow()) {
         trackCompleted('premium', false);
-        navigate(afterTarget(), { replace: true });
+        navigate(target, { replace: true });
       }
     } finally {
       setFinishing(false);

@@ -18,9 +18,9 @@ import { ContinueButton, SkipButton } from './shared';
 const LICENSE_POLL_ATTEMPTS = 10;
 const LICENSE_POLL_INTERVAL_MS = 1_000;
 
-/** Free vs paid. The last step: free/skip finishes immediately; premium
+/** Free vs paid, before the final team step. Free/skip continues; premium
  * round-trips through Stripe checkout (the flow stays incomplete, so both
- * checkout legs land back here) and finishes once payment is confirmed.
+ * checkout legs land back here) and continues once payment is confirmed.
  * An account that signed up through a GTM invite link sees its free-month
  * offer in place of the picker; checkout applies the promotion server-side. */
 export function PlanStep(props: {

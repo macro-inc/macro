@@ -7,8 +7,9 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
+import { animateSecurityHandoff } from '../primitives/animateSecurityHandoff';
 import { SecurityStep, VisionStep } from './StorySteps';
-import { WelcomeStep } from './WelcomeSteps';
+import { WorkspaceIntro } from './WorkspaceIntro';
 
 export type StoryStep = 'welcome' | 'vision' | 'tools' | 'security';
 export const isStoryStep = (key: string): key is StoryStep =>
@@ -20,9 +21,10 @@ export const isStoryStep = (key: string): key is StoryStep =>
 /** Owns the measured handoffs between the four opening story slides. */
 export function StoryStage(props: {
   step: StoryStep;
-  onNext: () => void;
+  onNext: (features?: string[]) => void;
   children: JSX.Element;
   durationMs?: number;
+  welcomeAction?: JSX.Element;
 }) {
   const [shown, setShown] = createSignal(untrack(() => props.step));
   const [moving, setMoving] = createSignal(false);
@@ -30,12 +32,18 @@ export function StoryStage(props: {
   let disposeMotion: (() => void) | undefined;
   onCleanup(() => disposeMotion?.());
 
-  const advance = () => {
-    if (!moving()) props.onNext();
+  const advance = (features?: string[]) => {
+    if (!moving() && !stage.closest('[inert], [data-security-handoff]'))
+      props.onNext(features);
   };
 
   const transitionTo = (next: StoryStep) => {
     disposeMotion?.();
+    // The outer handoff snapshots the full slide before shell layout changes.
+    if (stage?.parentElement?.closest('[data-security-handoff]')) {
+      setShown(next);
+      return;
+    }
     if (
       !stage ||
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -45,6 +53,14 @@ export function StoryStage(props: {
         if (stage?.isConnected && shown() === next)
           stage.querySelector('h1')?.focus({ preventScroll: true });
       });
+      return;
+    }
+    if (shown() === 'welcome') {
+      disposeMotion = animateSecurityHandoff(
+        stage,
+        () => setShown(next),
+        'intro'
+      );
       return;
     }
     const bounds = stage.getBoundingClientRect();
@@ -110,6 +126,7 @@ export function StoryStage(props: {
       cancelled = true;
       animations.forEach((animation) => animation.cancel());
       overlay.remove();
+      stage.style.removeProperty('opacity');
       setMoving(false);
       window.removeEventListener('resize', finish);
     };
@@ -130,12 +147,13 @@ export function StoryStage(props: {
         element: Element,
         frames: Keyframe[],
         start = 0,
-        end = 1
+        end = 1,
+        easing = 'cubic-bezier(.22,1,.36,1)'
       ) => {
         const animation = element.animate(frames, {
           duration: duration * (end - start),
           delay: duration * start,
-          easing: 'cubic-bezier(.22,1,.36,1)',
+          easing,
           fill: 'both',
         });
         animations.push(animation);
@@ -238,7 +256,10 @@ export function StoryStage(props: {
     <div ref={stage} data-story-stage aria-busy={moving()} inert={moving()}>
       <Switch>
         <Match when={shown() === 'welcome'}>
-          <WelcomeStep onContinue={advance} />
+          <WorkspaceIntro
+            onContinue={() => advance()}
+            action={props.welcomeAction}
+          />
         </Match>
         <Match when={shown() === 'vision'}>
           <VisionStep onContinue={advance} />
@@ -249,15 +270,13 @@ export function StoryStage(props: {
               tabindex="-1"
               class="mx-auto max-w-lg text-center font-[Roboto_Slab_Variable] text-4xl font-[315] leading-[1.12] tracking-tight outline-none sm:text-5xl"
             >
-              Start with the tools
-              <br />
-              you already use.
+              Connect your tools.
             </h1>
             <div>{props.children}</div>
           </div>
         </Match>
         <Match when={shown() === 'security'}>
-          <SecurityStep onContinue={advance} />
+          <SecurityStep onContinue={() => advance()} />
         </Match>
       </Switch>
     </div>

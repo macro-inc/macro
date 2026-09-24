@@ -29,7 +29,6 @@ import { FilterSubmenu } from '@app/features/next-soup/soup-view/filters-bar/fil
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { SoupViewList } from '@app/features/next-soup/soup-view/soup-view';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   favoriteBlockName,
@@ -552,7 +551,6 @@ function DriveViewContent(props: DriveViewProps) {
             ) : undefined
           }
         >
-          <ViewGettingStarted view="documents" />
           <Suspense
             fallback={
               <div class="grid size-full place-items-center text-ink-muted">

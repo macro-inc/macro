@@ -31,8 +31,12 @@ selection is represented as a server-side OAuth connection.
 
 ## Build
 
-From `apps/web`, `bun run build:site` writes `dist-site/` with 31 prerendered pages,
-SEO metadata, blog routes, sitemap, original assets, and the journey entry.
+From `apps/web`, install the build browser once with `bunx playwright install chromium --only-shell`
+(on Linux CI, add `--with-deps`). `bun run build:site` writes `dist-site/` with
+32 prerendered pages, SEO metadata, blog routes, sitemap, original assets, and the
+separate noindex `/start` journey. Feature/blog pages use Solid SSR; the homepage
+is snapshotted from the actual UI in Chromium with external requests blocked.
+The build ends with the SEO migration checks.
 `bun run build:all` builds both the authenticated app and public site.
 
 For hosting, serve `dist-site/` at the origin root and the existing `dist/` at
@@ -45,3 +49,22 @@ Validate with `bun --bun ../../node_modules/typescript/bin/tsc -p marketing/tsco
 the public journey tests, `just check`, and browser comparisons against the live
 feature pages. Keep the prerender route list and development route mapping in
 sync when adding a page.
+
+
+## SEO migration gate
+
+See [the migration audit and cutover checklist](seo/MIGRATION.md). The committed
+`seo/migration-baseline.json` records the 30 indexable URLs and schema types on
+macro.com as of September 23, 2026. Keep this baseline when adding pages; do not
+remove a URL from it to silence a regression.
+
+- `bun run check:seo`: verify the built artifact, metadata, schema, sitemap,
+  internal links, signup noindex, and a 400 KB gzip initial-JavaScript budget.
+- `bun run check:seo:live https://candidate-host`: verify direct HTTP responses,
+  static HTML, canonicals, crawler files, and real 404s at the deployed edge.
+  `VITE_APP_BASE_URL` sets the expected canonical origin (default macro.com).
+
+The existing app deployment builds only the authenticated app. It does **not**
+publish `dist-site`. The public cutover must upload this directory to the current
+website origin while retaining the CDN's app, Ghost resources, and OIDC routing.
+Installing Chromium and running `build:site` are required in that deployment job.

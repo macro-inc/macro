@@ -9,6 +9,10 @@ import {
 } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import {
+  CompanyKanbanCardSurface,
+  CompanyKanbanColumn,
+} from '@companies/components/CompanyKanbanPrimitives';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import {
@@ -32,7 +36,6 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { getSoupEntityById } from '@queries/soup/normalized-cache';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { cn, Layer } from '@ui';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 
 /** Column key for companies without a Stage value. */
@@ -310,13 +313,23 @@ export function CompanyKanban(props: {
           <div class="flex h-full gap-3 p-3">
             <For each={columns()}>
               {(column, columnIndex) => (
-                <div
-                  class={cn(
-                    // Fallback sizing until the board is measured; after
-                    // that the snapping columnWidth() takes over.
-                    'flex h-full min-w-56 flex-1 flex-col rounded-xl bg-surface-2/30 transition-colors',
-                    dropTarget() === column.key && draggedId() && 'bg-accent/10'
-                  )}
+                <CompanyKanbanColumn
+                  label={column.label}
+                  highlighted={!!draggedId() && dropTarget() === column.key}
+                  icon={
+                    <Show
+                      when={column.key !== NO_STAGE_KEY}
+                      fallback={
+                        <CircleDashed class="size-3.5 text-ink-extra-muted" />
+                      }
+                    >
+                      <CrmStageIcon
+                        optionId={column.key}
+                        index={columnIndex()}
+                        class="size-3.5"
+                      />
+                    </Show>
+                  }
                   style={
                     columnWidth() !== undefined
                       ? { width: `${columnWidth()}px`, flex: 'none' }
@@ -345,60 +358,40 @@ export function CompanyKanban(props: {
                     if (id) moveToStage(id, column.key);
                   }}
                 >
-                  <div class="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-ink-muted">
-                    <Show
-                      when={column.key !== NO_STAGE_KEY}
-                      fallback={
-                        <CircleDashed class="size-3.5 text-ink-extra-muted" />
-                      }
-                    >
-                      <CrmStageIcon
-                        optionId={column.key}
-                        index={columnIndex()}
-                        class="size-3.5"
-                      />
-                    </Show>
-                    <span class="truncate">{column.label}</span>
-                  </div>
-                  <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden flex flex-col gap-2 px-2 pb-2">
-                    <For each={column.entities}>
-                      {(entity) => (
-                        // The context-menu trigger is h-full (sized for list
-                        // rows); an auto-height wrapper resolves that to the
-                        // card's content height instead of the column's.
-                        <div class="shrink-0">
-                          <SoupEntityContextMenu
+                  <For each={column.entities}>
+                    {(entity) => (
+                      // The context-menu trigger is h-full (sized for list
+                      // rows); an auto-height wrapper resolves that to the
+                      // card's content height instead of the column's.
+                      <div class="shrink-0">
+                        <SoupEntityContextMenu
+                          entity={entity}
+                          list={soup}
+                          selectedEntities={soup.selection.selected}
+                          viewContext={entityActionViewContext()}
+                        >
+                          <CompanyKanbanCard
                             entity={entity}
-                            list={soup}
-                            selectedEntities={soup.selection.selected}
-                            viewContext={entityActionViewContext()}
-                          >
-                            <CompanyKanbanCard
-                              entity={entity}
-                              draggable={canDragFrom(column.key)}
-                              dragging={draggedId() === entity.id}
-                              onDragStart={(e) => {
-                                e.dataTransfer?.setData(
-                                  'text/plain',
-                                  entity.id
-                                );
-                                if (e.dataTransfer) {
-                                  e.dataTransfer.effectAllowed = 'move';
-                                }
-                                setDraggedId(entity.id);
-                              }}
-                              onDragEnd={() => {
-                                setDraggedId(undefined);
-                                setDropTarget(undefined);
-                              }}
-                              onClick={(e) => openCompany(entity, e)}
-                            />
-                          </SoupEntityContextMenu>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </div>
+                            draggable={canDragFrom(column.key)}
+                            dragging={draggedId() === entity.id}
+                            onDragStart={(e) => {
+                              e.dataTransfer?.setData('text/plain', entity.id);
+                              if (e.dataTransfer) {
+                                e.dataTransfer.effectAllowed = 'move';
+                              }
+                              setDraggedId(entity.id);
+                            }}
+                            onDragEnd={() => {
+                              setDraggedId(undefined);
+                              setDropTarget(undefined);
+                            }}
+                            onClick={(e) => openCompany(entity, e)}
+                          />
+                        </SoupEntityContextMenu>
+                      </div>
+                    )}
+                  </For>
+                </CompanyKanbanColumn>
               )}
             </For>
           </div>
@@ -435,45 +428,35 @@ function CompanyKanbanCard(props: {
       : undefined;
 
   return (
-    <Layer depth={2}>
-      <div
-        draggable={props.draggable}
-        onDragStart={props.onDragStart}
-        onDragEnd={props.onDragEnd}
-        onClick={props.onClick}
-        class={cn(
-          'flex flex-col gap-1.5 rounded-lg bg-surface p-2.5 text-sm shadow-sm',
-          'hover:bg-hover hover:shadow-md transition-[background-color,box-shadow]',
-          props.dragging && 'opacity-40'
-        )}
-      >
-        <div class="flex items-center gap-2 min-w-0">
-          <div class="size-4 shrink-0">
-            <Entity.Icon entity={props.entity} />
-          </div>
-          <span class="ph-no-capture truncate font-semibold min-w-0">
-            <Entity.Title entity={props.entity} />
-          </span>
-          <Show when={ownerId()}>
-            {(id) => (
-              <span class="ml-auto shrink-0">
-                <UserIcon id={id()} size="sm" suppressClick />
-              </span>
-            )}
-          </Show>
-        </div>
-        <div class="flex items-center gap-2 min-w-0 text-xs text-ink-extra-muted">
-          <Show when={primaryDomain()}>
-            {(domain) => <span class="truncate min-w-0">{domain()}</span>}
-          </Show>
-          {/* Last interaction — updatedAt carries crm_companies.last_interaction. */}
-          <Show when={props.entity.updatedAt}>
-            {(ts) => (
-              <span class="ml-auto shrink-0">{formatTimestamp(ts())}</span>
-            )}
-          </Show>
-        </div>
-      </div>
-    </Layer>
+    <CompanyKanbanCardSurface
+      draggable={props.draggable}
+      dragging={props.dragging}
+      onDragStart={props.onDragStart}
+      onDragEnd={props.onDragEnd}
+      onClick={props.onClick}
+      icon={<Entity.Icon entity={props.entity} />}
+      title={<Entity.Title entity={props.entity} />}
+      owner={
+        <Show when={ownerId()}>
+          {(id) => (
+            <span class="ml-auto shrink-0">
+              <UserIcon id={id()} size="sm" suppressClick />
+            </span>
+          )}
+        </Show>
+      }
+      domain={
+        <Show when={primaryDomain()}>
+          {(domain) => <span class="truncate min-w-0">{domain()}</span>}
+        </Show>
+      }
+      updatedAt={
+        <Show when={props.entity.updatedAt}>
+          {(ts) => (
+            <span class="ml-auto shrink-0">{formatTimestamp(ts())}</span>
+          )}
+        </Show>
+      }
+    />
   );
 }

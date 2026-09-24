@@ -242,7 +242,18 @@ const createAnalytics = () => {
     }, '[Analytics] Failed to identify visitor:');
   };
 
-  return { pageView, track, trackMeta, trackGoogleConversion, identifyEmail };
+  const trackPosthog = (event: string, data?: Record<string, unknown>) => {
+    sendEvent('posthog', event, data);
+  };
+
+  return {
+    pageView,
+    track,
+    trackPosthog,
+    trackMeta,
+    trackGoogleConversion,
+    identifyEmail,
+  };
 };
 
 export const analytics = createAnalytics();

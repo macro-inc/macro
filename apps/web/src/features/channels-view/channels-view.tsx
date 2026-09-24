@@ -1,5 +1,4 @@
 import { ViewShell } from '@app/components/view-shell';
-import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
@@ -103,7 +102,6 @@ function ChannelsViewRoot() {
                       />
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
-                      <ViewGettingStarted view="channels" />
                       <Show
                         when={selectedChannel()}
                         fallback={

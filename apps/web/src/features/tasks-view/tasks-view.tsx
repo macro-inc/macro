@@ -3,7 +3,6 @@ import {
   useEntityDetailNavigationStack,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
-import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ListEntityMetadataQueryProvider } from '@entity';
@@ -90,7 +89,6 @@ function TasksViewRoot() {
                 <ViewShell.Header>
                   <TasksHeader onSearchEscape={() => listElement()?.focus()} />
                 </ViewShell.Header>
-                <ViewGettingStarted view="tasks" />
                 <ViewShell.Content>
                   <Suspense fallback={<TasksListFallback />}>
                     <TaskList ref={setListElement} />

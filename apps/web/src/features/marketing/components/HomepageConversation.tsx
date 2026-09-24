@@ -14,6 +14,7 @@ export type HomepageMessage = {
   person: HomepagePersonId;
   text: JSX.Element;
   reaction?: { emoji: string; label: string };
+  reply?: JSX.Element;
 };
 
 export function HomepagePersonAvatar(props: { person: HomepagePersonId }) {
@@ -107,6 +108,9 @@ function Message(props: { message: HomepageMessage }) {
             <span>{reacted() ? 2 : 1}</span>
           </Button>
         )}
+      </Show>
+      <Show when={props.message.reply}>
+        <div class="homepage-message-reply">{props.message.reply}</div>
       </Show>
     </li>
   );
