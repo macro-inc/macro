@@ -2,14 +2,14 @@
 //! message service.
 //!
 //! Two shapes, by the session's [`AgentKind`]: a coding agent's turn is a
-//! magic chip Lexical composes, a live portal into the session that renders
-//! the turn itself; a chat agent's turn is a pending reply - the channel
-//! markdown's pulsing await node - that is patched into the answer when the
-//! turn ends, the way the original Macro bot replied, and that says so
-//! while the turn waits on a question only the session view can answer. A
-//! chat agent's message leads with a link to its session in every state.
-//! The domain names the kind; nothing about any node's syntax leaves this
-//! module.
+//! magic chip, a live portal into the session that renders the turn itself;
+//! a chat agent's turn is a pending reply - the channel markdown's pulsing
+//! await node - that is patched into the answer when the turn ends, the way
+//! the original Macro bot replied, and that says so while the turn waits on
+//! a question only the session view can answer. A chat agent's message
+//! leads with a link to its session in every state. The domain names the
+//! kind, this module chooses the words, and Lexical composes every node:
+//! no node syntax is written here.
 
 #[cfg(test)]
 mod test;
@@ -24,7 +24,8 @@ use entity_access::domain::{
 };
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::{
-    AgentAnnouncementChip, AgentAnnouncementReplyTarget, AgentConnectionChip, AgentConnectionPrompt,
+    AgentAnnouncementChip, AgentAnnouncementReplyTarget, AgentChatReply, AgentChatReplyBody,
+    AgentConnectionChip, AgentConnectionPrompt,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
@@ -44,11 +45,6 @@ use crate::domain::model::{
 };
 use crate::domain::ports::SessionAnnouncer;
 
-/// A chat agent's message body while its turn runs, replaced by the answer.
-///
-/// Rendered by the channel markdown as the pulsing await node, like the
-/// original Macro bot's.
-const PENDING_REPLY: &str = r#"<m-await>{"text":"Thinking…","inline":true}</m-await>"#;
 const EMPTY_RESPONSE_FALLBACK: &str = "I wasn't able to come up with a response.";
 const CANCELLED_FALLBACK: &str = "I stopped before finishing that.";
 const ERROR_FALLBACK: &str = "Sorry — I ran into an error while responding.";
@@ -57,49 +53,35 @@ const ERROR_FALLBACK: &str = "Sorry — I ran into an error while responding.";
 /// reader gets there.
 const NEEDS_INPUT_LEAD: &str =
     "I have a question before I can continue — open the agent session to answer it:";
-/// What the session link reads as wherever the channel markdown is shown as
-/// text: notification excerpts, search, plain-text previews.
-const SESSION_LINK_LABEL: &str = "Agent session";
 
-/// A link to the session, as the channel markdown's agent-session mention
-/// node - the same syntax `<m-agent-session-mention>` mentions in a message
-/// use, so every surface already renders it.
+/// A chat agent's message in one state, for Lexical to compose: the link to
+/// its session, then `body`.
 ///
-/// The channel message view lifts a leading one out of the body onto the
-/// sender line, which is why it goes first and why every state of the reply
-/// carries it: a patch replaces the content wholesale, and a link only the
-/// pending reply had would vanish with the spinner.
-fn session_link(session_id: AgentSessionId) -> String {
-    format!(
-        r#"<m-agent-session-mention>{{"id":"{session_id}","label":"{SESSION_LINK_LABEL}"}}</m-agent-session-mention>"#
-    )
-}
-
-/// `body` behind the session link, as its own paragraph so the view can
-/// take the link and leave the body intact.
-fn with_session_link(session_id: AgentSessionId, body: &str) -> String {
-    format!("{}\n\n{body}", session_link(session_id))
-}
-
-/// A chat agent's message as first posted: the link, then the spinner.
-fn pending_reply(session_id: AgentSessionId) -> String {
-    with_session_link(session_id, PENDING_REPLY)
+/// The channel message view lifts a leading session link out of the body
+/// onto the sender line, and every state of the reply carries one: a patch
+/// replaces the content wholesale, and a link only the pending reply had
+/// would vanish with the spinner.
+fn chat_reply(session_id: AgentSessionId, body: AgentChatReplyBody) -> AgentChatReply {
+    AgentChatReply {
+        session_id: session_id.to_string(),
+        body,
+    }
 }
 
 /// What a chat agent's pending reply becomes. Never blank: a turn that said
 /// nothing is told as such rather than left as an empty message. A turn
 /// waiting on its question shows the question, and one resumed after the
 /// answer shows the spinner again.
-fn reply_content(session_id: AgentSessionId, outcome: ReplyOutcome) -> String {
-    let body = match outcome {
+fn reply_body(outcome: ReplyOutcome) -> AgentChatReplyBody {
+    let markdown = match outcome {
         ReplyOutcome::Answered(text) => text,
         ReplyOutcome::Empty => EMPTY_RESPONSE_FALLBACK.to_owned(),
         ReplyOutcome::Cancelled => CANCELLED_FALLBACK.to_owned(),
         ReplyOutcome::Failed => ERROR_FALLBACK.to_owned(),
         ReplyOutcome::NeedsInput { question } => format!("{NEEDS_INPUT_LEAD}\n\n{question}"),
-        ReplyOutcome::Resumed => PENDING_REPLY.to_owned(),
+        ReplyOutcome::Resumed => return AgentChatReplyBody::Pending,
     };
-    with_session_link(session_id, &body)
+    AgentChatReplyBody::Markdown { markdown }
 }
 
 /// Whether the thread should hear about a patch. The answer, and a question
@@ -238,10 +220,15 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                     &announcement_chip(&announcement),
                 )
                 .await
-                .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?
         } else {
-            pending_reply(announcement.session_id)
-        };
+            self.lexical
+                .compose_agent_chat_reply(&chat_reply(
+                    announcement.session_id,
+                    AgentChatReplyBody::Pending,
+                ))
+                .await
+        }
+        .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
         let posted = self
             .messages
             .post(
@@ -282,14 +269,23 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             )
             .await?;
         let message_id = resolution.message_id;
+        let notification_policy = patch_policy(&resolution.outcome);
+        let content = self
+            .lexical
+            .compose_agent_chat_reply(&chat_reply(
+                resolution.session_id,
+                reply_body(resolution.outcome),
+            ))
+            .await
+            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
         match self
             .messages
             .patch(
                 access,
                 message_id,
                 MessagePatch {
-                    notification_policy: patch_policy(&resolution.outcome),
-                    content: Some(reply_content(resolution.session_id, resolution.outcome)),
+                    notification_policy,
+                    content: Some(content),
                     ..Default::default()
                 },
             )

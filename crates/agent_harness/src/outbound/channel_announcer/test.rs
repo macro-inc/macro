@@ -77,19 +77,6 @@ fn reply_target_carries_the_originating_channel_message() {
     );
 }
 
-#[test]
-fn the_pending_reply_is_an_inline_await_node() {
-    assert!(PENDING_REPLY.starts_with("<m-await>"));
-    assert!(PENDING_REPLY.ends_with("</m-await>"));
-    let body: serde_json::Value = serde_json::from_str(
-        PENDING_REPLY
-            .trim_start_matches("<m-await>")
-            .trim_end_matches("</m-await>"),
-    )
-    .expect("the await node body is JSON");
-    assert_eq!(body["inline"], true);
-}
-
 const SESSION: agent_session::domain::model::AgentSessionId =
     agent_session::domain::model::AgentSessionId::TEST_A;
 
@@ -107,63 +94,78 @@ fn every_outcome() -> Vec<ReplyOutcome> {
     ]
 }
 
-/// The exact bytes the frontend's `I_AGENT_SESSION_MENTION` transformer
-/// matches and `buildAgentSessionMentionMarkdown` produces: the tag around
-/// one JSON object with `id` first.
-#[test]
-fn the_session_link_is_an_agent_session_mention_node() {
-    assert_eq!(
-        session_link(SESSION),
-        r#"<m-agent-session-mention>{"id":"00000000-0000-0000-0000-00000000000a","label":"Agent session"}</m-agent-session-mention>"#
-    );
-    let body: serde_json::Value = serde_json::from_str(
-        session_link(SESSION)
-            .trim_start_matches("<m-agent-session-mention>")
-            .trim_end_matches("</m-agent-session-mention>"),
-    )
-    .expect("the mention node body is JSON");
-    assert_eq!(body["id"], SESSION.to_string());
+fn markdown(body: AgentChatReplyBody) -> String {
+    match body {
+        AgentChatReplyBody::Markdown { markdown } => markdown,
+        AgentChatReplyBody::Pending => panic!("expected prose, got the spinner"),
+    }
 }
 
 /// A patch replaces the content wholesale, so a link only the pending
-/// reply carried would vanish with the spinner. Every state leads with it,
-/// on its own line, with the body following intact.
+/// reply carried would vanish with the spinner. Every state asks Lexical
+/// for the same session link ahead of its body.
 #[test]
-fn the_session_link_survives_every_patch() {
-    let link = session_link(SESSION);
-    let pending = pending_reply(SESSION);
-    assert_eq!(pending, format!("{link}\n\n{PENDING_REPLY}"));
+fn every_reply_names_its_session() {
     for outcome in every_outcome() {
-        let content = reply_content(SESSION, outcome.clone());
-        assert!(
-            content.starts_with(&format!("{link}\n\n")),
-            "{outcome:?}: {content}"
-        );
-        assert_eq!(
-            content.matches("<m-agent-session-mention>").count(),
-            1,
-            "{outcome:?}: one link, not one per patch"
-        );
+        let reply = chat_reply(SESSION, reply_body(outcome.clone()));
+        assert_eq!(reply.session_id, SESSION.to_string(), "{outcome:?}");
     }
     assert_eq!(
-        reply_content(SESSION, ReplyOutcome::Answered("Sure.".to_owned())),
-        format!("{link}\n\nSure.")
+        chat_reply(SESSION, AgentChatReplyBody::Pending),
+        AgentChatReply {
+            session_id: "00000000-0000-0000-0000-00000000000a".to_owned(),
+            body: AgentChatReplyBody::Pending,
+        }
+    );
+}
+
+/// The wire shape the lexical service validates: `kind` tags the body.
+#[test]
+fn the_reply_serializes_as_the_endpoint_reads_it() {
+    let pending = serde_json::to_value(chat_reply(SESSION, AgentChatReplyBody::Pending)).unwrap();
+    assert_eq!(
+        pending,
+        serde_json::json!({
+            "sessionId": "00000000-0000-0000-0000-00000000000a",
+            "body": { "kind": "pending" }
+        })
+    );
+    let answered = serde_json::to_value(chat_reply(
+        SESSION,
+        reply_body(ReplyOutcome::Answered("Sure.".to_owned())),
+    ))
+    .unwrap();
+    assert_eq!(
+        answered["body"],
+        serde_json::json!({ "kind": "markdown", "markdown": "Sure." })
+    );
+}
+
+/// The answer goes out as the agent wrote it.
+#[test]
+fn an_answer_is_posted_as_written() {
+    assert_eq!(
+        reply_body(ReplyOutcome::Answered("Sure.\n\n- done".to_owned())),
+        AgentChatReplyBody::Markdown {
+            markdown: "Sure.\n\n- done".to_owned()
+        }
     );
 }
 
 #[test]
 fn a_resolved_reply_is_never_blank() {
-    let link = session_link(SESSION);
     for outcome in every_outcome() {
-        let body = reply_content(SESSION, outcome.clone())
-            .trim_start_matches(link.as_str())
-            .trim()
-            .to_owned();
-        assert!(!body.is_empty(), "{outcome:?}");
+        if outcome == ReplyOutcome::Resumed {
+            continue;
+        }
+        assert!(
+            !markdown(reply_body(outcome.clone())).trim().is_empty(),
+            "{outcome:?}"
+        );
     }
     assert_ne!(
-        reply_content(SESSION, ReplyOutcome::Failed),
-        reply_content(SESSION, ReplyOutcome::Empty),
+        reply_body(ReplyOutcome::Failed),
+        reply_body(ReplyOutcome::Empty),
         "an error and a silence read differently"
     );
 }
@@ -172,15 +174,11 @@ fn a_resolved_reply_is_never_blank() {
 /// answered and what it is.
 #[test]
 fn a_waiting_reply_shows_the_question_and_points_at_the_session() {
-    let content = reply_content(
-        SESSION,
-        ReplyOutcome::NeedsInput {
-            question: "Which inbox should I send from?".to_owned(),
-        },
-    );
+    let content = markdown(reply_body(ReplyOutcome::NeedsInput {
+        question: "Which inbox should I send from?".to_owned(),
+    }));
     assert!(content.contains("Which inbox should I send from?"));
     assert!(content.contains("open the agent session"), "{content}");
-    assert!(content.contains(&session_link(SESSION)));
 }
 
 /// Once the question is cleared the turn is running again, and the reply
@@ -188,8 +186,8 @@ fn a_waiting_reply_shows_the_question_and_points_at_the_session() {
 #[test]
 fn a_resumed_reply_is_the_pending_reply_again() {
     assert_eq!(
-        reply_content(SESSION, ReplyOutcome::Resumed),
-        pending_reply(SESSION)
+        reply_body(ReplyOutcome::Resumed),
+        AgentChatReplyBody::Pending
     );
 }
 
