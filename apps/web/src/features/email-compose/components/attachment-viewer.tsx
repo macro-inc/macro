@@ -9,13 +9,6 @@ function mediaKind(mimeType: string): MediaItem['kind'] | undefined {
   return undefined;
 }
 
-function viewableKind(attachment: DraftFormAttachment) {
-  if (attachment.type === 'local') return mediaKind(attachment.file.type);
-  if (attachment.type === 'remote') return mediaKind(attachment.contentType);
-  // Forwarded attachments have no URL until the draft is sent.
-  return undefined;
-}
-
 /** Opens image and video attachment chips in the media viewer. */
 export function createAttachmentViewer() {
   const [item, setItem] = createSignal<MediaItem>();
@@ -27,23 +20,19 @@ export function createAttachmentViewer() {
   };
   onCleanup(release);
 
-  const open = (attachment: DraftFormAttachment, kind: MediaItem['kind']) => {
+  const open = (file: File, kind: MediaItem['kind']) => {
     release();
-    let src: string;
-    if (attachment.type === 'local') {
-      objectUrl = URL.createObjectURL(attachment.file);
-      src = objectUrl;
-    } else if (attachment.type === 'remote') {
-      src = attachment.url;
-    } else {
-      return;
-    }
-    setItem({ id: attachment.attachmentId ?? src, src, fullSrc: src, kind });
+    objectUrl = URL.createObjectURL(file);
+    setItem({ id: objectUrl, src: objectUrl, fullSrc: objectUrl, kind });
   };
 
+  // Only files added in this session have viewable bytes; saved draft and
+  // forwarded attachments carry an S3 key or provider id, not a URL.
   const onClickFor = (attachment: DraftFormAttachment) => {
-    const kind = viewableKind(attachment);
-    return kind ? () => open(attachment, kind) : undefined;
+    if (attachment.type !== 'local') return undefined;
+    const { file } = attachment;
+    const kind = mediaKind(file.type);
+    return kind ? () => open(file, kind) : undefined;
   };
 
   const Viewer = () => (
