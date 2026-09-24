@@ -33,6 +33,7 @@ const routes: SplitRoutes = {
       id: 'drive',
       path: 'drive',
       search: ['drive'],
+      state: z.record(z.string(), z.unknown()),
       children: [driveFolderRoute],
     }),
     {
@@ -67,10 +68,10 @@ function createLayout(): Layout {
       notify();
     },
 
-    open({ location, target, replace }) {
+    open({ target, replace, ...entry }) {
       const next = {
         splitId: `split-${++nextId}`,
-        location,
+        ...entry,
       };
       if (target === 'new-split' || !target) {
         entries = [...entries, next];
@@ -295,7 +296,7 @@ describe('split router', () => {
     router.navigate(splitId, 'folder/two');
     await settle();
 
-    expect(location.read()).toEqual({
+    expect(location.read()).toMatchObject({
       pathname: '/drive/folder/two',
       search: '?s0.drive.sort=created_at',
       hash: '',
@@ -891,6 +892,229 @@ describe('split router', () => {
     expect(routeParams(router.route(splitId)).folderId).toBe('two');
   });
 
+  it('restores distinct state for duplicate URLs across browser Back and Forward', async () => {
+    const location = createMemorySplitRouterLocation('/drive/folder/one');
+    const layout = createLayout();
+    const router = createSplitRouter({ layout, routes, location });
+    const splitId = layout.snapshot().entries[0]!.splitId;
+
+    router.navigate(splitId, '/drive/folder/one', {
+      state: { breadcrumb: 'first' },
+    });
+    await router.settled();
+    router.navigate(splitId, '/drive/folder/one', {
+      state: { breadcrumb: 'second' },
+    });
+    await router.settled();
+
+    const entries = router.history(splitId)!.entries;
+    expect(entries).toHaveLength(3);
+    expect(entries[1]?.key).not.toBe(entries[2]?.key);
+    expect(router.entry(splitId)?.state).toEqual({ breadcrumb: 'second' });
+
+    expect(location.back()).toBe(true);
+    await router.settled();
+    expect(router.entry(splitId)?.state).toEqual({ breadcrumb: 'first' });
+
+    expect(location.forward()).toBe(true);
+    await router.settled();
+    expect(router.entry(splitId)?.state).toEqual({ breadcrumb: 'second' });
+
+    router.navigate(splitId, '/drive/folder/one', {
+      replace: true,
+      state: { breadcrumb: 'replacement' },
+    });
+    await router.settled();
+    expect(location.history()).toHaveLength(3);
+    expect(router.entry(splitId)?.state).toEqual({
+      breadcrumb: 'replacement',
+    });
+    expect(location.back()).toBe(true);
+    await router.settled();
+    expect(location.forward()).toBe(true);
+    await router.settled();
+    expect(router.entry(splitId)?.state).toEqual({
+      breadcrumb: 'replacement',
+    });
+  });
+
+  it('snapshots cloneable state and drops state that cannot be cloned', async () => {
+    const location = createMemorySplitRouterLocation('/drive/folder/one');
+    const layout = createLayout();
+    const router = createSplitRouter({ layout, routes, location });
+    const splitId = layout.snapshot().entries[0]!.splitId;
+    const state = { breadcrumbs: ['one'] };
+
+    router.navigate(splitId, '/drive/folder/two', { state });
+    state.breadcrumbs.push('mutated');
+    await router.settled();
+
+    expect(router.entry(splitId)?.state).toEqual({ breadcrumbs: ['one'] });
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    router.navigate(splitId, '/drive/folder/three', {
+      state: { callback: () => undefined },
+    });
+    await router.settled();
+
+    expect(routeParams(router.route(splitId)).folderId).toBe('three');
+    expect(router.entry(splitId)?.state).toBeUndefined();
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it('passes parsed output to state updaters without reparsing it', async () => {
+    let parses = 0;
+    const stateRoute = defineRoute({
+      id: 'state',
+      path: 'state',
+      state: z.object({ value: z.string() }).transform(({ value }) => ({
+        value,
+        parseNumber: ++parses,
+      })),
+    });
+    const location = createMemorySplitRouterLocation('/state');
+    const layout = createLayout();
+    const router = createSplitRouter({
+      layout,
+      routes: { definitions: [stateRoute] },
+      location,
+    });
+    const splitId = layout.snapshot().entries[0]!.splitId;
+
+    router.navigate(splitId, '/state', { state: { value: 'first' } });
+    await router.settled();
+    expect(router.entry(splitId)?.state).toEqual({
+      value: 'first',
+      parseNumber: 1,
+    });
+
+    router.navigate(splitId, '/state', {
+      state: (current) => ({
+        value: `${(current as { value: string }).value}-second`,
+      }),
+    });
+    await router.settled();
+    expect(router.entry(splitId)?.state).toEqual({
+      value: 'first-second',
+      parseNumber: 2,
+    });
+  });
+
+  it('rejects local state that the destination route does not accept', async () => {
+    const location = createMemorySplitRouterLocation('/drive/folder/one');
+    const layout = createLayout();
+    const router = createSplitRouter({ layout, routes, location });
+    const splitId = layout.snapshot().entries[0]!.splitId;
+
+    expect(() =>
+      router.navigate(splitId, '/drive/folder/two', { state: 'invalid' })
+    ).toThrow('rejected navigation state');
+    expect(() =>
+      router.navigate(splitId, '/legacy/one', {
+        state: { unsupported: true },
+      })
+    ).toThrow('rejected navigation state');
+    expect(routeParams(router.route(splitId)).folderId).toBe('one');
+  });
+
+  it('validates navigation state against a middleware redirect destination', async () => {
+    const location = createMemorySplitRouterLocation('/drive/folder/one');
+    const layout = createLayout();
+    const router = createSplitRouter({
+      layout,
+      routes,
+      location,
+      middleware: [
+        ({ path, redirect }) =>
+          path === '/drive/folder/two' ? redirect('/legacy/two') : undefined,
+      ],
+    });
+    const splitId = layout.snapshot().entries[0]!.splitId;
+
+    router.navigate(splitId, '/drive/folder/two', {
+      state: { breadcrumb: 'two' },
+    });
+    await router.settled();
+
+    expect(rootRouteMatch(router.route(splitId))?.id).toBe('legacy');
+    expect(router.entry(splitId)?.state).toBeUndefined();
+  });
+
+  it('drops restored state that the destination route does not accept', async () => {
+    const location = createMemorySplitRouterLocation('/drive/folder/one');
+    const layout = createLayout();
+    const router = createSplitRouter({ layout, routes, location });
+    const splitId = layout.snapshot().entries[0]!.splitId;
+
+    location.set(
+      {
+        pathname: '/drive/folder/two',
+        search: '',
+        hash: '',
+        state: {
+          __macroSplitRouter: {
+            entries: [{ key: 'restored-entry', state: 'invalid' }],
+          },
+        },
+      },
+      { replace: true }
+    );
+    await router.settled();
+
+    expect(routeParams(router.route(splitId)).folderId).toBe('two');
+    expect(router.entry(splitId)?.state).toBeUndefined();
+  });
+
+  it('treats an external URL without state as a fresh entry', async () => {
+    const location = createMemorySplitRouterLocation('/drive/folder/one');
+    const layout = createLayout();
+    const router = createSplitRouter({ layout, routes, location });
+    const splitId = layout.snapshot().entries[0]!.splitId;
+
+    router.navigate(splitId, '/drive/folder/one', {
+      replace: true,
+      state: { breadcrumb: 'stored' },
+    });
+    await router.settled();
+    const storedKey = router.entry(splitId)?.key;
+
+    location.set('/drive/folder/one', { replace: true });
+    await router.settled();
+
+    expect(router.entry(splitId)?.key).not.toBe(storedKey);
+    expect(router.entry(splitId)?.state).toBeUndefined();
+  });
+
+  it('preserves entry state through search pushes and replacements', async () => {
+    const location = createMemorySplitRouterLocation('/drive/folder/one');
+    const layout = createLayout();
+    const router = createSplitRouter({ layout, routes, location });
+    const splitId = layout.snapshot().entries[0]!.splitId;
+
+    router.navigate(splitId, '/drive/folder/two', {
+      state: (current) => ({ previous: current, breadcrumb: 'two' }),
+    });
+    await router.settled();
+    const routeKey = router.entry(splitId)?.key;
+    const state = router.entry(splitId)?.state;
+
+    router.updateSearch(splitId, 'drive', { sort: ['name'] });
+    await router.settled();
+    const pushedKey = router.entry(splitId)?.key;
+    expect(pushedKey).not.toBe(routeKey);
+    expect(router.entry(splitId)?.state).toBe(state);
+
+    router.updateSearch(
+      splitId,
+      'drive',
+      { sort: ['created_at'] },
+      { history: 'replace' }
+    );
+    await router.settled();
+    expect(router.entry(splitId)?.key).toBe(pushedKey);
+    expect(router.entry(splitId)?.state).toBe(state);
+  });
+
   it('restores search state during history traversal', async () => {
     const location = createMemorySplitRouterLocation('/drive/folder/one');
     const layout = createLayout();
@@ -1014,7 +1238,7 @@ describe('split router', () => {
     await settle();
 
     expect(location.history()).toHaveLength(2);
-    expect(location.read()).toEqual({
+    expect(location.read()).toMatchObject({
       pathname: '/drive/folder/two',
       search: '?s0.drive.sort=created_at',
       hash: '',
@@ -1353,6 +1577,8 @@ describe('split router', () => {
     const layout = createLayout();
     const router = createSplitRouter({ layout, routes, location });
     const splitId = layout.snapshot().entries[0]!.splitId;
+    // Initialization adds the router's opaque entry metadata with replacement.
+    flush();
 
     router.updateSearch(splitId, 'drive', { sort: ['name'] });
     router.updateSearch(splitId, 'drive', { sort: ['created_at'] });

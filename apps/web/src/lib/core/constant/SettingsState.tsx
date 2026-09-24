@@ -146,7 +146,13 @@ export const useSettingsState = () => {
     if (!split) return;
 
     const slug = settingsTabToSlug(tab);
-    const location = split.content.entryMetadata as SplitLocation | undefined;
+    const metadata = split.content.entryMetadata;
+    const location =
+      typeof metadata === 'object' &&
+      metadata !== null &&
+      'location' in metadata
+        ? (metadata.location as SplitLocation)
+        : (metadata as SplitLocation | undefined);
 
     if (
       rootRouteMatch(location?.route)?.id === 'settings' &&

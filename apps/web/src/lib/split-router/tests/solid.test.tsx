@@ -1,4 +1,4 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { type Accessor, onCleanup } from 'solid-js';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -14,6 +14,7 @@ import {
   useNavigate,
   useParams,
   useRouteParams,
+  useRouteState,
   useSplitHistory,
   useSplitRouter,
 } from '../solid';
@@ -104,6 +105,61 @@ afterEach(() => {
 });
 
 describe('Solid split router hooks', () => {
+  it('reads inherited route state and types navigation state', () => {
+    const root = defineRoute({
+      id: 'state-root',
+      path: 'state',
+      state: z
+        .object({ trail: z.array(z.string()) })
+        .transform((state) => ({ ...state, length: state.trail.length })),
+      children: [{ id: 'state-child', path: 'item/:id' }],
+    });
+    const child = root.children[0];
+
+    function StateView() {
+      const state = useRouteState(root);
+      const navigate = useNavigate();
+      expectTypeOf(state()).toEqualTypeOf<
+        { trail: string[]; length: number } | undefined
+      >();
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            navigate(
+              { route: child, params: { id: 'one' } },
+              {
+                state: (current) => ({
+                  trail: [
+                    ...(current?.trail ?? []),
+                    `one-${current?.length ?? 0}`,
+                  ],
+                }),
+              }
+            )
+          }
+        >
+          {state()?.trail.join('/') ?? 'empty'}
+        </button>
+      );
+    }
+
+    const result = render(() => (
+      <SplitRouter.Root
+        layout={createLayout()}
+        routes={{ definitions: [root] }}
+        location={createMemorySplitRouterLocation('/state')}
+      >
+        <SplitRouter.Scope splitId="split">
+          <StateView />
+        </SplitRouter.Scope>
+      </SplitRouter.Root>
+    ));
+
+    fireEvent.click(result.getByRole('button'));
+    expect(result.getByRole('button').textContent).toBe('one-0');
+  });
+
   it('reads typed branch params only through the referenced node and stays reactive', () => {
     const tree = defineRoutes({
       definitions: [

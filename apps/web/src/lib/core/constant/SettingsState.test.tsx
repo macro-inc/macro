@@ -18,6 +18,7 @@ import { useSettingsState } from './SettingsState';
 const mocks = vi.hoisted(() => ({
   mobile: true,
   hasSettingsSplit: false,
+  settingsEntryMetadata: undefined as unknown,
   updateCurrentEntry: vi.fn(),
   removeSplit: vi.fn(),
   openWithSplit: vi.fn(),
@@ -35,7 +36,11 @@ vi.mock('@app/signal/splitLayout', () => ({
         ? [
             {
               id: 'settings-split',
-              content: { type: 'component', id: 'settings' },
+              content: {
+                type: 'component',
+                id: 'settings',
+                entryMetadata: mocks.settingsEntryMetadata,
+              },
             },
           ]
         : [],
@@ -87,6 +92,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.mobile = true;
   mocks.hasSettingsSplit = false;
+  mocks.settingsEntryMetadata = undefined;
   setSplitActiveTabId('Account');
 });
 afterEach(cleanup);
@@ -132,6 +138,25 @@ describe('settings entry points', () => {
     router.navigate('settings-split', -1);
     expect(entries[0].location.route.matches[0].params.tab).toBe('account');
     router.dispose();
+  });
+
+  it('recognizes the active tab in wrapped router entry metadata', () => {
+    mocks.mobile = false;
+    mocks.hasSettingsSplit = true;
+    mocks.settingsEntryMetadata = {
+      key: 'settings-entry',
+      location: {
+        route: {
+          matches: [{ id: 'settings', params: { tab: 'appearance' } }],
+        },
+      },
+      state: { feature: 'value' },
+    };
+    const { state } = mountSettings();
+
+    state.selectTab('Appearance');
+
+    expect(mocks.updateCurrentEntry).not.toHaveBeenCalled();
   });
 
   it('ignores routed navigation when selecting a mobile sheet page', () => {

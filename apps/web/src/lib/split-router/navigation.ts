@@ -15,33 +15,28 @@ import type {
 } from './types';
 import { parseExternalLocation, parseRoutePathname } from './url';
 
-function decodeRouteState(
-  routes: SplitRoutesManifest,
-  route: SplitRouteState
-): SplitRouterEntry | undefined {
-  return decodeRoute(routes, encodeRoute(routes, { location: { route } }));
-}
-
 function resolveRouteTarget(
   routes: SplitRoutesManifest,
   current: SplitRouterEntry,
   target: { route: { id: string }; params?: unknown }
 ): SplitRouterEntry | undefined {
   const routeId = target.route.id;
-  const targetParams =
+  let targetParams: SplitRouteParams = {};
+  if (
     target.params &&
     typeof target.params === 'object' &&
     !Array.isArray(target.params)
-      ? (target.params as SplitRouteParams)
-      : {};
+  ) {
+    targetParams = target.params as SplitRouteParams;
+  }
   const branch = findRouteBranch(routes, routeId);
   if (!branch) return;
 
   const currentMatches = current.location.route.matches;
   const matches = branch.map(({ definition }, index) => {
     const currentMatch = currentMatches[index];
-    const params =
-      currentMatch?.id === definition.id ? currentMatch.params : {};
+    let params: SplitRouteParams = {};
+    if (currentMatch?.id === definition.id) params = currentMatch.params;
 
     return {
       id: definition.id,
@@ -54,7 +49,8 @@ function resolveRouteTarget(
   const [first, ...rest] = matches;
   if (!first) return;
 
-  return decodeRouteState(routes, { matches: [first, ...rest] });
+  const route: SplitRouteState = { matches: [first, ...rest] };
+  return decodeRoute(routes, encodeRoute(routes, { location: { route } }));
 }
 
 function resolveParentTarget(
@@ -72,7 +68,11 @@ function resolveParentTarget(
   const [first, ...rest] = route.matches.slice(0, length);
   if (!first) return;
 
-  return decodeRouteState(routes, { matches: [first, ...rest] });
+  const parentRoute: SplitRouteState = { matches: [first, ...rest] };
+  return decodeRoute(
+    routes,
+    encodeRoute(routes, { location: { route: parentRoute } })
+  );
 }
 
 function resolvePathTarget(
@@ -86,10 +86,12 @@ function resolvePathTarget(
     }
   | undefined {
   const childRelative = to.startsWith('./');
-  const value = childRelative ? to.slice(2) : to;
-  const targetUrl = parseExternalLocation(
-    value.startsWith('/') ? value : `/${value}`
-  );
+  let value = to;
+  if (childRelative) value = to.slice(2);
+
+  let pathname = value;
+  if (!value.startsWith('/')) pathname = `/${value}`;
+  const targetUrl = parseExternalLocation(pathname);
   const requested = parseRoutePathname(routes, targetUrl.pathname);
 
   if (!requested) return;
@@ -120,30 +122,35 @@ export function resolveNavigation(
   target: SplitRouterEntry | undefined,
   to: Exclude<SplitNavigateTo, number>
 ): SplitRouterEntry | undefined {
-  const resolved =
-    typeof to === 'string'
-      ? resolvePathTarget(routes, current, to)
-      : 'route' in to
-        ? {
-            entry: resolveRouteTarget(routes, current, to),
-            explicitSearch: undefined,
-          }
-        : {
-            entry: resolveParentTarget(routes, current, to.levels),
-            explicitSearch: undefined,
-          };
-  const decoded = resolved?.entry;
+  let resolved:
+    | {
+        entry: SplitRouterEntry | undefined;
+        explicitSearch: SplitLocation['search'];
+      }
+    | undefined;
+  if (typeof to === 'string') {
+    resolved = resolvePathTarget(routes, current, to);
+  } else if ('route' in to) {
+    resolved = {
+      entry: resolveRouteTarget(routes, current, to),
+      explicitSearch: undefined,
+    };
+  } else {
+    resolved = {
+      entry: resolveParentTarget(routes, current, to.levels),
+      explicitSearch: undefined,
+    };
+  }
+  if (!resolved) return;
+  const decoded = resolved.entry;
   if (!decoded) return;
 
-  const matchingRoute = target && getRouteId(target) === getRouteId(decoded);
   let search = resolved.explicitSearch;
+  if (!search && target && getRouteId(target) === getRouteId(decoded)) {
+    search = target.location.search;
+  }
 
-  if (!search && matchingRoute) search = target.location.search;
-
-  return {
-    location: {
-      ...decoded.location,
-      ...(search ? { search } : {}),
-    },
-  };
+  const location: SplitLocation = { ...decoded.location };
+  if (search) location.search = search;
+  return { location };
 }

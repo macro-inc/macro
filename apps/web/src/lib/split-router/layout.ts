@@ -16,9 +16,7 @@ export function createLayoutAdapter<TSplitId>(
     return value;
   };
   const entries = (): SplitRouterEntry[] =>
-    snapshot().entries.map((entry) => ({
-      location: entry.location,
-    }));
+    snapshot().entries.map(({ splitId: _splitId, ...entry }) => entry);
 
   const find = (
     splitId: TSplitId
@@ -28,11 +26,23 @@ export function createLayoutAdapter<TSplitId>(
   const entryEquals = (
     left: SplitRouterEntry | undefined,
     right: SplitRouterEntry | undefined
-  ): boolean =>
-    left === right ||
-    (left !== undefined &&
-      right !== undefined &&
-      deepEqual(left.location, right.location));
+  ): boolean => {
+    if (left === right) return true;
+    if (!left || !right) return false;
+    if (left.key !== right.key) return false;
+    if (!deepEqual(left.location, right.location)) return false;
+    return Object.is(left.state, right.state);
+  };
+
+  const entryIdentityEquals = (
+    left: SplitRouterEntry,
+    right: SplitRouterEntry
+  ): boolean => {
+    if (left.key !== undefined && right.key !== undefined) {
+      return left.key === right.key;
+    }
+    return deepEqual(left.location, right.location);
+  };
 
   const layoutsEqual = (
     left: SplitRouterEntry[],
@@ -76,21 +86,24 @@ export function createLayoutAdapter<TSplitId>(
     requireExistingTarget?: boolean;
   }): boolean => {
     assertRouteEntry(routes, options.entry);
-    const targetId =
-      options.target === 'new-split' ? undefined : options.target;
-    const current = targetId === undefined ? undefined : find(targetId);
+    let targetId: TSplitId | undefined;
+    let current: SplitRouterLayoutEntry<TSplitId> | undefined;
+    if (options.target !== 'new-split') {
+      targetId = options.target;
+      current = find(targetId);
+    }
 
     if (options.requireExistingTarget && !current) return false;
 
     if (targetId !== undefined && current) {
-      if (deepEqual(current.location, options.entry.location)) return false;
+      if (entryEquals(current, options.entry)) return false;
 
       layout.updateCurrentEntry(targetId, () => options.entry);
       return true;
     }
 
     layout.open({
-      location: options.entry.location,
+      ...options.entry,
       target: options.target,
       replace: options.replace,
     });
@@ -103,6 +116,7 @@ export function createLayoutAdapter<TSplitId>(
     changedIds,
     entries,
     entryEquals,
+    entryIdentityEquals,
     find,
     layoutsEqual,
     reconcile,

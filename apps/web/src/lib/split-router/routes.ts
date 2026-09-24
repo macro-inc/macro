@@ -6,12 +6,14 @@ import type {
   DefinedSplitRoutes,
   InferSplitRouteParams,
   InferSplitRoutePathParams,
+  InferSplitRouteState,
   SplitRouteClaim,
   SplitRouteDefinition,
   SplitRouteMatch,
   SplitRouteParams,
   SplitRouteRawParams,
   SplitRouterEntry,
+  SplitRouterEntryState,
   SplitRouteState,
   SplitRoutes,
   SplitSearchState,
@@ -26,6 +28,7 @@ type SplitRouteDefinitionConstraint = {
   component?: unknown;
   children?: readonly SplitRouteDefinitionConstraint[];
   params?: StandardSchemaV1;
+  state?: StandardSchemaV1;
   serializeParams?: unknown;
   claim?: unknown;
   search?: readonly string[] | '*';
@@ -260,6 +263,7 @@ export type SplitRouteNode<TComponent = unknown> = {
   readonly search: ReadonlySet<string>;
   readonly claims: readonly SplitRouteDefinition<TComponent>[];
   readonly externalSearch: readonly SplitRouteDefinition<TComponent>[];
+  readonly state?: StandardSchemaV1;
 };
 
 /** Runtime route state owned by a router, or explicitly supplied by its host. */
@@ -340,6 +344,7 @@ export function createRoutesManifest<TComponent>(
           ...(parent?.externalSearch ?? []),
           ...(definition.externalSearch ? [definition] : []),
         ],
+        state: definition.state ?? parent?.state,
       };
       branch.push(node);
       byId.set(definition.id, node);
@@ -475,6 +480,44 @@ export function resolveRouteBranch<TComponent>(
   route: SplitRouteState
 ): readonly SplitRouteNode<TComponent>[] {
   return resolveRouteNode(routes, route).branch;
+}
+
+export type SplitRouteEntryStateResult =
+  | { success: true; value: SplitRouterEntryState }
+  | { success: false };
+
+export function parseRouteEntryState(
+  routes: SplitRoutesManifest,
+  route: SplitRouteState,
+  state: unknown
+): SplitRouteEntryStateResult {
+  if (state === undefined) return { success: true, value: undefined };
+  const schema = resolveRouteNode(routes, route).state;
+  if (!schema) return { success: false };
+
+  const result = schema['~standard'].validate(state);
+  if (result instanceof Promise) {
+    throw new Error('Split route state schemas must be synchronous');
+  }
+  if (result.issues) return { success: false };
+  return {
+    success: true,
+    value: result.value as SplitRouterEntryState,
+  };
+}
+
+export function getRouteEntryState<const TRoute extends { id: string }>(
+  routes: SplitRoutesManifest,
+  entry: SplitRouterEntry | undefined,
+  route: TRoute
+): InferSplitRouteState<TRoute> | undefined {
+  if (!entry) return;
+  const active = resolveRouteNode(routes, entry.location.route);
+  const requested = routes.byId.get(route.id);
+  if (!requested) return;
+  if (!active.branch.includes(requested)) return;
+  if (requested.state !== active.state) return;
+  return entry.state as InferSplitRouteState<TRoute> | undefined;
 }
 
 export function getRouteClaim(

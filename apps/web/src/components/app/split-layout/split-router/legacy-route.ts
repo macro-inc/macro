@@ -11,6 +11,7 @@ import {
   type SplitLocation,
   type SplitRouteMatch,
   type SplitRouterEntry,
+  type SplitRouterEntryState,
   type UnmatchedSplitPathHandler,
 } from '@app/lib/split-router';
 import {
@@ -229,13 +230,15 @@ export function splitLocationFromContent(
 }
 
 /** Resolve legacy/persisted metadata before it reaches router state. */
-export function resolveContentLocation(
+export function resolveContentEntry(
   routes: SplitRoutesManifest,
   content: SplitContent
-): SplitLocation {
-  const metadata = isRecord(content.entryMetadata)
-    ? content.entryMetadata
-    : undefined;
+): SplitRouterEntry {
+  let metadata: Record<string, unknown> | undefined;
+  if (isRecord(content.entryMetadata)) metadata = content.entryMetadata;
+
+  let metadataLocation = metadata;
+  if (isRecord(metadata?.location)) metadataLocation = metadata.location;
   const resolve = (route: unknown) => {
     assertRouteState(routes, route);
     // Go through the URL representation, not schema validation of schema outputs.
@@ -255,9 +258,9 @@ export function resolveContentLocation(
     return decoded.location.route;
   };
   let route: SplitLocation['route'] | undefined;
-  if (metadata?.route !== undefined) {
+  if (metadataLocation?.route !== undefined) {
     try {
-      route = resolve(metadata.route);
+      route = resolve(metadataLocation.route);
     } catch {
       // Old or malformed metadata falls back to the content's compatibility route.
     }
@@ -266,9 +269,17 @@ export function resolveContentLocation(
   const search = filterRouteSearch(
     routes,
     route,
-    parseSearchState(metadata?.search)
+    parseSearchState(metadataLocation?.search)
   );
-  return search ? { route, search } : { route };
+  const location: SplitLocation = { route };
+  if (search) location.search = search;
+
+  const entry: SplitRouterEntry = { location };
+  if (typeof metadata?.key === 'string') entry.key = metadata.key;
+  if (metadata && Object.hasOwn(metadata, 'state')) {
+    entry.state = metadata.state as SplitRouterEntryState;
+  }
+  return entry;
 }
 
 export function splitContentFromLocation(

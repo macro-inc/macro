@@ -9,6 +9,8 @@ import {
   findRouteBranch,
   getExternalSearchKeys,
   getRouteClaim,
+  getRouteEntryState,
+  parseRouteEntryState,
   routeParams,
   validateRouteParams,
   validateSplitRoutes,
@@ -17,6 +19,8 @@ import type {
   InferSplitRouteBranchParams,
   InferSplitRouteNavigationParams,
   InferSplitRouteParams,
+  InferSplitRouteState,
+  InferSplitRouteStateInput,
   SplitRoutes,
 } from '../types';
 
@@ -31,6 +35,7 @@ const driveRoute = defineRoute({
   aliases: ['files'],
   params: z.object({}),
   search: ['drive'],
+  state: z.object({ trail: z.array(z.string()) }),
   externalSearch: ['action'],
   children: [
     {
@@ -157,6 +162,68 @@ function assertInvalidRouteDeclarations() {
   });
 }
 
+describe('route entry state schemas', () => {
+  it('parses inherited state and exposes it through the owning branch', () => {
+    const entry = decodeRoute(routes, [
+      'drive',
+      'folder',
+      'folder-id',
+      'pdf',
+      'document-id',
+    ])!;
+    const state = { trail: ['first', 'second'] };
+    const parsed = parseRouteEntryState(routes, entry.location.route, state);
+
+    expect(parsed).toEqual({ success: true, value: state });
+    expect(
+      getRouteEntryState(
+        routes,
+        { ...entry, state: parsed.success ? parsed.value : undefined },
+        driveRoute.children[0].children[0]
+      )
+    ).toEqual(state);
+  });
+
+  it('uses the deepest state schema and does not expose it through an overridden owner', () => {
+    const root = defineRoute({
+      id: 'root-state',
+      path: 'root',
+      state: z.object({ root: z.string() }),
+      children: [
+        {
+          id: 'child-state',
+          path: 'child',
+          state: z.object({ child: z.number() }),
+        },
+      ],
+    });
+    const child = root.children[0];
+    const manifest = createRoutesManifest({ definitions: [root] });
+    const entry = {
+      ...decodeRoute(manifest, ['root', 'child'])!,
+      state: { child: 1 },
+    };
+
+    expect(getRouteEntryState(manifest, entry, root)).toBeUndefined();
+    expect(getRouteEntryState(manifest, entry, child)).toEqual({ child: 1 });
+    expectTypeOf<InferSplitRouteState<typeof child>>().toEqualTypeOf<{
+      child: number;
+    }>();
+  });
+
+  it('rejects state outside an owning branch or outside its schema', () => {
+    const drive = decodeRoute(routes, ['drive'])!;
+    const legacy = decodeRoute(routes, ['legacy', 'one'])!;
+
+    expect(
+      parseRouteEntryState(routes, drive.location.route, { trail: 42 })
+    ).toEqual({ success: false });
+    expect(
+      parseRouteEntryState(routes, legacy.location.route, { trail: [] })
+    ).toEqual({ success: false });
+  });
+});
+
 describe('typed route trees', () => {
   it('checks declaration contracts without widening node inference', () => {
     expectTypeOf(assertInvalidRouteDeclarations).toBeFunction();
@@ -186,6 +253,12 @@ describe('typed route trees', () => {
     expectTypeOf<InferSplitRouteBranchParams<typeof detail>>().toEqualTypeOf<{
       folderId: string;
       documentId: string;
+    }>();
+    expectTypeOf<InferSplitRouteState<typeof detail>>().toEqualTypeOf<{
+      trail: string[];
+    }>();
+    expectTypeOf<InferSplitRouteStateInput<typeof detail>>().toEqualTypeOf<{
+      trail: string[];
     }>();
   });
 

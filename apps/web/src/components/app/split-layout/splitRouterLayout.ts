@@ -1,6 +1,5 @@
 import type {
   BrowserHistoryIntent,
-  SplitLocation,
   SplitRouterEntry,
   SplitRouterLayout,
   SplitRouterLayoutSnapshot,
@@ -10,39 +9,25 @@ import deepEqual from 'fast-deep-equal';
 import { createEffect, createRoot, on } from 'solid-js';
 import type { SplitContent, SplitId, SplitManager } from './layoutManager';
 import {
-  resolveContentLocation,
+  resolveContentEntry,
   splitContentFromLocation,
 } from './split-router/legacy-route';
 
 export type AppSplitRouterLayout = SplitRouterLayout<SplitId>;
 type AppSplitRouterSnapshot = SplitRouterLayoutSnapshot<SplitId>;
 
-const withoutLocation = (content: SplitContent): SplitContent => {
-  const result = { ...content };
-
-  delete result.entryMetadata;
-
-  return result;
-};
-
-const withLocation = (
-  content: SplitContent,
-  location: SplitLocation
-): SplitContent => ({
-  ...content,
-  entryMetadata: location,
-});
-
-const sameContent = (left: SplitContent, right: SplitContent) =>
-  left.type === right.type && left.id === right.id;
-
-function contentForLocation(
-  location: SplitLocation,
+function contentForEntry(
+  entry: SplitRouterEntry,
   current?: SplitContent
 ): SplitContent {
-  const routed = splitContentFromLocation(location);
-  const content = current && sameContent(current, routed) ? current : routed;
-  return withLocation(withoutLocation(content), location);
+  const routed = splitContentFromLocation(entry.location);
+  let source = routed;
+  if (current?.type === routed.type && current.id === routed.id) {
+    source = current;
+  }
+  const { entryMetadata: _entryMetadata, ...content } = source;
+
+  return { ...content, entryMetadata: entry };
 }
 
 const sameRouterEntries = (
@@ -53,11 +38,11 @@ const sameRouterEntries = (
   previous.every((entry, index) => {
     const next = current[index];
 
-    return (
-      next !== undefined &&
-      Object.is(entry.splitId, next.splitId) &&
-      deepEqual(entry.location, next.location)
-    );
+    if (!next) return false;
+    if (!Object.is(entry.splitId, next.splitId)) return false;
+    if (entry.key !== next.key) return false;
+    if (!deepEqual(entry.location, next.location)) return false;
+    return Object.is(entry.state, next.state);
   });
 
 function changeHistory(
@@ -81,12 +66,10 @@ export function createAppSplitRouterLayout(
   manager: SplitManager,
   routes: SplitRoutesManifest
 ): AppSplitRouterLayout {
-  const locationOf = (content: SplitContent) =>
-    resolveContentLocation(routes, content);
   const snapshot = (): AppSplitRouterSnapshot => ({
     entries: manager.getVisibleSplits().map((split) => ({
       splitId: split.id,
-      location: locationOf(split.content),
+      ...resolveContentEntry(routes, split.content),
     })),
   });
 
@@ -98,23 +81,23 @@ export function createAppSplitRouterLayout(
 
       if (!handle) return;
 
-      const current = locationOf(handle.content());
-      const next = update({ splitId, location: current });
+      const current = resolveContentEntry(routes, handle.content());
+      const next = update({ splitId, ...current });
       // Child routes keep the workspace mounted but can dispose its list.
       // Capture list focus/scroll before committing that accepted transition.
-      if (!deepEqual(current.route, next.location.route)) {
+      if (!deepEqual(current.location.route, next.location.route)) {
         handle.captureEntryState();
       }
-      handle.updateCurrentEntry((content) =>
-        contentForLocation(next.location, content)
-      );
+      handle.updateCurrentEntry((content) => contentForEntry(next, content));
     },
 
-    open({ location, target, replace }) {
-      const handle =
-        target && target !== 'new-split' ? manager.getSplit(target) : undefined;
+    open({ target, replace, ...entry }) {
+      let handle: ReturnType<SplitManager['getSplit']>;
+      if (target && target !== 'new-split') {
+        handle = manager.getSplit(target);
+      }
 
-      manager.openWithSplit(contentForLocation(location), {
+      manager.openWithSplit(contentForEntry(entry), {
         handle,
         preferNewSplit: target === 'new-split',
         allowDuplicate: target === 'new-split',
@@ -127,7 +110,7 @@ export function createAppSplitRouterLayout(
       for (const [index, split] of manager.getVisibleSplits().entries()) {
         if (
           !deepEqual(
-            locationOf(split.content).route,
+            resolveContentEntry(routes, split.content).location.route,
             entries[index]?.location.route
           )
         ) {
@@ -137,7 +120,7 @@ export function createAppSplitRouterLayout(
       const visible = manager.getVisibleSplits();
       manager.reconcile(
         entries.map((entry, index) =>
-          contentForLocation(entry.location, visible[index]?.content)
+          contentForEntry(entry, visible[index]?.content)
         )
       );
     },
