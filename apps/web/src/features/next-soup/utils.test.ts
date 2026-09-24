@@ -941,7 +941,7 @@ const documentRow = (notifications: UnifiedNotification[]) =>
   }) as unknown as EntityData;
 
 describe('getDocumentCommentTarget', () => {
-  it('targets the newest unread comment notification', () => {
+  it('targets the newest comment notification that is not done, read or not', () => {
     expect(
       getDocumentCommentTarget(
         documentRow([
@@ -961,13 +961,13 @@ describe('getDocumentCommentTarget', () => {
           }),
         ])
       )?.params
-    ).toEqual({ comment_id: 'comment-newest' });
+    ).toEqual({ comment_id: 'comment-read' });
   });
 
-  it('opens a document normally once its comment notifications are read', () => {
+  it('opens a document normally once its comment notifications are done', () => {
     expect(
       getDocumentCommentTarget(
-        documentRow([commentNotification('n1', 'comment-1', { state: 'seen' })])
+        documentRow([commentNotification('n1', 'comment-1', { state: 'done' })])
       )
     ).toBeUndefined();
   });

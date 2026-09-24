@@ -24,7 +24,7 @@ type HomeListEntityProps = BaseListEntityProps & {
 export function HomeListEntity(props: HomeListEntityProps) {
   const threadEntity = () =>
     props.entity.type === 'channel_thread' ? props.entity : undefined;
-  // A document announcing an unread comment reads like a thread row: the
+  // A document announcing a comment reads like a thread row: the
   // comment glyph, who did what, and where. Opening it lands on the comment.
   const commentNotification = () =>
     getDocumentCommentNotification(props.entity);
