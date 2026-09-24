@@ -91,6 +91,8 @@ export type EmailComposerOptions = {
   onRecipientsChange?: (recipients: EmailRecipient[]) => void;
   /** Prefill for the To field (e.g. from an intercepted mailto: link). Ignored when editing an existing draft. */
   initialTo?: string[];
+  /** Initial sending inbox for new messages. Existing drafts retain their sender. */
+  initialInboxId?: string;
 };
 
 export function createEmailComposer(props: EmailComposerOptions) {
@@ -114,6 +116,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
       onRecipientsChange: props.onRecipientsChange,
     }
   );
+
+  if (!initialDraftId && props.initialInboxId) {
+    form.setSelectedInbox(props.initialInboxId);
+  }
 
   const primaryInboxId = props.accounts.primaryId;
   const link = createMemo(() => {

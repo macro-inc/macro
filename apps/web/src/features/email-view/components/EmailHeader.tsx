@@ -94,7 +94,10 @@ export function EmailHeader(props: EmailHeaderProps) {
         <div class="ml-auto flex shrink-0 items-center self-center gap-2">
           <EmailInboxMenu />
           <div class="shrink-0">
-            <SidebarCreateButton label="New" onCreate={() => composeEmail()} />
+            <SidebarCreateButton
+              label="New"
+              onCreate={() => composeEmail(state.inboxIds)}
+            />
           </div>
         </div>
       </div>

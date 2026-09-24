@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { message } from '../../email-message/tests/messages';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
@@ -8,6 +9,62 @@ afterEach(() => vi.useRealTimers());
 
 // Real controller and editor, with only feature capabilities replaced.
 describe('standalone compose controller', () => {
+  it.each([
+    {
+      initialInboxId: undefined,
+      expectedId: 'inbox',
+      expectedAddress: 'me@example.com',
+    },
+    {
+      initialInboxId: 'work',
+      expectedId: 'work',
+      expectedAddress: 'work@example.com',
+    },
+  ])(
+    'uses $expectedAddress as the initial sender and saves to that inbox',
+    async ({ initialInboxId, expectedId, expectedAddress }) => {
+      const context = createComposeContext();
+      context.accounts.inboxes = () => [
+        { id: 'work', email_address: 'work@example.com', settings: {} },
+        { id: 'inbox', email_address: 'me@example.com', settings: {} },
+      ];
+      const root = mountEmailComposer(context, undefined, { initialInboxId });
+      try {
+        expect(root.state.context.fromAddress?.()).toBe(expectedAddress);
+        root.edit('Save with the selected sender');
+        await vi.advanceTimersByTimeAsync(600);
+        expect(context.drafts.saveDraft).toHaveBeenCalledWith(
+          expect.objectContaining({ inboxId: expectedId })
+        );
+      } finally {
+        root.dispose();
+      }
+    }
+  );
+
+  it('keeps a draft sender instead of the initial inbox and still allows a sender change', async () => {
+    const context = createComposeContext();
+    context.accounts.inboxes = () => [
+      { id: 'inbox', email_address: 'me@example.com', settings: {} },
+      { id: 'work', email_address: 'work@example.com', settings: {} },
+    ];
+    const root = mountEmailComposer(context, undefined, {
+      draft: message('existing-draft', { is_draft: true, link_id: 'work' }),
+      initialInboxId: 'inbox',
+    });
+    try {
+      expect(root.state.context.fromAddress?.()).toBe('work@example.com');
+      root.state.context.onSelectInbox?.('inbox');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.context.fromAddress?.()).toBe('me@example.com');
+      expect(context.drafts.saveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({ inboxId: 'inbox' })
+      );
+    } finally {
+      root.dispose();
+    }
+  });
+
   it('saves a composed draft after debounce and preserves the recipients and HTML', async () => {
     const context = createComposeContext();
     const root = mountEmailComposer(context);

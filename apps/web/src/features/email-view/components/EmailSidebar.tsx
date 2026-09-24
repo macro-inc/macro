@@ -1,6 +1,7 @@
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
-import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
+import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FileIcon from '@phosphor/file.svg';
@@ -10,7 +11,7 @@ import SignalIcon from '@phosphor/wave-sine.svg';
 import NoiseIcon from '@phosphor/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { pressHandlers } from '@ui';
-import { type Component, For } from 'solid-js';
+import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TAB_IDS, EMAIL_TABS, type EmailTabItem } from '../constants';
@@ -77,14 +78,22 @@ export function EmailSidebar() {
 
   return (
     <ViewSidebar.Root aria-label="Email navigation">
-      <SidebarCreateHeader
-        title="Email"
-        label="New email"
-        onCreate={() => composeEmail()}
-      />
+      <Show when={!isTouchDevice()}>
+        <ViewSidebar.Header>
+          <div class="flex min-w-0 items-center gap-1">
+            <ViewSidebar.CloseButton class="shrink-0" />
+            <ViewSidebar.Title>Email</ViewSidebar.Title>
+          </div>
+        </ViewSidebar.Header>
+      </Show>
 
       <ViewSidebar.Content>
         <EmailInboxList />
+
+        <SidebarCreateButton
+          label="New email"
+          onCreate={() => composeEmail(state.inboxIds)}
+        />
 
         <EmailNavigation />
 
