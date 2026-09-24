@@ -19,7 +19,7 @@ import {
 } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
-import { Button, Dialog, Panel } from '@ui';
+import { Button, confirmDialog, Dialog, Panel } from '@ui';
 import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
 import { ClaudeConnection } from '../claude-connection/claude-connection';
 import { CodexHarness } from './codex/views/CodexHarness';
@@ -43,7 +43,9 @@ function lastConnectedText(harness: RegisteredHarness): string {
 }
 
 /** Settings UI for choosing and configuring the available agent harnesses. */
-export function Harness(props: { navigation?: JSX.Element } = {}) {
+export function Harness(
+  props: { navigation?: JSX.Element; startPairing?: boolean } = {}
+) {
   const [cursorApiKey, setCursorApiKey] = createSignal('');
   const cursorStatus = useCursorApiKeyStatusQuery();
   const saveCursorApiKey = useSaveCursorApiKey();
@@ -57,7 +59,7 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
         initialCode?: string;
       }
     | undefined
-  >();
+  >(props.startPairing ? {} : undefined);
   const closePairing = () => {
     setPairingDialog(undefined);
   };
@@ -151,6 +153,14 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
   };
 
   const handleDisconnectCursor = async () => {
+    if (disconnectCursor.isPending) return;
+    const confirmed = await confirmDialog({
+      title: 'Disconnect Cursor?',
+      body: "Remove your Cursor connection from Macro? This removes Macro's copy of the API key but does not revoke it in Cursor.",
+      confirmLabel: 'Disconnect',
+      tone: 'danger',
+    });
+    if (!confirmed || disconnectCursor.isPending) return;
     try {
       await disconnectCursor.mutateAsync();
       setCursorApiKey('');
@@ -177,8 +187,8 @@ export function Harness(props: { navigation?: JSX.Element } = {}) {
             </Button>
           }
         >
-          {props.navigation}
           <BringYourOwnAgent onAddRuntime={() => setPairingDialog({})} />
+          {props.navigation}
           <div>
             <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
               Built-in runtimes

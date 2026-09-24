@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { chooseSelectOption } from '../../tests/select-helpers';
@@ -6,6 +6,7 @@ import { CodexConnection } from './CodexConnection';
 
 vi.mock('@ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ui')>()),
+  confirmDialog: vi.fn(async () => true),
   Button: (
     props: import('solid-js').JSX.ButtonHTMLAttributes<HTMLButtonElement>
   ) => <button {...props} />,
@@ -127,7 +128,7 @@ describe('Codex connection', () => {
       ).toBeNull();
     }
   );
-  it('saves only the selected environment and always describes the main branch', () => {
+  it('saves only the selected environment and always describes the main branch', async () => {
     const props = base();
     render(() => (
       <CodexConnection
@@ -173,7 +174,7 @@ describe('Codex connection', () => {
       environmentId: 'env-1',
     });
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect ChatGPT' }));
-    expect(props.onDisconnect).toHaveBeenCalledOnce();
+    await waitFor(() => expect(props.onDisconnect).toHaveBeenCalledOnce());
   });
   it('keeps server errors visible and prevents duplicate pending actions', () => {
     render(() => (

@@ -926,7 +926,13 @@ links remain in Settings → Integrations. The native-only Connections page rema
 available when `pipedream-mcp` is disabled.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
-`Agents` → `New agent` (or edit an existing agent) opens runtime selectors.
+`Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
+`Instructions` field is a Lexical contenteditable textbox, not a textarea. It
+supports Markdown headings, lists, emphasis, code, links, and the normal `@`
+mention picker; select text to open the formatting menu. Saved instructions
+retain mention identities using the shared editor's Markdown format and reopen
+with their formatting intact. Enter adds a new paragraph; use `Create agent` or
+`Save changes` to submit. The form also includes runtime selectors.
 The model list is loaded live and independently for Macro Agent, connected Cursor, and every
 registered macrod harness. The selected harness stays selected when the list refreshes.
 A paired macrod connects on startup, so models can load before any agents are bound.
@@ -938,7 +944,7 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-The `Runtimes` section shows built-in Macro, Cursor, Claude, and Codex configuration, followed by paired macrod runtimes. The “Bring your own agent” card rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. `New runtime` opens a full-page pairing flow: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
+The `Runtimes` section shows built-in Macro, Cursor, Claude, and Codex configuration, followed by paired macrod runtimes. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 
@@ -953,7 +959,11 @@ picker or automatic repository selection. Changed selections display **Unsaved
 changes** until the server confirms them. The save button is disabled until an
 environment is selected, and when it matches the saved environment.
 These choices apply to new sessions. **Disconnect** in the Codex row (accessible
-name **Disconnect ChatGPT**) removes the connection. The UI never asks for an
+name **Disconnect ChatGPT**) asks for confirmation before removing the connection.
+Claude, Cursor, and Connections disconnect actions use the same shared confirmation
+dialog (a drawer on mobile); Cancel leaves the connection intact. Claude's row
+keeps its layout while status loads, and sign-in details appear only after Connect.
+The UI never asks for an
 OAuth token.
 
 The Codex section and its auth/config requests were exercised in Chromium with

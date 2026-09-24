@@ -1,6 +1,6 @@
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import { Button } from '@ui';
+import { Button, confirmDialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { SettingsSelect } from '../../components/settings-select';
 import { HarnessIcon } from '../../integration-ui';
@@ -36,6 +36,18 @@ export function CodexConnection(props: {
     selectedEnvironment() !== (props.connection?.environmentId ?? '');
   const connected = () => props.connection?.connected === true;
   const loginPending = () => props.login?.status === 'pending';
+  const disconnect = async () => {
+    if (props.pending) return;
+    const confirmed = await confirmDialog({
+      title: 'Disconnect ChatGPT?',
+      body: 'Remove your ChatGPT connection from Macro? Existing Codex cloud sessions keep running. You can reconnect at any time.',
+      confirmLabel: 'Disconnect',
+      tone: 'danger',
+    });
+    if (!confirmed || props.pending) return;
+    setEnvironment(undefined);
+    props.onDisconnect();
+  };
   return (
     <section class="flex gap-4 px-6 py-5" aria-label="Codex connection">
       <HarnessIcon>
@@ -256,10 +268,7 @@ export function CodexConnection(props: {
                 class="shrink-0"
                 aria-label="Disconnect ChatGPT"
                 disabled={props.pending}
-                onClick={() => {
-                  setEnvironment(undefined);
-                  props.onDisconnect();
-                }}
+                onClick={() => void disconnect()}
               >
                 Disconnect
               </Button>

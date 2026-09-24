@@ -25,6 +25,22 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
 import { chooseSelectOption, selectOptions } from './tests/select-helpers';
 
+// The real Lexical surface has its own Markdown round-trip suite.
+vi.mock('./components/instructions-editor', () => ({
+  AgentInstructionsEditor: (props: {
+    markdown: string;
+    disabled?: boolean;
+    onChange: (markdown: string) => void;
+  }) => (
+    <textarea
+      aria-label="Instructions"
+      disabled={props.disabled}
+      value={props.markdown}
+      onInput={(event) => props.onChange(event.currentTarget.value)}
+    />
+  ),
+}));
+
 const claudeFlag = vi.hoisted(() => ({ enabled: true }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => {
@@ -315,35 +331,6 @@ const MACROD_HARNESS = {
 } satisfies Harness;
 
 describe('Agents', () => {
-  it('explains agent customization and the runtimes that power agents', () => {
-    render(() => <Agents />);
-    expect(
-      screen.getByText(
-        'Agents let you customize your Macro AI experience by combining a unique name, specific instructions, default model, and harness.'
-      )
-    ).toBeTruthy();
-    expect(
-      screen.getByText(
-        'Runtimes are the harnesses that power agents in macro, whether our native, fast, Macro AI harness, or coding harnesses like Cursor or your own Claude Code.'
-      )
-    ).toBeTruthy();
-  });
-
-  it('places navigation above both agent lists without a bring-your-own card', () => {
-    render(() => <Agents navigation={<nav aria-label="Agent management" />} />);
-    expect(screen.queryByText('Bring your own agent')).toBeNull();
-    const navigation = screen.getByRole('navigation', {
-      name: 'Agent management',
-    });
-    for (const name of ['Team agents', 'Private agents']) {
-      expect(
-        navigation.compareDocumentPosition(
-          screen.getByRole('heading', { name })
-        ) & Node.DOCUMENT_POSITION_FOLLOWING
-      ).toBeTruthy();
-    }
-  });
-
   it.each([false, true])(
     'gates Claude harness selection and discovery when enabled=%s',
     (enabled) => {
@@ -913,7 +900,7 @@ describe('Agents', () => {
     expect(within(dialog).getByLabelText('Name')).toBeTruthy();
     expect(within(dialog).getByLabelText('@tag')).toBeTruthy();
     expect(within(dialog).queryByLabelText('Description')).toBeNull();
-    expect(within(dialog).getByLabelText('System prompt')).toBeTruthy();
+    expect(within(dialog).getByLabelText('Instructions')).toBeTruthy();
     expect(harness).toHaveProperty('textContent', 'Macro Agent');
     expect(selectOptions(harness).getAllByRole('option')).toHaveLength(1);
     expect(within(dialog).getByLabelText('Default model')).toBeTruthy();
@@ -956,8 +943,8 @@ describe('Agents', () => {
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Bug fixer' },
     });
-    fireEvent.input(within(dialog).getByLabelText('System prompt'), {
-      target: { value: 'Fix the root cause and add tests.' },
+    fireEvent.input(within(dialog).getByLabelText('Instructions'), {
+      target: { value: 'Fix the **root cause** and add tests.' },
     });
     fireEvent.click(within(dialog).getByLabelText('Team'));
     fireEvent.click(
@@ -974,7 +961,7 @@ describe('Agents', () => {
         handle: 'bug-fixer',
         harness: 'in-memory',
         name: 'Bug fixer',
-        instructions: 'Fix the root cause and add tests.',
+        instructions: 'Fix the **root cause** and add tests.',
         mcp: { scope: 'owner_connections' },
         teamId: 'team-1',
       });

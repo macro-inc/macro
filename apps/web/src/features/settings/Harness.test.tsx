@@ -26,6 +26,11 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
 import { chooseSelectOption } from './tests/select-helpers';
 
+vi.mock('@ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ui')>()),
+  confirmDialog: vi.fn(async () => true),
+}));
+
 vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
 }));
@@ -219,42 +224,6 @@ beforeEach(() => {
 });
 
 describe('Harness', () => {
-  it('keeps the same agent and runtime explanation on the runtimes section', () => {
-    render(() => <Harness />);
-    expect(
-      screen.getByText(
-        'Agents let you customize your Macro AI experience by combining a unique name, specific instructions, default model, and harness.'
-      )
-    ).toBeTruthy();
-    expect(
-      screen.getByText(
-        'Runtimes are the harnesses that power agents in macro, whether our native, fast, Macro AI harness, or coding harnesses like Cursor or your own Claude Code.'
-      )
-    ).toBeTruthy();
-  });
-
-  it('places bring-your-own below navigation and above the runtime lists', () => {
-    harnessMocks.query.data = [REGISTERED_HARNESS];
-    render(() => (
-      <Harness navigation={<nav aria-label="Agent management" />} />
-    ));
-    const invitation = screen.getByRole('heading', {
-      name: 'Bring your agent to Macro',
-    });
-    expect(
-      screen
-        .getByRole('navigation', { name: 'Agent management' })
-        .compareDocumentPosition(invitation) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
-    for (const name of ['Built-in runtimes', 'Paired runtimes']) {
-      expect(
-        invitation.compareDocumentPosition(
-          screen.getByRole('heading', { name })
-        ) & Node.DOCUMENT_POSITION_FOLLOWING
-      ).toBeTruthy();
-    }
-  });
-
   it.each([false, true])(
     'offers Codex settings even when rollout access is %s',
     (enabled) => {

@@ -31,7 +31,7 @@ export function RuntimeSetupSteps(props: { children: JSX.Element }) {
       <SetupStep number={1} title="Install macrod">
         <p>Download the macrod archive for your computer, then extract it.</p>
         <a
-          href="https://github.com/macro-inc/macro/releases/tag/v2026.9.21.0"
+          href="https://github.com/macro-inc/macro/releases"
           target="_blank"
           rel="noopener noreferrer"
           class="inline-flex w-fit items-center gap-1.5 rounded-lg border border-edge-muted px-3 py-2 text-xs font-medium text-ink hover:bg-ink/5 focus-visible:outline-accent"

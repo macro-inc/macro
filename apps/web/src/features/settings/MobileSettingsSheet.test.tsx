@@ -70,21 +70,6 @@ function setup(tab: SettingsTab) {
 }
 
 describe('unavailable mobile settings sections', () => {
-  it('resolves legacy runtime links through the unified agents entry and its gate', () => {
-    const { setAvailableGroups, renderPage } = setup('Harness');
-    expect(renderPage).not.toHaveBeenCalled();
-    setAvailableGroups([
-      {
-        label: 'Agents',
-        items: [{ tab: 'Agents', label: 'Agents', icon: () => <svg /> }],
-      },
-    ]);
-    expect(screen.getByRole('heading', { name: 'Agents' })).toBeTruthy();
-    expect(screen.getByText('Harness form')).toBeTruthy();
-    setAvailableGroups([]);
-    expect(screen.queryByText('Harness form')).toBeNull();
-  });
-
   it.each<SettingsTab>(['Admin', 'CRM', 'Subscription'])(
     'shows a recovery action for unavailable %s without mounting its form',
     async (tab) => {

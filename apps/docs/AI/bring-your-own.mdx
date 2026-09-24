@@ -32,7 +32,7 @@ You need a macOS or Linux computer that can stay online and an installed, authen
 
 <Steps>
   <Step title="Install macrod">
-    Download the `macrod` archive for your operating system and architecture from [Macro release v2026.9.21.0](https://github.com/macro-inc/macro/releases/tag/v2026.9.21.0), then extract it.
+    Download the `macrod` archive for your operating system and architecture from [Macro releases](https://github.com/macro-inc/macro/releases), then extract it.
 
     Open **Settings → General → Agents → Runtimes → New runtime** in Macro. The page walks you through installation, configuration, and pairing.
   </Step>
@@ -48,7 +48,7 @@ You need a macOS or Linux computer that can stay online and an installed, authen
 
     On first launch, **Quickstart** lists the agents available on your machine. Select one, or choose **Custom command** to enter an ACP launch command.
 
-    Set **Workspace** to the directory your agent should work in. Choose **Private** for your own runtime or **Team** to let teammates use it. Leave **Full Access** off to require approval for actions.
+    Set **Workspace** to the directory your agent should work in. Choose **Private** for your own runtime that only you can kick off, or **Team** to let teammates use your agent. If you run team mode, anyone can create agent sessions that run on your computer. By default, you'll be asked for permission requests based on the harness you run, such as for accessing files outside of your workspace; if you enable **Full Access** these prompts will automatically be approved.
 
     <Frame caption="Configure your agent, workspace, and access before generating a pairing code.">
       ![The macrod Quickstart configuration screen showing discovered agents, workspace, access, Full Access off, and the Create and pair button](/images/macrod-quickstart-example.png)

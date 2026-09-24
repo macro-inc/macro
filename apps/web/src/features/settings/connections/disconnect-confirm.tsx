@@ -1,4 +1,4 @@
-import { Button, Dialog, Panel } from '@ui';
+import { ConfirmDialog } from '@ui';
 
 export type DisconnectConfirm = {
   title: string;
@@ -12,44 +12,21 @@ export function DisconnectConfirmDialog(props: {
   onClose: () => void;
 }) {
   return (
-    <Dialog
+    <ConfirmDialog
       open={props.request !== null}
       onOpenChange={(open) => {
         if (!open) props.onClose();
       }}
-      position="center"
-      visibleScrim
-      class="w-120"
-    >
-      <Panel depth={2} class="rounded-xl">
-        <Panel.Header class="px-6">
-          <Dialog.Title class="text-ink text-sm font-semibold">
-            {props.request?.title ?? 'Disconnect from Macro'}
-          </Dialog.Title>
-        </Panel.Header>
-        <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-          <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-            {props.request?.body}
-          </Dialog.Description>
-          <div class="pt-3 justify-end items-center gap-3 inline-flex">
-            <Button variant="outline" depth={3} onClick={props.onClose}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              depth={3}
-              onClick={() => {
-                const request = props.request;
-                if (!request) return;
-                props.onClose();
-                request.onConfirm();
-              }}
-            >
-              {props.request?.confirmLabel ?? 'Disconnect'}
-            </Button>
-          </div>
-        </Panel.Body>
-      </Panel>
-    </Dialog>
+      title={props.request?.title ?? 'Disconnect from Macro'}
+      body={props.request?.body}
+      confirmLabel={props.request?.confirmLabel ?? 'Disconnect'}
+      tone="danger"
+      onConfirm={() => {
+        const request = props.request;
+        if (!request) return;
+        props.onClose();
+        request.onConfirm();
+      }}
+    />
   );
 }

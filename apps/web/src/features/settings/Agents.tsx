@@ -44,6 +44,7 @@ import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
 import { AgentSettingsDescription } from './components/agent-settings-description';
+import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
 import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
@@ -562,7 +563,7 @@ function AgentEditorPage(props: {
   const [avatarUrl, setAvatarUrl] = createSignal<string | undefined>(
     props.agent?.bot.avatar_url ?? undefined
   );
-  const [instructions, setSystemPrompt] = createSignal(
+  const [instructions, setInstructions] = createSignal(
     props.agent?.instructions ?? ''
   );
   const [harnessId, setHarnessId] = createSignal(
@@ -865,19 +866,16 @@ function AgentEditorPage(props: {
           </AgentFormSection>
 
           <AgentFormSection
-            title="Behavior"
+            title="Instructions"
             description="Instructions the agent receives at the start of every conversation."
           >
-            <label class="flex flex-col gap-1.5">
-              <span class="text-xs font-medium text-ink">System prompt</span>
-              <textarea
-                rows={5}
-                class="settings-input h-auto min-h-30 w-full resize-y px-3 py-2.5 font-mono text-xs leading-5"
-                placeholder="You are a bug-fixing agent. Reproduce issues, identify root causes, and make focused, tested fixes…"
-                value={instructions()}
-                onInput={(event) => setSystemPrompt(event.currentTarget.value)}
-              />
-            </label>
+            <AgentInstructionsEditor
+              markdown={instructions()}
+              onChange={setInstructions}
+              disabled={props.pending}
+              class="rounded-lg border border-edge-muted bg-input px-3 py-2.5 focus-within:border-accent"
+              placeholder="Describe your agent’s role, how it should work, and what a good result looks like…"
+            />
           </AgentFormSection>
 
           <AgentFormSection
