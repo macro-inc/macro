@@ -183,7 +183,7 @@ export function $addCommentMark(
     if (
       needle &&
       !blocks.some((block) => block.includes(quote)) &&
-      blocks.join(' ').includes(quote)
+      collapse(blocks.join(' ')).includes(quote)
     )
       return {
         ok: false,

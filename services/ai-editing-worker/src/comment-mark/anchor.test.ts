@@ -96,6 +96,14 @@ describe('$addCommentMark', () => {
     expect(marks(session)).toHaveLength(0);
   });
 
+  it('spots a cross-block quote when a block ends in a space', () => {
+    const { session } = setup('First paragraph ends. \n\nSecond starts here.');
+    const result = edit(session, () =>
+      $addCommentMark(MARK, 'ends. Second starts')
+    );
+    expect(result).toMatchObject({ ok: false, reason: 'spans_blocks' });
+  });
+
   it('does not call a spacing slip inside one block a cross-block quote', () => {
     const { session } = setup('Alpha beta gamma.');
     const result = edit(session, () => $addCommentMark(MARK, 'beta  gamma'));
