@@ -1664,7 +1664,7 @@ async fn test_get_entity_notifications_batch_deserializes_tagged_metadata() {
 // ============================================================================
 
 #[tokio::test]
-async fn test_mark_seen_publishes_ios_clear_message() {
+async fn test_mark_seen_clears_push_only_when_enabled() {
     use std::sync::Arc;
 
     let user = test_user_id("alice@example.com");
@@ -1704,8 +1704,16 @@ async fn test_mark_seen_publishes_ios_clear_message() {
     assert_eq!(mark_seen_calls.len(), 1);
     assert_eq!(mark_seen_calls[0].1, vec![notif_id]);
 
-    // Verify queue message was published
     let published = queue.get_published();
+    if !cfg!(feature = "clear_ios_push") {
+        assert!(
+            published.is_empty(),
+            "Should not clear push when clear_ios_push is disabled"
+        );
+        return;
+    }
+
+    // Verify queue message was published
     assert_eq!(published.len(), 1);
 
     let msg = &published[0];
@@ -2016,7 +2024,7 @@ async fn test_mark_seen_skips_push_when_no_device_endpoints() {
 }
 
 #[tokio::test]
-async fn test_mark_done_updates_db_and_clears_push() {
+async fn test_mark_done_updates_db_and_clears_push_only_when_enabled() {
     use std::sync::Arc;
 
     let user = test_user_id("alice@example.com");
@@ -2060,10 +2068,16 @@ async fn test_mark_done_updates_db_and_clears_push() {
     assert_eq!(mark_done_calls[0].1, vec![notif_id]);
     assert!(mark_done_calls[0].2, "Should mark as done=true");
 
-    // Verify push clearing was published (Done(true) should clear push)
     let published = queue.get_published();
-    assert_eq!(published.len(), 1);
-    assert_eq!(published[0]["message_type"], "clear_push_notification");
+    if cfg!(feature = "clear_ios_push") {
+        assert_eq!(published.len(), 1);
+        assert_eq!(published[0]["message_type"], "clear_push_notification");
+    } else {
+        assert!(
+            published.is_empty(),
+            "Should not clear push when clear_ios_push is disabled"
+        );
+    }
 }
 
 #[tokio::test]
