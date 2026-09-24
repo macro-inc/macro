@@ -516,7 +516,9 @@ The address is a borderless ghost dropdown with the title's font weight and a
 consistent 14px font size at all widths; `from` is 12px. Both align to the title's baseline, without
 a tooltip or a separate clear button.
 Its single-select menu includes `All inboxes`, which clears the account selection
-and removes the filter. Verify that sidebar and menu selection stay in sync and that clearing preserves the current tab and other filters.
+and removes the filter. Saved selections from the old multi-select picker restore
+the first saved inbox; an empty saved selection restores All inboxes. Verify that
+sidebar and menu selection stay in sync and that clearing preserves the current tab and other filters.
 Sidebar rows, `New`, and the panel's back, forward and close controls act on primary-button
 mousedown, so the selection changes before the click completes; a normal click
 still works. The sidebar ends with a collapsible `Tags` section (every personal and

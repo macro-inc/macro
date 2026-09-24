@@ -45,6 +45,7 @@ import {
   emailTabSearch,
   emailTabSearchCodec,
 } from './email-route';
+import { normalizeInboxSelection } from './inbox-selection';
 import { createEmailViewPersistence } from './persistence';
 import {
   type EmailDataSource,
@@ -123,8 +124,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     createStore<EmailViewState>({
       tab: initial.tab ?? DEFAULT_EMAIL_TAB,
       search: initial.search ?? '',
-      inboxIds:
-        initial.inboxIds === undefined ? undefined : [...initial.inboxIds],
+      inboxIds: normalizeInboxSelection(initial.inboxIds),
       facets: normalizeFacetSelection(initial.facets),
       collapsedSidebarSectionIds: [
         ...(initial.collapsedSidebarSectionIds ?? []),
@@ -311,7 +311,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
 
   const setInboxIds = (ids: string[] | undefined) => {
     closeThread();
-    setState('inboxIds', ids === undefined ? undefined : [...ids]);
+    setState('inboxIds', normalizeInboxSelection(ids));
   };
 
   const setFacets = (facets: EmailViewState['facets']) => {

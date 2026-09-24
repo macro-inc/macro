@@ -20,8 +20,7 @@ type InboxOption = { id: string; label: string; photoUrl?: string };
 /**
  * Single-select over the user's linked inboxes: one inbox, or all of them.
  * `undefined` in view state means all; a chosen inbox is stored as `[id]`.
- * A stale multi-id selection persisted by the old picker still filters the
- * list, and every included inbox reads as selected until the user picks one.
+ * Legacy multi-id selections are normalized to their first inbox on restore.
  */
 function useInboxSelection() {
   const { state, setInboxIds } = useEmailView();
