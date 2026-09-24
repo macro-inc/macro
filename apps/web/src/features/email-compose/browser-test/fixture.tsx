@@ -5,6 +5,8 @@ import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import TextAa from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowSquareOut from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
 import { Button, SendButton } from '@ui';
 import { format } from 'date-fns/format';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
@@ -137,11 +139,16 @@ function Fixture() {
       run();
     };
     toastId = toast.success('Email scheduled', {
-      subtext: `Sends ${format(sendTime, "EEE, MMM d, yyyy 'at' h:mm a")}`,
+      subtext: `Sends ${format(sendTime, "EEE, MMM d 'at' h:mm a")}`,
       actions: [
-        { label: 'Undo', onClick: dismissThen(restoreDraft) },
+        {
+          label: 'Undo',
+          icon: ArrowCounterClockwise,
+          onClick: dismissThen(restoreDraft),
+        },
         {
           label: 'View message',
+          icon: ArrowSquareOut,
           onClick: dismissThen(() => setView('compose')),
         },
       ],

@@ -1,4 +1,5 @@
 import { format } from 'date-fns/format';
+import { isThisYear } from 'date-fns/isThisYear';
 import { type Accessor, createSignal } from 'solid-js';
 import type {
   EmailComposeFeedback,
@@ -345,6 +346,7 @@ export function createEmailSendSchedule(options: {
           ? [
               {
                 label: 'View message',
+                kind: 'open' as const,
                 onClick: () => {
                   if (toastId != null) notices.feedback.dismiss(toastId);
                   onViewScheduled({
@@ -379,7 +381,12 @@ export function createEmailSendSchedule(options: {
         toastId = notices.feedback.success(
           action === 'update' ? 'Email rescheduled' : 'Email scheduled',
           {
-            subtext: `Sends ${format(requested, "EEE, MMM d, yyyy 'at' h:mm a")}`,
+            subtext: `Sends ${format(
+              requested,
+              isThisYear(requested)
+                ? "EEE, MMM d 'at' h:mm a"
+                : "EEE, MMM d, yyyy 'at' h:mm a"
+            )}`,
             ...(actions.length > 0 ? { actions, duration: 8_000 } : {}),
           }
         );

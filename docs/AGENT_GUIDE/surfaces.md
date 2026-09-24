@@ -520,14 +520,16 @@ Remote-only draft attachments cannot be copied after the original draft is gone;
 their pills are removed and a notice asks you to attach those files again.
 
 A successful initial schedule shows an **Email scheduled** notice whose description
-gives the full send time, with **Undo** and **View message**; a rescheduled email
+gives the full send time, with **Undo** and **View message** on their own row below
+it; a rescheduled email
 shows **Email rescheduled** with **View message**. Undo cancels the captured draft in
 the captured inbox and restores its editable body, envelope, and attachments; it must
 not overwrite a newer reply. View message opens the scheduled thread, or scrolls an
 inline reply back into view.
 The Email view's **Scheduled** tab lists only server-confirmed scheduled drafts,
 soonest first across the selected inboxes, as ordinary email rows: the recipients,
-subject, and snippet, with a clock-and-time badge where Drafts shows **DRAFT**.
+subject, and snippet, with a clock-and-time badge (for example **Tomorrow, 2:12
+PM**) in place of the row's date.
 Opening a row previews its thread like any other email; cancel from the opened
 message's bar. Search and filters are hidden on this tab. Immediate-send undo-window
 queue rows are not scheduled drafts and must not appear.

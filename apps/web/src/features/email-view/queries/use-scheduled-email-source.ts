@@ -34,8 +34,6 @@ export function scheduledEmailEntity(
       name: recipient.name ?? undefined,
     })),
     scheduledSendTime: message.scheduled_send_time ?? undefined,
-    // The row's timestamp is when it will send, not when it was last edited.
-    sortTs: message.scheduled_send_time ?? message.updated_at,
     createdAt: message.created_at,
     updatedAt: message.updated_at,
   };

@@ -23,6 +23,7 @@ import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { Telemetry } from '@macro-inc/observability';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowSquareOut from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
   useAddForwardedAttachmentsMutation,
@@ -117,9 +118,9 @@ export function createEmailComposeContext(
   const { users } = useCombinedRecipients();
   const notice = (options?: ComposeNoticeOptions) => ({
     ...options,
-    actions: options?.actions?.map((action) => ({
+    actions: options?.actions?.map(({ kind, ...action }) => ({
       ...action,
-      icon: ArrowCounterClockwise,
+      icon: kind === 'open' ? ArrowSquareOut : ArrowCounterClockwise,
     })),
   });
   const reportError = (error: unknown) =>

@@ -340,10 +340,11 @@ it('only commits a selected time through the primary action', async () => {
   expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
     'Email scheduled',
     expect.objectContaining({
-      subtext: 'Sends Tue, Dec 1, 2026 at 12:00 PM',
+      // The year appears only when the send is not this year.
+      subtext: expect.stringMatching(/^Sends Tue, Dec 1(, 2026)? at 12:00 PM$/),
       actions: [
         expect.objectContaining({ label: 'Undo' }),
-        expect.objectContaining({ label: 'View message' }),
+        expect.objectContaining({ label: 'View message', kind: 'open' }),
       ],
       duration: 8_000,
     })

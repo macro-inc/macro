@@ -113,7 +113,6 @@ describe('scheduled email source', () => {
       isDraft: true,
       ownerId: 'alice',
       scheduledSendTime: '2026-09-27T12:00:00Z',
-      sortTs: '2026-09-27T12:00:00Z',
       participants: [{ email: 'peter@example.test', name: 'Peter' }],
     });
     expect(source.hasMore()).toBe(false);

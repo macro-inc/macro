@@ -261,7 +261,8 @@ export interface EmailComposeContext {
 export interface ComposeNoticeOptions {
   subtext?: string;
   duration?: number;
-  actions?: { label: string; onClick: () => void }[];
+  /** `kind` picks the action's icon; actions default to undo. */
+  actions?: { label: string; onClick: () => void; kind?: 'undo' | 'open' }[];
 }
 export interface EmailComposeHost {
   focusSibling?: (direction: 'next' | 'prev') => boolean | void;
