@@ -471,7 +471,8 @@ A presentation or refresh error after successful delivery is not a reason to sen
 again.
 
 Choosing or clearing a send time is local preparation only. The composer remains
-editable and autosaves normally, shows **Scheduled send: ...** in a bar attached
+editable and autosaves normally, shows **Scheduled send: ...** (the time and the
+viewer's timezone, e.g. **Sep 25 at 8:00 AM EDT**) in a bar attached
 below the composer (a strip along the bottom of the message card for replies), and
 performs no schedule, unschedule, archive, or delivery request. The bar's **Cancel**,
 at its far right, clears the local choice; the clock's tooltip reads **Schedule send
@@ -529,7 +530,8 @@ inline reply back into view.
 The Email view's **Scheduled** tab lists only server-confirmed scheduled drafts,
 soonest first across the selected inboxes, as ordinary email rows: the recipients,
 subject, and snippet, with a clock-and-time badge (for example **Tomorrow, 2:12
-PM**) in place of the row's date.
+PM**) in place of the row's date; hovering it gives the full date, time, and
+timezone.
 Opening a row previews its thread like any other email; cancel from the opened
 message's bar. Search and filters are hidden on this tab. Immediate-send undo-window
 queue rows are not scheduled drafts and must not appear.

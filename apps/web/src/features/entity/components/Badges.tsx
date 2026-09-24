@@ -1,5 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { formatTimeZoneAbbreviation } from '@core/util/date';
 import ClockIcon from '@phosphor/clock.svg';
 import HashIcon from '@phosphor/hash.svg';
 import UserPlus from '@phosphor/user-plus.svg';
@@ -113,7 +114,13 @@ export function ScheduledBadge(props: { sendTime: string }) {
           ? 'text-failure border-failure/20'
           : 'text-accent border-accent/20'
       )}
-      title={`${overdue() ? 'Overdue scheduled send' : 'Scheduled to send'} ${format(sendTime(), "EEE, MMM d, yyyy 'at' h:mm a")}`}
+      title={[
+        overdue() ? 'Overdue scheduled send' : 'Scheduled to send',
+        format(sendTime(), "EEE, MMM d, yyyy 'at' h:mm a"),
+        formatTimeZoneAbbreviation(sendTime()),
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       <ClockIcon class="size-3" />
       <span class="whitespace-nowrap">{scheduledSendLabel(sendTime())}</span>

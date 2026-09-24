@@ -1,4 +1,5 @@
 import type { EmailScheduleState } from '@app/features/email-compose/primitives/email-send-schedule';
+import { formatTimeZoneAbbreviation } from '@core/util/date';
 import ClockIcon from '@phosphor/clock.svg';
 import { Button, cn } from '@ui';
 import { format } from 'date-fns/format';
@@ -19,6 +20,13 @@ type ScheduleSummary = {
   action: () => void;
 };
 
+/** A send time with its zone, since the viewer's zone may not be the recipient's. */
+function sendTimeLabel(time: Date): string {
+  const zone = formatTimeZoneAbbreviation(time);
+  const label = format(time, "MMM d 'at' h:mm a");
+  return zone ? `${label} ${zone}` : label;
+}
+
 function describeSchedule(
   props: EmailScheduleSummaryProps
 ): ScheduleSummary | undefined {
@@ -26,7 +34,7 @@ function describeSchedule(
   if (state.type === 'editing') {
     if (state.intent.type === 'immediate') return undefined;
     return {
-      label: `Scheduled send: ${format(state.intent.sendTime, "MMM d 'at' h:mm a")}`,
+      label: `Scheduled send: ${sendTimeLabel(state.intent.sendTime)}`,
       detail: undefined,
       actionLabel: 'Cancel',
       accessibleActionLabel: 'Clear send time',
@@ -35,15 +43,15 @@ function describeSchedule(
   }
   if (state.proposedTime) {
     return {
-      label: `Scheduled for ${format(state.confirmedTime, "MMM d 'at' h:mm a")}`,
-      detail: `Update to ${format(state.proposedTime, "MMM d 'at' h:mm a")}; original remains active until Update succeeds`,
+      label: `Scheduled for ${sendTimeLabel(state.confirmedTime)}`,
+      detail: `Update to ${sendTimeLabel(state.proposedTime)}; original remains active until Update succeeds`,
       actionLabel: 'Cancel change',
       accessibleActionLabel: 'Cancel schedule change',
       action: () => props.onSelectTime(null),
     };
   }
   return {
-    label: `Scheduled for ${format(state.confirmedTime, "MMM d 'at' h:mm a")}`,
+    label: `Scheduled for ${sendTimeLabel(state.confirmedTime)}`,
     detail: undefined,
     actionLabel: 'Cancel',
     accessibleActionLabel: 'Cancel scheduled send',
