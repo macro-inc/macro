@@ -35,6 +35,17 @@ export const emailViewForTab = (tab: EmailTab): string =>
 
 const anyThread = (): TargetExpr => clause.not(clause.eq('threadId', NIL_UUID));
 
+// Preserve a shallow tree through both the REST and GraphQL AST compilers.
+// A flat 100-way clause.or becomes a linear tree and exceeds JSON ingress depth.
+function admittedThreads(ids: readonly string[]): TargetExpr {
+  if (ids.length < 2) return clause.eq('threadId', ids[0] ?? NIL_UUID);
+  const middle = Math.floor(ids.length / 2);
+  return clause.or(
+    admittedThreads(ids.slice(0, middle)),
+    admittedThreads(ids.slice(middle))
+  );
+}
+
 // Deliberately no `!isDraft` exclusion here: `isDraft` is thread-level, so
 // excluding it hid whole conversations the moment a reply draft saved (#5940).
 function tabClause(tab: EmailTab): TargetExpr {
@@ -86,13 +97,7 @@ export function buildEmailQuery(
 ): SoupAstItemsQueryArgs {
   const expressions = [tabClause(context.tab)];
   if (admittedIds) {
-    expressions.push(
-      clause.or(
-        ...(admittedIds.length ? admittedIds : [NIL_UUID]).map((id) =>
-          clause.eq('threadId', id)
-        )
-      )
-    );
+    expressions.push(admittedThreads(admittedIds));
   }
   const inbox = inboxClause(context.inboxIds);
   if (inbox) expressions.push(inbox);

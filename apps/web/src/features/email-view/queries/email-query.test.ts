@@ -3,6 +3,7 @@ import {
   EMPTY_TAG_FACET_CONTEXT,
 } from '@app/features/soup';
 import type { EntityData, WithNotification } from '@entity';
+import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { describe, expect, it, vi } from 'vitest';
 import type { EmailTab } from '../types';
@@ -66,6 +67,27 @@ const TAG_SETS = [
 ] as TagSetResponse[];
 
 describe('buildEmailQuery', () => {
+  it('keeps a full admission batch below REST and GraphQL ingress recursion limits', () => {
+    const ids = Array.from(
+      { length: 100 },
+      (_, index) =>
+        `00000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`
+    );
+    const args = buildEmailQuery(
+      contextFor({ tab: 'important', facets: { read: ['unread'] } }),
+      ids
+    );
+    const graphql = makeGraphqlSoupInput({ ...args, cursor: null });
+    const depth = (value: unknown): number =>
+      value && typeof value === 'object'
+        ? 1 + Math.max(0, ...Object.values(value).map(depth))
+        : 0;
+    expect(depth(args.body)).toBeLessThan(40);
+    expect(depth(graphql)).toBeLessThan(40);
+    for (const id of ids) expect(serialize(graphql)).toContain(id);
+    expect(serialize(args.body.ef)).not.toContain('"Read"');
+  });
+
   it('lists the server view each tab reads from', () => {
     expect(TABS.map((tab) => [tab, emailViewForTab(tab)])).toEqual([
       ['important', 'inbox'],
