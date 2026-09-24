@@ -29,6 +29,7 @@ import {
   BUCKET_COMBINATIONS,
   type Bucket,
   type QuickAccessContextValue,
+  type QuickAccessListOptions,
 } from './types';
 
 const mocks = vi.hoisted(() => ({
@@ -265,9 +266,13 @@ const retainedListText = {
   'recently-viewed': `older-note@${Date.parse('2026-08-03T00:00:00.000Z')},newer-note@${Date.parse('2026-08-02T00:00:00.000Z')}`,
 };
 
-function renderRetainedList(client: QueryClient) {
+function renderRetainedList(
+  client: QueryClient,
+  options?: QuickAccessListOptions
+) {
   const Shell = () => {
-    const list = useQuickAccess().useList();
+    const quickAccess = useQuickAccess();
+    const list = options ? quickAccess.useList(options) : quickAccess.useList();
     const node = document.createElement('main');
     node.dataset.testid = 'retained-shell';
     createRenderEffect(() => {
@@ -331,7 +336,7 @@ describe('Quick Access source integration', () => {
       }
       expect(fetch).toHaveBeenCalledTimes(2);
       expect(rendered.getByTestId('retained-shell').dataset.loading).toBe(
-        'true'
+        'false'
       );
       finishFirst(first);
       await vi.advanceTimersByTimeAsync(250);
@@ -373,6 +378,50 @@ describe('Quick Access source integration', () => {
         finish(retainedQueryData[source]);
         await vi.waitFor(() => expect(shell.dataset.loading).toBe('false'));
         expect(shell.textContent).toBe(retainedListText[source]);
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+
+  it.each(['history', 'channels'] as const)(
+    'keeps settled empty search results idle during a background %s refetch',
+    async (source) => {
+      let finishRefresh!: (data: unknown[]) => void;
+      const fetch = vi
+        .fn<() => Promise<unknown[]>>()
+        .mockResolvedValueOnce([])
+        .mockReturnValueOnce(
+          new Promise<unknown[]>((resolve) => {
+            finishRefresh = resolve;
+          })
+        );
+      let query: UseQueryResult<unknown[]> | undefined;
+      mocks.queries[source] = () =>
+        (query = useQuery(() => ({
+          queryKey: ['empty-background-refresh', source],
+          queryFn: fetch,
+          retry: false,
+        })));
+      const client = new QueryClient();
+      const rendered = renderRetainedList(client, {
+        buckets: ['note'],
+        searchTerm: () => 'no matching entities',
+      });
+      try {
+        const shell = rendered.getByTestId('retained-shell');
+        await vi.waitFor(() => expect(query?.isSuccess).toBe(true));
+        await vi.waitFor(() => expect(shell.dataset.loading).toBe('false'));
+        expect(shell.textContent).toBe('');
+        const refresh = query!.refetch();
+        await vi.waitFor(() => expect(query?.isRefetching).toBe(true));
+        expect(shell.dataset.loading).toBe('false');
+        expect(shell.textContent).toBe('');
+        finishRefresh([]);
+        await refresh;
+        expect(shell.dataset.loading).toBe('false');
+        expect(shell.textContent).toBe('');
       } finally {
         rendered.unmount();
         client.clear();
@@ -475,6 +524,7 @@ describe('Quick Access source integration', () => {
         expect(shell.textContent).toBe(expected);
         const refresh = query!.refetch();
         await vi.waitFor(() => expect(query?.isRefetching).toBe(true));
+        expect(shell.dataset.loading).toBe('false');
         expect(shell.textContent).toBe(expected);
         rejectRefresh(new Error('cache refresh failed'));
         await refresh;
