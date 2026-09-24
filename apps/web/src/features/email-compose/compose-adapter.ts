@@ -130,7 +130,17 @@ export function createEmailComposeContext(
   const refreshThread = (threadId: string | undefined) => {
     if (!threadId) return;
     if (isFeatureEnabled(enableGraphqlSoup)) {
-      void fetchAndCacheThread(threadId).catch(reportError);
+      void (async () => {
+        const result = await fetchAndCacheThread(threadId);
+        if (result.isErr())
+          reportError(
+            new Error(
+              `Failed to refresh email thread ${threadId}: ${result.error
+                .map((error) => `${error.code}: ${error.message}`)
+                .join(', ')}`
+            )
+          );
+      })().catch(reportError);
       return;
     }
     void queryClient

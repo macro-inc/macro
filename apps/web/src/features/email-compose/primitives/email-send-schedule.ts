@@ -51,6 +51,10 @@ export function getScheduleActionLabel(state: EmailScheduleState) {
 const sameTime = (left: Date, right: Date) =>
   left.getTime() === right.getTime();
 
+// A schedule's notice outlives the composer that made it: showing the thread
+// mounts another composer for the same draft, which may cancel or deliver it.
+const scheduledNotices = new Map<string, { toastId: number | undefined }>();
+
 export function createEmailSendSchedule(options: {
   delivery: Pick<EmailDelivery, 'schedule' | 'unschedule' | 'archive'>;
   notices: EmailComposeFeedback;
@@ -58,7 +62,7 @@ export function createEmailSendSchedule(options: {
   draftId: Accessor<string | null | undefined>;
   saveDraft: () => Promise<string | undefined>;
   threadId: Accessor<string | null | undefined>;
-  /** False when the thread is already done, so scheduling leaves it alone. */
+  /** Scheduling marks the thread done only when this reports it in the inbox. */
   threadInInbox?: Accessor<boolean | undefined>;
   inboxId: Accessor<string | undefined>;
   includeSignature: Accessor<boolean | undefined>;
@@ -100,11 +104,16 @@ export function createEmailSendSchedule(options: {
   let ignoredLifecycleObservation: EmailDraftLifecycleState | undefined;
   let deferredLifecycleObservation: EmailDraftLifecycleState | undefined;
   // The "Email scheduled" notice offers Undo only while that schedule stands.
-  let scheduledNoticeId: number | undefined;
+  // Remember the draft it belongs to past a composer's session reset.
+  let scheduledDraftId = options.initialScheduledTime
+    ? (options.draftId() ?? undefined)
+    : undefined;
   const dismissScheduledNotice = () => {
-    if (scheduledNoticeId == null) return;
-    notices.feedback.dismiss(scheduledNoticeId);
-    scheduledNoticeId = undefined;
+    const draftId = scheduledDraftId ?? options.draftId();
+    const notice = draftId ? scheduledNotices.get(draftId) : undefined;
+    if (!draftId || !notice) return;
+    scheduledNotices.delete(draftId);
+    if (notice.toastId != null) notices.feedback.dismiss(notice.toastId);
   };
 
   const pending = () => operation() !== 'idle';
@@ -147,6 +156,7 @@ export function createEmailSendSchedule(options: {
     ) {
       return;
     }
+    scheduledDraftId = options.draftId() ?? scheduledDraftId;
     selectionRevision += 1;
     setState({ type: 'scheduled', confirmedTime: sendTime });
   };
@@ -352,7 +362,10 @@ export function createEmailSendSchedule(options: {
       applyScheduled(requested, true);
       const threadId = options.threadId();
       let markedDone = false;
-      if (threadId && options.threadInInbox?.() !== false) {
+      const inInbox = options.threadInInbox
+        ? options.threadInInbox() === true
+        : true;
+      if (threadId && inInbox) {
         try {
           await delivery.archive({ threadId, value: true }, inboxId);
           markedDone = true;
@@ -366,6 +379,7 @@ export function createEmailSendSchedule(options: {
       try {
         // The title stays terse so it never truncates; the time is the subtext.
         let toastId: number | undefined;
+        let notice: { toastId: number | undefined } | undefined;
         let undoStarted = false;
         const onViewScheduled = options.onViewScheduled;
         const viewAction = onViewScheduled
@@ -390,8 +404,15 @@ export function createEmailSendSchedule(options: {
                 {
                   label: 'Undo',
                   onClick: () => {
-                    if (undoStarted) return;
+                    // A dismissing notice stays clickable; only the live one undoes.
+                    if (
+                      undoStarted ||
+                      !notice ||
+                      scheduledNotices.get(draftId) !== notice
+                    )
+                      return;
                     undoStarted = true;
+                    scheduledNotices.delete(draftId);
                     if (toastId != null) notices.feedback.dismiss(toastId);
                     void undoInitialSchedule({
                       draftId,
@@ -418,7 +439,8 @@ export function createEmailSendSchedule(options: {
             ...(actions.length > 0 ? { actions, duration: 8_000 } : {}),
           }
         );
-        scheduledNoticeId = toastId;
+        notice = { toastId };
+        scheduledNotices.set(draftId, notice);
       } catch (error) {
         // Toast rendering is post-commit UI and cannot make a successful
         // schedule retryable.
@@ -510,6 +532,7 @@ export function createEmailSendSchedule(options: {
     observe,
     detach,
     reset: () => {
+      scheduledDraftId = undefined;
       selectionRevision += 1;
       setState({ type: 'editing', intent: { type: 'immediate' } });
     },

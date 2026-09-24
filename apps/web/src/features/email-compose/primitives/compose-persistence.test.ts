@@ -405,22 +405,38 @@ it('only commits a selected time through the primary action', async () => {
   reopened.dispose();
 });
 
-it('dismisses the scheduled notice once the schedule is cancelled', async () => {
+it('retires the scheduled notice when the thread view cancels the schedule', async () => {
   const composeContext = createComposeContext();
   vi.mocked(composeContext.notices.feedback.success).mockImplementation(
     (message) => (message === 'Email scheduled' ? 7 : undefined)
   );
   const root = mountEmailComposer(composeContext);
   root.edit('Schedule then cancel');
-  root.state.context.schedule.onSelect(new Date('2026-12-01T12:00:00Z'));
+  const sendTime = new Date('2026-12-01T12:00:00Z');
+  root.state.context.schedule.onSelect(sendTime);
   root.state.context.onSend();
   await vi.advanceTimersByTimeAsync(1);
+  const scheduledNotice = vi
+    .mocked(composeContext.notices.feedback.success)
+    .mock.calls.find(([text]) => text === 'Email scheduled');
+  // Scheduling shows the thread, whose own composer holds the draft.
+  root.dispose();
+  const threadView = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', {
+      is_draft: true,
+      scheduled_send_time: sendTime.toISOString(),
+    }),
+  });
   expect(composeContext.notices.feedback.dismiss).not.toHaveBeenCalled();
 
-  expect(await root.state.context.schedule.onCancel()).toBe(true);
-  // Undo on a stale notice would unschedule whatever the draft is by then.
+  expect(await threadView.state.context.schedule.onCancel()).toBe(true);
   expect(composeContext.notices.feedback.dismiss).toHaveBeenCalledWith(7);
-  root.dispose();
+  // A click that lands during the dismissal must not undo the newer draft.
+  scheduledNotice?.[1]?.actions?.[0].onClick();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.delivery.unschedule).toHaveBeenCalledOnce();
+  expect(composeContext.drafts.restoreDraft).not.toHaveBeenCalled();
+  threadView.dispose();
 });
 
 it('preserves local intent on schedule failure without falling back to send', async () => {
