@@ -1,5 +1,8 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import {
+  createFilesReadyHandler,
+  getDragDropPosition,
+} from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { type FocusableElement, tabbable } from 'tabbable';
@@ -39,7 +42,7 @@ export function createComposeBodyActions(): ComposeBodyActions {
       toast.success(`${email} added to CC`);
     },
     readDroppedFiles: readDroppedEmailFiles,
-    pasteFiles(editor, files, directories) {
+    insertFiles(editor, files, directories, dropEvent) {
       handleFileFolderDrop(
         files,
         directories,
@@ -47,7 +50,9 @@ export function createComposeBodyActions(): ComposeBodyActions {
           editor,
           undefined,
           undefined,
-          undefined,
+          dropEvent
+            ? () => getDragDropPosition(editor, dropEvent, true)
+            : undefined,
           (ids) => ids.forEach(makeAttachmentPublic),
           { width: 542, height: 542 }
         )

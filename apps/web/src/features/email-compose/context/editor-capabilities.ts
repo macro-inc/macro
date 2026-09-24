@@ -7,9 +7,10 @@ export interface ComposeBodyActions {
     directories: FileSystemDirectoryEntry[],
     onFiles: (files: File[]) => void
   ): void;
-  pasteFiles(
+  insertFiles(
     editor: LexicalEditor,
     files: FileSystemFileEntry[],
-    directories: FileSystemDirectoryEntry[]
+    directories: FileSystemDirectoryEntry[],
+    dropEvent?: DragEvent
   ): void;
 }
