@@ -77,8 +77,8 @@ const adapter = createCacheCoordinatorPageAdapter({
     currentWorker = undefined;
     report({ kind: 'worker-terminated', ownerEpoch, reason });
   },
-  onEngineReplaced: (ownerEpoch) => {
-    report({ kind: 'engine-replaced', ownerEpoch });
+  onEngineReplaced: (ownerEpoch, openOutcome) => {
+    report({ kind: 'engine-replaced', ownerEpoch, openOutcome });
   },
   onProtocolError: (error) => {
     report({ kind: 'protocol-error', error: error.message });

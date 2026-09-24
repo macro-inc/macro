@@ -280,7 +280,8 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     );
     expect(pr.closest('button')).toBeNull();
     expect(view.container.querySelector('[data-kind="code"]')).toBeTruthy();
-    expect(screen.getByText('Open')).toBeTruthy();
+    expect(screen.getByText('#42')).toBeTruthy();
+    expect(screen.queryByText('Open')).toBeNull();
     fireEvent.mouseDown(pr, { button: 0, detail: 1 });
     fireEvent.click(pr);
     expect(open).not.toHaveBeenCalled();
@@ -293,7 +294,13 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
       pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
       pullRequestState: 'merged',
     });
-    expect(screen.getByText('Merged')).toBeTruthy();
+    expect(
+      screen.getByRole('link', {
+        name: 'Open pull request #42, Merged on GitHub',
+      })
+    ).toBeTruthy();
+    expect(screen.getByText('#42')).toBeTruthy();
+    expect(screen.queryByText('Merged')).toBeNull();
     expect(screen.queryByText('Open')).toBeNull();
   });
 

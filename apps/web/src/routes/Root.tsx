@@ -9,6 +9,7 @@ import { ChannelInviteAcceptance } from '@app/features/channel-invitations/Chann
 import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
 import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
+import { HomePreferencesProvider } from '@app/features/home/home-prefs';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
@@ -114,7 +115,6 @@ import {
   onMount,
   type ParentProps,
   Show,
-  Suspense,
 } from 'solid-js';
 import { BasePathComponent } from './BasePath';
 import { TaskRoute } from './TaskRoute';
@@ -232,57 +232,6 @@ const ROUTES: RouteDefinition[] = [
     component: TaskRoute,
   },
   LAYOUT_ROUTE,
-  /** BEGIN - APP ROUTES */
-  {
-    path: '/inbox',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/recent',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/activity',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/reminders',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/agents',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/mail',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/documents',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/tasks',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/channels',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/calls',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/companies',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/files',
-    component: LAYOUT_ROUTE.component,
-  },
-  /** END - APP ROUTES */
-
   {
     path: '/',
     component: BasePathComponent,
@@ -384,6 +333,7 @@ const ROUTES: RouteDefinition[] = [
 ];
 
 function ConfiguredGlobalAppStateProvider(props: ParentProps) {
+  const userId = useUserId();
   // Initialize global notification helpers
   const notifInterface = usePlatformNotificationState();
   useChatRenameWebsocketSync();
@@ -417,7 +367,9 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
       notificationSource={notificationSource}
       blockOrchestrator={blockOrchestrator}
     >
-      {props.children}
+      <HomePreferencesProvider userId={userId}>
+        {props.children}
+      </HomePreferencesProvider>
     </GlobalAppStateProvider>
   );
 }
@@ -614,20 +566,20 @@ export function Root() {
                                 <ChatAttachmentsInit />
                                 <ReactiveFavicon />
                                 <Title>{tabTitle()}</Title>
-                                <Suspense>
-                                  <IsomorphicRouter
-                                    transformUrl={transformShortIdInUrlPathname}
-                                    root={Layout}
-                                    rootPreload={rootPreload}
-                                    base={ROUTER_BASE}
-                                  >
-                                    {{
-                                      path: '/',
-                                      component: TauriRouteListener,
-                                      children: ROUTES,
-                                    }}
-                                  </IsomorphicRouter>
-                                </Suspense>
+                                {/* Loading boundaries belong inside Layout so
+                                    a pending resource cannot detach the app shell. */}
+                                <IsomorphicRouter
+                                  transformUrl={transformShortIdInUrlPathname}
+                                  root={Layout}
+                                  rootPreload={rootPreload}
+                                  base={ROUTER_BASE}
+                                >
+                                  {{
+                                    path: '/',
+                                    component: TauriRouteListener,
+                                    children: ROUTES,
+                                  }}
+                                </IsomorphicRouter>
                                 <InitialInteractiveOnboardingModal />
                                 <ToastRegion />
                               </SearchProvider>

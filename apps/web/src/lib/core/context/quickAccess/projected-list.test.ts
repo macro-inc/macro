@@ -9,7 +9,7 @@ import {
   createProjectedList,
   MAX_BROWSE_PAGES_PER_LOAD,
 } from './projected-list';
-import { exclude } from './types';
+import { type Bucket, exclude } from './types';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -79,6 +79,79 @@ describe('Quick Access local projection', () => {
     expect(list.items()).toHaveLength(80);
     expect(list.hasMore()).toBe(false);
     await list.loadMore();
+    expect(search).toHaveBeenCalledTimes(2);
+  });
+
+  it('resets the loaded window and cursor when reactive buckets change', async () => {
+    const [buckets, setBuckets] = createSignal<Bucket[]>([
+      'note',
+      'crm_company',
+    ]);
+    const refresh = deferred<SearchCachePage>();
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockResolvedValueOnce(page(['one'], true))
+      .mockResolvedValueOnce(page(['two'], true))
+      .mockReturnValueOnce(refresh.promise)
+      .mockResolvedValueOnce(page(['last']));
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        get buckets() {
+          return buckets();
+        },
+        revision: () => 0,
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.hasMore()).toBe(true));
+    await list.loadMore();
+    expect(list.items()).toHaveLength(2);
+
+    setBuckets(['note']);
+    expect(list.items()).toEqual([]);
+    expect(search.mock.calls[2][0]).toMatchObject({ buckets: ['note'] });
+    expect(search.mock.calls[2][0].cursor).toBeUndefined();
+    refresh.resolve(page(['new'], true));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(search).toHaveBeenCalledTimes(3);
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:new' }]);
+    await list.loadMore();
+    expect(search.mock.calls[3][0].cursor?.recordKey).toBe(
+      'GraphqlSoupDocument:new'
+    );
+    expect(list.items()).toHaveLength(2);
+  });
+
+  it('ignores in-flight results for buckets that are no longer enabled', async () => {
+    const [buckets, setBuckets] = createSignal<Bucket[]>([
+      'crm_company',
+      'note',
+    ]);
+    const pending = deferred<SearchCachePage>();
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(page(['note']));
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        get buckets() {
+          return buckets();
+        },
+        revision: () => 0,
+        materialize,
+      })
+    );
+    setBuckets(['note']);
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    pending.resolve({
+      documents: [document('company', 'crm_company')],
+      nextCursor: null,
+    });
+    await pending.promise;
+    await Promise.resolve();
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:note' }]);
     expect(search).toHaveBeenCalledTimes(2);
   });
 
@@ -245,7 +318,7 @@ describe('Quick Access local projection', () => {
     expect(search.mock.calls[0][0].buckets).not.toEqual(
       expect.arrayContaining(['email'])
     );
-    expect(search.mock.calls[0][0].buckets).not.toEqual(
+    expect(search.mock.calls[0][0].buckets).toEqual(
       expect.arrayContaining(['crm_company'])
     );
     expect(search.mock.calls[0][0].buckets).not.toEqual(
@@ -258,7 +331,7 @@ describe('Quick Access local projection', () => {
     const list = root(() =>
       createProjectedList({
         host: { search },
-        buckets: ['email', 'person', 'crm_company', 'agent_session'],
+        buckets: ['email', 'person', 'agent_session'],
         revision: () => 0,
         materialize,
       })

@@ -8,6 +8,7 @@ version = "0.1.0"
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model_file_type = { path = "../model_file_type" }
+model_owner = { path = "../model_owner" }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

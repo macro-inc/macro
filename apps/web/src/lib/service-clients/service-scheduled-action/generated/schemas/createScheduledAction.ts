@@ -5,20 +5,12 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { ActionKind } from './actionKind';
-import type { CreateScheduledActionTask } from './createScheduledActionTask';
-import type { Schedule } from './schedule';
+import type { ActionConfiguration } from './actionConfiguration';
+import type { LegacyActionConfiguration } from './legacyActionConfiguration';
 
 /**
- * Client-supplied payload for creating a scheduled action. The server fills
-in `id`, `owner` (from the authenticated user), timestamps, `claimed`, and
-`next_run_at` (derived from the cron).
+ * Exactly one representation is accepted, even if mixed fields agree or are null.
  */
-export interface CreateScheduledAction {
-  enabled: boolean;
-  kind: ActionKind;
-  name: string;
-  schedule: Schedule;
-  task: CreateScheduledActionTask;
-  timezone: string;
-}
+export type CreateScheduledAction =
+  | ActionConfiguration
+  | LegacyActionConfiguration;

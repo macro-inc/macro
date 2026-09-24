@@ -190,6 +190,9 @@ where
                 AgentMcpServers::OwnerConnections,
             ),
         };
+        // A caller's pick outranks the persona's: choosing a model on the way
+        // in is choosing what this session runs on, for its whole life.
+        let model = request.model.unwrap_or(model);
         let kind = AgentKind::for_session(bot_id, &harness);
         let harness = kind.harness_slug().map_or(harness, str::to_owned);
         if kind == AgentKind::CodexCloud {
@@ -251,7 +254,7 @@ where
         };
         let defaults = self.inner.defaults.for_bot(bot_id);
         let sandbox_size = self.inner.sessions.user_sandbox_size(&owner_user).await?;
-        let session_id = AgentSessionId::new();
+        let session_id = request.id.unwrap_or_else(AgentSessionId::new);
         // Same ordering as the trigger path's open: the token has to be minted
         // before the row, because the row is what carries the hash that makes
         // it mean anything.

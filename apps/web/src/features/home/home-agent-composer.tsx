@@ -3,6 +3,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useChatInputContext } from '@core/component/AI/context';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { createEffect, createSignal } from 'solid-js';
@@ -23,6 +24,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
   const input = useChatInputContext();
   const roster = createAgentRosterSource();
   const settings = useSettingsState();
+  const userId = useUserId();
   const [draft, setDraft] = createSignal('');
   let focus: (() => void) | undefined;
   let draftVersion = 0;
@@ -65,7 +67,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
     },
   });
   const start = (conversation: StartConversation) => {
-    const id = startPendingSession(conversation);
+    const id = startPendingSession({ ...conversation, userId: userId() });
     panel.handle.replace({
       next: {
         type: 'component',

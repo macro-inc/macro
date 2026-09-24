@@ -39,7 +39,7 @@ export function Thought(props: ThoughtProps) {
         />
       </button>
       <Show when={expanded()}>
-        <div class="pl-5 text-ink-muted whitespace-pre-wrap wrap-break-word">
+        <div class="pl-5 text-ink-muted whitespace-pre-wrap wrap-break-word select-text">
           {props.text}
         </div>
       </Show>

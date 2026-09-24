@@ -33,7 +33,7 @@ fn archived_call() -> Entity<'static> {
 
 fn command(facts: &TeamShareFacts, level: Option<AccessLevel>) -> AuthorizedTeamShareCommand {
     authorize_team_share(
-        Some(&facts.owner),
+        facts.owner.as_user(),
         facts,
         TeamShareRequest {
             access_level: Some(level),
@@ -227,7 +227,7 @@ async fn load_facts_prefers_active_call_over_archived_record_with_same_id(
 
     let facts = load_facts(&mut tx, &active_call()).await?;
 
-    assert_eq!(facts.owner.as_ref(), "macro|owner@example.com");
+    assert_eq!(facts.owner.principal_id(), "macro|owner@example.com");
     assert_eq!(facts.current, None);
     Ok(())
 }
@@ -413,6 +413,69 @@ async fn apply_project_team_share_copies_and_clears_nested_contents(
     .fetch_one(tx.as_mut())
     .await?;
     assert_eq!(remaining, Some(0));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../entity_access/fixtures", scripts("typed_owner_team"))
+)]
+async fn typed_owner_facts_match_sql_audiences_without_owner_escalation(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    use macro_user_id::user_id::MacroUserIdStr;
+    use models_permissions::share_permission::team_share::TeamSharePolicyError;
+
+    let team = Uuid::parse_str("90000000-0000-0000-0000-000000000011")?;
+    let actor = MacroUserIdStr::parse_from_str("macro|typed-owner@example.com")?;
+    let mut tx = pool.begin().await?;
+    for (suffix, has_team) in [
+        (31, true),
+        (32, false),
+        (33, true),
+        (34, true),
+        (35, true),
+        (36, false),
+        (37, false),
+    ] {
+        for kind in [EntityType::Document, EntityType::Project, EntityType::Chat] {
+            let entity = kind.with_entity_string(format!("90000000-0000-0000-0000-{suffix:012}"));
+            let facts = load_facts(&mut tx, &entity).await?;
+            let expected = has_team.then_some(team);
+            assert_eq!(facts.owner_team_id, expected, "{entity:?}");
+            let sql_team = sqlx::query_scalar!(
+                "SELECT team_id FROM owner_team($1)",
+                facts.owner.principal_id()
+            )
+            .fetch_optional(tx.as_mut())
+            .await?
+            .flatten();
+            assert_eq!(sql_team, facts.owner_team_id, "domain/SQL policy parity");
+
+            let request = TeamShareRequest {
+                legacy_enabled: Some(true),
+                ..Default::default()
+            };
+            let authorized =
+                authorize_team_share(Some(&actor), &facts, request, TeamShareLevel::Edit);
+            if suffix == 31 {
+                assert!(authorized?.is_some());
+            } else {
+                assert_eq!(authorized, Err(TeamSharePolicyError::NotOwner));
+            }
+            if suffix == 32 {
+                assert_eq!(
+                    authorize_team_share(
+                        facts.owner.as_user(),
+                        &facts,
+                        request,
+                        TeamShareLevel::Edit
+                    ),
+                    Err(TeamSharePolicyError::MissingTeam)
+                );
+            }
+        }
+    }
     Ok(())
 }
 

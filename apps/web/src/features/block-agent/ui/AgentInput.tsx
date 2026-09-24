@@ -10,6 +10,12 @@ import { createResizeObserver } from '@solid-primitives/resize-observer';
  * `@core/component/AI/component/input/ChatInput.tsx`.
  */
 
+import {
+  DictationButton,
+  DictationFeedback,
+  DictationPanel,
+} from '@app/features/dictation/components/dictation-controls';
+import { createComposerDictation } from '@app/features/dictation/composer-dictation';
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
@@ -118,6 +124,7 @@ export function AgentInput(props: AgentInputProps) {
     setHeight(element.getBoundingClientRect().height);
   });
   useTouchOutsideToDismissKeyboard(() => containerRef);
+  const dictation = createComposerDictation(() => editor.lexical);
 
   const attachments = () => props.attachments ?? [];
   const canAttach = () =>
@@ -136,7 +143,8 @@ export function AgentInput(props: AgentInputProps) {
     (markdown().trim().length > 0 || attachments().length > 0) &&
     !hasPendingAttachments() &&
     !props.disabled &&
-    !props.readOnly;
+    !props.readOnly &&
+    !dictation.active();
 
   // The channel composer's chips, drop zone, and overlay read their state
   // from `Input.Root`'s context; this is that context, over this composer's
@@ -167,6 +175,7 @@ export function AgentInput(props: AgentInputProps) {
   // in flight, or a previous advance the log has not confirmed yet. Attached
   // files are something to send in their own right, so they hold it back too.
   const canSendNext = () =>
+    !dictation.active() &&
     markdown().trim().length === 0 &&
     attachments().length === 0 &&
     props.hasQueuedMessages === true &&
@@ -291,7 +300,7 @@ export function AgentInput(props: AgentInputProps) {
         {/* h-auto beats Surface's size-full so the in-flow controls are not
             clipped over the editor (that was Auto sitting on the placeholder). */}
         <ComposerSurface
-          class="h-auto transition-[height] duration-150 ease-out motion-reduce:transition-none"
+          class="relative h-auto transition-[height] duration-150 ease-out motion-reduce:transition-none"
           style={{
             height: height() === undefined ? undefined : `${height()}px`,
           }}
@@ -308,7 +317,12 @@ export function AgentInput(props: AgentInputProps) {
                 hint="Drop files here to send them to the agent"
               />
             </Show>
-            <div ref={setContent} data-composer-content>
+            <div
+              ref={setContent}
+              data-composer-content
+              inert={dictation.active()}
+              classList={{ invisible: dictation.active() }}
+            >
               {/* Chips above the text, media and documents in their own rows,
                   exactly as the channel composer lays them out. */}
               <Input.Attachments kind="media" class="pb-0" />
@@ -366,7 +380,11 @@ export function AgentInput(props: AgentInputProps) {
                       disabled={props.disabled || props.readOnly}
                     />
                   </Show>
-                  <div class="ml-auto shrink-0">
+                  <div class="ml-auto flex shrink-0 items-center gap-[3.75px]">
+                    <DictationButton
+                      dictation={dictation}
+                      disabled={props.disabled || props.readOnly}
+                    />
                     <Show
                       when={canSendNext()}
                       fallback={
@@ -413,7 +431,9 @@ export function AgentInput(props: AgentInputProps) {
               </div>
             </div>
           </Input.DropZone>
+          <DictationPanel dictation={dictation} />
         </ComposerSurface>
+        <DictationFeedback dictation={dictation} />
       </div>
     </InputProvider>
   );

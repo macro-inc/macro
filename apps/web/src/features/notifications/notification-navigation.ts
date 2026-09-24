@@ -1,5 +1,5 @@
-import { createCalendarBlockRange } from '@block-calendar/calendar-range';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
+import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
+import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import {
   getChannelParams,
   navigateToChannelMessage,
@@ -403,16 +403,19 @@ function getSupportedHandler(
             : content.startDate
               ? { kind: 'allDay' as const, startDate: content.startDate }
               : undefined;
-          const range = time ? createCalendarBlockRange(time) : undefined;
-          openSplitIfNotOpen(lm, 'calendar', CALENDAR_BLOCK_ID, {
-            newSplit,
-            sourceHandle,
-            params: {
+          const range = time ? createCalendarRange(time) : undefined;
+          openCalendarView(
+            {
               eventId: content.eventId,
               occurrenceKey: content.occurrenceKey,
               range,
             },
-          });
+            {
+              manager: lm,
+              handle: sourceHandle,
+              openInNewSplit: newSplit,
+            }
+          );
         };
       })
       .with('inbox_reauth_required', () => null)

@@ -12,7 +12,6 @@ import {
   getThreadReplySnapshot,
   insertThreadReply,
   removeThreadReply,
-  replaceThreadReplyId,
   restoreThreadReply,
   setThreadRepliesData,
   softInvalidateThreadReplies,
@@ -27,8 +26,6 @@ import {
   insertTopLevelMessageIntoMessageTimeline,
   removeThreadReplyFromMessageTimeline,
   removeTopLevelMessageFromMessageTimeline,
-  replaceThreadReplyIdInMessageTimeline,
-  replaceTopLevelMessageIdInMessageTimeline,
   restoreThreadPreviewReplyInMessageTimeline,
   restoreTopLevelMessageInMessageTimeline,
   setMessageTimelineData,
@@ -265,29 +262,16 @@ export function restoreMessageInTargetCaches(
   );
 }
 
-/** Replaces a target message id across all rendered caches. */
-export function replaceTargetMessageId(
+/** Find a root's cached thread state without inventing a partial one. */
+export function getCachedThreadState(
   parent: MessageParent,
-  target: MessageTarget,
-  realId: string
-) {
-  if (target.kind === 'thread_reply') {
-    setThreadRepliesData(parent, target.threadId, (prev) =>
-      replaceThreadReplyId(prev, target.messageId, realId)
-    );
-    setMessageTimelineData(parent, (prev) =>
-      replaceThreadReplyIdInMessageTimeline(
-        prev,
-        target.threadId,
-        target.messageId,
-        realId
-      )
-    );
-    return;
-  }
-
-  setMessageTimelineData(parent, (prev) =>
-    replaceTopLevelMessageIdInMessageTimeline(prev, target.messageId, realId)
+  rootId: string
+): MessageThread['state'] | undefined {
+  return (
+    queryClient.getQueryData<MessageThread>(
+      getThreadRepliesQueryKey(parent, rootId)
+    )?.state ??
+    findTopLevelMessageSnapshotInMessageTimeline(parent, rootId)?.message.state
   );
 }
 

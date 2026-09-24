@@ -1,5 +1,6 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
-import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
+import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   type BlockAlias,
@@ -26,7 +27,7 @@ import { canNestBlock } from '@core/orchestrator';
 import { formatDate } from '@core/util/date';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   $convertMentionToCard,
   $isDocumentMentionNode,
@@ -123,8 +124,8 @@ function SkillSlashText(props: {
   const systemSkills = useSystemSkillsQuery();
   const openSkill = createCallback((e: MouseEvent) => {
     if (systemSkills.isSystemSkillId(props.documentId)) return;
-    // Also keeps the outer mention click handler (read-only contexts) from
-    // opening the skill a second time.
+    // Also keeps the outer mention click handler from opening the skill a
+    // second time.
     e.stopPropagation();
     openDocument(
       'skill',
@@ -539,24 +540,25 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return props.blockName;
   });
 
+  const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
+
   const open = createCallback((e: MouseEvent | KeyboardEvent | null) => {
     // The calendar is a singleton block: open it aimed at the viewer's own
-    // copy of the meeting, which the preview resolved through the shared
-    // iCalendar UID.
+    // copy of the meeting. A meeting shared through the channel but absent
+    // from the viewer's calendars has nothing to open, so its read-only
+    // preview card is shown instead.
     if (verifyBlockName(props.blockName) === 'calendar') {
-      const i = item();
-      const event = isCalendarEventPreviewItem(i) ? i.event : undefined;
-      const paramKey = props.blockParams?.occurrenceKey;
+      const target = calendarMentionOpen(
+        item(),
+        props.documentId,
+        props.blockParams?.occurrenceKey
+      );
+      if (target.kind === 'read_only') {
+        setPreviewCardOpen(true);
+        return;
+      }
       openCalendarEventSplit({
-        eventId: event?.viewerEventId ?? props.documentId,
-        occurrenceKey: paramKey ?? event?.occurrenceKey ?? undefined,
-        // The preview's time only locates the instance it previewed; a
-        // mention aimed at a different instance derives its range from the
-        // occurrence key instead.
-        time:
-          !paramKey || paramKey === event?.occurrenceKey
-            ? event?.time
-            : undefined,
+        ...target.target,
         openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
       });
       return;
@@ -633,7 +635,10 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     });
   };
 
-  const navHandlers = useSplitNavigationHandler<HTMLSpanElement>((e) => {
+  // Native listeners: inside an editable editor (the agent and chat
+  // composers) the shell stops click propagation before Solid's delegated
+  // handlers run, which left the chip inert there.
+  const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
     e.stopPropagation();
     const i = item();
     if (
@@ -647,6 +652,8 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
 
   return (
     <HoverCard
+      open={previewCardOpen()}
+      onOpenChange={setPreviewCardOpen}
       trigger={
         <span class="relative">
           <span

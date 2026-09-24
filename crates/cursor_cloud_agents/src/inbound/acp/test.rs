@@ -128,6 +128,28 @@ fn serve_over_channel_with_default_model(
     default_model: Option<&str>,
     configure: impl FnOnce(&Service),
 ) -> (Arc<Service>, TestClient) {
+    serve_over_channel_with_models(cursor, default_model, None, configure)
+}
+
+/// [`serve_over_channel`], for a session whose host record names a model.
+///
+/// The other half of [`serve_over_channel_with_default_model`]: both are fixed
+/// at construction, because the hosted deployment builds one service per
+/// session and hands it both preferences there.
+fn serve_over_channel_with_host_model(
+    cursor: FakeCursor,
+    host_model: Option<&str>,
+    configure: impl FnOnce(&Service),
+) -> (Arc<Service>, TestClient) {
+    serve_over_channel_with_models(cursor, None, host_model, configure)
+}
+
+fn serve_over_channel_with_models(
+    cursor: FakeCursor,
+    default_model: Option<&str>,
+    host_model: Option<&str>,
+    configure: impl FnOnce(&Service),
+) -> (Arc<Service>, TestClient) {
     let notifier = AcpNotifier::new();
     let service = Arc::new(
         CursorSessionService::new(
@@ -137,7 +159,8 @@ fn serve_over_channel_with_default_model(
             Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
             crate::domain::ports::NoArtifactStore,
         )
-        .with_default_model(default_model.map(str::to_owned)),
+        .with_default_model(default_model.map(str::to_owned))
+        .with_host_model(host_model.map(str::to_owned)),
     );
     configure(&service);
     let (agent_end, client_end) = Channel::duplex();
@@ -692,7 +715,6 @@ async fn session_load_answers_for_restored_sessions_only() {
             SessionId::new("cursor-acp-3"),
             Some(crate::domain::model::CursorAgentId::new("bc-restored")),
             None,
-            None,
         );
     });
 
@@ -833,7 +855,6 @@ async fn session_load_advertises_cursor_slash_commands() {
         service.restore_session(
             SessionId::new("cursor-acp-3"),
             Some(crate::domain::model::CursorAgentId::new("bc-restored")),
-            None,
             None,
         );
     });
@@ -1057,14 +1078,14 @@ async fn a_restored_session_keeps_its_model() {
     let cursor = FakeCursor::new();
     cursor.script_models(offered_models());
     crate::testing::script_legacy_history(&cursor);
-    let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
-        service.restore_session(
-            SessionId::new("cursor-acp-3"),
-            Some(crate::domain::model::CursorAgentId::new("bc-restored")),
-            None,
-            Some("gpt-5.5".to_owned()),
-        );
-    });
+    let (service, mut client) =
+        serve_over_channel_with_host_model(cursor.clone(), Some("gpt-5.5"), |service| {
+            service.restore_session(
+                SessionId::new("cursor-acp-3"),
+                Some(crate::domain::model::CursorAgentId::new("bc-restored")),
+                None,
+            );
+        });
 
     // The picker is repopulated at load, current value included — this is the
     // other half of the regression, where the options came back empty.
@@ -1123,14 +1144,14 @@ async fn a_restored_deployment_slug_falls_back_to_cursors_default() {
     let cursor = FakeCursor::new();
     cursor.script_models(offered_models());
     crate::testing::script_legacy_history(&cursor);
-    let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
-        service.restore_session(
-            SessionId::new("cursor-acp-3"),
-            Some(crate::domain::model::CursorAgentId::new("bc-restored")),
-            None,
-            Some("claude".to_owned()),
-        );
-    });
+    let (service, mut client) =
+        serve_over_channel_with_host_model(cursor.clone(), Some("claude"), |service| {
+            service.restore_session(
+                SessionId::new("cursor-acp-3"),
+                Some(crate::domain::model::CursorAgentId::new("bc-restored")),
+                None,
+            );
+        });
 
     let loaded = client
         .call(
@@ -1178,7 +1199,7 @@ async fn session_load_restores_the_clients_mcp_servers() {
     let cursor = FakeCursor::new();
     let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
         // Restored with *no* agent: the session opened, never prompted, died.
-        service.restore_session(SessionId::new("cursor-acp-3"), None, None, None);
+        service.restore_session(SessionId::new("cursor-acp-3"), None, None);
     });
 
     let loaded = client
@@ -1335,7 +1356,6 @@ async fn load_queues_all_native_history_before_its_response_and_repeats_without_
         service.restore_session(
             SessionId::new("restored"),
             Some(crate::domain::model::CursorAgentId::new("agent")),
-            None,
             None,
         );
     });

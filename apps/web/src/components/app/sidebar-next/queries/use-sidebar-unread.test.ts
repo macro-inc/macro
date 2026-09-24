@@ -1,5 +1,6 @@
 import type { EmailEntity } from '@entity/types/entity';
 import type { UnifiedNotification } from '@notifications/types';
+import type { NotificationState } from '@service-storage/graphql/generated/graphql';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useSidebarUnread } from './use-sidebar-unread';
@@ -8,8 +9,23 @@ const mocks = vi.hoisted(() => ({
   inbox: vi.fn(),
   email: vi.fn(),
   notifications: vi.fn(),
+  graphqlFlag: vi.fn(),
+  channels: vi.fn(),
+  withLocalState: vi.fn(),
+  hasUnreadEntity: vi.fn(),
+  transformEntities: vi.fn(),
 }));
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => mocks.graphqlFlag,
+}));
+vi.mock('@queries/channel/unread-presence', () => ({
+  createChannelUnreadQuery: mocks.channels,
+}));
+
+vi.mock('@app/features/email-view/queries/email-query', () => ({
+  buildEmailQuery: () => ({ params: {}, body: {} }),
+}));
 vi.mock('@app/features/inbox-view/queries/use-inbox-query', () => ({
   useInboxEntitiesQuery: mocks.inbox,
 }));
@@ -17,7 +33,10 @@ vi.mock('@queries/soup/items', () => ({
   useSoupAstItemsQuery: mocks.email,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
-  useGlobalNotificationSource: () => ({ notifications: mocks.notifications }),
+  useGlobalNotificationSource: () => ({
+    notifications: mocks.notifications,
+    withLocalState: mocks.withLocalState,
+  }),
 }));
 // Query builders import the soup barrel, which otherwise opens real sockets.
 vi.mock('@service-storage/websocket', () => ({
@@ -64,10 +83,31 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function setup() {
+function setup(graphql = false) {
   return createRoot((cleanup) => {
     dispose = cleanup;
+    const [graphqlEnabled, setGraphqlEnabled] = createSignal(graphql);
+    const [done, setDone] = createSignal(false);
+    mocks.withLocalState.mockImplementation(({ state }) =>
+      done() ? 'done' : state
+    );
+    const [witnesses, setWitnesses] = createSignal<
+      { id: string; state: NotificationState }[]
+    >([]);
+    mocks.graphqlFlag.mockImplementation(() => ({ enabled: graphqlEnabled() }));
     const [loading, setLoading] = createSignal(true);
+    mocks.channels.mockReturnValue({
+      get isEnabled() {
+        return graphqlEnabled();
+      },
+      get isLoading() {
+        return loading();
+      },
+      get data() {
+        if (loading()) throw new Error('Read pending unread query');
+        return witnesses();
+      },
+    });
     const [emails, setEmails] = createSignal<EmailEntity[]>([]);
     const [notifications, setNotifications] = createSignal<
       UnifiedNotification[]
@@ -81,10 +121,13 @@ function setup() {
         return { entities: emails() };
       },
     };
+    mocks.hasUnreadEntity.mockImplementation((items: EmailEntity[]) =>
+      items.some((item) => !item.done && !item.isRead)
+    );
     mocks.inbox.mockReturnValue({
       query,
-      transformEntities: (items: EmailEntity[]) =>
-        items.filter((item) => !item.done),
+      hasUnreadEntity: mocks.hasUnreadEntity,
+      transformEntities: mocks.transformEntities,
     });
     mocks.email.mockReturnValue(query);
     mocks.notifications.mockImplementation(notifications);
@@ -93,6 +136,9 @@ function setup() {
       setLoading,
       setEmails,
       setNotifications,
+      setWitnesses,
+      setGraphqlEnabled,
+      setDone,
     };
   });
 }
@@ -103,6 +149,8 @@ describe('sidebar unread presence', () => {
     for (const id of ['inbox', 'mail', 'channels', 'documents', 'agents']) {
       expect(unread(id)).toBe(false);
     }
+    expect(mocks.hasUnreadEntity).not.toHaveBeenCalled();
+    expect(mocks.transformEntities).not.toHaveBeenCalled();
     expect(mocks.inbox).toHaveBeenCalledWith({
       tab: 'signal',
       facets: { read: ['unread'] },
@@ -115,6 +163,8 @@ describe('sidebar unread presence', () => {
     setEmails([unreadEmail]);
     expect(unread('inbox')).toBe(true);
     expect(unread('mail')).toBe(true);
+    expect(mocks.hasUnreadEntity).toHaveBeenLastCalledWith([unreadEmail]);
+    expect(mocks.transformEntities).not.toHaveBeenCalled();
     setEmails([{ ...unreadEmail, isRead: true }]);
     expect(unread('inbox')).toBe(false);
     expect(unread('mail')).toBe(false);
@@ -123,6 +173,54 @@ describe('sidebar unread presence', () => {
     setEmails([{ ...unreadEmail, done: true }]);
     expect(unread('inbox')).toBe(false);
     expect(unread('mail')).toBe(false);
+  });
+
+  it('uses bounded GraphQL witnesses without reading the full feed', () => {
+    const { unread, setLoading, setWitnesses, setDone } = setup(true);
+    expect(unread('channels')).toBe(false);
+    expect(mocks.notifications).not.toHaveBeenCalled();
+    expect(mocks.channels.mock.calls[0][0]).toMatchObject({
+      initial: {
+        limit: 500,
+        filters: {
+          channelFilter: { literal: { notificationState: 'UNSEEN' } },
+        },
+      },
+    });
+    setLoading(false);
+    setWitnesses([{ id: 'witness', state: 'UNSEEN' }]);
+    expect(unread('channels')).toBe(true);
+    setDone(true);
+    expect(unread('channels')).toBe(false);
+    setDone(false);
+    expect(unread('channels')).toBe(true);
+    setWitnesses([{ id: 'witness', state: 'SEEN' }]);
+    expect(unread('channels')).toBe(false);
+    setWitnesses([]);
+    expect(unread('channels')).toBe(false);
+    expect(mocks.notifications).not.toHaveBeenCalled();
+  });
+
+  it('follows cold-start transport changes without reading the inactive feed', () => {
+    const {
+      unread,
+      setLoading,
+      setGraphqlEnabled,
+      setWitnesses,
+      setNotifications,
+    } = setup();
+    setLoading(false);
+    setNotifications([message]);
+    expect(unread('channels')).toBe(true);
+    mocks.notifications.mockClear();
+    setGraphqlEnabled(true);
+    expect(unread('channels')).toBe(false);
+    setWitnesses([{ id: 'bounded', state: 'UNSEEN' }]);
+    expect(unread('channels')).toBe(true);
+    expect(mocks.notifications).not.toHaveBeenCalled();
+    setNotifications([]);
+    setGraphqlEnabled(false);
+    expect(unread('channels')).toBe(false);
   });
 
   it('uses unread channel messages, ignoring seen, completed, and other entities', () => {

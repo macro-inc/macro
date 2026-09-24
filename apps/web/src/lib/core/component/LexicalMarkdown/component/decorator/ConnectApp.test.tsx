@@ -7,12 +7,28 @@ const mocks = vi.hoisted(() => ({
   openAgentsPage: vi.fn(),
   requestConnectApp: vi.fn(),
   pipedreamSlugs: new Set<string>(),
-  cursor: { isSuccess: true, isLoading: false, data: { registered: false } },
+  cursor: {
+    isSuccess: true,
+    isLoading: false,
+    get isPending(): boolean {
+      return this.isLoading;
+    },
+    data: { registered: false },
+  },
   codex: {
     isLoading: false,
+    get isPending(): boolean {
+      return this.isLoading;
+    },
     data: { connected: false, environmentId: null as string | null },
   },
-  claude: { isLoading: false, data: { connected: false } },
+  claude: {
+    isLoading: false,
+    get isPending(): boolean {
+      return this.isLoading;
+    },
+    data: { connected: false },
+  },
 }));
 vi.mock('@app/features/agents-view/primitives/open-page', () => ({
   openAgentsPage: mocks.openAgentsPage,

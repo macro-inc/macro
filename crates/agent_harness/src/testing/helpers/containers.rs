@@ -204,6 +204,10 @@ pub struct MockContainerManager {
     resize_unsupported: Arc<AtomicBool>,
     resumes: Arc<AtomicUsize>,
     teardowns: Arc<AtomicUsize>,
+    teardown_error: Arc<AtomicBool>,
+    /// Signalled on every spawn, so a test waits for a sandbox instead of
+    /// spinning on [`Self::spawned`].
+    spawned_signal: Arc<tokio::sync::Notify>,
 }
 
 impl MockContainerManager {
@@ -231,6 +235,20 @@ impl MockContainerManager {
         self.lock().len()
     }
 
+    /// The first session a sandbox is booted for, awaited rather than polled.
+    ///
+    /// Returns at once when one has already been spawned, so a caller that
+    /// arrives late still gets its session.
+    pub async fn first_spawned(&self) -> AgentSessionId {
+        loop {
+            let waited = self.spawned_signal.notified();
+            if let Some(session) = self.sessions().first().copied() {
+                return session;
+            }
+            waited.await;
+        }
+    }
+
     /// Answer every preflight with `blocker` from now on: the owner is not
     /// set up for this provider.
     pub fn block_with(&self, blocker: SessionBlocker) {
@@ -252,6 +270,11 @@ impl MockContainerManager {
     #[must_use]
     pub fn resumed(&self) -> usize {
         self.resumes.load(Ordering::Relaxed)
+    }
+
+    /// Fail the next teardown before removing its container.
+    pub fn fail_next_teardown(&self) {
+        self.teardown_error.store(true, Ordering::Relaxed);
     }
 
     /// How many sandboxes have been destroyed.
@@ -323,6 +346,7 @@ impl ContainerManager for MockContainerManager {
             .push(command.size);
         let container = ContainerMock::default();
         self.lock().insert(command.session_id, container.clone());
+        self.spawned_signal.notify_waiters();
         Ok(agent_session::domain::connection::RuntimeAttachment::solo(
             container,
         ))
@@ -383,6 +407,9 @@ impl ContainerManager for MockContainerManager {
     }
 
     async fn teardown(&self, session: AgentSessionId) -> Result<(), HarnessError> {
+        if self.teardown_error.swap(false, Ordering::Relaxed) {
+            return Err(HarnessError::Container("injected teardown failure".into()));
+        }
         self.teardowns.fetch_add(1, Ordering::Relaxed);
         self.lock().remove(&session);
         Ok(())

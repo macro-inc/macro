@@ -2,6 +2,8 @@
 //! with in-memory persistence, mock containers, a fake agent, and a
 //! recording announcer. Only the edges are doubles.
 
+mod user_cleanup;
+
 use messages::domain::models::MessageParent;
 use std::sync::{Arc, Mutex};
 
@@ -41,9 +43,10 @@ use super::AgentHarnessService;
 use super::into_session_error;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeclinedMention, DeliverAction,
-    HarnessCommand, HarnessDefaults, MentionOrigin, OpenSession, PriorMessage, SessionBlocker,
-    SessionDefaults, SessionRepository, SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, CommentAnchor,
+    ConversationContext, DeclinedMention, DeliverAction, HarnessCommand, HarnessDefaults,
+    MentionOrigin, OpenSession, PriorMessage, SessionBlocker, SessionDefaults, SessionRepository,
+    SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ContainerManager as _, MessagePromptContext, NoPeers,
@@ -120,7 +123,7 @@ fn forward_message(content: &str) -> DeliverAction {
 
 #[derive(Clone, Default)]
 struct PromptContextMock {
-    messages: Arc<Mutex<Vec<PriorMessage>>>,
+    context: Arc<Mutex<ConversationContext>>,
     failure: Arc<Mutex<Option<String>>>,
     unauthorized: Arc<Mutex<Option<String>>>,
     authorized: Arc<Mutex<Vec<(MacroUserIdStr<'static>, AnnounceOrigin)>>>,
@@ -128,8 +131,15 @@ struct PromptContextMock {
 
 impl PromptContextMock {
     fn with_messages(messages: Vec<PriorMessage>) -> Self {
+        Self::with_context(ConversationContext {
+            anchor: None,
+            messages,
+        })
+    }
+
+    fn with_context(context: ConversationContext) -> Self {
         Self {
-            messages: Arc::new(Mutex::new(messages)),
+            context: Arc::new(Mutex::new(context)),
             ..Self::default()
         }
     }
@@ -169,19 +179,19 @@ impl MessagePromptContext for PromptContextMock {
         Ok(())
     }
 
-    async fn preceding_messages(
+    async fn conversation_context(
         &self,
         _actor: &MacroUserIdStr<'static>,
         _origin: &AnnounceOrigin,
-    ) -> crate::domain::error::Result<Vec<PriorMessage>> {
+    ) -> crate::domain::error::Result<ConversationContext> {
         if let Some(message) = self.failure.lock().unwrap().clone() {
             return Err(HarnessError::PromptContext(rootcause::report!("{message}")));
         }
-        Ok(self.messages.lock().unwrap().clone())
+        Ok(self.context.lock().unwrap().clone())
     }
 }
 
-type PromptCompositionCall = (String, Option<Vec<PriorMessage>>);
+type PromptCompositionCall = (String, Option<ConversationContext>);
 
 #[derive(Clone, Default)]
 struct PromptComposerMock {
@@ -207,18 +217,18 @@ impl AgentPromptComposer for PromptComposerMock {
         &self,
         prompt_markdown: &str,
         _parent: Option<&MessageParent>,
-        messages: Option<&[PriorMessage]>,
+        context: Option<&ConversationContext>,
     ) -> crate::domain::error::Result<String> {
-        self.calls.lock().unwrap().push((
-            prompt_markdown.to_owned(),
-            messages.map(|messages| messages.to_vec()),
-        ));
+        self.calls
+            .lock()
+            .unwrap()
+            .push((prompt_markdown.to_owned(), context.cloned()));
         if let Some(message) = self.failure.lock().unwrap().clone() {
             return Err(HarnessError::PromptComposition(rootcause::report!(
                 "{message}"
             )));
         }
-        Ok(if messages.is_some() {
+        Ok(if context.is_some() {
             context_prompt(prompt_markdown)
         } else {
             prompt_markdown.to_owned()
@@ -797,7 +807,10 @@ async fn context_failure_still_calls_composer_with_empty_messages_and_delivers()
     assert_eq!(announcer.announced().len(), 1);
     assert_eq!(
         composer.calls(),
-        [("@claude fix the failing test".to_owned(), Some(Vec::new()))]
+        [(
+            "@claude fix the failing test".to_owned(),
+            Some(ConversationContext::default())
+        )]
     );
     assert_eq!(
         prompts(&container.agent()),
@@ -871,11 +884,60 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
     result.unwrap();
 
     assert_eq!(announcer.announced()[0].prompted_content, raw);
-    assert_eq!(composer.calls(), [(raw.clone(), Some(context))]);
+    assert_eq!(
+        composer.calls(),
+        [(
+            raw.clone(),
+            Some(ConversationContext {
+                anchor: None,
+                messages: context,
+            })
+        )]
+    );
     assert_eq!(
         prompts(&container.agent()),
         [vec![ContentBlock::from(context_prompt(&raw))]]
     );
+}
+
+/// A mention in a document comment: the agent is told which mark the comment
+/// sits on and what that mark covered, so it can find the words the comment is
+/// about instead of guessing from the comment body.
+#[tokio::test]
+async fn open_sends_the_comment_anchor_the_prompt_was_posted_on() {
+    let context = ConversationContext {
+        anchor: Some(CommentAnchor {
+            mark_id: "0199f3d4-0000-7000-8000-00000000000a".to_owned(),
+            marked_text: Some("the marked phrase".to_owned()),
+            current: None,
+        }),
+        messages: vec![],
+    };
+    let composer = PromptComposerMock::default();
+    let (service, _repo, containers, _announcer, _runtimes) = harness_with_edges(
+        PromptContextMock::with_context(context.clone()),
+        composer.clone(),
+    );
+    let command = open_command();
+    let raw = command.origin.content.clone();
+    let id = AgentSessionId::new();
+
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(id).unwrap();
+        complete_handshake(&container).await;
+        container
+    };
+    let (result, _container) = tokio::join!(open, drive);
+    result.unwrap();
+
+    assert_eq!(composer.calls(), [(raw, Some(context))]);
 }
 
 /// A provider mention from someone missing account setup: the bot answers in
@@ -1050,7 +1112,10 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     assert_eq!(containers.resumed(), 0, "no resume for a live session");
     assert_eq!(
         composer.calls().last(),
-        Some(&("and add a regression test".to_owned(), Some(Vec::new())))
+        Some(&(
+            "and add a regression test".to_owned(),
+            Some(ConversationContext::default())
+        ))
     );
     assert_eq!(
         prompts(&container.agent())[1],
@@ -1102,7 +1167,10 @@ async fn composer_failure_stops_follow_up_announcement_and_delivery() {
     assert!(matches!(result, Err(HarnessError::PromptComposition(_))));
     assert_eq!(
         composer.calls().last(),
-        Some(&("do not deliver this".to_owned(), Some(Vec::new())))
+        Some(&(
+            "do not deliver this".to_owned(),
+            Some(ConversationContext::default())
+        ))
     );
     assert_eq!(prompts(&container.agent()).len(), prompts_before);
     assert_eq!(announcer.announced().len(), announcements_before);
@@ -2655,9 +2723,11 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
 
     let session = service
         .open_managed_session(agent_session::domain::ports::OpenManagedSession {
+            id: None,
             repo_url: None,
             repo_branch: None,
             instructions: None,
+            model: None,
             owner: model_owner::Owner::User(sender()),
             prompt: None,
             profile: None,
@@ -2892,9 +2962,11 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
 
     let result = service
         .open_managed_session(OpenManagedSession {
+            id: None,
             repo_url: None,
             repo_branch: None,
             instructions: None,
+            model: None,
             owner: model_owner::Owner::User(sender()),
             prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
             profile: None,
@@ -2919,9 +2991,11 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         .expect("the user default should persist");
 
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         instructions: None,
+        model: None,
         owner: model_owner::Owner::User(sender()),
         prompt: None,
         profile: None,
@@ -3643,10 +3717,12 @@ mod lifecycle_events {
 async fn codex_named_session_provisions_egress_without_advertising_mcp() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         owner: model_owner::Owner::User(sender()),
         instructions: None,
+        model: None,
         prompt: Some("inspect".into()),
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
             bot_id: bot_id::CODEX_BOT_ID,
@@ -3764,6 +3840,39 @@ impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
     }
 }
 
+/// A model chosen on the way in is the session's model, from the row onwards.
+///
+/// The regression this pins: the picked model used to arrive as a set-model
+/// action sent before the first prompt. That is a control, controls take a
+/// turn of their own, and the automatic naming that only fires on a session's
+/// first turn therefore never ran - every session opened on a chosen model
+/// stayed "Agent Session" for life.
+#[tokio::test]
+async fn a_chosen_model_is_the_session_model_from_creation() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: Some("claude-4.5-sonnet-thinking".to_owned()),
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: bot_id::CURSOR_BOT_ID,
+            profile: None,
+        }),
+    });
+    let drive = async {
+        let session = containers.first_spawned().await;
+        let container = containers.container(session).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.model, "claude-4.5-sonnet-thinking");
+}
+
 /// The agents-view create path names the Cursor bot with no persisted
 /// profile. The deployment default harness is the sandboxed coder's
 /// `opencode`; Cursor sessions must not inherit it.
@@ -3771,10 +3880,12 @@ impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
 async fn a_cursor_managed_session_is_always_stamped_cursor() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         owner: model_owner::Owner::User(sender()),
         instructions: None,
+        model: None,
         prompt: None,
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
             bot_id: bot_id::CURSOR_BOT_ID,
@@ -3796,8 +3907,10 @@ async fn a_cursor_managed_session_is_always_stamped_cursor() {
 
 fn explicit_cursor_request() -> OpenManagedSession {
     OpenManagedSession {
+        id: None,
         owner: model_owner::Owner::User(sender()),
         instructions: None,
+        model: None,
         prompt: None,
         repo_url: Some("https://github.com/macro-inc/macro".into()),
         repo_branch: Some(

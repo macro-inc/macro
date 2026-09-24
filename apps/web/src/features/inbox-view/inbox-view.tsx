@@ -3,16 +3,19 @@ import {
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
-import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
+import { SplitRouter } from '@app/lib/split-router';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
-import { PreviewPanel } from '@components/app/PreviewPanel';
+import {
+  PreviewPanel,
+  type PreviewPanelSelection,
+} from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { type EntityData, ListEntityMetadataQueryProvider } from '@entity';
+import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, onMount, Show, Suspense } from 'solid-js';
 import { HomeChatStart } from './components/HomeChatStart';
 import { InboxListLayout } from './components/InboxHeader';
 import { InboxList } from './components/InboxList';
@@ -34,8 +37,8 @@ function InboxFallback() {
 }
 
 function HomeListPane(props: {
-  previewEntity: EntityData | undefined;
-  onPreviewEntityChange: (entity: EntityData | undefined) => void;
+  previewEntity: PreviewPanelSelection | undefined;
+  onPreviewEntityChange: (entity: PreviewPanelSelection | undefined) => void;
   onNewChat: () => void;
 }) {
   const shell = useViewShell();
@@ -78,29 +81,19 @@ function HomeReturnBreadcrumb(props: { onReturn: () => void }) {
 
 function InboxViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const orchestrator = useGlobalBlockOrchestrator();
-  const { state, setTab } = useInboxView();
-  const [previewEntity, setPreviewEntityState] = createSignal<EntityData>();
-  const selectPreview = createPreviewSelectionGuard();
-  const setPreviewEntity = (entity: EntityData | undefined) => {
-    if (!selectPreview(entity)) return;
-    setPreviewEntityState(entity);
-  };
-
-  let activeTab = state.tab;
-  createEffect(() => {
-    const nextTab = state.tab;
-    if (nextTab === activeTab) return;
-    activeTab = nextTab;
-    setPreviewEntity(undefined);
-  });
+  const { state, setTab, previewEntity, openPreview, closePreview } =
+    useInboxView();
 
   createEffect(() => {
-    if (state.tab === 'reminders') setTab('signal');
+    if (state.tab !== 'reminders') return;
+    setTab('signal');
   });
-  const newChat = () => setPreviewEntity(undefined);
+  const newChat = closePreview;
 
-  onMount(() => panel.handle.setDisplayName('Home'));
+  // The touch nav item and legacy touch view both call this "Notifications".
+  onMount(() =>
+    panel.handle.setDisplayName(isTouchDevice() ? 'Notifications' : 'Home')
+  );
 
   return (
     <ListEntityMetadataQueryProvider>
@@ -120,32 +113,20 @@ function InboxViewRoot() {
                     <ViewShell.Aside class="flex flex-col bg-panel">
                       <HomeListPane
                         previewEntity={previewEntity()}
-                        onPreviewEntityChange={setPreviewEntity}
+                        onPreviewEntityChange={(entity) =>
+                          entity ? openPreview(entity) : closePreview()
+                        }
                         onNewChat={newChat}
                       />
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
-                      <Show
-                        when={previewEntity()}
-                        fallback={
+                      <SplitRouter.Outlet
+                        fallback={() => (
                           <Suspense fallback={<InboxFallback />}>
                             <HomeChatStart />
                           </Suspense>
-                        }
-                      >
-                        {(entity) => (
-                          <Suspense>
-                            <PreviewPanel
-                              selectedEntity={entity()}
-                              orchestrator={orchestrator}
-                              splitPanelContext={panel}
-                              headerLeading={
-                                <HomeReturnBreadcrumb onReturn={newChat} />
-                              }
-                            />
-                          </Suspense>
                         )}
-                      </Show>
+                      />
                     </ViewShell.Main>
                   </ViewShell.Root>
                 </div>
@@ -155,7 +136,9 @@ function InboxViewRoot() {
                 <ViewShell.Main>
                   <HomeListPane
                     previewEntity={previewEntity()}
-                    onPreviewEntityChange={setPreviewEntity}
+                    onPreviewEntityChange={(entity) =>
+                      entity ? openPreview(entity) : closePreview()
+                    }
                     onNewChat={newChat}
                   />
                 </ViewShell.Main>
@@ -165,6 +148,23 @@ function InboxViewRoot() {
         </SplitPanel.Root>
       </StaticMarkdownContext>
     </ListEntityMetadataQueryProvider>
+  );
+}
+
+export function InboxDetailRouteView() {
+  const panel = useSplitPanelOrThrow();
+  const orchestrator = useGlobalBlockOrchestrator();
+  const { previewEntity, closePreview } = useInboxView();
+
+  return (
+    <Suspense>
+      <PreviewPanel
+        selectedEntity={previewEntity()}
+        orchestrator={orchestrator}
+        splitPanelContext={panel}
+        headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}
+      />
+    </Suspense>
   );
 }
 

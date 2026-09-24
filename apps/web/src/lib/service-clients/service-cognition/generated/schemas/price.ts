@@ -4,15 +4,18 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { PricePricePerAudioMinute } from './pricePricePerAudioMinute';
 
 /**
- * Resolved price for one completion.
+ * Rates applied to an invocation and its resolved dollar cost.
  */
 export interface Price {
-  /** Price per million input tokens (USD). */
+  /** Price per audio minute (USD), absent for token billing. */
+  price_per_audio_minute?: PricePricePerAudioMinute;
+  /** Price per million input tokens (USD); zero for audio billing. */
   price_per_million_in: number;
-  /** Price per million output tokens (USD). */
+  /** Price per million output tokens (USD); zero for audio billing. */
   price_per_million_out: number;
-  /** Total cost of the completion (USD). */
+  /** Total cost (USD). */
   total: number;
 }

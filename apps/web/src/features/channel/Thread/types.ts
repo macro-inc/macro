@@ -70,4 +70,9 @@ export type ThreadProps = {
   onClearSelection?: () => void;
   messageListScopeId?: string;
   isNewestThread?: boolean;
+  /**
+   * A single-root thread (a document's floating comment) stacks replies under
+   * the root on one straight rail instead of indenting and branching them.
+   */
+  monorail?: boolean;
 } & ThreadState;

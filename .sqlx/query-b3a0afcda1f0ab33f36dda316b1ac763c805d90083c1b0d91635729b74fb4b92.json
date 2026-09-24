@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b3a0afcda1f0ab33f36dda316b1ac763c805d90083c1b0d91635729b74fb4b92"
+}

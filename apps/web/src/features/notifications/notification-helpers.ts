@@ -171,24 +171,36 @@ export function useUnreadEntityTypeNotifications(
  * @param entity
  * @returns Promise<void>
  */
-export function markNotificationsForEntityAsDone(
+export async function markNotificationsForEntityAsDone(
   notificationSource: NotificationSource,
   entity: Entity
 ): Promise<void> {
+  await ensureNotificationSourceLoaded(notificationSource);
   return notificationSource.bulkMarkAsDone(
     notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
 }
 
-export function markNotificationForEntityIdAsRead(
+export async function markNotificationForEntityIdAsRead(
   notificationSource: NotificationSource,
   id: string
 ): Promise<void> {
+  await ensureNotificationSourceLoaded(notificationSource);
   return notificationSource.bulkMarkAsRead(
     notificationSource
       .notifications()
       .filter((n) => n.entity_id === id && !notificationIsRead(n))
   );
+}
+
+/** Cold imperative actions must load the full feed rather than act on an empty snapshot. */
+export async function ensureNotificationSourceLoaded(
+  notificationSource: NotificationSource
+): Promise<void> {
+  const query = notificationSource._notificationsQuery;
+  if (!query.isStarted || query.isLoading || query.data === undefined) {
+    await query.refetch();
+  }
 }
 
 /**
@@ -213,6 +225,18 @@ export async function markNotificationsForEntityAsRead(
   await notificationSource.bulkMarkAsRead(
     notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
+}
+
+/** Best-effort read marker for navigation/timer callers with no awaiting UI. */
+export async function markNotificationsForEntityAsReadInBackground(
+  notificationSource: NotificationSource,
+  entity: Entity
+): Promise<void> {
+  try {
+    await markNotificationsForEntityAsRead(notificationSource, entity);
+  } catch (error) {
+    console.error('Failed to mark entity notifications as read', error);
+  }
 }
 
 /**

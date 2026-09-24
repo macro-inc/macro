@@ -9,7 +9,13 @@ import type { GetAllUserNotificationsResponse } from '@service-notification/gene
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createClient, type Operation } from '@urql/core';
 import { ok } from 'neverthrow';
-import { type Accessor, createMemo, createSignal, type JSX } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+} from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { filter, map, pipe } from 'wonka';
@@ -357,6 +363,72 @@ describe('useUserNotificationsQuery transport facade', () => {
 
   afterEach(() => {
     testQueryClient.clear();
+  });
+
+  it('defers the full GraphQL feed until a data/status reader needs it, preserving pagination', async () => {
+    createGraphqlQueryMock.mockClear();
+    restUserNotificationsMock.mockClear();
+    const fetchNextPage = vi.fn(async () => {});
+    const refetch = vi.fn(async () => {});
+    createGraphqlQueryMock.mockReturnValue({
+      data: [],
+      error: null,
+      isLoading: false,
+      isFetching: false,
+      isFetchingNextPage: false,
+      hasNextPage: true,
+      fetchNextPage,
+      refetch,
+    });
+    let query!: UserNotificationsQuery;
+    const dispose = renderWithClient(() => {
+      query = useUserNotificationsQuery(() => ({ limit: 500 }));
+      return <div />;
+    });
+    try {
+      expect(query.transport).toBe('graphql');
+      expect(query.isStarted).toBe(false);
+      expect(createGraphqlQueryMock).not.toHaveBeenCalled();
+      expect(restUserNotificationsMock).not.toHaveBeenCalled();
+      expect(query.isLoading).toBe(false);
+      expect(query.isStarted).toBe(true);
+      expect(query.data).toEqual([]);
+      expect(createGraphqlQueryMock).toHaveBeenCalledOnce();
+      expect(query.hasNextPage).toBe(true);
+      await query.fetchNextPage();
+      await query.refetch();
+      expect(fetchNextPage).toHaveBeenCalledOnce();
+      expect(refetch).toHaveBeenCalledWith({
+        requestPolicy: 'network-only',
+        throwOnError: true,
+      });
+      expect(createGraphqlQueryMock).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('notifies gated consumers only after the lazy feed has been constructed', () => {
+    createGraphqlQueryMock.mockClear();
+    const reads = vi.fn();
+    let query!: UserNotificationsQuery;
+    const dispose = renderWithClient(() => {
+      query = useUserNotificationsQuery(() => ({ limit: 500 }));
+      createEffect(() => {
+        if (query.isStarted) reads(query.data);
+      });
+      return <div />;
+    });
+    try {
+      expect(query.isStarted).toBe(false);
+      expect(reads).not.toHaveBeenCalled();
+      expect(createGraphqlQueryMock).not.toHaveBeenCalled();
+      expect(query.isLoading).toBe(false);
+      expect(reads).toHaveBeenCalledExactlyOnceWith([]);
+      expect(createGraphqlQueryMock).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
   });
 
   it('reads active notifications from the GraphQL query', () => {

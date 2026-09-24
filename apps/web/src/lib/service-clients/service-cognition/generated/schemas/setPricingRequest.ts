@@ -4,6 +4,9 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { SetPricingRequestPricePerAudioMinute } from './setPricingRequestPricePerAudioMinute';
+import type { SetPricingRequestPricePerMilIn } from './setPricingRequestPricePerMilIn';
+import type { SetPricingRequestPricePerMilOut } from './setPricingRequestPricePerMilOut';
 
 /**
  * Request body for [`set_pricing_handler`].
@@ -11,8 +14,10 @@
 export interface SetPricingRequest {
   /** The model api id to (re)price. */
   model: string;
-  /** New price per million input tokens (USD). */
-  price_per_mil_in: number;
-  /** New price per million output tokens (USD). */
-  price_per_mil_out: number;
+  /** Price per minute of audio (USD), or null for token-only pricing. */
+  price_per_audio_minute?: SetPricingRequestPricePerAudioMinute;
+  /** New price per million input tokens (USD). Required for token pricing. */
+  price_per_mil_in?: SetPricingRequestPricePerMilIn;
+  /** New price per million output tokens (USD). Required for token pricing. */
+  price_per_mil_out?: SetPricingRequestPricePerMilOut;
 }

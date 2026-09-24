@@ -1,5 +1,17 @@
 # Other Surfaces
 
+## User cards
+
+Avatar and user-mention cards open on hover on pointer devices and as a bottom
+sheet on touch devices. With a keyboard on a touch device, Tab to the trigger and
+press Enter or Space; verify focus enters the sheet and returns to the opener
+after dismissal or copying, including after reopening. DM, Open contact, and
+Assign task should leave focus in their destination when the sheet closes.
+On pointer devices, avatars should stay out of the Tab order while still opening
+their cards on hover. Copy email/name confirms only after the clipboard
+write succeeds: the hover card shows a checkmark, while the sheet closes. A failed
+write shows failure feedback and leaves the card open for retry.
+
 ## Canvas colors
 
 To check the default canvas color, create a rectangle and a text box without
@@ -69,9 +81,13 @@ it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove r
 
 ## Home (desktop) / Notifications (mobile) — `/app/component/inbox`
 
-Touch devices render the legacy Notifications view without waiting for the new app
-views feature flag. Desktop waits for flag readiness before choosing the new Home
-view or its legacy fallback.
+Every form factor waits for new-app-views flag readiness before choosing the
+new view or its legacy fallback. With the flag enabled, touch devices render
+the new Inbox as **Notifications**: a floating Signal/Noise pill strip with a
+leading filter drawer (Status and Type), pull-to-refresh, and swipe-left to
+mark done. On touch, Signal is a pure notification feed — the viewer's own
+touched-by-me recents are not merged in; that merge is desktop Home's Signal
+only, so sent mail and AI chats without notifications appear only on desktop.
 
 On a cold launch, notification transport follows the GraphQL Soup flag reactively:
 if the flag arrives after REST starts, the GraphQL notification query must actually
@@ -150,7 +166,13 @@ are restored, including before a chat-limit paywall opens. With agents disabled,
 the input stays 32px above the vertical center as suggestions load. With agents
 enabled, the composer uses the same topbar offset and 24/64 padding as the
 Agents new-conversation page so the two inputs share a baseline; suggestions
-still load below it without moving the input. Up to three cached AI
+still load below it without moving the input. Eligible newer accounts (all
+accounts in development) see “New to Macro? See the **Getting Started** page.” directly
+below the composer, above suggestions. The link opens
+`/app/component/getting-started`; **Dismiss Getting Started link** hides it and
+remembers the dismissal per user in this browser across reloads. Dismissals update
+all open Home panes immediately and stay isolated when switching accounts. This
+dismissal is independent of the Getting Started sidebar link. Up to three cached AI
 suggestions appear below the
 composer, using the existing fast/smart recommendation projections. Compact rows
 use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
@@ -366,6 +388,12 @@ scrolls it into view, and briefly highlights it. For navigation regressions,
 exercise both a recent message and one outside the first page. Open another
 target while loading or highlighting: the previous request must not scroll the
 new thread or clear its highlight. Closing the split cancels pending positioning.
+The load gate and message body share one live thread source in both hosts. Cached
+body rendering should not wait for a second thread fetch, optional References,
+or inbox metadata. Inbox-dependent actions stay gated while ownership is unknown;
+explicit inbox IDs must never silently route to primary while links are loading.
+Background refreshes and older-message loading still update the same thread.
+Verify with API traffic delayed and with previously opened bodies offline.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
@@ -477,11 +505,21 @@ just client-side row filtering. Cached inserts enforce the same rule before a
 refetch, including expanded groups and inactive cached Shared queries. Until
 viewer identity is available, document inserts into Shared are rejected.
 
-On touch devices (phones and tablets), Files keeps the original tabbed view and
-mobile navigation even when `enable-new-app-views` is enabled.
+With `enable-new-app-views` enabled, Files opens **Drive** using the
+same shell as Tasks, on desktop and touch devices alike.
 
-On desktop, with `enable-new-app-views` enabled, Files opens **Drive** using the
-same shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+On touch devices (phones and tablets), the Drive header is a scrollable pill
+strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
+leading filter-drawer button, like Tasks. Touch opens on **Recent** (the first
+pill). The drawer holds Sort (hidden on Recent, where the viewer's own
+edit order applies) and, on tab locations only, the same filter groups as the
+desktop **Filter** menu; active selections show a count badge on the trigger
+and a `Clear all` action in the drawer. The in-view `Search Drive` field, the
+Sort/Filter dropdowns, and the header New menu are desktop-only — search on
+touch uses the global search overlay and creation uses the dock's New button.
+The **Folders** pill opens the folder overview and stays highlighted inside
+any folder; tapping it from inside a folder returns to the overview, and
+selecting another pill leaves the folder tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
 `Shared with me`, collapsible Favorites, a searchable folder hierarchy, and a
 collapsible Tags section beneath the folders. Tags lists every tag you can apply,
 nested by `/` in the tag name, with a `New tag` action in its header. Choosing a
@@ -498,7 +536,18 @@ label's font weight matches the file title. The link
 restores the originating Drive view.
 The `Drive` folder row opens the folder overview. Click a folder name to browse
 its contents in the main pane; its separate expand/collapse button reveals child
-folders without navigating. The top bar keeps the full folder and file detail
+folders without navigating. With GraphQL caching enabled and membership metadata
+hydrated, a never-visited folder can immediately show cached documents, chats,
+and subfolders for supported created/modified sorts and filters. Email remains
+server-owned: the full mixed GraphQL query still refreshes in the background,
+keeps loaded email rows, and owns pagination. A non-email projection with no visible
+rows, including when pending deletions hide every cached row, must not show
+`This folder is empty` while that initial request is pending or failed. Verify that
+loading and transport errors remain visible in this case; releasing a failed deletion
+restores cached rows without a refetch.
+Verify with a folder-specific GraphQL response delayed, then navigate to another
+folder before it completes; neither cached rows nor late results may leak across
+folders. The top bar keeps the full folder and file detail
 path in one breadcrumb trail. Folder containment uses `/` separators, while the
 transition to a file detail and nested detail navigation use the default `>`
 separator. Choosing a folder breadcrumb returns to that folder and clears newer
@@ -527,22 +576,30 @@ Recent uses the viewer's own interaction order and does not offer a sort overrid
 The New menu and drag/drop uploads target the selected folder. File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,
 while Markdown, code/CSV, image, video, PDF/DOCX, canvas, and unrecognized file
-clicks and Enter replace the list with a breadcrumbed detail. Choose the current location
+clicks and Enter replace the list with a breadcrumbed detail. Those detail
+menus include Duplicate, Rename, Move to folder, and Delete. Code, CSV, image,
+video, canvas, PDF, DOCX, and unrecognized files also include Download. PDF
+details include Print, and DOCX files include Download DOCX. Markdown details
+use the document menu, which already includes Download. Spreadsheets keep the
+editor's Import and export menu for Excel and CSV downloads. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
 entries. Opening a list row or sidebar favorite starts a new detail path; only
 navigation originating inside a detail appends to that path. Cmd/Ctrl-clicking a
 row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Enter
 opens the focused row in a new split. Cmd/Ctrl-clicking a row's folder link or
 search hit opens a new tab. Short filtered pages load more results automatically;
-a failed page shows a retry action instead of silently stopping. On narrow layouts,
-use `Select Drive view` for tabs, favorites, folders, and tags. Location, search,
+a failed page shows a retry action instead of silently stopping. On touch, tabs
+switch via the header pills; on narrow desktop layouts the header keeps a plain
+title and navigation goes through the hamburger overlay. Location, search,
 filters, expanded folders, list focus, and scroll position are restored when
 returning from an opened file.
 
-## Calendar — `/app/calendar/view`
+## Calendar — `/app/calendar/<month-or-week-or-day>`
 
-Calendars default to Day on phones and Week on desktop. The selected view is
-remembered locally on each device.
+The path selects the Month, Week, or Day period, and choosing another period updates
+that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
+recent choice is remembered locally for navigation that does not specify a period. An
+opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
@@ -605,6 +662,16 @@ has a checkbox in its header row toggling the whole overlay on or off — all te
 none — and lists the next 90 days of teammate absences; clicking a row navigates the grid to
 that date. Coverage depends on each teammate having connected their own calendar and using
 Google's out-of-office event type.
+
+A calendar event mentioned in a channel message opens the calendar focused on the viewer's
+own copy of the meeting. When the sender holds the event on their own calendar, the mention
+also shares it read-only with the channel's current members: a member without a copy of their
+own sees the mention's title and time, and its hover card adds a `Shared with you · not on
+your calendar` line with no open action. Clicking such a mention shows that hover card
+instead of opening the calendar. Private and confidential events are never shared this way.
+Every calendar mention's hover card shows the schedule, location, organizer and attendee
+count, plus the first lines of the event description (its links open), and no last-updated
+byline.
 
 ## Calls — `/app/component/calls`
 
@@ -675,6 +742,12 @@ use the standalone contact page.
 Company and contact headers have `Copy link` beside the side-panel toggle.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
+
+Company selection actions **Set owner** and **Set revenue** remain available
+while team deal-stage definitions are loading. **Set stage** waits for the active
+team definition rather than opening an editor with system defaults. Check both
+the entity actions menu and command menu with stage requests delayed; cancel the
+editors without changing hosted data.
 
 `Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
 At narrow widths, `Show CRM navigation` opens the same navigation in a menu.
@@ -765,10 +838,22 @@ week and with no visible scrollbar. Under ~672px the four stats read as a two-co
 value, and chips shorten. Rows stay on one line at every width. On touch devices the list rests
 below the floating page title and above the bottom toolbar.
 
+## Getting Started — `/app/component/getting-started`
+
+The buttons under **Put Macro's agent to work** create a chat and send their
+example prompt on first use. Later clicks reopen that button's saved chat without
+sending the prompt again, including after leaving the page or refreshing. Each
+button has its own chat, saved per account in this browser's local storage.
+Repeated clicks while the same button is creating its chat are ignored; a failed
+creation can be retried.
+
 ## Home — `/app/component/home`
 
 Greeting, getting-started checklist, example prompt buttons (`Draft a document`,
 `Draft an email`, `Search & research`), and the ubiquitous `Ask AI` composer.
+Eligible newer accounts (all accounts in development) also see the same
+dismissible **Getting Started** link below
+the composer, with its dismissal shared with the desktop Home starting pane.
 
 On phones, shared confirmations (including Remove Member and Cancel Invitation)
 use a glass sheet with a title, description, Close confirmation button, and

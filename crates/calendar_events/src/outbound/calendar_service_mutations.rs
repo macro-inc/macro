@@ -74,7 +74,7 @@ impl CalendarServiceMutations {
     ) -> Result<reqwest::Response, CalendarMutationError> {
         let response = request.send().await.map_err(|error| {
             CalendarMutationError::Retryable(format!(
-                "calendar mutation request failed to reach the email service: {error}"
+                "calendar mutation request failed to reach the calendar service: {error}"
             ))
         })?;
         let status = response.status();

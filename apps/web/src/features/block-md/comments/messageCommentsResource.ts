@@ -15,12 +15,14 @@ export function useCreateMarkedMessageResource() {
   return (
     content: string,
     markId: string,
+    markedText: string | undefined,
     mentions?: PostMessage['mentions'],
     attachments?: PostMessage['attachments']
   ) =>
     messages.post({
       content,
-      anchor: { type: 'markdown', mark_id: markId },
+      // The server trims and bounds the snapshot; it is sent as the mark reads.
+      anchor: { type: 'markdown', mark_id: markId, marked_text: markedText },
       mentions,
       attachments,
     });

@@ -84,6 +84,11 @@ impl SnapshotStorage for R2Storage {
         Ok(snapshot)
     }
 
+    async fn delete_snapshot(&self) -> worker::Result<()> {
+        let key = format!("{}/{}.snapshot", self.document_id, self.document_id);
+        self.inner.delete(&key).await
+    }
+
     async fn has_snapshot(&self) -> worker::Result<bool> {
         let key = format!("{}/{}.snapshot", self.document_id, self.document_id);
         let has = self.has(&key).await?;

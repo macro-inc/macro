@@ -42,7 +42,7 @@ impl SessionSharingRepo for Repo {
     async fn team_share_facts(&self, _: AgentSessionId) -> Result<TeamShareFacts> {
         Ok(TeamShareFacts {
             entity: EntityType::AgentSession.with_entity_string(self.id.to_string()),
-            owner: user(OWNER),
+            owner: user(OWNER).into(),
             owner_team_id: Some(macro_uuid::generate_uuid_v7()),
             current: None,
             revision: 0,

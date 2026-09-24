@@ -67,9 +67,6 @@ export function AgentSessionCodeDetails(props: {
               />
             </Show>
             <span class="tabular-nums">#{pr().number}</span>
-            <Show when={statusLabel()}>
-              <span class={statusClass()}>{statusLabel()}</span>
-            </Show>
           </a>
         )}
       </Show>

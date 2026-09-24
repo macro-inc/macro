@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET work_mem = '16MB'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "eba001bed3f012a9b5536a865d1dbf5bb3196a757e160895209a2d98db1b45cd"
+}

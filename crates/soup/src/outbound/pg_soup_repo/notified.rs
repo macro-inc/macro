@@ -238,11 +238,32 @@ fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
     types
 }
 
+// Entity-specific AST gates make this genuinely dynamic SQL, so a static SQLx
+// macro cannot check the whole statement. Keep request values bound below and
+// generate the gates through the existing typed filter builders.
+fn build_query(filter: Option<&EntityFilterAst>) -> String {
+    format!(
+        include_str!("notified/query.sql"),
+        document_gate = document_gate(ID_SQL, filter),
+        chat_gate = chat_gate(ID_SQL, filter),
+        project_gate = project_gate(ID_SQL, filter),
+        channel_gate = channel_gate(ID_SQL, filter),
+        channel_thread_gate = channel_thread_gate(ID_SQL, filter),
+        email_gate = email_gate(ID_SQL, filter),
+        calendar_event_gate = calendar_event_gate(filter),
+        foreign_entity_gate = foreign_entity_gate(filter),
+        reminder_gate = reminder_gate(),
+        agent_session_gate = agent_session_gate(),
+    )
+}
+
 /// Fetches one page of notified-at candidates.
 ///
 /// Shape: the user's live notifications collapse to one row per derived
-/// entity key, its newest notification (the `latest` window's first row per
-/// partition), which the fenced subquery orders and keysets; the outer query
+/// entity key using its maximum notification timestamp. No other column from
+/// the latest notification is needed, so grouping avoids sorting every
+/// notification for a row-number window. The fenced subquery orders and
+/// keysets these aggregates (never the raw notifications); the outer query
 /// gates those per entity type on existence/deletion/access and the
 /// soup-owned filters in that order until `LIMIT` is met. The `OFFSET 0`
 /// fence keeps the gates outside the dedupe and the inner order intact, so
@@ -262,82 +283,7 @@ pub(super) async fn notified_soup_page(
         return Ok(Vec::new());
     }
 
-    let sql = format!(
-        r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
-            UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = $1
-            UNION ALL
-            SELECT $1
-        ),
-        notified AS NOT MATERIALIZED (
-            SELECT
-                un.created_at,
-                n.id AS notification_id,
-                CASE WHEN n.event_item_type = 'channel'
-                        AND n.secondary_event_item_type = 'channel_message'
-                    THEN 'channel_message' ELSE n.event_item_type
-                END AS entity_type,
-                CASE WHEN n.event_item_type = 'channel'
-                        AND n.secondary_event_item_type = 'channel_message'
-                    THEN n.secondary_event_item_id ELSE n.event_item_id
-                END AS entity_id
-            FROM user_notification un
-            JOIN notification n ON n.id = un.notification_id
-            WHERE un.user_id = $1
-            AND un.deleted_at IS NULL
-        ),
-        latest AS NOT MATERIALIZED (
-            SELECT
-                entity_type,
-                entity_id,
-                created_at,
-                row_number() OVER (
-                    PARTITION BY entity_type, entity_id
-                    ORDER BY created_at DESC, notification_id DESC
-                ) AS rn
-            FROM notified
-            WHERE entity_type = ANY($2)
-        )
-        SELECT nc.entity_type, nc.entity_id, nc.notified_at
-        FROM (
-            SELECT entity_type, entity_id, created_at AS notified_at
-            FROM latest
-            WHERE rn = 1
-            AND ($3::timestamp IS NULL OR (created_at, entity_id) < ($3, $4))
-            ORDER BY created_at DESC, entity_id DESC
-            OFFSET 0
-        ) nc
-        WHERE CASE nc.entity_type
-            WHEN 'document' THEN {document_gate}
-            WHEN 'chat' THEN {chat_gate}
-            WHEN 'project' THEN {project_gate}
-            WHEN 'channel' THEN {channel_gate}
-            WHEN 'channel_message' THEN {channel_thread_gate}
-            WHEN 'email_thread' THEN {email_gate}
-            WHEN 'calendar_event' THEN {calendar_event_gate}
-            WHEN 'foreign_entity' THEN {foreign_entity_gate}
-            WHEN 'reminder' THEN {reminder_gate}
-            WHEN 'agent_session' THEN {agent_session_gate}
-            ELSE FALSE
-        END
-        ORDER BY nc.notified_at DESC, nc.entity_id DESC
-        LIMIT $6
-        "#,
-        document_gate = document_gate(ID_SQL, req.filter),
-        chat_gate = chat_gate(ID_SQL, req.filter),
-        project_gate = project_gate(ID_SQL, req.filter),
-        channel_gate = channel_gate(ID_SQL, req.filter),
-        channel_thread_gate = channel_thread_gate(ID_SQL, req.filter),
-        email_gate = email_gate(ID_SQL, req.filter),
-        calendar_event_gate = calendar_event_gate(req.filter),
-        foreign_entity_gate = foreign_entity_gate(req.filter),
-        reminder_gate = reminder_gate(),
-        agent_session_gate = agent_session_gate(),
-    );
+    let sql = build_query(req.filter);
 
     let after_ts = req.after.as_ref().map(|a| a.notified_at.naive_utc());
     let after_id = req.after.map(|a| a.entity_id);

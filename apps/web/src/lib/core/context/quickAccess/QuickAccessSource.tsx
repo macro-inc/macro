@@ -1,4 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { enableCrm } from '@core/constant/featureFlags';
 import {
   useChannelsContext,
   useDmActivityByUserId,
@@ -20,6 +22,7 @@ import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
 } from '@queries/channel/graphql';
+import { materializeCachedGraphqlCrmCompanies } from '@queries/crm/graphql';
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
@@ -29,11 +32,11 @@ import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import { toDate } from 'date-fns';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { searchQuickAccessItems } from './entity-search';
@@ -307,6 +310,7 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
+  const crmFlag = useFeatureFlag(enableCrm);
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
@@ -320,24 +324,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const cacheHost = graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
   const [cacheRevision, setCacheRevision] = createSignal(0);
   const cachedChannelsQuery = useCachedGraphqlChannelsQuery(cacheHost);
-  const refreshCachedLists = leadingAndTrailing(
-    throttle,
-    () => {
-      setCacheRevision((revision) => revision + 1);
-      void cachedChannelsQuery.refetch();
-    },
-    250
-  );
-  const unsubscribeCacheChanges = cacheHost?.onCacheChanged(
-    refreshCachedLists,
-    {
-      includeHydration: true,
-    }
-  );
-  onCleanup(() => {
-    unsubscribeCacheChanges?.();
-    refreshCachedLists.clear();
-  });
+  if (cacheHost) {
+    onCleanup(
+      subscribeToVisibleCacheChanges(cacheHost, () => {
+        setCacheRevision((revision) => revision + 1);
+        void cachedChannelsQuery.refetch();
+      })
+    );
+  }
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const { query: crmCompaniesQuery, companies: crmCompaniesAccessor } =
     useQuickAccessCrmCompaniesQuery();
@@ -376,7 +370,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   const soupViewedAtMap = createLazyMemo(() => {
     const map = new Map<string, string>();
-    const data = recentlyViewedQuery.data;
+    const data = queryReadyGate(recentlyViewedQuery)
+      ? recentlyViewedQuery.data
+      : undefined;
     if (!data) return map;
     for (const item of data) {
       if (item.viewedAt) map.set(item.id, item.viewedAt);
@@ -390,7 +386,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const allEntries: IndexEntry[] = [];
 
     // Process history items
-    const historyData = historyQuery.data ?? [];
+    const historyData = queryReadyGate(historyQuery) ? historyQuery.data : [];
     const hidden = hiddenIds();
     for (const item of historyData) {
       if (item.deletedAt) continue;
@@ -450,7 +446,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     // The GraphQL cache is authoritative while enabled. Otherwise preserve the
     // existing channel-list source unchanged.
     const channelData = cacheHost
-      ? (cachedChannelsQuery.data ?? [])
+      ? queryReadyGate(cachedChannelsQuery)
+        ? cachedChannelsQuery.data
+        : []
       : channels().map(apiChannelToQuickAccessChannel);
     for (const sourceChannel of channelData) {
       const viewedAt = cacheHost
@@ -867,24 +865,29 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const first = args[0];
     const options = typeof first === 'object' ? first : undefined;
     const buckets = options ? [...options.buckets] : (args as Bucket[]);
+    const projectedBuckets = createMemo(() =>
+      (buckets.length ? buckets : BUCKET_COMBINATIONS.all).filter(
+        (bucket) => bucket !== 'crm_company' || crmFlag().enabled
+      )
+    );
     const baseList = createLazyMemo(() => {
-      if (options?.enabled?.() === false) return [];
+      const activeBuckets = projectedBuckets();
+      if (options?.enabled?.() === false || activeBuckets.length === 0)
+        return [];
       let indices: IndexEntry[];
 
-      if (buckets.length === 0) {
-        indices = preBakedIndices().all;
-      } else if (buckets.length === 1) {
+      if (activeBuckets.length === 1) {
         // Single bucket = return pre-computed bucket list
-        indices = bucketIndices().get(buckets[0]) ?? [];
+        indices = bucketIndices().get(activeBuckets[0]) ?? [];
       } else {
         // Check for pre-baked combination
-        const preBaked = getPreBakedIndices(buckets);
+        const preBaked = getPreBakedIndices(activeBuckets);
         if (preBaked) {
           indices = preBaked;
         } else {
           // Fallback: merge-sort the requested bucket index lists
           const allIndices = bucketIndices();
-          const indicesToMerge = buckets
+          const indicesToMerge = activeBuckets
             .map((b) => allIndices.get(b) ?? [])
             .filter((arr) => arr.length > 0);
           indices = mergeMultipleSortedIndices(indicesToMerge);
@@ -903,10 +906,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       options && cacheHost
         ? createProjectedList<QuickAccessItem>({
             host: cacheHost,
-            buckets,
+            get buckets() {
+              return projectedBuckets();
+            },
             revision: cacheRevision,
             searchTerm: options.searchTerm,
-            enabled: options.enabled,
+            // An empty bucket list means "all" to the cache, not "none".
+            enabled: () =>
+              projectedBuckets().length > 0 && options.enabled?.() !== false,
             existingItems: localItems,
             materialize: async (documents) => {
               const idOf = (recordKey: string) =>
@@ -914,15 +921,20 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               const missing = documents.filter(
                 ({ recordKey }) => !itemCache.has(idOf(recordKey))
               );
-              const [historyItems, cachedChannelItems] = await Promise.all([
-                materializeCachedGraphqlHistoryItems(cacheHost, missing),
-                materializeCachedGraphqlChannels(cacheHost, missing),
-              ]);
+              const [historyItems, cachedChannelItems, cachedCompanies] =
+                await Promise.all([
+                  materializeCachedGraphqlHistoryItems(cacheHost, missing),
+                  materializeCachedGraphqlChannels(cacheHost, missing),
+                  materializeCachedGraphqlCrmCompanies(cacheHost, missing),
+                ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
               );
               const channelsById = new Map(
                 cachedChannelItems.map((item) => [item.id, item])
+              );
+              const companiesById = new Map(
+                cachedCompanies.map((company) => [company.id, company])
               );
               return documents.flatMap((document): QuickAccessItem[] => {
                 const id = idOf(document.recordKey);
@@ -943,6 +955,24 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                         createdAt: historyItem.createdAt,
                       },
                       data: entity,
+                    },
+                  ];
+                }
+                const company = companiesById.get(id);
+                if (company) {
+                  return [
+                    {
+                      kind: 'entity',
+                      id,
+                      bucket: 'crm_company',
+                      searchText: getCrmCompanySearchText(company),
+                      sortTimestamp: document.timestampMs,
+                      timestamps: {
+                        viewedAt: company.viewedAt,
+                        updatedAt: company.updatedAt,
+                        createdAt: company.createdAt,
+                      },
+                      data: company,
                     },
                   ];
                 }

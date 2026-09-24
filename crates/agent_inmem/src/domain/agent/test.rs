@@ -190,13 +190,9 @@ async fn new_session_advertises_its_slash_commands() {
         .iter()
         .map(|command| command.name.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(names, vec!["compact", "ask"]);
+    assert_eq!(names, vec!["ask"]);
     assert!(
-        advertised.available_commands[0].input.is_none(),
-        "/compact takes no argument, so the composer sends it as-is"
-    );
-    assert!(
-        advertised.available_commands[1].input.is_some(),
+        advertised.available_commands[0].input.is_some(),
         "/ask carries a hint for its question"
     );
 }

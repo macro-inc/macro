@@ -2,8 +2,11 @@ import type { IHighlight } from '@block-pdf/model/Highlight';
 import type { IThreadPlaceable } from '@block-pdf/type/placeables';
 import { useUserId } from '@core/context/user';
 import { compareDateAsc } from '@core/util/date';
-
-import { createConnectionWebsocketEffect } from '@service-connection/websocket';
+import { onThreadStateUpdated } from '@queries/messages/sync';
+import {
+  createConnectionWebsocketEffect,
+  parseWebsocketPayload,
+} from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type { AnnotationIncrementalUpdate } from '@service-storage/generated/schemas/annotationIncrementalUpdate';
 import type { Comment } from '@service-storage/generated/schemas/comment';
@@ -15,6 +18,8 @@ import type { DeleteCommentRequest } from '@service-storage/generated/schemas/de
 import type { DeleteUnthreadedAnchorRequest } from '@service-storage/generated/schemas/deleteUnthreadedAnchorRequest';
 import type { EditAnchorRequest } from '@service-storage/generated/schemas/editAnchorRequest';
 import type { EditCommentRequest } from '@service-storage/generated/schemas/editCommentRequest';
+import type { MessageEvent } from '@service-storage/generated/schemas/messageEvent';
+import { onCleanup } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
 
 export const sortComments = (a: Comment, b: Comment) => {
@@ -350,11 +355,40 @@ export function useEditPdfFreeCommentAnchor() {
   };
 }
 
+/**
+ * A message-path discussion creates, binds, or removes its anchor on the
+ * server: a new root or a thread state change. Both paths reload anchors on
+ * one, so neither acts on a stale binding.
+ */
+export function changesAnchors(
+  event: MessageEvent | undefined,
+  documentId: string
+) {
+  if (event?.parent?.type !== 'document' || event.parent.id !== documentId)
+    return false;
+  const change = event.change;
+  if (change.type === 'thread_updated') return true;
+  return change.type === 'posted' && !change.message.thread_id;
+}
+
+/** Annotation updates that only concern legacy comment threads. */
+const legacyCommentUpdates = new Set([
+  'create-comment',
+  'edit-comment',
+  'delete-comment',
+]);
+
 export function usePdfCommentRealtimeBehavior() {
   const currentUserId = useUserId();
   const { annotations, documentId } = usePdfDocument();
 
   createConnectionWebsocketEffect((msg) => {
+    if (msg.type === 'message_update') {
+      const event = parseWebsocketPayload<MessageEvent>(msg.type, msg.data);
+      if (changesAnchors(event, documentId()))
+        void annotations.commands.refetchAnchors();
+      return;
+    }
     if (msg.type === 'comment') {
       let incrementalUpdate: AnnotationIncrementalUpdate;
       try {
@@ -369,6 +403,12 @@ export function usePdfCommentRealtimeBehavior() {
         console.warn('unable to parse annotation incremental update', e);
         return;
       }
+      // Message-path discussions are not in the legacy comment store.
+      if (
+        annotations.unified &&
+        legacyCommentUpdates.has(incrementalUpdate.updateType)
+      )
+        return;
 
       switch (incrementalUpdate.updateType) {
         case 'create-comment':
@@ -407,4 +447,17 @@ export function usePdfCommentRealtimeBehavior() {
       }
     }
   });
+
+  if (annotations.unified) {
+    onCleanup(
+      onThreadStateUpdated((parent, state) => {
+        if (
+          parent.type === 'document' &&
+          parent.id === documentId() &&
+          state.deleted_at
+        )
+          annotations.commands.applyThreadDeleted(state.root_id);
+      })
+    );
+  }
 }

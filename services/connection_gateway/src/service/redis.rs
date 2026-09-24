@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use redis::{AsyncCommands, FromRedisValue, ParsingError, Value, aio::MultiplexedConnection};
@@ -61,18 +63,56 @@ impl FromRedisValue for MessageWithConnection {
     }
 }
 
-/// Polls redis for messages and forwards them to the connection requested
+/// How long to wait before the first resubscribe attempt, doubling up to
+/// [`MAX_RESUBSCRIBE_DELAY`] while attempts keep failing.
+const INITIAL_RESUBSCRIBE_DELAY: Duration = Duration::from_secs(1);
+const MAX_RESUBSCRIBE_DELAY: Duration = Duration::from_secs(30);
+/// A subscription that lived at least this long counts as healthy, so the
+/// next failure starts the backoff over rather than continuing it.
+const HEALTHY_SUBSCRIPTION_AGE: Duration = Duration::from_secs(60);
+
+/// Keeps this instance subscribed to the relay channel for as long as the
+/// process lives.
 ///
-/// Redis will broadcast requests for message sending to all instances of the `connection_gateway`
-/// If this instance has the connection_id handle to the connection, then it will send the message
-pub async fn poll_messages(ctx: ApiContext) -> Result<()> {
-    tracing::trace!("started polling redis messages");
+/// Redis broadcasts every cross-instance send to all instances of the
+/// `connection_gateway`; the one holding the connection forwards it to the
+/// client. A pub/sub stream ends whenever Redis drops the subscriber (a
+/// reconnect, a failover, an output buffer it decided was too large), and a
+/// subscriber that is not resubscribed silently loses every cross-instance
+/// message from then on. So each run is supervised: when it ends or fails,
+/// that is logged at error level and a fresh subscription is opened after a
+/// backoff.
+pub async fn poll_messages(ctx: ApiContext) {
+    let mut delay = INITIAL_RESUBSCRIBE_DELAY;
+    loop {
+        let started = Instant::now();
+        match subscribe_and_forward(&ctx).await {
+            Ok(()) => tracing::error!("redis relay subscription ended; resubscribing"),
+            Err(error) => {
+                tracing::error!(error = ?error, "redis relay subscription failed; resubscribing");
+            }
+        }
+        if started.elapsed() >= HEALTHY_SUBSCRIPTION_AGE {
+            delay = INITIAL_RESUBSCRIBE_DELAY;
+        }
+        tokio::time::sleep(delay).await;
+        delay = (delay * 2).min(MAX_RESUBSCRIBE_DELAY);
+    }
+}
 
-    let (mut sink, mut stream) = ctx.redis_client.get_async_pubsub().await?.split();
-
+/// One subscription: forward relayed messages to the connections this
+/// instance holds until the stream ends.
+async fn subscribe_and_forward(ctx: &ApiContext) -> Result<()> {
+    let (mut sink, mut stream) = ctx
+        .redis_client
+        .get_async_pubsub()
+        .await
+        .context("failed to open redis pub/sub connection")?
+        .split();
     sink.subscribe(REDIS_CHANNEL)
         .await
-        .context("Failed to subscribe to reddis channel")?;
+        .context("failed to subscribe to redis relay channel")?;
+    tracing::info!(channel = REDIS_CHANNEL, "subscribed to redis relay channel");
 
     while let Some(maybe_message) = stream.next().await {
         let mut message: MessageWithConnection =
@@ -122,8 +162,6 @@ pub async fn poll_messages(ctx: ApiContext) -> Result<()> {
             tracing::error!(error=?err, "failed to send message");
         }
     }
-
-    tracing::trace!("poller exited");
 
     Ok(())
 }

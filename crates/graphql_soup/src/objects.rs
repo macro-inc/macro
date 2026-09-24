@@ -1,5 +1,5 @@
 use async_graphql::{
-    Context, ID, InputValueError, InputValueResult, Interface, Json, Object, ObjectType,
+    Context, ID, InputType, InputValueError, InputValueResult, Interface, Json, Object, ObjectType,
     OutputType, Scalar, ScalarType, SimpleObject, Union, Value as GraphqlValue,
 };
 use graphql_common::{
@@ -68,6 +68,9 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
     /// GraphQL notification object supplied by the notification adapter.
     type Notification: OutputType;
 
+    /// Optional notification filtering input supplied by the notification adapter.
+    type NotificationFilter: InputType;
+
     /// GraphQL activity event object supplied by the activity adapter.
     type ActivityEvent: OutputType;
 
@@ -113,6 +116,8 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
     fn resolve_notifications(
         &self,
         ctx: &Context<'_>,
+        filter: Option<Self::NotificationFilter>,
+        limit: Option<i32>,
     ) -> impl Future<Output = async_graphql::Result<Vec<Self::Notification>>> + Send;
 
     /// Resolve whether the authenticated viewer has favorited this entity.
@@ -327,6 +332,10 @@ pub struct GraphqlEntityMetadata {
 }
 
 /// Common GraphQL interface over canonical Soup entity variants.
+#[expect(
+    clippy::duplicated_attributes,
+    reason = "async-graphql scopes each limit argument to its own field (notifications and activity)"
+)]
 #[derive(Interface)]
 #[graphql(
     field(name = "id", ty = "ID", desc = "The canonical entity identifier."),
@@ -361,6 +370,8 @@ pub struct GraphqlEntityMetadata {
         name = "notifications",
         method = "interface_notifications",
         ty = "Vec<E::Notification>",
+        arg(name = "filter", ty = "Option<E::NotificationFilter>"),
+        arg(name = "limit", ty = "Option<i32>"),
         desc = "Notifications associated with this entity for the current viewer."
     ),
     field(
@@ -2429,8 +2440,10 @@ macro_rules! impl_common_interface_edges {
                 async fn interface_notifications(
                     &self,
                     ctx: &Context<'_>,
+                    filter: Option<E::NotificationFilter>,
+                    limit: Option<i32>,
                 ) -> async_graphql::Result<Vec<E::Notification>> {
-                    self.1.resolve_notifications(ctx).await
+                    self.1.resolve_notifications(ctx, filter, limit).await
                 }
 
                 /// Resolve shared favorite state through the composed edge adapter.

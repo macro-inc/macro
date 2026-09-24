@@ -282,6 +282,18 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     synchronizeBuffers();
   };
 
+  // Browser history and direct URL navigation can change the route period
+  // without going through `changeView`. Keep the mounted pager in sync without
+  // emitting another route update or clearing an event that remains focused.
+  createEffect(() => {
+    const view = props.initialView;
+    const api = activePage()?.api();
+    if (!api || api.view.type === view) return;
+    pager.cancel();
+    api.changeView(view);
+    synchronizeBuffers();
+  });
+
   return {
     pager,
     pageOrder,

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM channel_label WHERE id = $2 AND scope_key = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "58a39b792f68382421cf3755fbc03c0ecb567dbb7e07e3773573ff2fde71a198"
+}

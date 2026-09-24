@@ -5,6 +5,7 @@ import {
 } from '@block-md/component/MarkdownDocument';
 import { ModalsProvider } from '@block-md/component/ModalsProvider';
 import { MarkdownSidePanelSections } from '@block-md/component/sidepanel/MarkdownSidePanelSections';
+import { createMarkdownDocumentState } from '@block-md/context/markdown-document-state';
 import { OldOverlay } from '@block-md/history/OldOverlay';
 import {
   loadMarkdownDocument,
@@ -12,14 +13,19 @@ import {
 } from '@block-md/queries/markdown-document';
 import { loadMarkdownCachedSnapshot } from '@block-md/queries/markdown-document-operations';
 import type { MarkdownDocumentKind } from '@block-md/types';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
+import { createMethodRegistration } from '@core/orchestrator';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button } from '@ui';
 import {
+  createComputed,
   createResource,
   ErrorBoundary,
   type JSX,
@@ -28,10 +34,9 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import type { FileDetailContext } from '../util/file-detail-context';
 
-export type MarkdownDetailContext = {
-  data: MarkdownDocumentData;
-};
+export type MarkdownDetailContext = FileDetailContext<MarkdownDocumentData>;
 
 export type MarkdownDetailProps = {
   documentId: string;
@@ -87,11 +92,23 @@ function MarkdownDetailContent(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
+  const orchestrator = useGlobalBlockOrchestrator();
+  const state = createMarkdownDocumentState();
+
+  // Mention chips and notifications aim an open document at a comment or node
+  // through its block handle; without one the click only activates the view.
+  createComputed(() => {
+    const handle = orchestrator.registerBlockHandle('md', props.documentId);
+    createMethodRegistration(() => handle, {
+      goToLocationFromParams: state.params.navigate,
+    });
+  });
 
   return (
     <MarkdownDocument
       documentId={props.documentId}
       kind={props.kind}
+      state={state}
       documentSource={{ type: 'sync', source: props.data.source }}
       permissions={props.data.permissions}
       persistedName={props.data.metadata.documentName}
@@ -102,7 +119,11 @@ function MarkdownDetailContent(props: {
         onShareOpenChange={props.onShareOpenChange}
       >
         <OldOverlay />
-        {props.children?.({ data: props.data })}
+        {props.children?.({
+          data: props.data,
+          documentMetadata: props.data.metadata,
+          userAccessLevel: props.data.userAccessLevel,
+        })}
         <SidePanel.Layout headerToggle={false}>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
             <MarkdownSidePanelSections />

@@ -1,6 +1,18 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { inboxPreviewNavigation } from '../inbox-view/inbox-preview-navigation';
+import { inboxPreviewSelection } from '../inbox-view/inbox-route';
 
-const { toastAlert, ...operationMocks } = vi.hoisted(() => {
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: vi.fn(() => false),
+}));
+
+const toastAlert = vi.hoisted(() => vi.fn());
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { alert: toastAlert },
+}));
+
+const operationMocks = vi.hoisted(() => {
   const store: Record<string, string> = {};
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
@@ -18,7 +30,6 @@ const { toastAlert, ...operationMocks } = vi.hoisted(() => {
     },
   });
   return {
-    toastAlert: vi.fn(),
     bulkMarkNotificationsAsDone: vi.fn(async () => {}),
     bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
     cancelQueries: vi.fn(async () => {}),
@@ -47,9 +58,6 @@ vi.mock('@service-connection/websocket', () => ({
   state: () => 'closed',
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),
-}));
-vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { alert: toastAlert },
 }));
 vi.mock('@queries/client', () => ({
   queryClient: {
@@ -112,6 +120,7 @@ import {
 afterEach(() => {
   setGlobalSplitManager(undefined);
   vi.clearAllMocks();
+  vi.mocked(isTouchDevice).mockReturnValue(false);
 });
 
 describe('agent session search navigation', () => {
@@ -151,14 +160,46 @@ describe('agent session search navigation', () => {
     };
     expect(getRowClickFallbackLocation(titleOnly)).toBeUndefined();
   });
+  it.each([
+    { status: 'opened', notify: false },
+    { status: 'unavailable', notify: false },
+    { status: 'reused', owner: 'existing', sourceOwner: 'list', notify: true },
+    {
+      status: 'reused',
+      owner: 'existing',
+      sourceOwner: 'existing',
+      notify: false,
+    },
+  ])(
+    'owns the toast policy for $status from $sourceOwner',
+    async ({ notify, ...result }) => {
+      const openWithSplit = vi.fn(() => result);
+      setGlobalSplitManager({
+        activeSplit: () => undefined,
+        getOrchestrator: () => ({
+          getBlockHandle: vi.fn(async () => undefined),
+        }),
+        openWithSplit,
+      } as unknown as SplitManager);
+      await openEntityInSplitFromUnifiedList(entity, {});
+      expect(openWithSplit).toHaveBeenCalledOnce();
+      if (notify)
+        expect(toastAlert).toHaveBeenCalledExactlyOnceWith(
+          'Content already open'
+        );
+      else expect(toastAlert).not.toHaveBeenCalled();
+    }
+  );
+
   it('opens the agent block with durable params and retargets it on each snippet click', async () => {
-    const openWithSplit = vi.fn();
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
     const goToLocationFromParams = vi.fn();
     const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
     setGlobalSplitManager({
       activeSplit: () => undefined,
       getOrchestrator: () => ({ getBlockHandle }),
       getSplitByContent: vi.fn(),
+      findOpenView: vi.fn(),
       openWithSplit,
     } as unknown as SplitManager);
     await openEntityInSplitFromUnifiedList(entity, {});
@@ -302,15 +343,13 @@ describe('mark-done orchestration', () => {
   });
 });
 
-describe('calendar block navigation', () => {
-  it('opens and targets the singleton calendar block', async () => {
-    const openWithSplit = vi.fn();
-    const goToLocationFromParams = vi.fn();
-    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+describe('calendar view navigation', () => {
+  it('opens and targets the singleton Calendar route', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
     setGlobalSplitManager({
       activeSplit: vi.fn(),
-      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
       getSplitByContent: vi.fn(),
+      findOpenView: vi.fn(),
       openWithSplit,
     } as unknown as SplitManager);
 
@@ -336,8 +375,8 @@ describe('calendar block navigation', () => {
 
     expect(openWithSplit).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'calendar',
-        id: 'view',
+        type: 'component',
+        id: 'calendar',
         params: expect.objectContaining({
           eventId: 'event-1',
           occurrenceKey: 'instance-1',
@@ -346,13 +385,168 @@ describe('calendar block navigation', () => {
             endDate: '2026-01-28',
           }),
         }),
+        entryMetadata: expect.objectContaining({
+          route: {
+            matches: [
+              expect.objectContaining({
+                id: 'view-calendar',
+              }),
+            ],
+          },
+          search: { calendar: { eventId: ['event-1'] } },
+        }),
       }),
       expect.any(Object)
     );
-    expect(getBlockHandle).toHaveBeenCalledWith('view', 'calendar');
-    expect(goToLocationFromParams).toHaveBeenCalledWith(
-      expect.objectContaining({ eventId: 'event-1' })
+  });
+});
+
+describe('Drive document routing', () => {
+  it('keeps task documents as legacy task blocks on touch', async () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({})),
+      openWithSplit,
+    } as unknown as SplitManager);
+    await openEntityInSplitFromUnifiedList(
+      {
+        type: 'document',
+        id: 'task-1',
+        fileType: 'md',
+        subType: { type: 'task' },
+      } as EntityData,
+      {}
     );
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'task', id: 'task-1', params: undefined },
+      expect.any(Object)
+    );
+  });
+  it.each([
+    'md',
+    'pdf',
+    'canvas',
+    'code',
+    'image',
+    'video',
+    'spreadsheet',
+    'unknown',
+  ] as const)(
+    'opens %s documents as legacy blocks on touch',
+    async (fileType) => {
+      vi.mocked(isTouchDevice).mockReturnValue(true);
+      const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+      setGlobalSplitManager({
+        activeSplit: vi.fn(),
+        getOrchestrator: vi.fn(() => ({})),
+        openWithSplit,
+      } as unknown as SplitManager);
+      await openEntityInSplitFromUnifiedList(
+        { type: 'document', id: 'doc-1', fileType } as EntityData,
+        { openInNewSplit: true }
+      );
+      expect(openWithSplit).toHaveBeenCalledWith(
+        { type: fileType, id: 'doc-1', params: undefined },
+        expect.objectContaining({ preferNewSplit: true })
+      );
+    }
+  );
+  it.each(['md', 'pdf', 'canvas'] as const)(
+    'opens %s documents as canonical Drive content',
+    async (fileType) => {
+      const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+      setGlobalSplitManager({
+        activeSplit: vi.fn(),
+        getOrchestrator: vi.fn(() => ({})),
+        getSplitByContent: vi.fn(),
+        openWithSplit,
+      } as unknown as SplitManager);
+
+      await openEntityInSplitFromUnifiedList(
+        {
+          type: 'document',
+          id: 'doc-1',
+          fileType,
+        } as EntityData,
+        { openInNewSplit: true }
+      );
+
+      expect(openWithSplit).toHaveBeenCalledWith(
+        {
+          type: 'component',
+          id: 'documents',
+          entryMetadata: {
+            route: {
+              matches: [
+                { id: 'drive', params: {} },
+                {
+                  id: 'drive-document',
+                  params: {
+                    documentId: 'doc-1',
+                    documentType: fileType,
+                  },
+                },
+              ],
+            },
+          },
+        },
+        expect.objectContaining({
+          allowDuplicate: true,
+          preferNewSplit: true,
+        })
+      );
+    }
+  );
+});
+
+describe('Inbox calendar preview navigation', () => {
+  it.each([
+    { kind: 'allDay' as const, startDate: '2025-01-01', endDate: '2025-01-03' },
+    {
+      kind: 'timed' as const,
+      startsAt: '2025-01-01T12:00:00.000Z',
+      endsAt: '2025-01-01T13:00:00.000Z',
+    },
+  ])('round-trips $kind event times', (time) => {
+    const result = inboxPreviewNavigation({
+      type: 'calendar_event',
+      id: 'event-1',
+      time,
+    });
+    expect(result.search.calendarTimeKind).toBe(time.kind);
+    expect(inboxPreviewSelection(result.params, result.search)).toMatchObject({
+      type: 'calendar_event',
+      id: 'event-1',
+      time,
+    });
+  });
+});
+
+describe('Inbox channel preview navigation', () => {
+  it('preserves explicit message targets on whole-channel selections', () => {
+    const result = inboxPreviewNavigation({
+      type: 'channel',
+      id: 'channel-1',
+      target: { messageId: 'message-1', threadId: 'thread-1' },
+    });
+    expect(result.params).toEqual({
+      blockType: 'channel',
+      previewId: 'channel-1',
+    });
+    expect(result.search).toMatchObject({
+      targetMessageId: 'message-1',
+      targetThreadId: 'thread-1',
+    });
+  });
+  it('keeps untargeted channels at latest', () => {
+    expect(
+      inboxPreviewNavigation({ type: 'channel', id: 'channel-1' }).search
+    ).toMatchObject({
+      targetMessageId: '',
+      targetThreadId: '',
+    });
   });
 });
 
@@ -433,13 +627,14 @@ describe('getChannelEntityTarget', () => {
 
   it('marks attached channel notifications through the shared split-open path', async () => {
     const notification = sendNotification('shared-open', 'message');
-    const openWithSplit = vi.fn();
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
     setGlobalSplitManager({
       activeSplit: vi.fn(),
       getOrchestrator: vi.fn(() => ({
         getBlockHandle: vi.fn(async () => undefined),
       })),
       getSplitByContent: vi.fn(),
+      findOpenView: vi.fn(),
       openWithSplit,
     } as unknown as SplitManager);
 
@@ -465,7 +660,7 @@ describe('getChannelEntityTarget', () => {
     const unread = sendNotification('mobile-unread', 'message');
     const read = asRead(sendNotification('mobile-read', 'read-message'));
     const reply = replyNotification('mobile-reply', 'reply', 'thread-root');
-    const openWithSplit = vi.fn();
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
     setGlobalSplitManager({
       activeSplit: vi.fn(),
       getOrchestrator: vi.fn(() => ({
@@ -546,7 +741,8 @@ describe('getChannelEntityTarget', () => {
         getBlockHandle: vi.fn(async () => undefined),
       })),
       getSplitByContent: vi.fn(),
-      openWithSplit: vi.fn(),
+      findOpenView: vi.fn(),
+      openWithSplit: vi.fn(() => ({ status: 'unavailable' })),
     } as unknown as SplitManager);
 
     const bulkMarkAsRead = vi.fn(async () => {});

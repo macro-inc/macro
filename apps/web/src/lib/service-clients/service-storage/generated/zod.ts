@@ -1602,7 +1602,13 @@ export const mentionPreviewsResponse = zod
                   attendeeCount: zod
                     .number()
                     .min(mentionPreviewsResponseItemsItemEventAttendeeCountMin)
-                    .describe("Number of attendees on the requester's copy."),
+                    .describe('Number of attendees on the previewed copy.'),
+                  description: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering.'
+                    ),
                   isRecurring: zod
                     .boolean()
                     .describe('Whether the event repeats.'),
@@ -1663,15 +1669,16 @@ export const mentionPreviewsResponse = zod
                   title: zod.string().describe('Display title.'),
                   updatedAt: zod.iso
                     .datetime({})
-                    .describe("Entity update time of the requester's copy."),
+                    .describe('Entity update time of the previewed copy.'),
                   viewerEventId: zod
                     .uuid()
+                    .nullish()
                     .describe(
-                      "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee."
+                      "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee.\nAbsent when the meeting is on none of the requester's calendars and\nthey see it only because it was shared with one of their channels:\nthat preview is read-only and there is no event of theirs to open."
                     ),
                 })
                 .describe(
-                  "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting."
+                  "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting, or — when the requester has\nnone — from the mentioned projection a channel they belong to was given."
                 ),
             ])
             .optional(),
@@ -2310,6 +2317,305 @@ export const ingestTranscriptBody = zod
       ),
   })
   .describe('A transcript segment from LiveKit Inference STT.');
+
+/**
+ * @summary List the caller's shared or private labels.
+ */
+export const listChannelLabelsResponse = zod
+  .object({
+    labels: zod
+      .array(
+        zod
+          .object({
+            channelCount: zod
+              .number()
+              .describe(
+                'All assignments for a manual label; visible matches for a smart tag.'
+              ),
+            channelIds: zod
+              .array(zod.uuid())
+              .describe(
+                'Channels in this label that the requesting user participates in.'
+              ),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the label was created.'),
+            id: zod.uuid().describe('Stable label id.'),
+            name: zod
+              .string()
+              .describe(
+                'Display name, unique within the scope (case-insensitive).'
+              ),
+            rule: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    attribute: zod.enum(['name']),
+                    contains: zod
+                      .string()
+                      .describe('The substring to find anywhere in the name.'),
+                  })
+                  .describe(
+                    'Case-insensitive, literal substring matching on the channel name.'
+                  )
+                  .describe(
+                    'An attribute rule that automatically groups matching channels.'
+                  ),
+              ])
+              .optional(),
+            sortOrder: zod
+              .number()
+              .describe(
+                'Manual ordering value within the scope; lower sorts first.'
+              ),
+            teamId: zod
+              .uuid()
+              .nullish()
+              .describe('Owning team, or `None` for account-private labels.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the label was last renamed or reordered.'),
+          })
+          .describe(
+            'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+          )
+      )
+      .describe(
+        'Every label of the scope, whether or not the caller sees channels in it.'
+      ),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team scope, or `None` for private labels.'),
+  })
+  .describe("The authorized scope's labels in manual order.");
+
+/**
+ * @summary Create a label for the caller's authorized scope.
+ */
+export const createChannelLabelBody = zod
+  .object({
+    channelIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Channels to move into the new label.'),
+    name: zod
+      .string()
+      .describe('Display name; unique within the scope, case-insensitively.'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Request body for creating a label.');
+
+export const createChannelLabelResponse = zod
+  .object({
+    channelCount: zod
+      .number()
+      .describe(
+        'All assignments for a manual label; visible matches for a smart tag.'
+      ),
+    channelIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Channels in this label that the requesting user participates in.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    id: zod.uuid().describe('Stable label id.'),
+    name: zod
+      .string()
+      .describe('Display name, unique within the scope (case-insensitive).'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+    sortOrder: zod
+      .number()
+      .describe('Manual ordering value within the scope; lower sorts first.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team, or `None` for account-private labels.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the label was last renamed or reordered.'),
+  })
+  .describe(
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+  );
+
+/**
+ * @summary Move a channel into a label of the caller's authorized scope, or out of any label.
+ */
+export const setChannelLabelParams = zod.object({
+  channel_id: zod.uuid().describe('The channel id.'),
+});
+
+export const setChannelLabelBody = zod
+  .object({
+    labelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The label to put the channel in, or `null` to remove it from its label.'
+      ),
+  })
+  .describe('Request body for moving a channel between labels.');
+
+/**
+ * @summary Preview visible channels matched by a smart tag, without creating it.
+ */
+export const previewSmartTagBody = zod
+  .object({
+    attribute: zod.enum(['name']),
+    contains: zod
+      .string()
+      .describe('The substring to find anywhere in the name.'),
+  })
+  .describe('Case-insensitive, literal substring matching on the channel name.')
+  .describe('An attribute rule that automatically groups matching channels.');
+
+export const previewSmartTagResponse = zod
+  .object({
+    channels: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('Channel id.'),
+            name: zod.string().describe('Channel display name.'),
+          })
+          .describe(
+            'A channel visible to the caller that matches a smart tag rule.'
+          )
+      )
+      .describe('First matches, in alphabetical order.'),
+    totalCount: zod
+      .number()
+      .describe(
+        'Number of matching channels the caller participates in, including overflow.'
+      ),
+  })
+  .describe(
+    'A bounded preview and the total number of visible channels matching a rule.'
+  );
+
+/**
+ * @summary Delete a label of the caller's authorized scope. Its channels return to the plain list.
+ */
+export const deleteChannelLabelParams = zod.object({
+  label_id: zod.uuid().describe('The label id.'),
+});
+
+/**
+ * @summary Rename a label of the caller's authorized scope.
+ */
+export const renameChannelLabelParams = zod.object({
+  label_id: zod.uuid().describe('The label id.'),
+});
+
+export const renameChannelLabelBody = zod
+  .object({
+    name: zod.string().describe('New display name.'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Request body for renaming a label.');
+
+export const renameChannelLabelResponse = zod
+  .object({
+    channelCount: zod
+      .number()
+      .describe(
+        'All assignments for a manual label; visible matches for a smart tag.'
+      ),
+    channelIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Channels in this label that the requesting user participates in.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    id: zod.uuid().describe('Stable label id.'),
+    name: zod
+      .string()
+      .describe('Display name, unique within the scope (case-insensitive).'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+    sortOrder: zod
+      .number()
+      .describe('Manual ordering value within the scope; lower sorts first.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team, or `None` for account-private labels.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the label was last renamed or reordered.'),
+  })
+  .describe(
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+  );
 
 /**
  * @summary Handler for `POST /channels`.
@@ -5472,6 +5778,21 @@ export const putCrmTeamStagesResponse = zod
       .describe('Stages in pipeline order.'),
   })
   .describe("The team's custom stage set.");
+
+/**
+ * Available to every signed-in user on every plan; does not consume chat
+credits. Audio and transcripts are never persisted.
+ * @summary Transcribe a transient recording with OpenAI Whisper.
+ */
+export const transcribeDictationQueryParams = zod.object({
+  language: zod.string().optional().describe('ISO 639-1 language hint'),
+});
+
+export const transcribeDictationResponse = zod
+  .object({
+    text: zod.string().describe('Recognized text.'),
+  })
+  .describe('Transcription result.');
 
 /**
  * @summary Gets the users documents to populate their recent document list
@@ -28311,6 +28632,12 @@ export const messageTimelineResponse = zod
                                 .describe(
                                   'Mark UUID serialized in the document.'
                                 ),
+                              marked_text: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                                ),
                               type: zod.enum(['markdown']),
                             })
                             .describe(
@@ -28611,6 +28938,12 @@ export const entityMessageCreateBody = zod
             zod
               .object({
                 mark_id: zod.uuid().describe('Serialized mark identifier.'),
+                marked_text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'The document text the mark covers, captured by the editor as the\ncomment is written. Trimmed and bounded before it is stored, so an\noversized or whitespace-only claim cannot reach the thread row.'
+                  ),
                 type: zod.enum(['markdown']),
               })
               .describe('Attach a discussion to a stable Markdown mark.'),
@@ -28671,6 +29004,12 @@ export const entityMessageCreateBody = zod
       .optional()
       .describe('Initial attachments.'),
     content: zod.string().describe('Macro Markdown body.'),
+    id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Client-minted UUIDv7 for the new message, so an optimistic message\nalready carries its final id; the server mints one when absent.'
+      ),
     mentions: zod
       .array(
         zod
@@ -28935,7 +29274,7 @@ export const entityMessageGetMessageResponse = zod
   );
 
 /**
- * @summary Tombstone one message while preserving replies.
+ * @summary Tombstone one message; deleting a discussion's root deletes the discussion.
  */
 export const entityMessageDeleteMessageParams = zod.object({
   parent_type: zod.string(),
@@ -29838,6 +30177,12 @@ export const entityMessageGetThreadResponse = zod
                     mark_id: zod
                       .uuid()
                       .describe('Mark UUID serialized in the document.'),
+                    marked_text: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                      ),
                     type: zod.enum(['markdown']),
                   })
                   .describe(
@@ -29920,6 +30265,12 @@ export const entityMessageDeleteThreadResponse = zod
                 mark_id: zod
                   .uuid()
                   .describe('Mark UUID serialized in the document.'),
+                marked_text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                  ),
                 type: zod.enum(['markdown']),
               })
               .describe(
@@ -30011,6 +30362,12 @@ export const entityMessagePatchThreadResponse = zod
                 mark_id: zod
                   .uuid()
                   .describe('Mark UUID serialized in the document.'),
+                marked_text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                  ),
                 type: zod.enum(['markdown']),
               })
               .describe(

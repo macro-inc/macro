@@ -3,10 +3,9 @@ import { parseDismissedCards } from './home-prefs';
 
 describe('parseDismissedCards', () => {
   it('accepts known home cards', () => {
-    expect(parseDismissedCards('["examples","setup"]')).toEqual([
-      'examples',
-      'setup',
-    ]);
+    expect(
+      parseDismissedCards('["examples","setup","getting-started-link"]')
+    ).toEqual(['examples', 'setup', 'getting-started-link']);
   });
 
   it('drops unknown and non-string entries', () => {

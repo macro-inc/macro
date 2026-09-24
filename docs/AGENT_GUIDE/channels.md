@@ -49,6 +49,16 @@ verify that its tool response includes the matching attachment URLs.
 
 ## Message composer
 
+Channel messages and thread replies have a microphone next to Send, including
+the collapsed composer. It uses the same OpenAI Whisper dictation and scrolling
+volume timeline as AI chat. **Use dictation** appends text to the draft without
+sending; **Cancel dictation** or Escape preserves the existing draft. Sending
+is blocked during dictation, including keyboard and external send actions.
+When local recognition is unavailable, confirming uploads the in-memory audio
+to Whisper. This fallback is available on all plans without consuming chat credits.
+Browsers without microphone recording show a disabled button.
+The first click downloads a language pack when needed; click again to record.
+
 Composer and conversation body text use `text-base` (15px at the default root
 size) on desktop and mobile. The shared scale uses 14px for `text-sm` and 12px
 for `text-xs`, with accessibility text scaling preserved.
@@ -304,6 +314,11 @@ records `path` (`catch_up` or `full`) and `reason`
 
 ## Chat navigation rail
 
+Following a channel mention or browser notification for the conversation already
+shown in Chat activates that workspace and jumps to the targeted message or reply. It keeps
+the existing preview and does not show a **Content already open** toast. The
+same applies to a channel preview in Home; a closed channel opens normally.
+
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
 **Show navigation** (the hamburger) immediately before the conversation title,
 or in the Chat header when no conversation is selected. Chat remembers this
@@ -313,10 +328,114 @@ the shared 256px default sidebar width and resize limits. In splits narrower tha
 with the same full sidebar contents. There is no separate skinny sidebar mode.
 
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
-optional `Favorites` section above the independently paginated `Channels` and
-`DMs` sections. It appears when the user has channel favorites and only lists
-channels. Channel favorites open in the channel preview. Shift-clicking a
-favorite, channel, or DM opens that conversation in a new split instead.
+optional `Favorites` section and the
+independently paginated `Channels` and `DMs` sections. Favorites appears when
+the user has channel favorites and only lists channels. Channel favorites open
+in the channel preview. Shift-clicking a favorite, channel, or DM opens that
+conversation in a new split instead.
+
+### Channel labels
+
+Channel labels require the `enable-channel-tags` feature flag. The flag is off
+until explicitly enabled, including in development. For a local frontend,
+`VITE_ENABLE_CHANNEL_TAGS=true` enables it and `VITE_ENABLE_CHANNEL_TAGS=false`
+forces it off; restart the frontend after changing the environment override.
+
+With the flag off, Channels remains a flat list in its selected sort order.
+The heading's `+` creates a channel directly. Label headings, creation dialogs,
+channel-menu label actions, and label drag targets are absent, and the app makes
+no channel-label list or smart-label preview requests. Existing saved labels
+remain unchanged and reappear when the flag is enabled.
+
+Even with the flag enabled, the heading keeps the direct `Create channel`
+action while labels are loading or unavailable. It shows the label creation
+menu only after the label list loads successfully; it never advertises disabled
+`New label` or `New smart label` actions. Changing the rollout flag to off also
+removes open label menus and dismisses label dialogs without reloading Chat.
+
+Verify both states after reloading Chat: with the flag off, inspect the heading
+action and a channel's context menu, drag between channel rows, and confirm
+there are no `/channel-labels` requests. With the flag enabled, verify the `+`
+menu offers `New channel`, `New label`, and `New smart label`; open each label
+dialog and cancel to check the controls without changing shared data. The
+creation, assignment, and persistence checks below require the label backend
+and an account where those changes are safe.
+
+Labels group channels inside the `Channels` section. Team members share the
+same labels and can create, rename, delete, or move their channels between them.
+Users without a team have labels private to their account. The naming and delete
+dialogs explain which scope applies. Collapse/expand state is per user.
+Every label remains visible, including empty labels; only team channels the
+viewer actively participates in are shown inside it. Shared labels accept only
+channels belonging to the label's team. Private account labels also accept only
+team channels. Public channels, private channels, and direct messages cannot be
+labelled. They keep their normal navigation, have no label menu actions, and
+cannot be dragged into labels. Existing ineligible assignments no longer group
+channels, including non-team channels and other teams' channels in shared labels.
+Names are unique within the team or account, case-insensitively.
+
+Layout: labels come first in creation order, each showing its visible channels
+A→Z, followed by ungrouped channels in the section's selected sort order. A label
+row has an unread count, a `···` menu (`Rename`, `Mark all as read`, `Delete label`), and a disclosure caret.
+Clicking the row or pressing Enter toggles it; `h` / `l` on a label or one of its
+channels collapses or expands that label. `[` / `]` jump between section headings.
+
+Creating: use the `Channels` heading's `+` → `New label`, including when the
+account has no team. The name field receives focus on opening and reopening.
+Enter or `Create label` saves; Escape or Cancel dismisses without saving.
+The dialog stays open while saving and shows a failure inline, preserving the
+name for a retry. A successful empty label appears immediately and survives
+reload. Rename uses the same dialog prefilled. Delete asks for confirmation;
+its button says `Delete for everyone` for shared labels and `Delete label` for
+private ones. Channels remain accessible after deleting their label.
+
+Moving: right-click a team channel for `Add to label` / `Move to label`, including a
+`New label…` option, or use `Ungroup from “<label>”`. Drag a channel onto a label
+heading or one of its channels to move in. Drag a grouped channel onto a plain
+team channel, the Channels heading, or empty space below the list to ungroup it.
+Dragging one ungrouped team channel onto another opens a name dialog; saving creates
+the label with both channels atomically. A failed save changes neither channel.
+Dropping on the source channel or its current label does nothing; Escape from
+the naming dialog leaves both channels unchanged.
+
+For drag verification, start from the channel name and from different horizontal
+positions in a row, then move across row boundaries and scroll the list. The
+highlight follows the visible target under the pointer, with a whole group
+highlighted when moving into it. A drag must not open a preview or reorder the
+source. Check moves into collapsed and empty labels, ungrouping, cancellation,
+and persistence after reload. Grouping in one Chat rail must not trigger a
+second dialog in another rail. If the label service cannot be reached, the
+UI reports the failure instead of claiming the group was saved.
+
+Smart labels: use `Channels` → `+` → `New smart label`. Enter a label name and a
+`Name contains` pattern. Matching ignores capitalization and treats punctuation
+literally; it does not use wildcards or regular expressions. The creation dialog
+shows up to five matching channels as you type, followed by `+N more channels
+matched` for overflow. Empty patterns cannot be saved; a valid pattern with no
+current matches can be saved for future channels. Only team channels you
+participate in are matched; shared labels match channels from their own team.
+Public channels, private channels, and direct messages are excluded from both
+the preview and saved results.
+
+Group headings have no icon in the sidebar; smart label creation uses a filter
+icon. Channels appear in every matching smart label and keep any manual label
+assignment. A channel in any smart label is excluded
+from the ungrouped list, even when its matching labels are collapsed. Membership
+follows channel names automatically. Existing matches update with live name
+changes; new shared-label matches and unloaded channels refresh periodically.
+Use the heading's `···` →
+`Edit smart label` to change the name or pattern and preview the new matches.
+Smart labels cannot be drag targets or manually assigned through `Move to label`.
+Deleting a smart label preserves channels, other labels, and manual assignments.
+
+Verify overlapping rules, collapsed labels, no matches, overflow, and quickly
+changing patterns (an older response must not replace the latest preview).
+Check public and private channels with matching names: they stay in the normal
+list, have no label actions, and cannot be dragged into labels or used as a
+second channel when grouping by drop. Team channels still support these actions.
+Open the same matched channel from two labels and verify keyboard focus remains
+on the chosen row. Check rule edits and persistence after reload.
+
 If a restored Chat selection is already open in another view, its preview stays
 closed but the saved selection is retained. Close the other view, then select
 the conversation again or reopen Chat to restore its preview. Verify that an
@@ -350,8 +469,8 @@ keyboard activation still toggles the highlighted section.
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances
 into the appended rows. If the section has no next page, navigation proceeds
-to the next section. `[` and `]` jump between the visible Favorites, Channels,
-and DMs section headers.
+to the next section. `[` and `]` jump between the visible Favorites,
+Channels, and DMs section headers.
 
 On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
 their own loaded pages and load more as their active list approaches the end.
@@ -359,6 +478,52 @@ With `enable-graphql-soup` enabled, open an unread conversation from each tab
 and return to the list: its top-level notifications should be read, including
 ones older than the global notification feed's loaded page. Notifications for
 separate thread stacks remain unread until that thread is opened.
+
+With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
+channel IDs and at most one unread notification ID/state per channel, with a
+500-channel candidate bound and no history, message previews, or metadata. It
+shares the channel lists' refreshes after notification patches, mark-read, and
+reconnect. Merely rendering that badge, subscribing to realtime notifications,
+or applying local read/done overrides must not start the full `SoupNotifications`
+feed. Check this with document-mention notifications disabled too (the production
+default): mention cleanup must wait until a real data/status reader activates the
+feed, then continue cleaning up loaded mentions. Full notification selection and
+pagination remain unchanged. Automatic/debounced read markers log failures and
+leave failed reads unread; they must not produce unhandled promise rejections or
+block the separate email read marker. Cold bulk actions wait for loading
+and report failures rather than treating pending data as an empty list. The
+Inbox badge still uses its own full Soup query for channel/thread membership.
+
+With GraphQL enabled, channel lists request at most one unread message notification
+per channel through an aliased, filtered `notifications` edge. An empty edge means
+no unread messages; invites and call notifications do not light the dot. Recent
+cards still use the latest-message preview. Full notification edges load only for
+an opened unread conversation, so mark-read and message targeting retain their
+complete thread-scoped inputs. Reopening a conversation must refresh that full
+edge even within 30 seconds; mark-read waits for the refresh rather than using
+older cached notifications. Failed lookups and successful lookups with no matching
+channel show **Conversation unavailable** with **Retry**, never permanent loading.
+Retry rather than marking just the one unread witness. Repeated mobile taps must
+open the last selected conversation, not a slower earlier request.
+
+Check cached Home → Chat navigation, All/Recent/search, and unread state after a
+read, a new notification, deletion, and reconnect. Cache reads remain asynchronous:
+a brief spinner can still appear, but cached rows must not wait for a background
+network refresh. Conversely, `cache-and-network` refreshes must start without
+waiting for a busy cache worker. Successful foreground query results display
+before cache persistence finishes; a delayed acknowledgement must not replay old
+rows or overwrite an optimistic update. Check initial and continuation pages with
+a slow cache, overlapping refreshes, and leaving/reopening Chat during a write.
+A cache write failure must not discard successful network rows. Mutations and
+cache-only hydration still wait for their durable/cache-projection work.
+A late cache snapshot must not replace newer network rows. Check a cold offline
+open too: a cache hit arriving
+after the network failure must remain usable without erasing the refresh error.
+If more unread notifications
+remain, the limited edge must refresh to the next one rather than staying empty.
+Refreshing unread indicators while composing must preserve the conversation,
+scroll position, and input focus. The backend must support the new edge arguments
+before deploying the frontend that requests them.
 
 ## Call lifecycle
 

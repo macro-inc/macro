@@ -38,6 +38,6 @@ pub(crate) fn render(frame: &mut Frame, app: &App) {
             modals::render_agent_picker(frame, &app.agents, *selected)
         }
         Mode::CustomAgent { buffer } => modals::render_custom_agent(frame, buffer),
-        Mode::Normal | Mode::EditSetting { .. } => {}
+        Mode::Normal | Mode::EditSetting { .. } | Mode::InstallingAgent { .. } => {}
     }
 }

@@ -418,15 +418,6 @@ struct SessionState {
 struct Session {
     /// ACP working directory, used by the standalone repository chooser.
     cwd: PathBuf,
-    /// The model id this session was using before the process restarted, when
-    /// it was restored and had one. An id rather than a [`ModelChoice`]: only
-    /// the id is persisted, and its params must be re-resolved against the
-    /// live model table anyway, which can have drifted across the restart.
-    ///
-    /// May also be a value that was never a Cursor id at all — the harness
-    /// seeds its session records with a deployment slug like `claude` — so
-    /// resolution tolerates a miss instead of trusting this.
-    restored_model_id: Option<String>,
     /// Serializes turns against background foreign-run syncs, so a mirror of
     /// cursor.com activity never interleaves its frames with a live turn's.
     /// A prompt waits on it; a sync skips its tick instead. Never held by
@@ -451,6 +442,14 @@ pub struct CursorSessionService<Cursor, Notifier, Chooser, Store> {
     /// A model id this deployment pins, applied to every new session. `None`
     /// leaves the choice to Cursor's own default resolution.
     default_model_id: Option<String>,
+    /// The model this one session runs on, from the host's own session record:
+    /// what its owner picked for it, or the slug the host seeded it with.
+    /// Outranks [`Self::default_model_id`], which is only what a session gets
+    /// when nobody said otherwise.
+    ///
+    /// A whole service per session is how the hosted deployment serves them,
+    /// so this sits beside the deployment default rather than on [`Session`].
+    host_model_id: Option<String>,
     /// `GET /v1/models`, fetched once. The table is static for the life of a
     /// process and every `session/new` would otherwise re-fetch it.
     models: tokio::sync::Mutex<Option<Vec<CursorModel>>>,
@@ -480,6 +479,7 @@ where
             sessions: Mutex::new(HashMap::new()),
             next_session: Mutex::new(0),
             default_model_id: None,
+            host_model_id: None,
             models: tokio::sync::Mutex::new(None),
         }
     }
@@ -495,6 +495,20 @@ where
         self
     }
 
+    /// Pin the model this session runs on, by id, ahead of the deployment
+    /// default.
+    ///
+    /// The host's session record, which holds the model its owner chose for
+    /// this session - before it ever ran, or by selecting one mid-session -
+    /// and otherwise whatever slug the host seeded the record with. Resolved
+    /// like any other id, so a value that is not a Cursor model is no opinion
+    /// and the deployment default still answers.
+    #[must_use]
+    pub fn with_host_model(mut self, model_id: Option<String>) -> Self {
+        self.host_model_id = model_id;
+        self
+    }
+
     /// Open a session.
     ///
     /// No repository is chosen here: a session's repository follows from what
@@ -504,7 +518,6 @@ where
     pub fn new_session(&self, cwd: &Path, mcp_servers: Vec<McpServer>) -> SessionId {
         let session = Arc::new(Session {
             cwd: cwd.to_path_buf(),
-            restored_model_id: None,
             turn_gate: Arc::new(tokio::sync::Mutex::new(())),
             state: Mutex::new(SessionState {
                 mcp_servers,
@@ -611,36 +624,40 @@ where
         {
             return Ok(Some(model));
         }
-        // The restored id outranks the deployment default: it is what this
-        // session was actually using before the restart, and the default is
-        // what a session gets when nobody ever said otherwise.
-        let fallback_id = session
-            .restored_model_id
-            .as_deref()
-            .or(self.default_model_id.as_deref());
-        let Some(fallback_id) = fallback_id else {
-            return Ok(None);
-        };
-        // A failure to *fetch* the model table degrades like a failed lookup
-        // in it: the fallback is a preference, and Cursor being unreachable
-        // for `GET /v1/models` must cost the preference, never the prompt —
-        // the run itself may well still work.
-        let choice = match self.resolve_model_id(fallback_id).await {
-            Ok(choice) => choice,
-            Err(error) => {
-                tracing::warn!(
-                    fallback_id,
-                    %error,
-                    "could not resolve the fallback model; using Cursor's default"
-                );
-                None
-            }
-        };
-        let Some(choice) = choice else {
-            return Ok(None);
-        };
-        session.state.lock().expect("session state poisoned").model = Some(choice.clone());
-        Ok(Some(choice))
+        // Session before deployment: the session's own id is what its owner
+        // chose for it (or was using before a restart), and the default is
+        // what a session gets when nobody ever said otherwise. Each is only a
+        // preference, so one that resolves to nothing hands the question to
+        // the next rather than answering it with silence.
+        for fallback_id in [
+            self.host_model_id.as_deref(),
+            self.default_model_id.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            // A failure to *fetch* the model table degrades like a failed
+            // lookup in it: the fallback is a preference, and Cursor being
+            // unreachable for `GET /v1/models` must cost the preference, never
+            // the prompt — the run itself may well still work.
+            let choice = match self.resolve_model_id(fallback_id).await {
+                Ok(choice) => choice,
+                Err(error) => {
+                    tracing::warn!(
+                        fallback_id,
+                        %error,
+                        "could not resolve the fallback model; using Cursor's default"
+                    );
+                    None
+                }
+            };
+            let Some(choice) = choice else {
+                continue;
+            };
+            session.state.lock().expect("session state poisoned").model = Some(choice.clone());
+            return Ok(Some(choice));
+        }
+        Ok(None)
     }
 
     /// The id resolved to a choice Cursor will accept, or `None` for an id
@@ -1184,9 +1201,8 @@ where
         id: SessionId,
         agent: Option<CursorAgentId>,
         repo: Option<RepoUrl>,
-        model_id: Option<String>,
     ) {
-        self.restore_session_with_watermark(id, agent, repo, model_id, None);
+        self.restore_session_with_watermark(id, agent, repo, None);
     }
 
     /// Restore a session together with its durable run-delivery checkpoint.
@@ -1195,7 +1211,6 @@ where
         id: SessionId,
         agent: Option<CursorAgentId>,
         repo: Option<RepoUrl>,
-        model_id: Option<String>,
         last_run: Option<CursorRunId>,
     ) {
         // No MCP servers here on purpose: the host never had the truth to
@@ -1203,7 +1218,6 @@ where
         // restates it on `session/load`, which is where it re-enters.
         let session = Arc::new(Session {
             cwd: PathBuf::new(),
-            restored_model_id: model_id,
             turn_gate: Arc::new(tokio::sync::Mutex::new(())),
             state: Mutex::new(SessionState {
                 repo,

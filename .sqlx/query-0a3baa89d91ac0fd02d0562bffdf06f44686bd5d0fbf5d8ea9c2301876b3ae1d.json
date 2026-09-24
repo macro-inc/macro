@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE scheduled_action\n                    SET next_run_at = $1, updated_at = now()\n                    WHERE id = $2 AND trigger_type = 'cron'\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a3baa89d91ac0fd02d0562bffdf06f44686bd5d0fbf5d8ea9c2301876b3ae1d"
+}

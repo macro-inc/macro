@@ -836,10 +836,12 @@ pub struct CalendarMentionRequestItem {
 ///
 /// Event entities are per-owner projections of a meeting, so a mention from
 /// another attendee resolves through the shared iCalendar UID to the
-/// requester's own copy — the preview never exposes another user's row.
+/// requester's own copy. Another user's row is exposed only when it was
+/// explicitly shared with a channel the requester belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CalendarMentionPreview {
-    /// The requester holds a live copy of the meeting on a visible calendar.
+    /// The requester holds a live copy of the meeting on a visible calendar,
+    /// or the mentioned copy was shared with one of their channels.
     Accessible(Box<CalendarMentionEvent>),
     /// The event exists but is on no calendar the requester can see.
     NoAccess,
@@ -848,16 +850,23 @@ pub enum CalendarMentionPreview {
 }
 
 /// Meeting-level fields shown in a calendar event mention preview, taken from
-/// the requester's own projection of the meeting.
+/// the requester's own projection of the meeting, or — when the requester has
+/// none — from the mentioned projection a channel they belong to was given.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarMentionEvent {
     /// The requester's own event entity for the mentioned meeting. Differs
     /// from the mentioned id when the mention came from another attendee.
-    pub viewer_event_id: Uuid,
+    /// Absent when the meeting is on none of the requester's calendars and
+    /// they see it only because it was shared with one of their channels:
+    /// that preview is read-only and there is no event of theirs to open.
+    pub viewer_event_id: Option<Uuid>,
     /// Display title.
     pub title: String,
+    /// Provider description, plain text or HTML, truncated for the preview.
+    /// Clients must sanitize it before rendering.
+    pub description: Option<String>,
     /// Time of the previewed instance: the requested occurrence when it
     /// exists, else the next upcoming one, else the latest past one, else the
     /// series start.
@@ -873,9 +882,9 @@ pub struct CalendarMentionEvent {
     pub organizer_email: Option<String>,
     /// Organizer display name.
     pub organizer_name: Option<String>,
-    /// Number of attendees on the requester's copy.
+    /// Number of attendees on the previewed copy.
     pub attendee_count: usize,
-    /// Entity update time of the requester's copy.
+    /// Entity update time of the previewed copy.
     pub updated_at: DateTime<Utc>,
 }
 
@@ -1261,7 +1270,19 @@ pub struct StoredGoogleCalendar {
     pub synced_at: Option<DateTime<Utc>>,
     /// Expiry of the active push notification channel, when one exists.
     pub watch_expires_at: Option<DateTime<Utc>>,
+    /// When the provider last refused a push channel for this calendar.
+    pub watch_unsupported_at: Option<DateTime<Utc>>,
 }
+
+/// Renew a channel whenever less than this much lifetime remains, so every
+/// poll cycle has several chances before expiry.
+pub const WATCH_RENEWAL_THRESHOLD: chrono::Duration = chrono::Duration::hours(12);
+
+/// How long a provider refusal to push for a calendar suppresses further
+/// watch attempts. Google refuses read-only feeds such as holiday and shared
+/// group calendars on every call, so retrying each poll only produces noise;
+/// the occasional re-probe notices a calendar that has since become watchable.
+pub const WATCH_UNSUPPORTED_RETRY_INTERVAL: chrono::Duration = chrono::Duration::days(7);
 
 /// How often Google's own read-only system calendars (holidays, birthdays)
 /// are synced. Their content changes on the order of once a year, and Google
@@ -1329,6 +1350,18 @@ pub enum GoogleSyncPlan {
 }
 
 impl StoredGoogleCalendar {
+    /// Whether this calendar's push channel should be opened or renewed now.
+    pub fn needs_watch_renewal(&self, now: DateTime<Utc>) -> bool {
+        if self
+            .watch_unsupported_at
+            .is_some_and(|refused_at| refused_at > now - WATCH_UNSUPPORTED_RETRY_INTERVAL)
+        {
+            return false;
+        }
+        self.watch_expires_at
+            .is_none_or(|expires_at| expires_at < now + WATCH_RENEWAL_THRESHOLD)
+    }
+
     /// Choose how the adapter must reconcile this calendar for a requested
     /// window, keeping full rebuilds for lost tokens or uncovered history
     /// and extending decayed future coverage incrementally.

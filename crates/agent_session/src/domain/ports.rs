@@ -219,6 +219,10 @@ pub struct OpenExternalAgentSession {
 /// paths remain runtime-owned. There is no originating mention to announce.
 #[derive(Debug, Clone)]
 pub struct OpenManagedSession {
+    /// The id the session is created under, when the caller minted one so it
+    /// could open a surface on the final id before this answers. `None`
+    /// mints one here.
+    pub id: Option<AgentSessionId>,
     /// Repository explicitly selected by the caller for a supported runtime.
     pub repo_url: Option<String>,
     /// Starting branch for the selected repository.
@@ -234,6 +238,9 @@ pub struct OpenManagedSession {
     /// Ad-hoc instructions for the default managed persona. Ignored when a
     /// persisted persona profile is selected.
     pub instructions: Option<String>,
+    /// Model to run on instead of the persona's own. The session's model from
+    /// creation, so its runtime starts on it and nothing is sent to change it.
+    pub model: Option<String>,
 }
 
 /// Opens sessions, however they are served. Implemented by the harness, which
@@ -1000,6 +1007,13 @@ pub struct QueuedControl {
 /// control routes can be mounted against it without knowing what a harness is.
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
+    /// Release and delete every session owned by a user before account deletion.
+    /// Internal account lifecycle only; shared sessions owned by others are untouched.
+    fn delete_user_sessions(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// The session is going away: release its live resources and delete it.
     fn session_deleted(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 

@@ -13,6 +13,8 @@ export type NavigationStackEntry<TData> = {
   data: TData;
 };
 
+export type NavigationStackChangeReason = 'restore' | 'navigate';
+
 export type NavigationStackState<TData, TNavigateOptions = unknown> = {
   entries: Store<NavigationStackEntry<TData>[]>;
   active: () => NavigationStackEntry<TData> | undefined;
@@ -22,6 +24,7 @@ export type NavigationStackState<TData, TNavigateOptions = unknown> = {
   push: (data: TData) => NavigationStackEntry<TData> | undefined;
   replace: (data: TData) => NavigationStackEntry<TData> | undefined;
   reset: (data: TData) => NavigationStackEntry<TData> | undefined;
+  reconcile: (data?: TData) => void;
   pop: () => void;
   popTo: (value: string) => void;
   clear: () => void;
@@ -57,7 +60,10 @@ export type NavigationStackRootProps<
 > = ParentProps<{
   defaultValue?: readonly TData[];
   /** Validates the resulting active entry before any state change, including history. */
-  beforeChange?: (data: TData | undefined) => boolean;
+  beforeChange?: (
+    data: TData | undefined,
+    reason: NavigationStackChangeReason
+  ) => boolean;
   shouldNavigate?: (data: TData, options?: TNavigateOptions) => boolean;
   onChange?: (entries: readonly NavigationStackEntry<TData>[]) => void;
 }>;
@@ -74,14 +80,14 @@ function Root<TData = unknown, TNavigateOptions = unknown>(
   });
   const [entries, setEntries] = createStore<NavigationStackEntry<TData>[]>(
     props.defaultValue
-      ?.filter((data) => props.beforeChange?.(data) !== false)
+      ?.filter((data) => props.beforeChange?.(data, 'restore') !== false)
       .map(createEntry) ?? []
   );
   const active = () => entries.at(-1);
   const notifyChange = () => props.onChange?.([...entries]);
 
   const push = (data: TData) => {
-    if (props.beforeChange?.(data) === false) return;
+    if (props.beforeChange?.(data, 'navigate') === false) return;
     const entry = createEntry(data);
     setEntries(entries.length, entry);
     notifyChange();
@@ -98,7 +104,7 @@ function Root<TData = unknown, TNavigateOptions = unknown>(
 
   const replace = (data: TData) => {
     if (entries.length === 0) return push(data);
-    if (props.beforeChange?.(data) === false) return;
+    if (props.beforeChange?.(data, 'navigate') === false) return;
 
     const entry = createEntry(data);
     setEntries(
@@ -111,7 +117,7 @@ function Root<TData = unknown, TNavigateOptions = unknown>(
   };
 
   const reset = (data: TData) => {
-    if (props.beforeChange?.(data) === false) return;
+    if (props.beforeChange?.(data, 'navigate') === false) return;
     const entry = createEntry(data);
     setEntries(
       produce((draft) => {
@@ -122,9 +128,20 @@ function Root<TData = unknown, TNavigateOptions = unknown>(
     return entry;
   };
 
+  const reconcile = (data?: TData) => {
+    const entry = data === undefined ? undefined : createEntry(data);
+
+    setEntries(
+      produce((draft) => {
+        draft.splice(0, draft.length, ...(entry ? [entry] : []));
+      })
+    );
+  };
+
   const pop = () => {
     if (entries.length === 0) return;
-    if (props.beforeChange?.(entries.at(-2)?.data) === false) return;
+    if (props.beforeChange?.(entries.at(-2)?.data, 'navigate') === false)
+      return;
     setEntries(
       produce((draft) => {
         draft.pop();
@@ -136,7 +153,7 @@ function Root<TData = unknown, TNavigateOptions = unknown>(
   const popTo = (value: string) => {
     const index = entries.findIndex((entry) => entry.value === value);
     if (index < 0 || index === entries.length - 1) return;
-    if (props.beforeChange?.(entries[index].data) === false) return;
+    if (props.beforeChange?.(entries[index].data, 'navigate') === false) return;
     setEntries(
       produce((draft) => {
         draft.splice(index + 1);
@@ -147,7 +164,7 @@ function Root<TData = unknown, TNavigateOptions = unknown>(
 
   const clear = () => {
     if (entries.length === 0) return;
-    if (props.beforeChange?.(undefined) === false) return;
+    if (props.beforeChange?.(undefined, 'navigate') === false) return;
     setEntries(
       produce((draft) => {
         draft.splice(0);
@@ -175,6 +192,7 @@ function Root<TData = unknown, TNavigateOptions = unknown>(
         reset: reset as (
           data: unknown
         ) => NavigationStackEntry<unknown> | undefined,
+        reconcile: reconcile as (data?: unknown) => void,
         pop,
         popTo,
         clear,

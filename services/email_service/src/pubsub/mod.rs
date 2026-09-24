@@ -1,6 +1,4 @@
 pub mod backfill;
-/// Outbound adapters used by calendar backfill application services.
-pub mod calendar_backfill_adapters;
 pub mod context;
 /// The flag-selected CRM metadata resolver, re-exported for the
 /// pubsub_workers binary to construct.

@@ -154,20 +154,37 @@ impl AccessRepository for PgAccessRepository {
             return Ok(None);
         };
         let user_id = user_id.as_ref();
-        let is_owner = sqlx::query_scalar!(
+        // A channel share reaches current participants only, and only while
+        // the event is live and not marked private or confidential: the grant
+        // records that someone shared it, not that its details may outlive the
+        // owner's later decision to hide them.
+        let access = sqlx::query!(
             r#"
-            SELECT event.owner_id = $2 AS "is_owner!"
+            SELECT
+                event.owner_id = $2 AS "is_owner!",
+                EXISTS (
+                    SELECT 1
+                    FROM macro_user_links link
+                    WHERE link.link_id = event.source_link_id
+                      AND link.primary_macro_id = $2
+                ) AS "is_linked!",
+                (
+                    event.status <> 'cancelled'
+                    AND event.visibility IN ('default', 'public')
+                    AND EXISTS (
+                        SELECT 1
+                        FROM entity_access grant_row
+                        JOIN comms_channel_participants participant
+                          ON participant.channel_id::text = grant_row.source_id
+                         AND participant.user_id = $2
+                         AND participant.left_at IS NULL
+                        WHERE grant_row.entity_id = event.id
+                          AND grant_row.entity_type = 'calendar_event'
+                          AND grant_row.source_type = 'channel'
+                    )
+                ) AS "is_channel_shared!"
             FROM calendar_events event
             WHERE event.id = $1
-              AND (
-                  event.owner_id = $2
-                  OR EXISTS (
-                      SELECT 1
-                      FROM macro_user_links link
-                      WHERE link.link_id = event.source_link_id
-                        AND link.primary_macro_id = $2
-                  )
-              )
             "#,
             event_id,
             user_id,
@@ -176,11 +193,15 @@ impl AccessRepository for PgAccessRepository {
         .await
         .map_err(AccessError::from)?;
 
-        Ok(is_owner.map(|is_owner| {
-            if is_owner {
-                AccessLevel::Owner
+        Ok(access.and_then(|access| {
+            if access.is_owner {
+                Some(AccessLevel::Owner)
+            } else if access.is_linked {
+                Some(AccessLevel::Edit)
+            } else if access.is_channel_shared {
+                Some(AccessLevel::View)
             } else {
-                AccessLevel::Edit
+                None
             }
         }))
     }

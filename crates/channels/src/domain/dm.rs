@@ -58,6 +58,8 @@ pub struct EnsureDms {
 }
 
 impl EnsureDms {
+    // Only the service consumes a batch, and that lives behind `ports`.
+    #[cfg(feature = "ports")]
     pub(crate) fn into_requests(self) -> Vec<EnsureDm> {
         self.requests
     }

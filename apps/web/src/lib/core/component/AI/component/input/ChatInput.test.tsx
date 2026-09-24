@@ -1,6 +1,6 @@
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type JSX, onCleanup, onMount } from 'solid-js';
+import { createSignal, type JSX, onCleanup, onMount } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChatInput } from './ChatInput';
 
@@ -11,6 +11,27 @@ const mocks = vi.hoisted(() => ({
   upload: vi.fn(),
   mount: vi.fn(),
   unmount: vi.fn(),
+  startDictation: () => {},
+  stopDictation: () => {},
+}));
+
+vi.mock('@app/features/dictation/composer-dictation', () => ({
+  createComposerDictation: () => {
+    const [active, setActive] = createSignal(false);
+    mocks.startDictation = () => setActive(true);
+    mocks.stopDictation = () => setActive(false);
+    return {
+      active,
+      phase: () => (active() ? 'listening' : 'idle'),
+      volumeHistory: () => [],
+      message: () => '',
+      label: () => 'Start dictation',
+      disabled: () => false,
+      start: async () => mocks.startDictation(),
+      confirm: async () => mocks.stopDictation(),
+      cancel: () => mocks.stopDictation(),
+    };
+  },
 }));
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
@@ -163,6 +184,27 @@ function setup(collapseOnBlur = true) {
 }
 
 describe('compact mobile chat drafts', () => {
+  it('stays expanded while focus moves to dictation controls and preserves the draft', () => {
+    const { wrapper, input, draft, onSend } = setup();
+    expect(wrapper.classList.contains('max-h-5')).toBe(true);
+    mocks.startDictation();
+    expect(wrapper.classList.contains('max-h-5')).toBe(false);
+    const cancel = document.querySelector<HTMLButtonElement>(
+      '[label="Cancel dictation"]'
+    )!;
+    input.focus();
+    cancel.focus();
+    expect(wrapper.classList.contains('max-h-5')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.click(cancel);
+    input.focus();
+    screen.getByRole('textbox', { name: 'Outside' }).focus();
+    expect(wrapper.classList.contains('max-h-5')).toBe(true);
+    expect(input.textContent).toBe(draft);
+    expect(mocks.unmount).not.toHaveBeenCalled();
+  });
+
   it('expands on focus and collapses on blur without replacing the editor or draft', () => {
     const { wrapper, input, draft } = setup();
     expect(wrapper.classList.contains('max-h-5')).toBe(true);

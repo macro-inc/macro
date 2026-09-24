@@ -3,6 +3,7 @@ import { PageModel } from '@block-pdf/model/Page';
 import { useIsPopup } from '@block-pdf/signal/pdfViewer';
 import {
   useDeleteComment,
+  useDeleteMessageCommentThread,
   useDeleteNewComments,
 } from '@block-pdf/store/comments/commentOperations';
 import { createPdfDraftThreadId } from '@block-pdf/type/comments';
@@ -679,11 +680,23 @@ export function useDeletePlaceable() {
   const modificationData = pdf.model.modificationData;
   const placeableIdMap = usePlaceableIdMap();
   const deleteComment = useDeleteComment();
+  const deleteMessageCommentThread = useDeleteMessageCommentThread();
+  const deleteNewComments = useDeleteNewComments();
 
   return createCallback((uuid: string) => {
     const placeable = placeableIdMap()[uuid];
     if (!placeable) {
       console.error('Placeable not found', uuid);
+      return;
+    }
+
+    if (isThreadPlaceable(placeable) && pdf.annotations.unified) {
+      const threadId = placeable.payload?.threadId;
+      if (threadId == null) {
+        deleteNewComments();
+        return;
+      }
+      void deleteMessageCommentThread(threadId);
       return;
     }
 

@@ -68,12 +68,12 @@ impl Quickstart {
     }
 
     fn from_config_with_agents(config: &Config, agents: Vec<DetectedAgent>) -> Self {
+        // Matched by preset rather than by launch line, so a config written
+        // by an earlier release keeps its agent preselected.
+        let configured = agent_catalog::kind_for(&config.harness);
         let selected_agent = agents
             .iter()
-            .find(|agent| {
-                agent.launch.command == config.harness.command
-                    && agent.launch.args == config.harness.args
-            })
+            .find(|agent| Some(agent.kind) == configured)
             .cloned()
             .or_else(|| {
                 Some(DetectedAgent {
@@ -82,8 +82,10 @@ impl Quickstart {
                     launch: super::agent_catalog::LaunchSpec {
                         command: config.harness.command.clone(),
                         args: config.harness.args.clone(),
+                        env: config.harness.env.clone(),
                     },
                     note: None,
+                    install: None,
                 })
             });
         let focus = selected_agent

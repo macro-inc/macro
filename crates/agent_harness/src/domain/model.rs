@@ -321,6 +321,39 @@ pub struct PriorMessage {
     pub content: String,
 }
 
+/// Where in a document a comment thread sits. The mark id alone names a
+/// location the agent has no way to resolve: the document body it can read
+/// carries no marks, so the text the comment covers travels with the id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommentAnchor {
+    /// Lexical mark the thread is attached to.
+    pub mark_id: String,
+    /// The marked text as it read when the comment was posted. Absent on
+    /// threads anchored before snapshots were captured.
+    pub marked_text: Option<String>,
+    /// The mark as the document reads now. Absent when the document no longer
+    /// carries it or the lookup failed, leaving the snapshot as the fallback.
+    pub current: Option<MarkedPassage>,
+}
+
+/// A comment mark resolved against the live document, both fields bounded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarkedPassage {
+    /// The text the mark covers.
+    pub marked_text: String,
+    /// The block or blocks containing the mark, windowed around it.
+    pub surrounding_text: String,
+}
+
+/// What the conversation an agent was summoned from contributes to its prompt.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConversationContext {
+    /// The document location, when the prompt came from an anchored comment.
+    pub anchor: Option<CommentAnchor>,
+    /// Untrusted prior messages, oldest first.
+    pub messages: Vec<PriorMessage>,
+}
+
 /// Do something in a session that already exists.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DeliverAction {

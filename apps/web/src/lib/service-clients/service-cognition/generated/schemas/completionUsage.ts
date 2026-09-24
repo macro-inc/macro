@@ -11,16 +11,15 @@ import type { MacroUserIdStr } from './macroUserIdStr';
 import type { Usage } from './usage';
 
 /**
- * A recorded completion: who, what feature, optional entity, and the cost.
+ * User and feature attribution for one invocation.
  */
 export interface CompletionUsage {
-  /** Token usage and cost. */
+  /** Measured usage and resolved cost. */
   cost: Usage;
-  /** The entity the completion related to, if any. */
+  /** Related entity, if any. */
   entity?: CompletionUsageEntity;
-  /** The feature that performed the completion. */
+  /** Feature that performed the invocation. */
   feature: AiFeature;
-  /** The user the completion was performed for (the [system user](SYSTEM_USER_ID)
-for background work). */
+  /** User the invocation was performed for. */
   user: MacroUserIdStr;
 }

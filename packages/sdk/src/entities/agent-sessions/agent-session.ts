@@ -30,6 +30,11 @@ export type CreateManagedSessionOptions = {
   /** Instructions the session's runtime works under, fixed for its life. */
   instructions?: string;
   /**
+   * The model the session runs on, instead of its persona's. The session's
+   * model from creation, read back as {@link AgentSession.model}.
+   */
+  model?: string;
+  /**
    * The repository the session works on, as one of the URLs
    * {@link AgentSession.repositories} lists for the caller. Omitted, the
    * runtime chooses from the prompt. Honored for Cursor sessions.
@@ -59,6 +64,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
         body: {
           prompt: opts?.prompt,
           instructions: opts?.instructions,
+          model: opts?.model,
           repoUrl: opts?.repoUrl,
           repoBranch: opts?.repoBranch,
         },

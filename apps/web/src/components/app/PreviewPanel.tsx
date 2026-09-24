@@ -1,5 +1,5 @@
 import {
-  navigateCalendarEntityToTarget,
+  navigateCalendarPreviewToTarget,
   navigateChannelEntityToTarget,
 } from '@app/features/next-soup/utils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -118,7 +118,7 @@ function PreviewPanelContent(
       ) {
         void navigateChannelEntityToTarget(entity, props.orchestrator);
       } else if (entity.type === 'calendar_event') {
-        void navigateCalendarEntityToTarget(entity, props.orchestrator);
+        void navigateCalendarPreviewToTarget(entity, props.orchestrator);
       }
     })
   );

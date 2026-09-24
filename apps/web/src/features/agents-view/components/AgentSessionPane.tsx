@@ -47,6 +47,7 @@ import type { NotificationSource } from '@notifications/notification-source';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import ShareIcon from '@phosphor/share.svg';
+import { EmptyStatePanel } from '@ui';
 import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
@@ -70,8 +71,15 @@ function SessionContent(props: {
   onDeleted: () => void;
   notificationSource: NotificationSource;
 }) {
-  const { loadFailed, loadRetryable, metadata, retryLoad, session, sessionId } =
-    useAgentSession();
+  const {
+    accessDenied,
+    loadFailed,
+    loadRetryable,
+    metadata,
+    retryLoad,
+    session,
+    sessionId,
+  } = useAgentSession();
   const panel = useSplitPanelOrThrow();
   const [shareOpen, setShareOpen] = createSignal(false);
   const userId = useUserId();
@@ -226,10 +234,21 @@ function SessionContent(props: {
               <Show
                 when={!loadFailed()}
                 fallback={
-                  <LoadErrorPanel
-                    title="Unable to load this session"
-                    onRetry={loadRetryable() ? retryLoad : undefined}
-                  />
+                  <Show
+                    when={accessDenied()}
+                    fallback={
+                      <LoadErrorPanel
+                        title="Unable to load this session"
+                        onRetry={loadRetryable() ? retryLoad : undefined}
+                      />
+                    }
+                  >
+                    <EmptyStatePanel
+                      centered
+                      title="You don't have access to this session"
+                      description="Ask a participant to share it with you."
+                    />
+                  </Show>
                 }
               >
                 <div class="transcript-host">

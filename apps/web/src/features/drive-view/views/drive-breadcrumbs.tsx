@@ -1,16 +1,16 @@
-import { useEntityDetailNavigationStack } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import type { ParentProps } from 'solid-js';
 import { DriveLocationBreadcrumbItems } from '../components/DriveBreadcrumbs';
 import { useDriveView } from '../context/drive-context';
 import type { DriveLocationBreadcrumb } from '../core/breadcrumbs';
+import { useDriveDetailNavigation } from '../drive-detail-navigation';
 
 export function DriveBreadcrumbs(
   props: ParentProps<{ entries: DriveLocationBreadcrumb[] }>
 ) {
   const { state, sidebar, actions } = useDriveView();
 
-  const navigation = useEntityDetailNavigationStack();
+  const navigation = useDriveDetailNavigation();
 
   return (
     <ViewBreadcrumbs.Root

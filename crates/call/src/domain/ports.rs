@@ -2,6 +2,7 @@
 //!
 //! These traits define the contracts that adapters must implement.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
 
@@ -279,6 +280,19 @@ pub trait CallRepository: Send + Sync + 'static {
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Resolve the display name of one channel as each of `viewer_ids` sees
+    /// it, keyed by viewer.
+    ///
+    /// DM and unnamed private channels are named after the *other*
+    /// participants, so the name differs per viewer; named channels resolve
+    /// to the same name for everyone. Viewers are not authorized here. The
+    /// map is empty when the channel does not exist.
+    fn resolve_channel_name_for_viewers<'a>(
+        &self,
+        channel_id: &Uuid,
+        viewer_ids: &[MacroUserIdStr<'a>],
+    ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, String>, Self::Err>> + Send;
 
     /// Delete a row from `call_records` by id. Participants and transcript
     /// segments are removed via `ON DELETE CASCADE`. No-op if no row matches.

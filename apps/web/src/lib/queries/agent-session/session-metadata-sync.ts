@@ -53,8 +53,5 @@ export async function handleAgentSessionUpdated(
 export async function invalidateAgentSessionMetadata(): Promise<void> {
   const filters = { queryKey: agentSessionKeys.detail._def };
   await queryClient.cancelQueries(filters);
-  await Promise.all([
-    queryClient.invalidateQueries(filters),
-    refreshAgentSessionLists(),
-  ]);
+  await queryClient.invalidateQueries(filters);
 }
