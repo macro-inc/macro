@@ -42,7 +42,8 @@ export function ChangesHandoff() {
     available() &&
     !layout.changesVisible() &&
     model.files().length > 0 &&
-    !controller.handoffDismissed();
+    !controller.handoffDismissed() &&
+    !context.host.hasQueuedMessages?.();
   return (
     <Show when={visible()}>
       <ChangesReadyCard
