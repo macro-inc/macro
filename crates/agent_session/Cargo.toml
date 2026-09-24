@@ -22,7 +22,6 @@ inbound = [
 outbound = [
   "bots/outbound",
   "dep:agent",
-  "dep:ai_usage",
   "dep:connection_gateway_client",
   "dep:entity_access_db_utils",
   "dep:entity_registry_db_utils",
@@ -46,7 +45,8 @@ schemars = { workspace = true, optional = true }
 agent-client-protocol = { workspace = true }
 harness_id = { path = "../harness_id" }
 agent = { path = "../agent", optional = true }
-ai_usage = { path = "../ai_usage", optional = true }
+ai_billing = { path = "../ai_billing" }
+ai_usage = { path = "../ai_usage" }
 dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 messages = { path = "../messages", features = ["ports", "schema"] }

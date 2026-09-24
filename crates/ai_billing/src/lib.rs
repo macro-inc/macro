@@ -37,14 +37,18 @@
 //! - [`outbound`] — Postgres repos over `ai_usage` and the billing tables, the
 //!   Stripe gateway, the roles + teams entitlement resolver, and the recorder
 //!   wrapper that triggers settlement after usage lands.
-//! - [`inbound`] — the axum router (summary, overage settings, credit
-//!   checkout, internal settle).
+//! - [`inbound`] — shared admission errors and the axum router (summary,
+//!   overage settings, credit checkout, internal settle).
+//! - `composition` (feature-gated) — database-backed admission construction
+//!   for application composition roots.
 //!
 //! The *payer* is the account that owns credits, overage settings, and the
 //! Stripe customer: the personal subscriber, or the team owner for members
 //! whose paid access comes through a team subscription. Each team seat uses
 //! only its own plan allowance; credits and overage are shared by the payer.
 
+#[cfg(feature = "composition")]
+pub mod composition;
 pub mod domain;
 pub mod inbound;
 pub mod outbound;

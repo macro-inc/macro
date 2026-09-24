@@ -288,6 +288,7 @@ dependencies = [
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
+ "ai_billing",
  "ai_usage",
  "anyhow",
  "async-trait",
@@ -358,6 +359,7 @@ dependencies = [
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
+ "ai_billing",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
@@ -434,6 +436,7 @@ dependencies = [
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
+ "ai_billing",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
@@ -505,6 +508,7 @@ dependencies = [
  "agent-client-protocol",
  "agent_fold",
  "agent_runtime_protocol",
+ "ai_billing",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -563,6 +567,7 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "agent_session",
+ "ai_billing",
  "ai_usage",
  "anyhow",
  "bot_id",
@@ -595,6 +600,7 @@ version = "0.1.0"
 dependencies = [
  "agent_session",
  "agent_trigger",
+ "ai_billing",
  "ai_usage",
  "anyhow",
  "bots",
@@ -738,6 +744,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "ai_billing",
  "ai_toolset",
  "ai_usage",
  "anthropic",
@@ -3521,6 +3528,7 @@ name = "channel_bots"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "ai_billing",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
@@ -5587,6 +5595,7 @@ dependencies = [
  "activity",
  "agent_changes",
  "agent_session",
+ "ai_billing",
  "ai_tools",
  "ai_usage",
  "analytics_client",
@@ -8978,6 +8987,7 @@ name = "import"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "ai_billing",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -10793,6 +10803,7 @@ dependencies = [
 name = "mcp_service"
 version = "0.1.0"
 dependencies = [
+ "ai_billing",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
@@ -10914,6 +10925,7 @@ name = "memory"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "ai_billing",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
@@ -14869,6 +14881,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "ai_billing",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
