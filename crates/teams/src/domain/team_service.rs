@@ -1086,7 +1086,7 @@ where
         }
 
         if let Err(error) = self.open_seat_release.release(team_id, user_id).await {
-            if let Some(restore) = non_empty::NonEmpty::new(roles_to_restore.as_slice()) {
+            if let Ok(restore) = non_empty::NonEmpty::new(roles_to_restore.as_slice()) {
                 self.user_roles_and_permissions_service
                     .dangerous_upsert_roles_for_user(user_id, restore)
                     .await
