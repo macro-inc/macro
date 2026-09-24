@@ -300,7 +300,9 @@ export function Notebook(props: {
 
   const contentDivClasses = createMemo(() => {
     const mode = layoutMode();
-    const shared = 'grow max-w-3xl pt-12 touch:pt-6 min-w-0';
+    // A zero basis keeps WebKit from sizing the column by the max-content width
+    // of its text, which it recomputes slowly for long unbroken runs.
+    const shared = 'grow basis-0 max-w-3xl pt-12 touch:pt-6 min-w-0';
     switch (mode) {
       case CommentLayoutMode.lg:
         return `${shared} mx-auto`;
