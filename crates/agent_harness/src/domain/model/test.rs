@@ -160,6 +160,16 @@ fn only_the_in_memory_runtime_is_not_a_coder() {
     }
 }
 
+/// The persona's choice wins; without one, the runtime's nature decides.
+#[test]
+fn a_persona_chooses_whether_it_codes_and_otherwise_follows_its_runtime() {
+    for kind in [AgentKind::InMemory, AgentKind::External, AgentKind::Cursor] {
+        assert!(is_coding_agent(Some(true), kind), "{kind:?}");
+        assert!(!is_coding_agent(Some(false), kind), "{kind:?}");
+        assert_eq!(is_coding_agent(None, kind), kind.is_coding(), "{kind:?}");
+    }
+}
+
 #[test]
 fn a_turn_with_text_answered_however_it_stopped() {
     for stop in [

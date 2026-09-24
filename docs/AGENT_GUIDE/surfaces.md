@@ -1049,6 +1049,12 @@ mention picker; select text to open the formatting menu. Saved instructions
 retain mention identities using the shared editor's Markdown format and reopen
 with their formatting intact. Enter adds a new paragraph; use `Create agent` or
 `Save changes` to submit. The form also includes runtime selectors.
+Under the runtime, `Answering a mention` chooses between `Coding agent` (a
+channel mention is answered with a magic chip that opens into the live session)
+and `Chat agent` (the agent replies in the thread, like `@macro`). It is the
+agent's own setting and always saved: a new form starts from the selected runtime
+- Macro's in-memory runtime as chat, every other runtime as coding - and picking a
+different runtime resets it to that default, but only the saved choice counts.
 The model list is loaded live and independently for Macro Agent, connected Cursor, and every
 registered macrod harness. The selected harness stays selected when the list refreshes.
 A paired macrod connects on startup, so models can load before any agents are bound.

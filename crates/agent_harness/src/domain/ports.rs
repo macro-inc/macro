@@ -117,6 +117,21 @@ pub trait PermissionPolicySource: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<PermissionPolicyConfig>> + Send;
 }
 
+/// Loads a persona's choice of whether it is a coding agent.
+///
+/// Read when a turn is announced or its reply resolved, like
+/// [`PermissionPolicySource`] is read on attach, so changing the agent's
+/// setting takes effect on its next turn. The domain applies the choice
+/// with [`crate::domain::model::is_coding_agent`].
+pub trait CodingAgentSource: Send + Sync + 'static {
+    /// The persona's setting for `bot`; `None` only for a fixed system bot,
+    /// which has no persona.
+    fn coding_agent_choice(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<Option<bool>>> + Send;
+}
+
 /// Durable attach/detach bookkeeping for harness runtime connections.
 ///
 /// The registry itself is in-process liveness; this is what lets the rest of

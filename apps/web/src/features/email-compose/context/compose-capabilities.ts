@@ -237,6 +237,8 @@ export interface EmailEditorFiles {
     directories: FileSystemDirectoryEntry[];
     dropEvent?: DragEvent;
     onUploaded(ids: string[]): void;
+    /** Videos, which email clients drop from HTML; callers attach them instead of inlining. */
+    onVideos?(files: File[]): void;
   }): void;
 }
 

@@ -76,7 +76,7 @@ import {
 } from './context/compose-capabilities';
 import { decodeBase64Utf8 } from './core/decode-base64';
 import type { EmailDraft } from './core/email-draft';
-import { readDroppedEmailFiles } from './editor-adapter';
+import { readDroppedEmailFiles, withVideoAttachments } from './editor-adapter';
 import { makeAttachmentPublic } from './make-attachment-public';
 import {
   emailDraftLifecycleSource,
@@ -204,15 +204,19 @@ export function createEmailComposeContext(
         handleFileFolderDrop(
           input.files,
           input.directories,
-          createFilesReadyHandler(
-            input.editor,
-            input.sourceId,
-            input.sourceId ? 'email' : undefined,
-            input.dropEvent && input.editor
-              ? () => getDragDropPosition(input.editor!, input.dropEvent!, true)
-              : undefined,
-            input.onUploaded,
-            { width: 542, height: 542 }
+          withVideoAttachments(
+            createFilesReadyHandler(
+              input.editor,
+              input.sourceId,
+              input.sourceId ? 'email' : undefined,
+              input.dropEvent && input.editor
+                ? () =>
+                    getDragDropPosition(input.editor!, input.dropEvent!, true)
+                : undefined,
+              input.onUploaded,
+              { width: 542, height: 542 }
+            ),
+            input.onVideos
           )
         );
       },

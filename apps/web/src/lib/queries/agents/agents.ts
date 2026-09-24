@@ -36,6 +36,12 @@ export type CreateAgentParams = {
    * macrod prompts.
    */
   autoAcceptPermissions?: boolean;
+  /**
+   * Whether the agent is a coding agent, which decides how it answers a
+   * channel mention: a magic chip into its live session, or a reply in the
+   * thread.
+   */
+  isCoding: boolean;
 };
 
 export type UpdateAgentParams = CreateAgentParams & {
@@ -88,6 +94,7 @@ export function useCreateAgentMutation() {
           mcp: vars.mcp,
           team_id: vars.teamId,
           auto_accept_permissions: vars.autoAcceptPermissions ?? null,
+          is_coding: vars.isCoding,
         })
       ),
     onSuccess: async (agent) => {
@@ -121,6 +128,7 @@ export function useUpdateAgentMutation() {
           mcp: vars.mcp,
           team_id: vars.teamId,
           auto_accept_permissions: vars.autoAcceptPermissions ?? null,
+          is_coding: vars.isCoding,
         })
       ),
     onSuccess: async (updated) => {
