@@ -6,6 +6,7 @@ use agent_session::domain::events::{
 };
 use agent_session::domain::lifecycle::session_identity;
 
+use crate::domain::model::{ReplyPersona, is_coding_agent};
 use crate::domain::notifications::plan;
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -49,23 +50,43 @@ where
 {
     /// The identity block for one session, from its row and its bot.
     pub(super) async fn identity(&self, session_id: AgentSessionId) -> Result<SessionIdentity> {
-        self.identity_and_kind(session_id)
-            .await
-            .map(|(identity, _)| identity)
+        let session = self.sessions.get_session(session_id).await?;
+        self.identity_of(&session).await
     }
 
-    /// [`Self::identity`], with the runtime kind the same row names - read
-    /// together because the notifications a fact warrants depend on both.
-    pub(super) async fn identity_and_kind(
+    /// [`Self::identity`], with whether the session's bot is a coding agent -
+    /// read together because the notifications a fact warrants depend on
+    /// both.
+    pub(super) async fn identity_and_coding(
         &self,
         session_id: AgentSessionId,
-    ) -> Result<(SessionIdentity, AgentKind)> {
+    ) -> Result<(SessionIdentity, bool)> {
         let session = self.sessions.get_session(session_id).await?;
-        let identity = self.identity_of(&session).await?;
-        Ok((
-            identity,
-            AgentKind::for_session(session.bot_id, &session.harness),
-        ))
+        let (identity, persona) =
+            tokio::try_join!(self.identity_of(&session), self.reply_persona(&session))?;
+        Ok((identity, persona.is_coding))
+    }
+
+    /// The persona a session's thread replies speak as: its bot's name, and
+    /// the bot's choice of being a coding agent applied to the runtime the
+    /// row names.
+    pub(super) async fn reply_persona(&self, session: &AgentSession) -> Result<ReplyPersona> {
+        let (bot, choice) = tokio::try_join!(
+            async { Ok::<_, HarnessError>(self.sessions.session_bot(session.bot_id).await?) },
+            async {
+                self.coding_agents
+                    .coding_agent_choice(session.bot_id)
+                    .await
+                    .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))
+            },
+        )?;
+        Ok(ReplyPersona {
+            name: bot.name,
+            is_coding: is_coding_agent(
+                choice,
+                AgentKind::for_session(session.bot_id, &session.harness),
+            ),
+        })
     }
 
     /// The identity block for a session whose row is already in hand.
@@ -89,10 +110,10 @@ where
         session_id: AgentSessionId,
         build: impl FnOnce(SessionIdentity) -> AgentSessionLifecycleEvent,
     ) {
-        match self.identity_and_kind(session_id).await {
-            Ok((identity, kind)) => {
+        match self.identity_and_coding(session_id).await {
+            Ok((identity, is_coding)) => {
                 let event = build(identity);
-                let notifications = plan(&event, kind);
+                let notifications = plan(&event, is_coding);
                 self.lifecycle_publisher.publish(event).await;
                 for notification in notifications {
                     self.notifier.notify(notification).await;

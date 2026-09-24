@@ -1,15 +1,16 @@
 //! Speak for an agent session in its originating thread through the shared
 //! message service.
 //!
-//! Two shapes, by the session's [`AgentKind`]: a coding agent's turn is a
-//! magic chip, a live portal into the session that renders the turn itself;
-//! a chat agent's turn is a pending reply - the channel markdown's pulsing
-//! await node - that is patched into the answer when the turn ends, the way
-//! the original Macro bot replied, and that says so while the turn waits on
-//! a question only the session view can answer. A chat agent's message
-//! leads with a link to its session in every state. The domain names the
-//! kind, this module chooses the words, and Lexical composes every node:
-//! no node syntax is written here.
+//! Two shapes, by whether the session's bot is a coding agent: a coding
+//! agent's turn is a magic chip, a live portal into the session that renders
+//! the turn itself; a chat agent's turn is a pending reply - the channel
+//! markdown's pulsing await node - that is patched into the answer when the
+//! turn ends, the way the original Macro bot replied, and that says so while
+//! the turn waits on a question only the session view can answer. A chat
+//! agent's message leads with a link to its session, labelled with the
+//! bot's name, in every state. The domain decides the shape and names the
+//! bot, this module chooses the words, and Lexical composes every node: no
+//! node syntax is written here.
 
 #[cfg(test)]
 mod test;
@@ -55,15 +56,22 @@ const NEEDS_INPUT_LEAD: &str =
     "I have a question before I can continue — open the agent session to answer it:";
 
 /// A chat agent's message in one state, for Lexical to compose: the link to
-/// its session, then `body`.
+/// its session, labelled with the bot's name, then `body`.
 ///
 /// The channel message view lifts a leading session link out of the body
 /// onto the sender line, and every state of the reply carries one: a patch
 /// replaces the content wholesale, and a link only the pending reply had
-/// would vanish with the spinner.
-fn chat_reply(session_id: AgentSessionId, body: AgentChatReplyBody) -> AgentChatReply {
+/// would vanish with the spinner. The label is what the link reads as there
+/// and wherever the markdown is shown as text: notification excerpts,
+/// search, previews.
+fn chat_reply(
+    session_id: AgentSessionId,
+    bot_name: &str,
+    body: AgentChatReplyBody,
+) -> AgentChatReply {
     AgentChatReply {
         session_id: session_id.to_string(),
+        label: Some(bot_name.to_owned()),
         body,
     }
 }
@@ -213,7 +221,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 &announcement.origin_parent,
             )
             .await?;
-        let content = if announcement.kind.is_coding() {
+        let content = if announcement.is_coding {
             self.lexical
                 .compose_agent_announcement(
                     &announcement_reply_target(&announcement),
@@ -224,6 +232,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             self.lexical
                 .compose_agent_chat_reply(&chat_reply(
                     announcement.session_id,
+                    &announcement.bot_name,
                     AgentChatReplyBody::Pending,
                 ))
                 .await
@@ -258,7 +267,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
     }
 
     async fn resolve(&self, resolution: ResolvedReply) -> Result<()> {
-        if resolution.kind.is_coding() {
+        if resolution.is_coding {
             return Ok(());
         }
         let access = self
@@ -274,6 +283,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .lexical
             .compose_agent_chat_reply(&chat_reply(
                 resolution.session_id,
+                &resolution.bot_name,
                 reply_body(resolution.outcome),
             ))
             .await

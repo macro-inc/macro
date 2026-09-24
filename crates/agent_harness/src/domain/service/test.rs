@@ -281,6 +281,25 @@ impl crate::domain::ports::PermissionPolicySource for KindDefaultPolicies {
     }
 }
 
+/// No persona has chosen: every bot's turns are announced as its runtime's
+/// nature says.
+struct HarnessDefaultCodingAgents;
+
+impl crate::domain::ports::CodingAgentSource for HarnessDefaultCodingAgents {
+    async fn coding_agent_choice(&self, _: BotId) -> anyhow::Result<Option<bool>> {
+        Ok(None)
+    }
+}
+
+/// Every persona made the same choice, whatever its runtime.
+struct ChosenCodingAgents(bool);
+
+impl crate::domain::ports::CodingAgentSource for ChosenCodingAgents {
+    async fn coding_agent_choice(&self, _: BotId) -> anyhow::Result<Option<bool>> {
+        Ok(Some(self.0))
+    }
+}
+
 fn harness_for_bot(bot: BotId) -> harness_id::HarnessId {
     harness_id::HarnessId::new_from_uuid(bot.as_uuid())
 }
@@ -404,6 +423,32 @@ fn harness_with_policies_and_mentions(
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
     mentions: PromptMentionsMock,
 ) -> (TestBench, TurnSignals) {
+    harness_with_ports(
+        prompt_context,
+        prompt_composer,
+        permission_policies,
+        HarnessDefaultCodingAgents,
+        mentions,
+    )
+}
+
+fn harness_with_coding_choice(chosen: bool) -> (TestBench, TurnSignals) {
+    harness_with_ports(
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        KindDefaultPolicies,
+        ChosenCodingAgents(chosen),
+        PromptMentionsMock::new(),
+    )
+}
+
+fn harness_with_ports(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+    coding_agents: impl crate::domain::ports::CodingAgentSource,
+    mentions: PromptMentionsMock,
+) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
@@ -433,6 +478,7 @@ fn harness_with_policies_and_mentions(
         EgressProvisionerMock::new(),
         NoPeers,
         permission_policies,
+        coding_agents,
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -2701,6 +2747,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         EgressProvisionerMock::new(),
         NoPeers,
         KindDefaultPolicies,
+        HarnessDefaultCodingAgents,
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -3200,6 +3247,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
         EgressProvisionerMock::new(),
         forwarder.clone(),
         KindDefaultPolicies,
+        HarnessDefaultCodingAgents,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -3252,6 +3300,7 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
         EgressProvisionerMock::new(),
         forwarder.clone(),
         KindDefaultPolicies,
+        HarnessDefaultCodingAgents,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),

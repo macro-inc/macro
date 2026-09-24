@@ -16,8 +16,10 @@
 //!
 //! Everything else is nobody's news.
 //!
-//! The session's [`AgentKind`] comes in beside the fact because the fact
-//! does not carry it: a chat agent's announced turn ends by patching its
+//! Whether the session's bot is a coding agent comes in beside the fact
+//! because the fact does not carry it (see
+//! [`crate::domain::model::is_coding_agent`]): a chat agent's announced
+//! turn ends by patching its
 //! pending reply into the thread, and the message service notifies on that
 //! patch as if the answer had just been posted, so a `settled` notification
 //! on top would tell the same people the same thing twice. The same reply
@@ -58,8 +60,6 @@ use model_notifications::{
 use notification::domain::models::apple::PushNotificationData;
 use notification::domain::models::request::SendNotificationRequestBuilder;
 use notification::domain::models::{Notification, SendNotificationRequest};
-
-use super::model::AgentKind;
 
 /// The namespace agent-session notification ids are derived in. Fixed
 /// forever: changing it would orphan every retraction of a notification
@@ -129,12 +129,14 @@ impl PlannedNotification {
     }
 }
 
-/// The notifications one lifecycle fact about a `kind` session warrants.
+/// The notifications one lifecycle fact about a session warrants, given
+/// whether its bot is a coding agent (`is_coding`, see
+/// [`crate::domain::model::is_coding_agent`]).
 #[must_use]
-pub fn plan(event: &AgentSessionLifecycleEvent, kind: AgentKind) -> Vec<PlannedNotification> {
+pub fn plan(event: &AgentSessionLifecycleEvent, is_coding: bool) -> Vec<PlannedNotification> {
     match event {
-        AgentSessionLifecycleEvent::Settled(settled) => plan_settled(settled, kind),
-        AgentSessionLifecycleEvent::WaitingForInput(waiting) => plan_waiting(waiting, kind),
+        AgentSessionLifecycleEvent::Settled(settled) => plan_settled(settled, is_coding),
+        AgentSessionLifecycleEvent::WaitingForInput(waiting) => plan_waiting(waiting, is_coding),
         AgentSessionLifecycleEvent::Mentioned(mentioned) => plan_mentioned(mentioned),
         AgentSessionLifecycleEvent::Opened(_)
         | AgentSessionLifecycleEvent::TurnStarted(_)
@@ -146,7 +148,7 @@ pub fn plan(event: &AgentSessionLifecycleEvent, kind: AgentKind) -> Vec<PlannedN
     }
 }
 
-fn plan_settled(settled: &SessionSettledMetadata, kind: AgentKind) -> Vec<PlannedNotification> {
+fn plan_settled(settled: &SessionSettledMetadata, is_coding: bool) -> Vec<PlannedNotification> {
     // "Settled" without the turn's record is a fact nobody can act on: no
     // excerpt, no chip, no turn to key the id by.
     let Some(turn) = &settled.last_turn else {
@@ -154,7 +156,7 @@ fn plan_settled(settled: &SessionSettledMetadata, kind: AgentKind) -> Vec<Planne
     };
     // A chat agent's announced turn already told the thread: its pending
     // reply was patched into the answer, and that patch notifies as a post.
-    if !kind.is_coding() && turn.announcement_message_id.is_some() {
+    if !is_coding && turn.announcement_message_id.is_some() {
         return Vec::new();
     }
     let (entity, secondary_entity) = entities(&settled.identity);
@@ -173,11 +175,11 @@ fn plan_settled(settled: &SessionSettledMetadata, kind: AgentKind) -> Vec<Planne
     })]
 }
 
-fn plan_waiting(waiting: &WaitingForInputMetadata, kind: AgentKind) -> Vec<PlannedNotification> {
+fn plan_waiting(waiting: &WaitingForInputMetadata, is_coding: bool) -> Vec<PlannedNotification> {
     // A chat agent's announced turn tells its thread it is waiting the same
     // way it tells it the answer: by patching its pending reply, which
     // notifies as a post.
-    if !kind.is_coding() && waiting.announcement_message_id.is_some() {
+    if !is_coding && waiting.announcement_message_id.is_some() {
         return Vec::new();
     }
     let (entity, secondary_entity) = entities(&waiting.identity);

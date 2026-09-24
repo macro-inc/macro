@@ -7,7 +7,8 @@ use bot_id::BotId;
 fn announcement() -> SessionAnnouncement {
     SessionAnnouncement {
         bot_id: BotId::TEST_A,
-        kind: crate::domain::model::AgentKind::SandboxedCoder,
+        bot_name: BOT_NAME.to_owned(),
+        is_coding: true,
         session_id: agent_session::domain::model::AgentSessionId::TEST_A,
         origin_parent: MessageParent::Channel(Uuid::from_u128(1)),
         origin_thread_id: Uuid::from_u128(2),
@@ -94,6 +95,9 @@ fn every_outcome() -> Vec<ReplyOutcome> {
     ]
 }
 
+/// The persona the reply speaks as, and what its session link reads as.
+const BOT_NAME: &str = "Macro Coder";
+
 fn markdown(body: AgentChatReplyBody) -> String {
     match body {
         AgentChatReplyBody::Markdown { markdown } => markdown,
@@ -105,33 +109,47 @@ fn markdown(body: AgentChatReplyBody) -> String {
 /// reply carried would vanish with the spinner. Every state asks Lexical
 /// for the same session link ahead of its body.
 #[test]
-fn every_reply_names_its_session() {
+fn every_reply_names_its_session_and_its_bot() {
     for outcome in every_outcome() {
-        let reply = chat_reply(SESSION, reply_body(outcome.clone()));
+        let reply = chat_reply(SESSION, BOT_NAME, reply_body(outcome.clone()));
         assert_eq!(reply.session_id, SESSION.to_string(), "{outcome:?}");
+        assert_eq!(reply.label.as_deref(), Some(BOT_NAME), "{outcome:?}");
     }
     assert_eq!(
-        chat_reply(SESSION, AgentChatReplyBody::Pending),
+        chat_reply(SESSION, BOT_NAME, AgentChatReplyBody::Pending),
         AgentChatReply {
             session_id: "00000000-0000-0000-0000-00000000000a".to_owned(),
+            label: Some(BOT_NAME.to_owned()),
             body: AgentChatReplyBody::Pending,
         }
     );
 }
 
+/// A name is text a person typed; it travels as JSON, so quotes and tag
+/// syntax in it reach Lexical as data for its own serializer to escape.
+#[test]
+fn a_bot_name_with_quotes_travels_as_data() {
+    let name = r#"Wolf's "Coder" </m-agent-session-mention>"#;
+    let value = serde_json::to_value(chat_reply(SESSION, name, AgentChatReplyBody::Pending)).unwrap();
+    assert_eq!(value["label"], name);
+}
+
 /// The wire shape the lexical service validates: `kind` tags the body.
 #[test]
 fn the_reply_serializes_as_the_endpoint_reads_it() {
-    let pending = serde_json::to_value(chat_reply(SESSION, AgentChatReplyBody::Pending)).unwrap();
+    let pending =
+        serde_json::to_value(chat_reply(SESSION, BOT_NAME, AgentChatReplyBody::Pending)).unwrap();
     assert_eq!(
         pending,
         serde_json::json!({
             "sessionId": "00000000-0000-0000-0000-00000000000a",
+            "label": "Macro Coder",
             "body": { "kind": "pending" }
         })
     );
     let answered = serde_json::to_value(chat_reply(
         SESSION,
+        BOT_NAME,
         reply_body(ReplyOutcome::Answered("Sure.".to_owned())),
     ))
     .unwrap();
