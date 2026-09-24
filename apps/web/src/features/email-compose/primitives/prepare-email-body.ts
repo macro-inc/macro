@@ -392,7 +392,9 @@ function applyMediaScale(container: Element) {
 function replaceVideosWithLinks(container: Element) {
   for (const video of container.querySelectorAll('video')) {
     const src = video.getAttribute('src');
-    if (!src) {
+    // Until the upload finishes the source is a local blob/preview URL that
+    // recipients can't open; the attachment still carries the file.
+    if (!src || !/^https?:\/\//i.test(src)) {
       video.remove();
       continue;
     }

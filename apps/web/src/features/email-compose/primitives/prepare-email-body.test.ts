@@ -92,6 +92,16 @@ describe('prepareEmailBodyFromHtml', () => {
     expect(link?.textContent).toBe('▶ Play video');
   });
 
+  it('drops videos whose source is still a local upload preview', () => {
+    const prepared = prepareEmailBodyFromHtml(
+      '<p>Clip</p><div><video src="blob:https://app.example.com/1234"></video></div>'
+    );
+    const html = decodeBase64Utf8(prepared.bodyHtml);
+    expect(html).not.toContain('<video');
+    expect(html).not.toContain('blob:');
+    expect(html).not.toContain('Play video');
+  });
+
   it('does not add a quote block without appendReply (undo-send restore)', () => {
     const prepared = prepareEmailBodyFromHtml('<p>hi there</p>');
     const decoded = decodeBase64Utf8(prepared.bodyHtml);
