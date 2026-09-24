@@ -13,7 +13,7 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@phosphor/share.svg';
+import IconShared from '@icon/share.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal } from 'solid-js';
 import { spreadsheetChatContext } from './core/chat-context';

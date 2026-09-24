@@ -702,7 +702,7 @@ export function Channel(props: ChannelProps) {
                   </Show>
                   <Show when={messages().length > 0}>
                     <div
-                      class="relative flex-1 min-h-0"
+                      class="scroll-top-fade relative flex-1 min-h-0"
                       ref={setThreadListContainerEl}
                     >
                       <SwipableRowProvider

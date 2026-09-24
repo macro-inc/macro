@@ -97,7 +97,7 @@ function ChannelDetailTopBar(props: {
         value={activeTab()}
         onChange={(value) => setActiveTab(value as ChannelTabId)}
       />
-      <div class="ml-auto flex shrink-0 items-center gap-2">
+      <div class="header-actions ml-auto flex shrink-0 items-center gap-2">
         <ChannelLiveIndicators channelId={props.channelId} />
         <Show when={ENABLE_CALLS && !call.isInThisChannel()}>
           <ChannelCallButton channelId={props.channelId} />

@@ -300,7 +300,10 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
   const isInstructions = () => props.isInstructions ?? false;
 
   return (
-    <div class="w-full grow overflow-hidden relative" data-block-content>
+    <div
+      class="scroll-top-fade w-full grow overflow-hidden relative"
+      data-block-content
+    >
       <Scroll
         class="relative"
         scrollRef={(element) => {

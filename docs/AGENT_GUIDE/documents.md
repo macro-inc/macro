@@ -1,5 +1,9 @@
 # Documents
 
+The document header has separate Share, Copy Share Link, and Side Panel buttons.
+They are borderless with a soft rounded background on hover. Share opens the
+sharing dialog; copying a link is a separate action.
+
 ## Spreadsheets
 
 Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog

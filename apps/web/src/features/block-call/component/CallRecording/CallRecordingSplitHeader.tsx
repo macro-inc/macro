@@ -24,8 +24,8 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildEntityData } from '@entity';
+import IconShared from '@icon/share.svg';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
-import IconShared from '@phosphor/share.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { Button } from '@ui';
 import { type Accessor, Show } from 'solid-js';

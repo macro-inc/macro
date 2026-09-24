@@ -20,6 +20,7 @@ import { useCreateChannelMutation } from '@queries/channel/channels';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { Button, Dialog, Panel, ToggleSwitch, Tooltip } from '@ui';
+import { inputClasses } from '@ui/components/Input';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 const [newChannelModalOpen, setNewChannelModalOpen] = createSignal(false);
@@ -198,7 +199,7 @@ export function CreateChannelModal() {
                   autocomplete="off"
                   data-1p-ignore
                   aria-invalid={error() === 'Enter a channel name'}
-                  class="h-10 w-full border-none bg-transparent px-0 text-xl font-medium text-ink outline-none placeholder:text-ink-placeholder focus:ring-0"
+                  class={inputClasses({ size: 'lg', class: 'text-sm' })}
                 />
               </div>
 

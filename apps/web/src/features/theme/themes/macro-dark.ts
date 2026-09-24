@@ -1,21 +1,21 @@
 import type { ThemeV3 } from '../types/themeTypes';
 
-/** Near-black structural surfaces with a restrained neutral depth ramp and green accent. */
+/** Near-black blue-gray surfaces with a restrained depth ramp and muted blue accent. */
 export const macroDarkTheme = {
   id: 'Macro Dark',
   name: 'Macro Dark',
   version: 3,
   mode: 'dark',
   colorTokens: {
-    'surface-0': 'oklch(0.17 0 21deg)',
+    'surface-0': 'oklch(0.17 0.002 250deg)',
     'surface-1':
-      'color-mix(in oklch, var(--color-surface-0) 94%, var(--color-content-0))',
+      'color-mix(in oklch, var(--color-surface-0) 97%, var(--color-content-0))',
     'surface-2':
-      'color-mix(in oklch, var(--color-surface-0) 90%, var(--color-content-0))',
+      'color-mix(in oklch, var(--color-surface-0) 95%, var(--color-content-0))',
     'surface-3':
-      'color-mix(in oklch, var(--color-surface-0) 86%, var(--color-content-0))',
+      'color-mix(in oklch, var(--color-surface-0) 93%, var(--color-content-0))',
     'surface-4':
-      'color-mix(in oklch, var(--color-surface-0) 82%, var(--color-content-0))',
+      'color-mix(in oklch, var(--color-surface-0) 91%, var(--color-content-0))',
     'content-0': 'oklch(1 0 21deg)',
     'content-1': 'oklch(0.83 0 21deg)',
     'content-2': 'oklch(0.75 0 21deg)',
@@ -23,7 +23,7 @@ export const macroDarkTheme = {
     'content-4': 'oklch(0.55 0 21deg)',
     edge: 'var(--color-surface-4)',
     'edge-muted': 'var(--color-surface-2)',
-    accent: 'oklch(0.7 0.12 142deg)',
+    accent: 'oklch(0.7 0.12 250deg)',
     red: 'oklch(0.75 0.2 25.331deg)',
     orange: 'oklch(0.75 0.2 47.604deg)',
     amber: 'oklch(0.75 0.2 70.08deg)',
@@ -52,8 +52,8 @@ export const macroDarkTheme = {
     menu: 'var(--color-surface-2)',
     tooltip: 'var(--color-surface-2)',
     toast: 'var(--color-surface-2)',
-    input: 'transparent',
-    'input-focus': 'var(--color-surface-1)',
+    input: 'var(--color-control)',
+    'input-focus': 'var(--color-control)',
     message: 'var(--color-surface-1)',
     hover: 'color-mix(in oklch, var(--color-content-0) 3%, transparent)',
     active: 'color-mix(in oklch, var(--color-content-0) 6%, transparent)',
@@ -61,7 +61,7 @@ export const macroDarkTheme = {
     success: 'var(--color-green)',
     warning: 'var(--color-amber)',
     failure: 'var(--color-red)',
-    chrome:
-      'color-mix(in oklch, var(--color-surface-0) 80%, var(--color-content-0))',
+    // Keep mobile glass at its original lightness, independent of the page base.
+    chrome: 'oklch(0.2 0.002 250deg)',
   },
 } satisfies ThemeV3;

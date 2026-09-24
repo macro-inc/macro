@@ -15,48 +15,49 @@ import { Tooltip } from './Tooltip';
 const BUTTON_TOUCH_STYLES =
   "touch:min-h-9 touch:min-w-9 touch:[&>svg:not([class*='size-'])]:size-6";
 
-// Hover and press feedback uses an `overlay-*` scrim over the base color, so
-// surface buttons keep their layer. Solid variants use a surface-colored scrim
-// to lighten without washing out their text.
+// Text actions use flat frames. Icon actions and embedded controls remain
+// unframed; navigation keeps its independent quiet selection treatment.
 /** Canonical variant classes for buttons and button-like elements. */
 export const buttonVariants = createVariants(
   cn(
     'relative inline-flex shrink-0 items-center justify-center whitespace-nowrap text-sm',
-    'rounded-md border-1 border-transparent font-medium outline-none select-none transition-colors [&_*]:select-none',
-    'data-disabled:cursor-not-allowed data-disabled:opacity-30',
+    'rounded-full border border-edge-button bg-control text-ink-muted font-medium outline-none select-none transition-colors duration-120 motion-reduce:transition-none [&_*]:select-none',
+    'not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:hover:text-ink not-disabled:active:overlay-active',
+    'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edge-focus',
+    'aria-pressed:overlay-active aria-pressed:text-ink',
+    'data-disabled:cursor-not-allowed data-disabled:opacity-50',
     '[&_svg]:pointer-events-none [&_svg]:shrink-0'
   ),
   {
     variant: {
       danger:
-        'bg-failure-bg text-failure dark:bg-failure-bg not-touch:not-disabled:hover:bg-failure/25 not-touch:not-disabled:active:bg-failure/30',
-      outline:
-        'bg-surface text-ink-muted border-edge border-[0.5px] not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:hover:text-ink not-touch:not-disabled:active:overlay-active',
-      accent:
-        'bg-accent-bg not-touch:not-disabled:hover:overlay-accent-bg text-accent',
+        'text-failure not-touch:not-disabled:hover:text-failure aria-pressed:text-failure',
+      outline: '',
+      accent: 'text-ink font-semibold',
       success:
-        'bg-success-bg not-touch:not-disabled:hover:overlay-success-bg text-success',
-      ghost:
-        'bg-transparent text-ink-muted not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:hover:text-ink not-touch:not-disabled:active:overlay-active',
-      strong:
-        'bg-ink text-surface-4 focus-visible:ring-surface-4/70 not-touch:not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface-4)_12%,transparent)] not-touch:not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface-4)_22%,transparent)]',
-      cta: 'bg-accent text-accent-contrast focus-visible:ring-accent-contrast/70 [--color-edge:var(--color-accent-contrast-muted)] [--color-edge-muted:var(--color-accent-contrast-muted)] not-touch:not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] not-touch:not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)]',
+        'text-success not-touch:not-disabled:hover:text-success aria-pressed:text-success',
+      // Retained for existing callers; ordinary actions always have a frame.
+      ghost: '',
+      plain: 'border-0 bg-transparent',
+      strong: 'text-ink font-semibold',
+      cta: 'text-ink font-semibold',
+      navigation: 'border-transparent bg-transparent',
     },
     size: {
       xs: "h-5 gap-1 px-1 text-xs [&>svg:not([class*='size-'])]:size-3",
       'icon-xs': "size-5 p-0.5 [&>svg:not([class*='size-'])]:size-3",
       sm: CONTROL_SIZE_VARIANTS.sm,
       md: CONTROL_SIZE_VARIANTS.md,
-      lg: `${CONTROL_SIZE_VARIANTS.lg} rounded-lg`,
-      xl: "h-12 gap-2 px-4 text-base rounded-lg [&>svg:not([class*='size-'])]:size-5",
+      lg: CONTROL_SIZE_VARIANTS.lg,
+      xl: "h-12 gap-2 px-4 text-base [&>svg:not([class*='size-'])]:size-5",
       'icon-lg':
-        "size-9 aspect-square p-2 [&>svg:not([class*='size-'])]:size-5",
+        "size-9 aspect-square rounded-xl p-2 [&>svg:not([class*='size-'])]:size-5",
       'icon-md':
         "size-8 aspect-square p-1.5 [&>svg:not([class*='size-'])]:size-4",
       'icon-sm':
         "size-6 aspect-square p-1 [&>svg:not([class*='size-'])]:size-3.5",
       'icon-composer':
-        'size-6 aspect-square not-touch:rounded-full p-1 touch:[&_svg]:size-3.5 not-touch:size-[33.75px] not-touch:p-[3.75px] not-touch:[&_svg]:size-[20.625px]',
+        'size-6 aspect-square p-1 touch:[&_svg]:size-3.5 not-touch:size-[33.75px] not-touch:p-[3.75px] not-touch:[&_svg]:size-[20.625px]',
     },
   },
   {
@@ -126,6 +127,7 @@ export function buttonClasses(options: ButtonClassOptions = {}): string {
 
   return cn(
     buttonVariants({ variant, size }),
+    (isIconSize(size ?? 'md') || square) && 'border-0 bg-transparent',
     fullWidth && 'w-full',
     !noTouchResize && BUTTON_TOUCH_STYLES,
     square && 'aspect-square p-0',
@@ -142,7 +144,10 @@ function isIconSize(size: ButtonSize): boolean {
  * `size` carries density; both are shared with Badge so button-like elements
  * line up.
  *
- * @do Give every screen at most one `cta` or `accent` button.
+ * @do Use icon sizes (or square) for borderless icon actions.
+ * @do Use plain for embedded controls such as the composer agent picker.
+ * @do Use strong ink/weight for primary text actions on the flat frame.
+ * @do Use `navigation` only for selectable navigation or list rows.
  * @do Always set `label` on icon-only buttons; it is the accessible name.
  * @do Use `danger` only for destructive actions, paired with a confirmation.
  * @dont Do not restyle a button with utility classes when a variant already
@@ -183,6 +188,7 @@ export const Button = (props: ButtonProps) => {
         noTouchResize: local.noTouchResize,
         square: local.square,
       }),
+      group && 'bg-transparent',
       local.class
     );
 

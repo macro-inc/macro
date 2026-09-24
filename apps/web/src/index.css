@@ -60,11 +60,11 @@
 @property --safe-right  { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --safe-left   { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --safe-top    { syntax: "<length>"; inherits: true; initial-value: 0px; }
-@property --app-border-width { syntax: "<length>"; inherits: true; initial-value: 0.5px; }
+@property --app-border-width { syntax: "<length>"; inherits: true; initial-value: 1px; }
 @property --app-ring-width   { syntax: "<length>"; inherits: true; initial-value: 0.5px; }
 
 :root {
-  --app-border-width: 0.5px;
+  --app-border-width: 1px;
   --app-ring-width: 0.5px;
 
   /* Workspace sidebar geometry. Both icon rails are 26px from the edge.
@@ -315,6 +315,11 @@ body.tauri-ios {
   --color-link-visited: var(--color-accent);
   --color-page: var(--color-surface-0);
   --color-panel: var(--theme-panel, var(--color-surface-1));
+  --color-control: var(--color-surface-2);
+  --color-edge-frame: color-mix(in oklch, var(--color-content-0) 8%, transparent);
+  --color-edge-button: color-mix(in oklch, var(--color-content-0) 5%, transparent);
+  --color-edge-divider: color-mix(in oklch, var(--color-content-0) 4%, transparent);
+  --color-edge-focus: color-mix(in oklch, var(--color-content-0) 40%, transparent);
   --color-dialog: var(--color-surface-2);
   --color-menu: var(--color-surface-2);
   /* Touch surfaces keep their translucent fill; desktop overrides it below
@@ -408,7 +413,7 @@ body.tauri-ios {
   --color-avatar-edge: oklch(0 0 0 / 0.4);
   --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
   --color-list-hover: var(--color-hover);
-  --color-list-highlighted: var(--color-hover);
+  --color-list-highlighted: var(--color-active);
   --color-list-selected: var(--color-selected);
   --color-list-selected-highlighted: color-mix(in oklch, var(--color-accent) 16%, transparent);
 
@@ -604,6 +609,38 @@ html[data-theme-light='false'] {
   --color-composer: var(--color-surface-4);
 }
 
+/* Right-side header actions share a quiet, hover-only background. */
+@utility header-actions {
+  & [data-button] {
+    @apply rounded-xl border-0 bg-transparent;
+
+    &:not(:hover):not(:active) {
+      background-image: none;
+    }
+  }
+}
+
+@utility scroll-top-fade {
+  @variant dark-mode {
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto;
+      height: 48px;
+      z-index: 1;
+      pointer-events: none;
+      background: linear-gradient(
+        to bottom,
+        var(--color-panel),
+        color-mix(in oklch, var(--color-panel) 75%, transparent) 25%,
+        color-mix(in oklch, var(--color-panel) 35%, transparent) 50%,
+        color-mix(in oklch, var(--color-panel) 10%, transparent) 75%,
+        transparent
+      );
+    }
+  }
+}
+
 /* Floating "island" chrome shared by the mobile dock buttons, header islands,
    and other floating mobile controls. Consumers add their own shape classes
    (e.g. `size-10 rounded-full` or `h-10 rounded-full px-3`). Defined as a
@@ -777,17 +814,21 @@ html[data-theme-light='false'] {
   --glass-shadow-scale: 0.5;
 }
 
-/* A clear but quiet edge for composed input surfaces with an internal editor. */
-@utility input-active-outline {
-  outline: 1px solid transparent;
-  outline-offset: -1px;
-
-  &:has(:is(input, textarea, [contenteditable]):focus) {
-    outline-color: color-mix(in oklch, var(--color-edge) 70%, var(--color-ink));
-  }
+/* Shared flat menu appearance, on the existing menu elements. */
+@utility menu-surface {
+  @apply relative min-h-0 rounded-xl border border-edge-frame bg-menu text-ink shadow-none;
+  --color-surface: var(--color-menu);
 }
 
-html[data-theme-light='true'] .glass-input {
+/* Shared dialog appearance; composers retain their original glass. */
+@utility elevated-surface {
+  @apply glass-input;
+  border-radius: 24px;
+  background-color: var(--color-dialog);
+  color: var(--color-ink);
+}
+
+html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
   --glass-shadow-y: 4px;
   --glass-shadow-blur: 16px;
   --glass-shadow-spread: -10px;
@@ -1294,17 +1335,17 @@ a {
 /* Shared text-field styling so inputs look the same across every settings tab.
    Apply to an <input>; pair with a width utility (e.g. `w-full`) as needed. */
 @utility settings-input {
-  @apply h-9 px-3 rounded-lg border border-edge-muted bg-transparent text-base text-ink outline-none transition-colors;
+  @apply h-9 px-3 rounded-full border border-edge-frame bg-control text-base text-ink outline-none transition-colors duration-120 motion-reduce:transition-none;
+  &:is(textarea) {
+    @apply rounded-xl;
+  }
   /* Matches the composer/chat placeholder token so hint text reads the same
      faintness everywhere, rather than settings sitting more prominent. */
   &::placeholder {
     @apply text-ink-placeholder;
   }
-  &:hover {
-    @apply border-edge;
-  }
-  &:focus {
-    @apply border-accent;
+  &:focus-visible {
+    @apply ring-2 ring-edge-muted;
   }
   /* State styling owned by the utility so call sites toggle an attribute instead
      of fighting the border/text classes. `aria-invalid` after `:focus` so the
@@ -1329,7 +1370,7 @@ a {
       inset-inline: calc(var(--spacing) * 6);
       bottom: 0;
       height: 1px;
-      background-color: color-mix(in oklab, var(--color-ink-muted) 5%, transparent);
+      background-color: var(--color-edge-divider);
       pointer-events: none;
     }
   }
@@ -1345,7 +1386,7 @@ a {
     inset-inline: calc(var(--spacing) * 6);
     bottom: 0;
     height: 1px;
-    background-color: color-mix(in oklab, var(--color-ink-muted) 5%, transparent);
+    background-color: var(--color-edge-divider);
     pointer-events: none;
   }
 }

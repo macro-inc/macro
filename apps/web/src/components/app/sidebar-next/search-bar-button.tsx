@@ -48,7 +48,7 @@ export const SearchRailButton = () => {
         tooltipPlacement: 'right',
         hotkey: TOKENS.sidebar.goTo.search,
         'data-sidebar-next-search': '',
-        class: 'size-10 rounded-full [&_svg]:size-6',
+        class: 'size-10 rounded-xl [&_svg]:size-5',
       }}
     />
   );

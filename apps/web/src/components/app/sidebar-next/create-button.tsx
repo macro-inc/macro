@@ -10,13 +10,13 @@ const RailCreateTrigger = (props: ButtonProps) => (
   <Button
     {...props}
     variant="ghost"
-    class="size-10 rounded-full [&_svg]:size-6"
+    class="size-10 rounded-xl [&_svg]:size-5"
     size="icon-md"
     label="Create"
     tooltipPlacement="right"
     hotkey={TOKENS.global.createCommand}
   >
-    <PlusIcon class="size-6" />
+    <PlusIcon class="size-5" />
   </Button>
 );
 
