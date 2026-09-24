@@ -105,7 +105,10 @@ export function NewChatPage(props: {
     const harness =
       agent?.harness === 'macro-inmem' ? 'in-memory' : agent?.harness;
     if (harness !== 'in-memory' && harness !== 'cursor') return undefined;
-    return { harness, model: composerModelOverride() ?? agent?.defaultModel } as const;
+    return {
+      harness,
+      model: composerModelOverride() ?? agent?.defaultModel,
+    } as const;
   };
   const capabilities = useAgentCapabilitiesQuery(capabilityTarget);
   const effort = () =>

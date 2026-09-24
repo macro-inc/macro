@@ -278,7 +278,7 @@ describe('an id whose create is in flight', () => {
       expect(create.control.mock.calls).toEqual([
         ['session-confirm', { type: 'setModel', model: 'model-2' }],
       ]);
-      expect(resolved.pending()).toBe(false);
+      expect(resolved.pending()).toBe(true);
       create.confirm?.();
       await flush();
       expect(create.control.mock.calls).toEqual([
@@ -288,7 +288,7 @@ describe('an id whose create is in flight', () => {
           { type: 'setConfigOption', configId: 'effort', value: 'ultra' },
         ],
       ]);
-      expect(resolved.pending()).toBe(false);
+      expect(resolved.pending()).toBe(true);
       create.confirm?.();
       await flush();
       expect(create.control).toHaveBeenLastCalledWith('session-confirm', {

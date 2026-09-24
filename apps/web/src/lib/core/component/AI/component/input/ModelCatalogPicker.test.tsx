@@ -11,7 +11,7 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ModelCatalogPicker } from './ModelCatalogPicker';
+import { ModelCatalogPicker, type ModelRowProps } from './ModelCatalogPicker';
 import type { CatalogModelOption } from './modelCatalog';
 
 const { isMobileWidth, setMobileWidth } = vi.hoisted(() => {
@@ -173,5 +173,34 @@ describe('ModelCatalogPicker more models at phone width', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Recommended' }));
     expect(screen.getByText('Claude Opus 5 High')).toBeTruthy();
     expect(screen.queryByText('Gemini 3.8 Flash High')).toBeNull();
+  });
+
+  it('uses the supplied model row for models beyond the recommended list', () => {
+    setMobileWidth(true);
+    const CustomRow = (props: ModelRowProps) => (
+      <button type="button" onClick={props.onSelect}>
+        Custom {props.option.label}
+      </button>
+    );
+    render(() => {
+      const [value, setValue] = createSignal('auto');
+      return (
+        <ModelCatalogPicker
+          value={value()}
+          options={OPTIONS}
+          onSelect={setValue}
+          modelRow={CustomRow}
+          ariaLabel="Agent model"
+        />
+      );
+    });
+
+    fireEvent.click(screen.getByText('More models'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Custom Gemini 3.8 Flash High' })
+    );
+    expect(
+      screen.getByRole('button', { name: 'Agent model' }).textContent
+    ).toContain('Gemini 3.8 Flash High');
   });
 });

@@ -71,7 +71,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-
+    
     /**
      * Probe one provider's model catalog without creating an agent session.
      */

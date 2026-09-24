@@ -112,9 +112,9 @@ export function startPendingSession(
       // Normally the id this tab minted; an older service may mint its own.
       const created = result.value.session.id;
       void refetchSoupEntity(created, 'agentSession', { created: true });
-      // The block adopts the session as soon as it exists. Confirm the
-      // selected settings before sending the first prompt on that session.
-      setSessionId(created);
+      // Hold the block in preflight while selected settings are confirmed,
+      // then adopt the session before issuing the first prompt so that prompt
+      // is folded speculatively while its POST is in flight.
       const prompt = options.prompt?.trim() ?? '';
       if (
         options.modelOverride ||
@@ -134,7 +134,9 @@ export function startPendingSession(
             }
             if (options.effortOverride) {
               const snapshot = await session.snapshot();
-              const effort = effortConfigOption(snapshot.metadata.configOptions);
+              const effort = effortConfigOption(
+                snapshot.metadata.configOptions
+              );
               if (
                 effort?.id !== options.effortOverride.configId ||
                 !effort.options.some(
@@ -151,6 +153,7 @@ export function startPendingSession(
               });
             }
           }
+          setSessionId(created);
           if (prompt || options.attachments?.length) {
             const delivered = await session.issue(
               {
@@ -178,6 +181,8 @@ export function startPendingSession(
         } finally {
           session.release();
         }
+      } else {
+        setSessionId(created);
       }
     })
     .catch(() =>
