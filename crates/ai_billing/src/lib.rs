@@ -19,6 +19,17 @@
 //! the payer's Stripe customer in chunks at the same list rate. Both keep the
 //! same margin as the plan itself.
 //!
+//! # Measured cost versus quota consumption
+//!
+//! Cost telemetry retains every recorded completion, including quota-exempt
+//! AI projections, document editing, and dictation. Billing usage excludes the
+//! shared [`QUOTA_EXEMPT_FEATURES`] set before applying the list-rate markup;
+//! these features consume no allowance, prepaid credits, or overage.
+//!
+//! This filtering applies when usage is read, including previously recorded
+//! usage. It does not delete cost records, rewrite historical invoices, or
+//! reverse credit consumption already booked in the billing ledger.
+//!
 //! # Layout
 //!
 //! - [`domain`] — plan catalog, the margin math, the settlement ledger (pure),
