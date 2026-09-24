@@ -19,6 +19,7 @@ import {
   createEffect,
   createMemo,
   on,
+  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
@@ -88,6 +89,33 @@ export function CalendarView(props: CalendarViewProps) {
     aimingEventId = nonEmpty(target.eventId);
     aim.aimAt(target);
   };
+  // A period change closes the selected event in the pager. Home keeps the
+  // event in search, so re-aim after the new period is committed to reopen it.
+  createEffect(
+    on(
+      () => routeParams.period,
+      (period, previousPeriod) => {
+        if (
+          !panel.isInlinePreview ||
+          previousPeriod === undefined ||
+          period === previousPeriod
+        ) {
+          return;
+        }
+        let cancelled = false;
+        // The pager closes its selection after it changes the route. Re-aim
+        // after that synchronous close, not at the old chip before it closes.
+        queueMicrotask(() => {
+          if (cancelled || routeParams.period !== period) return;
+          const target = routeTarget();
+          if (target.eventId) aimAt(target);
+        });
+        onCleanup(() => {
+          cancelled = true;
+        });
+      }
+    )
+  );
   createEffect(
     on(
       () => props.refocus?.(),
