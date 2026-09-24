@@ -94,9 +94,9 @@ function scheduledSendLabel(time: Date): string {
   const clock = format(time, 'h:mm a');
   if (isToday(time)) return `Today, ${clock}`;
   if (isTomorrow(time)) return `Tomorrow, ${clock}`;
-  if (differenceInCalendarDays(time, new Date()) < 7) {
-    return format(time, 'EEE, h:mm a');
-  }
+  // Only an upcoming send reads as a weekday; an overdue one keeps its date.
+  const daysAway = differenceInCalendarDays(time, new Date());
+  if (daysAway > 0 && daysAway < 7) return format(time, 'EEE, h:mm a');
   if (isThisYear(time)) return format(time, 'MMM d, h:mm a');
   return format(time, 'MMM d, yyyy');
 }

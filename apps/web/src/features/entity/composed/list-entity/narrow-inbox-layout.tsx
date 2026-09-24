@@ -41,7 +41,11 @@ export function NarrowInboxLayout(props: LayoutProps) {
     <Entity.Layout
       class="w-full text-sm grid"
       style={{
-        'grid-template-columns': 'auto 1fr 8ch',
+        // A scheduled send's badge is wider than a date, so it sizes its column.
+        'grid-template-columns':
+          isEmailEntity(props.entity) && props.entity.scheduledSendTime
+            ? 'auto 1fr auto'
+            : 'auto 1fr 8ch',
         'grid-template-rows': 'auto auto auto',
         'grid-template-areas':
           '"icon title timestamp" "icon body body" "icon body body"',
