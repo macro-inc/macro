@@ -1,11 +1,6 @@
 # Other Surfaces
 
-## Scrolling beneath top bars
-
-In dark mode, Docs, Channels, and both legacy and agent AI chats fade the top
-48px of scrolling content into the theme's panel background. The fade stays at
-the viewport edge and does not intercept clicks; header controls and composers
-remain outside it. Light mode has no fade.
+## Top bars
 
 Right-aligned split-header actions (including Calendar's New event and Channel's
 Call and Ask Macro) are borderless with a rounded-xl background on hover. Channel
