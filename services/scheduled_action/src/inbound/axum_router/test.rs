@@ -1,5 +1,10 @@
 use super::*;
-use crate::domain::service::test::{USER, configuration, service};
+use crate::domain::ai_runner::test::failures;
+use crate::domain::ports::ScheduledActionExecutor;
+use crate::domain::service::{
+    ScheduledActionServiceImpl,
+    test::{FakeRepo, USER, configuration, service},
+};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, header},
@@ -272,6 +277,75 @@ async fn authenticates_user_and_internal_requests_and_rejects_missing_credential
     );
 }
 
+struct RejectedExecution(std::sync::Mutex<Option<AiAdmissionError>>);
+
+impl ScheduledActionExecutor for RejectedExecution {
+    async fn execute_action(&self, _: ScheduledAction) -> anyhow::Result<InProgressExecution> {
+        Err(anyhow::Error::new(self.0.lock().unwrap().take().unwrap())
+            .context("failed to prepare scheduled job"))
+    }
+}
+
+#[tokio::test]
+async fn manual_admission_errors_are_public_and_management_remains_available() {
+    for events in [false, true] {
+        for failure in failures() {
+            let (expected_status, Json(expected_body)) = admission_error_response(&failure);
+            let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+            tokio::spawn(async move { while rx.recv().await.is_some() {} });
+            let service = Arc::new(
+                ScheduledActionServiceImpl::new(
+                    Arc::new(FakeRepo::default()),
+                    Arc::new(RejectedExecution(std::sync::Mutex::new(Some(failure)))),
+                    tx,
+                )
+                .with_event_management_enabled(true),
+            );
+            let app = scheduled_action_router(ScheduledActionRouterState {
+                service,
+                authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuth)),
+            });
+            let mut input = serde_json::to_value(configuration(events)).unwrap();
+            let (status, created) =
+                request(&app, "POST", "/scheduled-actions", "owner", input.clone()).await;
+            assert_eq!(status, StatusCode::CREATED);
+            let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
+            let (status, body) = request(
+                &app,
+                "POST",
+                &format!("{url}/execute"),
+                "owner",
+                Value::Null,
+            )
+            .await;
+            assert_eq!(status, expected_status);
+            assert_eq!(body, serde_json::to_value(expected_body).unwrap());
+            assert!(!body.to_string().contains("secret"));
+            assert_eq!(
+                request(&app, "GET", "/scheduled-actions", "owner", Value::Null)
+                    .await
+                    .0,
+                StatusCode::OK
+            );
+            assert_eq!(
+                request(&app, "GET", &format!("{url}/history"), "owner", Value::Null)
+                    .await
+                    .0,
+                StatusCode::OK
+            );
+            input["enabled"] = json!(false);
+            assert_eq!(
+                request(&app, "PUT", &url, "owner", input).await.0,
+                StatusCode::OK
+            );
+            assert_eq!(
+                request(&app, "DELETE", &url, "owner", Value::Null).await.0,
+                StatusCode::NO_CONTENT
+            );
+        }
+    }
+}
+
 #[tokio::test]
 async fn maps_typed_errors_and_sanitizes_internal_failures() {
     for (error, expected) in [
@@ -344,4 +418,12 @@ fn openapi_documents_canonical_legacy_and_event_opt_in_contracts() {
             .any(|p| p["name"] == "include_events" && p["required"] == false)
     );
     assert!(!spec["paths"]["/scheduled-actions/{id}"]["put"]["responses"]["409"].is_null());
+    let responses = &spec["paths"]["/scheduled-actions/{id}/execute"]["post"]["responses"];
+    for status in ["402", "503"] {
+        assert_eq!(
+            responses[status]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/AiAdmissionErrorBody"
+        );
+    }
+    assert!(!schemas["AiAdmissionErrorBody"].is_null());
 }

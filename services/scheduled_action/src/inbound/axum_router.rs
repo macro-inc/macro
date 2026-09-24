@@ -1,5 +1,10 @@
 use std::sync::Arc;
 
+use ai_billing::{
+    domain::AiAdmissionError,
+    inbound::admission::{AiAdmissionErrorBody, admission_error_response},
+};
+
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionExecutionRecord, ActionPolicyError, AlreadyRunningError, CreateScheduledAction,
@@ -280,6 +285,8 @@ pub async fn delete_action<
         (status = 401, body = String),
         (status = 404, body = String),
         (status = 409, body = String, description = "Action is already running"),
+        (status = 402, body = AiAdmissionErrorBody, description = "AI allowance exhausted"),
+        (status = 503, body = AiAdmissionErrorBody, description = "AI billing unavailable"),
         (status = 500, body = String),
     )
 )]
@@ -350,6 +357,9 @@ impl IntoResponse for ScheduledActionApiError {
             }
             Self::Service(error) => error,
         };
+        if let Some(admission) = error.downcast_ref::<AiAdmissionError>() {
+            return admission_error_response(admission).into_response();
+        }
         if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
             let status = match policy {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,

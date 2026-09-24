@@ -1,9 +1,14 @@
 use super::*;
+use crate::domain::ai_runner::{
+    AdmittedScheduledAgentRunner,
+    test::{Admission, failures},
+};
 use crate::domain::event_runs::{
     AuthorizedEventRun, ClaimToken, ConfigurationRevision, PendingEventRun,
 };
 use crate::domain::event_trigger::EventReference;
 use crate::domain::models::ActionKind;
+use ai_usage::AiFeature;
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7};
@@ -22,6 +27,8 @@ struct Repo {
     claim: Mutex<Option<ClaimToken>>,
     claims: AtomicUsize,
     releases: AtomicUsize,
+    schedule_advances: AtomicUsize,
+    last_executed_updates: AtomicUsize,
     records: Mutex<Vec<ActionExecutionRecord>>,
     fail_persistence: bool,
 }
@@ -48,9 +55,11 @@ impl ScheduledActionRepo for Repo {
         Ok(())
     }
     async fn update_next_run_at(&self, _: &Uuid) -> Result<()> {
+        self.schedule_advances.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
     async fn update_last_executed(&self, _: &Uuid, _: DateTime<Utc>) -> Result<()> {
+        self.last_executed_updates.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
     async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
@@ -80,11 +89,11 @@ impl ScheduledActionRepo for Repo {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Runner {
-    preparations: AtomicUsize,
-    calls: AtomicUsize,
-    contexts: Mutex<Vec<Option<EventReference>>>,
+    preparations: Arc<AtomicUsize>,
+    calls: Arc<AtomicUsize>,
+    contexts: Arc<Mutex<Vec<Option<EventReference>>>>,
     finish: CancellationToken,
     dropped: CancellationToken,
     fail_create: bool,
@@ -180,11 +189,120 @@ fn event_run() -> ClaimedEventRun {
         deadline: Utc::now() + MAX_ACTION_TIME,
     }
 }
-async fn drain(executor: &InProcessExecutor<Repo, Live, Runner>) {
+async fn drain<R: ScheduledAgentRunner>(executor: &InProcessExecutor<Repo, Live, R>) {
     executor.tracker.close();
     tokio::time::timeout(Duration::from_secs(1), executor.tracker.wait())
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn cron_and_manual_denials_release_claims_and_allow_only_later_executions() {
+    // Cron dispatch and manual execution share execute_action, including manual
+    // execution of event-configured actions.
+    for action in [action(), event_run().action] {
+        for failure in failures() {
+            let expected = public_failure(&failure);
+            let admission = Arc::new(Admission::new(vec![Err(failure), Ok(())]));
+            let runner = Runner::default();
+            runner.finish.cancel();
+            let executor = InProcessExecutor::new(
+                Arc::new(Repo::default()),
+                Arc::new(AdmittedScheduledAgentRunner::new(
+                    runner.clone(),
+                    admission.clone(),
+                )),
+                Arc::new(Live::default()),
+                TaskTracker::new(),
+                CancellationToken::new(),
+            );
+            let error = executor.execute_action(action.clone()).await.unwrap_err();
+            assert!(error.is::<AiAdmissionError>());
+            drain(&executor).await;
+            assert_eq!(runner.preparations.load(Ordering::SeqCst), 0);
+            assert_eq!(runner.calls.load(Ordering::SeqCst), 0);
+            assert!(executor.live_updates.0.lock().unwrap().is_empty());
+            assert!(executor.repo.claim.lock().unwrap().is_none());
+            assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 1);
+            assert_eq!(executor.repo.schedule_advances.load(Ordering::SeqCst), 1);
+            assert_eq!(
+                executor.repo.last_executed_updates.load(Ordering::SeqCst),
+                1
+            );
+            {
+                let records = executor.repo.records.lock().unwrap();
+                assert_eq!(records.len(), 1);
+                assert!(!records[0].is_success);
+                assert!(records[0].resource_id.is_none());
+                assert_eq!(records[0].result, expected);
+            }
+            assert_eq!(
+                *admission.calls.lock().unwrap(),
+                vec![(action.owner_user().unwrap().clone(), AiFeature::Automation)]
+            );
+            // Recovery does not rerun the rejected occurrence. A new execution
+            // can acquire the released claim and receives its own admission.
+            executor.execute_action(action.clone()).await.unwrap();
+            drain(&executor).await;
+            assert_eq!(runner.preparations.load(Ordering::SeqCst), 1);
+            assert_eq!(runner.calls.load(Ordering::SeqCst), 1);
+            assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 2);
+            assert_eq!(executor.repo.records.lock().unwrap().len(), 2);
+            assert!(executor.repo.records.lock().unwrap()[1].is_success);
+            assert_eq!(admission.calls.lock().unwrap().len(), 2);
+        }
+    }
+}
+
+fn public_failure(error: &AiAdmissionError) -> Value {
+    let code = match error {
+        AiAdmissionError::Denied(reason) => reason.code(),
+        AiAdmissionError::Unavailable(_) => "ai_billing_unavailable",
+    };
+    json!({"error": error.to_string(), "code": code})
+}
+
+#[tokio::test]
+async fn event_admission_failure_returns_terminal_history_for_fenced_finalization() {
+    for failure in failures() {
+        let expected = public_failure(&failure);
+        let admission = Arc::new(Admission::new(vec![Err(failure)]));
+        let runner = Runner::default();
+        let executor = InProcessExecutor::new(
+            Arc::new(Repo::default()),
+            Arc::new(AdmittedScheduledAgentRunner::new(
+                runner.clone(),
+                admission.clone(),
+            )),
+            Arc::new(Live::default()),
+            TaskTracker::new(),
+            CancellationToken::new(),
+        );
+        let run = event_run();
+        let result = executor.execute(&run, std::future::pending()).await;
+        assert_eq!(result.outcome, EventRunOutcome::Failed);
+        let record = result.record.unwrap();
+        assert_eq!(record.action_id, run.action.id.unwrap());
+        assert_eq!(record.start_time, run.started_at);
+        assert!(!record.is_success);
+        assert!(record.resource_id.is_none());
+        assert_eq!(record.result, expected);
+        assert_eq!(runner.preparations.load(Ordering::SeqCst), 0);
+        assert_eq!(runner.calls.load(Ordering::SeqCst), 0);
+        assert!(executor.live_updates.0.lock().unwrap().is_empty());
+        // EventDispatchService owns the atomic queue/history transition and
+        // token-fenced release, even when preparation fails.
+        assert_eq!(executor.repo.claims.load(Ordering::SeqCst), 0);
+        assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 0);
+        assert!(executor.repo.records.lock().unwrap().is_empty());
+        assert_eq!(
+            *admission.calls.lock().unwrap(),
+            vec![(
+                run.action.owner_user().unwrap().clone(),
+                AiFeature::Automation
+            )]
+        );
+    }
 }
 
 #[tokio::test]
