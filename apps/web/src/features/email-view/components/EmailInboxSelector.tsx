@@ -4,11 +4,13 @@ import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon, type UserIconSize } from '@core/component/UserIcon';
 import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
+import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import TrayIcon from '@phosphor/tray.svg';
+import XIcon from '@phosphor/x.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { cn, Dropdown, pressHandlers } from '@ui';
+import { Button, cn, Dropdown, pressHandlers } from '@ui';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 
@@ -100,8 +102,14 @@ export function EmailInboxList(props: { class?: string }) {
 
   return (
     <Show when={selection.visible()}>
-      <ViewSidebar.Nav aria-label="Inboxes" class={props.class}>
-        <div class="flex min-w-0 items-center gap-1 pr-(--sidebar-action-inset)">
+      <ViewSidebar.Nav
+        aria-label="Inboxes"
+        class={cn(
+          'max-h-[calc(4*var(--sidebar-row-height)+3*var(--sidebar-row-gap))] overflow-y-auto overscroll-none touch:max-h-[calc(11rem+3*var(--sidebar-row-gap))]',
+          props.class
+        )}
+      >
+        <div class="flex min-w-0 shrink-0 items-center gap-1 pr-(--sidebar-action-inset)">
           <ViewSidebar.Item
             active={selection.isAll()}
             aria-current={selection.isAll() ? 'true' : undefined}
@@ -109,7 +117,12 @@ export function EmailInboxList(props: { class?: string }) {
             {...pressHandlers(selection.selectAll)}
           >
             <ViewSidebar.Icon>
-              <TrayIcon class="size-4" />
+              <Show
+                when={selection.isAll()}
+                fallback={<TrayIcon class="size-4" />}
+              >
+                <CheckIcon class="size-4 text-accent" />
+              </Show>
             </ViewSidebar.Icon>
             <span class="truncate">All inboxes</span>
           </ViewSidebar.Item>
@@ -133,13 +146,81 @@ export function EmailInboxList(props: { class?: string }) {
               {...pressHandlers(() => selection.select(option.id))}
             >
               <ViewSidebar.Icon>
-                <InboxAvatar option={option} size="sm" class="size-5" />
+                <Show
+                  when={selection.isSelected(option.id)}
+                  fallback={
+                    <InboxAvatar option={option} size="sm" class="size-5" />
+                  }
+                >
+                  <CheckIcon class="size-4 text-accent" />
+                </Show>
               </ViewSidebar.Icon>
               <span class="truncate">{option.label}</span>
             </ViewSidebar.Item>
           )}
         </For>
       </ViewSidebar.Nav>
+    </Show>
+  );
+}
+
+/** Visible account scope beside the list title; clearing restores all inboxes. */
+export function EmailInboxFilter(props: { class?: string }) {
+  const selection = useInboxSelection();
+
+  return (
+    <Show when={selection.selectedOption()}>
+      {(selected) => (
+        <div
+          class={cn(
+            'flex min-w-0 items-baseline gap-1 text-sm text-ink-muted',
+            props.class
+          )}
+        >
+          <span class="shrink-0">from</span>
+          <div class="flex min-w-0 items-center rounded-md border border-edge-muted bg-surface">
+            <Dropdown placement="bottom-start">
+              <Dropdown.Trigger
+                variant="ghost"
+                size="sm"
+                aria-label={`Switch inbox: ${selected().label}`}
+                class="max-w-[min(16rem,30cqw)] rounded-r-none @max-[480px]/view-shell:max-w-[min(16rem,60cqw)]"
+              >
+                <span class="truncate">{selected().label}</span>
+                <CaretDownIcon aria-hidden="true" class="size-3" />
+              </Dropdown.Trigger>
+              <Dropdown.Content class="min-w-56">
+                <Dropdown.Group>
+                  <Dropdown.RadioGroup
+                    value={selected().id}
+                    onChange={selection.select}
+                  >
+                    <For each={selection.options()}>
+                      {(option) => (
+                        <InboxRadioItem
+                          value={option.id}
+                          icon={<InboxAvatar option={option} size="sm" />}
+                        >
+                          {option.label}
+                        </InboxRadioItem>
+                      )}
+                    </For>
+                  </Dropdown.RadioGroup>
+                </Dropdown.Group>
+              </Dropdown.Content>
+            </Dropdown>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              label="Show all inboxes"
+              onClick={selection.selectAll}
+              class="rounded-l-none"
+            >
+              <XIcon aria-hidden="true" class="size-3" />
+            </Button>
+          </div>
+        </div>
+      )}
     </Show>
   );
 }

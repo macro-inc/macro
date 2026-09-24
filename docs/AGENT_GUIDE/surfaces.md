@@ -503,7 +503,15 @@ section when the user can pick one: `All inboxes` or a single address, never sev
 search field, filter menu and preview control. The sidebar lists the inboxes above the
 tabs as plain rows; clicking one shows only that inbox, and the `+` beside
 `All inboxes` (`Connect another account`) starts the add-inbox flow. Sidebar rows,
-`New`, and the panel's back, forward and close controls act on primary-button
+including `All inboxes`, replace their icon with an accent-colored checkmark when
+selected. The inbox section shows up to four rows (including `All inboxes`), then
+scrolls independently so the email tabs stay in place. With many accounts, scroll
+to the last inbox and check that selecting it updates the header filter.
+Selecting one inbox also shows `from [email address] ×` beside the list
+title. The address opens a single-select account menu; `Show all inboxes` (×)
+clears the account selection and removes the filter. Verify that sidebar and menu
+selection stay in sync and that clearing preserves the current tab and other filters.
+Sidebar rows, `New`, and the panel's back, forward and close controls act on primary-button
 mousedown, so the selection changes before the click completes; a normal click
 still works. The sidebar ends with a collapsible `Tags` section (every personal and
 team tag, plus a `New tag` button): clicking a tag opens the `All` tab filtered to
