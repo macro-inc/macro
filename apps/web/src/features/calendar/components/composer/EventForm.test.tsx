@@ -4,7 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCalendarEventFormController } from './create-calendar-event-form-controller';
 import { EventForm } from './EventForm';
-import { defaultEditorInitialValues } from './event-form-model';
+import {
+  defaultEditorInitialValues,
+  type EventEditorConferenceChoice,
+} from './event-form-model';
 
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/MarkdownTextarea',
@@ -61,7 +64,7 @@ afterEach(() => {
 });
 
 function setup(
-  conference = defaultEditorInitialValues().conference,
+  conference: EventEditorConferenceChoice = 'macro',
   macroCallsEnabled = true
 ) {
   const submit = vi.fn();

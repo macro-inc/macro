@@ -1,6 +1,5 @@
 import { getMeetingShareToken, getMeetingUrl } from '@channel/Call/call-link';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { recipientEntityMapper, useContacts } from '@core/user';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
@@ -55,6 +54,7 @@ function editsPrimaryCopy(event: CalendarEvent) {
 interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
   onSaved: () => void;
+  macroCallsEnabled: Accessor<boolean>;
 }
 
 /** Shared create/edit query and mutation orchestration for any editor shell. */
@@ -158,6 +158,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     values: EventEditorSubmitValues
   ) => {
     const meeting = await fetchMeeting(shareToken);
+    if (!props.macroCallsEnabled()) return;
     await updateMeeting.mutateAsync({
       meetingId: meeting.id,
       ...(values.time.kind === 'allDay' ? { clearSchedule: true } : {}),
@@ -181,7 +182,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       values.conferenceChoice === 'macro' &&
       !values.outOfOffice &&
       event?.eventType !== 'out_of_office';
-    const needsCall = ENABLE_CALLS && wantsMacroCall;
+    const needsCall = () => props.macroCallsEnabled() && wantsMacroCall;
     const canManageCall =
       !event ||
       (!event.isReadOnly &&
@@ -240,20 +241,21 @@ export function useEventEditor(props: UseEventEditorProps) {
         }
         calendarSaved = true;
 
-        if (needsCall) {
+        if (needsCall()) {
           const meetingUrl = await createScheduledMeeting(values);
           const linkedContent = attachCalendarMacroCall(
             cleanContent,
             meetingUrl
           );
-          await update.mutateAsync({
-            eventId: created.id,
-            calendarId: created.calendarId ?? values.calendarId,
-            patch: {
-              location: linkedContent.location,
-              description: linkedContent.description,
-            },
-          });
+          if (needsCall())
+            await update.mutateAsync({
+              eventId: created.id,
+              calendarId: created.calendarId ?? values.calendarId,
+              patch: {
+                location: linkedContent.location,
+                description: linkedContent.description,
+              },
+            });
         }
         props.onSaved();
         return;
@@ -315,17 +317,18 @@ export function useEventEditor(props: UseEventEditorProps) {
       await update.mutateAsync(updateArgs);
       calendarSaved = true;
 
-      if (needsCall && canManageCall && !existingMeetingUrl) {
+      if (needsCall() && canManageCall && !existingMeetingUrl) {
         const meetingUrl = await createScheduledMeeting(values);
         const linkedContent = attachCalendarMacroCall(cleanContent, meetingUrl);
-        await update.mutateAsync({
-          ...updateArgs,
-          patch: {
-            location: linkedContent.location,
-            description: linkedContent.description,
-          },
-        });
-      } else if (needsCall && canManageCall && existingMeetingUrl) {
+        if (needsCall())
+          await update.mutateAsync({
+            ...updateArgs,
+            patch: {
+              location: linkedContent.location,
+              description: linkedContent.description,
+            },
+          });
+      } else if (needsCall() && canManageCall && existingMeetingUrl) {
         const shareToken = getMeetingShareToken(existingMeetingUrl);
         if (shareToken) await syncScheduledMeeting(shareToken, values);
       }

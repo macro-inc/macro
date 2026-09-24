@@ -1,4 +1,3 @@
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import PhoneIcon from '@phosphor/phone.svg';
 import type { CreatableBlock } from './types';
@@ -7,6 +6,7 @@ import type { CreatableBlock } from './types';
 export function createCallCommand(actions: {
   navigate: (path: string) => void;
   close: () => void;
+  enabled: () => boolean;
 }): CreatableBlock {
   return {
     label: 'Call',
@@ -16,10 +16,11 @@ export function createCallCommand(actions: {
     blockName: 'call',
     hotkeyToken: TOKENS.create.call,
     hotkey: 'c',
-    enabled: () => ENABLE_CALLS,
+    enabled: actions.enabled,
+    registrationType: 'add',
     runWithInputFocused: false,
     keyDownHandler: () => {
-      if (!ENABLE_CALLS) return false;
+      if (!actions.enabled()) return false;
       actions.close();
       actions.navigate('/meet/new');
       return true;

@@ -1,4 +1,3 @@
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   type CombinedRecipientItem,
   recipientEntityMapper,
@@ -157,7 +156,8 @@ export interface EventEditorSubmitValues {
 }
 
 export function defaultEditorInitialValues(
-  reference = new Date()
+  reference = new Date(),
+  macroCallsEnabled = false
 ): EventEditorInitialValues {
   const { start, end } = defaultEditorTimes(reference);
   return {
@@ -170,7 +170,7 @@ export function defaultEditorInitialValues(
     guests: '',
     location: '',
     description: '',
-    conference: ENABLE_CALLS ? 'macro' : 'none',
+    conference: macroCallsEnabled ? 'macro' : 'none',
     reminders: undefined,
     eventType: undefined,
     outOfOffice: undefined,
@@ -178,12 +178,18 @@ export function defaultEditorInitialValues(
 }
 
 /** Converts a FullCalendar-style selected range into create-event values. */
-export function calendarSelectionToEditorInitialValues(selection: {
-  start: Date;
-  end: Date;
-  allDay: boolean;
-}): EventEditorInitialValues {
-  const initialValues = defaultEditorInitialValues(selection.start);
+export function calendarSelectionToEditorInitialValues(
+  selection: {
+    start: Date;
+    end: Date;
+    allDay: boolean;
+  },
+  macroCallsEnabled = false
+): EventEditorInitialValues {
+  const initialValues = defaultEditorInitialValues(
+    selection.start,
+    macroCallsEnabled
+  );
   if (selection.allDay) {
     return {
       ...initialValues,

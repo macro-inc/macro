@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   updateEvent: vi.fn(),
   updateMeeting: vi.fn(),
   fetchMeeting: vi.fn(),
+  quickCalls: true,
+  quickCallsLoading: false,
 }));
 
 vi.mock('@core/util/webOrigin', () => ({
@@ -81,6 +83,8 @@ const savedEvent: CalendarEvent = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.quickCalls = true;
+  mocks.quickCallsLoading = false;
   mocks.createEvent.mockResolvedValue({
     id: 'event-1',
     calendarId: 'calendar-1',
@@ -94,6 +98,147 @@ beforeEach(() => {
 });
 
 describe('scheduling a Macro call', () => {
+  it.each(['off', 'loading'] as const)(
+    'saves a calendar event without creating a call when the flag is %s',
+    async (state) => {
+      mocks.quickCalls = state === 'loading';
+      mocks.quickCallsLoading = state === 'loading';
+      const saved = vi.fn();
+      const [editor, dispose] = createRoot(
+        (dispose) =>
+          [
+            useEventEditor({
+              macroCallsEnabled: () =>
+                mocks.quickCalls && !mocks.quickCallsLoading,
+              event: () => undefined,
+              onSaved: saved,
+            }),
+            dispose,
+          ] as const
+      );
+      try {
+        await editor.save(values);
+        expect(mocks.createEvent).toHaveBeenCalledOnce();
+        expect(mocks.createMeeting).not.toHaveBeenCalled();
+        expect(mocks.updateMeeting).not.toHaveBeenCalled();
+        expect(saved).toHaveBeenCalledOnce();
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it('rechecks the flag after the calendar save before attaching a call', async () => {
+    mocks.createEvent.mockImplementation(async () => {
+      mocks.quickCalls = false;
+      return { id: 'event-1' };
+    });
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => undefined,
+            onSaved: vi.fn(),
+          }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save(values);
+      expect(mocks.createMeeting).not.toHaveBeenCalled();
+      expect(mocks.updateEvent).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('does not attach an in-flight created call after the flag is disabled', async () => {
+    mocks.createMeeting.mockImplementation(async () => {
+      mocks.quickCalls = false;
+      return { shareToken: '8m8mGwzHqxzYjeIN5-nJRquRbzyTEhGF' };
+    });
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({
+            event: () => undefined,
+            onSaved: vi.fn(),
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+          }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save(values);
+      expect(mocks.createMeeting).toHaveBeenCalledOnce();
+      expect(mocks.updateEvent).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it.each(['off', 'loading'] as const)(
+    'preserves an existing Macro link without syncing it while %s',
+    async (state) => {
+      mocks.quickCalls = state === 'loading';
+      mocks.quickCallsLoading = state === 'loading';
+      const [editor, dispose] = createRoot(
+        (dispose) =>
+          [
+            useEventEditor({
+              macroCallsEnabled: () =>
+                mocks.quickCalls && !mocks.quickCallsLoading,
+              event: () => savedEvent,
+              onSaved: vi.fn(),
+            }),
+            dispose,
+          ] as const
+      );
+      try {
+        await editor.save(values);
+        expect(
+          mocks.updateEvent.mock.lastCall?.[0].patch.description
+        ).toContain(savedEvent.location);
+        expect(mocks.createMeeting).not.toHaveBeenCalled();
+        expect(mocks.updateMeeting).not.toHaveBeenCalled();
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it('does not sync a call if the flag is disabled while fetching its details', async () => {
+    mocks.fetchMeeting.mockImplementation(async () => {
+      mocks.quickCalls = false;
+      return { id: 'meeting-1' };
+    });
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({
+            event: () => savedEvent,
+            onSaved: vi.fn(),
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+          }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save(values);
+      expect(mocks.fetchMeeting).toHaveBeenCalledOnce();
+      expect(mocks.updateMeeting).not.toHaveBeenCalled();
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toContain(
+        savedEvent.location
+      );
+    } finally {
+      dispose();
+    }
+  });
+
   it.each(['none', 'macro'] as const)(
     'clears legacy provider conferencing when %s is selected on an event carrying both links',
     async (conferenceChoice) => {
@@ -105,7 +250,12 @@ describe('scheduling a Macro call', () => {
       const [editor, dispose] = createRoot(
         (dispose) =>
           [
-            useEventEditor({ event: () => event, onSaved: vi.fn() }),
+            useEventEditor({
+              macroCallsEnabled: () =>
+                mocks.quickCalls && !mocks.quickCallsLoading,
+              event: () => event,
+              onSaved: vi.fn(),
+            }),
             dispose,
           ] as const
       );
@@ -129,7 +279,12 @@ describe('scheduling a Macro call', () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => event, onSaved: vi.fn() }),
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => event,
+            onSaved: vi.fn(),
+          }),
           dispose,
         ] as const
     );
@@ -159,7 +314,12 @@ describe('scheduling a Macro call', () => {
       const [editor, dispose] = createRoot(
         (dispose) =>
           [
-            useEventEditor({ event: () => undefined, onSaved: saved }),
+            useEventEditor({
+              macroCallsEnabled: () =>
+                mocks.quickCalls && !mocks.quickCallsLoading,
+              event: () => undefined,
+              onSaved: saved,
+            }),
             dispose,
           ] as const
       );
@@ -194,7 +354,12 @@ describe('scheduling a Macro call', () => {
       const [editor, dispose] = createRoot(
         (dispose) =>
           [
-            useEventEditor({ event: () => event, onSaved: vi.fn() }),
+            useEventEditor({
+              macroCallsEnabled: () =>
+                mocks.quickCalls && !mocks.quickCallsLoading,
+              event: () => event,
+              onSaved: vi.fn(),
+            }),
             dispose,
           ] as const
       );
@@ -228,7 +393,12 @@ describe('scheduling a Macro call', () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => event, onSaved: vi.fn() }),
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => event,
+            onSaved: vi.fn(),
+          }),
           dispose,
         ] as const
     );
@@ -246,38 +416,59 @@ describe('scheduling a Macro call', () => {
     }
   });
 
-  it('respects switching to no link after a failed Macro attachment', async () => {
-    mocks.updateEvent.mockRejectedValueOnce(new Error('Update unavailable'));
-    const saved = vi.fn();
-    const [editor, dispose] = createRoot(
-      (dispose) =>
-        [
-          useEventEditor({ event: () => undefined, onSaved: saved }),
-          dispose,
-        ] as const
-    );
-    try {
-      await editor.save(values);
-      expect(editor.saveError()).toBeDefined();
-      await editor.save({ ...values, conferenceChoice: 'none' });
-      expect(mocks.createEvent).toHaveBeenCalledOnce();
-      expect(mocks.createMeeting).toHaveBeenCalledOnce();
-      expect(mocks.updateMeeting).not.toHaveBeenCalled();
-      expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toBe(
-        values.description
+  it.each(['none', 'disabled'] as const)(
+    'saves edited event details after failed attachment when switching to %s',
+    async (choice) => {
+      mocks.updateEvent.mockRejectedValueOnce(new Error('Update unavailable'));
+      const saved = vi.fn();
+      const [editor, dispose] = createRoot(
+        (dispose) =>
+          [
+            useEventEditor({
+              macroCallsEnabled: () =>
+                mocks.quickCalls && !mocks.quickCallsLoading,
+              event: () => undefined,
+              onSaved: saved,
+            }),
+            dispose,
+          ] as const
       );
-      expect(editor.saveError()).toBeUndefined();
-      expect(saved).toHaveBeenCalledOnce();
-    } finally {
-      dispose();
+      try {
+        await editor.save(values);
+        expect(editor.saveError()).toBeDefined();
+        if (choice === 'disabled') mocks.quickCalls = false;
+        await editor.save({
+          ...values,
+          title: 'Updated planning',
+          conferenceChoice: choice === 'none' ? 'none' : 'macro',
+        });
+        expect(mocks.createEvent).toHaveBeenCalledOnce();
+        expect(mocks.createMeeting).toHaveBeenCalledOnce();
+        expect(mocks.updateMeeting).not.toHaveBeenCalled();
+        expect(mocks.updateEvent.mock.lastCall?.[0].patch.title).toBe(
+          'Updated planning'
+        );
+        expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toBe(
+          values.description
+        );
+        expect(editor.saveError()).toBeUndefined();
+        expect(saved).toHaveBeenCalledOnce();
+      } finally {
+        dispose();
+      }
     }
-  });
+  );
 
   it('keeps an all-day call untimed instead of inventing local-midnight times', async () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => undefined, onSaved: vi.fn() }),
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => undefined,
+            onSaved: vi.fn(),
+          }),
           dispose,
         ] as const
     );
@@ -304,7 +495,12 @@ describe('scheduling a Macro call', () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => undefined, onSaved: vi.fn() }),
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => undefined,
+            onSaved: vi.fn(),
+          }),
           dispose,
         ] as const
     );
@@ -337,7 +533,12 @@ describe('scheduling a Macro call', () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => event, onSaved: vi.fn() }),
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => event,
+            onSaved: vi.fn(),
+          }),
           dispose,
         ] as const
     );
@@ -359,7 +560,12 @@ describe('scheduling a Macro call', () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => undefined, onSaved: saved }),
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => undefined,
+            onSaved: saved,
+          }),
           dispose,
         ] as const
     );
@@ -396,7 +602,12 @@ describe('scheduling a Macro call', () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => undefined, onSaved: vi.fn() }),
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => undefined,
+            onSaved: vi.fn(),
+          }),
           dispose,
         ] as const
     );
@@ -417,7 +628,12 @@ describe('scheduling a Macro call', () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => undefined, onSaved: saved }),
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => undefined,
+            onSaved: saved,
+          }),
           dispose,
         ] as const
     );
@@ -442,7 +658,12 @@ describe('scheduling a Macro call', () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => undefined, onSaved: saved }),
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => undefined,
+            onSaved: saved,
+          }),
           dispose,
         ] as const
     );
@@ -478,7 +699,12 @@ describe('scheduling a Macro call', () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => undefined, onSaved: vi.fn() }),
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => undefined,
+            onSaved: vi.fn(),
+          }),
           dispose,
         ] as const
     );
@@ -531,7 +757,12 @@ describe('scheduling a Macro call', () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => savedEvent, onSaved: saved }),
+          useEventEditor({
+            macroCallsEnabled: () =>
+              mocks.quickCalls && !mocks.quickCallsLoading,
+            event: () => savedEvent,
+            onSaved: saved,
+          }),
           dispose,
         ] as const
     );

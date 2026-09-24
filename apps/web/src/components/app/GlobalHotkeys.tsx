@@ -22,11 +22,7 @@ import {
 import { useLogout } from '@core/auth/logout';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_CALLS,
-  enableSnippets,
-  LOCAL_ONLY,
-} from '@core/constant/featureFlags';
+import { enableSnippets, LOCAL_ONLY } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -188,7 +184,8 @@ export default function GlobalShortcuts() {
     icon: Plus,
   });
 
-  useCreateCommands().forEach((item) => {
+  const createCommands = useCreateCommands();
+  createCommands.forEach((item) => {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
@@ -214,10 +211,27 @@ export default function GlobalShortcuts() {
   });
 
   registerHotkey({
-    hotkey: ENABLE_CALLS ? 'escape' : ['c', 'escape'],
+    hotkey: 'escape',
     scopeId: CREATE_MENU_COMMAND_SCOPE,
     description: 'Close Create',
     condition: createMenuOpen,
+    keyDownHandler: () => {
+      setCreateMenuOpen(false);
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    hotkey: 'c',
+    scopeId: CREATE_MENU_COMMAND_SCOPE,
+    description: 'Close Create',
+    condition: () =>
+      createMenuOpen() &&
+      !createCommands.some(
+        (item) => item.hotkey === 'c' && (item.enabled?.() ?? true)
+      ),
+    registrationType: 'add',
     keyDownHandler: () => {
       setCreateMenuOpen(false);
       return true;

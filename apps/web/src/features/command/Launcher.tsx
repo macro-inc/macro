@@ -5,6 +5,7 @@ import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
@@ -706,11 +707,13 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
 /** Router-backed commands are bound once in each host's component owner. */
 export function useCreateCommands(): CreatableBlock[] {
   const navigate = useNavigate();
+  const quickCalls = useQuickCallsFlag();
   return [
     ...CREATABLE_BLOCKS,
     createCallCommand({
       navigate,
       close: () => setCreateMenuOpen(false, false),
+      enabled: () => quickCalls().enabled,
     }),
   ];
 }
@@ -819,7 +822,9 @@ type LauncherInnerProps = {
 
 export const LauncherInner = (props: LauncherInnerProps) => {
   const hkGroup = createHotkeyGroup();
-  const availableBlocks = useCreateMenuBlocks(() => props.blocks);
+  const commands = useCreateCommands();
+  const candidates = () => props.blocks ?? commands;
+  const availableBlocks = useCreateMenuBlocks(candidates);
   const sortedBlocks = createMemo(() => sortLauncherBlocks(availableBlocks()));
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchMode = launcherSearchMode;
@@ -849,7 +854,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     item: CreatableBlock | undefined,
     shouldReturnFocus?: boolean
   ) => {
-    if (!item) return false;
+    if (!item || !availableBlocks().includes(item)) return false;
 
     trackLauncherItemUsage(item);
     item.keyDownHandler();
@@ -881,12 +886,15 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     setFocusedIndex(0);
   });
 
-  availableBlocks().forEach((item) => {
+  candidates().forEach((item) => {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
       scopeId: launcherScope,
       description: item.description,
+      condition: () => availableBlocks().includes(item),
+      registrationType: item.registrationType,
+      runWithInputFocused: item.runWithInputFocused,
       keyDownHandler: () => {
         return runLauncherItem(item, false);
       },
@@ -898,6 +906,9 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         hotkey: `shift+${item.hotkey}` as ValidHotkey,
         scopeId: launcherScope,
         description: `${item.description} in new split`,
+        condition: () => availableBlocks().includes(item),
+        registrationType: item.registrationType,
+        runWithInputFocused: item.runWithInputFocused,
         keyDownHandler: () => {
           return runLauncherItem(item);
         },
@@ -905,18 +916,19 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     }
   });
 
-  if (!availableBlocks().some((item) => item.hotkey === 'c')) {
-    registerHotkey({
-      hotkey: 'c',
-      scopeId: launcherScope,
-      description: 'Close Launcher',
-      condition: createMenuOpen,
-      keyDownHandler: () => {
-        setCreateMenuOpen(false);
-        return true;
-      },
-    }).withGroup(hkGroup);
-  }
+  registerHotkey({
+    hotkey: 'c',
+    scopeId: launcherScope,
+    description: 'Close Launcher',
+    condition: () =>
+      createMenuOpen() &&
+      !availableBlocks().some((item) => item.hotkey === 'c'),
+    registrationType: 'add',
+    keyDownHandler: () => {
+      setCreateMenuOpen(false);
+      return true;
+    },
+  }).withGroup(hkGroup);
 
   const navUpHotkey = registerHotkey({
     hotkey: ['arrowup', 'ctrl+k', 'shift+tab'],

@@ -1,11 +1,11 @@
 import { getMeetingPath, getMeetingShareToken } from '@channel/Call/call-link';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { useNavigate } from '@solidjs/router';
 import { Show, Suspense } from 'solid-js';
 import { LiveCallsSidebar } from '../meetings/components/live-calls-sidebar';
 import { useActiveQuickCallsSource } from '../meetings/queries/active-quick-calls';
+import { useQuickCallsFlag } from '../meetings/use-quick-calls-flag';
 
 function ChannelsLiveCalls() {
   const userId = useUserId();
@@ -33,8 +33,9 @@ function ChannelsLiveCalls() {
 
 /** Active quick calls belong to the Chat workspace, outside its conversation tree. */
 export function ChannelsLiveCallsSidebar() {
+  const flag = useQuickCallsFlag();
   return (
-    <Show when={ENABLE_CALLS}>
+    <Show when={!flag().loading && flag().enabled}>
       <Suspense>
         <ChannelsLiveCalls />
       </Suspense>

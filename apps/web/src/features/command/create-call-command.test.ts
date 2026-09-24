@@ -3,24 +3,20 @@ import { registerHotkey, useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { setActiveScope, setPressedKeys } from '@core/hotkey/state';
 import { registerScope, removeScope } from '@core/hotkey/utils';
 import { fireEvent } from '@solidjs/testing-library';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createCallCommand } from './create-call-command';
 
 const flags = vi.hoisted(() => ({ calls: true }));
-vi.mock('@core/constant/featureFlags', () => ({
-  get ENABLE_CALLS() {
-    return flags.calls;
-  },
-}));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 
 const disposers: (() => void)[] = [];
 const scope = 'test-create-call';
 
-function setup() {
+function setup(enabled = () => flags.calls) {
   const actions = { close: vi.fn(), navigate: vi.fn() };
-  const command = createCallCommand(actions);
+  const command = createCallCommand({ ...actions, enabled });
+  const closeWithoutCall = vi.fn(() => true);
   registerScope({
     scopeId: scope,
     parentScopeId: 'global',
@@ -38,9 +34,17 @@ function setup() {
       keyDownHandler: () => true,
     });
     registerHotkey({ ...command, scopeId: scope, condition: command.enabled });
+    registerHotkey({
+      scopeId: scope,
+      hotkey: 'c',
+      description: 'Close Create',
+      registrationType: 'add',
+      condition: () => !enabled(),
+      keyDownHandler: closeWithoutCall,
+    });
   });
   setActiveScope('global');
-  return { ...actions, command };
+  return { ...actions, command, closeWithoutCall };
 }
 
 function pressC(target: Element | Document = document) {
@@ -87,4 +91,21 @@ it('disables both keyboard and direct menu action when calls are unavailable', (
   pressC();
   expect(actions.command.keyDownHandler()).toBe(false);
   expect(actions.navigate).not.toHaveBeenCalled();
+  expect(actions.closeWithoutCall).toHaveBeenCalledOnce();
+});
+
+it('enables C C after the flag resolves and blocks a stale action when revoked', () => {
+  const [enabled, setEnabled] = createSignal(false);
+  const actions = setup(enabled);
+  pressC();
+  pressC();
+  expect(actions.navigate).not.toHaveBeenCalled();
+  setEnabled(true);
+  setActiveScope('global');
+  pressC();
+  pressC();
+  expect(actions.navigate).toHaveBeenCalledExactlyOnceWith('/meet/new');
+  setEnabled(false);
+  expect(actions.command.keyDownHandler()).toBe(false);
+  expect(actions.navigate).toHaveBeenCalledOnce();
 });

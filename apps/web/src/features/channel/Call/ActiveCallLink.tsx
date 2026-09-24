@@ -1,6 +1,7 @@
 import { useCallLinkQuery } from '@queries/call/meetings';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { MeetingLink } from '../../meetings/components/meeting-link';
+import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
 import { useCallContext } from './CallContext';
 import { getMeetingUrl } from './call-link';
 
@@ -80,11 +81,14 @@ function ActiveCallLinkContent() {
 }
 
 export function ActiveCallLink() {
+  const flag = useQuickCallsFlag();
   return (
-    <Suspense
-      fallback={<p class="text-xs text-ink-muted">Loading call link…</p>}
-    >
-      <ActiveCallLinkContent />
-    </Suspense>
+    <Show when={!flag().loading && flag().enabled}>
+      <Suspense
+        fallback={<p class="text-xs text-ink-muted">Loading call link…</p>}
+      >
+        <ActiveCallLinkContent />
+      </Suspense>
+    </Show>
   );
 }

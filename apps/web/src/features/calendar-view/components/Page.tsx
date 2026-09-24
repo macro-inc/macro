@@ -29,6 +29,7 @@ import {
   timeGridScroller,
 } from '@app/features/calendar/utils/time-grid-scroller';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
@@ -217,6 +218,7 @@ export function Page(props: {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
   const openEventComposer = useOpenEventComposer();
+  const quickCalls = useQuickCallsFlag();
   const calendarsQuery = useVisibleCalendarsQuery();
   const firstWritableCalendar = createMemo(() =>
     calendarsQuery.data?.find((calendar) => calendar.isWritable)
@@ -260,7 +262,10 @@ export function Page(props: {
     setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
     openEventComposer({
       initialValues: {
-        ...calendarSelectionToEditorInitialValues(selection),
+        ...calendarSelectionToEditorInitialValues(
+          selection,
+          quickCalls().enabled && !quickCalls().loading
+        ),
         ...(calendar ? { calendarId: calendar.id } : {}),
       },
       onCalendarChange: (_calendarId: string, color: string) =>

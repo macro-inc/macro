@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import type { HotkeyInterceptorContext } from '@core/hotkey/types';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createCallCommand } from '../create-call-command';
 import { SidebarCreateMenu } from './sidebar-create-menu';
@@ -10,18 +10,17 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   close: vi.fn(),
   calls: true,
+  enabled: undefined as (() => boolean) | undefined,
   interceptor: undefined as
     | ((context: HotkeyInterceptorContext) => boolean)
     | undefined,
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  get ENABLE_CALLS() {
-    return mocks.calls;
-  },
-}));
 vi.mock('@app/features/command/Launcher', () => ({
   useCreateMenuBlocks: () => () => {
-    const command = createCallCommand(mocks);
+    const command = createCallCommand({
+      ...mocks,
+      enabled: () => mocks.enabled?.() ?? mocks.calls,
+    });
     return command.enabled?.() ? [command] : [];
   },
 }));
@@ -41,6 +40,7 @@ vi.mock('@ui', async () => ({
 let style: HTMLStyleElement;
 beforeEach(() => {
   mocks.calls = true;
+  mocks.enabled = undefined;
   vi.clearAllMocks();
   style = document.createElement('style');
   style.textContent =
@@ -116,4 +116,15 @@ it('retains C to close and hides Call when calls are disabled', async () => {
   expect(screen.queryByRole('menuitem', { name: 'Call' })).toBeNull();
   expect(intercept('c')).toBe(true);
   expect(mocks.navigate).not.toHaveBeenCalled();
+});
+
+it('adds Call to an open menu after flag loading completes', async () => {
+  const [enabled, setEnabled] = createSignal(false);
+  mocks.enabled = enabled;
+  await openMenu();
+  expect(screen.queryByRole('menuitem', { name: 'Call' })).toBeNull();
+  setEnabled(true);
+  expect(await screen.findByRole('menuitem', { name: 'Call' })).toBeTruthy();
+  expect(intercept('c')).toBe(true);
+  expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith('/meet/new');
 });

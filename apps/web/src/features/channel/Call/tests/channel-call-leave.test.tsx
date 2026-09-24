@@ -26,6 +26,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@service-call/client', () => ({ callServiceClient: mocks }));
+vi.mock('../../../meetings/use-quick-calls-flag', () => ({
+  useQuickCallsFlag: () => () => ({ enabled: false, loading: false }),
+}));
 vi.mock('@service-connection/websocket', () => ({
   createConnectionWebsocketEffect: () => {},
   createConnectionBlockWebsocketEffect: () => {},

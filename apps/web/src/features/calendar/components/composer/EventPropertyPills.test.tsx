@@ -100,6 +100,29 @@ describe('EventComposerGuestsPill', () => {
 });
 
 describe('EventComposerConferencePill', () => {
+  it('offers Macro only after the host flag resolves enabled', async () => {
+    const user = userEvent.setup();
+    const [enabled, setEnabled] = createSignal(false);
+    render(() => (
+      <EventComposerConferencePill
+        value="none"
+        macroCallsEnabled={enabled()}
+        canKeepExisting={false}
+        onChange={vi.fn()}
+      />
+    ));
+    await user.click(
+      screen.getByRole('button', { name: /Video conferencing/ })
+    );
+    expect(screen.queryByRole('option', { name: 'Macro call' })).toBeNull();
+    setEnabled(true);
+    expect(
+      await screen.findByRole('option', { name: 'Macro call' })
+    ).toBeTruthy();
+    setEnabled(false);
+    expect(screen.queryByRole('option', { name: 'Macro call' })).toBeNull();
+  });
+
   it('shows the Macro selection and lets users switch to no link or Google Meet', async () => {
     const user = userEvent.setup();
     render(() => {

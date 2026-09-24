@@ -9,6 +9,7 @@ import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useSidePanel } from '@components/app/side-panel/SidePanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -16,7 +17,6 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
@@ -72,6 +72,7 @@ export function Header() {
   const calendarView = useCalendarView();
   const openEventComposer = useOpenEventComposer();
   const navigate = useNavigate();
+  const quickCalls = useQuickCallsFlag();
   const initialDate = new Date();
   const today = createLocalToday();
 
@@ -170,14 +171,16 @@ export function Header() {
               <PlusIcon class="size-3.5" />
               <span class="@max-[520px]/split-header:hidden">New event</span>
             </Button>
-            <Show when={ENABLE_CALLS}>
+            <Show when={quickCalls().enabled}>
               <Button
                 variant="ghost"
                 size="sm"
                 class="rounded-lg px-2 @max-[520px]/split-header:size-6 @max-[520px]/split-header:p-1 touch:rounded-full"
                 label="New Call"
                 hotkey={TOKENS.create.call}
-                onClick={() => navigate('/meet/new')}
+                onClick={() => {
+                  if (quickCalls().enabled) navigate('/meet/new');
+                }}
               >
                 <PhoneIcon class="size-3.5" />
                 <span class="@max-[520px]/split-header:hidden">New Call</span>

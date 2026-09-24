@@ -3,6 +3,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { getMeetingPath } from '@channel/Call/call-link';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
 import {
@@ -58,11 +59,15 @@ export function CallRecordingSplitHeader(props: {
   const shareCtx = useShareDialogContext();
   const callName = () => record().customName ?? record().channelName ?? 'Call';
   const navigate = useNavigate();
+  const flag = useQuickCallsFlag();
+  const quickCallsEnabled = () => !flag().loading && flag().enabled;
   const meeting = useCallLinkQuery(() =>
-    record().channelId ? undefined : record().callId
+    quickCallsEnabled() && !record().channelId ? record().callId : undefined
   );
   const shareToken = () =>
-    meeting.isSuccess ? meeting.data?.shareToken : undefined;
+    quickCallsEnabled() && meeting.isSuccess
+      ? meeting.data?.shareToken
+      : undefined;
   const canCallAgain = () => Boolean(record().channelId || shareToken());
   const callAgain = () => {
     const channelId = record().channelId;

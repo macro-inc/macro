@@ -7,8 +7,16 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { onCleanup, onMount } from 'solid-js';
-import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest';
+import { createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { MeetingRouter } from './meeting-router';
 
 const lifecycle = vi.hoisted(() => ({
@@ -16,6 +24,11 @@ const lifecycle = vi.hoisted(() => ({
   newCleanup: vi.fn(),
   existingMount: vi.fn(),
   existingCleanup: vi.fn(),
+  flag: () => ({ enabled: true, loading: false }),
+}));
+
+vi.mock('./use-quick-calls-flag', () => ({
+  useQuickCallsFlag: () => () => lifecycle.flag(),
 }));
 
 vi.mock('./new-meeting-route', () => ({
@@ -92,11 +105,37 @@ function setup(path: string) {
 
 beforeAll(() => vi.stubGlobal('scrollTo', vi.fn()));
 afterAll(() => vi.unstubAllGlobals());
+beforeEach(() => {
+  lifecycle.flag = () => ({ enabled: true, loading: false });
+});
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
+
+it.each(['/meet/new', '/meet/join/shared-token', '/meet/shared-token'])(
+  'does not mount call setup for %s while the flag is loading or disabled',
+  async (path) => {
+    const [flag, setFlag] = createSignal({ enabled: false, loading: true });
+    lifecycle.flag = flag;
+    const history = setup(path);
+    expect(screen.getByText('Loading call…')).toBeTruthy();
+    expect(history.get()).toBe(`/app${path}`);
+    expect(lifecycle.newMount).not.toHaveBeenCalled();
+    expect(lifecycle.existingMount).not.toHaveBeenCalled();
+
+    setFlag({ enabled: false, loading: false });
+    expect(screen.getByText('This call is unavailable')).toBeTruthy();
+    expect(lifecycle.newMount).not.toHaveBeenCalled();
+    expect(lifecycle.existingMount).not.toHaveBeenCalled();
+
+    setFlag({ enabled: true, loading: false });
+    await screen.findByText(
+      path === '/meet/new' ? 'Draft owner' : 'Existing owner: shared-token'
+    );
+  }
+);
 
 it('preserves the draft owner through connection and unexpected disconnect', async () => {
   const history = setup('/meet/new');

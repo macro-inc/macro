@@ -5,9 +5,29 @@ import { parseMeetingRoute } from './core/meeting-navigation';
 import { MeetingRouteContent } from './meeting-route';
 import { NewMeetingRoute } from './new-meeting-route';
 import { createMeetingNavigation } from './primitives/meeting-navigation';
+import { useQuickCallsFlag } from './use-quick-calls-flag';
+
+export function MeetingRouter() {
+  const flag = useQuickCallsFlag();
+  return (
+    <Show
+      when={!flag().loading}
+      fallback={<div class="p-6 text-ink-muted">Loading call…</div>}
+    >
+      <Show
+        when={flag().enabled}
+        fallback={
+          <div class="p-6 text-ink-muted">This call is unavailable</div>
+        }
+      >
+        <EnabledMeetingRouter />
+      </Show>
+    </Show>
+  );
+}
 
 /** One matched route keeps media/session ownership alive as its phase changes. */
-export function MeetingRouter() {
+function EnabledMeetingRouter() {
   const location = useLocation();
   const navigate = useNavigate();
   const navigation = createMeetingNavigation({

@@ -701,6 +701,13 @@ that path. Calendar navigation defaults to Day on phones and Week on desktop; th
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
+Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
+the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the
+flag loads or is off, those controls stay hidden and meeting routes do not mount
+call setup. Existing channel calls and the upcoming-events list remain available.
+For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
+
+
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
 Dismissing a changed event still asks before discarding the draft.
@@ -752,7 +759,7 @@ section listing each connected account with a per-account `Enable` (grant calend
 
 `New event` opens the compact composer with All day in the date/time fields.
 The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`
-for new events, defaulting to `Macro call` when calls are enabled. Keeping
+for new events, defaulting to `Macro call` when quick calls are enabled. Keeping
 that selection creates and attaches a Macro call after the event saves. Selecting
 `Google Meet` or `No meeting link` skips the Macro call. Out-of-office entries do
 not create calls. There is no separate call toggle or Scheduled Call menu option.
@@ -826,7 +833,8 @@ byline.
 ## Calls — `/app/component/calls`
 
 Tabs `All` / `Missed` / `Unattended`; `New call` offers `Call a channel or contact`
-and `Manage call links`. Create Quick Calls with `New Call` beside Calendar's
+and, with `enable-quick-calls` enabled, `Manage call links`. Create Quick Calls
+with `New Call` beside Calendar's
 `New event`, or with `Create` → `Call` (`C C`). Scheduled calls are created through
 Calendar and can be shared with people who do not have a Macro account.
 The channel/contact option opens the recipient picker.
@@ -845,6 +853,7 @@ that the failure is caused by an unsupported media format.
 
 ### Call links and guests — `/app/meet/join/:shareToken`
 
+These routes require `enable-quick-calls` for both signed-in users and guests.
 In Calendar, create an event with `Macro call` selected (the default).
 Saving creates the call and includes its link in the invitation;
 the room starts on the first join. Use Calendar to edit the event or invite guests.

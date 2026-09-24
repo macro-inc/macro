@@ -6,8 +6,8 @@ import {
 } from '@app/features/calendar/components/composer/event-form-model';
 import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { onMount } from 'solid-js';
 
@@ -20,10 +20,13 @@ export function EventComposerSplit(props: {
   onSaveSuccess?: () => void;
 }) {
   const panel = useSplitPanelOrThrow();
+  const quickCalls = useQuickCallsFlag();
+  const macroCallsEnabled = () => quickCalls().enabled && !quickCalls().loading;
   const [attachHotkeys] = useHotkeyDOMScope('event-composer', true);
   const close = () => panel.handle.close();
   const editor = useEventEditor({
     event: () => props.event,
+    macroCallsEnabled,
     onSaved: () => {
       props.onSaveSuccess?.();
       close();
@@ -31,11 +34,15 @@ export function EventComposerSplit(props: {
   });
   const isEdit = () => props.event !== undefined;
 
+  const initialValues =
+    editor.initialValues() ??
+    props.initialValues ??
+    defaultEditorInitialValues(new Date(), macroCallsEnabled());
   const controller = createCalendarEventFormController({
     initialValue:
-      editor.initialValues() ??
-      props.initialValues ??
-      defaultEditorInitialValues(),
+      !isEdit() && initialValues.conference === 'macro' && !macroCallsEnabled()
+        ? { ...initialValues, conference: 'none' }
+        : initialValues,
     isEdit: isEdit(),
     calendarOptions: editor.calendarOptions,
     guestOptions: editor.guestOptions,
@@ -52,7 +59,7 @@ export function EventComposerSplit(props: {
     >
       <EventForm
         controller={controller}
-        macroCallsEnabled={ENABLE_CALLS}
+        macroCallsEnabled={macroCallsEnabled()}
         isEdit={isEdit() || editor.eventCreated()}
         saveError={editor.saveError()}
         disabledFields={editor.disabledFields()}

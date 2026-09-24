@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   buildEventTime,
   calendarSelectionToEditorInitialValues,
@@ -6,17 +6,6 @@ import {
   type EventEditorInitialValues,
   eventHasEnded,
 } from './event-form-model';
-
-const featureFlags = vi.hoisted(() => ({ enabled: true }));
-vi.mock('@core/constant/featureFlags', () => ({
-  get ENABLE_CALLS() {
-    return featureFlags.enabled;
-  },
-}));
-
-afterEach(() => {
-  featureFlags.enabled = true;
-});
 
 const NOW = new Date('2026-08-25T12:00:00');
 
@@ -33,19 +22,26 @@ function localMidnight(date: string): string {
 
 describe('new event conferencing', () => {
   it('defaults new events and calendar selections to Macro call', () => {
-    expect(defaultEditorInitialValues(NOW).conference).toBe('macro');
+    expect(defaultEditorInitialValues(NOW, true).conference).toBe('macro');
     expect(
-      calendarSelectionToEditorInitialValues({
-        start: NOW,
-        end: new Date(NOW.getTime() + 60 * 60 * 1000),
-        allDay: false,
-      }).conference
+      calendarSelectionToEditorInitialValues(
+        {
+          start: NOW,
+          end: new Date(NOW.getTime() + 60 * 60 * 1000),
+          allDay: false,
+        },
+        true
+      ).conference
     ).toBe('macro');
   });
 
   it('defaults to no link when calls are unavailable', () => {
-    featureFlags.enabled = false;
     expect(defaultEditorInitialValues(NOW).conference).toBe('none');
+  });
+
+  it('uses the host capability when enabling Macro calls', () => {
+    expect(defaultEditorInitialValues(NOW).conference).toBe('none');
+    expect(defaultEditorInitialValues(NOW, true).conference).toBe('macro');
   });
 });
 

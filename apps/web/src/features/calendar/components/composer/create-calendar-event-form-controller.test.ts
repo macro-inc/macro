@@ -51,7 +51,10 @@ function controllerFor(
   return createRoot((dispose) => {
     disposers.push(dispose);
     return createCalendarEventFormController({
-      initialValue: { ...defaultEditorInitialValues(), ...initialValue },
+      initialValue: {
+        ...defaultEditorInitialValues(new Date(), true),
+        ...initialValue,
+      },
       calendarOptions: () => [
         { id: 'calendar-1', label: 'Calendar', color: '#000000' },
       ],

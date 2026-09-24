@@ -11,7 +11,7 @@ import {
 } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { LiveCallsSidebar } from './components/live-calls-sidebar';
 import type { MeetingInvitation } from './core/meeting-invitations';
@@ -19,6 +19,7 @@ import { IncomingMeetingInvitationsProvider } from './incoming-meeting-invitatio
 import { useActiveQuickCallsSource } from './queries/active-quick-calls';
 
 const mocks = vi.hoisted(() => ({
+  flag: () => ({ enabled: true, loading: false }),
   events: vi.fn(),
   resolutions: vi.fn(),
   publish: vi.fn(),
@@ -27,6 +28,9 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   callerName: vi.fn(),
   getActiveMeetings: vi.fn(),
+}));
+vi.mock('./use-quick-calls-flag', () => ({
+  useQuickCallsFlag: () => mocks.flag,
 }));
 vi.mock('@service-call/client', () => ({ callServiceClient: mocks }));
 vi.mock('@queries/client', async () => {
@@ -60,6 +64,7 @@ vi.mock('@channel/Call/meeting-invitation-resolution', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.flag = () => ({ enabled: true, loading: false });
   mocks.ring.mockReturnValue({ stop: mocks.stop });
   mocks.resolutions.mockReturnValue(vi.fn());
   mocks.callerName.mockResolvedValue('Ada');
@@ -109,7 +114,7 @@ async function invite() {
     invitedAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 30_000).toISOString(),
   };
-  mocks.events.mock.calls[0][0].onInvited(event);
+  mocks.events.mock.calls.at(-1)![0].onInvited(event);
   // Let the caller name resolve without depending on notification permission.
   await Promise.resolve();
   await Promise.resolve();
@@ -269,4 +274,39 @@ it('removes the global notification only when this recipient answers elsewhere',
       'macro|recipient@example.com',
     ],
   });
+});
+
+it('gates quick-call listeners and stops active rings without remounting app content', async () => {
+  const [flag, setFlag] = createSignal({ enabled: true, loading: true });
+  mocks.flag = flag;
+  const input = setup() as HTMLInputElement;
+  fireEvent.input(input, { target: { value: 'Keep my work' } });
+  expect(mocks.events).not.toHaveBeenCalled();
+  expect(mocks.resolutions).not.toHaveBeenCalled();
+  expect(mocks.ring).not.toHaveBeenCalled();
+
+  setFlag({ enabled: false, loading: false });
+  expect(mocks.events).not.toHaveBeenCalled();
+  setFlag({ enabled: true, loading: false });
+  expect(mocks.events).toHaveBeenCalledOnce();
+  const invitation = await invite();
+  const staleListener = mocks.events.mock.calls[0][0];
+  const unsubscribe = mocks.resolutions.mock.results[0].value;
+  expect(mocks.ring).toHaveBeenCalledOnce();
+
+  setFlag({ enabled: false, loading: false });
+  expect(screen.queryByRole('region', { name: 'Incoming calls' })).toBeNull();
+  expect(mocks.stop).toHaveBeenCalledOnce();
+  expect(unsubscribe).toHaveBeenCalledOnce();
+  expect(screen.getByRole('textbox', { name: 'Current work' })).toBe(input);
+  expect(input.value).toBe('Keep my work');
+  staleListener.onInvited(invitation);
+  expect(mocks.ring).toHaveBeenCalledOnce();
+
+  setFlag({ enabled: true, loading: false });
+  expect(mocks.events).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole('region', { name: 'Incoming calls' })).toBeNull();
+  expect(mocks.ring).toHaveBeenCalledOnce();
+  await invite();
+  expect(mocks.ring).toHaveBeenCalledTimes(2);
 });

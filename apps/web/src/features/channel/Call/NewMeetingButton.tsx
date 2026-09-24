@@ -2,10 +2,28 @@ import { ManageMeetingsDialog } from '@app/features/meetings/manage-meetings-dia
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import UsersIcon from '@phosphor/users.svg';
 import VideoCameraIcon from '@phosphor/video-camera.svg';
-import { Dropdown } from '@ui';
+import { Button, Dropdown } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
 
 export function NewMeetingButton(props: { onChannelCall: () => void }) {
+  const flag = useQuickCallsFlag();
+  return (
+    <Show
+      when={!flag().loading && flag().enabled}
+      fallback={
+        <Button variant="accent" size="sm" onClick={props.onChannelCall}>
+          <VideoCameraIcon class="size-3.5" />
+          New call
+        </Button>
+      }
+    >
+      <NewMeetingMenu onChannelCall={props.onChannelCall} />
+    </Show>
+  );
+}
+
+function NewMeetingMenu(props: { onChannelCall: () => void }) {
   const [managing, setManaging] = createSignal(false);
   return (
     <>

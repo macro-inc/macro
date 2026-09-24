@@ -8,16 +8,14 @@ import type {
 import { ChannelsLiveCallsSidebar } from './live-calls-sidebar';
 
 const mocks = vi.hoisted(() => ({
-  enabled: true,
+  flag: () => ({ enabled: true, loading: false }),
   navigate: vi.fn(),
   source: vi.fn(),
   displayName: vi.fn(),
 }));
 
-vi.mock('@core/constant/featureFlags', () => ({
-  get ENABLE_CALLS() {
-    return mocks.enabled;
-  },
+vi.mock('../meetings/use-quick-calls-flag', () => ({
+  useQuickCallsFlag: () => mocks.flag,
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|viewer@example.com',
@@ -41,7 +39,7 @@ const call: ActiveQuickCall = {
 };
 
 beforeEach(() => {
-  mocks.enabled = true;
+  mocks.flag = () => ({ enabled: true, loading: false });
   mocks.navigate.mockReset();
   mocks.source.mockReset();
   mocks.displayName.mockReset();
@@ -65,7 +63,7 @@ function setup() {
 }
 
 it('does not mount the active-call source when calls are disabled', () => {
-  mocks.enabled = false;
+  mocks.flag = () => ({ enabled: false, loading: false });
   setup();
   expect(mocks.source).not.toHaveBeenCalled();
   expect(screen.queryByRole('region', { name: 'Live' })).toBeNull();
@@ -163,4 +161,22 @@ it('isolates a pending active-call source from the surrounding navigation', asyn
   resolve([call]);
   expect(await screen.findByRole('heading', { name: 'Live' })).toBeTruthy();
   expect(screen.getByText('Conversations')).toBeTruthy();
+});
+
+it('mounts discovery only after the remote flag enables and removes it when disabled', () => {
+  const [flag, setFlag] = createSignal({ enabled: true, loading: true });
+  mocks.flag = flag;
+  const { setCalls } = setup();
+  setCalls([call]);
+  expect(mocks.source).not.toHaveBeenCalled();
+  expect(screen.queryByRole('region', { name: 'Live' })).toBeNull();
+
+  setFlag({ enabled: false, loading: false });
+  expect(mocks.source).not.toHaveBeenCalled();
+  setFlag({ enabled: true, loading: false });
+  expect(mocks.source).toHaveBeenCalledOnce();
+  expect(screen.getByRole('region', { name: 'Live' })).toBeTruthy();
+
+  setFlag({ enabled: false, loading: false });
+  expect(screen.queryByRole('region', { name: 'Live' })).toBeNull();
 });

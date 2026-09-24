@@ -1,6 +1,12 @@
 /** @vitest-environment jsdom */
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import type { Accessor, JSX, ParentProps } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  type JSX,
+  type ParentProps,
+} from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CalendarCallsSidePanelSection } from './calendar-call-sidebar';
 
@@ -8,11 +14,13 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   active: vi.fn(),
   callsEnabled: true,
+  enabled: undefined as (() => boolean) | undefined,
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  get ENABLE_CALLS() {
-    return mocks.callsEnabled;
-  },
+vi.mock('../meetings/use-quick-calls-flag', () => ({
+  useQuickCallsFlag: () => () => ({
+    enabled: mocks.enabled?.() ?? mocks.callsEnabled,
+    loading: false,
+  }),
 }));
 vi.mock('@solidjs/router', () => ({ useNavigate: () => mocks.navigate }));
 vi.mock('@core/context/user', () => ({
@@ -29,7 +37,7 @@ vi.mock('../meetings/queries/upcoming-calendar-events', () => ({
 }));
 vi.mock('../meetings/queries/active-quick-calls', () => ({
   useActiveQuickCallsSource: (userId: Accessor<string | undefined>) => {
-    mocks.active(userId());
+    createEffect(() => mocks.active(userId()));
     return {};
   },
 }));
@@ -57,6 +65,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   mocks.callsEnabled = true;
+  mocks.enabled = undefined;
 });
 
 it('keeps creation actions out of Upcoming events', () => {
@@ -73,4 +82,18 @@ it('keeps upcoming events available when calling is disabled', () => {
   expect(screen.getByText('Event list')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'New Call' })).toBeNull();
   expect(mocks.active).toHaveBeenCalledExactlyOnceWith(undefined);
+});
+
+it('enables active quick calls after loading without remounting upcoming events', () => {
+  const [enabled, setEnabled] = createSignal(false);
+  mocks.enabled = enabled;
+  render(() => <CalendarCallsSidePanelSection />);
+  const events = screen.getByText('Event list');
+  expect(mocks.active).toHaveBeenLastCalledWith(undefined);
+  setEnabled(true);
+  expect(mocks.active).toHaveBeenLastCalledWith('macro|self@example.com');
+  expect(screen.getByText('Event list')).toBe(events);
+  setEnabled(false);
+  expect(mocks.active).toHaveBeenLastCalledWith(undefined);
+  expect(screen.getByText('Event list')).toBe(events);
 });
