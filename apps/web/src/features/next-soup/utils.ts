@@ -55,7 +55,7 @@ import {
 } from '@core/dom-selectors';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
-import type { DateValue } from '@core/util/date';
+import { compareDateDesc, type DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
@@ -473,7 +473,8 @@ export type ChannelPreviewSelection = WithNotification<
 >;
 
 export function getChannelEntityTarget(
-  entity: EntityData | ChannelPreviewSelection
+  entity: EntityData | ChannelPreviewSelection,
+  options: { scopeChannelThreads?: boolean } = {}
 ): ChannelClickTarget | undefined {
   if (
     entity.type !== 'channel' &&
@@ -502,10 +503,13 @@ export function getChannelEntityTarget(
 
   if (!isWithNotification(entity)) return fallback;
 
-  const scoped = scopeChannelNotificationsForEntity(
-    entity,
-    entity.notifications?.() ?? []
-  );
+  const notifications = entity.notifications?.() ?? [];
+  const scoped =
+    options.scopeChannelThreads === false
+      ? [...notifications].sort((a, b) =>
+          compareDateDesc(a.created_at, b.created_at)
+        )
+      : scopeChannelNotificationsForEntity(entity, notifications);
   for (const notification of scoped) {
     // For a whole-`channel` row, ignore notifications you have already read:
     // the row stands for the entire channel, so once read it should open at

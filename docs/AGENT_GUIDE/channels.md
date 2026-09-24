@@ -493,6 +493,13 @@ and return to the list: its top-level notifications should be read, including
 ones older than the global notification feed's loaded page. Notifications for
 separate thread stacks remain unread until that thread is opened.
 
+On desktop, each click on a conversation in the Chat rail opens its most recent
+currently unread notification, including replies in threads. Read notifications
+are not retained as click targets: once a channel has no unread
+notifications, clicking it opens the latest message. Explicit search hits still
+open their matched message. Verify repeated clicks after read-state updates and
+after a new notification arrives; previously read targets must not loop around.
+
 With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread notification ID/state per channel, with a
 500-channel candidate bound and no history, message previews, or metadata. It

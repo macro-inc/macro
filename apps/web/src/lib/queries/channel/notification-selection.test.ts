@@ -22,12 +22,14 @@ const channel = (
 describe('channel selection hydration', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('does not load history for a read channel or a legacy row', async () => {
+  it('returns synchronously for a read channel or a legacy row', () => {
     const legacy = channel(undefined);
-    expect(await hydrateChannelNotificationSelection(legacy)).toBe(legacy);
-    expect(
-      (await hydrateChannelNotificationSelection(channel([]))).notifications?.()
-    ).toEqual([]);
+    expect(hydrateChannelNotificationSelection(legacy)).toBe(legacy);
+    const read = hydrateChannelNotificationSelection(channel([]));
+    expect(read).not.toBeInstanceOf(Promise);
+    if (read instanceof Promise)
+      throw new Error('Unexpected notification fetch');
+    expect(read.notifications?.()).toEqual([]);
     expect(fetchNotifications).not.toHaveBeenCalled();
   });
 

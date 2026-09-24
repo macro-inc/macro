@@ -125,6 +125,7 @@ import { type ChannelEntityTarget, type EntityData, queryKeys } from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
 import {
   type CalendarPreviewSelection,
+  type ChannelPreviewSelection,
   executeMarkEntitiesDone,
   executeMarkEntitiesUndone,
   getChannelEntityTarget,
@@ -319,6 +320,101 @@ const channelThreadRow = (opts?: {
     ...(opts?.target ? { target: opts.target } : {}),
     ...(opts?.notifications ? { notifications: () => opts.notifications } : {}),
   }) as unknown as EntityData;
+
+describe('channel unread clicks', () => {
+  const newer = {
+    ...replyNotification('reply', 'newer', 'thread'),
+    created_at: '2026-09-24T12:00:00Z',
+  };
+  const older = {
+    ...sendNotification('send', 'older'),
+    created_at: '2026-09-23T12:00:00Z',
+  };
+
+  it('reads current unread state on every click without revisiting read targets', () => {
+    let notifications = [older, newer, { ...newer, id: 'mention' }];
+    const row: ChannelPreviewSelection = {
+      type: 'channel',
+      id: 'channel-1',
+      notifications: () => notifications,
+    };
+    const click = () =>
+      getChannelEntityTarget(row, { scopeChannelThreads: false });
+    expect(click()).toEqual({
+      kind: 'message',
+      messageId: 'newer',
+      threadId: 'thread',
+    });
+
+    notifications = [older, asRead(newer), asRead({ ...newer, id: 'mention' })];
+    expect(click()).toEqual({
+      kind: 'message',
+      messageId: 'older',
+      threadId: undefined,
+    });
+
+    notifications = notifications.map(asRead);
+    expect(click()).toEqual({ kind: 'latest' });
+    expect(click()).toEqual({ kind: 'latest' });
+
+    notifications.push({
+      ...older,
+      id: 'incoming',
+      created_at: '2026-09-25T12:00:00Z',
+      notification_metadata: {
+        ...older.notification_metadata,
+        content: {
+          ...older.notification_metadata.content,
+          messageId: 'incoming',
+        },
+      },
+    } as UnifiedNotification);
+    expect(click()).toMatchObject({ kind: 'message', messageId: 'incoming' });
+  });
+
+  it('uses new arrivals immediately while older notifications remain unread', () => {
+    let notifications = [older];
+    const row: ChannelPreviewSelection = {
+      type: 'channel',
+      id: 'channel-1',
+      notifications: () => notifications,
+    };
+    expect(
+      getChannelEntityTarget(row, { scopeChannelThreads: false })
+    ).toMatchObject({ messageId: 'older' });
+    notifications = [older, newer];
+    expect(
+      getChannelEntityTarget(row, { scopeChannelThreads: false })
+    ).toMatchObject({ messageId: 'newer' });
+  });
+
+  it('preserves Home row targets, including an already-read thread reply', () => {
+    const notifications = [
+      asRead({
+        ...replyNotification('read-reply', 'read-newest', 'thread'),
+        created_at: '2026-09-25T12:00:00Z',
+      }),
+      newer,
+      older,
+    ];
+    expect(getChannelEntityTarget(channelRow({ notifications }))).toMatchObject(
+      { messageId: 'older' }
+    );
+    const thread: ChannelPreviewSelection = {
+      type: 'channel_thread',
+      id: 'thread',
+      channelId: 'channel-1',
+      messageId: 'thread',
+      threadId: 'thread',
+      notifications: () => notifications,
+    };
+    expect(getChannelEntityTarget(thread)).toEqual({
+      kind: 'message',
+      messageId: 'read-newest',
+      threadId: 'thread',
+    });
+  });
+});
 
 describe('resolveMarkEntitiesDoneVariables', () => {
   it('uses notifications attached to a GraphQL Soup entity', () => {
