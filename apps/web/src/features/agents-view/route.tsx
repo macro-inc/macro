@@ -9,6 +9,7 @@ import {
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
+import { lazyOnce, preloadWhenIdle } from '@core/lazy-once';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { createRenderEffect, lazy, Show } from 'solid-js';
@@ -19,12 +20,23 @@ import { parseAgentsRoute } from './core/route';
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
 }));
-const AgentsView = lazy(async () => ({
-  default: (await import('./views/AgentsView')).AgentsView,
-}));
 const McpConnections = lazy(async () => ({
   default: (await import('../settings/McpConnections')).McpConnections,
 }));
+
+// Every way into a conversation remounts this view: opening one moves the pane
+// from `agents` to `agents/:id`, and the sidebar rows remount it again on each
+// switch. Solid's `lazy` re-suspends on each of those, and what it suspends to
+// is the app's full-screen loading screen, so the workspace comes back from its
+// chunk instead of swapping in place.
+const AgentsView = lazyOnce(async () => ({
+  default: (await import('./views/AgentsView')).AgentsView,
+}));
+
+// Agents is a primary destination — a rail entry, a hotkey, and a route the app
+// can start on — so fetching it while the user is still reading the page they
+// opened keeps the first visit off that loading screen as well.
+preloadWhenIdle(AgentsView);
 
 function LegacyAgentsView() {
   const user = useUserContext();
