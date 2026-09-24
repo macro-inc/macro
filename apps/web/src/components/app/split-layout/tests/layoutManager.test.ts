@@ -934,6 +934,35 @@ describe('layoutManager', () => {
       dispose();
     });
 
+    it.each([
+      ['/component/preview-empty', '/inbox'],
+      ['/component/non-member-channel', '/inbox'],
+      ['/component/inbox', '/inbox'],
+      ['/component/documents', '/drive'],
+      ['/component/settings', '/settings/account'],
+    ])('upgrades the legacy component URL %s', async (incoming, expected) => {
+      const { location, router, dispose } = ingressRouter(incoming);
+      await router.settled();
+      expect(location.read().pathname).toBe(expected);
+      expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
+    it.each([
+      ['/email/thread-1', '/mail/thread-1'],
+      ['/channel/channel-1', '/channels/channel-1'],
+      ['/task/task-1', '/tasks/task-1'],
+      ['/md/document-1', '/drive/md/document-1'],
+    ])('upgrades the legacy block URL %s', async (incoming, expected) => {
+      const { location, router, dispose } = ingressRouter(incoming);
+      await router.settled();
+      expect(location.read().pathname).toBe(expected);
+      expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
     it('upgrades the legacy Calendar block URL to the preferred period route', async () => {
       localStorage.setItem(
         CALENDAR_PREFERENCES_KEY,
@@ -970,7 +999,7 @@ describe('layoutManager', () => {
         messageId: ['explicit'],
         extra: ['keep'],
       });
-      expect(router.search(channel.id, 'channel-detail')).toEqual({
+      expect(router.search(channel.id, 'channels')).toEqual({
         messageId: ['first', 'last'],
         threadId: ['thread'],
       });
@@ -983,6 +1012,25 @@ describe('layoutManager', () => {
       ).toBe('code');
       expect(location.read().hash).toBe('#focus');
       expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
+    it('migrates legacy channel targets on Inbox preview routes', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/inbox/channel/c1?channel_message_id=first&channel_message_id=last&channel_thread_id=thread'
+      );
+      await router.settled();
+      const split = manager.splits()[0];
+      expect(router.search(split.id, 'channels')).toEqual({
+        messageId: ['first', 'last'],
+        threadId: ['thread'],
+      });
+      expect(
+        new URLSearchParams(location.read().search).getAll(
+          's0.channels.messageId'
+        )
+      ).toEqual(['first', 'last']);
       router.dispose();
       dispose();
     });

@@ -408,12 +408,11 @@ pub trait DocumentContentEventService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Resolve the stored file type and publish a sync-content event. Sync callers
-    /// supply document identity and attribution without interpreting the content.
+    /// supply document identity and editors without interpreting the content.
     fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        actor: Option<String>,
-        on_behalf_of: Option<String>,
+        editors: Vec<crate::domain::events::DocumentSyncEditor>,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }
 
@@ -588,4 +587,19 @@ pub trait DocumentService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
         share: bool,
     ) -> impl Future<Output = Result<DocumentTeamShareResponse, DocumentError>> + Send;
+}
+
+/// Shared editing-session timestamps, independent of document synchronization.
+pub trait EditingActivityStore: Send + Sync {
+    /// Atomically refresh each actor's session for the supplied inactivity window.
+    ///
+    /// Returns one admission flag per activity, in input order. A new session or
+    /// replay of its admitted source event is allowed; subsequent edits refresh
+    /// the inactivity window without producing another activity.
+    fn refresh_editing_sessions(
+        &self,
+        activities: &[activity::Activity],
+        source_event_id: uuid::Uuid,
+        idle: std::time::Duration,
+    ) -> impl Future<Output = Result<Vec<bool>, rootcause::Report>> + Send;
 }

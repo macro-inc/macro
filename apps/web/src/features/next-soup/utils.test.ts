@@ -1,4 +1,8 @@
-import { previewBlockTarget } from '@components/app/previewTarget';
+import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
+import {
+  previewBlockTarget,
+  previewCalendarTarget,
+} from '@components/app/previewTarget';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -34,6 +38,7 @@ const operationMocks = vi.hoisted(() => {
     },
   });
   return {
+    archive: vi.fn(async (): Promise<'committed' | 'queued'> => 'committed'),
     bulkMarkNotificationsAsDone: vi.fn(async () => {}),
     bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
     cancelQueries: vi.fn(async () => {}),
@@ -41,7 +46,9 @@ const operationMocks = vi.hoisted(() => {
       isErr: () => false,
       value: undefined,
     })),
-    invalidateQueries: vi.fn(async () => {}),
+    invalidateQueries: vi.fn(
+      async (_options: { queryKey?: readonly unknown[] }) => {}
+    ),
     invalidateRemindersById: vi.fn(),
     invalidateSoupEntity: vi.fn(async () => {}),
     setReminderCompleted: vi.fn(async () => {}),
@@ -62,6 +69,10 @@ vi.mock('@service-connection/websocket', () => ({
   state: () => 'closed',
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),
+}));
+vi.mock('@queries/email/integration', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/email/integration')>()),
+  archiveEmailThread: operationMocks.archive,
 }));
 vi.mock('@queries/client', () => ({
   queryClient: {
@@ -110,10 +121,12 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
 
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
-import type { ChannelEntityTarget, EntityData } from '@entity';
+import { type ChannelEntityTarget, type EntityData, queryKeys } from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
 import {
+  type CalendarPreviewSelection,
   executeMarkEntitiesDone,
+  executeMarkEntitiesUndone,
   getChannelEntityTarget,
   getDocumentCommentTarget,
   getRowClickFallbackLocation,
@@ -328,6 +341,45 @@ describe('resolveMarkEntitiesDoneVariables', () => {
 });
 
 describe('mark-done orchestration', () => {
+  const invalidatedEmailList = () =>
+    operationMocks.invalidateQueries.mock.calls.some(
+      ([options]) =>
+        JSON.stringify(options.queryKey) === JSON.stringify(queryKeys.all.email)
+    );
+
+  for (const [label, execute] of [
+    ['Done', executeMarkEntitiesDone],
+    ['Undo', executeMarkEntitiesUndone],
+  ] as const) {
+    it(`${label} does not invalidate REST email caches while the archive is queued`, async () => {
+      operationMocks.archive.mockResolvedValueOnce('queued');
+      await execute({ emailIds: ['queued'], notificationIds: [] });
+      expect(invalidatedEmailList()).toBe(false);
+      expect(operationMocks.invalidateSoupEntity).not.toHaveBeenCalled();
+    });
+    it(`${label} still reconciles committed and rejected archive writes`, async () => {
+      await execute({ emailIds: ['committed'], notificationIds: [] });
+      expect(invalidatedEmailList()).toBe(true);
+      operationMocks.invalidateQueries.mockClear();
+      operationMocks.archive.mockRejectedValueOnce(new Error('archive failed'));
+      await expect(
+        execute({ emailIds: ['failed'], notificationIds: [] })
+      ).rejects.toThrow('archive failed');
+      expect(invalidatedEmailList()).toBe(true);
+      expect(operationMocks.invalidateSoupEntity).toHaveBeenCalledWith(
+        'failed'
+      );
+    });
+    it(`${label} defers shared-list refresh for mixed committed/queued writes`, async () => {
+      operationMocks.archive
+        .mockResolvedValueOnce('committed')
+        .mockResolvedValueOnce('queued');
+      await execute({ emailIds: ['committed', 'queued'], notificationIds: [] });
+      expect(invalidatedEmailList()).toBe(false);
+      expect(operationMocks.invalidateSoupEntity).not.toHaveBeenCalled();
+    });
+  }
+
   it('executes entity notification writes directly and returns exact ids', async () => {
     operationMocks.updateNotificationsForEntities.mockResolvedValueOnce([
       { id: 'entity-notification' },
@@ -410,6 +462,49 @@ describe('calendar view navigation', () => {
       }),
       expect.any(Object)
     );
+  });
+
+  it('keeps a recurring reminder on its instance through the Calendar route', () => {
+    const selection = {
+      type: 'calendar_event',
+      id: 'event-1',
+      time: {
+        kind: 'timed',
+        startsAt: '2026-05-18T22:00:00Z',
+        endsAt: '2026-05-18T22:30:00Z',
+      },
+      notifications: () => [
+        {
+          notification_metadata: {
+            tag: 'calendar_event_reminder',
+            content: {
+              eventId: 'event-1',
+              occurrenceKey: '2026-09-23T22:00:00+00:00',
+              startsAt: '2026-09-23T22:00:00Z',
+              endsAt: '2026-09-23T22:30:00Z',
+            },
+          },
+        } as UnifiedNotification,
+      ],
+    } satisfies CalendarPreviewSelection;
+    const target = previewCalendarTarget(selection);
+    expect(target).toEqual({
+      eventId: 'event-1',
+      occurrenceKey: '2026-09-23T22:00:00+00:00',
+      range: createCalendarRange({
+        kind: 'timed',
+        startsAt: '2026-09-23T22:00:00Z',
+        endsAt: '2026-09-23T22:30:00Z',
+      }),
+    });
+    expect(
+      inboxCalendarNavigation(target, 'timeGridWeek')?.search.calendar
+    ).toEqual({
+      eventId: ['event-1'],
+      occurrenceKey: ['2026-09-23T22:00:00+00:00'],
+      startDate: [target.range!.startDate],
+      endDate: [target.range!.endDate],
+    });
   });
 });
 
@@ -529,7 +624,7 @@ describe('Inbox calendar preview navigation', () => {
     ).toEqual({
       params: { period: 'timeGridWeek' },
       search: {
-        'channel-detail': undefined,
+        channels: undefined,
         calendar: {
           eventId: ['event-1'],
           occurrenceKey: ['occurrence-1'],
@@ -554,13 +649,13 @@ describe('Inbox channel preview navigation', () => {
       previewId: 'channel-1',
     });
     expect(result.search).toEqual({
-      'channel-detail': { messageId: ['message-1'], threadId: ['thread-1'] },
+      channels: { messageId: ['message-1'], threadId: ['thread-1'] },
     });
   });
   it('keeps untargeted channels at latest', () => {
     expect(
       inboxPreviewNavigation({ type: 'channel', id: 'channel-1' }).search
-    ).toEqual({ 'channel-detail': undefined });
+    ).toEqual({ channels: undefined });
   });
   it('names markdown subtypes in the path', () => {
     expect(
@@ -921,7 +1016,7 @@ const documentRow = (notifications: UnifiedNotification[]) =>
   }) as unknown as EntityData;
 
 describe('getDocumentCommentTarget', () => {
-  it('targets the newest unread comment notification', () => {
+  it('targets the newest comment notification that is not done, read or not', () => {
     expect(
       getDocumentCommentTarget(
         documentRow([
@@ -941,13 +1036,13 @@ describe('getDocumentCommentTarget', () => {
           }),
         ])
       )?.params
-    ).toEqual({ comment_id: 'comment-newest' });
+    ).toEqual({ comment_id: 'comment-read' });
   });
 
-  it('opens a document normally once its comment notifications are read', () => {
+  it('opens a document normally once its comment notifications are done', () => {
     expect(
       getDocumentCommentTarget(
-        documentRow([commentNotification('n1', 'comment-1', { state: 'seen' })])
+        documentRow([commentNotification('n1', 'comment-1', { state: 'done' })])
       )
     ).toBeUndefined();
   });

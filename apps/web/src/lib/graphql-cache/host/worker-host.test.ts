@@ -26,6 +26,7 @@ import {
   CacheBootstrapExhaustedError,
   COORDINATOR_CONNECT_TIMEOUT_MS,
 } from '../worker/startup';
+import { CacheNavigationError } from './navigation-error';
 import { createWorkerCacheHost } from './worker-host';
 
 const CLIENT_ID = '00000000-0000-4000-8000-000000000007';
@@ -1555,6 +1556,235 @@ describe('createWorkerCacheHost', () => {
     expect(onInitializationError).toHaveBeenCalledOnce();
     finishDrain();
     await draining;
+  });
+
+  it('classifies admitted and late navigation writes consistently', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('write');
+    const args = {
+      query: 'subscription Updates { update }',
+      data: { update: 1 },
+    };
+    const admitted = host.writeQuery(args);
+    const rejected =
+      expect(admitted).rejects.toBeInstanceOf(CacheNavigationError);
+    await vi.waitFor(() => expect(adapter.requests.at(-1)?.kind).toBe('write'));
+    dispatchEvent(new PageTransitionEvent('pagehide'));
+    await rejected;
+    await expect(host.writeQuery(args)).rejects.toBeInstanceOf(
+      CacheNavigationError
+    );
+    dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    await expect(host.currentRevision()).rejects.toBeInstanceOf(
+      CacheNavigationError
+    );
+    expect(adapterFactory).toHaveBeenCalledOnce();
+  });
+
+  it('reconnects the same host repeatedly and retains subscriptions and active query dependencies', async () => {
+    localStorage.setItem('graphql-cache:scope', 'scope-1');
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    const affected = vi.fn();
+    const generations = vi.fn();
+    const changed = vi.fn();
+    const hydrated = vi.fn();
+    const settled = vi.fn();
+    host.onOpsAffected(affected);
+    host.onCacheGenerationChanged(generations);
+    host.onCacheChanged(changed);
+    host.onCacheChanged(hydrated, { includeHydration: true });
+    host.onMutationSettled(settled);
+
+    for (let cycle = 0; cycle < 2; cycle += 1) {
+      await host.readQuery({ opKey: 7, query: 'query Seven { seven }' });
+      await host.readQuery({ opKey: 9, query: 'query Nine { nine }' });
+      const old = requireAdapter();
+      dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      expect(old.dispose).toHaveBeenCalledWith({
+        graceful: false,
+        preserveDatabase: true,
+      });
+      await host.teardown(9);
+      await expect(host.currentRevision()).rejects.toBeInstanceOf(
+        CacheNavigationError
+      );
+      old.terminalError(new Error('late retired transport error'));
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      await host.currentRevision();
+      const replacement = requireAdapter();
+      expect(replacement).not.toBe(old);
+      expect(affected).toHaveBeenLastCalledWith([7]);
+      expect(generations).toHaveBeenLastCalledWith({ storage: 'reset' });
+      expect(host.clientId).toBe(CLIENT_ID);
+      expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
+      expect(replacement.options.scope).toBe('scope-1');
+      old.replace(100);
+      old.terminalError(new Error('late callback after restore'));
+      old.push({ kind: 'cache-changed', revision: INITIAL_CACHE_REVISION });
+      expect(changed).toHaveBeenCalledTimes(cycle);
+      replacement.push({
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+      });
+      replacement.push({
+        kind: 'cache-hydrated',
+        revision: INITIAL_CACHE_REVISION,
+      });
+      replacement.push({
+        kind: 'mutation-settled',
+        settlement: { transactionId: '3', status: 'committed' },
+      });
+      expect(changed).toHaveBeenCalledTimes(cycle + 1);
+      expect(hydrated).toHaveBeenCalledTimes((cycle + 1) * 2);
+      expect(settled).toHaveBeenCalledTimes(cycle + 1);
+    }
+    expect(adapterFactory).toHaveBeenCalledTimes(3);
+    expect(onInitializationError).not.toHaveBeenCalled();
+    host.dispose();
+  });
+
+  it.each(['registration', 'init'] as const)(
+    'restores when pagehide interrupts %s without resurrecting the old attempt',
+    async (phase) => {
+      configureAdapter = (fake) => {
+        if (phase === 'registration')
+          fake.start.mockImplementationOnce(() => new Promise(() => {}));
+        else fake.ignoredKinds.add('init');
+      };
+      const onInitializationError = vi.fn();
+      const host = createWorkerCacheHost({
+        scope: 'scope-1',
+        onInitializationError,
+      });
+      const affected = vi.fn();
+      host.onOpsAffected(affected);
+      const read = host.readQuery({ opKey: 7, query: 'query Seven { seven }' });
+      const rejected =
+        expect(read).rejects.toBeInstanceOf(CacheNavigationError);
+      const old = requireAdapter();
+      if (phase === 'init')
+        await vi.waitFor(() => expect(old.requests).toHaveLength(1));
+      dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      configureAdapter = () => undefined;
+      // No intervening microtask: exercise the old startup's catch/finally racing restore.
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      await rejected;
+      await expect(host.currentRevision()).resolves.toBe(
+        INITIAL_CACHE_REVISION
+      );
+      expect(requireAdapter()).not.toBe(old);
+      expect(affected).toHaveBeenCalledWith([7]);
+      expect(onInitializationError).not.toHaveBeenCalled();
+      expect(adapterFactory).toHaveBeenCalledTimes(2);
+      host.dispose();
+    }
+  );
+
+  it.each([false, true])(
+    'does not resurrect an explicitly disposed host (restore started: %s)',
+    async (restoreStarted) => {
+      const host = createWorkerCacheHost({ scope: 'scope-1' });
+      await host.currentRevision();
+      dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      if (restoreStarted)
+        dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      host.dispose();
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      await expect(host.currentRevision()).rejects.toThrow(
+        'cache worker host was disposed'
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(adapterFactory).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('reports a failed restore through normal initialization fallback', async () => {
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    await host.currentRevision();
+    dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    configureAdapter = (fake) => fake.errors.set('init', 'restore failed');
+    dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    await expect(host.currentRevision()).rejects.toThrow('restore failed');
+    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: 'restore failed' })
+    );
+    host.dispose();
+  });
+
+  it('revalidates reads attempted while suspended instead of counting them as replacement registrations', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const affected = vi.fn();
+    host.onOpsAffected(affected);
+    await host.readQuery({ opKey: 7, query: 'query Seven { seven }' });
+    dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    for (const opKey of [7, 9]) {
+      await expect(
+        host.readQuery({ opKey, query: 'query Value { value }' })
+      ).rejects.toBeInstanceOf(CacheNavigationError);
+    }
+    dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    await host.currentRevision();
+    expect(affected).toHaveBeenCalledWith([7, 9]);
+    host.dispose();
+  });
+
+  it('fences a pre-navigation write waiting to be admitted across immediate restoration', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    const stale = host.writeQuery({
+      query: 'query Value { value }',
+      data: { value: 'stale' },
+    });
+    const rejected = expect(stale).rejects.toBeInstanceOf(CacheNavigationError);
+    dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    await rejected;
+    await host.currentRevision();
+    expect(requireAdapter().requests.some(({ kind }) => kind === 'write')).toBe(
+      false
+    );
+    host.dispose();
+  });
+
+  it('never replays an uncertain enqueue after restoration', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    const old = requireAdapter();
+    old.ignoredKinds.add('enqueue-optimistic-mutation');
+    const mutation = host.enqueueOptimisticMutation(
+      {
+        uuid: '00000000-0000-4000-8000-000000000100',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      },
+      { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
+    );
+    const rejected = expect(mutation).rejects.toMatchObject({
+      errorCode: 'admitted-enqueue-uncertain',
+    });
+    await vi.waitFor(() =>
+      expect(old.requests.at(-1)?.kind).toBe('enqueue-optimistic-mutation')
+    );
+    dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    await rejected;
+    await host.currentRevision();
+    expect(requireAdapter().requests.map(({ kind }) => kind)).toEqual([
+      'init',
+      'current-revision',
+    ]);
+    host.dispose();
   });
 
   it('treats pagehide enqueue as uncertain without quarantining persistent storage', async () => {

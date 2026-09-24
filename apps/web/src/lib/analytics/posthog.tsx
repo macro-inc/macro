@@ -9,6 +9,7 @@ import {
   type JSX,
   onCleanup,
   Show,
+  startTransition,
 } from 'solid-js';
 
 export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
@@ -26,13 +27,18 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
     const [flagsLoaded, setFlagsLoaded] = createSignal(false);
 
     const unsub = analytics.posthog.onFeatureFlags((flags, _, ctx) => {
-      // Order matters: signals propagate synchronously, so flagsLoaded must
-      // only flip after the flag values are in place — the other way around,
-      // flag-off fallbacks fire against the still-empty flag list.
-      if (!ctx?.errorsLoading) {
-        setFeatureFlags(flags);
-      }
-      setFlagsLoaded(true);
+      // Flags usually arrive after first paint and swap flagged subtrees,
+      // often to lazy views. A transition keeps the painted UI until the new
+      // one is ready instead of flashing Suspense fallbacks in between.
+      startTransition(() => {
+        // Order matters: signals propagate synchronously, so flagsLoaded must
+        // only flip after the flag values are in place — the other way around,
+        // flag-off fallbacks fire against the still-empty flag list.
+        if (!ctx?.errorsLoading) {
+          setFeatureFlags(flags);
+        }
+        setFlagsLoaded(true);
+      });
     });
 
     onCleanup(unsub);

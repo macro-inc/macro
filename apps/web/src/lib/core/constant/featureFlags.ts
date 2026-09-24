@@ -107,14 +107,14 @@ export function isFeatureEnabled(flag: Flag): boolean {
 
 /**
  * Switches Inbox, Tasks, and Channels from the current SoupView implementations
- * to the new composable view implementations. Enabled by default in local
- * development; production follows PostHog. Override locally with
- * VITE_ENABLE_NEW_APP_VIEWS=false.
+ * to the new composable view implementations. On everywhere without waiting
+ * for PostHog: a late PostHog answer swaps the app shell after first paint.
+ * Override locally with VITE_ENABLE_NEW_APP_VIEWS=false.
  */
 export const enableNewAppViews = defineFlag({
   key: 'enable-new-app-views',
   env: 'ENABLE_NEW_APP_VIEWS',
-  default: DEV_MODE_ENV || undefined,
+  default: true,
 });
 
 /**

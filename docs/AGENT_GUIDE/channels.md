@@ -157,7 +157,7 @@ opens the session.
 regardless of which harness they use.
 A mention without a connected account creates no session and replies in the thread
 with a **Connect Cursor**, **Connect Codex**, or **Connect Claude** chip. Each chip
-opens Settings → Harness, where all three connection cards are visible. The same
+opens Settings → Agents → Runtimes, where all three connection cards are visible. The same
 chip reads **connected** after setup; mention the bot again to start a session.
 Codex also prompts for a cloud environment when ChatGPT is connected but no
 environment has been saved. New sessions use that environment on
@@ -171,7 +171,7 @@ a configured backend for end-to-end verification.
 Within the Cursor rollout, `@cursor` is offered whether connected or not. A mention from someone with
 no Cursor API key opens no session: the Cursor bot replies in the thread that
 `@cursor` runs on their own account and is not connected yet, followed by a
-**Connect Cursor** chip. Clicking the chip opens Settings → Harness; once a key
+**Connect Cursor** chip. Clicking the chip opens Settings → Agents → Runtimes; once a key
 is saved the same chip reads **Cursor connected** and stops navigating. The
 original mention is not replayed - mention `@cursor` again after connecting.
 
@@ -278,7 +278,8 @@ an incoming selection must not mark the Home item done or edit the thread root.
 Press `Escape` to clear selection; the parent Home shortcut is then available
 again. Typing `e` in the composer or inline editor should still enter text.
 Returning through split navigation restores the saved message position and expanded
-threads. Switching channel tabs currently opens Messages at latest. The `Scroll to bottom` control appears when scrolling down through history;
+threads. Switching channel tabs and returning restores the Messages position,
+expanded threads, and pending reply from when the tab was left. The `Scroll to bottom` control appears when scrolling down through history;
 it returns to the latest page even after opening a link into old history.
 The jump waits for that page to reach the rendered list.
 A newer message navigation cancels a pending jump to latest. Scrolling manually
@@ -315,9 +316,12 @@ records `path` (`catch_up` or `full`) and `reason`
 ## Chat navigation rail
 
 Following a channel mention or browser notification for the conversation already
-shown in Chat activates that workspace and jumps to the targeted message or reply. It keeps
-the existing preview and does not show a **Content already open** toast. The
-same applies to a channel preview in Home; a closed channel opens normally.
+shown in Chat activates that workspace and jumps to the targeted message or reply.
+It keeps the shared channel detail mounted and does not show a **Content already open**
+toast. The same applies to a channel preview in Home; a closed channel opens normally.
+In Chat, the detail uses the shared channel top bar with Messages, Attachments,
+Participants, and Calls tabs (when calls are enabled). A message target switches
+back to Messages; changing unread notifications does not restart navigation.
 
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
 **Show navigation** (the hamburger) immediately before the conversation title,
@@ -331,7 +335,7 @@ On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section and the
 independently paginated `Channels` and `DMs` sections. Favorites appears when
 the user has channel favorites and only lists channels. Channel favorites open
-in the channel preview. Shift-clicking a favorite, channel, or DM opens that
+in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead.
 
 ### Channel labels
@@ -568,6 +572,13 @@ appears while a call is in progress. `Ask Macro` opens a new chat pane with the 
 already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
 `...` drawer instead. Clicking the radio input can time out — click the adjacent label text
 instead.
+
+In the Chat workspace — and wherever a channel opens inline inside another
+view's detail stack (a channel mention followed from the email view, say) — the
+conversation renders an inline detail whose top bar holds the channel avatar
+and name, the same tab strip, live viewer avatars, and the `Call` and
+`Ask Macro` buttons. The title `...` menu (rename, channel picture) is not
+offered there; open the channel as a split (shift-click a rail row) to use it.
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and

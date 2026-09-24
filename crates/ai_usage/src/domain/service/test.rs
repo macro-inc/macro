@@ -98,6 +98,18 @@ fn system_user_is_valid() {
     assert_eq!(SYSTEM_USER_ID.as_ref(), "macro|ai-system@macro.com");
 }
 
+#[test]
+fn normalize_model_id_strips_provider_prefix() {
+    assert_eq!(
+        normalize_model_id("anthropic/claude-opus-5"),
+        "claude-opus-5"
+    );
+    assert_eq!(normalize_model_id("openai/gpt-5.6"), "gpt-5.6");
+    assert_eq!(normalize_model_id("claude-haiku-4-5"), "claude-haiku-4-5");
+    // A trailing slash is not a provider prefix; leave the id alone.
+    assert_eq!(normalize_model_id("weird/"), "weird/");
+}
+
 #[derive(Clone, Default)]
 struct FakeRepo {
     pricing: std::sync::Arc<std::sync::Mutex<Option<ModelPricing>>>,

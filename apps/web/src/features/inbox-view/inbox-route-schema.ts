@@ -1,4 +1,4 @@
-import { CHANNEL_DETAIL_SEARCH_NAMESPACE } from '@app/features/channels-view/channels-route';
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { createSearchParamsCodec } from '@app/lib/split-router';
 import {
   type BlockAlias,
@@ -56,6 +56,6 @@ export const inboxDocumentSearchCodec =
 
 /** Search the inline Home item owns; the channel namespace is shared with the channels view. */
 export const INBOX_PREVIEW_SEARCH_NAMESPACES = [
-  CHANNEL_DETAIL_SEARCH_NAMESPACE,
+  channelsSearch.namespace,
   INBOX_DOCUMENT_SEARCH_NAMESPACE,
 ] as const;

@@ -86,7 +86,7 @@ describe.each(['recent', 'new chat'] as const)('Home %s press', (kind) => {
 });
 
 describe('Home document comment row', () => {
-  const commentNotification = (state: 'unseen' | 'seen') => ({
+  const commentNotification = (state: 'unseen' | 'seen' | 'done') => ({
     id: 'n1',
     entity_id: 'doc-1',
     entity_type: 'document',
@@ -99,7 +99,7 @@ describe('Home document comment row', () => {
     },
   });
 
-  const renderRow = (state: 'unseen' | 'seen') =>
+  const renderRow = (state: 'unseen' | 'seen' | 'done') =>
     render(() => (
       <HomeListEntity
         entity={
@@ -116,13 +116,16 @@ describe('Home document comment row', () => {
       />
     )).container.querySelector<HTMLElement>('[data-home-item]')!;
 
-  it('announces an unread comment mention', () => {
-    expect(renderRow('unseen').textContent).toContain(
-      'Peter mentioned you on Recent chat'
-    );
-  });
+  it.each(['unseen', 'seen'] as const)(
+    'announces the comment mention while %s',
+    (state) => {
+      expect(renderRow(state).textContent).toContain(
+        'Peter mentioned you on Recent chat'
+      );
+    }
+  );
 
-  it('reads as the plain document once the comment is read', () => {
-    expect(renderRow('seen').textContent).not.toContain('mentioned you');
+  it('reads as the plain document once the notification is done', () => {
+    expect(renderRow('done').textContent).not.toContain('mentioned you');
   });
 });

@@ -5,7 +5,7 @@ import {
   calendarPeriodPath,
   calendarSearch,
 } from '@app/features/calendar-view/calendar-url';
-import { channelDetailSearch } from '@app/features/channels-view/channels-route';
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   createSearchParams,
   defineRoute,
@@ -69,7 +69,7 @@ function LegacyInboxView() {
 
 function InboxLegacyRouteView() {
   const params = useParams<InboxDetailParams>();
-  const [channelSearch] = createSearchParams(channelDetailSearch);
+  const [channelSearch] = createSearchParams(channelsSearch);
   const [documentSearch] = createSearchParams(inboxDocumentSearch);
   const [eventSearch] = createSearchParams(calendarSearch);
   const legacyTarget = () => {

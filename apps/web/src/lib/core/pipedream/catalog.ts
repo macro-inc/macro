@@ -37,14 +37,16 @@ export function createPipedreamCatalogSearch(
 
   const query = usePipedreamCatalogQuery(search);
 
-  const entries = (): PipedreamCatalogEntryResponse[] =>
-    (query.data?.pages ?? [])
+  const entries = (): PipedreamCatalogEntryResponse[] => {
+    if (!query.isSuccess) return [];
+    return (query.data?.pages ?? [])
       .flatMap((page) => page.servers)
       .filter(
         (entry) =>
           pipedreamAppAvailableInEnv(entry.app_slug) &&
           !exclude().has(entry.app_slug)
       );
+  };
 
   return { searchInput, onSearchInput, search, query, entries };
 }

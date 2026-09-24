@@ -5,7 +5,7 @@ mod test;
 
 use crate::domain::{
     AiFeature, CompletionUsage, ModelPricing, Price, Result, Usage, UsageAmount, UsageApiParams,
-    UsageError, UsageRepo,
+    UsageError, UsageRepo, normalize_model_id,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
@@ -81,7 +81,7 @@ impl UsageRepo for PgUsageRepo {
             FROM ai_pricing
             WHERE model = $1
             "#,
-            model,
+            normalize_model_id(model),
         )
         .fetch_optional(&self.inner)
         .await?;

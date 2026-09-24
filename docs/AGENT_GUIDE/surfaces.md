@@ -221,8 +221,8 @@ insert older history above already displayed rows. Live actions and refreshes
 can still reorder rows. Short or fully filtered pages continue loading until the list
 fills or there are no more results. A failed
 source shows a retry notice while the other source stays usable. Document typing
-alone is not yet attributed by Activity; Home reflects the actions the existing
-Activity system records.
+starts an Edited activity for that editing session. Human edits
+are attributed to the signed-in editor; agent edits retain their agent attribution.
 
 Calendar reminder rows use the reminder delivery time for Home's date section,
 including on a cold GraphQL load with notification sorting disabled. Verify that
@@ -304,6 +304,17 @@ on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
 ### Read state and trash
 
+In the Email view, Status filters discovery on the server **before pagination**,
+for both the mailbox list and service-backed search. With Unread selected, opening
+or marking an admitted row read keeps its position across refreshes. Separate
+lookups, bounded to 100 already-admitted thread IDs each, omit only the read filter;
+they still enforce the tab, inbox, other facets, and (for search) the search text.
+A snapshot bridges a pending lookup, but a confirmed non-match removes the row,
+so archive/trash cannot be resurrected by retention. Changing the search text,
+filters, tab, inbox, or user resets admission. Check that unread mail is discovered
+even after 100 newer read threads, then verify focus through Mark Read and refresh
+in both list and search, including with more than one loaded page.
+
 With GraphQL Soup enabled, **Mark read/unread** updates the normalized email row
 optimistically. Permanent server errors roll it back; retryable transport failures
 can leave the action in the durable queue. Mark unread sends only the thread ID;
@@ -315,7 +326,29 @@ active flat and grouped lists, including loaded continuation pages. Once replay
 commits (even after a reload), those queries refresh from the server; they should
 not refetch over the optimistic state merely because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
-The GraphQL-disabled REST path is unchanged.
+The GraphQL-disabled REST path is unchanged. With GraphQL enabled, archive-based
+Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
+updates optimistically in the normalized cache, and each reversal is a distinct
+ordered queue entry. The server resolves the thread's owning/delegated inbox;
+no client INBOX-label lookup is needed. Confirmed writes revalidate mounted lists,
+including continuation pages; queued writes retain those descriptors for replay
+without refetching over optimism. Callers preserve the queued disposition and
+skip REST/TanStack email invalidations as well, including Done/Undo batches and
+thread archive replay. Committed writes and failed non-queued batches still
+reconcile. Permanent failures roll back the failed intent.
+Check Signal/Noise removal and All's done indicator, then Undo/Redo, including an
+offline action followed by reconnect. Sent-only threads cannot be unarchived.
+
+The service retains both replica-backed Soup reads and a primary-backed email
+writer. Email mutations and their uncached reply reloads use the primary; ordinary
+GraphQL/REST lists, direct Soup lookups, and realtime Soup hydration use the replica.
+A mutation reply is fresh, but subsequent list refetches are eventually consistent
+and can still return replica-stale read/archive state. Test that boundary separately
+from mutation reply correctness. A post-commit reply-load failure is retryable;
+it must not discard the queued intent. Deploy
+the backend schema containing `setEmailThreadArchived` before this client.
+Browser WASM and native cache builds must include the regenerated schema metadata;
+native offline archive support therefore requires a full app build, not just OTA.
 
 ### Cached Mail filtering
 
@@ -786,6 +819,13 @@ quoted fields, original date timestamps and spreadsheet formula escaping.
 
 ## Activity — `/app/component/activity`
 
+To verify document content activity, keep Activity open in one tab and edit an
+existing document's body in another, without renaming it. The editor's Edited
+entry should arrive for the first edit. Keep typing across multiple saves: the
+activity count must stay unchanged. After five minutes without editing, the next
+edit should add one new event. Reconnecting within that window and opening or
+closing a document without edits must not add an event.
+
 Requires authentication and the `enable-activity-feed` flag. Direct navigation and
 restored splits wait for flags to load; when disabled, they redirect to Home
 (`/app/component/inbox`) without loading the activity feed.
@@ -855,6 +895,17 @@ and prevent dismissal; canceling leaves the underlying data unchanged.
 
 ## Settings — `/app/settings/<section>`
 
+### Email signatures
+
+In Integrations, **Edit signature** beside an owned inbox expands its editor.
+The editor uses the app's background and text colors, including in dark mode;
+explicit colors in signature content are preserved. **Close signature editor**
+(the X) or Escape while focused in that inbox row collapses it and returns focus
+to **Edit signature**. Unsaved edits remain when reopened; closing does not save
+or remove the signature.
+The inbox row's trash icon removes the inbox through the existing confirmation;
+it is separate from the signature editor's close control.
+
 ### Team membership
 
 Team membership has no size cap, including free teams. Invitations and domain
@@ -887,29 +938,59 @@ and split navigation.
 
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
-`x-macro-user-api-key`), `Notifications`, `Billing`,
-`Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
-Workspace → `Team`, `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
+`x-macro-user-api-key`), `Notifications`, `Billing` (current plan card with
+`Manage`; on paid plans an **AI usage** card with the period meter, credit
+balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
+Checkout, and a `Usage billing` toggle with per-period limit pills; an
+`Upgrade`/`Upgrade to Max` card, or a `Switch to Premium` link on Max; on a team
+the plan change moves only the viewer's own seat),
+`Appearance`, `Agents`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
+Workspace → `Team` (members list; on a paid team each row shows the seat's plan,
+and admins/owners change it with the `Seat plan` menu: `Premium` or `Max`,
+prorated at once), `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`),
 `Integrations` (personal Gmail/GitHub accounts), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`, `Harness`;
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`;
 `Log out`.
-`Agents` lists team and private agents with `Create agent` / `Edit <name>` dialogs grouped
+`Agents` unifies agent definitions and runtime configuration in one page, also used by the Agents workspace. Its `Agents` section lists team and private agents. `New agent` / `Edit <name>` open full-page forms grouped
 Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio pair:
 `Use my connected apps` (default; the agent gets whatever the person running it has
 connected) or `Specific apps`, which reveals a `Search connectors` box over the whole
 Pipedream catalog (results are `option` rows; picking one adds it) and a row per picked app
 with a connected / not-connected dot for the *current viewer* plus an inline `Connect`
-that opens the Pipedream Connect flow inside the dialog. Unconnected picks never block
+that opens the Pipedream Connect flow inside the page. Unconnected picks never block
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
 `Connect <app>` chip that opens Agents → Connections for that app. MCP integrations
 are managed on that page, rather than in Settings.
+
+With `pipedream-mcp` enabled, Agents → Connections has `Connected` and `Discover`
+tabs. Connected groups GitHub, Linear, Notion, and Slack tool grants by provider,
+lists other catalog connections alongside them, and puts custom MCP servers in
+a separate section. Discover offers featured providers, a searchable catalog,
+and `Add custom MCP`. Slack discovery retains its development-only gate.
+Provider Back returns to the tab that opened it; navigation is local to each
+Agents workspace and starts at Connected on a fresh visit.
+Provider and custom-server More menus contain Disable, Reconnect, and Disconnect;
+custom servers also offer Rename. Disabled grants show Enable. Unauthenticated
+custom servers show Connect and Remove. Disconnect/Remove require confirmation.
+Adding a custom MCP saves its name and URL; Connect on its row starts OAuth.
+An agent reply's `Connect <app>` chip still starts that app's connection flow.
+Cursor stays in Agents → Runtimes with its API key and default model controls; it is not
+featured or offered in the Connections catalog. Personal Gmail and GitHub account
+links remain in Settings → Integrations. The native-only Connections page remains
+available when `pipedream-mcp` is disabled.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
-`Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
+`Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
+`Instructions` field is a Lexical contenteditable textbox, not a textarea. It
+supports Markdown headings, lists, emphasis, code, links, and the normal `@`
+mention picker; select text to open the formatting menu. Saved instructions
+retain mention identities using the shared editor's Markdown format and reopen
+with their formatting intact. Enter adds a new paragraph; use `Create agent` or
+`Save changes` to submit. The form also includes runtime selectors.
 The model list is loaded live and independently for Macro Agent, connected Cursor, and every
 registered macrod harness. The selected harness stays selected when the list refreshes.
 A paired macrod connects on startup, so models can load before any agents are bound.
@@ -921,7 +1002,7 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-`Harness` shows Cursor, Claude, Codex, and paired macrod runtimes to every user.
+The `Runtimes` section shows built-in Macro, Cursor, Claude, and Codex configuration, followed by paired macrod runtimes. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 
@@ -936,7 +1017,11 @@ picker or automatic repository selection. Changed selections display **Unsaved
 changes** until the server confirms them. The save button is disabled until an
 environment is selected, and when it matches the saved environment.
 These choices apply to new sessions. **Disconnect** in the Codex row (accessible
-name **Disconnect ChatGPT**) removes the connection. The UI never asks for an
+name **Disconnect ChatGPT**) asks for confirmation before removing the connection.
+Claude, Cursor, and Connections disconnect actions use the same shared confirmation
+dialog (a drawer on mobile); Cancel leaves the connection intact. Claude's row
+keeps its layout while status loads, and sign-in details appear only after Connect.
+The UI never asks for an
 OAuth token.
 
 The Codex section and its auth/config requests were exercised in Chromium with

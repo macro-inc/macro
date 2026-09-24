@@ -4968,8 +4968,7 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_descrip
  */
 export type DocumentSyncContentUpdatedMetadata = {
     /**
-     * Who mechanically changed the content. Absent on events published
-     * before attribution, and on human-only collab sessions.
+     * Legacy single-editor attribution; newer Sync callers send `editors`.
      */
     actor?: string | null;
     /**
@@ -4981,9 +4980,24 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
+     * Distinct editors since the preceding snapshot notification.
+     */
+    editors?: Array<DocumentSyncEditor>;
+    /**
      * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
+    on_behalf_of?: null | MacroUserIdStr;
+};
+
+/**
+ * An editor reported by Sync from an authenticated session.
+ */
+export type DocumentSyncEditor = {
+    /**
+     * User or bot that performed the edit.
+     */
+    actor: string;
     on_behalf_of?: null | MacroUserIdStr;
 };
 

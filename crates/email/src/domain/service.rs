@@ -332,6 +332,16 @@ where
         self.mark_thread_seen_impl(macro_id, thread_id).await
     }
 
+    async fn set_thread_archived(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        archived: bool,
+    ) -> Result<(), EmailErr> {
+        self.set_thread_archived_impl(macro_id, thread_id, archived)
+            .await
+    }
+
     async fn mark_thread_unread(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,

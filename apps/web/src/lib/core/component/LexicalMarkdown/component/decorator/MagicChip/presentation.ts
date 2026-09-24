@@ -6,7 +6,7 @@ import type {
   PendingInteraction,
   ToolName,
 } from '@service-agent-fold/generated/types';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 
 /** The tool's own name, without its MCP server namespace. */
 function toolLabel(name: ToolName): string {
@@ -275,6 +275,14 @@ function turnEndedActivity(
         busy: false,
       }))
       .with({ kind: 'other' }, ({ reason }) => ({ label: reason, busy: false }))
+      // A failure the runtime wrote in the person's terms — a spent Cursor
+      // budget — is shown in those terms; the link lives in the session,
+      // which the chip opens.
+      .with({ kind: 'failed', notice: P.nonNullable }, ({ notice }) => ({
+        label: notice.title,
+        detail: notice.body,
+        busy: false,
+      }))
       // The runtime errored the prompt. The label says that much; the
       // runtime's own message goes in the detail line, because some of these
       // are the user's to act on — a repository Cursor cannot reach, say.

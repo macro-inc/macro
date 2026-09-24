@@ -331,6 +331,7 @@ body.tauri-ios {
   --color-composer-action: var(--color-ink);
   --color-composer-action-ink: var(--color-panel);
   --color-code-buffer: color-mix(in srgb, var(--color-surface-0) 60%, var(--color-surface-1));
+  --color-inline-code: color-mix(in oklch, var(--color-ink) 5%, transparent);
   --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
   --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
   --color-selected: color-mix(in oklch, var(--color-accent) 8%, transparent);

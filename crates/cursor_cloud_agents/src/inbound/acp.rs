@@ -28,6 +28,7 @@
 #[cfg(test)]
 mod test;
 
+use crate::domain::error::SessionError;
 use crate::domain::model::{McpHeader, McpServer, McpTransport};
 use crate::domain::model_options::{MODEL_CONFIG_ID, cursor_model_config_options};
 use crate::domain::ports::{
@@ -451,8 +452,7 @@ where
                             }
                             Err(error) => {
                                 tracing::error!(error = %error, "prompt failed");
-                                let _ = responder
-                                    .respond_with_error(AcpError::new(-32603, error.to_string()));
+                                let _ = responder.respond_with_error(prompt_error(&error));
                             }
                         }
                         Ok(())
@@ -637,6 +637,24 @@ async fn advertise_slash_commands(notifier: &AcpNotifier, session: &SessionId) {
         .await
     {
         tracing::warn!(error = %error, "could not advertise cursor slash commands");
+    }
+}
+
+/// The `session/prompt` error for a failed turn.
+///
+/// The message is the error's `Display` - one sentence for a refusal, the
+/// report for anything else. A refusal the person can act on also carries
+/// its notice as the error's `data`, which is where the fold picks it up.
+fn prompt_error(error: &SessionError) -> AcpError {
+    let acp_error = AcpError::new(-32603, error.to_string());
+    match error {
+        SessionError::Rejected(refusal) => acp_error.data(
+            refusal
+                .notice
+                .as_ref()
+                .and_then(|notice| serde_json::to_value(notice).ok()),
+        ),
+        _ => acp_error,
     }
 }
 

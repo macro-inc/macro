@@ -70,6 +70,7 @@ outbound = [
   "dep:entity_access_db_utils",
   "dep:entity_registry_db_utils",
   "dep:hex",
+  "dep:redis",
   "dep:share_permission_db_utils",
   "dep:sqlx",
   "ports",
@@ -149,6 +150,7 @@ model_owner = { path = "../model_owner" }
 futures = { workspace = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 hex = { workspace = true, optional = true }
+redis = { workspace = true, optional = true, features = ["aio", "tokio-rustls-comp"] }
 sqlx = { workspace = true, optional = true }
 sync_service_client = { path = "../sync_service_client" }
 task_dedup = { path = "../task_dedup", optional = true }

@@ -19,7 +19,7 @@ pub mod outbound;
 pub use domain::{
     AiFeature, CompletionUsage, FeatureUsage, ModelPricing, NoOpUsageRecorder, Price,
     SYSTEM_USER_ID, Usage, UsageAmount, UsageApiParams, UsageContext, UsageEvent, UsageRecorder,
-    UsageRepo, UsageService, UsageSummary,
+    UsageRepo, UsageService, UsageSummary, normalize_model_id,
 };
 
 use std::sync::Arc;

@@ -41,7 +41,7 @@ pub trait DssInternal {
     async fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        attribution: Option<DocumentAttribution>,
+        editors: Vec<DocumentAttribution>,
     ) -> worker::Result<()>;
 }
 
@@ -74,37 +74,46 @@ impl DssInternal for DssInternalClient<'_> {
     async fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        attribution: Option<DocumentAttribution>,
+        editors: Vec<DocumentAttribution>,
     ) -> worker::Result<()> {
         let url = format!(
             "{}/internal/documents/{document_id}/sync-content-updated",
             self.dss_url()?,
         );
-        let body = serde_json::json!({
-            "actor": attribution.as_ref().map(|value| &value.actor),
-            "on_behalf_of": attribution.as_ref().and_then(|value| value.on_behalf_of.as_ref()),
-        });
-        let mut request = Request::new_with_init(
-            &url,
-            RequestInit::new()
-                .with_method(Method::Post)
-                .with_body(Some(body.to_string().into())),
-        )?;
-        request.headers_mut()?.set(
-            MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY,
-            &self.internal_auth_key()?,
-        )?;
-        request
-            .headers_mut()?
-            .set("Content-Type", "application/json")?;
-        let response = Fetch::Request(request).send().await?;
-        if response.status_code() != 200 {
-            return Err(worker::Error::from(format!(
-                "DSS sync-content notification returned {}",
-                response.status_code()
-            )));
+        let mut body = if editors.is_empty() {
+            serde_json::json!({})
+        } else {
+            serde_json::json!({ "editors": editors })
+        };
+        loop {
+            let mut request = Request::new_with_init(
+                &url,
+                RequestInit::new()
+                    .with_method(Method::Post)
+                    .with_body(Some(body.to_string().into())),
+            )?;
+            request.headers_mut()?.set(
+                MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY,
+                &self.internal_auth_key()?,
+            )?;
+            request
+                .headers_mut()?
+                .set("Content-Type", "application/json")?;
+            let response = Fetch::Request(request).send().await?;
+            match response.status_code() {
+                200 => return Ok(()),
+                422 if body.get("editors").is_some() => {
+                    // Older DSS rejects unknown fields. Preserve search during
+                    // mixed-version deployments by dropping optional activity hints.
+                    body = serde_json::json!({});
+                }
+                status => {
+                    return Err(worker::Error::from(format!(
+                        "DSS sync-content notification returned {status}",
+                    )));
+                }
+            }
         }
-        Ok(())
     }
 
     async fn publish_shallow_snapshot(

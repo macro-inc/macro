@@ -21822,7 +21822,7 @@
         "properties": {
           "actor": {
             "type": ["string", "null"],
-            "description": "Who mechanically changed the content. Absent on events published\nbefore attribution, and on human-only collab sessions."
+            "description": "Legacy single-editor attribution; newer Sync callers send `editors`."
           },
           "document_id": {
             "type": "string",
@@ -21831,6 +21831,13 @@
           "document_version_id": {
             "type": ["string", "null"],
             "description": "Version marker for the sync snapshot, when the caller supplies one."
+          },
+          "editors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentSyncEditor"
+            },
+            "description": "Distinct editors since the preceding snapshot notification."
           },
           "file_type": {
             "$ref": "#/components/schemas/FileType",
@@ -21844,6 +21851,28 @@
               {
                 "$ref": "#/components/schemas/MacroUserIdStr",
                 "description": "The user whose feed this edit belongs on, when different from\n[`Self::actor`]."
+              }
+            ]
+          }
+        }
+      },
+      "DocumentSyncEditor": {
+        "type": "object",
+        "description": "An editor reported by Sync from an authenticated session.",
+        "required": ["actor"],
+        "properties": {
+          "actor": {
+            "type": "string",
+            "description": "User or bot that performed the edit."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User represented by an agent, if any."
               }
             ]
           }

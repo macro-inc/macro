@@ -452,7 +452,7 @@ describe('InboxViewProvider route selection', () => {
   it('rebuilds a targeted channel preview from a direct URL', () => {
     const { context } = mountProvider(
       undefined,
-      '/inbox/channel/channel-1?s0.channel-detail.messageId=message-1&s0.channel-detail.threadId=thread-1'
+      '/inbox/channel/channel-1?s0.channels.messageId=message-1&s0.channels.threadId=thread-1'
     );
 
     expect(context.previewTarget()).toEqual({
@@ -588,12 +588,8 @@ describe('InboxViewProvider route selection', () => {
     });
     await router.settled();
     expect(location.read().pathname).toBe('/inbox/channel/channel-1');
-    expect(location.read().search).toContain(
-      's0.channel-detail.messageId=message-1'
-    );
-    expect(location.read().search).toContain(
-      's0.channel-detail.threadId=thread-1'
-    );
+    expect(location.read().search).toContain('s0.channels.messageId=message-1');
+    expect(location.read().search).toContain('s0.channels.threadId=thread-1');
     expect(context.previewTarget()).toMatchObject({
       params: {
         channel_message_id: 'message-1',

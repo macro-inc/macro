@@ -7,8 +7,8 @@ import {
 } from '@app/features/calendar-view/calendar-url';
 import type { CalendarViewTarget } from '@app/features/calendar-view/types';
 import {
-  CHANNEL_DETAIL_SEARCH_NAMESPACE,
-  channelDetailSearchCodec,
+  channelsSearch,
+  channelsSearchCodec,
 } from '@app/features/channels-view/channels-route';
 import type { SerializedSearchParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
@@ -46,7 +46,7 @@ export function inboxDetailSearch(
   } = {}
 ): DetailSearch {
   return {
-    [CHANNEL_DETAIL_SEARCH_NAMESPACE]: detail.channel,
+    [channelsSearch.namespace]: detail.channel,
     [INBOX_DOCUMENT_SEARCH_NAMESPACE]: detail.document,
     [CALENDAR_SEARCH_NAMESPACE]: detail.calendar,
   };
@@ -68,7 +68,7 @@ function documentDetailSearch(
   });
 }
 
-function channelDetailSearch(
+function channelTargetSearch(
   target: PreviewBlockTarget
 ): SerializedSearchParams | undefined {
   if (target.blockType !== 'channel') return;
@@ -77,7 +77,8 @@ function channelDetailSearch(
     const raw = params[key];
     return typeof raw === 'string' ? raw : '';
   };
-  return channelDetailSearchCodec.serialize({
+  return channelsSearchCodec.serialize({
+    ...channelsSearch.defaults,
     messageId: value(CHANNEL_URL_PARAMS.message),
     threadId: value(CHANNEL_URL_PARAMS.thread),
   });
@@ -93,7 +94,7 @@ export function inboxPreviewTargetNavigation(
       previewId: target.blockId,
     },
     search: inboxDetailSearch({
-      channel: channelDetailSearch(target),
+      channel: channelTargetSearch(target),
       document: documentDetailSearch(target),
     }),
   };

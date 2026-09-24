@@ -1,5 +1,16 @@
 # Navigation and App Structure
 
+## Returning from another page
+
+A browser back/forward-cache restore reconnects the GraphQL cache worker and
+live subscriptions in place; it must not reload the app or discard in-memory
+editor state. For lifecycle verification, navigate to another document and Back,
+confirm `pageshow.persisted` is true (otherwise this was a fresh load), then check
+that cached reads, live updates, and the existing editor still work. Runnable
+queued mutations should resume promptly, without waiting for the old poll or
+local retry timer; durable leases and server-retry deadlines still apply.
+Switching tabs or navigating an in-app route is not a back/forward-cache restore.
+
 ## Direct URLs (all under the frontend origin)
 
 | Route | Surface |
@@ -9,11 +20,11 @@
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
 | `/app/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/inbox/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channel-detail.*` and a document comment `sN.document-detail.commentId`; a calendar row renders the Calendar view inline at `/app/inbox/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
+| `/app/inbox/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.document-detail.commentId`; a calendar row renders the Calendar view inline at `/app/inbox/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
 | `/app/channels` | Channels list |
-| `/app/channels/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channel-detail.*` |
+| `/app/channels/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channels.messageId` and `sN.channels.threadId`, in the same namespace as the Channels tab |
 | `/app/drive` | Files (Drive defaults to My Files) |
 | `/app/drive/<recent-or-shared>` | A Drive tab (`/app/drive/tab/<...>` remains a compatibility alias) |
 | `/app/drive/folder/<uuid>` | A Drive folder; breadcrumbs resolve from current accessible folder data |
@@ -421,13 +432,13 @@ Shared Mail restart rules still apply.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
 
-Settings → Agents and Settings → Harness render while their requests are pending.
+Settings → Agents → Agents / Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 
 With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
-Settings → Harness, above Cursor, with the
-Anthropic logo. Settings → Agents selects an agent's harness but does not host
+Settings → Agents → Runtimes, above Cursor, with the
+Anthropic logo. Settings → Agents → Agents selects an agent's runtime but does not host
 Claude's connection form. **Connect Claude** starts authorization and opens sign-in
 on the first click; a fallback link remains if the browser blocks the tab.
 Approve on Claude's page, copy the complete `code#state`, then use **Finish

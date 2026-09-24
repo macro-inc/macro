@@ -3,12 +3,7 @@ import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/util
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { SplitRouter } from '@app/lib/split-router';
-import { channelPreviewTarget } from '@components/app/channelPreviewTarget';
-import {
-  useGlobalBlockOrchestrator,
-  useGlobalNotificationSource,
-} from '@components/app/GlobalAppState';
-import { PreviewPanel } from '@components/app/PreviewPanel';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -26,6 +21,7 @@ import {
   useContext,
 } from 'solid-js';
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
+import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
 import {
@@ -144,8 +140,6 @@ function ChannelsViewRoot() {
 }
 
 export function ChannelDetailRouteView() {
-  const panel = useSplitPanelOrThrow();
-  const orchestrator = useGlobalBlockOrchestrator();
   const { selectedChannel } = useChannelsView();
   const notificationSource = useGlobalNotificationSource();
   const channelId = () => selectedChannel()?.id;
@@ -235,13 +229,7 @@ export function ChannelDetailRouteView() {
           </div>
         }
       >
-        {(channel) => (
-          <PreviewPanel
-            target={channelPreviewTarget(channel())}
-            orchestrator={orchestrator}
-            splitPanelContext={panel}
-          />
-        )}
+        {(channel) => <ChannelDetailView channel={channel()} />}
       </Show>
     </Suspense>
   );

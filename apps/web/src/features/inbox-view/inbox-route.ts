@@ -4,7 +4,7 @@ import {
   type CalendarSearchParams,
   calendarSearchTarget,
 } from '@app/features/calendar-view/calendar-url';
-import type { channelDetailSearch } from '@app/features/channels-view/channels-route';
+import type { channelsSearch } from '@app/features/channels-view/channels-route';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { PreviewBlockTarget } from '@components/app/previewTarget';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
@@ -17,7 +17,10 @@ import type {
 } from './inbox-route-schema';
 
 export type InboxPreviewSearch = {
-  channel: z.infer<typeof channelDetailSearch.schema>;
+  channel: Pick<
+    z.infer<typeof channelsSearch.schema>,
+    'messageId' | 'threadId'
+  >;
   document: z.infer<typeof inboxDocumentSearch.schema>;
 };
 

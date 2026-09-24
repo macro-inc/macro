@@ -3,7 +3,7 @@ import {
   calendarSearchTarget,
   calendarTargetSearch,
 } from '@app/features/calendar-view/calendar-url';
-import { channelDetailSearch } from '@app/features/channels-view/channels-route';
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
 import {
@@ -99,7 +99,7 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
   const userId = useUserId();
   const navigate = useNavigate();
   const routeParams = useRouteParams(inboxPreviewRoute);
-  const [channelSearch] = createSearchParams(channelDetailSearch);
+  const [channelSearch] = createSearchParams(channelsSearch);
   const [documentSearch] = createSearchParams(inboxDocumentSearch);
   const calendarParams = useRouteParams(inboxCalendarRoute);
   const [openCalendarSearch] = createSearchParams(calendarSearch);

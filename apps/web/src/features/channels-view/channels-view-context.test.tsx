@@ -175,18 +175,35 @@ describe('ChannelsViewProvider route selection', () => {
     expect(context.state.mobileTab).toBe('direct_messages');
   });
 
-  it('keeps tab search when entering and leaving inline detail', async () => {
+  it('keeps tab search and clears the message target when leaving detail', async () => {
     const { context, location, router } = mountProvider(
       '/channels?s0.channels.tab=recents'
     );
-    context.setSelectedChannel({ type: 'channel', id: 'c1' });
+    context.setSelectedChannel({
+      type: 'channel',
+      id: 'c1',
+      target: { messageId: 'message-1' },
+    });
     await router.settled();
     expect(location.read().pathname).toBe('/channels/c1');
     expect(location.read().search).toContain('s0.channels.tab=recents');
+    expect(location.read().search).toContain('s0.channels.messageId=message-1');
     context.setSelectedChannel(undefined);
     await router.settled();
     expect(location.read().pathname).toBe('/channels');
-    expect(location.read().search).toContain('s0.channels.tab=recents');
+    expect(location.read().search).toBe('?s0.channels.tab=recents');
+  });
+
+  it('keeps the message target when changing tabs in detail', async () => {
+    const { context, location, router } = mountProvider(
+      '/channels/c1?s0.channels.messageId=m1'
+    );
+    context.setTab('recents');
+    await router.settled();
+    expect(location.read().search).toBe(
+      '?s0.channels.messageId=m1&s0.channels.tab=recents'
+    );
+    expect(context.selectedChannel()?.target).toEqual({ messageId: 'm1' });
   });
 
   it('persists collapsed labels per user and restores them', () => {
@@ -207,7 +224,7 @@ describe('ChannelsViewProvider route selection', () => {
   });
   it('derives accepted selection from a direct detail route', () => {
     const { context } = mountProvider(
-      '/channels/c1?s0.channel-detail.messageId=m1&s0.channel-detail.threadId=t1'
+      '/channels/c1?s0.channels.messageId=m1&s0.channels.threadId=t1'
     );
 
     expect(context.selectedChannel()).toEqual({
@@ -231,13 +248,14 @@ describe('ChannelsViewProvider route selection', () => {
     await router.settled();
     expect(location.read()).toMatchObject({
       pathname: '/channels/c1',
-      search: '?s0.channel-detail.messageId=m1&s0.channel-detail.threadId=t1',
+      search: '?s0.channels.messageId=m1&s0.channels.threadId=t1',
     });
     expect(context.selectedChannel()?.id).toBe('c1');
 
     expect(context.setSelectedChannel(undefined)).toBe(true);
     await router.settled();
     expect(location.read().pathname).toBe('/channels');
+    expect(location.read().search).toBe('');
     expect(context.selectedChannel()).toBeUndefined();
   });
 

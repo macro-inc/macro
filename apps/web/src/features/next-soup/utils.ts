@@ -1,7 +1,10 @@
 import { isListViewID } from '@app/constants/list-views';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
-import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
+import {
+  type CalendarEventTime,
+  createCalendarRange,
+} from '@app/features/calendar-view/calendar-range';
 import {
   calendarFocusedEventSearchKey,
   calendarPath,
@@ -94,6 +97,10 @@ import {
 } from '@notifications';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
+import {
+  archiveEmailThread,
+  type EmailArchiveDisposition,
+} from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
 import { fetchAndCacheThread } from '@queries/email/thread';
 import {
@@ -522,11 +529,9 @@ export function getChannelEntityTarget(
 /**
  * Resolve the comment a document row opens at. A stamped `commentTarget` (the
  * Inbox preview route carries one, since it keeps no notifications) wins;
- * otherwise it is the row's newest unread comment notification, the one the
- * row announces, so opening it lands on that comment exactly like a copied
- * comment link. Read ones are skipped for the same reason as on a
- * whole-`channel` row: once the document looks caught up it should open
- * normally rather than scroll to an old comment.
+ * otherwise it is the comment notification the row stands for (see
+ * `getDocumentCommentNotification`), read or not, so opening it lands on that
+ * comment exactly like a copied comment link.
  */
 export function getDocumentCommentTarget(entity: {
   type: string;
@@ -871,19 +876,28 @@ export function calendarEventLinkTarget(entity: CalendarPreviewSelection): {
   return { eventId: eventId ?? entity.id, occurrenceKey };
 }
 
-/** Build a Calendar view focus target for an event row's occurrence. */
-export function calendarViewTargetForEntity(
-  entity: CalendarPreviewSelection
-): CalendarViewTarget {
+function calendarReminderContent(entity: CalendarPreviewSelection) {
   const notifications = isWithNotification(entity)
     ? (entity.notifications?.() ?? [])
     : [];
   const metadata = notifications
     .map((notification) => notification.notification_metadata)
     .find((candidate) => candidate?.tag === 'calendar_event_reminder');
-  const content =
-    metadata?.tag === 'calendar_event_reminder' ? metadata.content : undefined;
-  const time = content?.startsAt
+  return metadata?.tag === 'calendar_event_reminder'
+    ? metadata.content
+    : undefined;
+}
+
+/**
+ * The time of the instance an event row points at. A reminder names the
+ * instance that is starting, while a recurring row's own time is the series'
+ * first instance.
+ */
+export function calendarEventTimeForEntity(
+  entity: CalendarPreviewSelection
+): CalendarEventTime | undefined {
+  const content = calendarReminderContent(entity);
+  return content?.startsAt
     ? {
         kind: 'timed' as const,
         startsAt: content.startsAt,
@@ -892,6 +906,14 @@ export function calendarViewTargetForEntity(
     : content?.startDate
       ? { kind: 'allDay' as const, startDate: content.startDate }
       : entity.time;
+}
+
+/** Build a Calendar view focus target for an event row's occurrence. */
+export function calendarViewTargetForEntity(
+  entity: CalendarPreviewSelection
+): CalendarViewTarget {
+  const content = calendarReminderContent(entity);
+  const time = calendarEventTimeForEntity(entity);
 
   return {
     eventId: content?.eventId ?? entity.id,
@@ -1076,18 +1098,21 @@ async function _archiveEmail(
     queryClient.setQueryData(key, applyEmailOptimistic(data));
   }
 
+  let disposition: EmailArchiveDisposition | undefined;
   try {
-    await emailClient.flagArchived({ value: options.archive, id });
+    disposition = await archiveEmailThread({ value: options.archive, id });
   } catch (_err) {
     soupTxn.rollback();
     for (const [key, data] of previousEmail) {
       queryClient.setQueryData(key, data);
     }
   } finally {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
-      invalidateSoupEntity(id),
-    ]);
+    if (disposition !== 'queued') {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+        invalidateSoupEntity(id),
+      ]);
+    }
   }
 }
 
@@ -1641,11 +1666,7 @@ export async function executeMarkEntitiesDone(args: {
 
   let authoritativeNotificationIds: string[] = [];
   const results = await Promise.allSettled([
-    ...emailIds.map((id) =>
-      throwOnErr(
-        async () => await emailClient.flagArchived({ value: true, id })
-      )
-    ),
+    ...emailIds.map((id) => archiveEmailThread({ value: true, id })),
     notificationIds.length > 0
       ? bulkMarkNotificationsAsDone(notificationIds)
       : Promise.resolve(),
@@ -1662,6 +1683,11 @@ export async function executeMarkEntitiesDone(args: {
     ...setRemindersCompleted(reminderIds, true),
   ]);
 
+  const hasQueuedEmail = results
+    .slice(0, emailIds.length)
+    .some(
+      (result) => result.status === 'fulfilled' && result.value === 'queued'
+    );
   const rejected = results.find(
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
@@ -1673,9 +1699,13 @@ export async function executeMarkEntitiesDone(args: {
     // them back, so they have to be reconciled too, not just the emails.
     invalidateRemindersById(reminderIds, { refetch: true });
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+      ...(!hasQueuedEmail
+        ? [
+            queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+            ...emailIds.map((id) => invalidateSoupEntity(id)),
+          ]
+        : []),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
-      ...emailIds.map((id) => invalidateSoupEntity(id)),
       ...reminderIds.map((id) => invalidateSoupEntity(id)),
     ]);
     throw rejected.reason ?? new Error('Failed to mark as done');
@@ -1683,15 +1713,21 @@ export async function executeMarkEntitiesDone(args: {
 
   invalidateRemindersById(reminderIds);
   await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.all.email,
-      refetchType: 'none',
-    }),
+    // A shared REST list can contain both committed and queued threads. Do
+    // not fetch its pre-write server state over any queued optimistic row.
+    ...(!hasQueuedEmail
+      ? [
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.all.email,
+            refetchType: 'none',
+          }),
+          ...emailIds.map((id) => invalidateSoupEntity(id)),
+        ]
+      : []),
     queryClient.invalidateQueries({
       queryKey: notificationKeys.user._def,
       refetchType: 'none',
     }),
-    ...emailIds.map((id) => invalidateSoupEntity(id)),
   ]);
 
   return authoritativeNotificationIds;
@@ -1705,7 +1741,7 @@ export async function executeMarkEntitiesUndone(args: {
   emailIds: string[];
   notificationIds: string[];
   reminderIds?: string[];
-}): Promise<void> {
+}): Promise<EmailArchiveDisposition> {
   const { emailIds, notificationIds, reminderIds = [] } = args;
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
@@ -1713,17 +1749,18 @@ export async function executeMarkEntitiesUndone(args: {
   ]);
 
   const results = await Promise.allSettled([
-    ...emailIds.map((id) =>
-      throwOnErr(
-        async () => await emailClient.flagArchived({ value: false, id })
-      )
-    ),
+    ...emailIds.map((id) => archiveEmailThread({ value: false, id })),
     notificationIds.length > 0
       ? bulkMarkNotificationsAsUndone(notificationIds)
       : Promise.resolve(),
     ...setRemindersCompleted(reminderIds, false),
   ]);
 
+  const hasQueuedEmail = results
+    .slice(0, emailIds.length)
+    .some(
+      (result) => result.status === 'fulfilled' && result.value === 'queued'
+    );
   const rejected = results.find(
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
@@ -1735,9 +1772,13 @@ export async function executeMarkEntitiesUndone(args: {
     // unarchived thread would sit there still showing as done.
     invalidateRemindersById(reminderIds, { refetch: true });
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+      ...(!hasQueuedEmail
+        ? [
+            queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+            ...emailIds.map((id) => invalidateSoupEntity(id)),
+          ]
+        : []),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
-      ...emailIds.map((id) => invalidateSoupEntity(id)),
       ...reminderIds.map((id) => invalidateSoupEntity(id)),
     ]);
     throw rejected.reason ?? new Error('Failed to undo');
@@ -1746,21 +1787,26 @@ export async function executeMarkEntitiesUndone(args: {
   invalidateRemindersById(reminderIds);
 
   await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.all.email,
-      refetchType: 'none',
-    }),
+    ...(!hasQueuedEmail
+      ? [
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.all.email,
+            refetchType: 'none',
+          }),
+          // Refetch open thread views only after the unarchive has committed.
+          ...emailIds.map((id) =>
+            queryClient.invalidateQueries({
+              queryKey: emailKeys.threadMessages(id).queryKey,
+            })
+          ),
+        ]
+      : []),
     queryClient.invalidateQueries({
       queryKey: notificationKeys.user._def,
       refetchType: 'none',
     }),
-    // Refetch open thread views so the unarchive restores `inbox_visible`.
-    ...emailIds.map((id) =>
-      queryClient.invalidateQueries({
-        queryKey: emailKeys.threadMessages(id).queryKey,
-      })
-    ),
   ]);
+  return hasQueuedEmail ? 'queued' : 'committed';
 }
 
 import { agentMessageParams } from '@app/features/block-agent/core/search-location';

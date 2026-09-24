@@ -156,6 +156,7 @@ export function PDFPopup(props: PDFPopupProps) {
 
   return (
     <GeneralizedPopup
+      class="z-highlight-menu"
       anchor={{
         ref: props.anchorRef,
         blockId: `${blockId}`,

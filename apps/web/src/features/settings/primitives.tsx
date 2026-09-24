@@ -26,6 +26,8 @@ export const SettingsSheetContext = createContext(false);
  */
 export function SettingsPage(props: {
   title: string;
+  /** Inline subpages need their own heading beneath the mobile sheet chrome. */
+  showTitleInSheet?: boolean;
   /** Optional one-line subtitle; accepts text or inline markup (e.g. a link). */
   description?: JSX.Element;
   /** Right-aligned controls beside the title (e.g. a global toggle). */
@@ -36,7 +38,7 @@ export function SettingsPage(props: {
   return (
     <div
       data-drawer-scroll-body={inSheet ? true : undefined}
-      class="h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children"
+      class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children"
     >
       {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
           scroll content (plus the usual breathing room) so pages scroll under
@@ -46,7 +48,7 @@ export function SettingsPage(props: {
           'mx-auto w-full max-w-[710px]',
           inSheet
             ? '@container px-3 pt-2 pb-[max(24px,var(--mobile-sheet-safe-padding))]'
-            : 'px-10 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]'
+            : 'px-10 pt-14 pb-24 @max-[480px]/settings-page:px-4 @max-[480px]/settings-page:pt-6 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]'
         )}
       >
         {/* Headers are inset by the card's inner padding so the title and
@@ -54,12 +56,12 @@ export function SettingsPage(props: {
             while the cards themselves stay full-width. */}
         <header
           class={cn(
-            'flex items-start justify-between gap-4',
+            'flex items-start justify-between gap-4 @max-[480px]/settings-page:flex-col @max-[480px]/settings-page:gap-3',
             inSheet ? 'px-4' : 'px-6'
           )}
         >
           <div class="flex flex-col gap-1.5 min-w-0">
-            <Show when={!inSheet}>
+            <Show when={!inSheet || props.showTitleInSheet}>
               <h1 class="text-2xl/tight font-semibold text-ink">
                 {props.title}
               </h1>
