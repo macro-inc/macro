@@ -438,6 +438,23 @@ access to the title and property controls.
 
 ## AI edit
 
+Direct **Edit with AI**, dictation and AI projections are quota-exempt: their
+provider cost is retained as telemetry but does not consume allowance or credits.
+Normal document permissions and dictation rate limits still apply. **Ask Macro**
+opens a billable chat, even when asking it to edit this document; Discussion bot
+classification/responses are also independently admitted operations.
+
+Rollout check with a disposable exhausted paid account: run a direct AI edit on
+a disposable document, confirm dictation appends without sending, and verify
+ordinary editing, reading and comments remain available. Then send a doc-scoped
+Ask Macro prompt: expect backend HTTP 402 with a stable quota code, no response
+stream, and no new provider work. Billing unavailability is HTTP 503 instead.
+Check explicit/inferred Discussion invocations using the
+[channel rejection checklist](channels.md#ai-quota-rejection); posting a comment
+can succeed even when its asynchronous AI response is rejected. Do not assume
+these paths open a new purchase dialog. Retry with a fresh request after test
+billing recovery. See the [backend contract](../AI_QUOTA_ENFORCEMENT.md).
+
 1. Click `Edit with AI` (button directly under the editor body).
 2. A focused prompt box appears (placeholder `Describe the edit…`). Type the instruction,
    press Enter (or click `Send`).

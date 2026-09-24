@@ -1,3 +1,5 @@
+pub(crate) mod quota;
+
 use super::*;
 use ai_billing::DenyReason;
 use ai_billing::domain::{AiAdmissionError, AiAdmissionService, UnconfiguredAiAdmissionService};

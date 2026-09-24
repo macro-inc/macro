@@ -5,6 +5,33 @@ use ai_usage::AiFeature;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unavailable_billing_storage_is_503_not_a_purchase_required_response(pool: sqlx::PgPool) {
+    use crate::api::stream::chat_message::test::quota::BillingFixture;
+    use ai_billing::domain::PlanTier;
+
+    let fixture = BillingFixture::personal(pool, PlanTier::Premium).await;
+    fixture.record(&fixture.user, AiFeature::Chat, 16.0).await;
+    fixture
+        .assert_rejected(
+            StatusCode::PAYMENT_REQUIRED,
+            DenyReason::AllowanceExhausted.code(),
+        )
+        .await;
+    fixture.pool.close().await;
+    fixture
+        .assert_rejected(StatusCode::SERVICE_UNAVAILABLE, "ai_billing_unavailable")
+        .await;
+    // Exempt operations do not need a functioning billing store.
+    for feature in ai_billing::domain::QUOTA_EXEMPT_FEATURES {
+        fixture
+            .admission
+            .admit(&fixture.user, feature)
+            .await
+            .unwrap();
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn internal_paid_actor_without_professional_permission_is_admitted_before_either_stage(
     pool: sqlx::PgPool,
 ) {
