@@ -47,7 +47,7 @@ const StatusDot: Component<{ tone: MagicChipTone; busy: boolean }> = (
         class="size-2 shrink-0 rounded-full"
         classList={{
           [TONE_DOT[props.tone]]: true,
-          'magic-chip-dot': props.busy,
+          'animate-pulse motion-reduce:animate-none': props.busy,
         }}
         data-magic-chip-dot={props.tone}
         aria-hidden="true"

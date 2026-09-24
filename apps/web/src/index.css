@@ -1193,27 +1193,7 @@ html[data-touch-device='true'] :is(
   animation: magic-chip-shimmer 1.8s linear infinite;
 }
 
-@keyframes magic-chip-dot {
-  0%,
-  100% {
-    opacity: 0.3;
-    transform: scale(0.65);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.magic-chip-dot {
-  animation: magic-chip-dot 1.8s ease-in-out infinite;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .magic-chip-dot {
-    animation: none;
-  }
-
   .magic-chip-shimmer {
     animation: none;
     background: none;
