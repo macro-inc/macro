@@ -304,13 +304,16 @@ on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
 ### Read state and trash
 
-In the Email view, Status is a client-side admission filter over the paginated
-mailbox source. With Unread selected, opening or marking an admitted row read
-keeps that row in place across refreshes; already-read rows are not admitted.
-Changing the read filter, tab, or inbox resets admission. Archive and trash still
-remove rows through the authoritative source rather than retained row snapshots.
-Verify keyboard focus stays on the same row when marking it read, including with
-more than one loaded page.
+In the Email view, Status filters discovery on the server **before pagination**,
+for both the mailbox list and service-backed search. With Unread selected, opening
+or marking an admitted row read keeps its position across refreshes. Separate
+lookups, bounded to 100 already-admitted thread IDs each, omit only the read filter;
+they still enforce the tab, inbox, other facets, and (for search) the search text.
+A snapshot bridges a pending lookup, but a confirmed non-match removes the row,
+so archive/trash cannot be resurrected by retention. Changing the search text,
+filters, tab, inbox, or user resets admission. Check that unread mail is discovered
+even after 100 newer read threads, then verify focus through Mark Read and refresh
+in both list and search, including with more than one loaded page.
 
 With GraphQL Soup enabled, **Mark read/unread** updates the normalized email row
 optimistically. Permanent server errors roll it back; retryable transport failures
@@ -329,7 +332,10 @@ updates optimistically in the normalized cache, and each reversal is a distinct
 ordered queue entry. The server resolves the thread's owning/delegated inbox;
 no client INBOX-label lookup is needed. Confirmed writes revalidate mounted lists,
 including continuation pages; queued writes retain those descriptors for replay
-without refetching over optimism. Permanent failures roll back the failed intent.
+without refetching over optimism. Callers preserve the queued disposition and
+skip REST/TanStack email invalidations as well, including Done/Undo batches and
+thread archive replay. Committed writes and failed non-queued batches still
+reconcile. Permanent failures roll back the failed intent.
 Check Signal/Noise removal and All's done indicator, then Undo/Redo, including an
 offline action followed by reconnect. Sent-only threads cannot be unarchived.
 

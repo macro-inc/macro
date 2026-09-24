@@ -78,17 +78,28 @@ function inboxClause(inboxIds: string[] | undefined): TargetExpr | undefined {
   return clause.or(...inboxIds.map((id) => clause.eq('emailLinkId', id)));
 }
 
-/** Builds the email-only Soup AST for the composable Email view. */
+/** Discovery keeps the server read filter ahead of pagination. ID-scoped
+ * admission lookups drop only read status; all other membership rules remain. */
 export function buildEmailQuery(
-  context: EmailQueryContext
+  context: EmailQueryContext,
+  admittedIds?: readonly string[]
 ): SoupAstItemsQueryArgs {
   const expressions = [tabClause(context.tab)];
+  if (admittedIds) {
+    expressions.push(
+      clause.or(
+        ...(admittedIds.length ? admittedIds : [NIL_UUID]).map((id) =>
+          clause.eq('threadId', id)
+        )
+      )
+    );
+  }
   const inbox = inboxClause(context.inboxIds);
   if (inbox) expressions.push(inbox);
 
   const base = compileClause(confine({ ef: clause.and(...expressions) }));
   const refinements = compileFacets(
-    context.facets,
+    admittedIds ? { ...context.facets, read: [] } : context.facets,
     EMAIL_FACETS,
     context.facetContext
   );
