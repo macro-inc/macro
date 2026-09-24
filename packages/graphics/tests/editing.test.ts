@@ -1,5 +1,6 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { createGraphicsEditor } from '../src/core';
+import { translation } from '../src/core/affine';
 import { drawableIds, worldBounds } from '../src/core/scene';
 
 function makeEditor() {
@@ -7,7 +8,9 @@ function makeEditor() {
     {
       id: 'a',
       type: 'rectangle',
-      geometry: { x: 10, y: 20, width: 100, height: 80 },
+      placement: { parentId: 'scene-root', sortKey: 'a0' },
+      transform: translation(10, 20),
+      geometry: { width: 100, height: 80 },
       appearance: { fill: 'transparent', stroke: 'black' },
     },
   ]);
@@ -120,4 +123,44 @@ it('does not resize or create history when a handle is clicked off-center', () =
   editor.updateTransform({ x: 112, y: 103 });
   expect(editor.commitTransform()).toBe(false);
   expect(editor.getSession().canUndo).toBe(false);
+});
+
+it('resets disposable data, clearing previews, selection and both history stacks', () => {
+  const editor = makeEditor();
+  const seed = editor.document;
+  editor.beginTransform('a', { x: 10, y: 20 });
+  editor.updateTransform({ x: 40, y: 50 });
+  editor.commitTransform();
+  editor.select('a');
+  editor.deleteSelection();
+  editor.undo();
+  expect(editor.getSession()).toMatchObject({ canUndo: true, canRedo: true });
+  editor.beginTransform('a', { x: 40, y: 50 });
+  editor.updateTransform({ x: 80, y: 90 });
+  editor.resetDocument(seed);
+  expect(editor.document).toEqual(seed);
+  expect(editor.getSession()).toMatchObject({
+    selectedIds: [],
+    transform: undefined,
+    box: undefined,
+    canUndo: false,
+    canRedo: false,
+  });
+  editor.undo();
+  editor.redo();
+  expect(editor.document).toEqual(seed);
+  editor.beginRectangle({ x: 0, y: 0 });
+  editor.updateRectangle({ x: 30, y: 30 });
+  editor.resetDocument(seed);
+  expect(editor.getPreview()).toBeUndefined();
+  expect(
+    editor.commitRectangle('discarded', { fill: 'red', stroke: 'black' })
+  ).toBe(false);
+  const changed = vi.fn();
+  editor.subscribeDocument(changed);
+  expect(() =>
+    editor.resetDocument({ rootId: 'missing', items: {} })
+  ).toThrow();
+  expect(changed).not.toHaveBeenCalled();
+  expect(editor.document).toEqual(seed);
 });

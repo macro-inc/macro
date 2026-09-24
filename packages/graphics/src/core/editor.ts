@@ -1,4 +1,5 @@
 import { translation } from './affine';
+import type { GraphicsBackend } from './backend';
 import {
   fitImageCamera,
   INITIAL_CAMERA,
@@ -6,16 +7,20 @@ import {
   MIN_SCALE,
   zoomAt,
 } from './camera';
+import { type GraphicsCommand, styleCommand } from './commands';
+import { type LayerOperation, reorderNodes } from './layering';
 import type {
+  Appearance,
   Bounds,
   Camera,
   GraphicsDocument,
   GraphicsItem,
   ImageSurface,
-  LegacyRectangle,
   Point,
-  RectangleItem,
+  ShapeItem,
+  ShapeKind,
 } from './model';
+import { keysAt, type LayerPosition } from './ordering';
 import {
   children,
   createScene,
@@ -28,6 +33,7 @@ import {
   worldBounds,
 } from './scene';
 import { createSelection, type SelectionState } from './selection';
+import { shapeDefinition } from './shapes/registry';
 
 export type EditingSession = SelectionState &
   Readonly<{
@@ -39,7 +45,19 @@ export type GraphicsEditor = ReturnType<typeof createGraphicsEditor>;
 
 /** One document and camera per instance. The caller owns disposal. */
 export function createGraphicsEditor(
-  seed: readonly (LegacyRectangle | GraphicsItem)[] | GraphicsDocument = []
+  seed: readonly GraphicsItem[] | GraphicsDocument = []
+) {
+  return createEditor(seed);
+}
+
+/** The caller owns the backend lifetime; disposal only detaches this editor. */
+export function createGraphicsEditorFromBackend(backend: GraphicsBackend) {
+  return createEditor(backend.getDocument(), backend);
+}
+
+function createEditor(
+  seed: readonly GraphicsItem[] | GraphicsDocument,
+  backend?: GraphicsBackend
 ) {
   let document: GraphicsDocument = Array.isArray(seed)
     ? createScene(seed)
@@ -55,8 +73,8 @@ export function createGraphicsEditor(
   const getSession = (): EditingSession =>
     Object.freeze({
       ...selection.getState(),
-      canUndo: undoStack.length > 0,
-      canRedo: redoStack.length > 0,
+      canUndo: backend ? backend.getHistory().canUndo : undoStack.length > 0,
+      canRedo: backend ? backend.getHistory().canRedo : redoStack.length > 0,
     });
   const emitSession = () => {
     for (const listener of sessionListeners) listener(getSession());
@@ -64,12 +82,16 @@ export function createGraphicsEditor(
   const selection = createSelection({
     getDocument: () => document,
     commitDocument,
-    cancelDrawing: cancelRectangle,
+    cancelDrawing: cancelShape,
     onChange: emitSession,
   });
   const { select, cancelTransform } = selection;
   function commitDocument(next: GraphicsDocument) {
     next = freezeDocument(next);
+    if (backend) {
+      backend.commit(next);
+      return;
+    }
     undoStack.push(document);
     if (undoStack.length > 100) undoStack.shift();
     redoStack.length = 0;
@@ -78,7 +100,7 @@ export function createGraphicsEditor(
   }
   function travel(from: GraphicsDocument[], to: GraphicsDocument[]) {
     if (disposed) return;
-    cancelRectangle();
+    cancelShape();
     cancelTransform();
     const next = from.pop();
     if (next) {
@@ -89,12 +111,20 @@ export function createGraphicsEditor(
   }
   let start: Point | undefined;
   let preview: Bounds | undefined;
+  let drawingKind: ShapeKind = 'rectangle';
+
+  const detachBackend = backend?.subscribe((source) => {
+    // Until intent rebasing is implemented, remote commits cancel local previews.
+    if (source === 'remote') cancelShape();
+    publishDocument(backend.getDocument());
+    emitSession();
+  });
 
   function setPreview(next: Bounds | undefined) {
     preview = next ? Object.freeze(next) : undefined;
     for (const listener of previewListeners) listener(preview);
   }
-  function cancelRectangle() {
+  function cancelShape() {
     start = undefined;
     setPreview(undefined);
   }
@@ -102,6 +132,18 @@ export function createGraphicsEditor(
     selection.reconcile(next);
     document = Object.freeze(next);
     for (const listener of documentListeners) listener(document);
+  }
+  /** Replace disposable working data and clear selection, previews and history. */
+  function resetDocument(next: GraphicsDocument) {
+    if (disposed) return;
+    if (backend)
+      throw new Error('Reset shared scenes by recreating their backend');
+    const validated = freezeDocument(next);
+    select();
+    undoStack.length = 0;
+    redoStack.length = 0;
+    publishDocument(validated);
+    emitSession();
   }
   function clampPoint(point: Point): Point {
     const surface = document.surface;
@@ -112,7 +154,7 @@ export function createGraphicsEditor(
         }
       : point;
   }
-  function updateRectangle(point: Point) {
+  function updateShape(point: Point) {
     if (
       disposed ||
       !start ||
@@ -139,9 +181,78 @@ export function createGraphicsEditor(
     )
       return;
     camera = Object.freeze(next);
-    cancelRectangle();
+    cancelShape();
     cancelTransform();
     for (const listener of listeners) listener(camera);
+  }
+
+  function beginShape(kind: ShapeKind, point: Point) {
+    if (disposed || !Number.isFinite(point.x) || !Number.isFinite(point.y))
+      return false;
+    const surface = document.surface;
+    if (
+      surface &&
+      (point.x < 0 ||
+        point.y < 0 ||
+        point.x > surface.width ||
+        point.y > surface.height)
+    )
+      return false;
+    select();
+    drawingKind = kind;
+    start = { ...point };
+    updateShape(point);
+    return true;
+  }
+  function commitShape(id: string, appearance: Appearance, minSize = 0) {
+    const geometry = preview;
+    cancelShape();
+    if (
+      disposed ||
+      !geometry ||
+      geometry.width <= minSize ||
+      geometry.height <= minSize
+    )
+      return false;
+    if (Object.hasOwn(document.items, id))
+      throw new Error(`Duplicate graphics item: ${id}`);
+    const item: ShapeItem = Object.freeze({
+      id,
+      type: drawingKind,
+      placement: {
+        parentId: document.rootId,
+        sortKey: keysAt(
+          document,
+          children(document),
+          children(document).length,
+          1
+        )[0]!,
+      },
+      transform: translation(geometry.x, geometry.y),
+      geometry: shapeDefinition(drawingKind).createGeometry(geometry),
+      appearance: Object.freeze({ ...appearance }),
+    });
+    commitDocument({
+      ...document,
+      items: Object.freeze({ ...document.items, [id]: item }),
+    });
+    return true;
+  }
+
+  function execute<Payload>(
+    command: GraphicsCommand<Payload>,
+    payload: Payload
+  ) {
+    if (disposed) return;
+    // Commands replace any pending gesture and always form one history step.
+    cancelShape();
+    cancelTransform();
+    const result = command.apply(
+      { document, selection: selection.getState().selectedIds },
+      payload
+    );
+    if (result.document !== document) commitDocument(result.document);
+    if (result.selection) selection.selectMany(result.selection);
   }
 
   return {
@@ -149,6 +260,7 @@ export function createGraphicsEditor(
       return document;
     },
     getSession,
+    resetDocument,
     subscribeSession(listener: (session: EditingSession) => void) {
       if (disposed) return () => {};
       sessionListeners.add(listener);
@@ -157,7 +269,8 @@ export function createGraphicsEditor(
       };
     },
     select,
-    hitTest: (point: Point, deep = false) => hitTest(document, point, deep),
+    hitTest: (point: Point, deep = false) =>
+      hitTest(document, point, deep, 3 / camera.scale),
     groupSelection(id: string) {
       if (disposed) return;
       commitDocument(
@@ -170,8 +283,19 @@ export function createGraphicsEditor(
       const id = selection.getState().selectedId;
       if (id) commitDocument(ungroupNode(document, id));
     },
-    reparent(id: string, parentId: string, order: number) {
-      if (!disposed) commitDocument(reparent(document, id, parentId, order));
+    reparent(id: string, parentId: string, position: LayerPosition = 'front') {
+      if (disposed) return;
+      const next = reparent(document, id, parentId, position);
+      if (next !== document) commitDocument(next);
+    },
+    reorderSelection(operation: LayerOperation) {
+      if (disposed) return;
+      const next = reorderNodes(
+        document,
+        selection.getState().selectedIds,
+        operation
+      );
+      if (next !== document) commitDocument(next);
     },
     toggleSelection: selection.toggle,
     beginBoxSelection: selection.beginBox,
@@ -182,8 +306,23 @@ export function createGraphicsEditor(
     cancelTransform,
     commitTransform: selection.commitTransform,
     deleteSelection: selection.deleteSelection,
-    undo: () => travel(undoStack, redoStack),
-    redo: () => travel(redoStack, undoStack),
+    execute,
+    setSelectionAppearance: (appearance: Partial<Appearance>) =>
+      execute(styleCommand, appearance),
+    undo: () => {
+      if (disposed) return;
+      if (!backend) return travel(undoStack, redoStack);
+      cancelShape();
+      cancelTransform();
+      backend.undo();
+    },
+    redo: () => {
+      if (disposed) return;
+      if (!backend) return travel(redoStack, undoStack);
+      cancelShape();
+      cancelTransform();
+      backend.redo();
+    },
     getPreview: () => preview,
     subscribeDocument(listener: (document: GraphicsDocument) => void) {
       if (disposed) return () => {};
@@ -200,21 +339,7 @@ export function createGraphicsEditor(
       };
     },
     setImageSurface(surface: ImageSurface) {
-      if (disposed) return;
-      if (
-        ![surface.width, surface.height].every(
-          (value) => Number.isFinite(value) && value > 0
-        )
-      )
-        throw new Error('Invalid image dimensions');
-      select();
-      undoStack.length = 0;
-      redoStack.length = 0;
-      emitSession();
-      publishDocument({
-        ...createScene(),
-        surface: Object.freeze({ ...surface }),
-      });
+      resetDocument({ ...createScene(), surface });
     },
     fitScene(viewport: { width: number; height: number }) {
       const bounds = worldBounds(document, document.rootId);
@@ -259,65 +384,16 @@ export function createGraphicsEditor(
         scale: boundedScale,
       });
     },
-    beginRectangle(point: Point) {
-      if (disposed || !Number.isFinite(point.x) || !Number.isFinite(point.y))
-        return false;
-      const surface = document.surface;
-      if (
-        surface &&
-        (point.x < 0 ||
-          point.y < 0 ||
-          point.x > surface.width ||
-          point.y > surface.height)
-      )
-        return false;
-      select();
-      start = { ...point };
-      updateRectangle(point);
-      return true;
-    },
-    updateRectangle,
-    cancelRectangle,
-    commitRectangle(
-      id: string,
-      appearance: RectangleItem['appearance'],
-      minSize = 0
-    ) {
-      const geometry = preview;
-      cancelRectangle();
-      if (
-        disposed ||
-        !geometry ||
-        geometry.width <= minSize ||
-        geometry.height <= minSize
-      )
-        return false;
-      if (Object.hasOwn(document.items, id))
-        throw new Error(`Duplicate graphics item: ${id}`);
-      const item: RectangleItem = Object.freeze({
-        id,
-        type: 'rectangle',
-        placement: {
-          parentId: document.rootId,
-          order: children(document).length
-            ? Math.max(
-                ...children(document).map((id) => {
-                  const n = document.items[id];
-                  return n && n.type !== 'surface' ? n.placement.order : 0;
-                })
-              ) + 1
-            : 0,
-        },
-        transform: translation(geometry.x, geometry.y),
-        geometry: { width: geometry.width, height: geometry.height },
-        appearance: Object.freeze({ ...appearance }),
-      });
-      commitDocument({
-        ...document,
-        items: Object.freeze({ ...document.items, [id]: item }),
-      });
-      return true;
-    },
+    beginShape,
+    updateShape,
+    cancelShape,
+    commitShape,
+    getDrawingKind: () => drawingKind,
+    // Convenience operations for the rectangle-only image markup host.
+    beginRectangle: (point: Point) => beginShape('rectangle', point),
+    updateRectangle: updateShape,
+    cancelRectangle: cancelShape,
+    commitRectangle: commitShape,
     clearRectangles() {
       if (disposed || !drawableIds(document).length) return;
       select();
@@ -345,6 +421,7 @@ export function createGraphicsEditor(
     },
     dispose() {
       disposed = true;
+      detachBackend?.();
       listeners.clear();
       documentListeners.clear();
       previewListeners.clear();

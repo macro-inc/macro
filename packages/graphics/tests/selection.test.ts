@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+import { translation } from '../src/core/affine';
 import type { GraphicsDocument } from '../src/core/model';
 import { createScene, worldBounds } from '../src/core/scene';
 import { createSelection } from '../src/core/selection';
@@ -8,7 +9,9 @@ it('runs against an injected document host without an editor or history backend'
     {
       id: 'a',
       type: 'rectangle',
-      geometry: { x: 10, y: 20, width: 100, height: 80 },
+      placement: { parentId: 'scene-root', sortKey: 'a0' },
+      transform: translation(10, 20),
+      geometry: { width: 100, height: 80 },
       appearance: { fill: 'white', stroke: 'black' },
     },
   ]);

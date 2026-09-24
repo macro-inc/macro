@@ -1,0 +1,128 @@
+# Two-peer scene experiment
+
+`@macro-inc/graphics/loro` is an experimental adapter and in-memory transport for
+`/app/component/graphics-multiplayer-playground`. It uses the workspace Loro
+version (1.16.3). No SyncService, network requests, local storage, or server changes
+are involved. Reload/reset creates a new shared seed and two independent replicas.
+
+The root graphics export stays framework/DOM/Loro-free. `GraphicsBackend` is the
+small document/history contract; `createGraphicsEditorFromBackend` proposes local
+commits and renders backend snapshots. Loro is authoritative. The editor does not
+also maintain snapshot undo for these documents. The owner disposes each editor
+before its backend. Existing memory-backed demos keep their original behavior.
+
+## Representation
+
+- A LoroTree owns containment and sibling ordering. Node data retains the stable
+  graphics ID and immutable kind. The surface is the implicit root of the forest.
+- Each node has one coherent `pose` register: local matrix, geometry, coordinate
+  parent ID, and a captured world matrix. Fill and stroke are separate registers,
+  so moving and restyling the same shape can merge independently.
+- Ordered Loro children project to unique core sort keys. These keys are derived,
+  not CRDT fields; concurrent key collisions are handled by Loro's ordered tree.
+  Core commands become moves of affected tree nodes, not full-list replacements.
+- A gesture makes one commit and one undo step. Selection, camera, active tool and
+  previews remain local editor state. A separate ephemeral channel broadcasts
+  read-only cursor, selection and pending-gesture snapshots while connected.
+- Incoming changes cancel local transform/drawing previews. Intent rebasing is
+  deliberately deferred. Imported changes do not echo back into the transport.
+
+## Conflict policy under evaluation
+
+Loro resolves competing values of the same pose register. Independent style fields
+merge separately. Its tree resolves competing parents and prevents cycles.
+
+A winning tree parent can differ from the coordinate parent recorded by the winning
+pose. In that case the projection uses the pose's captured world matrix, expressed
+relative to the actual parent. This keeps both replicas valid and avoids interpreting
+an old local matrix in the wrong coordinate space. It is a derived interpretation:
+no repair operations or reconciliation loop are emitted.
+
+**This is a policy to evaluate, not a settled production schema.** Such a node stays
+anchored in world space through subsequent parent transforms until it receives a
+new pose edit. The playground reports these nodes. Captured world pose is the
+winning edit's pose, not a guarantee that both concurrent geometric intentions
+survive. Concurrent edits to one pose choose one coherent result.
+
+The native Loro UndoManager records only local operations, with merging disabled
+and a 100-step bound. Independent remote properties survive undo. Undo of a field
+that another peer subsequently overwrote can restore the pre-local value; redo can
+restore the remote value. Undoing a deletion restores pre-delete node data, even
+when another peer edited that node concurrently. The tests explicitly capture
+these behaviors. Snapshot undo
+is never applied to a shared document. Deleting a group while another peer extracts
+a child lets the extracted child survive; opposite reparents converge without cycles.
+
+## Controls and validation
+
+Alice and Bob have independent editors. Go offline queues updates; Sync now delivers
+the queue without changing connection state. Reconnect resumes delivery. Delivery
+delay is a transport batching delay. Reset both peers discards editors, histories,
+queued messages and timers. No messages can cross into the new seed.
+
+## Awareness boundary
+
+`createGraphicsPresence` observes the editor through its existing subscriptions.
+It uses Loro's `EphemeralStore`, independently of the document and UndoManager.
+Its packets contain identity/color, a world-space cursor, selected root IDs, the
+document clock and an optional pending action. Transform previews flatten selected
+descendants into world-space shape outlines; drawing and marquee previews have
+their own payloads. Neither sending nor receiving presence issues editor commands.
+
+`@macro-inc/graphics/loro/solid` exports `CollaborativeGraphicsSurface`, composing
+the unchanged `GraphicsSurface` with a sibling overlay and cursor listener.
+Remote selections and ghosts use the receiving camera, have no editing handles
+and ignore pointer events. Committed shape components retain their identity.
+The core, shared browser input and ordinary Solid surface have no awareness hooks
+or imports. Non-collaborative hosts keep their existing imports and behavior.
+
+Cursor and preview publication uses a 40 ms trailing debounce with a 100 ms maximum
+wait, so continuous movement still sends updates. Capture and encoding happen only
+when sending. Selection changes, cursor departure, release and cancellation flush
+immediately. Transport coalesces the latest packet per peer and adds the demo's
+latency setting. Presence is excluded from the durable queued/delivered counters. Disconnect hides remote
+presence and discards pending presence packets; reconnect publishes fresh state.
+Sync now while offline exchanges only document updates. Monotonic packet sequences
+reject duplicate/reordered presence. Heartbeats refresh idle selections every 10
+seconds; states expire after 30 seconds without an update, checked on Loro's
+15-second cleanup interval. Reset/unmount disposes listeners and timers.
+
+Ghosts are displayed only when their captured document clock matches the receiver's
+clock. A commit therefore suppresses a delayed, obsolete gesture until fresh
+presence arrives. Selection IDs still resolve against the current committed scene.
+This prototype sends simple rectangle/ellipse geometry and uses the default shape
+renderers for tinted ghosts. Rich custom shape previews, authenticated peer identity,
+payload validation and a real network presence transport remain integration work.
+
+The cursor is a colored pointer with a rounded name-only badge, shown only while
+the peer's cursor is on the canvas. Pending ghosts replace redundant transform
+selection outlines. The receiver springs cursor, ghost geometry and marquee bounds
+between packets using one animation loop, with no writes back to presence. The
+critically damped closed-form solver stays stable after background tab pauses;
+affine transforms interpolate translation, angle, scale and shear separately,
+unwrapping angles across ±π instead of interpolating raw matrix entries. New
+elements appear at their first reported position. Completion, cancellation,
+invalid document clocks and peer removal clear ghosts immediately. Reduced-motion
+preferences bypass interpolation; settled/unmounted overlays stop their frame loop.
+
+Tests cover independent and conflicting property edits/undo, concurrent inserts and
+ordering, grouping/ungrouping, opposite reparents, parent/pose mismatch, group deletion
+versus extraction, remote preview cancellation, delayed/offline transport, duplicates
+and reversed deliveries. Node tests use Loro's Node WASM entry; the web app uses the
+existing Vite WASM configuration and browser entry.
+
+Awareness tests cover nested and drawing previews, camera mapping, selection and
+cursor isolation from document/history, unchanged committed DOM mounts, stale
+previews, reordered packets, coalescing, offline/reconnect behavior and disposal/expiry.
+Motion tests cover bounded debounce, mid-flight retargeting, shortest-arc rotation,
+stable ghost DOM, settling, reduced motion and animation cleanup.
+
+Production integration still needs a chosen geometry conflict policy, intent rebasing,
+asset/text schemas, shared collaboration runtime integration, durable initialization,
+permissions, reconnect/storage tests and deployment. This transport is only a demo
+harness; do not turn it into another production sync engine.
+
+References: [Loro ordered trees](https://www.loro.dev/docs/tutorial/tree),
+[Loro undo](https://www.loro.dev/docs/advanced/undo),
+[Loro ephemeral state](https://www.loro.dev/docs/tutorial/ephemeral). See tests for the actual behavior
+of the pinned workspace version rather than treating these docs as test evidence.

@@ -2,13 +2,17 @@
 
 Status: the local scene foundation and demo adaptation are implemented in
 packages/graphics: normalized surface/group/rectangle tree, affine math, validated
-structural operations, transformed selection/editing, rotation handle, versioned
-decoder/migration and nested-scene tester. Both existing demos use version 2.
+structural operations, transformed selection/editing, rotation handle, and
+nested-scene tester. Demos use the current unversioned model and disposable seed
+scripts; no document storage or migration is supported. Typed shape definitions and separate Solid
+renderer registration now support rectangles and ellipses; see the graphics
+package README for the extension recipe.
 
-The current implementation supports one surface per document, numeric sibling
+The current implementation supports one surface per document, fractional string sibling
 order keys, linear queries and local snapshot undo. Multi-surface documents,
-decomposition inspectors, incremental query caches and the Loro convergence spike
-remain future work. The design below records the intended boundary; those future
+decomposition inspectors and incremental query caches remain future work. An initial
+Loro convergence spike and two-peer visual playground are implemented separately;
+their geometry conflict policy is still experimental. The design below records the intended boundary; those future
 capabilities must not be inferred from the local prototype.
 
 This checkpoint supersedes the flat-scene scope in the original rectangle plan.
@@ -148,15 +152,15 @@ Require a documented policy and convergence tests for move versus reparent, oppo
 reparents, and deleting a group while another peer extracts a child. Do not call the
 schema collaboration-ready until these cases have a defined outcome.
 
-Version the document format. Convert the prototype's flat order into root children,
-map x/y to translation matrices, and retain width/height as local geometry. Reject
-invalid tree references/transforms with structured diagnostics on decode. Keep
-TypeScript definitions authoritative; runtime validation consumes unknown data.
+Keep one current TypeScript model during playground development. Update the seed
+scripts and reset test documents when it changes; do not migrate disposable data.
+Validate tree references, transforms and geometry before editor mutations. Add a
+versioned import boundary only when durable or exchanged documents require it.
 
 ## Implementation gates
 
-1. Math and model: affine tests, normalized tree types, validation, flat-scene
-   migration and headless scene queries. Demonstrate nested rotation/nonuniform
+1. Math and model: affine tests, normalized tree types, validation, disposable seed
+   scripts and headless scene queries. Demonstrate nested rotation/nonuniform
    scale and round-trip coordinate conversion, including reflections and rejected
    singular transforms.
 2. Editing kernel: atomic structural operations and undo. Test reparent/group/
@@ -170,5 +174,8 @@ TypeScript definitions authoritative; runtime validation consumes unknown data.
    persistence or network integration. This can inform the storage adapter without
    making local scene math depend on Loro.
 
-Gates 1–3 are the next implementation checkpoint. No further editing features
-should build on the existing flat geometry model.
+Gates 1–3 are implemented. Gate 4 now has an initial automated harness and a visual
+two-peer playground. See [the Loro adapter notes](../packages/graphics/src/loro/README.md)
+for tested cases and the provisional parent/pose mismatch policy. Production schema
+selection and sync integration remain open; shared documents use native Loro undo,
+never local snapshot history.

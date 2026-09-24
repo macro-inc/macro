@@ -20,6 +20,7 @@ import {
   roots,
   rotation,
   scaling,
+  selectionFrame,
   transformPoint,
   translation,
   ungroupNode,
@@ -34,7 +35,7 @@ const fixture = (): GraphicsDocument =>
     {
       id: 'outer',
       type: 'group',
-      placement: { parentId: 'scene-root', order: 0 },
+      placement: { parentId: 'scene-root', sortKey: 'a0' },
       transform: multiply(
         translation(100, 80),
         multiply(rotation(0.4), scaling(1.6, 0.7))
@@ -43,13 +44,13 @@ const fixture = (): GraphicsDocument =>
     {
       id: 'inner',
       type: 'group',
-      placement: { parentId: 'outer', order: 0 },
+      placement: { parentId: 'outer', sortKey: 'a0' },
       transform: multiply(translation(50, 30), rotation(-0.7)),
     },
     {
       id: 'a',
       type: 'rectangle',
-      placement: { parentId: 'inner', order: 0 },
+      placement: { parentId: 'inner', sortKey: 'a0' },
       transform: translation(10, 20),
       geometry: { width: 80, height: 50 },
       appearance: { fill: 'red', stroke: 'black' },
@@ -57,7 +58,7 @@ const fixture = (): GraphicsDocument =>
     {
       id: 'b',
       type: 'rectangle',
-      placement: { parentId: 'scene-root', order: 1 },
+      placement: { parentId: 'scene-root', sortKey: 'a1' },
       transform: translation(400, 100),
       geometry: { width: 70, height: 40 },
       appearance: { fill: 'blue', stroke: 'black' },
@@ -80,25 +81,29 @@ describe('scene foundation', () => {
   it('preserves world pose when reparenting and rejects cycles without partial edits', () => {
     const doc = fixture(),
       before = worldMatrix(doc, 'a');
-    const moved = reparent(doc, 'a', 'scene-root', 2);
+    const moved = reparent(doc, 'a', 'scene-root', 'front');
     closeMatrix(worldMatrix(moved, 'a'), before);
     expect(children(moved, 'inner')).toEqual([]);
-    expect(() => reparent(doc, 'outer', 'inner', 1)).toThrow();
+    expect(() => reparent(doc, 'outer', 'inner', 'front')).toThrow();
     expect(children(doc, 'inner')).toEqual(['a']);
-    expect(() => reparent(doc, 'a', 'b', 1)).toThrow();
+    expect(() => reparent(doc, 'a', 'b', 'front')).toThrow();
   });
   it('groups and ungroups preserving geometry, order and identity', () => {
     const doc = createScene([
       {
         id: 'a',
         type: 'rectangle',
-        geometry: { x: 10, y: 10, width: 20, height: 20 },
+        placement: { parentId: 'scene-root', sortKey: 'a0' },
+        transform: translation(10, 10),
+        geometry: { width: 20, height: 20 },
         appearance: { fill: 'red', stroke: 'black' },
       },
       {
         id: 'b',
         type: 'rectangle',
-        geometry: { x: 50, y: 10, width: 20, height: 20 },
+        placement: { parentId: 'scene-root', sortKey: 'a1' },
+        transform: translation(50, 10),
+        geometry: { width: 20, height: 20 },
         appearance: { fill: 'blue', stroke: 'black' },
       },
     ]);
@@ -195,7 +200,7 @@ describe('scene foundation', () => {
     const node: GraphicsItem = {
       id: 'r',
       type: 'rectangle',
-      placement: { parentId: 'scene-root', order: 0 },
+      placement: { parentId: 'scene-root', sortKey: 'a0' },
       transform: rotation(Math.PI / 4),
       geometry: { width: 100, height: 100 },
       appearance: { fill: 'red', stroke: 'black' },
@@ -226,46 +231,14 @@ describe('scene foundation', () => {
         ...doc,
         items: {
           ...doc.items,
-          b: { ...node, placement: { parentId: 'missing', order: 0 } },
+          b: { ...node, placement: { parentId: 'missing', sortKey: 'a0' } },
         },
       })
     ).toThrow();
     const editor = createGraphicsEditor(doc);
-    expect(() => editor.reparent('outer', 'inner', 0)).toThrow();
+    expect(() => editor.reparent('outer', 'inner', 'front')).toThrow();
     expect(editor.getSession().canUndo).toBe(false);
   });
-});
-
-it('decodes versioned scenes, migrates legacy geometry and reports invalid containment', async () => {
-  const { decodeGraphicsDocument } = await import('../src/core/codec');
-  const legacy = {
-    version: 1,
-    items: {
-      a: {
-        id: 'a',
-        type: 'rectangle',
-        geometry: { x: 10, y: 20, width: 30, height: 40 },
-        appearance: { fill: 'red', stroke: 'black' },
-      },
-    },
-    order: ['a'],
-  };
-  const result = decodeGraphicsDocument(legacy);
-  if (!result.ok) throw new Error(result.error);
-  expect(result.document.version).toBe(2);
-  expect(worldBounds(result.document, 'a')).toEqual({
-    x: 10,
-    y: 20,
-    width: 30,
-    height: 40,
-  });
-  const copy = decodeGraphicsDocument(JSON.parse(JSON.stringify(fixture())));
-  expect(copy.ok).toBe(true);
-  const invalid = JSON.parse(JSON.stringify(fixture()));
-  invalid.items.outer.placement.parentId = 'inner';
-  expect(decodeGraphicsDocument(invalid).ok).toBe(false);
-  invalid.items.outer.transform = [0, 0, 0, 0, 0, 0];
-  expect(decodeGraphicsDocument(invalid).ok).toBe(false);
 });
 
 it('scales a mixed-parent selection around the opposite corner and commits one undo step', () => {
@@ -304,7 +277,8 @@ it('scales a selected subtree once, preserves the opposite anchor and supports c
     editor.select('outer');
     editor.toggleSelection('a');
     const before = worldMatrix(editor.document, 'a'),
-      bounds = worldBounds(editor.document, 'outer');
+      frame = selectionFrame(editor.document, ['outer'])!,
+      bounds = frame.bounds;
     const west = corner.endsWith('w'),
       north = corner.startsWith('n');
     const start = {
@@ -315,19 +289,32 @@ it('scales a selected subtree once, preserves the opposite anchor and supports c
       x: west ? bounds.x + bounds.width : bounds.x,
       y: north ? bounds.y + bounds.height : bounds.y,
     };
-    editor.beginTransform('outer', start, corner);
-    editor.updateTransform({
-      x: start.x + (west ? -1 : 1) * bounds.width,
-      y: start.y + (north ? -1 : 1) * bounds.height,
-    });
+    editor.beginTransform(
+      'outer',
+      transformPoint(frame.transform, start),
+      corner
+    );
+    editor.updateTransform(
+      transformPoint(frame.transform, {
+        x: start.x + (west ? -1 : 1) * bounds.width,
+        y: start.y + (north ? -1 : 1) * bounds.height,
+      })
+    );
     editor.commitTransform();
     closeMatrix(
       worldMatrix(editor.document, 'a'),
-      multiply(around(anchor, scaling(2)), before)
+      multiply(
+        around(transformPoint(frame.transform, anchor), scaling(2)),
+        before
+      )
     );
     editor.undo();
-    editor.beginTransform('outer', start, corner);
-    editor.updateTransform({ x: anchor.x, y: anchor.y });
+    editor.beginTransform(
+      'outer',
+      transformPoint(frame.transform, start),
+      corner
+    );
+    editor.updateTransform(transformPoint(frame.transform, anchor));
     expect(editor.getSession().transform).toBeDefined();
     editor.cancelTransform();
     closeMatrix(worldMatrix(editor.document, 'a'), before);
@@ -340,7 +327,7 @@ it('preserves right angles, orientation and aspect ratios when scaling rotated m
     {
       id: 'a',
       type: 'rectangle',
-      placement: { parentId: 'scene-root', order: 0 },
+      placement: { parentId: 'scene-root', sortKey: 'a0' },
       transform: multiply(translation(30, 40), rotation(0.6)),
       geometry: { width: 100, height: 60 },
       appearance: { fill: 'red', stroke: 'black' },
@@ -348,7 +335,7 @@ it('preserves right angles, orientation and aspect ratios when scaling rotated m
     {
       id: 'b',
       type: 'rectangle',
-      placement: { parentId: 'scene-root', order: 1 },
+      placement: { parentId: 'scene-root', sortKey: 'a1' },
       transform: multiply(translation(180, 150), rotation(-0.4)),
       geometry: { width: 70, height: 40 },
       appearance: { fill: 'blue', stroke: 'black' },

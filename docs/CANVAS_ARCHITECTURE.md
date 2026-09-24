@@ -1,9 +1,16 @@
 # Graphics editor architecture — discussion draft
 
+Current feature gaps and proposed next checkpoints: [Graphics and Canvas parity plan](GRAPHICS_PARITY.md)
+(source audit 2026-09-24).
+
 Current implementation: [Graphics scene foundation](GRAPHICS_SCENE_FOUNDATION.md).
 The local tree and affine-transform core, nested-scene tester and demo adaptation
-are implemented. This supersedes the initial flat rectangle scope below. Loro
-encoding, persistence and collaborative history are still unimplemented.
+are implemented. This supersedes the initial flat rectangle scope below. An experimental
+two-peer Loro adapter and visual playground now exercise ordered trees and local
+undo; see [adapter notes](../packages/graphics/src/loro/README.md). Durable persistence
+and SyncService integration remain unimplemented. The
+playgrounds use one unversioned model with disposable seed scripts. Versioning and
+migration proposals below apply to future durable documents, not playground data.
 
 Status: proposal, not an approved implementation specification. Based on a source
 review on 2026-09-23; no runtime verification was performed. Package names are
@@ -431,7 +438,7 @@ header conventions and semantic theme tokens at the host boundary.
 
 ### Minimal state
 
-The initial document is a versioned, typed map of rectangles plus a flat ordered
+The initial document is a typed map of rectangles plus a flat ordered
 ID sequence. Rectangle data has an immutable ID/type, a coherent axis-aligned
 `{ x, y, width, height }` geometry value, and simple appearance. This is a local
 prototype representation, not a committed CRDT schema or long-term file format.

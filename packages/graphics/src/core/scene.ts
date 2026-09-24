@@ -2,37 +2,24 @@ import {
   corners,
   enclosing,
   IDENTITY,
-  intersects,
   inverse,
   type Matrix,
   multiply,
   transformPoint,
-  translation,
 } from './affine';
+import { validAppearance } from './appearance';
+import type { Bounds, GraphicsDocument, GraphicsItem, Point } from './model';
 import {
-  type Bounds,
-  type GraphicsDocument,
-  type GraphicsItem,
-  type LegacyRectangle,
-  type Point,
-  rectangleDefinition,
-} from './model';
+  children,
+  insertionIndex,
+  isSortKey,
+  keysAt,
+  type LayerPosition,
+} from './ordering';
+import { isShape, shapeDefinition } from './shapes/registry';
 
 export type SceneOverrides = Readonly<Record<string, GraphicsItem>>;
-export function children(
-  doc: GraphicsDocument,
-  parentId = doc.rootId
-): readonly string[] {
-  return Object.values(doc.items)
-    .filter((n) => n.type !== 'surface' && n.placement.parentId === parentId)
-    .sort((a, b) =>
-      a.type !== 'surface' && b.type !== 'surface'
-        ? a.placement.order - b.placement.order ||
-          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
-        : 0
-    )
-    .map((n) => n.id);
-}
+export { children } from './ordering';
 export function paintOrder(doc: GraphicsDocument): readonly string[] {
   const result: string[] = [];
   const visit = (id: string) => {
@@ -45,7 +32,7 @@ export function paintOrder(doc: GraphicsDocument): readonly string[] {
   return result;
 }
 export const drawableIds = (doc: GraphicsDocument) =>
-  paintOrder(doc).filter((id) => doc.items[id]?.type === 'rectangle');
+  paintOrder(doc).filter((id) => isShape(doc.items[id]));
 export function worldMatrix(
   doc: GraphicsDocument,
   id: string,
@@ -67,8 +54,8 @@ export function nodeCorners(
 ): readonly Point[] {
   const node = Object.hasOwn(overrides, id) ? overrides[id] : doc.items[id];
   if (!node) return [];
-  if (node.type === 'rectangle')
-    return corners(rectangleDefinition.bounds(node)).map((p) =>
+  if (isShape(node))
+    return corners(shapeDefinition(node.type).bounds(node)).map((p) =>
       transformPoint(worldMatrix(doc, id, overrides), p)
     );
   return children(doc, id).flatMap((child) =>
@@ -110,15 +97,17 @@ export function outermost(doc: GraphicsDocument, id: string): string {
 export function hitTest(
   doc: GraphicsDocument,
   point: Point,
-  deep = false
+  deep = false,
+  tolerance = 0
 ): string | undefined {
   for (const id of [...drawableIds(doc)].reverse()) {
     const node = doc.items[id];
     if (
-      node?.type === 'rectangle' &&
-      rectangleDefinition.hitTest(
+      isShape(node) &&
+      shapeDefinition(node.type).hitTest(
         node,
-        transformPoint(inverse(worldMatrix(doc, id)), point)
+        transformPoint(inverse(worldMatrix(doc, id)), point),
+        { worldTransform: worldMatrix(doc, id), tolerance }
       )
     )
       return deep ? id : outermost(doc, id);
@@ -128,16 +117,32 @@ export function boxHits(doc: GraphicsDocument, box: Bounds): readonly string[] {
   return [
     ...new Set(
       drawableIds(doc)
-        .filter((id) => intersects(nodeCorners(doc, id), corners(box)))
+        .filter((id) => {
+          const node = doc.items[id];
+          return (
+            isShape(node) &&
+            shapeDefinition(node.type).intersectsBox(
+              node,
+              worldMatrix(doc, id),
+              box
+            )
+          );
+        })
         .map((id) => outermost(doc, id))
     ),
   ];
 }
 export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
-  if (doc.version !== 2 || doc.items[doc.rootId]?.type !== 'surface')
+  if (doc.items[doc.rootId]?.type !== 'surface')
     throw new Error('Invalid scene root');
   const items: Record<string, GraphicsItem> = Object.create(null);
+  const siblingKeys = new Map<string, Set<string>>();
   for (const [id, node] of Object.entries(doc.items)) {
+    if (
+      !node ||
+      !['surface', 'group', 'rectangle', 'ellipse'].includes(node.type)
+    )
+      throw new Error('Invalid node type');
     if (id !== node.id) throw new Error('Node identity mismatch');
     if (node.type === 'surface') {
       if (id !== doc.rootId)
@@ -148,12 +153,24 @@ export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
       });
       continue;
     }
+    if (
+      !Array.isArray(node.transform) ||
+      node.transform.length !== 6 ||
+      !node.transform.every(Number.isFinite)
+    )
+      throw new Error('Invalid transform');
+    if (isShape(node) && !validAppearance(node.appearance))
+      throw new Error('Invalid appearance');
     inverse(node.transform);
-    if (!Number.isFinite(node.placement.order))
+    if (!isSortKey(node.placement.sortKey))
       throw new Error('Invalid sibling order');
+    const used = siblingKeys.get(node.placement.parentId) ?? new Set<string>();
+    if (used.has(node.placement.sortKey))
+      throw new Error('Duplicate sibling sort key');
+    used.add(node.placement.sortKey);
+    siblingKeys.set(node.placement.parentId, used);
     const parent = doc.items[node.placement.parentId];
-    if (!parent || parent.type === 'rectangle')
-      throw new Error('Invalid parent');
+    if (!parent || isShape(parent)) throw new Error('Invalid parent');
     const seen = new Set([id]);
     let ancestor: GraphicsItem | undefined = parent;
     while (ancestor && ancestor.type !== 'surface') {
@@ -163,17 +180,15 @@ export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
     }
     if (ancestor?.id !== doc.rootId) throw new Error('Unreachable node');
     if (
-      node.type === 'rectangle' &&
-      ![node.geometry.width, node.geometry.height].every(
-        (v) => Number.isFinite(v) && v > 0
-      )
+      isShape(node) &&
+      !shapeDefinition(node.type).validateGeometry(node.geometry)
     )
-      throw new Error('Invalid rectangle dimensions');
+      throw new Error(`Invalid ${node.type} geometry`);
     const frozen = Object.freeze({
       ...node,
       placement: Object.freeze({ ...node.placement }),
       transform: Object.freeze([...node.transform]) as Matrix,
-      ...(node.type === 'rectangle'
+      ...(isShape(node)
         ? {
             geometry: Object.freeze({ ...node.geometry }),
             appearance: Object.freeze({ ...node.appearance }),
@@ -198,31 +213,17 @@ export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
   return result;
 }
 export function createScene(
-  seed: readonly (LegacyRectangle | GraphicsItem)[] = []
+  seed: readonly GraphicsItem[] = []
 ): GraphicsDocument {
   const rootId = 'scene-root';
   const items: Record<string, GraphicsItem> = {
     [rootId]: { id: rootId, type: 'surface' },
   };
-  seed.forEach((node, index) => {
+  for (const node of seed) {
     if (Object.hasOwn(items, node.id)) throw new Error('Duplicate node ID');
-    const next: GraphicsItem =
-      node.type === 'rectangle' && !('transform' in node)
-        ? {
-            id: node.id,
-            type: 'rectangle',
-            placement: { parentId: rootId, order: index },
-            transform: translation(node.geometry.x, node.geometry.y),
-            geometry: {
-              width: node.geometry.width,
-              height: node.geometry.height,
-            },
-            appearance: node.appearance,
-          }
-        : node;
-    Object.defineProperty(items, node.id, { value: next, enumerable: true });
-  });
-  return freezeDocument({ version: 2, rootId, items });
+    Object.defineProperty(items, node.id, { value: node, enumerable: true });
+  }
+  return freezeDocument({ rootId, items });
 }
 export function deleteSubtrees(
   doc: GraphicsDocument,
@@ -245,11 +246,19 @@ export function reparent(
   doc: GraphicsDocument,
   id: string,
   parentId: string,
-  order: number
+  position: LayerPosition = 'front'
 ): GraphicsDocument {
   const node = doc.items[id];
   if (!node || node.type === 'surface')
     throw new Error('Cannot reparent root or missing node');
+  const siblings = children(doc, parentId).filter((key) => key !== id);
+  const index = insertionIndex(siblings, position);
+  if (
+    node.placement.parentId === parentId &&
+    children(doc, parentId).indexOf(id) === index
+  )
+    return doc;
+  const sortKey = keysAt(doc, siblings, index, 1)[0]!;
   const transform = multiply(
     inverse(worldMatrix(doc, parentId)),
     worldMatrix(doc, id)
@@ -258,7 +267,7 @@ export function reparent(
     ...doc,
     items: {
       ...doc.items,
-      [id]: { ...node, placement: { parentId, order }, transform },
+      [id]: { ...node, placement: { parentId, sortKey }, transform },
     },
   });
 }
@@ -289,21 +298,20 @@ export function groupNodes(
   items[id] = {
     id,
     type: 'group',
-    placement: { parentId, order: first.placement.order },
+    placement: { parentId, sortKey: first.placement.sortKey },
     transform: IDENTITY,
   };
-  ordered.forEach((key, index) => {
+  for (const key of ordered) {
     const n = items[key];
     if (n && n.type !== 'surface')
-      items[key] = { ...n, placement: { parentId: id, order: index } };
-  });
-  const order = Math.min(
-    ...selected.map((key) => {
-      const n = doc.items[key];
-      return n && n.type !== 'surface' ? n.placement.order : 0;
-    })
-  );
-  items[id] = { ...items[id], placement: { parentId, order } };
+      items[key] = { ...n, placement: { ...n.placement, parentId: id } };
+  }
+  const backmost = doc.items[ordered[0]!];
+  if (backmost && backmost.type !== 'surface')
+    items[id] = {
+      ...items[id],
+      placement: { parentId, sortKey: backmost.placement.sortKey },
+    };
   return freezeDocument({ ...doc, items });
 }
 export function ungroupNode(
@@ -313,27 +321,27 @@ export function ungroupNode(
   const group = doc.items[id];
   if (group?.type !== 'group') throw new Error('Not a group');
   const parentId = group.placement.parentId;
-  const order = children(doc, parentId).flatMap((key) =>
-    key === id ? children(doc, id) : [key]
+  const siblings = children(doc, parentId);
+  const descendants = children(doc, id);
+  const keys = keysAt(
+    doc,
+    siblings.filter((key) => key !== id),
+    siblings.indexOf(id),
+    descendants.length
   );
   const items: Record<string, GraphicsItem> = Object.assign(
     Object.create(null),
     doc.items
   );
-  for (const child of children(doc, id)) {
+  descendants.forEach((child, index) => {
     const node = items[child];
     if (node && node.type !== 'surface')
       items[child] = {
         ...node,
-        placement: { parentId, order: 0 },
+        placement: { parentId, sortKey: keys[index]! },
         transform: multiply(group.transform, node.transform),
       };
-  }
-  delete items[id];
-  order.forEach((key, index) => {
-    const n = items[key];
-    if (n && n.type !== 'surface')
-      items[key] = { ...n, placement: { parentId, order: index } };
   });
+  delete items[id];
   return freezeDocument({ ...doc, items });
 }

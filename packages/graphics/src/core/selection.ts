@@ -9,7 +9,9 @@ import {
   transformPoint,
   translation,
 } from './affine';
+import { duplicateNodes, type IdFactory } from './fragments';
 import type { Bounds, GraphicsDocument, GraphicsItem, Point } from './model';
+import { type ResizeHandle, type ResizeModifiers, resizeBox } from './resize';
 import {
   boxHits,
   deleteSubtrees,
@@ -19,9 +21,19 @@ import {
   worldBounds,
   worldMatrix,
 } from './scene';
+import { type SelectionFrame, selectionFrame } from './selection-frame';
+import { isShape, shapeDefinition } from './shapes/registry';
+import { stretchShapes } from './stretch';
 
-export type ResizeCorner = 'nw' | 'ne' | 'sw' | 'se';
-export type TransformHandle = ResizeCorner | 'rotate';
+export type {
+  ResizeCorner,
+  ResizeEdge,
+  ResizeHandle,
+  ResizeModifiers,
+} from './resize';
+export type TransformHandle = ResizeHandle | 'rotate';
+export type TransformModifiers = ResizeModifiers &
+  Readonly<{ snapRotation?: boolean }>;
 export type SelectionState = Readonly<{
   selectedId?: string;
   selectedIds: readonly string[];
@@ -32,6 +44,7 @@ export type SelectionState = Readonly<{
     geometry: Bounds;
     geometries: Readonly<Record<string, Bounds>>;
     nodes: SceneOverrides;
+    document?: GraphicsDocument;
   }>;
 }>;
 export type SelectionHost = Readonly<{
@@ -59,8 +72,10 @@ export function createSelection(host: SelectionHost) {
         handle?: TransformHandle;
         base: GraphicsDocument;
         targets: readonly string[];
+        frame: SelectionFrame;
         pivot: Point;
         nodes: SceneOverrides;
+        originalSelection?: readonly string[];
       }
     | undefined;
   const emit = () => host.onChange();
@@ -88,12 +103,14 @@ export function createSelection(host: SelectionHost) {
             geometry: worldBounds(gesture.base, gesture.id, gesture.nodes),
             geometries: Object.freeze(geometries),
             nodes: gesture.nodes,
+            document: gesture.originalSelection ? gesture.base : undefined,
           })
         : undefined,
     });
   };
   function cancelTransform() {
     if (disposed) return;
+    if (gesture?.originalSelection) selectedIds = gesture.originalSelection;
     gesture = undefined;
     if (box) selectedIds = box.previous;
     box = undefined;
@@ -113,10 +130,10 @@ export function createSelection(host: SelectionHost) {
     );
     emit();
   }
-  function updateTransform(point: Point) {
+  function updateTransform(point: Point, modifiers: TransformModifiers = {}) {
     if (disposed || !gesture || ![point.x, point.y].every(Number.isFinite))
       return;
-    const { base, origin, handle, pivot, targets, id } = gesture;
+    const { base, origin, handle, pivot, targets, id, frame } = gesture;
     const node = base.items[id];
     const nodes: Record<string, GraphicsItem> = Object.create(null);
     if (
@@ -124,58 +141,45 @@ export function createSelection(host: SelectionHost) {
       handle !== 'rotate' &&
       (targets.length > 1 || node?.type === 'group')
     ) {
-      const bounds = enclosing(
-        targets.flatMap((key) => nodeCorners(base, key))
-      );
+      const { bounds } = frame;
       if (bounds.width <= 0 || bounds.height <= 0) return;
-      const west = handle.endsWith('w'),
-        north = handle.startsWith('n');
-      const anchor = {
-        x: west ? bounds.x + bounds.width : bounds.x,
-        y: north ? bounds.y + bounds.height : bounds.y,
-      };
-      // Keep the drag's initial handle offset and avoid singular/flipped scales.
-      const sx = Math.max(
-        0.01,
-        1 + ((west ? -1 : 1) * (point.x - origin.x)) / bounds.width
+      const fromWorld = inverse(frame.transform);
+      const start = transformPoint(fromWorld, origin);
+      const end = transformPoint(fromWorld, point);
+      // Different child axes force uniform scaling for the entire selection,
+      // including edge drags. This keeps the dragged box and content in sync.
+      const proportional = modifiers.proportional || !frame.canDeform;
+      const resized = resizeBox(
+        bounds,
+        handle,
+        {
+          x: end.x - start.x,
+          y: end.y - start.y,
+        },
+        { ...modifiers, proportional }
       );
-      const sy = Math.max(
-        0.01,
-        1 + ((north ? -1 : 1) * (point.y - origin.y)) / bounds.height
+      const delta = multiply(
+        frame.transform,
+        multiply(resized.transform, fromWorld)
       );
-      // Nonuniform world scaling shears rotated descendants. Keep their aspect
-      // ratio, and that of persistent groups; flat unrotated rectangles may stretch.
-      const proportional = targets.some((key) => {
-        const item = base.items[key];
-        if (!item || item.type === 'surface') return false;
-        const world = worldMatrix(base, key);
-        return (
-          item.type === 'group' ||
-          item.placement.parentId !== base.rootId ||
-          Math.abs(world[1]) > 1e-9 ||
-          Math.abs(world[2]) > 1e-9 ||
-          world[0] < 0 ||
-          world[3] < 0
-        );
-      });
-      const factor = Math.max(sx, sy);
-      const delta = around(
-        anchor,
-        proportional ? scaling(factor) : scaling(sx, sy)
-      );
-      for (const key of targets) {
-        const item = base.items[key];
-        if (!item || item.type === 'surface') continue;
-        nodes[key] = {
-          ...item,
-          transform: multiply(
-            inverse(worldMatrix(base, item.placement.parentId)),
-            multiply(delta, worldMatrix(base, key))
-          ),
-        };
-      }
+      if (!proportional) {
+        Object.assign(nodes, stretchShapes(base, targets, delta));
+      } else
+        for (const key of targets) {
+          const item = base.items[key];
+          if (!item || item.type === 'surface') continue;
+          nodes[key] = {
+            ...item,
+            transform: multiply(
+              inverse(worldMatrix(base, item.placement.parentId)),
+              multiply(delta, worldMatrix(base, key))
+            ),
+          };
+        }
     } else if (handle && handle !== 'rotate') {
-      if (node?.type !== 'rectangle') return;
+      if (!isShape(node)) return;
+      const definition = shapeDefinition(node.type);
+      const localBounds = definition.bounds(node);
       const world = worldMatrix(base, id);
       const surface = base.surface;
       const endWorld = surface
@@ -186,25 +190,22 @@ export function createSelection(host: SelectionHost) {
         : point;
       const end = transformPoint(inverse(world), endWorld),
         start = transformPoint(inverse(world), origin);
-      const fixed = {
-        x: handle.endsWith('w') ? node.geometry.width : 0,
-        y: handle.startsWith('n') ? node.geometry.height : 0,
-      };
-      const moving = {
-        x: (handle.endsWith('w') ? 0 : node.geometry.width) + end.x - start.x,
-        y:
-          (handle.startsWith('n') ? 0 : node.geometry.height) + end.y - start.y,
-      };
-      const x = Math.min(fixed.x, moving.x),
-        y = Math.min(fixed.y, moving.y);
-      const width = Math.abs(fixed.x - moving.x),
-        height = Math.abs(fixed.y - moving.y);
-      // A zero-sized preview is ignored; no singular shape is committed.
-      if (width <= 1e-8 || height <= 1e-8) return;
+      const resized = resizeBox(
+        localBounds,
+        handle,
+        { x: end.x - start.x, y: end.y - start.y },
+        modifiers
+      );
+      const { width, height } = resized.bounds;
       nodes[id] = {
-        ...node,
-        transform: multiply(node.transform, translation(x, y)),
-        geometry: { width, height },
+        ...definition.resize(node, { x: 0, y: 0, width, height }),
+        transform: multiply(
+          node.transform,
+          multiply(
+            resized.transform,
+            scaling(1 / Math.abs(resized.scaleX), 1 / Math.abs(resized.scaleY))
+          )
+        ),
       };
     } else {
       let dx = point.x - origin.x,
@@ -222,16 +223,21 @@ export function createSelection(host: SelectionHost) {
           Math.min(base.surface.height - bounds.y - bounds.height, dy)
         );
       }
-      const delta =
-        handle === 'rotate'
-          ? around(
-              pivot,
-              rotation(
-                Math.atan2(point.y - pivot.y, point.x - pivot.x) -
-                  Math.atan2(origin.y - pivot.y, origin.x - pivot.x)
-              )
-            )
-          : translation(dx, dy);
+      let delta = translation(dx, dy);
+      if (handle === 'rotate') {
+        let angle =
+          Math.atan2(point.y - pivot.y, point.x - pivot.x) -
+          Math.atan2(origin.y - pivot.y, origin.x - pivot.x);
+        if (modifiers.snapRotation) {
+          const world = worldMatrix(base, id);
+          const initialAngle =
+            targets.length === 1 ? Math.atan2(world[1], world[0]) : 0;
+          const step = Math.PI / 6;
+          angle =
+            Math.round((initialAngle + angle) / step) * step - initialAngle;
+        }
+        delta = around(pivot, rotation(angle));
+      }
       for (const key of targets) {
         const item = base.items[key];
         if (!item || item.type === 'surface') continue;
@@ -249,7 +255,7 @@ export function createSelection(host: SelectionHost) {
       nodes[id] = Object.freeze({
         ...node,
         transform: Object.freeze([...node.transform]) as typeof node.transform,
-        ...(node.type === 'rectangle'
+        ...(isShape(node)
           ? { geometry: Object.freeze({ ...node.geometry }) }
           : {}),
       });
@@ -260,6 +266,12 @@ export function createSelection(host: SelectionHost) {
   return {
     getState,
     select,
+    selectMany(ids: readonly string[]) {
+      cancelTransform();
+      host.cancelDrawing();
+      selectedIds = Object.freeze(roots(host.getDocument(), ids));
+      emit();
+    },
     cancelTransform,
     updateTransform,
     toggle(id: string) {
@@ -317,8 +329,13 @@ export function createSelection(host: SelectionHost) {
         emit();
       }
     },
-    beginTransform(id: string, point: Point, handle?: TransformHandle) {
-      const base = host.getDocument(),
+    beginTransform(
+      id: string,
+      point: Point,
+      handle?: TransformHandle,
+      duplicateId?: IdFactory
+    ) {
+      let base = host.getDocument(),
         node = base.items[id];
       if (
         disposed ||
@@ -332,20 +349,29 @@ export function createSelection(host: SelectionHost) {
         cancelTransform();
         host.cancelDrawing();
       }
+      let originalSelection: readonly string[] | undefined;
+      if (duplicateId && !handle) {
+        originalSelection = selectedIds;
+        const cloned = duplicateNodes(base, selectedIds, duplicateId, {
+          x: 0,
+          y: 0,
+        });
+        base = cloned.document;
+        selectedIds = Object.freeze(cloned.selection);
+        id = selectedIds[0]!;
+      }
       const targets = roots(base, selectedIds);
-      const bounds = enclosing(
-        targets.flatMap((key) => nodeCorners(base, key))
-      );
+      const frame = selectionFrame(base, targets);
+      if (!frame) return false;
       gesture = {
         id,
         origin: { ...point },
+        originalSelection,
         handle,
         base,
         targets,
-        pivot: {
-          x: bounds.x + bounds.width / 2,
-          y: bounds.y + bounds.height / 2,
-        },
+        frame,
+        pivot: frame.center,
         nodes: Object.freeze({}),
       };
       emit();
@@ -353,7 +379,7 @@ export function createSelection(host: SelectionHost) {
     },
     commitTransform() {
       if (disposed || !gesture) return false;
-      const { base, nodes } = gesture;
+      const { base, nodes, originalSelection } = gesture;
       gesture = undefined;
       const changed = Object.entries(nodes).some(([id, node]) => {
         const old = base.items[id];
@@ -361,13 +387,13 @@ export function createSelection(host: SelectionHost) {
           return false;
         return (
           !sameMatrix(old.transform, node.transform) ||
-          (old.type === 'rectangle' &&
-            node.type === 'rectangle' &&
-            (Math.abs(old.geometry.width - node.geometry.width) > 1e-9 ||
-              Math.abs(old.geometry.height - node.geometry.height) > 1e-9))
+          (isShape(old) &&
+            isShape(node) &&
+            !shapeDefinition(node.type).sameGeometry(old, node))
         );
       });
       if (!changed) {
+        if (originalSelection) selectedIds = originalSelection;
         emit();
         return false;
       }
@@ -385,6 +411,7 @@ export function createSelection(host: SelectionHost) {
     },
     reconcile(document: GraphicsDocument) {
       if (disposed) return;
+      if (gesture?.originalSelection) selectedIds = gesture.originalSelection;
       gesture = undefined;
       box = undefined;
       selectedIds = Object.freeze(

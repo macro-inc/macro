@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { attachCameraControls } from '../src/browser';
 import { createGraphicsEditor } from '../src/core';
+import { translation } from '../src/core/affine';
 import { drawableIds, worldBounds } from '../src/core/scene';
 
 const makeEditor = () =>
@@ -8,7 +9,9 @@ const makeEditor = () =>
     ['a', 'b', 'c'].map((id, i) => ({
       id,
       type: 'rectangle' as const,
-      geometry: { x: i * 100, y: 0, width: 50, height: 50 },
+      placement: { parentId: 'scene-root', sortKey: `a${i}` },
+      transform: translation(i * 100, 0),
+      geometry: { width: 50, height: 50 },
       appearance: { fill: 'white', stroke: 'black' },
     }))
   );

@@ -91,6 +91,14 @@ export function defineFlag(config: RemoteFlagConfig | EnvFlagConfig): Flag {
   };
 }
 
+/** Canvas Next is a disposable local demo. Never enabled in deployed builds. */
+export const USE_CANVAS_NEXT =
+  LOCAL_ONLY &&
+  defineFlag({
+    env: 'USE_CANVAS_NEXT',
+    default: true,
+  }).enabled;
+
 /**
  * Imperative snapshot. Env/`default` override wins. Otherwise PostHog,
  * or `false` if flags have not loaded or the key is unknown.

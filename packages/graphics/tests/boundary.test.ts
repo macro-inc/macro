@@ -6,7 +6,10 @@ import { expect, it } from 'vitest';
 
 it('keeps the transitive core import graph inside the framework-free core', () => {
   const root = resolve(import.meta.dirname, '../src/core');
-  for (const file of readdirSync(root).filter((name) => name.endsWith('.ts'))) {
+  for (const file of readdirSync(root, {
+    recursive: true,
+    encoding: 'utf8',
+  }).filter((name) => name.endsWith('.ts'))) {
     const path = resolve(root, file);
     const source = ts.createSourceFile(
       path,
@@ -21,6 +24,10 @@ it('keeps the transitive core import graph inside the framework-free core', () =
         ts.isStringLiteral(node.moduleSpecifier)
       ) {
         const specifier = node.moduleSpecifier.text;
+        if (specifier === 'fractional-indexing') {
+          expect(file).toBe('ordering.ts');
+          return;
+        }
         expect(specifier.startsWith('.')).toBe(true);
         expect(resolve(dirname(path), specifier).startsWith(`${root}/`)).toBe(
           true

@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/core/index.ts",
     "./browser": "./src/browser/index.ts",
-    "./solid": "./src/solid/index.tsx"
+    "./solid": "./src/solid/index.tsx",
+    "./loro": "./src/loro/index.ts",
+    "./loro/solid": "./src/loro/solid/index.tsx"
   },
   "scripts": {
     "test": "vitest run",
@@ -29,5 +31,9 @@
     "typescript": "^5.9.3",
     "vite-plugin-solid": "^2.11.8",
     "vitest": "5.0.1"
+  },
+  "dependencies": {
+    "fractional-indexing": "4.0.0",
+    "loro-crdt": "catalog:"
   }
 }

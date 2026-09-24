@@ -949,24 +949,105 @@ default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
 Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
+# Canvas Next (local development)
+
+Open `/app/component/canvas-next`. This local-only component is enabled by
+`USE_CANVAS_NEXT` (override with `VITE_USE_CANVAS_NEXT=false`); it lives inside
+`block-canvas/canvas-next` and uses the pure graphics core. It does not replace
+saved Canvas documents. Reset demo or reload restores the disposable seed.
+
+Tools: V select, R rectangle, O ellipse, H hand; Space temporarily pans.
+Drawing selects the new shape and returns to Select. Shift-click/marquee adds
+selection. Cmd/Ctrl-click selects within a group. Option/Alt-drag duplicates
+selected subtrees; Escape cancels without committing the copies.
+
+Use Cmd/Ctrl+A/C/X/V/D for select all/copy/cut/paste/duplicate, arrows to nudge
+1 world unit (Shift: 10), Cmd/Ctrl+G to group and Shift+Cmd/Ctrl+G to ungroup.
+Undo/redo and Delete use the normal editor shortcuts. They are scoped to this
+editor and do not hijack text or number inputs. Right-click exposes editing actions.
+
+Single and multiple selections have invisible resize targets along their entire
+edges, with resize cursors and a 10-screen-pixel hit area at any zoom. Only corner
+handles are visible; they take priority over the edge targets where they overlap.
+The grips stay square to the screen; edge cursors stay EW for sides and NS for
+top/bottom. Corners use diagonal arrows based on their world-space position relative
+to the selection center, including after rotation or a flip.
+Click-drag anywhere inside the selection box to move it, including
+gaps and unfilled interiors. Shift still toggles shapes; deep-select still picks children.
+Drag a side to change width, or top/bottom to change height; perpendicular pointer
+movement is ignored. A rotated single shape follows its local axes. Groups and
+multiple selections always have dashed, world-axis-aligned boxes; single shapes
+retain their oriented solid boxes. The rotator follows a single shape's oriented
+top edge; for groups and multiple selections it is centered above the world bounds.
+Option/Alt anchors the center; Shift preserves
+proportions, including shrinking. Incompatible descendant rotations force uniform
+scaling for both edge and corner drags, preventing new shear. Dragging through zero
+flips the crossed axis and continues resizing on the opposite side.
+Each drag is one undo step, Escape cancels, and handles/collective bounds hide
+throughout the preview. Losing pointer capture alone must not snap a move back:
+the gesture continues until release, including outside the canvas. Actual pointer
+cancellation or focus loss still discards the preview.
+The box, handles, rotation circle and resize math all use
+the same core selection frame.
+
+The left inspector edits fill, stroke, width, opacity, and rectangle radius;
+mixed selections show Mixed values. Group styling applies to descendant shapes.
+Styles also become creation defaults. Arrange offers six alignments, horizontal
+and vertical equal-gap distribution, grouping, and stable layer changes. The
+Layers list selects items; Shift-click toggles selection. Keyboard clipboard
+round-trips only Canvas Next shape/group fragments at this checkpoint.
+
+Smoke test: draw each shape; select/group/copy/paste; verify originals remain and
+new items are selected; nudge by 1/10 units; Option-drag and cancel once, then commit
+and undo once; style a mixed group; align/distribute; reorder and check stacking.
+Input focus must retain native typing/clipboard behavior.
+
 # Graphics playground (local development)
 
 The scene foundation is shared by the graphics and image demos. The graphics demo
-adds a circular **Rotate selection** handle above the selected rectangle/group.
-Drag it to rotate; the edit is one undo step. The shared dashed selection box and all transform handles hide during move,
+adds a circular **Rotate selection** handle 16 screen pixels outside a single shape's
+oriented top edge, or above the world-aligned bounds for groups and multiple selections,
+with no connecting stem. Single shapes retain oriented solid
+boxes; groups and multiple selections have dashed world-axis-aligned boxes.
+Click-drag their interiors to move the selection. Resize grips stay square, with
+fixed EW/NS edge cursors and diagonal corner cursors matching their world-space
+quadrant. Drag the circle to rotate; hold **Shift** to snap a single
+shape/group's world angle to 30° increments. Multiple selections snap the rotation
+delta, preserving relative angles.
+Shift can be pressed or released during the drag, including while stationary.
+The edit is one undo step. The shared selection box and all transform handles hide during move,
 rotate, and scale previews, then return on release or cancellation. Individual
 outlines remain visible. Drag a shared corner to scale the selection about the
-opposite corner; rotated or grouped selections scale proportionally to preserve shape angles
-and aspect ratios. Flat, unrotated rectangles can stretch independently per axis.
-Scale clamps at 1% rather than crossing into a singular or reflected transform. Rectangle corner handles follow its
-transformed corners. **Group** combines selected siblings; **Ungroup** restores
+opposite corner. Shared corner and edge resizing stretch independently when all
+descendant axes align with the selection frame (including quarter turns).
+Incompatible rotations or shear force proportional scaling for the whole selection.
+Resizing continues through zero, reflecting the crossed axis. A tiny nonzero
+minimum at the crossing keeps scene transforms invertible. Rectangle corner
+handles follow its transformed corners. Hold **Shift** during single-shape corner resizing to
+preserve its starting aspect ratio. Hold **Alt/Option** to resize from the center;
+combine both modifiers for proportional resizing from the center. Modifiers
+can be pressed or released during the drag, including while the pointer is
+stationary. Alt/Option also scales groups and multiple selections around their
+collective center. **Group** combines selected siblings; **Ungroup** restores
 their children to the parent. Groups can nest and contain rotation/nonuniform
 scale. Ordinary canvas clicks select the outermost group; Alt-click selects the
 hit rectangle directly. **Fit scene** brings content and handle space into view.
 
+Expand **Layers** in either graphics demo to see the scene tree in back-to-front
+order and select nodes directly. **Send to back**, **Send backward**, **Bring
+forward**, and **Bring to front** reorder the selection within each node's parent.
+Multiple selected nodes keep their relative order, and groups move as contiguous
+subtrees. Reordering is one undo step; selecting or transforming a shape keeps its
+document layer position. The document stores stable fractional sort keys rather
+than array indexes or CSS z-index values. **Reset test scene** rebuilds the demo
+from its seed script, clears history and selection, returns to Select, and resets
+the camera (fitting the nested demo). Reloading also recreates the seeded data.
+Test documents stay in memory: there are no schema versions, migrations, or local
+storage saves. Saving/loading and multiplayer remain separate checkpoints.
+
 Open `/app/component/nested-scene-playground` for the scene graph tester. It starts
 with a rotated/scaled outer group, a rotated inner group, three descendants and a
-root-level sibling. Expand **Scene tree** to see the indented hierarchy and select
+root-level sibling. Expand **Layers** to see the indented hierarchy and select
 any node directly, then collapse it to edit on the canvas. **Move selected to root**
 reparents while preserving the world pose; Undo restores the prior parent and
 order. Reparenting and grouping must not remount unchanged rectangle components.
@@ -983,13 +1064,19 @@ Invalid files leave the previous image intact. Files and annotations stay local 
 are discarded on reload. There is no save/upload, selection or resize yet.
 
 Open `/app/component/graphics-playground` on a local frontend server.
-Use **Select** to click a rectangle and drag it, or drag a corner handle to resize.
-Drag empty canvas to select all rectangles the box touches; Shift-drag adds to the
-selection, and Shift-click toggles individual rectangles. Drag a selected rectangle
+Use **Select** to click a shape and drag it, or drag a visible corner handle or anywhere along an edge to resize.
+Unfilled rectangles and ellipses are picked only within 3 screen pixels of their outline at
+any zoom; their empty interiors let clicks reach shapes beneath. Filled shapes
+also accept clicks inside. The orange seed rectangle is filled; the other two
+seed rectangles and newly drawn shapes have no fill. Box selection tests the
+whole shape, including its interior, but excludes empty corners around an ellipse.
+Drag empty canvas to select all shapes the box touches; Shift-drag adds to the
+selection, and Shift-click toggles individual shapes. Drag a selected shape
 to move the group; Delete removes the group in one undo step. Escape during box
-selection restores the previous selection. Multiple selection and persistent groups expose corner scaling handles; scaling
-is one undo step and preserves relative placement, including nested descendants. Click empty canvas to deselect. **Rectangle** draws new rectangles anywhere in the
-infinite world. **Delete** (or Delete/Backspace while the canvas is focused) removes
+selection restores the previous selection. Multiple selection and persistent groups expose visible corner handles and invisible full-edge resize targets; scaling
+is one undo step and preserves relative placement, including nested descendants. Click empty canvas to deselect. **Rectangle** and **Ellipse** draw their respective shapes anywhere in the
+infinite world. Ellipse previews follow the curve; ellipses support the same
+move, resize, rotation, multi-selection, grouping and history as rectangles. **Delete** (or Delete/Backspace while the canvas is focused) removes
 the selection. Escape cancels an active gesture; otherwise it deselects.
 **Undo** / **Redo** also support Ctrl/Meta-Z, Ctrl/Meta-Shift-Z and Ctrl/Meta-Y while
 the canvas is focused. Creation, moving, resizing and deletion each undo as one
@@ -1003,5 +1090,42 @@ camera position and zoom. It has no persistence or document creation effects.
 - Scroll to pan; Ctrl/Meta-scroll zooms about the pointer.
 - Focus the canvas, then Space-drag, or use a middle-button drag, to pan.
 - Zoom buttons use the viewport center. Reset view returns to 100% at camera 0, 0.
-- Each split owns its own camera. Selection and drawing tools are not implemented
-  in checkpoint 1.
+- Each split owns its own camera and local scene.
+
+### Graphics multiplayer playground
+
+Open `/app/component/graphics-multiplayer-playground` on the local frontend. Alice
+and Bob render independent Loro replicas of the same seeded scene side by side.
+Each panel has Select/Rectangle/Ellipse, Fill/No fill, Delete, Group/Ungroup, Fit and
+its own Undo/Redo. Expand Layers to select nested nodes, reorder, move to root, or
+move the selected node into an eligible group. Canvas pan/zoom, selection, resize
+and rotation use the same controls as the infinite canvas playground.
+
+Go offline stops delivery. Make different edits in the two panels, then Sync now
+to deliver the queued bytes while staying offline, or Reconnect to resume automatic
+delivery. Delivery delay simulates batching latency; the status shows queued and
+delivered update counts. Gestures sync on release. A remote commit cancels an active
+local preview. Undo affects local history; same-property conflicts follow native
+Loro undo behavior. The adapter notes document the provisional reparent/move policy.
+
+While connected, each panel shows the other peer's colored cursor/name, dashed
+selection outlines and tinted ghosts of pending drawing, movement, resizing or
+rotation. Dragging a selection box also shows a remote marquee. Try selecting a
+shape in Alice's panel, then dragging it slowly: Bob sees Alice's pending position
+while the committed shape stays put until release. Pan/zoom Bob independently to
+check that awareness follows his camera. Escape clears a gesture preview.
+The cursor has a rounded name-only badge; no action/status text or detached label
+appears on the selection. During transforms, the ghost supplies the outline.
+Cursor and preview updates debounce for 40 ms (100 ms maximum during continuous
+movement), and the receiver spring-smooths their motion between updates. Release
+and cancellation clear ghosts promptly. Reduced-motion settings disable smoothing.
+
+Awareness does not edit the document or local selection, intercept clicks or add
+undo steps. Delivery delay applies to presence too, with intermediate messages
+coalesced. Go offline immediately hides remote awareness and drops its pending
+messages; Sync now while offline syncs documents only. Reconnect publishes fresh
+presence. Document update counts exclude cursor/selection/preview messages.
+
+Reset both peers recreates the scene and clears histories, selections and queued
+updates. Reload also resets everything. This is a local-only component registry
+demo: no document files, storage, SyncService, or backend data are created.

@@ -1,6 +1,6 @@
 import {
-  children,
   type GraphicsEditor,
+  type LayerOperation,
   paintOrder,
   roots,
 } from '@macro-inc/graphics';
@@ -25,7 +25,30 @@ export function SceneInspector(props: { editor: GraphicsEditor }) {
   return (
     <aside class="max-h-48 shrink-0 overflow-auto border-t border-edge-muted p-3 text-xs">
       <div class="mb-2 font-medium">
-        Scene tree · select a node to edit it directly
+        Scene tree · back to front · select a node to edit it directly
+      </div>
+      <div class="mb-2 flex flex-wrap gap-2">
+        <For
+          each={
+            [
+              { operation: 'back', label: 'Send to back' },
+              { operation: 'backward', label: 'Send backward' },
+              { operation: 'forward', label: 'Bring forward' },
+              { operation: 'front', label: 'Bring to front' },
+            ] satisfies { operation: LayerOperation; label: string }[]
+          }
+        >
+          {(action) => (
+            <button
+              type="button"
+              class="rounded border border-edge-muted px-2 py-1 disabled:opacity-40"
+              disabled={!session().selectedIds.length}
+              onClick={() => props.editor.reorderSelection(action.operation)}
+            >
+              {action.label}
+            </button>
+          )}
+        </For>
       </div>
       <div class="flex flex-col items-start gap-1">
         <For each={paintOrder(document)}>
@@ -50,12 +73,7 @@ export function SceneInspector(props: { editor: GraphicsEditor }) {
           }
           onClick={() => {
             const id = session().selectedId;
-            if (id)
-              props.editor.reparent(
-                id,
-                document.rootId,
-                children(document).length + 10
-              );
+            if (id) props.editor.reparent(id, document.rootId);
           }}
         >
           Move selected to root

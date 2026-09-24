@@ -1,5 +1,5 @@
 import {
-  type Component,
+  createMemo,
   createSignal,
   For,
   onCleanup,
@@ -7,18 +7,33 @@ import {
   Show,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
-import { attachCameraControls, type GraphicsInputOptions } from '../browser';
-import { corners, cssMatrix, enclosing } from '../core/affine';
+import {
+  attachCameraControls,
+  type GraphicsInputOptions,
+  resizeCursor,
+} from '../browser';
+import { corners, cssMatrix, enclosing, translation } from '../core/affine';
 import { worldToScreen } from '../core/camera';
 import type { GraphicsEditor } from '../core/editor';
-import type { Point, RectangleItem } from '../core/model';
+import type { Point, ShapeItem } from '../core/model';
+import { isResizeEdge, resizeHandles } from '../core/resize';
+import { selectionFrame } from '../core/selection-frame';
+import { isShape, isShapeKind, shapeDefinition } from '../core/shapes/registry';
 import {
-  drawableIds,
-  nodeCorners,
-  roots,
-  worldBounds,
-  worldMatrix,
-} from '../core/scene';
+  defaultRenderers,
+  type ItemRenderers,
+  ShapeView,
+} from './shape-renderers';
+
+export {
+  defaultRenderers,
+  type ItemRenderers,
+  type ShapeViewProps,
+} from './shape-renderers';
+export { EllipseView } from './shapes/ellipse';
+export { RectangleView } from './shapes/rectangle';
+
+import { drawableIds, roots, worldMatrix } from '../core/scene';
 
 export function createGraphicsProjection(editor: GraphicsEditor) {
   const [camera, setCamera] = createSignal(editor.getCamera());
@@ -31,25 +46,10 @@ export function createGraphicsProjection(editor: GraphicsEditor) {
   onCleanup(editor.subscribePreview(setPreview));
   return { camera, document, session, preview };
 }
-export type ItemRenderers = {
-  rectangle: Component<{ item: RectangleItem; scale: number }>;
-};
-export const RectangleView: Component<{ item: RectangleItem }> = (props) => (
-  <div
-    style={{
-      width: '100%',
-      height: '100%',
-      'box-sizing': 'border-box',
-      background: props.item.appearance.fill,
-      border: `2px solid ${props.item.appearance.stroke}`,
-    }}
-  />
-);
-
 /** Scene paint order is independent of DOM containment; nodes retain keyed mounts. */
 export function GraphicsSurface(props: {
   editor: GraphicsEditor;
-  renderers?: ItemRenderers;
+  renderers?: Partial<ItemRenderers>;
   gridColor?: string;
   class?: string;
   input?: GraphicsInputOptions;
@@ -60,53 +60,67 @@ export function GraphicsSurface(props: {
   onMount(() =>
     onCleanup(attachCameraControls(viewport, props.editor, props.input))
   );
+  const scene = () =>
+    projection.session().transform?.document ?? projection.document;
   const overrides = () => projection.session().transform?.nodes ?? {};
-  const selected = () =>
-    roots(projection.document, projection.session().selectedIds);
+  const selected = () => roots(scene(), projection.session().selectedIds);
+  const frame = createMemo(() =>
+    selectionFrame(scene(), selected(), overrides())
+  );
   const screen = (p: Point) => worldToScreen(projection.camera(), p);
-  const outline = (id: string) => {
-    const node = projection.document.items[id];
-    const points =
-      node?.type === 'rectangle'
-        ? nodeCorners(projection.document, id, overrides())
-        : corners(worldBounds(projection.document, id, overrides()));
-    return points.map(screen);
-  };
+  const outline = (id: string) =>
+    selectionFrame(scene(), [id], overrides())?.corners.map(screen) ?? [];
   const pointsAttribute = (points: readonly Point[]) =>
     points.map((p) => `${p.x},${p.y}`).join(' ');
-  const handlePoints = () => {
+  const handleCorners = () => {
     if (projection.session().transform) return [];
-    if (
-      selected().length > 1 ||
-      projection.document.items[projection.session().selectedId ?? '']?.type ===
-        'group'
-    ) {
-      const bounds = selectionBounds();
-      return bounds ? corners(bounds) : [];
-    }
-    const id = projection.session().selectedId;
-    return id && projection.document.items[id]?.type === 'rectangle'
-      ? outline(id)
-      : [];
+    return frame()?.corners.map(screen) ?? [];
   };
-  const selectionBounds = () => {
-    const points = selected()
-      .flatMap((id) => nodeCorners(projection.document, id, overrides()))
-      .map(screen);
-    if (!points.length) return undefined;
-    return enclosing(points);
+  const edgeSegment = (index: number) => {
+    const points = handleCorners();
+    if (points.length !== 4) return undefined;
+    return { start: points[index]!, end: points[(index + 1) % 4]! };
   };
   const rotationHandle = () => {
-    if (projection.session().transform) return undefined;
-    const b = selectionBounds();
-    return b ? { x: b.x + b.width / 2, y: b.y - 30, anchorY: b.y } : undefined;
+    const points = handleCorners();
+    if (points.length !== 4) return undefined;
+    if (selected().length === 1 && isShape(scene().items[selected()[0]!])) {
+      const [a, b, c] = [points[0]!, points[1]!, points[2]!];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      // Keep the normal outside the box even after a resize flips an axis.
+      const direction = dy * (c.x - a.x) - dx * (c.y - a.y) > 0 ? -1 : 1;
+      const offset = (16 * direction) / Math.hypot(dx, dy);
+      return {
+        x: (a.x + b.x) / 2 + dy * offset,
+        y: (a.y + b.y) / 2 - dx * offset,
+      };
+    }
+    const bounds = enclosing(points);
+    return { x: bounds.x + bounds.width / 2, y: bounds.y - 16 };
   };
   const gridStep = () => {
     let step = 32 * projection.camera().scale;
     while (step < 16) step *= 2;
     return step;
   };
-  const Rectangle = props.renderers?.rectangle ?? RectangleView;
+  const renderers = { ...defaultRenderers, ...props.renderers };
+  const previewItem = (): ShapeItem | undefined => {
+    const bounds = projection.preview();
+    if (!bounds || bounds.width <= 0 || bounds.height <= 0) return undefined;
+    const kind = props.editor.getDrawingKind();
+    return {
+      id: 'preview',
+      type: kind,
+      placement: { parentId: scene().rootId, sortKey: 'a0' },
+      transform: translation(bounds.x, bounds.y),
+      geometry: shapeDefinition(kind).createGeometry(bounds),
+      appearance: props.input?.appearance?.() ?? {
+        fill: 'transparent',
+        stroke: '#e53935',
+      },
+    };
+  };
   return (
     <div
       ref={viewport}
@@ -116,18 +130,18 @@ export function GraphicsSurface(props: {
       aria-label="Graphics canvas"
       style={{
         position: 'relative',
+        isolation: 'isolate',
         overflow: 'hidden',
         width: '100%',
         height: '100%',
         'touch-action': 'none',
         'overscroll-behavior': 'contain',
         'user-select': 'none',
-        cursor:
-          props.input?.tool?.() === 'rectangle'
-            ? 'crosshair'
-            : props.input?.tool?.() === 'pan'
-              ? 'grab'
-              : undefined,
+        cursor: isShapeKind(props.input?.tool?.())
+          ? 'crosshair'
+          : props.input?.tool?.() === 'pan'
+            ? 'grab'
+            : undefined,
         'background-image': `radial-gradient(circle, ${props.gridColor ?? 'currentColor'} 1px, transparent 1px)`,
         'background-size': `${gridStep()}px ${gridStep()}px`,
         'background-position': `${projection.camera().x}px ${projection.camera().y}px`,
@@ -140,10 +154,11 @@ export function GraphicsSurface(props: {
           left: '0',
           'transform-origin': '0 0',
           'pointer-events': 'none',
+          'z-index': 0,
           transform: `translate(${projection.camera().x}px, ${projection.camera().y}px) scale(${projection.camera().scale})`,
         }}
       >
-        <Show when={projection.document.surface}>
+        <Show when={scene().surface}>
           {(surface) => (
             <Show when={props.image}>
               {(image) => (
@@ -165,16 +180,15 @@ export function GraphicsSurface(props: {
             </Show>
           )}
         </Show>
-        <For each={drawableIds(projection.document)}>
+        <For each={drawableIds(scene())}>
           {(id) => {
-            const initial = projection.document.items[id];
-            if (initial?.type !== 'rectangle') return null;
+            const initial = scene().items[id];
+            if (!isShape(initial)) return null;
             const item = () => {
-              const node = overrides()[id] ?? projection.document.items[id];
-              return node?.type === 'rectangle' ? node : initial;
+              const node = overrides()[id] ?? scene().items[id];
+              return isShape(node) ? node : initial;
             };
-            const world = () =>
-              worldMatrix(projection.document, id, overrides());
+            const world = () => worldMatrix(scene(), id, overrides());
             return (
               <div
                 data-graphics-item={id}
@@ -182,14 +196,16 @@ export function GraphicsSurface(props: {
                   position: 'absolute',
                   left: '0',
                   top: '0',
-                  width: `${item().geometry.width}px`,
-                  height: `${item().geometry.height}px`,
+                  width: `${shapeDefinition(item().type).bounds(item()).width}px`,
+                  height: `${shapeDefinition(item().type).bounds(item()).height}px`,
                   'transform-origin': '0 0',
+                  isolation: 'isolate',
                   transform: cssMatrix(world()),
                   'pointer-events': 'auto',
                 }}
               >
-                <Rectangle
+                <ShapeView
+                  renderers={renderers}
                   item={item()}
                   scale={
                     projection.camera().scale *
@@ -200,21 +216,26 @@ export function GraphicsSurface(props: {
             );
           }}
         </For>
-        <Show when={projection.preview()}>
-          {(preview) => (
+        <Show when={previewItem()}>
+          {(item) => (
             <div
               data-graphics-preview
               style={{
                 position: 'absolute',
-                left: `${preview().x}px`,
-                top: `${preview().y}px`,
-                width: `${preview().width}px`,
-                height: `${preview().height}px`,
-                'box-sizing': 'border-box',
-                border: `${2 / projection.camera().scale}px dashed ${props.input?.appearance?.().stroke ?? '#e53935'}`,
+                left: `${projection.preview()?.x ?? 0}px`,
+                top: `${projection.preview()?.y ?? 0}px`,
+                width: `${projection.preview()?.width ?? 0}px`,
+                height: `${projection.preview()?.height ?? 0}px`,
                 'pointer-events': 'none',
               }}
-            />
+            >
+              <ShapeView
+                renderers={renderers}
+                item={item()}
+                scale={projection.camera().scale}
+                preview
+              />
+            </div>
           )}
         </Show>
       </div>
@@ -222,6 +243,7 @@ export function GraphicsSurface(props: {
         aria-label="Selection overlay"
         style={{
           position: 'absolute',
+          'z-index': 1,
           inset: '0',
           width: '100%',
           height: '100%',
@@ -230,58 +252,82 @@ export function GraphicsSurface(props: {
         }}
       >
         <Show when={props.input?.tool?.() === 'select'}>
-          <For each={selected()}>
+          <For
+            each={selected().filter(
+              (id) =>
+                isShape(scene().items[id]) &&
+                (selected().length > 1 || projection.session().transform)
+            )}
+          >
             {(id) => (
               <polygon
                 points={pointsAttribute(outline(id))}
                 fill="none"
                 stroke="#5687ff"
-                stroke-width="2"
-              />
-            )}
-          </For>
-          <Show
-            when={
-              !projection.session().transform &&
-              selected().length > 1 &&
-              selectionBounds()
-            }
-          >
-            {(bounds) => (
-              <rect
-                data-graphics-selection-bounds
-                stroke-dasharray="3 3"
-                x={bounds().x}
-                y={bounds().y}
-                width={bounds().width}
-                height={bounds().height}
-                fill="none"
-                stroke="#5687ff"
                 stroke-width="1"
               />
             )}
+          </For>
+          <Show when={!projection.session().transform && frame()}>
+            {(selection) => (
+              <polygon
+                data-graphics-selection-bounds
+                stroke-dasharray={
+                  selected().length > 1 ||
+                  scene().items[selected()[0]!]?.type === 'group'
+                    ? '3 3'
+                    : undefined
+                }
+                points={pointsAttribute(selection().corners.map(screen))}
+                fill="transparent"
+                stroke="#5687ff"
+                stroke-width="1"
+                style={{ 'pointer-events': 'all', cursor: 'move' }}
+              />
+            )}
           </Show>
-          <For each={['nw', 'ne', 'se', 'sw'] as const}>
-            {(corner, index) => (
-              <Show when={handlePoints()[index()]}>
+          {/* Screen-space hit strips; corners are painted afterward and win overlaps. */}
+          <For each={resizeHandles.filter(isResizeEdge)}>
+            {(handle, index) => (
+              <Show when={edgeSegment(index())}>
+                {(edge) => (
+                  <line
+                    data-graphics-handle={handle}
+                    role="img"
+                    aria-label={`Resize ${handle}`}
+                    x1={edge().start.x}
+                    y1={edge().start.y}
+                    x2={edge().end.x}
+                    y2={edge().end.y}
+                    stroke="transparent"
+                    stroke-width="10"
+                    style={{
+                      'pointer-events': 'stroke',
+                      cursor: resizeCursor(handle, frame()),
+                    }}
+                  />
+                )}
+              </Show>
+            )}
+          </For>
+          <For each={resizeHandles.filter((handle) => !isResizeEdge(handle))}>
+            {(handle, index) => (
+              <Show when={handleCorners()[index()]}>
                 {(point) => (
                   <rect
-                    data-graphics-handle={corner}
+                    data-graphics-handle={handle}
                     role="img"
-                    aria-label={`Resize ${corner}`}
+                    aria-label={`Resize ${handle}`}
                     x={point().x - 5}
                     y={point().y - 5}
                     width="10"
                     height="10"
-                    rx="2"
+                    rx="0"
                     fill="white"
                     stroke="#5687ff"
                     style={{
                       'pointer-events': 'all',
-                      cursor:
-                        corner === 'nw' || corner === 'se'
-                          ? 'nwse-resize'
-                          : 'nesw-resize',
+                      cursor: resizeCursor(handle, frame()),
                     }}
                   />
                 )}
@@ -290,26 +336,17 @@ export function GraphicsSurface(props: {
           </For>
           <Show when={rotationHandle()}>
             {(handle) => (
-              <>
-                <line
-                  x1={handle().x}
-                  y1={handle().anchorY}
-                  x2={handle().x}
-                  y2={handle().y}
-                  stroke="#5687ff"
-                />
-                <circle
-                  data-graphics-handle="rotate"
-                  role="img"
-                  aria-label="Rotate selection"
-                  cx={handle().x}
-                  cy={handle().y}
-                  r="6"
-                  fill="white"
-                  stroke="#5687ff"
-                  style={{ 'pointer-events': 'all', cursor: 'grab' }}
-                />
-              </>
+              <circle
+                data-graphics-handle="rotate"
+                role="img"
+                aria-label="Rotate selection"
+                cx={handle().x}
+                cy={handle().y}
+                r="6"
+                fill="white"
+                stroke="#5687ff"
+                style={{ 'pointer-events': 'all', cursor: 'grab' }}
+              />
             )}
           </Show>
         </Show>

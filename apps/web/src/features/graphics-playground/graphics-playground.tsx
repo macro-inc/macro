@@ -5,6 +5,9 @@ import {
   drawableIds,
   type GraphicsDocument,
   roots,
+  type ShapeKind,
+  shapeDefinitions,
+  shapeKinds,
 } from '@macro-inc/graphics';
 import {
   createGraphicsProjection,
@@ -12,40 +15,19 @@ import {
 } from '@macro-inc/graphics/solid';
 import { createSignal, For, onCleanup, onMount } from 'solid-js';
 import { SceneInspector } from './components/scene-inspector';
+import { createGraphicsTestScene } from './core/test-scenes';
 
 export default function GraphicsPlayground(
-  props: { scene?: GraphicsDocument; label?: string; inspector?: boolean } = {}
+  props: {
+    seedScene?: () => GraphicsDocument;
+    label?: string;
+    inspector?: boolean;
+  } = {}
 ) {
-  const editor = createGraphicsEditor(
-    props.scene ?? [
-      {
-        id: 'rectangle-a',
-        type: 'rectangle',
-        geometry: { x: 96, y: 96, width: 240, height: 160 },
-        appearance: { fill: 'var(--color-accent)', stroke: 'var(--color-ink)' },
-      },
-      {
-        id: 'rectangle-b',
-        type: 'rectangle',
-        geometry: { x: 400, y: 192, width: 180, height: 240 },
-        appearance: {
-          fill: 'var(--color-panel)',
-          stroke: 'var(--color-ink-muted)',
-        },
-      },
-      {
-        id: 'rectangle-c',
-        type: 'rectangle',
-        geometry: { x: 176, y: 336, width: 160, height: 112 },
-        appearance: {
-          fill: 'var(--color-input)',
-          stroke: 'var(--color-accent)',
-        },
-      },
-    ]
-  );
+  const seedScene = props.seedScene ?? createGraphicsTestScene;
+  const editor = createGraphicsEditor(seedScene());
   onCleanup(editor.dispose);
-  const [tool, setTool] = createSignal<'select' | 'rectangle'>('select');
+  const [tool, setTool] = createSignal<'select' | ShapeKind>('select');
   const { camera, document, session } = createGraphicsProjection(editor);
   const canGroup = () => {
     const nodes = roots(document, session().selectedIds).map(
@@ -65,13 +47,20 @@ export default function GraphicsPlayground(
     );
   };
   let surfaceHost!: HTMLDivElement;
+  const fitScene = () =>
+    editor.fitScene({
+      width: surfaceHost.clientWidth,
+      height: surfaceHost.clientHeight,
+    });
   onMount(() => {
-    if (props.inspector)
-      editor.fitScene({
-        width: surfaceHost.clientWidth,
-        height: surfaceHost.clientHeight,
-      });
+    if (props.inspector) fitScene();
   });
+  const resetTestScene = () => {
+    editor.resetDocument(seedScene());
+    editor.resetCamera();
+    setTool('select');
+    if (props.inspector) fitScene();
+  };
   const zoom = (factor: number) =>
     editor.zoomAt(
       { x: surfaceHost.clientWidth / 2, y: surfaceHost.clientHeight / 2 },
@@ -84,16 +73,7 @@ export default function GraphicsPlayground(
       </SplitHeaderLeft>
       <div class="@container flex size-full min-h-0 flex-col bg-panel text-ink">
         <div class="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge-muted px-3 py-2 text-xs">
-          <button
-            type="button"
-            class="text-xs"
-            onClick={() =>
-              editor.fitScene({
-                width: surfaceHost.clientWidth,
-                height: surfaceHost.clientHeight,
-              })
-            }
-          >
+          <button type="button" class="text-xs" onClick={fitScene}>
             Fit scene
           </button>
           <span
@@ -105,19 +85,19 @@ export default function GraphicsPlayground(
           <span class="hidden text-xs text-ink-muted @2xl:block">
             Scroll to pan · Space + drag · Circle handle to rotate
           </span>
-          <For each={['select', 'rectangle'] as const}>
+          <For each={['select', ...shapeKinds] as const}>
             {(value) => (
               <button
                 type="button"
                 class="rounded border border-edge-muted px-2 py-1 text-xs aria-pressed:bg-accent aria-pressed:text-accent-contrast"
                 aria-pressed={tool() === value}
                 onClick={() => {
-                  editor.cancelRectangle();
+                  editor.cancelShape();
                   editor.cancelTransform();
                   setTool(value);
                 }}
               >
-                {value === 'select' ? 'Select' : 'Rectangle'}
+                {value === 'select' ? 'Select' : shapeDefinitions[value].label}
               </button>
             )}
           </For>
@@ -192,6 +172,13 @@ export default function GraphicsPlayground(
           >
             Reset view
           </button>
+          <button
+            type="button"
+            class="rounded border border-edge-muted px-2 py-1 text-xs hover:bg-input"
+            onClick={resetTestScene}
+          >
+            Reset test scene
+          </button>
         </div>
         <div ref={surfaceHost} class="min-h-0 flex-1">
           <GraphicsSurface
@@ -200,7 +187,7 @@ export default function GraphicsPlayground(
               tool,
               editing: true,
               appearance: () => ({
-                fill: 'var(--color-input)',
+                fill: 'transparent',
                 stroke: 'var(--color-accent)',
               }),
             }}
@@ -208,17 +195,15 @@ export default function GraphicsPlayground(
             class="focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
           />
         </div>
-        {props.inspector && (
-          <details class="relative shrink-0 border-t border-edge-muted">
-            <summary class="px-4 py-1 text-xs">Scene tree</summary>
-            <div class="absolute bottom-full z-10 w-full bg-panel shadow-lg">
-              <SceneInspector editor={editor} />
-            </div>
-          </details>
-        )}
+        <details class="relative shrink-0 border-t border-edge-muted">
+          <summary class="px-4 py-1 text-xs">Layers</summary>
+          <div class="absolute bottom-full z-10 w-full bg-panel shadow-lg">
+            <SceneInspector editor={editor} />
+          </div>
+        </details>
         <div class="flex gap-4 border-t border-edge-muted px-4 py-2 text-xs text-ink-muted">
           <span>
-            {drawableIds(document).length} rectangles ·{' '}
+            {drawableIds(document).length} shapes ·{' '}
             {session().selectedIds.length
               ? `${session().selectedIds.length} selected`
               : 'Drag to select'}
