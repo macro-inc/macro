@@ -251,7 +251,7 @@ export function Agents(props: { navigation?: JSX.Element } = {}) {
       <Show when={!creating() && !creatingFromLink() && !editingAgent()}>
         <SettingsPage
           title="Agents"
-          description={<AgentSettingsDescription />}
+          description={<AgentSettingsDescription section="agents" />}
           actions={
             <Button variant="cta" size="sm" onClick={() => setCreating(true)}>
               <PlusIcon />

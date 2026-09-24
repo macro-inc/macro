@@ -175,7 +175,7 @@ export function Harness(
       <Show when={!pairingDialog()}>
         <SettingsPage
           title={props.navigation ? 'Agents' : 'Runtimes'}
-          description={<AgentSettingsDescription />}
+          description={<AgentSettingsDescription section="runtimes" />}
           actions={
             <Button
               variant="cta"
