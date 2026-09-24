@@ -276,13 +276,17 @@ impl NotificationStatus {
     /// returns true if we should be clearing the relevant push notifications
     /// for this notification
     pub(crate) fn should_clear_push_notifs(&self) -> bool {
-        use super::NotificationAction;
-        let action = match self {
-            NotificationStatus::Seen => NotificationAction::MarkSeen,
-            NotificationStatus::Done(true) => NotificationAction::MarkDone,
-            NotificationStatus::Done(false) => NotificationAction::Reopen,
-        };
-        action.should_clear_push_notifications()
+        if cfg!(feature = "clear_ios_push") {
+            use super::NotificationAction;
+            let action = match self {
+                NotificationStatus::Seen => NotificationAction::MarkSeen,
+                NotificationStatus::Done(true) => NotificationAction::MarkDone,
+                NotificationStatus::Done(false) => NotificationAction::Reopen,
+            };
+            action.should_clear_push_notifications()
+        } else {
+            false
+        }
     }
 }
 
