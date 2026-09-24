@@ -11,6 +11,7 @@ import type { UpdateAgentRequestAutoAcceptPermissions } from './updateAgentReque
 import type { UpdateAgentRequestAvatarUrl } from './updateAgentRequestAvatarUrl';
 import type { UpdateAgentRequestDescription } from './updateAgentRequestDescription';
 import type { UpdateAgentRequestHarnessId } from './updateAgentRequestHarnessId';
+import type { UpdateAgentRequestIsCoding } from './updateAgentRequestIsCoding';
 import type { UpdateAgentRequestTeamId } from './updateAgentRequestTeamId';
 
 /**
@@ -37,6 +38,8 @@ asking. Omit to always prompt. */
   harness_id?: UpdateAgentRequestHarnessId;
   /** Instructions supplied to the agent at the start of a conversation. */
   instructions: string;
+  /** Whether the agent is a coding agent. Omit to follow the harness. */
+  is_coding?: UpdateAgentRequestIsCoding;
   /** Which MCP servers sessions of this agent are handed. */
   mcp?: AgentMcpServers;
   /** Display name. */

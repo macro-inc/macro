@@ -83,6 +83,12 @@ export const listAgentsResponseItem = zod
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
       ),
+    is_coding: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. `None` follows the\nharness - in-memory chats, every other runtime codes.'
+      ),
     mcp: zod
       .union([
         zod
@@ -160,6 +166,12 @@ export const createAgentBody = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    is_coding: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether the agent is a coding agent. Omit to follow the harness.'
       ),
     mcp: zod
       .union([
@@ -247,6 +259,12 @@ export const updateAgentBody = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    is_coding: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether the agent is a coding agent. Omit to follow the harness.'
       ),
     mcp: zod
       .union([
@@ -368,6 +386,12 @@ export const updateAgentResponse = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    is_coding: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. `None` follows the\nharness - in-memory chats, every other runtime codes.'
       ),
     mcp: zod
       .union([

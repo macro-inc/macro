@@ -14824,6 +14824,10 @@
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
           },
+          "is_coding": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. `None` follows the\nharness - in-memory chats, every other runtime codes."
+          },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
             "description": "Which MCP servers sessions of this agent are handed."
@@ -19295,6 +19299,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "is_coding": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent is a coding agent. Omit to follow the harness."
           },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
@@ -30867,6 +30875,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "is_coding": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent is a coding agent. Omit to follow the harness."
           },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
