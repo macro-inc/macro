@@ -229,8 +229,11 @@ pub async fn build_tool_service_context(
     );
 
 
-    let skill_tool_context =
-        ai_tools::build_skill_tool_context(search_client.clone(), soup_service.clone());
+    let skill_tool_context = ai_tools::build_skill_tool_context(
+        search_client.clone(),
+        soup_service.clone(),
+        &document_tool_context,
+    );
 
     Ok(ToolServiceContext {
         search_service_client: search_client.clone(),

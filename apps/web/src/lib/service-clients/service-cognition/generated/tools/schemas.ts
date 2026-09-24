@@ -5072,6 +5072,14 @@ export const ReadProjectResponse = z.object({
   ),
 });
 
+export const ReadSkill = z.object({ documentId: z.string().uuid() });
+
+export const ReadSkillResponse = z.object({
+  documentId: z.string().uuid(),
+  name: z.string(),
+  content: z.string(),
+});
+
 export const ReadSpreadsheet = z.object({
   documentId: z.string(),
   sheetId: z.union([z.string(), z.null()]).optional(),

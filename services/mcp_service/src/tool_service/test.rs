@@ -65,6 +65,8 @@ async fn server_instructions_describe_available_workflows() {
         "downloadable URLs",
         "CreateDocument",
         "ListEntities",
+        "ListSkills",
+        "ReadSkill",
     ] {
         assert!(
             instructions.contains(expected_text),
