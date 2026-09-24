@@ -284,9 +284,10 @@ function SidePanelLayoutInner(
           )}
         >
           <Scroll>
-            {/* Full-frame mobile: the overlay spans the whole panel, so the
-                content must clear the floating header islands + status bar. */}
-            <div class="w-full max-w-2xl mx-auto min-w-0 touch:pt-(--mobile-content-inset-top)">
+            {/* Full-frame mobile: the overlay paints over the floating header
+                islands, so it starts at the top and only clears the status
+                bar. The bottom chrome still floats above it. */}
+            <div class="w-full max-w-2xl mx-auto min-w-0 touch:pt-(--safe-top) touch:pb-(--mobile-content-inset-bottom)">
               <div class="px-2 pt-2">
                 <Button
                   variant="ghost"
