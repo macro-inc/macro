@@ -417,11 +417,7 @@ where
     type Err = BillingError;
 
     #[tracing::instrument(skip(self), err)]
-    async fn release(
-        &self,
-        team_id: Uuid,
-        member: &MacroUserIdStr<'_>,
-    ) -> Result<(), BillingError> {
+    async fn release(&self, team_id: Uuid, member: &MacroUserIdStr<'_>) -> Result<()> {
         let Some(payer) = self.entitlements.team_payer(team_id).await? else {
             return Ok(());
         };

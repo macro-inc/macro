@@ -1397,12 +1397,14 @@ struct ReleaseOnSecondRead {
 
 impl EntitlementSource for ReleaseOnSecondRead {
     async fn entitlement(&self, _user: &MacroUserIdStr<'_>) -> Result<Entitlement> {
-        let mut calls = self.calls.lock().unwrap();
-        *calls += 1;
-        if *calls == 1 {
+        let first_read = {
+            let mut calls = self.calls.lock().unwrap();
+            *calls += 1;
+            *calls == 1
+        };
+        if first_read {
             Ok(self.before.clone())
         } else {
-            drop(calls);
             self.repo
                 .release_open_seat(&self.before.payer, self.open, &self.member)
                 .await?;

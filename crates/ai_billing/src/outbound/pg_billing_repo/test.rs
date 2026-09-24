@@ -430,6 +430,7 @@ async fn settlement_uses_stored_overage_policy_and_flushes_at_period_end(pool: P
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
     let repo = PgBillingRepo::new(pool.clone());
+    let payer = payer();
     let now = Utc::now()
         .duration_trunc(chrono::Duration::microseconds(1))
         .unwrap();
@@ -442,7 +443,7 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
     let member = MacroUserIdStr::try_from("macro|member@example.com".to_string()).unwrap();
     let seats = vec![
         SeatAllowance {
-            user: payer(),
+            user: payer.clone(),
             included_cents: 4_000,
         },
         SeatAllowance {
@@ -452,20 +453,20 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
     ];
 
     assert!(
-        repo.period_allowance(&payer(), open.start())
+        repo.period_allowance(&payer, open.start())
             .await
             .unwrap()
             .is_none()
     );
 
     assert_eq!(
-        repo.store_open_allowance(&payer(), open, &seats, SeatGeneration::from_raw(0))
+        repo.store_open_allowance(&payer, open, &seats, SeatGeneration::from_raw(0))
             .await
             .unwrap(),
         AllowanceStore::Stored
     );
     let frozen = repo
-        .period_allowance(&payer(), open.start())
+        .period_allowance(&payer, open.start())
         .await
         .unwrap()
         .unwrap();
@@ -473,17 +474,17 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
 
     // A later observation of the same open period refreshes.
     let max_payer = vec![SeatAllowance {
-        user: payer(),
+        user: payer.clone(),
         included_cents: 20_000,
     }];
     assert_eq!(
-        repo.store_open_allowance(&payer(), open, &max_payer, SeatGeneration::from_raw(0))
+        repo.store_open_allowance(&payer, open, &max_payer, SeatGeneration::from_raw(0))
             .await
             .unwrap(),
         AllowanceStore::Stored
     );
     let frozen = repo
-        .period_allowance(&payer(), open.start())
+        .period_allowance(&payer, open.start())
         .await
         .unwrap()
         .unwrap();
@@ -496,16 +497,16 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
         )
         VALUES ($1, $2, $3, $4)
         "#,
-        payer().as_ref(),
+        payer.as_ref(),
         earlier,
-        &vec![payer().as_ref().to_string(), member.as_ref().to_string()],
+        &vec![payer.as_ref().to_string(), member.as_ref().to_string()],
         &vec![4_000_i64, 20_000_i64],
     )
     .execute(&pool)
     .await
     .unwrap();
     assert_eq!(
-        repo.period_allowance(&payer(), open.start())
+        repo.period_allowance(&payer, open.start())
             .await
             .unwrap()
             .unwrap()
@@ -513,7 +514,7 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
         max_payer
     );
     assert_eq!(
-        repo.period_allowance(&payer(), earlier)
+        repo.period_allowance(&payer, earlier)
             .await
             .unwrap()
             .unwrap()
@@ -567,6 +568,7 @@ async fn seat_generation(pool: &PgPool, payer: &str) -> Option<i64> {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(pool: PgPool) {
     let repo = PgBillingRepo::new(pool.clone());
+    let payer = payer();
     let now = Utc::now();
     let open_start = (now - chrono::Duration::days(1))
         .duration_trunc(chrono::Duration::microseconds(1))
@@ -581,7 +583,7 @@ async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(poo
     let alice = MacroUserIdStr::try_from("macro|alice@example.com".to_string()).unwrap();
     let bob = MacroUserIdStr::try_from("macro|bob@example.com".to_string()).unwrap();
     let users = vec![
-        payer().as_ref().to_string(),
+        payer.as_ref().to_string(),
         alice.as_ref().to_string(),
         bob.as_ref().to_string(),
     ];
@@ -595,7 +597,7 @@ async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(poo
         )
         VALUES ($1, $2, $3, $4, $5)
         "#,
-        payer().as_ref(),
+        payer.as_ref(),
         open.start(),
         &users,
         &open_cents,
@@ -611,7 +613,7 @@ async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(poo
         )
         VALUES ($1, $2, $3, $4, $5)
         "#,
-        payer().as_ref(),
+        payer.as_ref(),
         closed_start,
         &users,
         &closed_cents,
@@ -621,32 +623,28 @@ async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(poo
     .await
     .unwrap();
 
-    repo.release_open_seat(&payer(), open, &alice)
-        .await
-        .unwrap();
+    repo.release_open_seat(&payer, open, &alice).await.unwrap();
 
-    let open_row = raw_allowance(&pool, payer().as_ref(), open.start())
+    let open_row = raw_allowance(&pool, payer.as_ref(), open.start())
         .await
         .unwrap();
     assert_eq!(
         open_row.billed_users,
-        vec![payer().as_ref().to_string(), bob.as_ref().to_string()]
+        vec![payer.as_ref().to_string(), bob.as_ref().to_string()]
     );
     assert_eq!(open_row.included_cents_by_user, vec![100, 300]);
     assert_ne!(open_row.updated_at, seeded_at);
-    let closed_row = raw_allowance(&pool, payer().as_ref(), closed_start)
+    let closed_row = raw_allowance(&pool, payer.as_ref(), closed_start)
         .await
         .unwrap();
     assert_eq!(closed_row.billed_users, users);
     assert_eq!(closed_row.included_cents_by_user, closed_cents);
     assert_eq!(closed_row.updated_at, seeded_at);
-    assert_eq!(seat_generation(&pool, payer().as_ref()).await, Some(1));
+    assert_eq!(seat_generation(&pool, payer.as_ref()).await, Some(1));
 
-    repo.release_open_seat(&payer(), open, &alice)
-        .await
-        .unwrap();
+    repo.release_open_seat(&payer, open, &alice).await.unwrap();
 
-    let retried = raw_allowance(&pool, payer().as_ref(), open.start())
+    let retried = raw_allowance(&pool, payer.as_ref(), open.start())
         .await
         .unwrap();
     assert_eq!(retried.billed_users, open_row.billed_users);
@@ -656,19 +654,19 @@ async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(poo
     );
     assert_eq!(retried.updated_at, open_row.updated_at);
     assert_eq!(
-        raw_allowance(&pool, payer().as_ref(), closed_start)
+        raw_allowance(&pool, payer.as_ref(), closed_start)
             .await
             .unwrap()
             .updated_at,
         seeded_at
     );
-    assert_eq!(seat_generation(&pool, payer().as_ref()).await, Some(2));
+    assert_eq!(seat_generation(&pool, payer.as_ref()).await, Some(2));
 
     let outsider = MacroUserIdStr::try_from("macro|outsider@example.com".to_string()).unwrap();
-    repo.release_open_seat(&payer(), open, &outsider)
+    repo.release_open_seat(&payer, open, &outsider)
         .await
         .unwrap();
-    let untouched = raw_allowance(&pool, payer().as_ref(), open.start())
+    let untouched = raw_allowance(&pool, payer.as_ref(), open.start())
         .await
         .unwrap();
     assert_eq!(untouched.billed_users, open_row.billed_users);
