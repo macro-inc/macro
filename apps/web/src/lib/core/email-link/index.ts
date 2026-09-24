@@ -1,9 +1,10 @@
 import { ROUTER_BASE_CONCAT, toBaseRelative } from '@app/constants/routerBase';
 import { updateUserAuth } from '@core/auth';
+import { createNativeAuthSession } from '@core/auth/native-auth';
 import { toast } from '@core/component/Toast/Toast';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { currentSettingsReturnTo } from '@core/constant/SettingsState';
-import { getNativeMobilePlatform } from '@core/util/platform';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
@@ -19,7 +20,6 @@ import type {
   ResyncResponse,
 } from '@service-email/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
-import { invoke } from '@tauri-apps/api/core';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
 import { rememberInboxLinkReturn } from './return-layout';
@@ -223,7 +223,7 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
  * inbox that is already connected so the user isn't shown mailbox permissions
  * they have already granted.
  *
- * On native iOS the OAuth runs inline in an `ASWebAuthenticationSession` via
+ * On native mobile OAuth runs in a platform authentication browser via
  * the Tauri auth plugin (the app never navigates away), and the link is
  * provisioned here directly with the `link_id` from the init response. A
  * shared-inbox conflict is surfaced through `requestShareInboxConfirmation`,
@@ -231,7 +231,7 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
  *
  * Everywhere else — web and desktop — the consent screen replaces the page, so
  * the layout the user was working in is stashed against the new link id first
- * and the callback restores it. iOS needs no stash: its layout never unmounts.
+ * and the callback restores it. Native mobile needs no stash: its layout never unmounts.
  */
 export function useAddInboxFlow() {
   const initGmailLink = useInitGmailLink();
@@ -263,8 +263,9 @@ export function useAddInboxFlow() {
   };
 
   const startNativeFlow = async (scopes: ConsentScopes) => {
+    const session = createNativeAuthSession('inbox-link-callback');
     const result = await initGmailLink.mutateAsync({
-      originalUrl: 'macro://inbox-link-callback',
+      originalUrl: session.callbackUrl,
       scopes,
     });
     if (result.isErr()) {
@@ -280,22 +281,8 @@ export function useAddInboxFlow() {
       return;
     }
 
-    let auth: { success: boolean; token?: string; error?: string };
-    try {
-      auth = await invoke('plugin:auth|authenticate', {
-        payload: {
-          authUrl: result.value.authorization_url,
-          callbackScheme: 'macro',
-          ephemeralSession: true,
-        },
-      });
-    } catch (error) {
-      console.error('add-inbox authenticate failed', error);
-      toast.failure('Failed to add inbox');
-      return;
-    }
-
-    if (!auth.success || !auth.token) {
+    const auth = await session.authenticate(result.value.authorization_url);
+    if (!auth.success) {
       if (auth.error !== 'User canceled login') {
         toast.failure('Failed to add inbox');
       }
@@ -307,7 +294,7 @@ export function useAddInboxFlow() {
 
   return async (options?: { scopes?: ConsentScopes }) => {
     const scopes = options?.scopes ?? 'gmail';
-    if (getNativeMobilePlatform() === 'ios') {
+    if (isNativeMobilePlatform()) {
       await startNativeFlow(scopes);
       return;
     }

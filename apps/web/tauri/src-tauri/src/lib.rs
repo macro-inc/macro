@@ -23,6 +23,8 @@ use staged_upload::cleanup_stale_staged_files;
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
 
+#[cfg(target_os = "android")]
+mod android_tls;
 mod tauri_protocol;
 
 pub(crate) const APP_SCHEME: &str = "macro";
@@ -87,6 +89,7 @@ mod debug;
 /// If the webview attempts to naviate to other domains,
 /// they will be opened in the systems default browser
 static ALLOWED_DOMAINS: &[&str] = &[
+    "https://tauri.localhost",
     "http://tauri.localhost",
     "tauri://localhost",
     "http://localhost:3000",
@@ -157,13 +160,19 @@ pub fn run() {
     #[cfg(target_os = "ios")]
     {
         builder = builder
-            .plugin(tauri_plugin_haptics::init())
+            .plugin(tauri_plugin_auth::init())
+            .plugin(tauri_plugin_virtual_keyboard::init())
             .plugin(tauri_plugin_edit_menu::init())
             .plugin(tauri_plugin_input_accessory::init())
             .plugin(tauri_plugin_network_status::init())
             .plugin(tauri_plugin_pasteboard::init())
             .plugin(tauri_plugin_photo_library::init())
             .plugin(tauri_plugin_call_kit::init());
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        builder = builder.plugin(tauri_plugin_android_auth::init());
     }
 
     // register the rest of the common plugins
@@ -211,10 +220,9 @@ pub fn run() {
     {
         // register mobile specific plugins
         builder = builder
+            .plugin(tauri_plugin_haptics::init())
             .plugin(tauri_plugin_safe_area_insets::init())
-            .plugin(tauri_plugin_notifications::init())
-            .plugin(tauri_plugin_virtual_keyboard::init())
-            .plugin(tauri_plugin_auth::init());
+            .plugin(tauri_plugin_notifications::init());
     }
 
     // Window origin differs by platform:
@@ -444,12 +452,19 @@ enum LaunchState {
 }
 
 /// Convert a deep link url into a `navigate` event for the frontend router.
-#[tracing::instrument(err, skip(handle))]
+#[tracing::instrument(err, skip(handle, url))]
 fn emit_navigate_for_deep_link(url: Url, handle: &AppHandle) -> Result<(), Report> {
+    // Auth callbacks belong exclusively to the native browser session. They
+    // must not reach SPA routing or application logs, even via an explicit intent.
+    if url.scheme() == APP_SCHEME && url.host_str() == Some("android-auth") {
+        return Ok(());
+    }
     // Universal/App links come in as https:// URLs, custom scheme links come in as macro://
     let macro_scheme = match url.scheme() {
         s if s == APP_SCHEME => MacroScheme::new(url)?,
-        "http" | "https" => MacroScheme::from_url(&url)?,
+        "http" | "https" if navigation_plugin::is_app_link(APP_LINK_HOSTS, &url) => {
+            MacroScheme::from_url(&url)?
+        }
         scheme => {
             return Err(report!("unexpected deep link scheme: {}", scheme));
         }
@@ -462,7 +477,6 @@ fn emit_navigate_for_deep_link(url: Url, handle: &AppHandle) -> Result<(), Repor
     // we send a navigate event instead of calling navigate directly
     // because navigate performs a full browser navigation
 
-    tracing::trace!("{payload:?}");
     Ok(handle.emit("navigate", payload)?)
 }
 
@@ -471,7 +485,6 @@ fn attach_deep_link_handler(app: &mut tauri::App) {
         let handle = app.handle().clone();
         move |ev| {
             let urls = ev.urls();
-            tracing::trace!("received open url event {urls:?}");
             let Some(url) = urls.into_iter().next() else {
                 tracing::warn!("open url event contained no urls");
                 return;
@@ -544,7 +557,7 @@ fn flush_launch_deep_link(app: AppHandle, delivery: tauri::State<'_, DeepLinkDel
     };
 
     if let Some(url) = to_emit {
-        tracing::debug!("flushing deep link {url}");
+        tracing::debug!("flushing launch deep link");
         emit_navigate_for_deep_link(url, &app).log_and_consume();
     }
 }

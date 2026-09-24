@@ -12,6 +12,24 @@ const mocks = vi.hoisted(() => ({
   toastCustom: vi.fn(),
   toastDismiss: vi.fn(),
   toastFailure: vi.fn(),
+  nativeMobile: false,
+  authenticate: vi.fn(),
+  invalidateGithubLinkStatus: vi.fn(),
+}));
+
+vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
+  isNativeMobilePlatform: () => mocks.nativeMobile,
+}));
+
+vi.mock('@core/auth/native-auth', () => ({
+  createNativeAuthSession: () => ({
+    callbackUrl: 'macro://android-auth/test-attempt',
+    authenticate: mocks.authenticate,
+  }),
+}));
+
+vi.mock('@queries/auth', () => ({
+  invalidateGithubLinkStatus: mocks.invalidateGithubLinkStatus,
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -85,6 +103,10 @@ beforeEach(() => {
   mocks.toastCustom.mockReset();
   mocks.toastDismiss.mockReset();
   mocks.toastFailure.mockReset();
+  mocks.nativeMobile = false;
+  mocks.authenticate.mockReset();
+  mocks.invalidateGithubLinkStatus.mockReset();
+  mocks.invalidateGithubLinkStatus.mockResolvedValue(undefined);
 
   mocks.toastCustom.mockReturnValue(101);
 });
@@ -95,6 +117,48 @@ afterEach(() => {
 });
 
 describe('GithubReauthenticationPrompt', () => {
+  it.each([
+    { result: { success: true }, invalidates: true, failure: false },
+    {
+      result: { success: false, error: 'User canceled login' },
+      invalidates: false,
+      failure: false,
+    },
+    {
+      result: { success: false, error: 'Authentication browser failed' },
+      invalidates: false,
+      failure: true,
+    },
+  ])(
+    'handles native reconnect result $result',
+    async ({ result, invalidates, failure }) => {
+      mocks.nativeMobile = true;
+      mocks.checkGithubLinkStatus.mockResolvedValue(
+        resultErr([{ code: 'REAUTHENTICATION_REQUIRED', message: 'Reconnect' }])
+      );
+      const originalUrl = window.location.href;
+      const authorizationUrl = 'https://github.com/login/oauth/authorize';
+      mocks.reauthenticateGithub.mockResolvedValue(resultOk(authorizationUrl));
+      mocks.authenticate.mockResolvedValue(result);
+
+      const cleanup = renderPrompt();
+      await flushPromises();
+      await getReconnectAction().onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mocks.reauthenticateGithub).toHaveBeenCalledWith(
+        'macro://android-auth/test-attempt'
+      );
+      expect(mocks.authenticate).toHaveBeenCalledWith(authorizationUrl);
+      expect(window.location.href).toBe(originalUrl);
+      expect(mocks.invalidateGithubLinkStatus).toHaveBeenCalledTimes(
+        invalidates ? 1 : 0
+      );
+      expect(mocks.toastFailure).toHaveBeenCalledTimes(failure ? 1 : 0);
+      cleanup();
+    }
+  );
+
   it('shows a reconnect toast globally when GitHub reauthentication is required', async () => {
     mocks.checkGithubLinkStatus.mockResolvedValue(
       resultErr([

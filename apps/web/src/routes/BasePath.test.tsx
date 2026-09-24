@@ -3,6 +3,7 @@
  */
 
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { ThrownResultError } from '@core/util/result';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import type { JSX } from 'solid-js';
@@ -16,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   hasLoginCookie: true,
   nativeMobile: false,
   navigate: vi.fn(),
+  routerSearch: (): string => '',
+  setRouterSearch: (_value: string) => {},
 }));
 
 vi.mock('@app/features/paywall/use-checkout-completion-listener', () => ({
@@ -70,14 +73,31 @@ vi.mock('@queries/auth/user-info', async () => {
   };
 });
 
-vi.mock('@solidjs/router', () => ({
-  // Mirrors the real Navigate component: a replace navigation on render.
-  Navigate: (props: { href: string }) => {
-    mocks.navigate(props.href, { replace: true });
-    return null;
-  },
-  useSearchParams: () => [{}, () => {}],
-}));
+vi.mock('@solidjs/router', async () => {
+  const { createSignal } = await import('solid-js');
+  const [search, setSearch] = createSignal('');
+  mocks.routerSearch = search;
+  mocks.setRouterSearch = setSearch;
+  return {
+    Navigate: (props: { href: string }) => {
+      mocks.navigate(props.href, { replace: true });
+      return null;
+    },
+    useLocation: () => ({
+      get search() {
+        return search();
+      },
+    }),
+    useSearchParams: () => [
+      {
+        get upgrade() {
+          return new URLSearchParams(search()).get('upgrade');
+        },
+      },
+      () => {},
+    ],
+  };
+});
 
 vi.mock('@ui', () => ({
   Button: (props: { children: JSX.Element; onClick?: () => void }) => (
@@ -126,12 +146,14 @@ function flush() {
 beforeEach(() => {
   mocks.hasLoginCookie = true;
   mocks.nativeMobile = false;
+  mocks.setRouterSearch('');
   mocks.navigate.mockReset();
   mocks.fetchUserInfo.mockReset();
   mocks.confirmSessionExpired.mockReset();
   mocks.clearLocalAuthSession.mockReset();
   mocks.clearLocalAuthSession.mockResolvedValue(undefined);
   sessionStorage.clear();
+  localStorage.clear();
   queryClient.clear();
   window.history.replaceState({}, '', '/app/');
 });
@@ -142,6 +164,128 @@ afterEach(() => {
 });
 
 describe('BasePathComponent', () => {
+  it.each([true, false])(
+    'preserves a late native root query while authentication resolves (%s)',
+    async (authenticated) => {
+      mocks.nativeMobile = true;
+      mocks.hasLoginCookie = authenticated;
+      let resolveUserInfo!: (value: { authenticated: boolean }) => void;
+      mocks.fetchUserInfo.mockReturnValue(
+        new Promise<{ authenticated: boolean }>((resolve) => {
+          resolveUserInfo = resolve;
+        })
+      );
+      renderRoute();
+      await vi.waitFor(() => expect(mocks.fetchUserInfo).toHaveBeenCalled());
+      expect(mocks.navigate).not.toHaveBeenCalled();
+
+      mocks.setRouterSearch('?upgrade=true&referral_code=late');
+      await vi.waitFor(() =>
+        expect(sessionStorage.getItem('showUpgradeModal')).toBe('true')
+      );
+      resolveUserInfo({ authenticated });
+
+      await vi.waitFor(() =>
+        expect(mocks.navigate).toHaveBeenCalledWith(
+          `${authenticated ? DEFAULT_ROUTE : '/welcome'}?upgrade=true&referral_code=late`,
+          { replace: true }
+        )
+      );
+    }
+  );
+
+  it('preserves native hash-router queries when entering the app', async () => {
+    mocks.nativeMobile = true;
+    mocks.setRouterSearch('?upgrade=true&referral_code=invite');
+    window.history.replaceState({}, '', `/#/${mocks.routerSearch()}`);
+    mocks.fetchUserInfo.mockResolvedValue({ authenticated: true });
+
+    renderRoute();
+
+    await vi.waitFor(() => {
+      expect(mocks.navigate).toHaveBeenCalledWith(
+        `${DEFAULT_ROUTE}${mocks.routerSearch()}`,
+        { replace: true }
+      );
+    });
+    expect(sessionStorage.getItem('showUpgradeModal')).toBe('true');
+  });
+
+  it('preserves native hash-router queries when sending a new user to welcome', async () => {
+    mocks.nativeMobile = true;
+    mocks.hasLoginCookie = false;
+    mocks.setRouterSearch('?referral_code=invite');
+    window.history.replaceState({}, '', `/#/${mocks.routerSearch()}`);
+    mocks.fetchUserInfo.mockResolvedValue({ authenticated: false });
+
+    renderRoute();
+
+    await vi.waitFor(() => {
+      expect(mocks.navigate).toHaveBeenCalledWith(
+        '/welcome?referral_code=invite',
+        {
+          replace: true,
+        }
+      );
+    });
+  });
+
+  it('preserves native hash-router queries after confirmed session expiry', async () => {
+    mocks.nativeMobile = true;
+    mocks.setRouterSearch('?referral_code=invite');
+    window.history.replaceState({}, '', `/#/${mocks.routerSearch()}`);
+    mocks.fetchUserInfo.mockRejectedValue(UNAUTHORIZED_ERROR());
+    mocks.confirmSessionExpired.mockResolvedValue(true);
+
+    renderRoute();
+
+    await vi.waitFor(() => {
+      expect(mocks.navigate).toHaveBeenCalledWith(
+        '/welcome?referral_code=invite',
+        {
+          replace: true,
+        }
+      );
+    });
+  });
+
+  it('keeps browser query forwarding unchanged', async () => {
+    window.history.replaceState({}, '', '/app/?subscriptionSuccess=true');
+    mocks.fetchUserInfo.mockResolvedValue({ authenticated: true });
+
+    renderRoute();
+
+    await vi.waitFor(() => {
+      expect(mocks.navigate).toHaveBeenCalledWith(
+        `${DEFAULT_ROUTE}?subscriptionSuccess=true`,
+        { replace: true }
+      );
+    });
+  });
+
+  it('retains a native destination until authentication succeeds', async () => {
+    mocks.nativeMobile = true;
+    mocks.hasLoginCookie = false;
+    mocks.fetchUserInfo.mockResolvedValue({ authenticated: false });
+    setPostLoginRedirect('/task/pending');
+
+    renderRoute();
+    await vi.waitFor(() => {
+      expect(mocks.navigate).toHaveBeenCalledWith('/welcome', {
+        replace: true,
+      });
+    });
+    expect(localStorage.getItem('nativePostLoginRedirect')).not.toBeNull();
+
+    queryClient.setQueryData(['auth', 'userInfo'], { authenticated: true });
+    await vi.waitFor(() => {
+      expect(mocks.navigate).toHaveBeenCalledWith('/task/pending', {
+        replace: true,
+      });
+    });
+    expect(localStorage.getItem('nativePostLoginRedirect')).toBeNull();
+  });
+
   it('redirects an authenticated session to the default route', async () => {
     mocks.fetchUserInfo.mockResolvedValue({ authenticated: true });
 
