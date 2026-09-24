@@ -18,6 +18,7 @@ import {
   useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import GmailIcon from '@icon/mcp-gmail.svg';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import CalendarSlashIcon from '@phosphor-icons/core/regular/calendar-slash.svg?component-solid';
@@ -419,28 +420,27 @@ function InboxRow(props: {
   const calendarUiEnabled = useCalendarUiFlag();
   const showSignature = () => isSignatureExpanded(props.link.id);
   const signatureSectionId = `signature-section-${props.link.id}`;
+  const [attachHotkeys, signatureHotkeyScope] =
+    useHotkeyDOMScope('email-signature');
   let signatureTrigger: HTMLButtonElement | undefined;
   const closeSignature = () => {
     if (!showSignature()) return;
     toggleSignatureExpanded(props.link.id);
     signatureTrigger?.focus();
   };
+  registerHotkey({
+    scopeId: signatureHotkeyScope,
+    hotkey: 'escape',
+    description: 'Close signature editor',
+    condition: showSignature,
+    runWithInputFocused: true,
+    keyDownHandler: () => {
+      closeSignature();
+      return true;
+    },
+  });
   return (
-    <div
-      class="bg-surface flex flex-col"
-      on:keydown={(event) => {
-        if (
-          event.key !== 'Escape' ||
-          event.defaultPrevented ||
-          !showSignature()
-        ) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        closeSignature();
-      }}
-    >
+    <div class="bg-surface flex flex-col" ref={attachHotkeys}>
       <div class="flex items-center justify-between gap-3 min-h-15.25 py-2 px-6">
         <div class="min-w-0 flex flex-col gap-0.5">
           <div class="flex items-center gap-2 min-w-0">
