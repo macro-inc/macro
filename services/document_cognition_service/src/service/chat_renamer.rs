@@ -55,6 +55,16 @@ async fn rename_initial_chat(
     stream_id: String,
     initial_question: String,
 ) -> anyhow::Result<()> {
+    if let Err(error) = ctx
+        .tool_service_context
+        .admission
+        .admit(&user_id, ai_usage::AiFeature::ChatRename)
+        .await
+    {
+        tracing::warn!(error = ?error, "skipping optional chat rename: admission rejected");
+        return Ok(());
+    }
+
     let name = generate_chat_name(
         &initial_question,
         user_id.clone(),
@@ -134,20 +144,4 @@ fn clean_chat_name(raw: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::clean_chat_name;
-
-    #[test]
-    fn clean_chat_name_trims_quotes_and_collapses_whitespace() {
-        assert_eq!(
-            clean_chat_name("  \"Plan   Q3\nHiring\"  "),
-            "Plan Q3 Hiring"
-        );
-    }
-
-    #[test]
-    fn clean_chat_name_limits_length() {
-        let raw = "a".repeat(120);
-        assert_eq!(clean_chat_name(&raw).len(), 100);
-    }
-}
+mod test;
