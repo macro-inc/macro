@@ -28,6 +28,7 @@ import type {
   EmailAttachmentStorage,
   EmailComposeAccounts,
   EmailComposeFeedback,
+  EmailComposeHost,
   EmailConnectivity,
   EmailDelivery,
   EmailDraftLifecycleSource,
@@ -125,6 +126,8 @@ export type ReplyComposerOptions = {
     navigate?: boolean;
   }) => void;
   setShowReply?: Setter<boolean>;
+  /** Reopens this reply's thread when the composer is no longer on screen. */
+  host?: Pick<EmailComposeHost, 'showThread'>;
 };
 
 export function createReplyComposer(
@@ -684,6 +687,15 @@ export function createReplyComposer(
     reconcileIdentity: lifecycle.refreshIdentity,
     onScheduleUndone: ({ draftId, threadId, inboxId }) =>
       restoreAfterUndoSend(draftId, threadId, inboxId),
+    // The scheduled reply stays in its thread, locked; bring it back into view.
+    onViewScheduled: ({ threadId }) => {
+      const container = dom.container();
+      if (container?.isConnected) {
+        container.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
+      }
+      if (threadId) props.host?.showThread?.(threadId);
+    },
   });
   const cancelSchedule = async () => {
     if (!(await schedule.cancel())) return false;

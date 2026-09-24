@@ -1,8 +1,11 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, tryMacroId } from '@core/user';
+import ClockIcon from '@phosphor/clock.svg';
 import HashIcon from '@phosphor/hash.svg';
 import UserPlus from '@phosphor/user-plus.svg';
 import { cn, HoverCard } from '@ui';
+import { format } from 'date-fns/format';
+import { isToday } from 'date-fns/isToday';
 import type { ParentProps } from 'solid-js';
 import type { CallStatus } from '../types/entity';
 
@@ -82,6 +85,34 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
 
 export function DraftBadge() {
   return <Badge class="text-warning border-edge-muted px-2">draft</Badge>;
+}
+
+/**
+ * The list's timestamp column shows a scheduled row's send date, or its time
+ * when it sends today; the badge carries the other half.
+ */
+export function ScheduledBadge(props: { sendTime: string }) {
+  const sendTime = () => new Date(props.sendTime);
+  const overdue = () => sendTime().getTime() <= Date.now();
+  const label = () => {
+    const time = sendTime();
+    if (isToday(time)) return 'today';
+    return format(time, time.getMinutes() === 0 ? 'h a' : 'h:mm a');
+  };
+  return (
+    <Badge
+      class={cn(
+        'shrink-0 px-2',
+        overdue()
+          ? 'text-failure border-failure/20'
+          : 'text-accent border-accent/20'
+      )}
+      title={`${overdue() ? 'Overdue scheduled send' : 'Scheduled to send'} ${format(sendTime(), "MMM d, yyyy 'at' h:mm a")}`}
+    >
+      <ClockIcon class="size-3" />
+      <span class="whitespace-nowrap">{label()}</span>
+    </Badge>
+  );
 }
 
 function _ImportantBadge() {

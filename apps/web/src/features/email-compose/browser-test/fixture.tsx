@@ -1,5 +1,7 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
+import { toast } from '@core/component/Toast/Toast';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import TextAa from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
@@ -8,7 +10,10 @@ import { format } from 'date-fns/format';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { EmailDateSelector } from '../components/email-date-selector';
-import { EmailScheduleSummary } from '../components/email-schedule-summary';
+import {
+  EmailScheduleBar,
+  EmailScheduleSummary,
+} from '../components/email-schedule-summary';
 import type { EmailScheduleState } from '../primitives/email-send-schedule';
 
 type ScheduledItem = {
@@ -16,11 +21,6 @@ type ScheduledItem = {
   subject: string;
   recipient: string;
   sendTime: Date;
-};
-
-type UndoAction = {
-  label: string;
-  run: () => void;
 };
 
 function Fixture() {
@@ -37,8 +37,6 @@ function Fixture() {
   >('idle');
   const [scheduledItems, setScheduledItems] = createSignal<ScheduledItem[]>([]);
   const [commitCount, setCommitCount] = createSignal(0);
-  const [toastMessage, setToastMessage] = createSignal<string>();
-  const [undoAction, setUndoAction] = createSignal<UndoAction>();
 
   const selectedTime = () => {
     const current = schedule();
@@ -82,16 +80,11 @@ function Fixture() {
     );
   };
 
-  const showToast = (message: string, undo?: UndoAction) => {
-    setToastMessage(message);
-    setUndoAction(undo);
-  };
-
   const restoreDraft = () => {
     setScheduledItems((items) => items.filter((item) => item.id !== 'fixture'));
     setSchedule({ type: 'editing', intent: { type: 'immediate' } });
     setView('compose');
-    showToast('Schedule cancelled');
+    toast.success('Schedule cancelled.');
   };
 
   const cancelSchedule = async () => {
@@ -109,9 +102,11 @@ function Fixture() {
     setCommitCount((count) => count + 1);
 
     if (current.type === 'editing' && current.intent.type === 'immediate') {
-      showToast('Email sent', {
-        label: 'Undo',
-        run: () => showToast('Send undone'),
+      toast.success('Email sent', {
+        actions: [
+          { label: 'Undo', onClick: () => toast.success('Send undone') },
+        ],
+        duration: 5_000,
       });
       return;
     }
@@ -135,9 +130,22 @@ function Fixture() {
       },
     ]);
     setOperation('idle');
-    showToast(`Email scheduled for ${format(sendTime, "MMM d 'at' h:mm a")}`, {
-      label: 'Undo',
-      run: restoreDraft,
+    // Mirrors the production notice in email-send-schedule.ts.
+    let toastId: number | undefined;
+    const dismissThen = (run: () => void) => () => {
+      if (toastId != null) toast.dismiss(toastId);
+      run();
+    };
+    toastId = toast.success('Email scheduled', {
+      subtext: `Sends ${format(sendTime, "EEE, MMM d, yyyy 'at' h:mm a")}`,
+      actions: [
+        { label: 'Undo', onClick: dismissThen(restoreDraft) },
+        {
+          label: 'View message',
+          onClick: dismissThen(() => setView('compose')),
+        },
+      ],
+      duration: 8_000,
     });
   };
 
@@ -156,163 +164,156 @@ function Fixture() {
   return (
     <main class="min-h-screen bg-surface p-4 text-ink">
       <div
-        class="mx-auto flex min-h-[520px] flex-col overflow-hidden rounded-2xl border border-edge-muted bg-surface-secondary shadow-xl"
+        class="mx-auto flex flex-col"
         style={{ width: `min(${width}px, 100%)` }}
       >
-        <nav
-          class="flex border-b border-edge-muted p-2"
-          aria-label="Email views"
-        >
-          <button
-            class="rounded-lg px-3 py-2 text-sm data-[active=true]:bg-accent/15 data-[active=true]:text-accent"
-            data-active={view() === 'compose'}
-            onClick={() => setView('compose')}
+        <div class="relative z-10 flex min-h-[380px] flex-col overflow-hidden rounded-2xl border border-edge-muted bg-surface-secondary shadow-xl">
+          <nav
+            class="flex border-b border-edge-muted p-2"
+            aria-label="Email views"
           >
-            Compose
-          </button>
-          <button
-            class="rounded-lg px-3 py-2 text-sm data-[active=true]:bg-accent/15 data-[active=true]:text-accent"
-            data-active={view() === 'scheduled'}
-            onClick={() => setView('scheduled')}
-          >
-            Scheduled ({scheduledItems().length})
-          </button>
-        </nav>
+            <button
+              class="rounded-lg px-3 py-2 text-sm data-[active=true]:bg-accent/15 data-[active=true]:text-accent"
+              data-active={view() === 'compose'}
+              onClick={() => setView('compose')}
+            >
+              Compose
+            </button>
+            <button
+              class="rounded-lg px-3 py-2 text-sm data-[active=true]:bg-accent/15 data-[active=true]:text-accent"
+              data-active={view() === 'scheduled'}
+              onClick={() => setView('scheduled')}
+            >
+              Scheduled ({scheduledItems().length})
+            </button>
+          </nav>
 
-        <Show
-          when={view() === 'compose'}
-          fallback={
+          <Show
+            when={view() === 'compose'}
+            fallback={
+              <section
+                class="flex flex-1 flex-col p-4"
+                aria-label="Scheduled emails"
+              >
+                <h1 class="mb-3 text-lg font-semibold">Scheduled</h1>
+                <Show
+                  when={scheduledItems().length}
+                  fallback={
+                    <p class="m-auto text-sm text-ink-muted">
+                      No scheduled emails
+                    </p>
+                  }
+                >
+                  <div class="rounded-xl border border-edge-muted bg-surface p-3">
+                    <div class="flex items-center gap-3">
+                      <div class="min-w-0 flex-1">
+                        <p class="truncate text-sm font-medium">
+                          To: {scheduledItems()[0].recipient}
+                        </p>
+                        <p class="truncate text-sm text-ink-muted">
+                          {scheduledItems()[0].subject}
+                        </p>
+                      </div>
+                      <time class="shrink-0 text-xs font-medium text-accent">
+                        {format(scheduledItems()[0].sendTime, 'MMM d, h:mm a')}
+                      </time>
+                      <button
+                        class="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium text-failure hover:bg-hover"
+                        onClick={restoreDraft}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </Show>
+              </section>
+            }
+          >
             <section
               class="flex flex-1 flex-col p-4"
-              aria-label="Scheduled emails"
+              aria-label="Compose email"
             >
-              <h1 class="mb-3 text-lg font-semibold">Scheduled</h1>
-              <Show
-                when={scheduledItems().length}
-                fallback={
-                  <p class="m-auto text-sm text-ink-muted">
-                    No scheduled emails
-                  </p>
-                }
-              >
-                <div class="rounded-xl border border-edge-muted bg-surface p-3">
-                  <div class="flex items-center gap-3">
-                    <div class="min-w-0 flex-1">
-                      <p class="truncate text-sm font-medium">
-                        To: {scheduledItems()[0].recipient}
-                      </p>
-                      <p class="truncate text-sm text-ink-muted">
-                        {scheduledItems()[0].subject}
-                      </p>
-                    </div>
-                    <time class="shrink-0 text-xs font-medium text-accent">
-                      {format(scheduledItems()[0].sendTime, 'MMM d, h:mm a')}
-                    </time>
-                    <button
-                      class="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium text-failure hover:bg-hover"
-                      onClick={restoreDraft}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </Show>
-            </section>
-          }
-        >
-          <section class="flex flex-1 flex-col p-4" aria-label="Compose email">
-            <div class="border-b border-edge-muted py-2 text-sm">
-              <span class="mr-2 text-ink-muted">From</span> me@macro.test
-            </div>
-            <div class="border-b border-edge-muted py-2 text-sm">
-              <span class="mr-2 text-ink-muted">To</span> peter@example.test
-            </div>
-            <label class="border-b border-edge-muted py-2 text-sm">
-              <span class="sr-only">Subject</span>
-              <input
-                class="w-full bg-transparent outline-none"
-                value="Quarterly notes"
-              />
-            </label>
-            <label class="flex flex-1 py-3 text-sm">
-              <span class="sr-only">Message</span>
-              <textarea
-                class="w-full resize-none bg-transparent outline-none"
-                placeholder="Write a message…"
-              >
-                Here are the notes we discussed.
-              </textarea>
-            </label>
+              <div class="border-b border-edge-muted py-2 text-sm">
+                <span class="mr-2 text-ink-muted">From</span> me@macro.test
+              </div>
+              <div class="border-b border-edge-muted py-2 text-sm">
+                <span class="mr-2 text-ink-muted">To</span> peter@example.test
+              </div>
+              <label class="border-b border-edge-muted py-2 text-sm">
+                <span class="sr-only">Subject</span>
+                <input
+                  class="w-full bg-transparent outline-none"
+                  value="Quarterly notes"
+                />
+              </label>
+              <label class="flex flex-1 py-3 text-sm">
+                <span class="sr-only">Message</span>
+                <textarea
+                  class="w-full resize-none bg-transparent outline-none"
+                  placeholder="Write a message…"
+                >
+                  Here are the notes we discussed.
+                </textarea>
+              </label>
 
-            <div
-              data-testid="toolbar"
-              class="flex min-w-0 flex-wrap items-center justify-end gap-y-1 border-t border-edge-muted pt-2"
-            >
-              <EmailScheduleSummary
-                state={schedule()}
-                operation={operation()}
-                onSelectTime={selectTime}
-                onCancelSchedule={cancelSchedule}
-              />
-              <div class="ml-auto flex shrink-0 items-center gap-1">
-                <Button label="Delete draft" size="icon-composer">
-                  <TrashIcon />
-                </Button>
-                <Button label="Attach" size="icon-composer">
-                  <PaperclipIcon />
-                </Button>
-                <Button label="Format" size="icon-composer">
-                  <TextAa />
-                </Button>
-                <div class="shrink-0">
-                  <EmailDateSelector
-                    mobile={mobile}
-                    compact
+              <div
+                data-testid="toolbar"
+                class="flex min-w-0 flex-wrap items-center justify-end gap-y-1 border-t border-edge-muted pt-2"
+              >
+                <Show when={mobile}>
+                  <EmailScheduleSummary
                     state={schedule()}
-                    selectedTime={selectedTime()}
+                    operation={operation()}
                     onSelectTime={selectTime}
                     onCancelSchedule={cancelSchedule}
-                    operation={operation()}
+                  />
+                </Show>
+                <div class="ml-auto flex shrink-0 items-center gap-1">
+                  <Button label="Delete draft" size="icon-composer">
+                    <TrashIcon />
+                  </Button>
+                  <Button label="Attach" size="icon-composer">
+                    <PaperclipIcon />
+                  </Button>
+                  <Button label="Format" size="icon-composer">
+                    <TextAa />
+                  </Button>
+                  <div class="shrink-0">
+                    <EmailDateSelector
+                      mobile={mobile}
+                      compact
+                      state={schedule()}
+                      selectedTime={selectedTime()}
+                      onSelectTime={selectTime}
+                      onCancelSchedule={cancelSchedule}
+                      operation={operation()}
+                    />
+                  </div>
+                  <SendButton
+                    appearance="composer"
+                    disabled={actionDisabled()}
+                    aria-label={actionLabel()}
+                    tooltip={actionLabel()}
+                    onClick={submit}
+                    shortcut="cmd+enter"
                   />
                 </div>
-                <SendButton
-                  appearance="composer"
-                  disabled={actionDisabled()}
-                  aria-label={actionLabel()}
-                  tooltip={actionLabel()}
-                  onClick={submit}
-                  shortcut="cmd+enter"
-                />
               </div>
-            </div>
-          </section>
+            </section>
+          </Show>
+        </div>
+        <Show when={!mobile && view() === 'compose'}>
+          <EmailScheduleBar
+            state={schedule()}
+            operation={operation()}
+            onSelectTime={selectTime}
+            onCancelSchedule={cancelSchedule}
+            class="-mt-6 rounded-b-[20px] border border-t-0 border-edge-muted px-4 pt-8 pb-2"
+          />
         </Show>
       </div>
 
-      <Show when={toastMessage()}>
-        {(message) => (
-          <div
-            role="status"
-            data-testid="toast"
-            class="fixed bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-4 rounded-xl bg-ink px-4 py-3 text-sm text-surface shadow-xl"
-          >
-            <span>{message()}</span>
-            <Show when={undoAction()}>
-              {(undo) => (
-                <button
-                  class="font-semibold text-accent"
-                  onClick={() => {
-                    undo().run();
-                    setUndoAction(undefined);
-                  }}
-                >
-                  {undo().label}
-                </button>
-              )}
-            </Show>
-          </div>
-        )}
-      </Show>
+      <ToastRegion />
       <output class="sr-only" data-testid="commit-count">
         {commitCount()}
       </output>

@@ -313,7 +313,8 @@ it('keeps a selected or cleared time inert while ordinary autosave continues', a
 
 it('only commits a selected time through the primary action', async () => {
   const composeContext = createComposeContext();
-  const root = mountEmailComposer(composeContext);
+  const host = { showThread: vi.fn(), showDraft: vi.fn() };
+  const root = mountEmailComposer(composeContext, host);
   root.edit('Schedule this');
   const firstTime = new Date('2026-12-01T12:00:00Z');
   expect(root.state.context.schedule.onSelect(firstTime)).toBe(true);
@@ -337,10 +338,14 @@ it('only commits a selected time through the primary action', async () => {
   expect(root.state.context.schedule.confirmedTime()).toEqual(firstTime);
   expect(root.state.context.deliveryState?.()).toBe('scheduled');
   expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
-    'Email scheduled for Dec 1, 2026 at 12:00 PM',
+    'Email scheduled',
     expect.objectContaining({
-      actions: [expect.objectContaining({ label: 'Undo' })],
-      duration: 5_000,
+      subtext: 'Sends Tue, Dec 1, 2026 at 12:00 PM',
+      actions: [
+        expect.objectContaining({ label: 'Undo' }),
+        expect.objectContaining({ label: 'View message' }),
+      ],
+      duration: 8_000,
     })
   );
   root.state.context.onSend();
@@ -350,7 +355,10 @@ it('only commits a selected time through the primary action', async () => {
 
   const scheduledNotice = vi
     .mocked(composeContext.notices.feedback.success)
-    .mock.calls.find(([message]) => message.startsWith('Email scheduled for'));
+    .mock.calls.find(([message]) => message === 'Email scheduled');
+  host.showThread.mockClear();
+  scheduledNotice?.[1]?.actions?.[1].onClick();
+  expect(host.showThread).toHaveBeenCalledExactlyOnceWith('thread');
   scheduledNotice?.[1]?.actions?.[0].onClick();
   await vi.advanceTimersByTimeAsync(1);
   expect(composeContext.delivery.unschedule).toHaveBeenCalledExactlyOnceWith({

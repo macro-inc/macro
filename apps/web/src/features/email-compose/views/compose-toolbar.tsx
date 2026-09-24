@@ -80,14 +80,8 @@ export function EmailComposeToolbar(props: {
           />
         </div>
       </Show>
-      <div class="mt-2 flex min-w-0 flex-wrap items-center justify-end gap-y-1">
-        <EmailScheduleSummary
-          state={ctx.schedule.state()}
-          operation={ctx.schedule.operation()}
-          onSelectTime={ctx.schedule.onSelect}
-          onCancelSchedule={ctx.schedule.onCancel}
-        />
-        <div class="ml-auto flex shrink-0 items-center gap-1">
+      <div class="mt-2 flex min-w-0 justify-end">
+        <div class="flex shrink-0 items-center gap-1">
           <Show when={ctx.hasDraft()}>
             <Button
               onClick={ctx.onDelete}

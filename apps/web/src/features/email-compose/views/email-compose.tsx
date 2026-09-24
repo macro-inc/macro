@@ -10,6 +10,7 @@ import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { ComposerSurface } from '@ui';
 
 import { createSignal, Show } from 'solid-js';
+import { EmailScheduleBar } from '../components/email-schedule-summary';
 import { SignaturePreview } from '../components/signature-preview';
 import type { EmailComposeContext } from '../context/compose-capabilities';
 import { ComposeProvider } from '../context/compose-context';
@@ -153,12 +154,23 @@ export function EmailComposeView(props: EmailComposeViewProps) {
             wrapper={(children) => (
               // The same card as the chat composer and the thread's message
               // cards, so a fresh draft reads as one of the app's composers.
-              <ComposerSurface
-                as="div"
-                class="relative size-full min-h-0 overflow-clip touch:rounded-xl touch:border touch:border-edge-muted"
-              >
-                {children}
-              </ComposerSurface>
+              <div class="flex size-full min-h-0 flex-col">
+                <ComposerSurface
+                  as="div"
+                  class="relative z-10 min-h-0 flex-1 overflow-clip touch:rounded-xl touch:border touch:border-edge-muted"
+                >
+                  {children}
+                </ComposerSurface>
+                {/* Tucked under the card so its fill shows through the rounded
+                    corners, like the agent composer's repository drawer. */}
+                <EmailScheduleBar
+                  state={ctxValue.schedule.state()}
+                  operation={ctxValue.schedule.operation()}
+                  onSelectTime={ctxValue.schedule.onSelect}
+                  onCancelSchedule={ctxValue.schedule.onCancel}
+                  class="-mt-6 rounded-b-[20px] border border-t-0 border-edge-muted px-4 pt-8 pb-2"
+                />
+              </div>
             )}
           >
             <ComposeLayout

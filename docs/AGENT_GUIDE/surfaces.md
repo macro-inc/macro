@@ -471,30 +471,33 @@ A presentation or refresh error after successful delivery is not a reason to sen
 again.
 
 Choosing or clearing a send time is local preparation only. The composer remains
-editable and autosaves normally, shows **Scheduled send: ...** to the left of the
-toolbar controls, and performs no schedule, unschedule, archive, or delivery
-request. **Cancel** beside that preview clears the local choice. The clock and
+editable and autosaves normally, shows **Scheduled send: ...** in a bar attached
+below the composer (a strip along the bottom of the message card for replies), and
+performs no schedule, unschedule, archive, or delivery request. The bar's **Cancel**,
+at its far right, clears the local choice; the clock's tooltip reads **Schedule send
+time**. The clock and
 primary arrow remain icon-sized; the clock turns accent-colored when a time is
 selected, while the primary action's accessible name and tooltip change from
 **Send email** to **Schedule send**. Clicking it or pressing `Ctrl`/`Cmd`+`Enter
 runs the same validation and is the only initial scheduling commitment. A selected
 time that has passed is rejected at submission rather than falling back to immediate
-send. Touch toolbars keep the same visible summary and Cancel action; when space is
-tight, that summary truncates or wraps separately from the fixed icon group. The
+send. Touch toolbars keep the summary inline beside their icons, with Cancel next to
+the time; when space is tight, that summary truncates or wraps separately from the
+fixed icon group. The
 former picker-auto-commit behavior was a defect and must not be restored.
 
 Only a successful scheduling response or authoritative lifecycle reconciliation
 shows **Scheduled for ...**. Confirmed scheduled composers are content-locked.
 Picking another time creates a local proposal while the original remains active;
-the toolbar continues to show the original time plus the proposed replacement and
+the bar continues to show the original time plus the proposed replacement and
 explains that the original remains active. **Update schedule** commits the proposal.
 Clearing that proposal does not cancel the original. **Cancel schedule** is a
 separate explicit action, and only its
 confirmed success returns the message to an editable draft. Failed schedule,
 update, or cancel requests retain the user's local intent and last authoritative
-time, and never fall through to immediate Send. At narrow split widths the status
-row wraps above the fixed action group and its labels truncate; it must not cover
-discard, attachment, formatting, the clock, or the primary action. Reply recipients
+time, and never fall through to immediate Send. At narrow split widths the bar's
+label truncates while Cancel stays at its far edge; the bar never covers discard,
+attachment, formatting, the clock, or the primary action. Reply recipients
 cannot be edited or dragged during a confirmed schedule or active delivery mutation.
 
 When verifying, use an intercepted or isolated delivery fixture: choose a time,
@@ -516,15 +519,18 @@ Recovery re-uploads local attachment files and restores forwarded attachments.
 Remote-only draft attachments cannot be copied after the original draft is gone;
 their pills are removed and a notice asks you to attach those files again.
 
-A successful initial schedule shows an **Email scheduled for ...** notice with
-**Undo**. Undo cancels the captured draft in the captured inbox and restores its
-editable body, envelope, and attachments; it must not overwrite a newer reply.
+A successful initial schedule shows an **Email scheduled** notice whose description
+gives the full send time, with **Undo** and **View message**; a rescheduled email
+shows **Email rescheduled** with **View message**. Undo cancels the captured draft in
+the captured inbox and restores its editable body, envelope, and attachments; it must
+not overwrite a newer reply. View message opens the scheduled thread, or scrolls an
+inline reply back into view.
 The Email view's **Scheduled** tab lists only server-confirmed scheduled drafts,
-ordered by send time across the selected inboxes. Its **Cancel** action removes the
-row only after confirmed server cancellation and returns the message to Drafts.
-Immediate-send undo-window queue rows are not scheduled drafts and must not appear.
-If delivery wins the cancellation race, refresh the row and report that the message
-is no longer scheduled rather than claiming it was cancelled.
+soonest first across the selected inboxes, as ordinary email rows: the recipients,
+subject, and snippet, with a clock-and-time badge where Drafts shows **DRAFT**.
+Opening a row previews its thread like any other email; cancel from the opened
+message's bar. Search and filters are hidden on this tab. Immediate-send undo-window
+queue rows are not scheduled drafts and must not appear.
 
 With the new app views enabled, mobile and tablet Email use a floating, horizontally
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the

@@ -285,6 +285,8 @@ export type EmailEntity = EntityBase & {
   hasIcsAttachment?: boolean;
   attachments?: EmailAttachment[];
   properties?: SoupProperty[];
+  /** ISO 8601 time of the thread draft's confirmed scheduled send. */
+  scheduledSendTime?: string;
 };
 
 export type ProjectEntity = EntityBase & {

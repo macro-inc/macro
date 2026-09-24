@@ -55,7 +55,9 @@ export function EmailEmptyState() {
   const { state, setFacets, setInboxIds } = useEmailView();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
-  const searchText = () => state.search.trim();
+  // Scheduled has no search or filters; text typed on another tab stays behind.
+  const searchText = () =>
+    state.tab === 'scheduled' ? '' : state.search.trim();
   const noInboxesSelected = () => state.inboxIds?.length === 0;
   const hasActiveFilters = () =>
     Object.values(state.facets).some((optionIds) => optionIds.length > 0);

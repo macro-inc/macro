@@ -3,7 +3,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useEmailLinksContext } from '@core/context/emailLinks';
 import { cn } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
-import { DraftBadge } from '../../components/Badges';
+import { DraftBadge, ScheduledBadge } from '../../components/Badges';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
 import { getSnippetHit } from '../../extractors-search/snippet-entity';
@@ -68,8 +68,15 @@ export function EmailInboxChip(props: { entity: EmailEntity; class?: string }) {
 export function EmailIdentity(props: { entity: EmailEntity }) {
   return (
     <>
-      <Show when={props.entity.isDraft}>
-        <DraftBadge />
+      <Show
+        when={props.entity.scheduledSendTime}
+        fallback={
+          <Show when={props.entity.isDraft}>
+            <DraftBadge />
+          </Show>
+        }
+      >
+        {(sendTime) => <ScheduledBadge sendTime={sendTime()} />}
       </Show>
       <span class="truncate min-w-0">
         <Entity.EmailParticipants entity={props.entity} />

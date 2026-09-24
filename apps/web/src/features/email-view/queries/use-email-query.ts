@@ -31,6 +31,7 @@ import { buildEmailQuery, type EmailQueryContext } from './email-query';
 import { groupEmailEntitiesByDate } from './email-results';
 import { buildEmailSearchRequest } from './email-search';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
+import { useScheduledEmailSource } from './use-scheduled-email-source';
 
 export type EmailDataSourceItem = SoupRow<WithNotification<EntityData>>;
 
@@ -91,6 +92,8 @@ export function useEmailDataSource(
 ): EmailDataSource {
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
+  const scheduled = useScheduledEmailSource(state);
+  const showsScheduled = () => state.tab === 'scheduled';
 
   const facetContext = createMemo(
     (): EmailFacetContext => createTagFacetContext(options.tagSets())
@@ -342,21 +345,27 @@ export function useEmailDataSource(
   };
 
   return {
-    items,
-    isLoading,
+    items: () => (showsScheduled() ? scheduled.items() : items()),
+    isLoading: () => (showsScheduled() ? scheduled.isLoading() : isLoading()),
     isFetching: () => {
+      if (showsScheduled()) return scheduled.isFetching();
       if (search.isSettling()) return true;
       return usesServiceSearch() ? search.isFetching() : query.isFetching;
     },
-    error: () =>
-      (usesServiceSearch() ? search.error() : query.error) ??
-      retainedQueries()
-        .map((lookup) => lookup.error())
-        .find((error) => error instanceof Error) ??
-      undefined,
-    hasMore,
-    isLoadingMore,
+    error: () => {
+      if (showsScheduled()) return scheduled.error();
+      return (
+        (usesServiceSearch() ? search.error() : query.error) ??
+        retainedQueries()
+          .map((lookup) => lookup.error())
+          .find((error) => error instanceof Error) ??
+        undefined
+      );
+    },
+    hasMore: () => !showsScheduled() && hasMore(),
+    isLoadingMore: () => !showsScheduled() && isLoadingMore(),
     loadMore: async () => {
+      if (showsScheduled()) return;
       if (usesServiceSearch()) {
         await search.fetchNextPage();
         return;
@@ -364,6 +373,10 @@ export function useEmailDataSource(
       await query.fetchNextPage();
     },
     refresh: async () => {
+      if (showsScheduled()) {
+        await scheduled.refresh();
+        return;
+      }
       await Promise.all([
         usesServiceSearch() ? search.refetch() : query.refresh(),
         ...retainedQueries().map((lookup) => lookup.refresh()),

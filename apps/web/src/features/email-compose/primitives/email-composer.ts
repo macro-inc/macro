@@ -409,6 +409,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
       setCompleted(false);
       props.host?.showDraft?.(draftId);
     },
+    onViewScheduled: ({ draftId, threadId }) => {
+      if (threadId) props.host?.showThread?.(threadId);
+      else props.host?.showDraft?.(draftId);
+    },
   });
   const cancelSchedule = async () => {
     if (!(await schedule.cancel())) return false;

@@ -37,14 +37,21 @@ async function expectNoOverlap(toolbar: Locator) {
       ).toBe(false);
     }
   }
+}
 
-  const summary = toolbar.getByTestId('schedule-summary');
-  if ((await summary.count()) === 0) return;
+/**
+ * Desktop shows the time in a bar under the composer with Cancel at its far
+ * edge; touch keeps it inline in the toolbar with Cancel beside the time.
+ */
+async function expectScheduleSummary(page: Page, placement: 'bar' | 'inline') {
+  const toolbarBox = await page.getByTestId('toolbar').boundingBox();
+  const summary = page.getByTestId('schedule-summary');
   const summaryBox = await summary.boundingBox();
   const labelBox = await summary
     .getByTestId('schedule-summary-label')
     .boundingBox();
   const cancelBox = await summary.getByRole('button').boundingBox();
+  expect(toolbarBox).not.toBeNull();
   expect(summaryBox).not.toBeNull();
   expect(labelBox).not.toBeNull();
   expect(cancelBox).not.toBeNull();
@@ -52,10 +59,23 @@ async function expectNoOverlap(toolbar: Locator) {
     summaryBox!.x + summaryBox!.width + 0.5
   );
   expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(cancelBox!.x + 0.5);
+  if (placement === 'inline') {
+    expect(
+      cancelBox!.x - (labelBox!.x + labelBox!.width),
+      'Cancel must sit beside the time it cancels'
+    ).toBeLessThanOrEqual(8);
+    return;
+  }
+  // The bar's padding scales with browser zoom.
   expect(
-    cancelBox!.x - (labelBox!.x + labelBox!.width),
-    'Cancel must sit beside the time it cancels'
-  ).toBeLessThanOrEqual(8);
+    summaryBox!.x + summaryBox!.width - (cancelBox!.x + cancelBox!.width),
+    'Cancel sits at the far edge of the bar'
+  ).toBeLessThanOrEqual(Math.max(24, summaryBox!.width * 0.1));
+  // The bar tucks under the card's rounded corners, so measure its content.
+  expect(
+    cancelBox!.y + 0.5,
+    'The bar sits below the toolbar'
+  ).toBeGreaterThanOrEqual(toolbarBox!.y + toolbarBox!.height);
 }
 
 test('selected time appears to the left while clock and send stay icon-sized', async ({
@@ -65,9 +85,10 @@ test('selected time appears to the left while clock and send stay icon-sized', a
   await chooseTomorrowAtNine(page);
 
   const toolbar = page.getByTestId('toolbar');
-  await expect(toolbar).toContainText('Scheduled send:');
+  const summary = page.getByTestId('schedule-summary');
+  await expect(summary).toContainText('Scheduled send:');
   await expect(
-    toolbar.getByRole('button', { name: 'Clear send time' })
+    summary.getByRole('button', { name: 'Clear send time' })
   ).toBeVisible();
 
   const clock = toolbar.getByRole('button', { name: /Send time set to/ });
@@ -80,8 +101,10 @@ test('selected time appears to the left while clock and send stay icon-sized', a
   await expect(submit).toBeEnabled();
   await expect(clock.locator('svg')).toHaveClass(/text-accent/);
   await expectNoOverlap(toolbar);
+  await expectScheduleSummary(page, 'bar');
 
-  await toolbar.getByRole('button', { name: 'Clear send time' }).click();
+  await summary.getByRole('button', { name: 'Clear send time' }).click();
+  await expect(summary).toHaveCount(0);
   const clearedClock = toolbar.getByRole('button', {
     name: 'Choose send time',
   });
@@ -95,11 +118,13 @@ test('narrow and zoomed toolbars wrap deliberately without overlap', async ({
   await chooseTomorrowAtNine(page);
   const toolbar = page.getByTestId('toolbar');
   await expectNoOverlap(toolbar);
+  await expectScheduleSummary(page, 'bar');
 
   await page.evaluate(() => {
     document.body.style.zoom = '200%';
   });
   await expectNoOverlap(toolbar);
+  await expectScheduleSummary(page, 'bar');
 });
 
 test('pointer schedule shows Undo and exposes the message in Scheduled', async ({
@@ -111,19 +136,23 @@ test('pointer schedule shows Undo and exposes the message in Scheduled', async (
     .getByRole('button', { name: 'Schedule send', exact: true })
     .click();
 
-  const toast = page.getByTestId('toast');
-  await expect(toast).toContainText('Email scheduled for');
+  const toast = page.getByRole('status').filter({ hasText: 'Email scheduled' });
+  await expect(toast).toContainText('Email scheduled');
   await expect(toast.getByRole('button', { name: 'Undo' })).toBeVisible();
-  await expect(page.getByTestId('toolbar')).toContainText('Scheduled for');
+  await expect(
+    toast.getByRole('button', { name: 'View message' })
+  ).toBeVisible();
+  await expect(toast).toContainText('Sends ');
+  await expect(page.getByTestId('schedule-summary')).toContainText(
+    'Scheduled for'
+  );
   await expect(page.getByTestId('commit-count')).toHaveText('1');
 
   await page.getByRole('button', { name: /Scheduled \(1\)/ }).click();
   await expect(page.getByRole('heading', { name: 'Scheduled' })).toBeVisible();
   await expect(page.getByText('Quarterly notes')).toBeVisible();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(page.getByTestId('toolbar')).not.toContainText(
-    'Scheduled send:'
-  );
+  await expect(page.getByTestId('schedule-summary')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: /Scheduled \(0\)/ })
   ).toBeVisible();
@@ -137,11 +166,13 @@ test('Undo cancels only the confirmed schedule and restores an editable draft', 
   await page
     .getByRole('button', { name: 'Schedule send', exact: true })
     .click();
-  await page.getByTestId('toast').getByRole('button', { name: 'Undo' }).click();
+  await page
+    .getByRole('status')
+    .filter({ hasText: 'Email scheduled' })
+    .getByRole('button', { name: 'Undo' })
+    .click();
 
-  await expect(page.getByTestId('toolbar')).not.toContainText(
-    'Scheduled send:'
-  );
+  await expect(page.getByTestId('schedule-summary')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: /Scheduled \(0\)/ })
   ).toBeVisible();
@@ -159,7 +190,9 @@ test('keyboard submission commits a selected time exactly once', async ({
   await page.keyboard.press('Control+Enter');
 
   await expect(page.getByTestId('commit-count')).toHaveText('1');
-  await expect(page.getByTestId('toast')).toContainText('Email scheduled for');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Email scheduled' })
+  ).toContainText('Email scheduled');
   await expect(page.getByTestId('schedule-summary')).toContainText(
     'Scheduled for'
   );
@@ -169,4 +202,5 @@ test('keyboard submission commits a selected time exactly once', async ({
     })
   ).toBeVisible();
   await expectNoOverlap(page.getByTestId('toolbar'));
+  await expectScheduleSummary(page, 'inline');
 });

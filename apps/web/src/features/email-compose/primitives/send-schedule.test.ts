@@ -617,7 +617,7 @@ describe('send and schedule ordering', () => {
 
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
-        .mock.calls.find(([text]) => text.startsWith('Email scheduled for'));
+        .mock.calls.find(([text]) => text === 'Email scheduled');
       scheduledNotice?.[1]?.actions?.[0].onClick();
       await vi.advanceTimersByTimeAsync(0);
 
@@ -660,7 +660,7 @@ describe('send and schedule ordering', () => {
       await state.sendEmail();
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
-        .mock.calls.find(([text]) => text.startsWith('Email scheduled for'));
+        .mock.calls.find(([text]) => text === 'Email scheduled');
 
       scheduledNotice?.[1]?.actions?.[0].onClick();
       await vi.advanceTimersByTimeAsync(0);
@@ -688,7 +688,7 @@ describe('send and schedule ordering', () => {
       await state.sendEmail();
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
-        .mock.calls.find(([text]) => text.startsWith('Email scheduled for'));
+        .mock.calls.find(([text]) => text === 'Email scheduled');
 
       state.edit('Newer reply that must survive');
       scheduledNotice?.[1]?.actions?.[0].onClick();
@@ -717,7 +717,7 @@ describe('send and schedule ordering', () => {
     await scheduled.sendEmail();
     const scheduledNotice = vi
       .mocked(composeContext.notices.feedback.success)
-      .mock.calls.find(([text]) => text.startsWith('Email scheduled for'));
+      .mock.calls.find(([text]) => text === 'Email scheduled');
     scheduled.dispose();
 
     const newer = mountReplyComposer(composeContext, parent, {
@@ -759,7 +759,7 @@ describe('send and schedule ordering', () => {
       });
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
-        .mock.calls.find(([text]) => text.startsWith('Email scheduled for'));
+        .mock.calls.find(([text]) => text === 'Email scheduled');
       scheduledNotice?.[1]?.actions?.[0].onClick();
       await vi.advanceTimersByTimeAsync(0);
 

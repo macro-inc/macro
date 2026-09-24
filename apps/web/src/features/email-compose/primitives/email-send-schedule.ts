@@ -74,6 +74,12 @@ export function createEmailSendSchedule(options: {
     inboxId: string | undefined;
     sendTime: Date;
   }) => Promise<void> | void;
+  /** Opens the scheduled message; the success notice offers it when present. */
+  onViewScheduled?: (input: {
+    draftId: string;
+    threadId: string | undefined;
+    inboxId: string | undefined;
+  }) => void;
 }) {
   const { delivery, notices } = options;
   const [state, setState] = createSignal<EmailScheduleState>(
@@ -330,32 +336,53 @@ export function createEmailSendSchedule(options: {
           );
         }
       }
-      const successMessage = `Email ${action === 'update' ? 'rescheduled' : 'scheduled'} for ${format(requested, "MMM d, yyyy 'at' h:mm a")}`;
       try {
-        if (action === 'schedule') {
-          let undoStarted = false;
-          const toastId = notices.feedback.success(successMessage, {
-            actions: [
+        // The title stays terse so it never truncates; the time is the subtext.
+        let toastId: number | undefined;
+        let undoStarted = false;
+        const onViewScheduled = options.onViewScheduled;
+        const viewAction = onViewScheduled
+          ? [
               {
-                label: 'Undo',
+                label: 'View message',
                 onClick: () => {
-                  if (undoStarted) return;
-                  undoStarted = true;
                   if (toastId != null) notices.feedback.dismiss(toastId);
-                  void undoInitialSchedule({
+                  onViewScheduled({
                     draftId,
                     threadId: threadId ?? undefined,
                     inboxId,
-                    sendTime: requested,
                   });
                 },
               },
-            ],
-            duration: 5_000,
-          });
-        } else {
-          notices.feedback.success(successMessage);
-        }
+            ]
+          : [];
+        const undoAction =
+          action === 'schedule'
+            ? [
+                {
+                  label: 'Undo',
+                  onClick: () => {
+                    if (undoStarted) return;
+                    undoStarted = true;
+                    if (toastId != null) notices.feedback.dismiss(toastId);
+                    void undoInitialSchedule({
+                      draftId,
+                      threadId: threadId ?? undefined,
+                      inboxId,
+                      sendTime: requested,
+                    });
+                  },
+                },
+              ]
+            : [];
+        const actions = [...undoAction, ...viewAction];
+        toastId = notices.feedback.success(
+          action === 'update' ? 'Email rescheduled' : 'Email scheduled',
+          {
+            subtext: `Sends ${format(requested, "EEE, MMM d, yyyy 'at' h:mm a")}`,
+            ...(actions.length > 0 ? { actions, duration: 8_000 } : {}),
+          }
+        );
       } catch (error) {
         // Toast rendering is post-commit UI and cannot make a successful
         // schedule retryable.
