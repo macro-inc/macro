@@ -199,12 +199,21 @@ mod tests {
         // on the user's reply through SendConfirmedEmail, quoting it.
         let session = SESSION_TOOL_USE_PROMPT.to_string();
         assert!(session.contains("channel or document thread"));
-        assert!(session.contains("context block says so"));
+        assert!(session.contains("context block names a conversation parent"));
         assert!(session.contains("`SendConfirmedEmail`"));
         assert!(session.contains("quoted verbatim"));
         assert!(session.contains("`userConfirmation`"));
         assert!(session.contains("`AskUser`"));
-        assert!(session.contains("never use it from the session view"));
+        assert!(session.contains("`SendConfirmedEmail` is never right here"));
+
+        // The thread rule is to restate what the tool would have done, whole,
+        // so the user can approve it without opening the session - and it
+        // covers every user tool, not just email.
+        assert!(session.contains("written out verbatim"));
+        assert!(session.contains("the whole calendar event"));
+
+        // Which prompt is being answered decides it, not the session.
+        assert!(session.contains("decided per"));
     }
 
     #[test]

@@ -32,7 +32,7 @@ export function AgentSessionLink(props: AgentSessionLinkProps) {
             event.stopPropagation();
             layout?.openWithSplit(
               { type: 'agent', id: link().sessionId },
-              { activate: true, preferNewSplit: event.shiftKey }
+              { activate: true, preferNewSplit: true }
             );
           }}
         >
