@@ -10,20 +10,41 @@
 //! CI only needs to run it for a service when that service's config could have
 //! changed, i.e. when its `src/config.rs`, `src/doppler_config.rs`, or
 //! `Cargo.toml` changed.
+//! Services explicitly awaiting bootstrap in `.github/services-config.json`
+//! defer this live check. Changing the inventory revalidates every ready service,
+//! so removing that marker cannot bypass its first config validation.
 //!
 //! Input is a newline-delimited file of paths relative to the repository root
 //! (typically `git diff --name-only ...`). Output is the affected bin names, one
 //! per line, sorted and deduplicated.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use guppy::graph::{BuildTargetId, PackageGraph};
 use xtask_graph::build_graph;
 
+#[cfg(test)]
+mod test;
+
 /// Source path (relative to a crate root) of a service's doppler-config binary.
 const DOPPLER_CONFIG_SRC: &str = "src/doppler_config.rs";
+const SERVICES_CONFIG: &str = ".github/services-config.json";
+
+#[derive(serde::Deserialize)]
+struct ServicesConfig {
+    services: BTreeMap<String, ServiceConfig>,
+}
+
+#[derive(serde::Deserialize)]
+struct ServiceConfig {
+    bootstrap_pending: Option<String>,
+    #[serde(default)]
+    deploy_binaries: Vec<String>,
+    #[serde(default)]
+    deploy_lambdas: Vec<String>,
+}
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -38,9 +59,11 @@ fn main() -> Result<()> {
 }
 
 fn run(graph: &PackageGraph, changed_files_path: &Path) -> Result<()> {
-    let workspace = graph.workspace();
-    let ws_root = workspace.root();
-    let repo_root = ws_root;
+    let repo_root = graph.workspace().root();
+    let services: ServicesConfig = serde_json::from_slice(
+        &std::fs::read(repo_root.join(SERVICES_CONFIG)).context("reading service inventory")?,
+    )
+    .context("parsing service inventory")?;
 
     let changed_files = std::fs::read_to_string(changed_files_path).with_context(|| {
         format!(
@@ -54,6 +77,20 @@ fn run(graph: &PackageGraph, changed_files_path: &Path) -> Result<()> {
         .map(|line| repo_root.join(line).into_std_path_buf())
         .collect();
 
+    for bin in config_bins(graph, &changed, &services)? {
+        println!("{bin}");
+    }
+    Ok(())
+}
+
+fn config_bins(
+    graph: &PackageGraph,
+    changed: &BTreeSet<PathBuf>,
+    services: &ServicesConfig,
+) -> Result<BTreeSet<String>> {
+    let workspace = graph.workspace();
+    let inventory_changed =
+        changed.contains(&workspace.root().join(SERVICES_CONFIG).into_std_path_buf());
     let mut bins = BTreeSet::new();
     for package in workspace.iter() {
         // Only services that actually ship a `src/doppler_config.rs` binary.
@@ -69,6 +106,24 @@ fn run(graph: &PackageGraph, changed_files_path: &Path) -> Result<()> {
             continue;
         };
 
+        if let Some((service, reason)) = services.services.iter().find_map(|(name, service)| {
+            let reason = service.bootstrap_pending.as_ref()?;
+            package
+                .build_targets()
+                .any(|target| match target.id() {
+                    BuildTargetId::Binary(name) => service
+                        .deploy_binaries
+                        .iter()
+                        .chain(&service.deploy_lambdas)
+                        .any(|binary| binary == name),
+                    _ => false,
+                })
+                .then_some((name, reason))
+        }) {
+            eprintln!("Deferring {service} live Doppler validation: {reason}");
+            continue;
+        }
+
         let dir = package
             .manifest_path()
             .parent()
@@ -80,13 +135,10 @@ fn run(graph: &PackageGraph, changed_files_path: &Path) -> Result<()> {
             dir.join(DOPPLER_CONFIG_SRC).into_std_path_buf(),
             dir.join("Cargo.toml").into_std_path_buf(),
         ];
-        if triggers.iter().any(|trigger| changed.contains(trigger)) {
+        if inventory_changed || triggers.iter().any(|trigger| changed.contains(trigger)) {
             bins.insert(bin_name.to_owned());
         }
     }
 
-    for bin in bins {
-        println!("{bin}");
-    }
-    Ok(())
+    Ok(bins)
 }

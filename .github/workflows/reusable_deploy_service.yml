@@ -55,6 +55,11 @@ jobs:
       run: |
         set -euo pipefail
         cfg=.github/services-config.json
+        if jq -e --arg service "$SERVICE" '.services[$service].bootstrap_pending != null' "$cfg" > /dev/null; then
+          reason=$(jq -r --arg service "$SERVICE" '.services[$service].bootstrap_pending' "$cfg")
+          echo "::error::Cannot deploy $SERVICE before bootstrap: $reason"
+          exit 1
+        fi
         has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' "$cfg")
         has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' "$cfg")
         echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"

@@ -1,6 +1,58 @@
 use super::*;
 
 #[test]
+fn bootstrap_defers_preview_until_activation_without_hiding_paused_services() {
+    let dir = tempfile::tempdir().unwrap();
+    let github = dir.path().join(".github");
+    std::fs::create_dir_all(github.join("outputs")).unwrap();
+    std::fs::write(
+        github.join("outputs/all_modified_files.json"),
+        r#"[".github/services-config.json"]"#,
+    )
+    .unwrap();
+    let mut config = serde_json::json!({"services": {
+        "ready": {},
+        "pending": {"bootstrap_pending": "Requires first-time setup"},
+        "paused": {"deploy_enabled": false}
+    }});
+    for expected in [
+        serde_json::json!(["paused", "ready"]),
+        serde_json::json!(["paused", "pending", "ready"]),
+    ] {
+        std::fs::write(github.join("services-config.json"), config.to_string()).unwrap();
+        let output_path = dir.path().join("output");
+        std::fs::write(&output_path, "").unwrap();
+        let output = std::process::Command::new("bash")
+            .args([
+                "-euo",
+                "pipefail",
+                "-c",
+                &detect_affected_services().value.run.unwrap(),
+            ])
+            .current_dir(dir.path())
+            .env("GITHUB_OUTPUT", &output_path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let result = std::fs::read_to_string(output_path).unwrap();
+        assert!(
+            result
+                .lines()
+                .any(|line| line == format!("services={expected}")),
+            "{result}"
+        );
+        config["services"]["pending"]
+            .as_object_mut()
+            .unwrap()
+            .remove("bootstrap_pending");
+    }
+}
+
+#[test]
 fn sqlx_changes_preview_every_service() {
     let detect = detect_affected_services();
     let run = detect

@@ -203,6 +203,11 @@ fn detect_affected_services() -> Step<Run> {
 
             # Check each service for changes
             for service in $(echo "$config" | jq -r '.services | keys[]'); do
+              bootstrap_pending=$(jq -r --arg s "$service" '.services[$s].bootstrap_pending // empty' <<< "$config")
+              if jq -e --arg s "$service" '.services[$s].bootstrap_pending != null' <<< "$config" > /dev/null; then
+                echo "::notice::Deferring $service live infrastructure checks: $bootstrap_pending"
+                continue
+              fi
               service_changed=false
 
               # Workspace/build-system changes can affect every deployable.

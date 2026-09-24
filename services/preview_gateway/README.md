@@ -89,7 +89,15 @@ requires explicit ownership/routing across gateways first.
 
 Before first deployment:
 
-1. Choose a separate preview domain and its Route 53 zone. Set Pulumi
+The service has a `bootstrap_pending` reason in `.github/services-config.json`
+until these prerequisites are ready. CI still builds, lints, and tests its Rust
+and TypeScript, but explicitly defers live Doppler validation and Pulumi preview;
+automatic deployment excludes it and the manual service deployment workflow
+rejects it. Direct Pulumi commands remain available for bootstrap. Other services'
+checks remain strict, including failures caused by missing configuration.
+
+1. Initialize `macro-inc/preview-gateway/dev` and `macro-inc/preview-gateway/prod`
+   Pulumi stacks. Choose a separate preview domain and its Route 53 zone. Set Pulumi
    `preview_domain` and `preview_zone_id` for the dev or prod stack. Dev and prod
    should use distinct DNS suffixes.
 2. Deploy the Doppler projects stack to create `preview-gateway` and its secret
@@ -102,8 +110,11 @@ Before first deployment:
    They must be present in the synced `APP_SECRETS_JSON` before a task can become
    healthy. MacroConfig does not merge missing JSON keys from ECS environment
    variables. Run `preview_gateway_doppler_config` to validate service config.
-4. Deploy gateway, harness, and web changes. The service is registered in the
-   normal CI deploy inventory. Confirm `/preview/health`, call SharePreview,
+4. Remove `bootstrap_pending` from the service inventory and open a PR. This
+   inventory-only change triggers live Doppler validation and Pulumi previews
+   before enabling the normal deployment pipeline; do not remove it before dev
+   and prod configuration are ready. Deploy gateway, harness, and web changes.
+   Confirm `/preview/health`, call SharePreview,
    execute the script, and verify a page edit over HMR and Stop sharing.
 
 A domain, DNS zone, and production secrets are deployment prerequisites, not

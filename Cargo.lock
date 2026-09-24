@@ -20725,6 +20725,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "guppy",
+ "serde",
+ "serde_json",
  "xtask_graph",
 ]
 
@@ -20815,6 +20817,7 @@ dependencies = [
  "indoc",
  "serde_json",
  "serde_yaml",
+ "tempfile",
  "xtask_paths",
 ]
 

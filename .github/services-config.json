@@ -299,6 +299,7 @@
       "stack_path": "infra/stacks/kafka-cluster/**"
     },
     "preview-gateway": {
+      "bootstrap_pending": "Requires an isolated preview domain, Pulumi stacks, and Doppler configs; see services/preview_gateway/README.md",
       "source_paths": [
         "services/preview_gateway/**",
         "crates/agent_preview/**"
