@@ -1,5 +1,6 @@
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
@@ -60,6 +61,7 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
 
 export function EmailSidebar() {
   const panel = useSplitPanelOrThrow();
+  const { openWithSplit } = useSplitLayout();
   const {
     state,
     setTab,
@@ -92,7 +94,7 @@ export function EmailSidebar() {
 
         <SidebarCreateButton
           label="New email"
-          onCreate={() => composeEmail(state.inboxIds)}
+          onCreate={() => composeEmail(openWithSplit, state.inboxIds)}
         />
 
         <EmailNavigation />

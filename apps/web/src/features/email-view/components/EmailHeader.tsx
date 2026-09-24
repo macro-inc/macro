@@ -5,6 +5,7 @@ import {
   ViewShell,
 } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSignal } from 'solid-js';
 import { composeEmail } from '../compose-email';
@@ -57,6 +58,7 @@ export function EmailTopBar() {
 
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
+  const { openWithSplit } = useSplitLayout();
   const { state, setState } = useEmailView();
   const [filterOpen, setFilterOpen] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
@@ -96,7 +98,7 @@ export function EmailHeader(props: EmailHeaderProps) {
           <div class="shrink-0">
             <SidebarCreateButton
               label="New"
-              onCreate={() => composeEmail(state.inboxIds)}
+              onCreate={() => composeEmail(openWithSplit, state.inboxIds)}
             />
           </div>
         </div>
