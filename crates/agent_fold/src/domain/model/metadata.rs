@@ -108,6 +108,22 @@ pub enum TurnState {
     Disconnected,
 }
 
+impl TurnState {
+    /// Whether a turn is open: the session is mid-turn and something still
+    /// has to happen before it settles.
+    ///
+    /// `Disconnected` is not open. The turn it interrupted never finished,
+    /// but nothing is coming for it either, so a reader waiting on one of
+    /// these is waiting on nothing.
+    #[must_use]
+    pub fn is_open(self) -> bool {
+        matches!(
+            self,
+            Self::Starting | Self::Running | Self::Stopping | Self::Blocked
+        )
+    }
+}
+
 /// One slash command the harness advertises.
 ///
 /// Mirrors ACP's `AvailableCommand`, flattened: the only input shape ACP

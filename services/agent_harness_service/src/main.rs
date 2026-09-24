@@ -76,6 +76,10 @@ use agent_inmem::outbound::manager::InMemAgentManager;
 use agent_inmem::outbound::tool_catalog::McpToolCatalog;
 use agent_inmem::rig_engine::RigTurnEngine;
 use agent_runtime_directory::PgAgentRuntimeDirectory;
+use agent_session::domain::abandoned_turn::{
+    ABANDONED_TURN_QUIET_FOR, ABANDONED_TURN_SWEEP_INTERVAL, ABANDONED_TURN_SWEEP_LIMIT,
+    close_abandoned_turns,
+};
 use agent_session::domain::model::{AgentMcpServers, ReplicaId};
 use agent_session::domain::ports::{NoOpRealtime, SessionOwnership as _};
 use agent_session::domain::service::AgentSessionServiceImpl;
@@ -290,6 +294,12 @@ async fn run() -> anyhow::Result<()> {
         turn_observer.clone(),
         lifecycle_publisher.clone(),
         replica,
+    );
+    // Built here because both halves are moved into other owners further
+    // down; the sweep it belongs to is spawned once everything else is up.
+    let abandoned_turn_realtime = ConnectionGatewayAgentSessionRealtime::new(
+        connection_gateway.clone(),
+        session_audience.clone(),
     );
 
     // Sessions with a command admitted but not yet resolved - shared with
@@ -1079,6 +1089,45 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    // The other side of that liveness signal. A replica that stops beating
+    // takes its sessions' actors with it, and an actor that never runs its
+    // teardown never writes the frame that ends the turn it was mid-way
+    // through - so the log just stops and readers wait on an agent that is
+    // not there. Every replica sweeps for those; the lease decides which one
+    // closes any given session, and closes it once.
+    let abandoned_turn_repo = session_repo.clone();
+    let abandoned_turn_readiness = runtime_commands_readiness.clone();
+    let abandoned_turns = tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(ABANDONED_TURN_SWEEP_INTERVAL);
+        loop {
+            ticker.tick().await;
+            if !*abandoned_turn_readiness.borrow() {
+                continue;
+            }
+            match close_abandoned_turns(
+                &abandoned_turn_repo,
+                &abandoned_turn_realtime,
+                replica,
+                ABANDONED_TURN_QUIET_FOR,
+                ABANDONED_TURN_SWEEP_LIMIT,
+            )
+            .await
+            {
+                Ok(sweep) if sweep.closed > 0 => {
+                    tracing::info!(
+                        closed = sweep.closed,
+                        examined = sweep.examined,
+                        "closed agent session turns no replica was driving"
+                    );
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    tracing::warn!(error = ?error, "abandoned agent session turn sweep failed");
+                }
+            }
+        }
+    });
+
     // Keep trigger generation in this deployment while retaining Kafka as the
     // boundary between channel events and harness commands.
     let mut trigger = tokio::spawn(trigger::supervise(
@@ -1277,6 +1326,7 @@ async fn run() -> anyhow::Result<()> {
     trigger.abort();
     egress_http.abort();
     heartbeat.abort();
+    abandoned_turns.abort();
     runtime_commands.abort();
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
