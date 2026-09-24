@@ -5173,6 +5173,68 @@ export const SendChannelMessageResponse = z.object({
   message_id: z.string(),
 });
 
+export const SendConfirmedEmail = z.object({
+  subject: z.string(),
+  body: z.string(),
+  to: z.array(
+    z.object({
+      email: z.string(),
+      name: z.union([z.string(), z.null()]).optional(),
+    })
+  ),
+  cc: z
+    .array(
+      z.object({
+        email: z.string(),
+        name: z.union([z.string(), z.null()]).optional(),
+      })
+    )
+    .optional(),
+  bcc: z
+    .array(
+      z.object({
+        email: z.string(),
+        name: z.union([z.string(), z.null()]).optional(),
+      })
+    )
+    .optional(),
+  replyingToId: z.union([z.string().uuid(), z.null()]).optional(),
+  includeSignature: z.union([z.boolean(), z.null()]).optional(),
+  userConfirmation: z.string(),
+});
+
+export const SendEmailResponse = z.any().superRefine((x, ctx) => {
+  const schemas = [
+    z.literal('userEdited'),
+    z
+      .object({
+        sent: z.object({
+          message_id: z.string().uuid(),
+          thread_id: z.string().uuid(),
+        }),
+      })
+      .strict(),
+    z
+      .object({ convertedToDraft: z.object({ draft_id: z.string().uuid() }) })
+      .strict(),
+  ];
+  const errors = schemas.reduce<z.ZodError[]>(
+    (errors, schema) =>
+      ((result) => (result.error ? [...errors, result.error] : errors))(
+        schema.safeParse(x)
+      ),
+    []
+  );
+  if (schemas.length - errors.length !== 1) {
+    ctx.addIssue({
+      path: ctx.path,
+      code: 'invalid_union',
+      unionErrors: errors,
+      message: 'Invalid input: Should pass single schema',
+    });
+  }
+});
+
 export const SendEmail = z.object({
   subject: z.string(),
   body: z.string(),
@@ -5854,68 +5916,6 @@ export const WebSearchResponse = z.object({
     z.object({ type: z.string(), error_code: z.string() }),
   ]),
   tool_use_id: z.string(),
-});
-
-export const SendConfirmedEmail = z.object({
-  subject: z.string(),
-  body: z.string(),
-  to: z.array(
-    z.object({
-      email: z.string(),
-      name: z.union([z.string(), z.null()]).optional(),
-    })
-  ),
-  cc: z
-    .array(
-      z.object({
-        email: z.string(),
-        name: z.union([z.string(), z.null()]).optional(),
-      })
-    )
-    .optional(),
-  bcc: z
-    .array(
-      z.object({
-        email: z.string(),
-        name: z.union([z.string(), z.null()]).optional(),
-      })
-    )
-    .optional(),
-  replyingToId: z.union([z.string().uuid(), z.null()]).optional(),
-  includeSignature: z.union([z.boolean(), z.null()]).optional(),
-  userConfirmation: z.string(),
-});
-
-export const SendEmailResponse = z.any().superRefine((x, ctx) => {
-  const schemas = [
-    z.literal('userEdited'),
-    z
-      .object({
-        sent: z.object({
-          message_id: z.string().uuid(),
-          thread_id: z.string().uuid(),
-        }),
-      })
-      .strict(),
-    z
-      .object({ convertedToDraft: z.object({ draft_id: z.string().uuid() }) })
-      .strict(),
-  ];
-  const errors = schemas.reduce<z.ZodError[]>(
-    (errors, schema) =>
-      ((result) => (result.error ? [...errors, result.error] : errors))(
-        schema.safeParse(x)
-      ),
-    []
-  );
-  if (schemas.length - errors.length !== 1) {
-    ctx.addIssue({
-      path: ctx.path,
-      code: 'invalid_union',
-      unionErrors: errors,
-      message: 'Invalid input: Should pass single schema',
-    });
-  }
 });
 
 export const ReadThread = z.object({

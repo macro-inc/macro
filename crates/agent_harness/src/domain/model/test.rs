@@ -167,6 +167,7 @@ fn a_turn_with_text_answered_however_it_stopped() {
         StopReason::Cancelled,
         StopReason::Failed {
             message: "boom".to_owned(),
+            notice: None,
         },
     ] {
         assert_eq!(
@@ -193,6 +194,7 @@ fn a_silent_turn_is_told_by_how_it_stopped() {
         (
             StopReason::Failed {
                 message: "boom".to_owned(),
+                notice: None,
             },
             ReplyOutcome::Failed,
         ),
