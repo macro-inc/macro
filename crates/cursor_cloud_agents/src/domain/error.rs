@@ -46,8 +46,10 @@ impl From<rootcause::Report> for SessionError {
 pub struct PromptRefusal {
     /// One plain sentence or two, no report decorations.
     pub message: String,
+    /// Stable public code, when a hosted helper refused the operation.
+    pub code: Option<String>,
     /// The refusal as a rendered notice, when there is more to say than a line.
-    pub notice: Option<FailureNotice>,
+    pub notice: Option<Box<FailureNotice>>,
 }
 
 impl PromptRefusal {
@@ -56,10 +58,20 @@ impl PromptRefusal {
     pub fn plain(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
+            code: None,
             notice: None,
         }
     }
+
+    /// Attach a public machine-readable startup failure code.
+    #[must_use]
+    pub fn with_code(mut self, code: impl Into<String>) -> Self {
+        self.code = Some(code.into());
+        self
+    }
 }
+
+impl std::error::Error for PromptRefusal {}
 
 impl std::fmt::Display for PromptRefusal {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -117,7 +129,8 @@ impl UsageLimitExceeded {
         let notice = self.notice();
         PromptRefusal {
             message: format!("{} {}", notice.title, notice.body),
-            notice: Some(notice),
+            code: None,
+            notice: Some(Box::new(notice)),
         }
     }
 }

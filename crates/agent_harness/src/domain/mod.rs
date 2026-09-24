@@ -10,6 +10,8 @@ pub mod pending;
 pub mod ports;
 /// The per-session queue of turn-occupying actions awaiting their turn.
 pub mod queue;
+/// Owner-bound selection and admission for Macro-funded repository helpers.
+pub mod repository_choice;
 /// Compute resources for a sandbox size.
 pub mod sandbox;
 /// The harness orchestrator: containers, announcements, and trigger commands.

@@ -543,6 +543,7 @@ async fn run() -> anyhow::Result<()> {
         },
         pending_commands.clone(),
     )
+    .with_ai_admission(Arc::clone(&admission))
     // Cursor's own artifact links expire in fifteen minutes, so a
     // walkthrough's screenshots and recordings are re-hosted where every
     // other user-visible blob in Macro lives.

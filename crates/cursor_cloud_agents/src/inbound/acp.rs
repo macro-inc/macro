@@ -648,6 +648,9 @@ async fn advertise_slash_commands(notifier: &AcpNotifier, session: &SessionId) {
 fn prompt_error(error: &SessionError) -> AcpError {
     let acp_error = AcpError::new(-32603, error.to_string());
     match error {
+        SessionError::Rejected(refusal) if refusal.code.is_some() => {
+            acp_error.data(serde_json::json!({ "code": refusal.code, "error": refusal.message }))
+        }
         SessionError::Rejected(refusal) => acp_error.data(
             refusal
                 .notice
