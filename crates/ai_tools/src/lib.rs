@@ -7,6 +7,7 @@ use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_
 #[cfg(test)]
 mod test;
 
+mod ai_operations;
 mod build_context;
 mod display_results;
 mod schemas;

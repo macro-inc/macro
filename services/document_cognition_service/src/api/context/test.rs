@@ -403,6 +403,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
+        admission: Arc::new(ai_billing::domain::UnconfiguredAiAdmissionService),
         recorder: ai_usage::pg_recorder(pool.clone()),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };

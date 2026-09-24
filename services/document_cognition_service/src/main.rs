@@ -664,6 +664,9 @@ async fn main() -> anyhow::Result<()> {
         ),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        admission: Arc::new(ai_billing::domain::BillingAdmissionService::new(
+            ai_billing.as_ref().clone(),
+        )),
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
