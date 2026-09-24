@@ -33,6 +33,7 @@ use agent_client_protocol::{
 };
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_session::domain::model::AgentSessionId;
+use ai_billing::domain::AiAdmissionError;
 use ai_tools::user_tool_review::{
     ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
 };
@@ -615,7 +616,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             // A closed connection is the only way this fails,
                             // and failing the spawned task would tear the
                             // whole (already closing) server down.
-                            let _ = responder.respond(PromptResponse::new(stop));
+                            let _ = match stop {
+                                Ok(stop) => responder.respond(PromptResponse::new(stop)),
+                                Err(error) => responder.respond_with_error(error),
+                            };
                             Ok(())
                         }
                         .instrument(span)
@@ -676,7 +680,7 @@ async fn run_turn(
     acp_session_id: SessionId,
     prompt: UserPrompt,
     cancel: CancellationToken,
-) -> StopReason {
+) -> Result<StopReason, AcpError> {
     let _turn = state.turn_lock.lock().await;
     let TurnInput {
         messages,
@@ -717,6 +721,18 @@ async fn run_turn(
                 accumulator.push(part);
             }
             Ok(Some(Err(error))) => {
+                if let agent::AgentError::Other(error) = &error
+                    && let Some(admission) = error.downcast_ref::<AiAdmissionError>()
+                {
+                    let code = match admission {
+                        AiAdmissionError::Denied(reason) => reason.code(),
+                        AiAdmissionError::Unavailable(_) => "ai_billing_unavailable",
+                    };
+                    return Err(AcpError::internal_error().data(serde_json::json!({
+                        "error": admission.to_string(),
+                        "code": code,
+                    })));
+                }
                 if error.was_cancelled() {
                     was_cancelled = true;
                 } else {
@@ -761,9 +777,9 @@ async fn run_turn(
     state.push_turn(prompt, turn_parts);
 
     if was_cancelled || cancel.is_cancelled() {
-        StopReason::Cancelled
+        Ok(StopReason::Cancelled)
     } else {
-        StopReason::EndTurn
+        Ok(StopReason::EndTurn)
     }
 }
 

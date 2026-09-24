@@ -70,6 +70,7 @@ use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
 use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
+use agent_inmem::domain::admission::AdmissionCheckingTurnEngine;
 use agent_inmem::domain::engine::TurnEngine;
 use agent_inmem::outbound::acp_mcp::AcpMcpConnector;
 use agent_inmem::outbound::egress_mcp::EgressMcpClient;
@@ -437,8 +438,10 @@ async fn run() -> anyhow::Result<()> {
         ai_tools::build_tool_service_context_from_env(pool.clone(), event_broker_tracker.clone())
             .await
             .context("failed to build the in-memory agent tool context")?;
-    let inmem_model_engine: Arc<dyn TurnEngine> =
-        Arc::new(RigTurnEngine::new(pool.clone(), tool_context));
+    let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(AdmissionCheckingTurnEngine::new(
+        Arc::new(RigTurnEngine::new(pool.clone(), tool_context)),
+        Arc::clone(&admission),
+    ));
     // Cold attaches (fresh spawns and post-restart resumes) rebuild
     // their model context from the same log every frame lands in.
     let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
