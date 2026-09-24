@@ -1200,36 +1200,31 @@ async fn run() -> anyhow::Result<()> {
         config.document_permission_jwt.as_ref().to_string(),
     );
 
-    let make_soup_service = |email_previews| {
-        Arc::new(
-            SoupImpl::new(
-                PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-                frecency_service.clone(),
-                email_previews,
-                ChannelListServiceImpl::new(
-                    PgChannelsRepo::new(readonly_db.clone()),
-                    PgChannelsRepo::new(readonly_db.clone()),
-                    frecency_storage.clone(),
-                ),
-                call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
-                    readonly_db.clone(),
-                )),
-                crm_service.clone(),
-                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
-                reminders_service.clone(),
-            )
-            .with_agent_branches(
-                agent_changes::outbound::postgres::PgChangesetRepo::new(readonly_db.clone()),
+    // Keep the replica-backed Soup reader alongside the primary-backed email
+    // writer in SoupRouterState. REST, GraphQL lists, and realtime hydration
+    // share this reader; only email mutations and their reply loader use the
+    // writer service, so normal list traffic never switches to the primary.
+    let soup_service = Arc::new(
+        SoupImpl::new(
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+            frecency_service,
+            readonly_email_service,
+            ChannelListServiceImpl::new(
+                PgChannelsRepo::new(readonly_db.clone()),
+                PgChannelsRepo::new(readonly_db.clone()),
+                frecency_storage.clone(),
             ),
+            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                readonly_db.clone(),
+            )),
+            crm_service.clone(),
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
+            reminders_service.clone(),
         )
-    };
-    let soup_service = make_soup_service(readonly_email_service);
-    // GraphQL merges email facts across mutation replies, lists, and realtime
-    // hydration. Replica-backed revalidation could undo a committed read/archive
-    // in the normalized cache. Keep just this email leg on the writer pool;
-    // REST Soup and every other domain retain their existing replica readers.
-    let graphql_soup_service =
-        make_soup_service(ReadonlyEmailPreviewAdapter(email_service.clone()));
+        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
+            readonly_db.clone(),
+        )),
+    );
 
     let websocket_notification_consumer_service =
         Arc::new(WebSocketNotificationConsumerService::new(
@@ -1544,9 +1539,8 @@ async fn run() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
-        graphql_soup_service: graphql_soup_service.clone(),
         graphql_soup_schema: complete_graph::build_schema_from_arcs(
-            graphql_soup_service,
+            soup_service,
             soup_realtime_service,
             websocket_notification_consumer_service,
             activity_realtime_service,

@@ -465,8 +465,8 @@ pub trait EmailRepo: Send + Sync + 'static {
 }
 
 /// Read-only capability for fetching email thread previews. The composition
-/// root chooses the pool: replica-backed for REST Soup, primary-backed when
-/// GraphQL needs read-after-write consistency.
+/// root supplies the replica-backed service for ordinary REST/GraphQL Soup.
+/// Mutation replies reload through the primary-backed email writer instead.
 pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
     fn get_email_thread_previews(
         &self,

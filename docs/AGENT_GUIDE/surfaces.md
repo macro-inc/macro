@@ -339,11 +339,13 @@ reconcile. Permanent failures roll back the failed intent.
 Check Signal/Noise removal and All's done indicator, then Undo/Redo, including an
 offline action followed by reconnect. Sent-only threads cannot be unarchived.
 
-Email mutation replies use an uncached primary-backed reader. GraphQL email lists
-and realtime hydration also use primary-backed email previews, so an immediate
-refresh cannot overwrite the reply with replica-stale read/archive state. REST
-Soup and the other entity domains keep their existing readers. A post-commit
-reply-load failure is retryable; it must not discard the queued intent. Deploy
+The service retains both replica-backed Soup reads and a primary-backed email
+writer. Email mutations and their uncached reply reloads use the primary; ordinary
+GraphQL/REST lists, direct Soup lookups, and realtime Soup hydration use the replica.
+A mutation reply is fresh, but subsequent list refetches are eventually consistent
+and can still return replica-stale read/archive state. Test that boundary separately
+from mutation reply correctness. A post-commit reply-load failure is retryable;
+it must not discard the queued intent. Deploy
 the backend schema containing `setEmailThreadArchived` before this client.
 Browser WASM and native cache builds must include the regenerated schema metadata;
 native offline archive support therefore requires a full app build, not just OTA.
