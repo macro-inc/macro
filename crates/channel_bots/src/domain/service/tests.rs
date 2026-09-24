@@ -1,9 +1,45 @@
 use super::super::test::*;
 use super::*;
+use ai_billing::domain::{AiAdmissionError, AiAdmissionService, DenyReason};
+use ai_usage::AiFeature;
 use async_trait::async_trait;
 use chrono::{TimeZone as _, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::api::MockMessageServiceApi;
 use std::sync::Mutex;
+
+struct Admission {
+    result: Mutex<Option<Result<(), AiAdmissionError>>>,
+    calls: Mutex<Vec<(String, AiFeature)>>,
+}
+
+impl Admission {
+    fn new(result: Result<(), AiAdmissionError>) -> Arc<Self> {
+        Arc::new(Self {
+            result: Mutex::new(Some(result)),
+            calls: Mutex::new(vec![]),
+        })
+    }
+}
+
+impl AiAdmissionService for Admission {
+    fn admit<'a>(
+        &'a self,
+        user: &'a MacroUserIdStr<'_>,
+        feature: AiFeature,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<(), AiAdmissionError>> + Send + 'a>,
+    > {
+        self.calls.lock().unwrap().push((user.to_string(), feature));
+        Box::pin(async {
+            self.result
+                .lock()
+                .unwrap()
+                .take()
+                .expect("admitted only once")
+        })
+    }
+}
 
 struct Responder {
     prompts: Mutex<Vec<String>>,
@@ -68,6 +104,7 @@ fn handler_with_marks(
         eastern_time_zones(),
         marks,
     )
+    .with_ai_admission(Admission::new(Ok(())))
 }
 
 fn invocation(trigger: &messages::domain::models::Message) -> BotEvent {
@@ -502,6 +539,139 @@ async fn prompt_says_the_time_zone_is_unknown_without_a_calendar() {
     .unwrap();
 
     assert!(prompt.contains("UTC; the user's own time zone is unknown"));
+}
+
+#[tokio::test]
+async fn allowed_responses_admit_once_for_both_parents_and_trigger_kinds() {
+    for parent in [parent(), MessageParent::Channel(Uuid::from_u128(900))] {
+        for trigger_kind in [BotTrigger::Mention, BotTrigger::Inferred] {
+            let mut trigger = message(1, None, "help");
+            trigger.parent = parent.clone();
+            let mut api = MockMessageServiceApi::new();
+            configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+            api.expect_preceding().returning(|_, _, _| Ok(vec![]));
+            expect_placeholder(&mut api);
+            api.expect_patch().once().returning(|_, _, input| {
+                assert_eq!(input.content.as_deref(), Some("answer"));
+                Ok(message(3, Some(Uuid::from_u128(1)), "answer"))
+            });
+            let admission = Admission::new(Ok(()));
+            let responder = responder("answer");
+            let handler = handler(api, Arc::new(Access::default()), responder.clone())
+                .with_ai_admission(admission.clone());
+            let mut event = invocation(&trigger);
+            event.trigger = trigger_kind;
+            handler.handle(&event).await.unwrap();
+            assert_eq!(
+                *admission.calls.lock().unwrap(),
+                vec![(user().to_string(), AiFeature::ChannelBot)]
+            );
+            assert_eq!(responder.prompts.lock().unwrap().len(), 1);
+        }
+    }
+}
+
+#[tokio::test]
+async fn response_admission_denials_never_post_thinking_or_call_the_responder() {
+    for parent in [parent(), MessageParent::Channel(Uuid::from_u128(900))] {
+        for trigger_kind in [BotTrigger::Mention, BotTrigger::Inferred] {
+            for error in [
+                AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+                AiAdmissionError::Denied(DenyReason::OverageLimitReached),
+                AiAdmissionError::Denied(DenyReason::OveragePaymentFailed),
+                AiAdmissionError::Unavailable(rootcause::report!("private payer database error")),
+            ] {
+                let expected_code = match &error {
+                    AiAdmissionError::Denied(reason) => reason.code(),
+                    AiAdmissionError::Unavailable(_) => "ai_billing_unavailable",
+                };
+                let expected_content = format!("{error} ({expected_code})");
+                let mut trigger = message(1, None, "@macro help");
+                trigger.parent = parent.clone();
+                let mut api = MockMessageServiceApi::new();
+                configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+                api.expect_preceding().returning(|_, _, _| Ok(vec![]));
+                if trigger_kind == BotTrigger::Mention {
+                    api.expect_post().once().returning(move |access, input| {
+                        assert_eq!(access.acting_user_id(), Some(&user()));
+                        assert_eq!(input.attribution, MessageAttribution::ActingUser);
+                        assert_eq!(input.thread_id, Some(Uuid::from_u128(1)));
+                        assert_eq!(
+                            input.notification_policy,
+                            PostMessageNotificationPolicy::Default
+                        );
+                        assert_eq!(input.content, expected_content);
+                        assert!(!input.content.contains("private payer"));
+                        Ok(message(3, input.thread_id, &input.content))
+                    });
+                }
+                let admission = Admission::new(Err(error));
+                let responder = responder("must not run");
+                let handler = handler(api, Arc::new(Access::default()), responder.clone())
+                    .with_ai_admission(admission.clone());
+                let mut event = invocation(&trigger);
+                event.trigger = trigger_kind;
+                let error = handler.handle(&event).await.unwrap_err();
+                assert!(error.downcast_ref::<AiAdmissionError>().is_some());
+                assert_eq!(
+                    *admission.calls.lock().unwrap(),
+                    vec![(user().to_string(), AiFeature::ChannelBot)]
+                );
+                assert!(responder.prompts.lock().unwrap().is_empty());
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn response_authorization_and_trigger_validation_precede_admission() {
+    for revoked in [true, false] {
+        let access = Arc::new(Access::default());
+        let mut api = MockMessageServiceApi::new();
+        if revoked {
+            access.revoke();
+        } else {
+            api.expect_get()
+                .once()
+                .returning(|_, _| Err(MessageError::NotFound));
+        }
+        let admission = Admission::new(Ok(()));
+        let handler =
+            handler(api, access, responder("must not run")).with_ai_admission(admission.clone());
+        assert!(
+            handler
+                .handle(&invocation(&message(1, None, "help")))
+                .await
+                .is_err()
+        );
+        assert!(admission.calls.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn unconfigured_response_admission_fails_closed() {
+    let trigger = message(1, None, "help");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+    let responder = responder("must not run");
+    let handler = MacroAiHandler::new(
+        Arc::new(api),
+        Arc::new(Access::default()),
+        responder.clone(),
+        eastern_time_zones(),
+        Marks::none(),
+    );
+    let mut event = invocation(&trigger);
+    event.trigger = BotTrigger::Inferred;
+    assert!(matches!(
+        handler
+            .handle(&event)
+            .await
+            .unwrap_err()
+            .downcast_ref::<AiAdmissionError>(),
+        Some(AiAdmissionError::Unavailable(_))
+    ));
+    assert!(responder.prompts.lock().unwrap().is_empty());
 }
 
 #[test]
