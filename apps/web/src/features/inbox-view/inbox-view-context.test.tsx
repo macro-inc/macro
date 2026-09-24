@@ -6,6 +6,7 @@ import {
   useSplitRouter,
 } from '@app/lib/split-router';
 import { createMemorySplitRouterLocation } from '@app/lib/split-router/integrations/memory';
+import type { PreviewPanelSelection } from '@components/app/previewTarget';
 import { appSplitRoutes } from '@components/app/split-layout/split-router/app-routes';
 import { cleanup, render } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -102,6 +103,7 @@ vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToResolvedBlockName: (type: string) =>
     ['task', 'snippet', 'skill'].includes(type) ? 'md' : type,
   isBlockAlias: () => false,
+  itemToBlockName: (item: { fileType?: string }) => item.fileType ?? 'md',
   resolveBlockAlias: (type: string) => type,
 }));
 vi.mock('@components/app/createPreviewSelectionGuard', () => ({
@@ -456,6 +458,34 @@ describe('InboxViewProvider route selection', () => {
     await router.settled();
     expect(location.read().pathname).toBe('/inbox');
     expect(context.previewEntity()).toBeUndefined();
+  });
+
+  it('asks the preview to navigate again when the previewed row is re-opened', async () => {
+    const { context, location, router } = mountProvider();
+    const row = {
+      type: 'document',
+      id: 'doc-1',
+      fileType: 'md',
+      commentTarget: { commentId: 'comment-1' },
+    } satisfies PreviewPanelSelection;
+
+    context.openPreview(row);
+    await router.settled();
+    const url = location.read().pathname + location.read().search;
+    expect(context.previewNavigationRequest()).toBe(0);
+
+    expect(context.openPreview({ ...row })).toBe(true);
+    expect(context.openPreview({ ...row })).toBe(true);
+    await router.settled();
+    expect(context.previewNavigationRequest()).toBe(2);
+    expect(location.read().pathname + location.read().search).toBe(url);
+
+    context.openPreview({ ...row, commentTarget: { commentId: 'comment-2' } });
+    await router.settled();
+    expect(context.previewNavigationRequest()).toBe(2);
+    expect(location.read().search).toContain(
+      's0.inbox-preview.targetCommentId=comment-2'
+    );
   });
 
   it('round-trips calendar, reminder, foreign, and document subtype targets', async () => {

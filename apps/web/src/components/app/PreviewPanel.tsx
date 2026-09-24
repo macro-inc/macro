@@ -47,6 +47,11 @@ export const [PreviewPanelContext, useMaybePreviewPanel] =
 
 export type PreviewPanelProps = {
   selectedEntity: PreviewPanelSelection | undefined;
+  /**
+   * Bumped by the host when the user re-opens the selection already shown, so
+   * the block navigates to its target again.
+   */
+  navigationRequest?: number;
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
   onFocusOut?: VoidFunction;
@@ -115,8 +120,19 @@ function PreviewPanelContent(
     return entity;
   });
 
+  const navigation = createMemo(
+    () => ({
+      selection: navigationSelection(),
+      request: props.navigationRequest ?? 0,
+    }),
+    undefined,
+    {
+      equals: (a, b) => a.selection === b.selection && a.request === b.request,
+    }
+  );
+
   createRenderEffect(
-    on(navigationSelection, () => {
+    on(navigation, () => {
       const entity = props.selectedEntity;
       setInteractedWith(false);
       if (!blockInstance()) return;

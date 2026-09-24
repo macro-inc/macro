@@ -12,6 +12,7 @@ import {
 const mocks = vi.hoisted(() => ({
   navigateChannel: vi.fn(),
   navigateCalendar: vi.fn(),
+  navigateDocument: vi.fn(),
   mounts: vi.fn(),
   unmounts: vi.fn(),
 }));
@@ -21,6 +22,13 @@ vi.mock('@app/features/next-soup/utils', () => ({
   getChannelEntityTarget: () => ({ kind: 'latest' }),
   navigateChannelEntityToTarget: mocks.navigateChannel,
   navigateCalendarPreviewToTarget: mocks.navigateCalendar,
+  navigateDocumentEntityToComment: mocks.navigateDocument,
+  getDocumentCommentTarget: (entity: {
+    commentTarget?: { commentId: string };
+  }) =>
+    entity.commentTarget
+      ? { commentId: entity.commentTarget.commentId, params: {} }
+      : undefined,
   calendarViewTargetForEntity: vi.fn(),
   reminderSplitTarget: vi.fn(),
 }));
@@ -50,6 +58,7 @@ afterEach(() => {
 
 function setup(initial: PreviewPanelSelection) {
   const [entity, setEntity] = createSignal(initial);
+  const [navigationRequest, setNavigationRequest] = createSignal(0);
   let preview: ReturnType<typeof useMaybePreviewPanel>;
   const element = () => {
     preview = useMaybePreviewPanel();
@@ -75,6 +84,7 @@ function setup(initial: PreviewPanelSelection) {
   const view = render(() => (
     <PreviewPanel
       selectedEntity={entity()}
+      navigationRequest={navigationRequest()}
       orchestrator={orchestrator}
       splitPanelContext={{} as PreviewPanelProps['splitPanelContext']}
       onFocusOut={onFocusOut}
@@ -83,6 +93,7 @@ function setup(initial: PreviewPanelSelection) {
   return {
     ...view,
     setEntity,
+    requestNavigation: () => setNavigationRequest((count) => count + 1),
     createBlockInstance,
     onFocusOut,
     previewEntity: () => preview?.previewEntity(),
@@ -198,5 +209,34 @@ describe('channel preview navigation', () => {
     expect(mocks.navigateCalendar).toHaveBeenCalledTimes(2);
     expect(view.createBlockInstance).toHaveBeenCalledTimes(1);
     expect(mocks.mounts).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('re-opening the previewed selection', () => {
+  const document = {
+    type: 'document',
+    id: 'doc-1',
+    fileType: 'md',
+    commentTarget: { commentId: 'comment-1' },
+  } satisfies PreviewPanelSelection;
+
+  it('navigates the document to its comment again on each request', () => {
+    const view = setup(document);
+    expect(mocks.navigateDocument).toHaveBeenCalledTimes(1);
+
+    view.setEntity({ ...document });
+    expect(mocks.navigateDocument).toHaveBeenCalledTimes(1);
+
+    view.requestNavigation();
+    view.requestNavigation();
+    expect(mocks.navigateDocument).toHaveBeenCalledTimes(3);
+    expect(view.createBlockInstance).toHaveBeenCalledTimes(1);
+    expect(mocks.unmounts).not.toHaveBeenCalled();
+  });
+
+  it('re-targets a channel on request', () => {
+    const view = setup(channelSelections[1]);
+    view.requestNavigation();
+    expect(mocks.navigateChannel).toHaveBeenCalledTimes(2);
   });
 });
