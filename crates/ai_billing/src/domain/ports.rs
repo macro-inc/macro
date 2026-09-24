@@ -25,9 +25,12 @@ pub trait EntitlementSource: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<String>>> + Send;
 }
 
-/// Reads recorded AI usage at Macro's list rate.
+/// Reads recorded, metered AI usage at Macro's list rate.
 pub trait UsageReader: Send + Sync + 'static {
     /// List-rate usage for each of `users` within `period`.
+    ///
+    /// AI projections remain in `ai_usage` for cost tracking but do not
+    /// consume a user's allowance, credits, or overage.
     fn list_rate_usage_cents_by_user(
         &self,
         users: &[MacroUserIdStr<'static>],
