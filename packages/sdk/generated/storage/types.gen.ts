@@ -123,10 +123,10 @@ export type Agent = {
     /**
      * Whether the agent works in a repository, which decides how it answers
      * a channel mention: a coding agent posts a magic chip into its live
-     * session, a chat agent replies in the thread. `None` follows the
-     * harness - in-memory chats, every other runtime codes.
+     * session, a chat agent replies in the thread. Chosen in the agent's
+     * settings; the persona's word, not the runtime's.
      */
-    is_coding?: boolean | null;
+    is_coding: boolean;
     /**
      * Which MCP servers sessions of this agent are handed.
      */
@@ -3217,9 +3217,10 @@ export type CreateAgentRequest = {
      */
     instructions: string;
     /**
-     * Whether the agent is a coding agent. Omit to follow the harness.
+     * Whether the agent is a coding agent: a mention is answered with a magic
+     * chip into its live session (`true`) or a reply in the thread (`false`).
      */
-    is_coding?: boolean | null;
+    is_coding: boolean;
     /**
      * Which MCP servers sessions of this agent are handed.
      */
@@ -10368,9 +10369,10 @@ export type UpdateAgentRequest = {
      */
     instructions: string;
     /**
-     * Whether the agent is a coding agent. Omit to follow the harness.
+     * Whether the agent is a coding agent: a mention is answered with a magic
+     * chip into its live session (`true`) or a reply in the thread (`false`).
      */
-    is_coding?: boolean | null;
+    is_coding: boolean;
     /**
      * Which MCP servers sessions of this agent are handed.
      */

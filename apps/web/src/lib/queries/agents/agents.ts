@@ -39,9 +39,9 @@ export type CreateAgentParams = {
   /**
    * Whether the agent is a coding agent, which decides how it answers a
    * channel mention: a magic chip into its live session, or a reply in the
-   * thread. Omit to follow the harness: in-memory chats, the rest code.
+   * thread.
    */
-  isCoding?: boolean;
+  isCoding: boolean;
 };
 
 export type UpdateAgentParams = CreateAgentParams & {
@@ -94,7 +94,7 @@ export function useCreateAgentMutation() {
           mcp: vars.mcp,
           team_id: vars.teamId,
           auto_accept_permissions: vars.autoAcceptPermissions ?? null,
-          is_coding: vars.isCoding ?? null,
+          is_coding: vars.isCoding,
         })
       ),
     onSuccess: async (agent) => {
@@ -128,7 +128,7 @@ export function useUpdateAgentMutation() {
           mcp: vars.mcp,
           team_id: vars.teamId,
           auto_accept_permissions: vars.autoAcceptPermissions ?? null,
-          is_coding: vars.isCoding ?? null,
+          is_coding: vars.isCoding,
         })
       ),
     onSuccess: async (updated) => {

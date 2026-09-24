@@ -124,8 +124,8 @@ pub trait PermissionPolicySource: Send + Sync + 'static {
 /// setting takes effect on its next turn. The domain applies the choice
 /// with [`crate::domain::model::is_coding_agent`].
 pub trait CodingAgentSource: Send + Sync + 'static {
-    /// The persona's choice for `bot`: `Some` when it chose, `None` when it
-    /// has not or when `bot` is a fixed system bot with no persona.
+    /// The persona's setting for `bot`; `None` only for a fixed system bot,
+    /// which has no persona.
     fn coding_agent_choice(
         &self,
         bot: BotId,

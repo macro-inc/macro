@@ -85,9 +85,8 @@ export const listAgentsResponseItem = zod
       ),
     is_coding: zod
       .boolean()
-      .nullish()
       .describe(
-        'Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. `None` follows the\nharness - in-memory chats, every other runtime codes.'
+        "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
       ),
     mcp: zod
       .union([
@@ -169,9 +168,8 @@ export const createAgentBody = zod
       ),
     is_coding: zod
       .boolean()
-      .nullish()
       .describe(
-        'Whether the agent is a coding agent. Omit to follow the harness.'
+        'Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`).'
       ),
     mcp: zod
       .union([
@@ -262,9 +260,8 @@ export const updateAgentBody = zod
       ),
     is_coding: zod
       .boolean()
-      .nullish()
       .describe(
-        'Whether the agent is a coding agent. Omit to follow the harness.'
+        'Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`).'
       ),
     mcp: zod
       .union([
@@ -389,9 +386,8 @@ export const updateAgentResponse = zod
       ),
     is_coding: zod
       .boolean()
-      .nullish()
       .describe(
-        'Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. `None` follows the\nharness - in-memory chats, every other runtime codes.'
+        "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
       ),
     mcp: zod
       .union([

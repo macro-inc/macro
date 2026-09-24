@@ -120,7 +120,7 @@ struct AgentRow {
     mcp_app_slugs: Vec<String>,
     mcp_server_names: Vec<String>,
     auto_accept_permissions: Option<bool>,
-    is_coding: Option<bool>,
+    is_coding: bool,
 }
 
 impl TryFrom<AgentRow> for Agent {

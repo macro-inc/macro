@@ -252,9 +252,9 @@ impl AgentKind {
 
 /// Whether a session's turns are announced as a coding agent's.
 ///
-/// The persona's own choice when it made one; otherwise the runtime's
-/// nature ([`AgentKind::is_coding`]). The fixed system bots have no persona
-/// to choose, so `choice` is `None` for them and the runtime decides.
+/// A persona's setting is the source of truth. The fixed system bots have no
+/// persona and so no setting; `choice` is `None` for them alone, and the
+/// runtime's nature ([`AgentKind::is_coding`]) decides.
 #[must_use]
 pub const fn is_coding_agent(choice: Option<bool>, kind: AgentKind) -> bool {
     match choice {

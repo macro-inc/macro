@@ -5,8 +5,8 @@ use bot_id::BotId;
 use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 
-/// Reads the persona's choice of being a coding agent. Fixed system bots
-/// have no persona and so no choice; the domain lets their runtime decide.
+/// Reads the persona's setting of being a coding agent. Fixed system bots
+/// have no persona and so no setting; the domain lets their runtime decide.
 #[derive(Clone)]
 pub struct PgCodingAgentSource {
     repo: PgBotsRepo,
@@ -21,10 +21,6 @@ impl PgCodingAgentSource {
 
 impl CodingAgentSource for PgCodingAgentSource {
     async fn coding_agent_choice(&self, bot: BotId) -> anyhow::Result<Option<bool>> {
-        Ok(self
-            .repo
-            .get_agent(bot)
-            .await?
-            .and_then(|agent| agent.is_coding))
+        Ok(self.repo.get_agent(bot).await?.map(|agent| agent.is_coding))
     }
 }

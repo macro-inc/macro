@@ -301,9 +301,9 @@ pub struct Agent {
     pub auto_accept_permissions: Option<bool>,
     /// Whether the agent works in a repository, which decides how it answers
     /// a channel mention: a coding agent posts a magic chip into its live
-    /// session, a chat agent replies in the thread. `None` follows the
-    /// harness - in-memory chats, every other runtime codes.
-    pub is_coding: Option<bool>,
+    /// session, a chat agent replies in the thread. Chosen in the agent's
+    /// settings; the persona's word, not the runtime's.
+    pub is_coding: bool,
 }
 
 /// Request to create a persisted AI agent.
@@ -342,9 +342,9 @@ pub struct CreateAgentRequest {
     /// asking. Omit to always prompt.
     #[serde(default)]
     pub auto_accept_permissions: Option<bool>,
-    /// Whether the agent is a coding agent. Omit to follow the harness.
-    #[serde(default)]
-    pub is_coding: Option<bool>,
+    /// Whether the agent is a coding agent: a mention is answered with a magic
+    /// chip into its live session (`true`) or a reply in the thread (`false`).
+    pub is_coding: bool,
 }
 
 /// Request to replace the editable configuration of a persisted AI agent.
@@ -383,9 +383,9 @@ pub struct UpdateAgentRequest {
     /// asking. Omit to always prompt.
     #[serde(default)]
     pub auto_accept_permissions: Option<bool>,
-    /// Whether the agent is a coding agent. Omit to follow the harness.
-    #[serde(default)]
-    pub is_coding: Option<bool>,
+    /// Whether the agent is a coding agent: a mention is answered with a magic
+    /// chip into its live session (`true`) or a reply in the thread (`false`).
+    pub is_coding: bool,
 }
 
 /// Channel containing a bot.
