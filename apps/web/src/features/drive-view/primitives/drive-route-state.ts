@@ -90,6 +90,7 @@ const routeSearch = ({
   scope,
   sort,
   facets: normalizeFacetSelection(facets),
+  commentId: '',
 });
 
 /** Restored entry state supplies UI state; the current URL always wins selection. */

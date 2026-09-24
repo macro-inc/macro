@@ -4,6 +4,7 @@ import {
 } from '@app/features/soup/filters/facets/selection';
 import {
   type CreateSearchParamsOptions,
+  createSearchParamsCodec,
   isSafeName,
   type SerializedSearchParams,
   type SplitRouteParams,
@@ -85,9 +86,10 @@ const searchSchema = z.object({
   scope: z.enum(['default', 'all', 'attachments']),
   sort: z.enum(['updated_at', 'created_at', 'viewed_at']),
   facets: z.record(z.string(), z.array(z.string())),
+  commentId: z.string(),
 });
 export type DriveSearchParams = z.infer<typeof searchSchema>;
-const reservedSearchFields = new Set(['scope', 'sort', 'facets']);
+const reservedSearchFields = new Set(['scope', 'sort', 'facets', 'commentId']);
 
 export const driveSearch = {
   namespace: 'drive',
@@ -96,11 +98,14 @@ export const driveSearch = {
     scope: 'default',
     sort: 'updated_at',
     facets: {},
+    commentId: '',
   } as DriveSearchParams,
   serialize(value, { defaults }): SerializedSearchParams | undefined {
     const params: SerializedSearchParams = {};
     if (value.scope !== defaults.scope) params.scope = [value.scope];
     if (value.sort !== defaults.sort) params.sort = [value.sort];
+    if (value.commentId !== defaults.commentId)
+      params.commentId = [value.commentId];
     for (const [field, values] of Object.entries(
       normalizeFacetSelection(value.facets)
     )) {
@@ -112,9 +117,11 @@ export const driveSearch = {
   deserialize(params) {
     const scope = takeLast(params.scope);
     const sort = takeLast(params.sort);
+    const commentId = takeLast(params.commentId);
     const legacy = takeLast(params.facets);
-    const facets =
+    const facets: Record<string, string[]> =
       legacy === undefined ? {} : deserializeFacetSelection(legacy);
+    delete facets.commentId;
     for (const [field, values] of Object.entries(params)) {
       if (!reservedSearchFields.has(field)) facets[field] = values;
     }
@@ -125,7 +132,10 @@ export const driveSearch = {
       ...(sort === undefined
         ? {}
         : { sort: sort as DriveSearchParams['sort'] }),
+      ...(commentId === undefined ? {} : { commentId }),
       facets: normalizeFacetSelection(facets),
     };
   },
 } satisfies CreateSearchParamsOptions<DriveSearchParams>;
+
+export const driveSearchCodec = createSearchParamsCodec(driveSearch);
