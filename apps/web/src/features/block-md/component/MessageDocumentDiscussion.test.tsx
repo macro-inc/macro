@@ -46,6 +46,8 @@ vi.mock('@core/messages/DocumentConversation', () => ({
     buildLink: (message: { id: string }) => string;
     hideComposer?: boolean;
     hideWhenEmpty?: boolean;
+    targetCleared?: boolean;
+    onClearTarget?: () => void;
   }) => {
     mocks.conversation(props);
     return (
@@ -210,6 +212,23 @@ describe('scrolling to a linked Discussion message', () => {
     await flushMutations();
 
     expect(scrolledIds()).toEqual(['m1', 'm1']);
+  });
+
+  it('releases the linked message highlight until the next navigation', () => {
+    setRenderedMessageIds(['m1']);
+    setup();
+    navigate('m1');
+    const conversation = mocks.conversation.mock.calls[0][0] as {
+      targetCleared?: boolean;
+      onClearTarget: () => void;
+    };
+    expect(conversation.targetCleared).toBe(false);
+
+    conversation.onClearTarget();
+    expect(conversation.targetCleared).toBe(true);
+
+    navigate('m1');
+    expect(conversation.targetCleared).toBe(false);
   });
 
   it('does not steal scroll on later renders or when the value shows through again', async () => {

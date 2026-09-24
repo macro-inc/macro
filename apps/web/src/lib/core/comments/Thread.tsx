@@ -96,6 +96,8 @@ export type CommentsContextType = {
   ownedComment: (id: CommentId) => boolean;
   inComment: boolean;
   highlightedCommentId: Accessor<CommentId | null>;
+  /** Releases the comment-link highlight when the highlighted comment is clicked. */
+  clearHighlightedComment?: () => void;
   /**
    * When set (the touch drawer), messages report their inline-edit state so
    * the host can hide its pinned reply composer while an edit is open.
@@ -229,6 +231,7 @@ function MessageThreadBody(props: ThreadBodyProps) {
             hideReplyInput={props.hideReplyInput}
             onEditingChange={context.setMessageEditing}
             targetId={targetId()}
+            onClearTarget={context.clearHighlightedComment}
             buildLink={(message) =>
               buildSimpleEntityUrl(
                 { type: context.documentType, id: context.documentId },
