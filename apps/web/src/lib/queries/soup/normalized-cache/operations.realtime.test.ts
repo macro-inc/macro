@@ -182,6 +182,23 @@ describe('Home notification revalidation with real normalized query keys', () =>
     expect(homeItems()[0].notified_at).toBe(NEW);
   });
 
+  it('keeps delivered recency when a replica-stale Home response arrives after the optimistic read', async () => {
+    const home = mountHome();
+    updateSoupForNotification(notification());
+    expect(resolveNotifiedAt('channel-1', homeItems()[0].notified_at)).toBe(
+      NEW
+    );
+    const refetch = testQueryClient.invalidateQueries({
+      queryKey: homeKey,
+      exact: true,
+    });
+    home.resolve(page([channel(NEW, OLD)]));
+    await refetch;
+    expect(resolveNotifiedAt('channel-1', homeItems()[0].notified_at)).toBe(
+      NEW
+    );
+  });
+
   it('restores a cached done-filtered row on a new notification', () => {
     mountHome();
     // Another cached list keeps the entity normalized after Home removes it.

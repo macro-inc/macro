@@ -189,9 +189,9 @@ export function bumpSoupEntityTouchedAt(
  * without waiting for a refetch. Newest wins: an out-of-order delivery never
  * moves a row back down. The stamp is also recorded as a floor (see
  * `notified-floor.ts`) so a notified page that was in flight when the
- * notification landed cannot overwrite it with the previous stamp; the floor
- * clears once the server's value catches up. Non-notified responses omit the
- * field, so the field-merge never clears the stamp either.
+ * notification landed cannot overwrite it with the previous stamp. The floor
+ * survives optimistic reads and overlapping refreshes for a bounded interval.
+ * Non-notified responses omit the field, so field merges preserve the stamp.
  */
 export function bumpSoupEntityNotifiedAt(
   entityId: string,

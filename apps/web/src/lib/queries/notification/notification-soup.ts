@@ -1,5 +1,6 @@
 import { channelThreadRootId } from '@notifications/channel-thread-root';
 import type { UnifiedNotification } from '@notifications/types';
+import { match, P } from 'ts-pattern';
 import {
   bumpSoupEntityNotifiedAt,
   hasSoupEntity,
@@ -7,8 +8,7 @@ import {
   refetchSoupEntity,
   restoreSoupEntityToDoneFilteredQueries,
   type SoupEntityTag,
-} from '@queries/soup/normalized-cache';
-import { match, P } from 'ts-pattern';
+} from '../soup/normalized-cache';
 
 function notificationEntityTypeToSoupTag(
   entityType: UnifiedNotification['entity_type']
