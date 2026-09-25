@@ -83,8 +83,8 @@ export function FileDetailLayout(props: FileDetailLayoutProps) {
       </SidePanel.Layout>
       <Suspense>
         <ShareModal
-          isSharePermOpen={shareOpen()}
-          setIsSharePermOpen={setShareOpen}
+          open={shareOpen()}
+          onOpenChange={setShareOpen}
           id={props.documentId}
           blockAlias={props.blockType}
           itemType="document"

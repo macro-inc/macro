@@ -70,8 +70,8 @@ export function ModalsProvider(
       />
       <Suspense>
         <ShareModal
-          isSharePermOpen={shareOpen()}
-          setIsSharePermOpen={setShareOpen}
+          open={shareOpen()}
+          onOpenChange={setShareOpen}
           id={documentId()}
           blockAlias={blockAlias()}
           itemType="document"

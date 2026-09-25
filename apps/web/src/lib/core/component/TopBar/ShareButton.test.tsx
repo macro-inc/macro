@@ -356,8 +356,8 @@ function mountShare(isOwner: boolean) {
       itemType="agent_session"
       blockAlias="agent"
       userPermissions={Permissions.OWNER}
-      isSharePermOpen
-      setIsSharePermOpen={onOpenChange}
+      open
+      onOpenChange={onOpenChange}
     />
   ));
   return { onOpenChange, onCopyLink };
@@ -563,8 +563,8 @@ describe('agent session sharing', () => {
           itemType="agent_session"
           blockAlias="agent"
           userPermissions={Permissions.CAN_VIEW}
-          isSharePermOpen
-          setIsSharePermOpen={vi.fn()}
+          open
+          onOpenChange={vi.fn()}
         />
       </ShareDialogContext.Provider>
     ));
@@ -729,8 +729,8 @@ function mountChatShare() {
       itemType="chat"
       blockAlias="chat"
       userPermissions={Permissions.OWNER}
-      isSharePermOpen
-      setIsSharePermOpen={vi.fn()}
+      open
+      onOpenChange={vi.fn()}
     />
   ));
 }
@@ -755,8 +755,8 @@ function mountCallShare() {
       itemType="call"
       blockAlias="call"
       userPermissions={Permissions.OWNER}
-      isSharePermOpen
-      setIsSharePermOpen={vi.fn()}
+      open
+      onOpenChange={vi.fn()}
     />
   ));
 }
@@ -945,8 +945,8 @@ function mountProjectShare() {
       itemType="project"
       blockAlias="project"
       userPermissions={Permissions.OWNER}
-      isSharePermOpen
-      setIsSharePermOpen={vi.fn()}
+      open
+      onOpenChange={vi.fn()}
     />
   ));
 }

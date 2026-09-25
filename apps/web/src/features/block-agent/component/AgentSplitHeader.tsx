@@ -183,8 +183,8 @@ export function AgentSplitHeader(props: {
               itemType="agent_session"
               blockAlias="agent"
               userPermissions={permissions()}
-              isSharePermOpen={shareOpen()}
-              setIsSharePermOpen={setShareOpen}
+              open={shareOpen()}
+              onOpenChange={setShareOpen}
             />
           </Suspense>
         )}

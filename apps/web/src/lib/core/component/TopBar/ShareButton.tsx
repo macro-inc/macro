@@ -70,7 +70,15 @@ import type { LinkShare } from '@service-storage/generated/schemas/linkShare';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button, cn, Dropdown, Panel, SegmentedControl, Tooltip } from '@ui';
+import {
+  Button,
+  cn,
+  Dropdown,
+  type ManagedDialogProps,
+  Panel,
+  SegmentedControl,
+  Tooltip,
+} from '@ui';
 import type { Result } from 'neverthrow';
 import {
   type Accessor,
@@ -215,10 +223,8 @@ export function getShareDrawerRecipientInput(): HTMLElement | null {
   );
 }
 
-interface ShareModalProps {
-  setIsSharePermOpen: (value: boolean) => void;
+interface ShareModalProps extends ManagedDialogProps {
   userPermissions: Permissions;
-  isSharePermOpen: boolean;
   blockAlias: BlockName | BlockAlias;
   itemType: ItemType;
   owner?: string;
@@ -815,7 +821,7 @@ export function ShareModal(props: ShareModalProps) {
   // Function to navigate to a channel
   const navigateToChannel = createCallback((channelId: string) => {
     navigate(`/channel/${channelId}`);
-    props.setIsSharePermOpen(false); // Close the dialog after navigation
+    props.onOpenChange(false); // Close the dialog after navigation
   });
 
   const removeChannelAccess = createCallback(async (channelId: string) => {
@@ -1216,8 +1222,8 @@ export function ShareModal(props: ShareModalProps) {
         <MobileShareDrawer
           editPermissionEnabled={editPermissionEnabled()}
           canForward={canForward()}
-          isOpen={props.isSharePermOpen}
-          setIsOpen={props.setIsSharePermOpen}
+          isOpen={props.open}
+          setIsOpen={props.onOpenChange}
           blockAlias={props.blockAlias}
           name={props.name}
           id={props.id}
@@ -1240,10 +1246,7 @@ export function ShareModal(props: ShareModalProps) {
         />
       }
     >
-      <Dialog
-        onOpenChange={props.setIsSharePermOpen}
-        open={props.isSharePermOpen}
-      >
+      <Dialog onOpenChange={props.onOpenChange} open={props.open}>
         <Dialog.Portal>
           <Dialog.Overlay class="z-modal fixed inset-0 scrim-glass" />
           <div class="z-modal fixed inset-0">
@@ -1279,8 +1282,8 @@ export function ShareModal(props: ShareModalProps) {
                         userPermissions: userPermissions(),
                         channelSharePermissions: recipients(),
                       }}
-                      onSubmit={() => props.setIsSharePermOpen(false)}
-                      onCancel={() => props.setIsSharePermOpen(false)}
+                      onSubmit={() => props.onOpenChange(false)}
+                      onCancel={() => props.onOpenChange(false)}
                       refetch={refetch}
                       name={props.name}
                       hideAccessLevelSelector={props.itemType === 'email'}
@@ -1643,8 +1646,8 @@ export function ShareBlockModal(props: {
   return (
     <Suspense>
       <ShareModal
-        isSharePermOpen={ctx.isOpen()}
-        setIsSharePermOpen={(v) => (v ? ctx.open() : ctx.close())}
+        open={ctx.isOpen()}
+        onOpenChange={(v) => (v ? ctx.open() : ctx.close())}
         id={id}
         blockAlias={blockAlias}
         itemType={itemType}

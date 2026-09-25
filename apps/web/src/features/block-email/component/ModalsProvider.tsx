@@ -43,8 +43,8 @@ export function ModalsProvider(
       <Show when={ENABLE_EMAIL_SHARING}>
         <Suspense>
           <ShareModal
-            isSharePermOpen={shareOpen()}
-            setIsSharePermOpen={setShareOpen}
+            open={shareOpen()}
+            onOpenChange={setShareOpen}
             id={props.threadId}
             blockAlias="email"
             itemType="email"
