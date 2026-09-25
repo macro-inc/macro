@@ -1,8 +1,11 @@
-import { PrStatusIcon } from '@block-pr/component/PrStatus';
-import type { GithubPullRequestEntity } from '@entity';
+import {
+  type GithubPullRequestEntity,
+  ListEntity,
+  ListLayoutProvider,
+} from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button } from '@ui';
-import { For, Match, Show, Suspense, Switch } from 'solid-js';
+import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
 import type { useReviewsQuery } from '../queries/use-reviews-query';
 import { filterReviews } from '../reviews-filter';
 import type { ReviewsScope } from '../reviews-types';
@@ -14,40 +17,32 @@ export type ReviewsListProps = {
   search: string;
   selectedRepositories: readonly string[];
   selectedAuthors: readonly string[];
-  onOpen: (foreignEntityId: string, event: MouseEvent) => void;
+  onOpen: (foreignEntityId: string, newSplit: boolean) => void;
 };
 
 function ReviewRow(props: {
   review: GithubPullRequestEntity;
   onOpen: ReviewsListProps['onOpen'];
 }) {
-  const repository = () =>
-    `${props.review.metadata.owner}/${props.review.metadata.repo}`;
-
   return (
-    <li class="mx-1">
-      <button
-        type="button"
-        class="flex min-h-11 w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-list-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
-        onClick={(event) => props.onOpen(props.review.id, event)}
-        aria-label={`${props.review.metadata.name}, ${repository()}, ${props.review.metadata.status}`}
+    <li>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`${props.review.metadata.name}, ${props.review.metadata.owner}/${props.review.metadata.repo}, ${props.review.metadata.status}`}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          props.onOpen(props.review.id, false);
+        }}
+        class="outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <PrStatusIcon
-          status={props.review.metadata.status}
-          class="size-4 shrink-0"
+        <ListEntity
+          entity={props.review}
+          hideCheckbox
+          onClick={(event) => props.onOpen(props.review.id, event.shiftKey)}
         />
-        <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span class="truncate text-sm font-medium text-ink">
-            {props.review.metadata.name}
-          </span>
-          <span class="truncate text-xs text-ink-muted">
-            {repository()} #{props.review.metadata.number}
-          </span>
-        </span>
-        <span class="shrink-0 text-xs capitalize text-ink-muted">
-          {props.review.metadata.status}
-        </span>
-      </button>
+      </div>
     </li>
   );
 }
@@ -62,6 +57,7 @@ export function ReviewsList(props: ReviewsListProps) {
       authors: props.selectedAuthors,
     });
   const source = props.source;
+  const [listElement, setListElement] = createSignal<HTMLDivElement>();
   const loadMore = () => {
     if (source.isLoadingMore()) return;
     void source.loadMore();
@@ -69,11 +65,6 @@ export function ReviewsList(props: ReviewsListProps) {
 
   return (
     <section aria-label="Reviews" class="flex size-full min-h-0 flex-col">
-      <div class="shrink-0 border-b border-edge-muted px-4 py-3">
-        <h2 class="text-sm font-semibold text-ink">
-          {props.scope === 'authored' ? 'Authored by me' : 'Pull requests'}
-        </h2>
-      </div>
       <Suspense
         fallback={
           <div
@@ -115,7 +106,7 @@ export function ReviewsList(props: ReviewsListProps) {
             </div>
           </Match>
           <Match when={true}>
-            <div class="min-h-0 flex-1 overflow-auto">
+            <div ref={setListElement} class="min-h-0 flex-1 overflow-auto">
               <Show
                 when={reviews().length > 0}
                 fallback={
@@ -130,13 +121,15 @@ export function ReviewsList(props: ReviewsListProps) {
                   </div>
                 }
               >
-                <ul aria-label="Pull requests" class="py-1">
-                  <For each={reviews()}>
-                    {(review) => (
-                      <ReviewRow review={review} onOpen={props.onOpen} />
-                    )}
-                  </For>
-                </ul>
+                <ListLayoutProvider ref={listElement}>
+                  <ul aria-label="Pull requests" class="py-1">
+                    <For each={reviews()}>
+                      {(review) => (
+                        <ReviewRow review={review} onOpen={props.onOpen} />
+                      )}
+                    </For>
+                  </ul>
+                </ListLayoutProvider>
               </Show>
               <Show when={source.hasMore()}>
                 <div class="flex justify-center p-3">

@@ -44,6 +44,8 @@ function ReviewsRoot() {
   const navigate = useNavigate();
   const params = useParams<{ foreignEntityId?: string }>();
   const [scope, setScope] = createSignal<ReviewsScope>('all');
+  const scopeTitle = () =>
+    scope() === 'authored' ? 'Authored by me' : 'All PRs';
   const [search, setSearch] = createSignal('');
   const [sort, setSort] = createSignal<ReviewsSortId>('updated_at');
   const [selectedRepositories, setSelectedRepositories] = createSignal<
@@ -100,8 +102,8 @@ function ReviewsRoot() {
     setScope(next);
     if (params.foreignEntityId) openList();
   };
-  const openReview = (foreignEntityId: string, event: MouseEvent) => {
-    if (event.shiftKey) {
+  const openReview = (foreignEntityId: string, newSplit: boolean) => {
+    if (newSplit) {
       const content = reviewsHostedContent({ type: 'pr', id: foreignEntityId });
       if (content)
         layout.openWithSplit(content, {
@@ -125,7 +127,7 @@ function ReviewsRoot() {
     <>
       <ViewShell.TopBar>
         <h1 class="hidden min-w-0 truncate text-sm font-semibold text-ink @max-[720px]/view-shell:block">
-          Reviews
+          {scopeTitle()}
         </h1>
         <ViewBreadcrumbs.Outlet
           class="@max-[720px]/view-shell:hidden"
@@ -138,7 +140,9 @@ function ReviewsRoot() {
           fallback={
             <div class="flex min-w-0 flex-col @max-[720px]/view-shell:gap-3">
               <div class="hidden h-8 items-center @max-[720px]/view-shell:flex">
-                <h1 class="truncate text-xl font-semibold text-ink">Reviews</h1>
+                <h1 class="truncate text-xl font-semibold text-ink">
+                  {scopeTitle()}
+                </h1>
               </div>
               <div class="flex min-w-0 items-center justify-between gap-3">
                 <SearchBar
@@ -205,9 +209,9 @@ function ReviewsRoot() {
           <ViewBreadcrumbs.ReturnButton
             isActive={item.isActive()}
             onClick={item.onSelect}
-            tooltip="Reviews"
+            tooltip={scopeTitle()}
           >
-            Reviews
+            {scopeTitle()}
           </ViewBreadcrumbs.ReturnButton>
         )}
       </ViewBreadcrumbs.Item>

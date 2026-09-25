@@ -35,7 +35,8 @@ It opens a separate `/app/reviews` shell with `All PRs` and `Authored by me`
 in its sidebar. The list contains accessible GitHub pull requests of any status;
 the authored view uses the linked GitHub username. If no username is available,
 the list explains that GitHub must be connected. Search, repository and author
-filters, and Updated/Created sort controls appear above the list.
+filters, and Updated/Created sort controls appear above the list. The content
+header shows the selected view name, and PR rows use the shared entity layout.
 
 Select a PR to open `/app/reviews/pr/<foreignEntityId>` in the Reviews shell.
 Its breadcrumb returns to the Reviews list. Old `/app/pr/<id>` and
