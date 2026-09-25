@@ -1014,8 +1014,8 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Soft-delete a CRM comment, scoped to the requesting user's team. When it
-     * was the thread's last live comment, the thread is soft-deleted too
+     * Delete a CRM comment, scoped to the requesting user's team. Deleting a
+     * thread's first comment deletes the whole discussion, as on documents
      * (reported via `threadDeleted`).
      */
     public deleteCrmComment<ThrowOnError extends boolean = false>(options: Options<DeleteCrmCommentData, ThrowOnError>): RequestResult<DeleteCrmCommentResponses, DeleteCrmCommentErrors, ThrowOnError> {

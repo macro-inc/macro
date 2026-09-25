@@ -10,14 +10,13 @@ import type { CreateCrmCommentRequestThreadId } from './createCrmCommentRequestT
  * Request body for `POST /crm/comments/{entity_type}/{entity_id}`.
  */
 export interface CreateCrmCommentRequest {
-  /** Arbitrary client metadata for the comment. */
+  /** Ignored: messages keep no client metadata. */
   metadata?: unknown;
   /** The comment body (markdown). */
   text: string;
   /** Existing thread to append to. Omit to start a new thread on the
 addressed entity. */
   threadId?: CreateCrmCommentRequestThreadId;
-  /** Metadata to set on a newly created thread (ignored when replying
-without a value). */
+  /** Ignored: discussions keep no thread metadata. */
   threadMetadata?: unknown;
 }

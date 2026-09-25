@@ -306,6 +306,14 @@ pub trait MessageRepository: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> impl Future<Output = Result<Option<Uuid>, MessageError>> + Send;
+    /// The parent a message belongs to, whatever its state. Grants nothing: it
+    /// only tells an id-addressed adapter which parent receipt to mint.
+    fn parent_of(
+        &self,
+        _id: Uuid,
+    ) -> impl Future<Output = Result<Option<MessageParent>, MessageError>> + Send {
+        async { Ok(None) }
+    }
 }
 
 /// Publish committed changes, deriving delivery policy from the persisted parent.

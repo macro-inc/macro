@@ -769,6 +769,21 @@ impl MessageRepository for PgMessageRepository {
             .await
     }
 
+    async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+        let row = sqlx::query!(
+            "SELECT parent_entity_type, parent_entity_id FROM comms_messages WHERE id = $1",
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(database_error)?;
+        row.map(|row| {
+            MessageParent::parse(&row.parent_entity_type, &row.parent_entity_id)
+                .map_err(|_| MessageError::Invalid("stored message has an invalid parent"))
+        })
+        .transpose()
+    }
+
     async fn resolve_legacy(
         &self,
         parent: &MessageParent,

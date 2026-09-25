@@ -6270,7 +6270,7 @@
     "/crm/comment/{comment_id}": {
       "delete": {
         "tags": ["crm::inbound::axum_router::comments"],
-        "summary": "Soft-delete a CRM comment, scoped to the requesting user's team. When it\nwas the thread's last live comment, the thread is soft-deleted too\n(reported via `threadDeleted`).",
+        "summary": "Delete a CRM comment, scoped to the requesting user's team. Deleting a\nthread's first comment deletes the whole discussion, as on documents\n(reported via `threadDeleted`).",
         "operationId": "delete_crm_comment",
         "parameters": [
           {
@@ -20483,7 +20483,7 @@
         "required": ["text"],
         "properties": {
           "metadata": {
-            "description": "Arbitrary client metadata for the comment."
+            "description": "Ignored: messages keep no client metadata."
           },
           "text": {
             "type": "string",
@@ -20495,7 +20495,7 @@
             "description": "Existing thread to append to. Omit to start a new thread on the\naddressed entity."
           },
           "threadMetadata": {
-            "description": "Metadata to set on a newly created thread (ignored when replying\nwithout a value)."
+            "description": "Ignored: discussions keep no thread metadata."
           }
         }
       },
@@ -21791,7 +21791,7 @@
       },
       "DeleteCrmCommentResult": {
         "type": "object",
-        "description": "Outcome of soft-deleting a CRM comment: reports whether the parent thread\nwas soft-deleted too (it is when the deleted comment was its last live one).",
+        "description": "Outcome of deleting a CRM comment: reports whether its discussion went with\nit (it does when the deleted comment was the discussion's first).",
         "required": ["commentId", "threadId", "threadDeleted"],
         "properties": {
           "commentId": {
@@ -21801,7 +21801,7 @@
           },
           "threadDeleted": {
             "type": "boolean",
-            "description": "Whether the thread itself was soft-deleted because no live comments\nremained."
+            "description": "Whether the whole discussion was deleted because the comment was its\nfirst."
           },
           "threadId": {
             "type": "string",
