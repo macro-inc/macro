@@ -413,6 +413,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             return Err(MessageError::Invalid("thread update must change a field"));
         }
         if patch.detach_anchor {
+            if !matches!(parent, MessageParent::Document(_)) {
+                return Err(MessageError::Invalid(
+                    "only document discussions have anchors",
+                ));
+            }
             if !access.entity_permission().satisfies::<EditAccessLevel>() {
                 return Err(MessageError::Forbidden);
             }
