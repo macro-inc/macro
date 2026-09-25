@@ -951,7 +951,7 @@ describe('layoutManager', () => {
       expect(router.search(split.id, 'call-detail')).toEqual({
         transcriptId: ['segment-2'],
       });
-      const mount = split.mount;
+      const mount = manager.splits()[0].mount;
       split.replace({
         next: {
           type: 'call',
@@ -969,7 +969,7 @@ describe('layoutManager', () => {
         transcriptId: ['segment-2'],
         seek: ['again'],
       });
-      expect(split.mount).toBe(mount);
+      expect(manager.splits()[0].mount).toBe(mount);
       router.dispose();
       dispose();
     });
