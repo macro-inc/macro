@@ -11,6 +11,7 @@ import {
   buildUploadedAttachment,
   getAttachmentKindFromFile,
   iconTypeFromFilename,
+  isSameSourceFile,
   type UploadResult,
 } from './utils/file-helpers';
 
@@ -77,12 +78,22 @@ export async function uploadInputAttachments(options: {
   uploadFile: (file: File) => Promise<UploadResult>;
 }): Promise<void> {
   for (const file of options.files) {
+    // Checked per file so a duplicate inside the same pick is caught by the
+    // pending chip added for its earlier twin.
+    const alreadyAttached = options.tracker
+      .attachments()
+      .some((attachment) => isSameSourceFile(attachment, file));
+    if (alreadyAttached) {
+      toast.alert(`${file.name} is already attached`);
+      continue;
+    }
+
     const uploadSource = createUploadFile(file);
     const pendingId = crypto.randomUUID();
     const pendingKind = getAttachmentKindFromFile(uploadSource);
     const previewSrc = createAttachmentPreviewSrc(uploadSource, pendingKind);
 
-    options.tracker.addAttachment({
+    const pending: InputAttachmentData = {
       id: pendingId,
       name: file.name,
       kind: pendingKind,
@@ -92,7 +103,10 @@ export async function uploadInputAttachments(options: {
           : undefined,
       pending: true,
       previewSrc,
-    });
+      size: file.size,
+    };
+    if (file.type) pending.mimeType = file.type;
+    options.tracker.addAttachment(pending);
 
     try {
       const dimensionsPromise = resolveMediaDimensions(

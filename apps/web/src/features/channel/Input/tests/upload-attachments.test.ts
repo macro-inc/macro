@@ -4,12 +4,17 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getImageDimensionsMock, getVideoDimensionsMock, toastFailureMock } =
-  vi.hoisted(() => ({
-    getImageDimensionsMock: vi.fn(),
-    getVideoDimensionsMock: vi.fn(),
-    toastFailureMock: vi.fn(),
-  }));
+const {
+  getImageDimensionsMock,
+  getVideoDimensionsMock,
+  toastFailureMock,
+  toastAlertMock,
+} = vi.hoisted(() => ({
+  getImageDimensionsMock: vi.fn(),
+  getVideoDimensionsMock: vi.fn(),
+  toastFailureMock: vi.fn(),
+  toastAlertMock: vi.fn(),
+}));
 
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: (type?: string | null) => type ?? 'unknown',
@@ -27,6 +32,7 @@ import { getAttachmentKindFromFile } from '../utils/file-helpers';
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: {
     failure: toastFailureMock,
+    alert: toastAlertMock,
   },
 }));
 
@@ -38,6 +44,7 @@ describe('uploadInputAttachments', () => {
     getVideoDimensionsMock.mockReset();
     getVideoDimensionsMock.mockResolvedValue({ width: 0, height: 0 });
     toastFailureMock.mockReset();
+    toastAlertMock.mockReset();
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -87,6 +94,8 @@ describe('uploadInputAttachments', () => {
         kind: 'image',
         pending: true,
         previewSrc: 'blob:attachment-preview',
+        mimeType: 'image/png',
+        size: 3,
       },
     ]);
 
@@ -217,6 +226,101 @@ describe('uploadInputAttachments', () => {
         mimeType: 'application/pdf',
         size: 3,
       },
+    ]);
+  });
+
+  it('skips a file that is already attached and tells the user', async () => {
+    const tracker = createInputAttachmentTracker();
+    const upload = vi.fn(async () => ({
+      failed: false as const,
+      destination: 'static' as const,
+      id: 'uploaded-video-1',
+    }));
+    const clip = () => new File(['abc'], 'clip.mp4', { type: 'video/mp4' });
+
+    await uploadInputAttachments({
+      files: [clip()],
+      tracker,
+      uploadFile: upload,
+    });
+    await uploadInputAttachments({
+      files: [clip()],
+      tracker,
+      uploadFile: upload,
+    });
+
+    expect(upload).toHaveBeenCalledOnce();
+    expect(tracker.attachments()).toHaveLength(1);
+    expect(toastAlertMock).toHaveBeenCalledWith('clip.mp4 is already attached');
+  });
+
+  it('skips the twin when the same file is picked twice in one batch', async () => {
+    const tracker = createInputAttachmentTracker();
+    const upload = vi.fn(async () => ({
+      failed: false as const,
+      destination: 'static' as const,
+      id: `uploaded-${upload.mock.calls.length}`,
+    }));
+    const clip = () => new File(['abc'], 'clip.mp4', { type: 'video/mp4' });
+
+    await uploadInputAttachments({
+      files: [clip(), clip()],
+      tracker,
+      uploadFile: upload,
+    });
+
+    expect(upload).toHaveBeenCalledOnce();
+    expect(tracker.attachments()).toHaveLength(1);
+  });
+
+  it('still allows a different file that shares a name', async () => {
+    const tracker = createInputAttachmentTracker();
+    const upload = vi.fn(async () => ({
+      failed: false as const,
+      destination: 'static' as const,
+      id: `uploaded-${upload.mock.calls.length}`,
+    }));
+
+    await uploadInputAttachments({
+      files: [
+        new File(['abc'], 'clip.mp4', { type: 'video/mp4' }),
+        new File(['abcdef'], 'clip.mp4', { type: 'video/mp4' }),
+      ],
+      tracker,
+      uploadFile: upload,
+    });
+
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(tracker.attachments()).toHaveLength(2);
+    expect(toastAlertMock).not.toHaveBeenCalled();
+  });
+
+  it('recognises an uploaded document whose chip name dropped the extension', async () => {
+    const tracker = createInputAttachmentTracker();
+    const upload = vi.fn(async () => ({
+      failed: false as const,
+      destination: 'dss' as const,
+      type: 'document' as const,
+      documentId: 'doc-1',
+      fileType: 'pdf',
+    }));
+    const manual = () =>
+      new File(['abc'], 'manual.pdf', { type: 'application/pdf' });
+
+    await uploadInputAttachments({
+      files: [manual()],
+      tracker,
+      uploadFile: upload,
+    });
+    await uploadInputAttachments({
+      files: [manual()],
+      tracker,
+      uploadFile: upload,
+    });
+
+    expect(upload).toHaveBeenCalledOnce();
+    expect(tracker.attachments()).toEqual([
+      expect.objectContaining({ id: 'doc-1', name: 'manual' }),
     ]);
   });
 });

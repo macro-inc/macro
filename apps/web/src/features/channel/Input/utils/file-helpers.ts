@@ -70,6 +70,26 @@ export function getAttachmentKindFromFile(file: {
   return 'document';
 }
 
+/**
+ * Whether a picked file is the same source file as an attachment already in
+ * the composer. Uploaded document chips keep the name without its extension,
+ * so both spellings are accepted; size (and mime type when both are known)
+ * guard against unrelated files that happen to share a name.
+ */
+export function isSameSourceFile(
+  attachment: InputAttachmentData,
+  file: { name: string; size: number; type?: string }
+): boolean {
+  if (attachment.size !== file.size) return false;
+  if (attachment.mimeType && file.type && attachment.mimeType !== file.type) {
+    return false;
+  }
+  return (
+    attachment.name === file.name ||
+    attachment.name === filenameWithoutExtension(file.name)
+  );
+}
+
 export function buildUploadedAttachment(
   file: { name: string },
   pendingKind: InputAttachmentKind,
