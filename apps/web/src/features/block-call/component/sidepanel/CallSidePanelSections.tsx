@@ -15,7 +15,7 @@ import {
   useToggleShareWithTeamMutation,
 } from '@queries/call/call';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import type { CallRecord } from '@service-call/client';
 import { cn, InlineCheckbox } from '@ui';
 import { type Accessor, Show, Suspense } from 'solid-js';
 import { formatCallDuration } from '../../utils';
@@ -40,9 +40,11 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
       >
         <PropertiesSectionContent record={props.record} />
       </SidePanel.Section>
-      <SidePanel.Section id="sharing" title="Sharing" order={20}>
-        <SharingSectionContent record={props.record} />
-      </SidePanel.Section>
+      <Show when={props.record().channelId != null}>
+        <SidePanel.Section id="sharing" title="Sharing" order={20}>
+          <SharingSectionContent record={props.record} />
+        </SidePanel.Section>
+      </Show>
       <EntityActivitySectionConditional
         entityId={props.record().callId}
         entityType="CALL_RECORD"
@@ -163,6 +165,7 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
 
   const handleChange = async (checked: boolean) => {
     const current = record();
+    if (!current.channelId) return;
     try {
       const newValue = current.isActive
         ? await toggleLiveShare.mutateAsync(current.callId)

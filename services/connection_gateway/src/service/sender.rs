@@ -18,7 +18,7 @@ pub struct Delivery {
     pub active: bool,
 }
 
-#[tracing::instrument(skip(ctx, redis_connection), err)]
+#[tracing::instrument(skip(ctx, redis_connection, message), err)]
 pub async fn send_message_to_entity<Ctx>(
     ctx: Ctx,
     entity: &Entity<'_>,

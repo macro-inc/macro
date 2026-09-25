@@ -52,7 +52,7 @@ pub struct SearchGotoChannel {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema, JsonSchema)]
 pub struct SearchGotoCallRecord {
-    pub channel_id: uuid::Uuid,
+    pub channel_id: Option<uuid::Uuid>,
     pub transcript_id: uuid::Uuid,
     pub speaker_id: String,
     pub sequence_num: i32,

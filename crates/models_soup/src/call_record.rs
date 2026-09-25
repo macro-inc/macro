@@ -4,16 +4,31 @@ use item_filters::CallStatus;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// A participant in a call record, as displayed in Soup.
+/// A Macro-account participant in a call record, as displayed in Soup.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SoupCallRecordParticipant {
-    /// The user id.
+    /// The Macro user id.
     pub user_id: String,
     /// When the user joined the call.
     pub joined_at: DateTime<Utc>,
     /// When the user left (None if still in an active call).
+    pub left_at: Option<DateTime<Utc>>,
+}
+
+/// A non-account guest of a call record, as displayed in Soup.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SoupCallRecordGuest {
+    /// Opaque guest identity; matches the guest's transcript speaker id.
+    pub id: Uuid,
+    /// Guest-provided display name.
+    pub display_name: String,
+    /// When the guest joined the call.
+    pub joined_at: DateTime<Utc>,
+    /// When the guest left (None if still in an active call).
     pub left_at: Option<DateTime<Utc>>,
 }
 
@@ -26,7 +41,7 @@ pub struct SoupCallRecord<T = ()> {
     /// The call identifier.
     pub call_id: Uuid,
     /// The channel this call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who created the call.
     pub created_by: String,
     /// When the call started.
@@ -50,8 +65,10 @@ pub struct SoupCallRecord<T = ()> {
     /// Whether the requesting user attended this call. Kept for compatibility
     /// and derived from `status == ATTENDED`.
     pub attended: bool,
-    /// Participants in the call.
+    /// Macro-account participants in the call.
     pub participants: Vec<SoupCallRecordParticipant>,
+    /// Non-account guests in the call.
+    pub guests: Vec<SoupCallRecordGuest>,
     /// Extra fields passed from above
     #[serde(flatten)]
     pub extra: T,
@@ -94,6 +111,16 @@ impl SoupCallRecord<()> {
                     user_id: p.user_id,
                     joined_at: p.joined_at,
                     left_at: p.left_at,
+                })
+                .collect(),
+            guests: record
+                .guests
+                .into_iter()
+                .map(|g| SoupCallRecordGuest {
+                    id: g.id.as_uuid(),
+                    display_name: g.display_name,
+                    joined_at: g.joined_at,
+                    left_at: g.left_at,
                 })
                 .collect(),
             extra: (),

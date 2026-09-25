@@ -22,6 +22,10 @@ use notification::domain::service::NotificationIngress;
 use serde_json::json;
 use uuid::Uuid;
 
+mod active_meetings;
+mod meeting_invites;
+
+use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
     CallRecord, CallRecordTranscriptSegment, CallWebhookEvent, DeletedCallRecordStorageKeys,
@@ -48,6 +52,10 @@ fn user(email: &'static str) -> MacroUserIdStr<'static> {
 struct MockRtcClient {
     tokens: Mutex<HashMap<String, anyhow::Result<String>>>,
     generate_calls: Mutex<Vec<(String, String)>>,
+    /// `(room_name, identity)` for each participant removal.
+    removed: Arc<Mutex<Vec<(String, String)>>>,
+    /// Identities connected per room; a room missing here does not exist.
+    rooms: Mutex<HashMap<String, Vec<String>>>,
 }
 
 impl MockRtcClient {
@@ -55,7 +63,20 @@ impl MockRtcClient {
         Self {
             tokens: Mutex::new(HashMap::new()),
             generate_calls: Mutex::new(Vec::new()),
+            removed: Arc::default(),
+            rooms: Mutex::default(),
         }
+    }
+
+    fn with_room(self, room_name: &str, identities: &[&str]) -> Self {
+        self.rooms.lock().unwrap().insert(
+            room_name.to_string(),
+            identities
+                .iter()
+                .map(|identity| identity.to_string())
+                .collect(),
+        );
+        self
     }
 
     fn set_token(&self, identity: &str, token: anyhow::Result<String>) {
@@ -71,12 +92,24 @@ impl MockRtcClient {
 }
 
 impl CallRtcClient for MockRtcClient {
+    async fn generate_guest_token(
+        &self,
+        room: &str,
+        guest_id: GuestId,
+        _name: &str,
+    ) -> anyhow::Result<String> {
+        Ok(format!("guest-token:{room}:{guest_id}"))
+    }
+    async fn remove_guest(&self, _room: &str, _guest_id: GuestId) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
     }
 
     async fn delete_room(&self, _room_name: &str) -> anyhow::Result<()> {
-        unreachable!("delete_room not exercised by these tests")
+        Ok(())
     }
 
     async fn generate_token<'a>(
@@ -128,10 +161,21 @@ impl CallRtcClient for MockRtcClient {
 
     async fn remove_participant<'a>(
         &self,
-        _room_name: &str,
-        _participant_identity: MacroUserIdStr<'a>,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'a>,
     ) -> anyhow::Result<()> {
-        unreachable!("remove_participant not exercised by these tests")
+        self.removed.lock().unwrap().push((
+            room_name.to_string(),
+            participant_identity.as_ref().to_string(),
+        ));
+        Ok(())
+    }
+
+    async fn list_participant_identities(
+        &self,
+        room_name: &str,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        Ok(self.rooms.lock().unwrap().get(room_name).cloned())
     }
 
     async fn start_room_composite_egress(
@@ -373,7 +417,7 @@ fn started_event_timestamp() -> DateTime<Utc> {
 fn started_event_call(created_by: &str) -> Call {
     Call {
         id: STARTED_EVENT_CALL_ID,
-        channel_id: STARTED_EVENT_CHANNEL_ID,
+        channel_id: Some(STARTED_EVENT_CHANNEL_ID),
         room_name: STARTED_EVENT_CHANNEL_ID.to_string(),
         created_by: created_by.to_string(),
         created_at: started_event_timestamp(),
@@ -394,11 +438,13 @@ fn mock_get_or_create_repo(
                 .times(1)
                 .returning(|_| Box::pin(async { Ok(None) }));
 
-            repo.expect_create_call()
-                .times(1)
-                .return_once(move |_, _, _, _| Box::pin(async move { Ok(Some(call)) }));
-            // Push notifications are skipped: `NoOpEntityAccessService`
-            // fails recipient lookup before any channel name is resolved.
+            repo.expect_create_call().times(1).return_once(
+                move |call_id, channel_id, room_name, _| {
+                    assert_eq!(room_name, call_id.to_string());
+                    assert_ne!(room_name, channel_id.to_string());
+                    Box::pin(async move { Ok(Some(call)) })
+                },
+            );
         }
         GetOrCreateScenario::RaceLoses => {
             let mut sequence = mockall::Sequence::new();
@@ -649,6 +695,227 @@ async fn get_or_create_call_sends_call_answered_to_joining_user() {
     );
 }
 
+const SWITCHED_FROM_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6e1);
+const SWITCHED_FROM_ROOM: &str = "switched-from-room";
+
+/// Existing-call join where the user is still active in another call that
+/// has `remaining` participants once they leave it.
+fn switching_repo(remaining: i64) -> MockCallRepository {
+    let call = started_event_call(STARTED_EVENT_CREATOR);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_channel_id()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
+    repo.expect_find_active_call_for_user()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Some((SWITCHED_FROM_CALL_ID, None))) }));
+    repo.expect_get_call_by_id().times(1).returning(|call_id| {
+        let other = Call {
+            id: *call_id,
+            channel_id: None,
+            room_name: SWITCHED_FROM_ROOM.to_string(),
+            created_by: STARTED_EVENT_CREATOR.to_string(),
+            created_at: started_event_timestamp(),
+            egress_id: None,
+        };
+        Box::pin(async move { Ok(Some(other)) })
+    });
+    repo.expect_remove_participant()
+        .withf(|call_id, user_id| {
+            *call_id == SWITCHED_FROM_CALL_ID
+                && user_id.as_ref() == user("requester@example.com").as_ref()
+        })
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    repo.expect_get_participant_count()
+        .withf(|call_id| *call_id == SWITCHED_FROM_CALL_ID)
+        .times(1)
+        .returning(move |_| Box::pin(async move { Ok(remaining) }));
+    repo.expect_add_participant()
+        .withf(|call_id, _| *call_id == STARTED_EVENT_CALL_ID)
+        .times(1)
+        .returning(|call_id, user_id| {
+            let participant = CallParticipant {
+                call_id: *call_id,
+                user_id: user_id.as_ref().to_string(),
+                joined_at: started_event_timestamp(),
+            };
+            Box::pin(async move { Ok(participant) })
+        });
+    repo
+}
+
+async fn join_while_in_other_call(
+    repo: MockCallRepository,
+) -> (
+    crate::domain::models::CallTokenResponse,
+    Vec<(String, String)>,
+) {
+    let rtc_client = MockRtcClient::new();
+    let removed = rtc_client.removed.clone();
+    let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
+        repo,
+        rtc_client,
+        StubConnectionService,
+        NoOpEntityAccessService,
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://livekit.example.com",
+    );
+    let response = service
+        .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
+        .await
+        .expect("joining switches calls instead of conflicting");
+    let removed = removed.lock().unwrap().clone();
+    (response, removed)
+}
+
+#[tokio::test]
+async fn joining_a_call_switches_the_user_out_of_their_other_call() {
+    let (response, removed) = join_while_in_other_call(switching_repo(1)).await;
+
+    assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
+    assert_eq!(
+        removed,
+        vec![(
+            SWITCHED_FROM_ROOM.to_string(),
+            user("requester@example.com").as_ref().to_string(),
+        )]
+    );
+}
+
+#[tokio::test]
+async fn switching_out_as_the_last_participant_archives_the_other_call() {
+    let mut repo = switching_repo(0);
+    repo.expect_archive_call_if_empty()
+        .withf(|call_id| *call_id == SWITCHED_FROM_CALL_ID)
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(None) }));
+
+    let (response, _) = join_while_in_other_call(repo).await;
+
+    assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
+}
+
+const RECONCILED_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6f2);
+const RECONCILED_ROOM: &str = "reconciled-room";
+const RECONCILED_GUEST: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6f3);
+
+fn minutes_ago(minutes: i64) -> DateTime<Utc> {
+    Utc::now() - chrono::TimeDelta::minutes(minutes)
+}
+
+/// One active call with a member and a guest, both joined `joined` ago.
+fn reconcile_repo(joined: DateTime<Utc>) -> MockCallRepository {
+    let mut repo = MockCallRepository::new();
+    repo.expect_list_active_calls().times(1).returning(|| {
+        let call = Call {
+            id: RECONCILED_CALL_ID,
+            channel_id: None,
+            room_name: RECONCILED_ROOM.to_string(),
+            created_by: STARTED_EVENT_CREATOR.to_string(),
+            created_at: minutes_ago(30),
+            egress_id: None,
+        };
+        Box::pin(async move { Ok(vec![call]) })
+    });
+    repo.expect_get_participants()
+        .times(1)
+        .returning(move |call_id| {
+            let participant = CallParticipant {
+                call_id: *call_id,
+                user_id: user("requester@example.com").as_ref().to_string(),
+                joined_at: joined,
+            };
+            Box::pin(async move { Ok(vec![participant]) })
+        });
+    repo.expect_get_active_guests()
+        .times(1)
+        .returning(move |_| {
+            Box::pin(async move { Ok(vec![(GuestId::from_uuid(RECONCILED_GUEST), joined)]) })
+        });
+    repo
+}
+
+async fn reconcile(repo: MockCallRepository, rtc_client: MockRtcClient) {
+    let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
+        repo,
+        rtc_client,
+        StubConnectionService,
+        NoOpEntityAccessService,
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://livekit.example.com",
+    );
+    service
+        .reconcile_stale_calls()
+        .await
+        .expect("reconciliation succeeds");
+}
+
+#[tokio::test]
+async fn reconcile_marks_disconnected_people_left_and_archives_the_empty_call() {
+    let mut repo = reconcile_repo(minutes_ago(10));
+    repo.expect_remove_participant()
+        .withf(|call_id, user_id| {
+            *call_id == RECONCILED_CALL_ID
+                && user_id.as_ref() == user("requester@example.com").as_ref()
+        })
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    repo.expect_reconcile_guest()
+        .withf(|call_id, guest_id, joined| {
+            *call_id == RECONCILED_CALL_ID
+                && *guest_id == GuestId::from_uuid(RECONCILED_GUEST)
+                && !joined
+        })
+        .times(1)
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
+    repo.expect_get_participant_count()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(0) }));
+    repo.expect_archive_call_if_empty()
+        .withf(|call_id| *call_id == RECONCILED_CALL_ID)
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(None) }));
+
+    // Only the transcription agent is left in the room.
+    reconcile(
+        repo,
+        MockRtcClient::new().with_room(RECONCILED_ROOM, &["agent-transcriber"]),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn reconcile_keeps_people_still_connected_to_the_room() {
+    let mut repo = reconcile_repo(minutes_ago(10));
+    repo.expect_get_participant_count()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(2) }));
+
+    let guest_identity = GuestId::from_uuid(RECONCILED_GUEST).to_string();
+    reconcile(
+        repo,
+        MockRtcClient::new().with_room(
+            RECONCILED_ROOM,
+            &[user("requester@example.com").as_ref(), &guest_identity],
+        ),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn reconcile_gives_recent_joiners_time_to_connect() {
+    let mut repo = reconcile_repo(minutes_ago(0));
+    repo.expect_get_participant_count()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(2) }));
+
+    // The room is gone, but both people joined moments ago.
+    reconcile(repo, MockRtcClient::new()).await;
+}
+
 const ARCHIVED_EVENT_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6d8);
 const ARCHIVED_EVENT_CHANNEL_ID: Uuid = Uuid::from_u128(0x4f6f8b0a_6f9f_4a3f_9c3a_2b1e5d4c7a91);
 const ARCHIVED_EVENT_ROOM_NAME: &str = "archived-event-room";
@@ -674,7 +941,7 @@ fn archived_event_ended_at() -> DateTime<Utc> {
 fn active_call_for_archived_event(created_by: &str, egress_id: Option<&str>) -> Call {
     Call {
         id: ARCHIVED_EVENT_CALL_ID,
-        channel_id: ARCHIVED_EVENT_CHANNEL_ID,
+        channel_id: Some(ARCHIVED_EVENT_CHANNEL_ID),
         room_name: ARCHIVED_EVENT_ROOM_NAME.to_string(),
         created_by: created_by.to_string(),
         created_at: archived_event_started_at(),
@@ -689,7 +956,7 @@ fn archived_call_for_event(
 ) -> ArchivedCall {
     ArchivedCall {
         call_id: ARCHIVED_EVENT_CALL_ID,
-        channel_id: ARCHIVED_EVENT_CHANNEL_ID,
+        channel_id: Some(ARCHIVED_EVENT_CHANNEL_ID),
         created_by: created_by.to_string(),
         started_at: archived_event_started_at(),
         ended_at: archived_event_ended_at(),
@@ -701,6 +968,7 @@ fn archived_call_for_event(
 
 fn egress_ended_rtc_client(egress_id: Option<&str>, file_url: Option<&str>) -> MockCallRtcClient {
     let event = CallWebhookEvent {
+        guest_identity: None,
         event: "egress_ended".to_string(),
         id: "egress-ended-event-id".to_string(),
         room_name: None,
@@ -726,6 +994,7 @@ fn webhook_rtc_client(
     participant_identity: Option<&'static str>,
 ) -> MockCallRtcClient {
     let event = CallWebhookEvent {
+        guest_identity: None,
         event: event_type.to_string(),
         id: format!("{event_type}-event-id"),
         room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
@@ -852,11 +1121,11 @@ async fn participant_left_publishes_last_participant_archived_event() {
             assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
             Box::pin(async { Ok(0) })
         });
-    repo.expect_archive_call()
+    repo.expect_archive_call_if_empty()
         .times(1)
         .return_once(move |call_id| {
             assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
-            Box::pin(async move { Ok(archived_call) })
+            Box::pin(async move { Ok(Some(archived_call)) })
         });
 
     let mut rtc_client = webhook_rtc_client("participant_left", Some(ARCHIVED_EVENT_PARTICIPANT));
@@ -1084,7 +1353,12 @@ async fn archived_egress_ended_publishes_recording_ready_event() {
         .times(1)
         .returning(|egress_id| {
             assert_eq!(egress_id, RECORDING_READY_EGRESS_ID);
-            Box::pin(async { Ok(Some((ARCHIVED_EVENT_CALL_ID, ARCHIVED_EVENT_CHANNEL_ID))) })
+            Box::pin(async {
+                Ok(Some((
+                    ARCHIVED_EVENT_CALL_ID,
+                    Some(ARCHIVED_EVENT_CHANNEL_ID),
+                )))
+            })
         });
     repo.expect_set_recording_key()
         .times(1)
@@ -1189,7 +1463,12 @@ async fn failed_recording_key_persistence_does_not_publish_recording_ready_event
     repo.expect_get_call_record_by_egress_id()
         .times(1)
         .returning(|_| {
-            Box::pin(async { Ok(Some((ARCHIVED_EVENT_CALL_ID, ARCHIVED_EVENT_CHANNEL_ID))) })
+            Box::pin(async {
+                Ok(Some((
+                    ARCHIVED_EVENT_CALL_ID,
+                    Some(ARCHIVED_EVENT_CHANNEL_ID),
+                )))
+            })
         });
     repo.expect_set_recording_key()
         .times(1)
@@ -1217,7 +1496,7 @@ const MUTATED_EVENT_ACTOR: &str = "macro|editor@example.com";
 fn call_record_for_mutation() -> CallRecord {
     CallRecord {
         call_id: MUTATED_EVENT_CALL_ID,
-        channel_id: MUTATED_EVENT_CHANNEL_ID,
+        channel_id: Some(MUTATED_EVENT_CHANNEL_ID),
         room_name: "mutation-event-room".to_string(),
         created_by: "macro|creator@example.com".to_string(),
         started_at: archived_event_started_at(),
@@ -1238,6 +1517,7 @@ fn call_record_for_mutation() -> CallRecord {
         status: None,
         user_access_level: None,
         participants: Vec::new(),
+        guests: Vec::new(),
         transcript: Vec::new(),
     }
 }
@@ -1956,11 +2236,14 @@ async fn live_call_team_share_rejects_non_view_levels_and_contradictions() {
 #[tokio::test]
 async fn toggle_share_with_team_publishes_updated_event() {
     let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Some(live_record())) }));
     repo.expect_toggle_share_with_team()
         .times(1)
         .returning(|call_id| {
             assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
-            Box::pin(async { Ok((true, MUTATED_EVENT_CHANNEL_ID)) })
+            Box::pin(async { Ok((true, Some(MUTATED_EVENT_CHANNEL_ID))) })
         });
     repo.expect_get_participants()
         .times(1)
@@ -1980,9 +2263,7 @@ async fn toggle_share_with_team_publishes_updated_event() {
 #[tokio::test]
 async fn toggle_share_with_team_on_archived_call_conflicts_without_events() {
     let mut repo = MockCallRepository::new();
-    repo.expect_toggle_share_with_team()
-        .times(1)
-        .returning(|_| Box::pin(async { Err(CallError::Conflict("archived".to_string())) }));
+    expect_archived_record(&mut repo);
     let event_broker = RecordingEventBroker::default();
     let service = build_mutation_service(repo, event_broker.clone());
 
@@ -1993,6 +2274,147 @@ async fn toggle_share_with_team_on_archived_call_conflicts_without_events() {
         Err(CallError::Conflict(_))
     ));
     assert!(event_broker.events().is_empty());
+}
+
+/// Standalone records retain individual access, but cannot enter team memory.
+fn standalone_record(is_active: bool) -> CallRecord {
+    let mut record = call_record_for_mutation();
+    record.channel_id = None;
+    record.is_active = is_active;
+    record
+}
+
+#[tokio::test]
+async fn standalone_call_team_memory_enable_is_forbidden_live_and_archived() {
+    for is_active in [true, false] {
+        for request in [
+            team_edit(Some(team_share_request(Some(AccessLevel::View))), None),
+            team_edit(None, Some(true)),
+        ] {
+            let mut repo = MockCallRepository::new();
+            repo.expect_get_call_record_by_call_id()
+                .times(1)
+                .returning(move |_| {
+                    Box::pin(async move { Ok(Some(standalone_record(is_active))) })
+                });
+            let events = RecordingEventBroker::default();
+            let service = build_mutation_service(repo, events.clone());
+
+            assert!(matches!(
+                service
+                    .edit_call_record(creator_mutation_receipt(), request)
+                    .await,
+                Err(CallError::Forbidden(_))
+            ));
+            assert!(events.events().is_empty());
+        }
+    }
+}
+
+#[tokio::test]
+async fn standalone_call_team_memory_enable_is_forbidden_through_generic_share_policy() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(2)
+        .returning(|_| Box::pin(async { Ok(Some(standalone_record(false))) }));
+    let events = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, events.clone());
+
+    assert!(matches!(
+        service
+            .update_share_policy(
+                EntityType::Call.with_entity_string(MUTATED_EVENT_CALL_ID.to_string()),
+                creator_mutation_receipt(),
+                team_share_request(Some(AccessLevel::View)),
+            )
+            .await,
+        Err(entity_mutation::EntityMutationErrorCode::Forbidden(_))
+    ));
+    assert!(events.events().is_empty());
+}
+
+#[tokio::test]
+async fn standalone_call_team_memory_can_be_explicitly_cleared_live_and_archived() {
+    for is_active in [true, false] {
+        for request in [
+            team_edit(Some(team_share_request(None)), None),
+            team_edit(None, Some(false)),
+        ] {
+            let repo = if is_active {
+                let mut repo = MockCallRepository::new();
+                repo.expect_get_call_record_by_call_id()
+                    .times(1)
+                    .returning(|_| Box::pin(async { Ok(Some(standalone_record(true))) }));
+                repo.expect_patch_call_record()
+                    .times(1)
+                    .returning(|_, args| {
+                        assert_eq!(args.live_share_with_team, Some(false));
+                        assert!(args.team_share.is_none());
+                        Box::pin(async { Ok(()) })
+                    });
+                repo.expect_get_participants()
+                    .times(1)
+                    .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+                repo
+            } else {
+                let mut facts = team_share_facts();
+                facts.current = Some(TeamShareGrant {
+                    team_id: CREATOR_TEAM_ID,
+                    level: TeamShareLevel::View,
+                });
+                mock_team_share_repo(facts, standalone_record(false), None)
+            };
+            let events = RecordingEventBroker::default();
+            let service = build_mutation_service(repo, events.clone());
+
+            service
+                .edit_call_record(creator_mutation_receipt(), request)
+                .await
+                .unwrap();
+            let published = events.events();
+            assert_eq!(published.len(), 1);
+            assert_eq!(published[0].envelope["metadata"]["share_with_team"], false);
+            assert!(published[0].envelope["metadata"]["channel_id"].is_null());
+        }
+    }
+}
+
+#[tokio::test]
+async fn standalone_team_memory_toggle_cannot_enable_but_can_clear_old_intent() {
+    for old_intent in [true, false] {
+        let mut repo = MockCallRepository::new();
+        repo.expect_get_call_record_by_call_id()
+            .times(1)
+            .returning(move |_| {
+                let mut record = standalone_record(true);
+                record.share_with_team = old_intent;
+                Box::pin(async move { Ok(Some(record)) })
+            });
+        if old_intent {
+            repo.expect_patch_call_record()
+                .times(1)
+                .returning(|_, args| {
+                    assert_eq!(args.live_share_with_team, Some(false));
+                    assert!(args.team_share.is_none());
+                    Box::pin(async { Ok(()) })
+                });
+            repo.expect_get_participants()
+                .times(1)
+                .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+        }
+        let events = RecordingEventBroker::default();
+        let service = build_mutation_service(repo, events.clone());
+        let result = service
+            .toggle_share_with_team(creator_mutation_receipt())
+            .await;
+        if old_intent {
+            assert!(!result.unwrap());
+            assert_eq!(events.events().len(), 1);
+        } else {
+            assert!(matches!(result, Err(CallError::Forbidden(_))));
+            assert!(events.events().is_empty());
+        }
+    }
 }
 
 #[tokio::test]
@@ -2212,7 +2634,7 @@ enum NamePersistence {
 fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
     CallRecord {
         call_id: SUMMARIZED_EVENT_CALL_ID,
-        channel_id: SUMMARIZED_EVENT_CHANNEL_ID,
+        channel_id: Some(SUMMARIZED_EVENT_CHANNEL_ID),
         room_name: SUMMARIZED_EVENT_CHANNEL_ID.to_string(),
         created_by: "macro|creator@example.com".to_string(),
         started_at: started_event_timestamp(),
@@ -2233,6 +2655,7 @@ fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
         status: None,
         user_access_level: None,
         participants: Vec::new(),
+        guests: Vec::new(),
         transcript: vec![CallRecordTranscriptSegment {
             transcript_id: Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b701),
             segment_id: Some("segment-1".to_string()),
@@ -2881,7 +3304,7 @@ async fn build_voip_push_payloads_returns_empty_for_no_recipients() {
 fn active_call(call_id: Uuid) -> Call {
     Call {
         id: call_id,
-        channel_id: Uuid::nil(),
+        channel_id: Some(Uuid::nil()),
         room_name: Uuid::nil().to_string(),
         created_by: "macro|carla@example.com".to_string(),
         created_at: chrono::Utc::now(),
@@ -2997,4 +3420,591 @@ async fn enroll_stable_speaker_voices_links_all_voices_for_consistent_diarized_s
     assert_eq!(user_a_voices, expected);
     assert!(voice_repo.get_user_voices(&MACRO_USER_B).await?.is_empty());
     Ok(())
+}
+
+fn invitation_for_test() -> crate::domain::meetings::Meeting {
+    crate::domain::meetings::Meeting {
+        id: Uuid::now_v7(),
+        share_token: crate::domain::meetings::MeetingToken::generate(),
+        title: "Design review".to_string(),
+        scheduled_start: None,
+        scheduled_end: None,
+        channel_id: None,
+        channel_call_id: None,
+        call_id: Some(ARCHIVED_EVENT_CALL_ID),
+        user_id: user(ARCHIVED_EVENT_CREATOR).to_string(),
+    }
+}
+
+#[derive(Clone)]
+struct CallInviteIngress(Arc<AtomicUsize>);
+
+impl NotificationIngress for CallInviteIngress {
+    async fn send_notification<
+        'a,
+        T: notification::domain::models::Notification + Clone + 'static,
+        U: serde::Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
+        request: notification::domain::models::request::SendNotificationRequest<'a, T, U>,
+    ) -> Result<
+        Option<notification::domain::models::NotificationResult<'a>>,
+        rootcause::Report<notification::domain::service::SendNotificationError>,
+    > {
+        assert_eq!(T::TYPE_NAME, "call_invite");
+        let request = serde_json::to_value(request).unwrap();
+        assert!(
+            !request["build_email"].is_null(),
+            "an external recipient must get an email delivery"
+        );
+        assert_eq!(
+            request["req"]["recipient_ids"],
+            json!(["macro|guest@outside.example"])
+        );
+        let content = &request["req"]["notification"]["content"];
+        assert_eq!(content["title"], "Design review");
+        assert!(content["share_token"].as_str().unwrap().len() >= 20);
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Ok(None)
+    }
+}
+
+#[tokio::test]
+async fn meeting_invites_authorize_owner_validate_email_and_queue_direct_email() {
+    for (actor, email, permitted) in [
+        ("other@example.com", "guest@outside.example", false),
+        (ARCHIVED_EVENT_CREATOR, "invalid-email", false),
+        (ARCHIVED_EVENT_CREATOR, " Guest@Outside.Example ", true),
+    ] {
+        let meeting = invitation_for_test();
+        let token = meeting.share_token.clone();
+        let mut repo = MockCallRepository::new();
+        repo.expect_get_meeting()
+            .times(1)
+            .return_once(move |_| Box::pin(async move { Ok(Some(meeting)) }));
+        let sent = Arc::new(AtomicUsize::new(0));
+        let service: CallServiceImpl<_, _, _, _, _, _, NoopCallSummarizer> = CallServiceImpl::new(
+            repo,
+            MockCallRtcClient::new(),
+            StubConnectionService,
+            NoOpEntityAccessService,
+            CallInviteIngress(sent.clone()),
+            StubRecordingStorage,
+            "wss://livekit.example.com",
+        );
+        let result = service
+            .invite_to_meeting(user(actor), token, email.to_string())
+            .await;
+        if permitted {
+            assert!(result.is_ok());
+        } else if actor == ARCHIVED_EVENT_CREATOR {
+            assert!(matches!(result, Err(CallError::InvalidRequest(_))));
+        } else {
+            assert!(matches!(result, Err(CallError::Forbidden(_))));
+        }
+        assert_eq!(sent.load(Ordering::SeqCst), usize::from(permitted));
+    }
+}
+
+#[tokio::test]
+async fn meeting_cancellation_propagates_owner_authorization() {
+    for allowed in [false, true] {
+        let id = Uuid::now_v7();
+        let mut repo = MockCallRepository::new();
+        repo.expect_cancel_meeting()
+            .times(1)
+            .returning(move |meeting_id, actor| {
+                assert_eq!(*meeting_id, id);
+                assert_eq!(actor, user(ARCHIVED_EVENT_CREATOR).as_ref());
+                Box::pin(async move { Ok(allowed) })
+            });
+        let service = build_webhook_service(
+            repo,
+            MockCallRtcClient::new(),
+            RecordingEventBroker::default(),
+        );
+        let result = service
+            .cancel_meeting(user(ARCHIVED_EVENT_CREATOR), &id)
+            .await;
+        if allowed {
+            assert!(result.is_ok());
+        } else {
+            assert!(matches!(result, Err(CallError::Forbidden(_))));
+        }
+    }
+}
+
+#[tokio::test]
+async fn guest_cannot_join_an_expired_channel_invitation() {
+    let mut meeting = invitation_for_test();
+    let token = meeting.share_token.clone();
+    meeting.channel_id = Some(ARCHIVED_EVENT_CHANNEL_ID);
+    meeting.channel_call_id = Some(ARCHIVED_EVENT_CALL_ID);
+    meeting.call_id = None;
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_meeting()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(meeting)) }));
+    let service = build_webhook_service(
+        repo,
+        MockCallRtcClient::new(),
+        RecordingEventBroker::default(),
+    );
+    let result = service
+        .join_meeting_guest(
+            token,
+            crate::domain::meetings::GuestJoinRequest {
+                display_name: "Ada".to_string(),
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(CallError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn guest_join_persists_the_guest_before_minting_a_room_scoped_token() {
+    let mut meeting = invitation_for_test();
+    let token = meeting.share_token.clone();
+    let mut active = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
+    active.channel_id = None;
+    meeting.call_id = Some(active.id);
+    let room_name = active.room_name.clone();
+
+    let mut seq = mockall::Sequence::new();
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_meeting()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(meeting)) }));
+    repo.expect_get_call_by_id()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(active)) }));
+    repo.expect_add_guest()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|call_id, _, name| {
+            assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
+            // The request name arrives padded; validation must trim it.
+            assert_eq!(name, "Ada Lovelace");
+            Box::pin(async { Ok(()) })
+        });
+    let mut rtc = MockCallRtcClient::new();
+    rtc.expect_generate_guest_token()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(move |room, guest_id, name| {
+            assert_eq!(room, ARCHIVED_EVENT_ROOM_NAME);
+            assert_eq!(name, "Ada Lovelace");
+            Box::pin(async move { Ok(format!("guest-token:{guest_id}")) })
+        });
+    let service = build_webhook_service(repo, rtc, RecordingEventBroker::default());
+
+    let response = service
+        .join_meeting_guest(
+            token.clone(),
+            crate::domain::meetings::GuestJoinRequest {
+                display_name: "  Ada Lovelace  ".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.call_id, ARCHIVED_EVENT_CALL_ID);
+    assert_eq!(response.room_name, room_name);
+    assert_eq!(response.channel_id, None);
+    assert_eq!(response.share_token, Some(token.into()));
+    // The participant id is the opaque guest identity the token was minted for.
+    let guest_id = GuestId::parse_rtc_identity(&response.participant_id).unwrap();
+    assert_eq!(response.token, format!("guest-token:{guest_id}"));
+}
+
+#[tokio::test]
+async fn guests_cannot_join_channel_linked_meetings() {
+    let mut meeting = invitation_for_test();
+    let token = meeting.share_token.clone();
+    meeting.channel_id = Some(ARCHIVED_EVENT_CHANNEL_ID);
+    meeting.channel_call_id = Some(ARCHIVED_EVENT_CALL_ID);
+    meeting.call_id = Some(ARCHIVED_EVENT_CALL_ID);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_meeting()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(meeting)) }));
+    // No call lookup, no room creation, no guest row: the ban short-circuits.
+    let service = build_webhook_service(
+        repo,
+        MockCallRtcClient::new(),
+        RecordingEventBroker::default(),
+    );
+    let result = service
+        .join_meeting_guest(
+            token,
+            crate::domain::meetings::GuestJoinRequest {
+                display_name: "Ada".to_string(),
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(CallError::Forbidden(_))));
+}
+
+#[tokio::test]
+async fn email_invites_are_forbidden_for_channel_meetings() {
+    let mut meeting = invitation_for_test();
+    let token = meeting.share_token.clone();
+    meeting.user_id = user(ARCHIVED_EVENT_CREATOR).to_string();
+    meeting.channel_id = Some(ARCHIVED_EVENT_CHANNEL_ID);
+    meeting.channel_call_id = Some(ARCHIVED_EVENT_CALL_ID);
+    meeting.call_id = Some(ARCHIVED_EVENT_CALL_ID);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_meeting()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(meeting)) }));
+    let service = build_webhook_service(
+        repo,
+        MockCallRtcClient::new(),
+        RecordingEventBroker::default(),
+    );
+    let result = service
+        .invite_to_meeting(
+            user(ARCHIVED_EVENT_CREATOR),
+            token,
+            "ada@example.com".to_string(),
+        )
+        .await;
+    assert!(matches!(result, Err(CallError::Forbidden(_))));
+}
+
+#[tokio::test]
+async fn token_mint_failure_releases_the_pending_guest_row() {
+    let mut meeting = invitation_for_test();
+    let token = meeting.share_token.clone();
+    let mut active = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
+    active.channel_id = None;
+    meeting.call_id = Some(active.id);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_meeting()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(meeting)) }));
+    repo.expect_get_call_by_id()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(active)) }));
+    repo.expect_add_guest()
+        .times(1)
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
+    // The never-connected guest must be marked left so the row cannot hold
+    // the call open (no webhook will ever fire for it).
+    repo.expect_reconcile_guest()
+        .times(1)
+        .returning(|call_id, _, joined| {
+            assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
+            assert!(!joined);
+            Box::pin(async { Ok(()) })
+        });
+    let mut rtc = MockCallRtcClient::new();
+    rtc.expect_generate_guest_token()
+        .times(1)
+        .returning(|_, _, _| Box::pin(async { Err(anyhow::anyhow!("mint failed")) }));
+    let service = build_webhook_service(repo, rtc, RecordingEventBroker::default());
+    let result = service
+        .join_meeting_guest(
+            token,
+            crate::domain::meetings::GuestJoinRequest {
+                display_name: "Ada".to_string(),
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(CallError::Internal(_))));
+}
+
+#[tokio::test]
+async fn guest_webhook_events_reconcile_join_and_leave() {
+    for (event_type, joined) in [("participant_joined", true), ("participant_left", false)] {
+        let mut active = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
+        active.channel_id = None;
+        let guest_id = GuestId::generate();
+        let mut repo = MockCallRepository::new();
+        repo.expect_get_call_by_room_name()
+            .times(1)
+            .return_once(move |_| Box::pin(async move { Ok(Some(active)) }));
+        repo.expect_reconcile_guest()
+            .times(1)
+            .returning(move |call_id, guest, was_join| {
+                assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
+                assert_eq!(guest, guest_id);
+                assert_eq!(was_join, joined);
+                Box::pin(async { Ok(()) })
+            });
+        if !joined {
+            // A guest leaving runs the room-empty check; someone remains.
+            repo.expect_get_participant_count()
+                .times(1)
+                .returning(|_| Box::pin(async { Ok(1) }));
+        }
+        let event = CallWebhookEvent {
+            event: event_type.to_string(),
+            id: "evt".to_string(),
+            room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
+            participant_identity: None,
+            guest_identity: Some(guest_id),
+            egress_id: None,
+            file_url: None,
+            created_at: 0,
+        };
+        let mut rtc = MockCallRtcClient::new();
+        rtc.expect_receive_webhook()
+            .times(1)
+            .return_once(move |_, _| Ok(event));
+        let service = build_webhook_service(repo, rtc, RecordingEventBroker::default());
+        service
+            .process_webhook_event("webhook-body", "webhook-token")
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn mixed_call_archives_only_after_both_users_and_guests_leave() {
+    // Last Macro user leaves while a guest is still connected: the call must
+    // stay open. The guest's later departure archives it.
+    let mut active = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
+    active.channel_id = None;
+    let second_leg = active.clone();
+    let mut archived = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 1, true);
+    archived.channel_id = None;
+    let guest_id = GuestId::generate();
+
+    let mut repo = MockCallRepository::new();
+    // The user's departure leaves the guest connected (1); the guest's
+    // departure empties the room (0).
+    let mut counts = vec![1i64, 0].into_iter();
+    repo.expect_get_call_by_room_name()
+        .times(2)
+        .returning(move |_| {
+            let call = second_leg.clone();
+            Box::pin(async move { Ok(Some(call)) })
+        });
+    repo.expect_remove_participant()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    repo.expect_reconcile_guest()
+        .times(1)
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
+    repo.expect_get_participant_count()
+        .times(2)
+        .returning(move |_| {
+            let count = counts.next().unwrap_or(0);
+            Box::pin(async move { Ok(count) })
+        });
+    repo.expect_archive_call_if_empty()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(archived)) }));
+
+    let user_left = CallWebhookEvent {
+        event: "participant_left".to_string(),
+        id: "evt-user".to_string(),
+        room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
+        participant_identity: Some(user(ARCHIVED_EVENT_CREATOR).into_owned()),
+        guest_identity: None,
+        egress_id: None,
+        file_url: None,
+        created_at: 0,
+    };
+    let guest_left = CallWebhookEvent {
+        guest_identity: Some(guest_id),
+        participant_identity: None,
+        id: "evt-guest".to_string(),
+        ..user_left.clone()
+    };
+    let mut webhooks = vec![user_left, guest_left].into_iter();
+    let mut rtc = MockCallRtcClient::new();
+    rtc.expect_receive_webhook()
+        .times(2)
+        .returning(move |_, _| Ok(webhooks.next().expect("two webhook deliveries")));
+    rtc.expect_delete_room()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(()) }));
+    let events = RecordingEventBroker::default();
+    let service = build_webhook_service(repo, rtc, events.clone());
+
+    service
+        .process_webhook_event("webhook-body", "webhook-token")
+        .await
+        .unwrap();
+    assert!(events.events().is_empty());
+    service
+        .process_webhook_event("webhook-body", "webhook-token")
+        .await
+        .unwrap();
+    assert_eq!(events.events().len(), 1);
+}
+
+#[tokio::test]
+async fn meeting_leave_rejects_a_token_for_another_invitation() {
+    let meeting = invitation_for_test();
+    let wrong_token = crate::domain::meetings::MeetingToken::generate();
+    let active = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_room_name()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(active)) }));
+    repo.expect_get_meeting_for_call()
+        .times(1)
+        .return_once(move |_, _| Box::pin(async move { Ok(Some(meeting)) }));
+    let mut rtc = MockCallRtcClient::new();
+    rtc.expect_verify_access_token().times(1).return_once(|_| {
+        Ok(crate::domain::models::VerifiedRingToken {
+            identity: GuestId::generate().to_string(),
+            room: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
+        })
+    });
+    let service = build_webhook_service(repo, rtc, RecordingEventBroker::default());
+    assert!(matches!(
+        service.leave_meeting(wrong_token, "rtc-token").await,
+        Err(CallError::Auth)
+    ));
+}
+
+#[tokio::test]
+async fn last_guest_leaving_archives_call_and_stops_recording() {
+    let meeting = invitation_for_test();
+    let token = meeting.share_token.clone();
+    let mut active = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, Some("recording"));
+    active.channel_id = None;
+    let mut archived = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 1, true);
+    archived.channel_id = None;
+    let guest_id = GuestId::generate();
+    let identity = guest_id.to_string();
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_room_name()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(active)) }));
+    repo.expect_get_meeting_for_call()
+        .times(1)
+        .return_once(move |_, include_cancelled| {
+            // Connected participants of a revoked invitation must still leave.
+            assert!(include_cancelled);
+            Box::pin(async move { Ok(Some(meeting)) })
+        });
+    repo.expect_reconcile_guest()
+        .times(1)
+        .returning(move |call, guest, joined| {
+            assert_eq!(*call, ARCHIVED_EVENT_CALL_ID);
+            assert_eq!(guest, guest_id);
+            assert!(!joined);
+            Box::pin(async { Ok(()) })
+        });
+    repo.expect_get_participant_count()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(0) }));
+    repo.expect_archive_call_if_empty()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(archived)) }));
+    let mut rtc = MockCallRtcClient::new();
+    rtc.expect_verify_access_token()
+        .times(1)
+        .return_once(move |_| {
+            Ok(crate::domain::models::VerifiedRingToken {
+                identity,
+                room: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
+            })
+        });
+    rtc.expect_remove_guest()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    rtc.expect_stop_egress().times(1).returning(|id| {
+        assert_eq!(id, "recording");
+        Box::pin(async { Ok(()) })
+    });
+    rtc.expect_delete_room()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(()) }));
+    let events = RecordingEventBroker::default();
+    let service = build_webhook_service(repo, rtc, events.clone());
+    assert!(
+        service
+            .leave_meeting(token, "rtc-token")
+            .await
+            .unwrap()
+            .call_ended
+    );
+    assert_eq!(events.events().len(), 1);
+}
+
+#[tokio::test]
+async fn meeting_edits_propagate_owner_authorization_and_validated_metadata() {
+    for allowed in [false, true] {
+        let meeting = invitation_for_test();
+        let id = meeting.id;
+        let mut repo = MockCallRepository::new();
+        repo.expect_update_meeting()
+            .times(1)
+            .return_once(move |meeting_id, actor, request| {
+                assert_eq!(*meeting_id, id);
+                assert_eq!(actor, user(ARCHIVED_EVENT_CREATOR).as_ref());
+                assert_eq!(request.title.as_deref(), Some("New name"));
+                Box::pin(async move { Ok(allowed.then_some(meeting)) })
+            });
+        let service = build_webhook_service(
+            repo,
+            MockCallRtcClient::new(),
+            RecordingEventBroker::default(),
+        );
+        let result = service
+            .update_meeting(
+                user(ARCHIVED_EVENT_CREATOR),
+                &id,
+                crate::domain::meetings::UpdateMeetingRequest {
+                    clear_schedule: false,
+                    title: Some(" New name ".to_string()),
+                    scheduled_start: None,
+                    scheduled_end: None,
+                },
+            )
+            .await;
+        if allowed {
+            assert!(result.is_ok());
+        } else {
+            assert!(matches!(result, Err(CallError::Forbidden(_))));
+        }
+    }
+}
+
+#[test]
+fn summary_uses_guest_name_without_rewriting_account_identity() {
+    let mut record = summarized_call_record(None);
+    let guest_id = GuestId::generate();
+    record.transcript[0].speaker_id = guest_id.to_string();
+    let guests = vec![crate::domain::models::CallRecordGuest {
+        id: guest_id,
+        display_name: "Ada".to_string(),
+        joined_at: Utc::now(),
+        left_at: None,
+    }];
+    let transcript = super::summary_transcript(record.transcript.clone(), &guests);
+    assert_eq!(transcript[0].speaker_id, "Ada (guest)");
+    assert_eq!(record.transcript[0].speaker_id, guest_id.to_string());
+}
+
+#[tokio::test]
+async fn sharing_a_cancelled_standalone_meeting_rejects_the_revoked_link() {
+    let meeting = invitation_for_test();
+    let mut record = call_record_for_mutation();
+    record.channel_id = None;
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .return_once(move |_| Box::pin(async move { Ok(Some(record)) }));
+    repo.expect_get_meeting_for_call()
+        .times(1)
+        .return_once(move |_, _| Box::pin(async move { Ok(Some(meeting)) }));
+    repo.expect_get_meeting()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    let service = build_mutation_service(repo, RecordingEventBroker::default());
+    let receipt = EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user("editor@example.com"),
+        &MUTATED_EVENT_CALL_ID.to_string(),
+        EntityType::Call,
+    );
+    assert!(matches!(
+        service.share_call(receipt).await,
+        Err(CallError::NotFound(_))
+    ));
 }

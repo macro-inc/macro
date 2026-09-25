@@ -23,8 +23,7 @@ import {
   isAddInboxDialogOpen,
 } from '@app/features/inbox/AddInboxDialog';
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
-// AI usage billing is temporarily disabled.
-// import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
+import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { Paywall } from '@app/features/paywall/Paywall';
 import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
 import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
@@ -54,8 +53,8 @@ import {
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
-// import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { enableReminders } from '@core/constant/featureFlags';
+import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
+import { DEV_MODE_ENV, enableReminders } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
@@ -355,7 +354,7 @@ function NewOnboardingRedirect() {
 function LayoutInner(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
-  // const { usageLimitOpen } = useAiUsageLimitState();
+  const { usageLimitOpen } = useAiUsageLimitState();
   const location = useLocation();
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = createSignal(false);
   const [sidebarOverlayTriggerHovered, setSidebarOverlayTriggerHovered] =
@@ -502,11 +501,9 @@ function LayoutInner(props: RouteSectionProps) {
           <Paywall />
         </Suspense>
       </Show>
-      {/* AI usage billing is temporarily disabled.
-      <Show when={usageLimitOpen()}>
+      <Show when={DEV_MODE_ENV && usageLimitOpen()}>
         <AiUsageLimitDialog />
       </Show>
-      */}
       <div class="max-h-full grow flex">
         {/* The provider spans the sidebar too so its favorites can register
             sortables with the same drag-drop context as the entity drags. */}

@@ -35,6 +35,23 @@ import { createAppSplitRouterMiddleware } from '../split-router/app-middleware';
 import { appSplitRoutes } from '../split-router/app-routes';
 import { createAppSplitRouterLayout } from '../splitRouterLayout';
 
+// Settings navigation has its own route tests; avoid loading it through unrelated views.
+vi.mock('@core/constant/settingsSplitUrl', () => ({
+  appendSettingsSplitToUrl: vi.fn(),
+  settingsTabSlugFromUrl: vi.fn(),
+  stripSettingsSplitFromUrl: vi.fn(),
+}));
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: vi.fn() },
 }));

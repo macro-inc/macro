@@ -90,6 +90,8 @@ export function getCallRecordResolution(
   >,
   userId: string
 ): CallResolution | null {
+  // Standalone meetings do not ring a channel's members.
+  if (!record.channelId) return null;
   if (!record.isActive) {
     return {
       type: 'ended',

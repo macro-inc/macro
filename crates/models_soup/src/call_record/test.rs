@@ -10,7 +10,7 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
     let now = Utc::now();
     CallRecord {
         call_id: Uuid::now_v7(),
-        channel_id: Uuid::now_v7(),
+        channel_id: Some(Uuid::now_v7()),
         room_name: "room".to_string(),
         created_by: "macro|creator@test.com".to_string(),
         started_at: now,
@@ -37,6 +37,7 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
                 left_at: None,
             })
             .collect(),
+        guests: Vec::new(),
         transcript: Vec::new(),
         user_access_level: None,
     }
@@ -171,4 +172,23 @@ fn from_record_for_user_summary_none_when_record_has_none() {
     let record = record_with_participants(&["macro|a@test.com"]);
     let soup = SoupCallRecord::from_record_for_user(record, "macro|a@test.com");
     assert!(soup.summary.is_none());
+}
+
+#[test]
+fn standalone_call_retains_guest_name_and_has_no_channel() {
+    let mut record = record_with_participants(&[]);
+    record.channel_id = None;
+    let guest_id = call::domain::meetings::GuestId::generate();
+    record.guests = vec![call::domain::models::CallRecordGuest {
+        id: guest_id,
+        display_name: "Alex".to_string(),
+        joined_at: Utc::now(),
+        left_at: None,
+    }];
+    let soup = SoupCallRecord::from_record_for_user(record, "macro|owner@example.com");
+    assert_eq!(soup.channel_id, None);
+    assert!(soup.participants.is_empty());
+    assert_eq!(soup.guests[0].id, guest_id.as_uuid());
+    assert_eq!(soup.guests[0].display_name, "Alex");
+    assert_eq!(soup.status, CallStatus::Unattended);
 }

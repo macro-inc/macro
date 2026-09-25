@@ -13,12 +13,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createMemo, createSignal } from 'solid-js';
-import {
-  appendSettingsSplitToUrl,
-  settingsTabSlugFromUrl,
-  stripSettingsSplitFromUrl,
-} from './settingsSplitUrl';
-import { settingsSlugToTab, settingsTabToSlug } from './settingsTabsConfig';
+import { settingsTabToSlug } from './settingsTabsConfig';
 
 export type SettingsTab =
   | 'Account'
@@ -67,18 +62,6 @@ export const restoreSettingsReturnTo = (url: string) => {
 export const currentSettingsReturnTo = settingsReturnTo;
 
 /**
- * Extract the active settings tab from a docked-split path
- * (`.../settings/<slug>`), or undefined if the path has no settings split.
- * Scans type positions (even indices, base stripped) so a block id that happens
- * to be "settings" isn't mistaken for one — mirrors
- * {@link stripSettingsSplitFromUrl}.
- */
-export const settingsTabFromSplitPath = (
-  pathname: string
-): SettingsTab | undefined =>
-  settingsSlugToTab(settingsTabSlugFromUrl(toBaseRelative(pathname)) ?? '');
-
-/**
  * Whether settings is the only visible split — the "clobbered" mode that
  * looks and behaves like the old fullscreen route (app sidebar hidden,
  * settings owns its own back/move-to-split affordances). Mobile is excluded:
@@ -107,9 +90,11 @@ export const isSoloSettings = () => {
 
 export const useSettingsState = () => {
   const mobileSettings = useMobileSettings();
-  const { openWithSplit, replaceAllSplits } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const navigate = useNavigate();
   const location = useLocation();
+  const currentUrl = () =>
+    `${toBaseRelative(location.pathname)}${location.search}${location.hash}`;
 
   const getSettingsSplit = () => {
     const splitManager = globalSplitManager();
@@ -178,30 +163,18 @@ export const useSettingsState = () => {
     }, 10);
   };
 
-  // Capture the current layout (minus any settings split) as where "Back to
-  // app"/"Move to split" should return to, then clobber every other split so
-  // settings becomes the sole one. Shared by opening settings fresh and by
-  // collapsing a docked-alongside layout back down to solo. Capture query and
-  // hash too so content locations are restored.
+  // The standalone settings URL is a normal history entry. Browser Back
+  // restores the exact docked layout (if there was one).
   const collapseToSoloSettings = (tab: SettingsTab) => {
-    setSettingsReturnTo(
-      stripSettingsSplitFromUrl(
-        `${toBaseRelative(location.pathname)}${location.search}${location.hash}`
-      )
-    );
+    if (!splitOpen()) setSettingsReturnTo(currentUrl());
     setActiveTabId(tab);
-    replaceAllSplits(settingsContent(tab));
+    navigate(`/settings/${settingsTabToSlug(tab)}`);
   };
 
   // Mobile opens an in-place settings sheet; a fresh open lands on its index.
   // Desktop keeps the solo/split layout and defaults to Account.
   const openSettings = (tab?: SettingsTab) => {
     if (isMobile()) {
-      setSettingsReturnTo(
-        stripSettingsSplitFromUrl(
-          `${toBaseRelative(location.pathname)}${location.search}${location.hash}`
-        )
-      );
       mobileSettings.openSettings(tab);
 
       return;
@@ -250,6 +223,7 @@ export const useSettingsState = () => {
     if (activeTabId) setActiveTabId(activeTabId);
 
     const tab = activeTabId ?? 'Account';
+    if (!splitOpen()) setSettingsReturnTo(currentUrl());
 
     openWithSplit(settingsContent(tab), {
       activate: true,
@@ -264,49 +238,42 @@ export const useSettingsState = () => {
 
   const removeSettingsSplit = () => {
     const settingsSplit = getSettingsSplit();
-    if (settingsSplit) {
-      globalSplitManager()?.removeSplit(settingsSplit.id);
-    }
+    if (settingsSplit) globalSplitManager()?.removeSplit(settingsSplit.id);
+    setSettingsReturnTo(undefined);
   };
 
   const closeSettings = () => {
     if (isMobile()) {
       mobileSettings.close();
-
       return;
     }
 
     if (isSoloSettings()) {
-      navigate(settingsReturnTo() ?? DEFAULT_ROUTE, { replace: true });
-
+      const returnTo = settingsReturnTo() ?? DEFAULT_ROUTE;
+      setSettingsReturnTo(undefined);
+      navigate(returnTo, { replace: true });
       return;
     }
 
     removeSettingsSplit();
   };
 
-  // Dock settings alongside the layout we came from: rebuild that layout and
-  // add settings back as a `settings/<tab>` split. Navigating straight to the
-  // composed path (rather than mutating splits directly) lets the URL→layout
-  // sync rebuild everything in one pass.
-  const moveSettingsToSplit = (tab?: SettingsTab) => {
-    if (tab) setActiveTabId(tab);
-    // Strip any settings split already in the target layout before re-adding
-    // one, so repeatedly toggling fullscreen ⇄ split reuses a single settings
-    // split (on the current tab) instead of stacking a new one each cycle.
-    // Preserve the return layout's query and hash when appending settings.
-    const returnTo = stripSettingsSplitFromUrl(
-      settingsReturnTo() ?? DEFAULT_ROUTE
-    );
-
-    navigate(
-      appendSettingsSplitToUrl(returnTo, settingsTabToSlug(activeTabId()))
-    );
+  // Restore the layout from before settings opened, then dock the current tab.
+  // The layout manager owns URL serialization for the new settings pane.
+  const moveSettingsToSplit = async (tab?: SettingsTab) => {
+    const currentTab = tab ?? activeTabId();
+    setActiveTabId(currentTab);
+    await navigate(settingsReturnTo() ?? DEFAULT_ROUTE, { replace: true });
+    globalSplitManager()?.openWithSplit(settingsContent(currentTab), {
+      activate: true,
+      allowDuplicate: false,
+      preferNewSplit: true,
+      mergeHistory: false,
+    });
+    focusSettingsPanel();
   };
 
-  // Collapse a docked-alongside layout back down to a lone settings split.
-  // The return layout is the current path minus the settings split, so "Back
-  // to app" / "Move to split" land correctly.
+  // Fullscreen has its own URL; browser Back restores the docked layout.
   const moveSettingsToSolo = (tab?: SettingsTab) => {
     collapseToSoloSettings(tab ?? activeTabId());
   };
@@ -330,21 +297,27 @@ export const useSettingsState = () => {
     const settingsSplit = getSettingsSplit();
     if (settingsSplit) {
       const manager = globalSplitManager();
-      // Docked but not the active split → bring focus to it instead of closing.
+      // Docked but not active: bring settings forward. Otherwise minimize it.
       if (manager && manager.activeSplitId() !== settingsSplit.id) {
         manager.activateSplit(settingsSplit.id);
         focusSettingsPanel();
-
         return;
       }
-      // Docked and already focused → close it.
-      manager?.removeSplit(settingsSplit.id);
-
+      removeSettingsSplit();
       return;
     }
 
-    // Nothing open → open settings as a solo split on desktop.
     openSettings();
+  };
+
+  const restoreMobileDeepLink = () => {
+    const manager = globalSplitManager();
+    const split = getSettingsSplit();
+    if (!manager || !split || manager.splits().length === 1) {
+      navigate(DEFAULT_ROUTE, { replace: true });
+      return;
+    }
+    manager.removeSplit(split.id);
   };
 
   return {
@@ -352,6 +325,7 @@ export const useSettingsState = () => {
     openSettings,
     openSettingsInSplit,
     selectTab,
+    restoreMobileDeepLink,
     closeSettings,
     moveSettingsToSplit,
     moveSettingsToSolo,

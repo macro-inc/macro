@@ -3,7 +3,9 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
-import { useCall } from '@channel/Call/use-call';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
+import { getMeetingPath } from '@channel/Call/call-link';
+import { joinChannelCall } from '@channel/Call/join-channel-call';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
@@ -26,7 +28,9 @@ import { isMobile } from '@core/mobile/isMobile';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import { useCallLinkQuery } from '@queries/call/meetings';
+import type { CallRecord } from '@service-call/client';
+import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { type Accessor, Show } from 'solid-js';
 
@@ -54,15 +58,26 @@ export function CallRecordingSplitHeader(props: {
   const blockId = useBlockId();
   const shareCtx = useShareDialogContext();
   const callName = () => record().customName ?? record().channelName ?? 'Call';
-  const call = useCall(() => record().channelId);
-
-  async function handleJoin() {
-    try {
-      await call.joinCall();
-    } catch (error) {
-      console.error('Failed to join call from recording', error);
+  const navigate = useNavigate();
+  const flag = useQuickCallsFlag();
+  const quickCallsEnabled = () => !flag().loading && flag().enabled;
+  const meeting = useCallLinkQuery(() =>
+    quickCallsEnabled() && !record().channelId ? record().callId : undefined
+  );
+  const shareToken = () =>
+    quickCallsEnabled() && meeting.isSuccess
+      ? meeting.data?.shareToken
+      : undefined;
+  const canCallAgain = () => Boolean(record().channelId || shareToken());
+  const callAgain = () => {
+    const channelId = record().channelId;
+    if (channelId) {
+      void joinChannelCall(channelId);
+      return;
     }
-  }
+    const token = shareToken();
+    if (token) navigate(getMeetingPath(token));
+  };
 
   const shareTool: BlockTool = {
     label: 'Share',
@@ -143,7 +158,7 @@ export function CallRecordingSplitHeader(props: {
         <div class="-order-1">
           <BlockLiveIndicators />
         </div>
-        <Show when={!isMobile() && !record().isActive}>
+        <Show when={!isMobile() && !record().isActive && canCallAgain()}>
           <div class="order-[900] flex items-center">
             <HeaderIsland>
               <Button
@@ -152,7 +167,7 @@ export function CallRecordingSplitHeader(props: {
                 size="icon-xs"
                 class="bg-surface"
                 tooltip="Call Again"
-                onClick={handleJoin}
+                onClick={callAgain}
               >
                 <PhoneCallIcon class="size-4" />
               </Button>
@@ -170,8 +185,7 @@ export function CallRecordingSplitHeader(props: {
         id={blockId}
         itemType="call"
         name={callName()}
-        // Generic chrome can't reconstruct a CallEntity (it lacks the
-        // channelId), so supply it for the menu's entity-gated items.
+        // Supply the record's current status and optional channel association.
         entity={buildEntityData({
           id: record().callId,
           name: callName(),
