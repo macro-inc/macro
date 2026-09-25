@@ -1,5 +1,6 @@
 import {
   type ChannelPreviewSelection,
+  channelIdForPreviewNavigation,
   getChannelEntityTarget,
 } from '@app/features/next-soup/utils';
 import { makePersistedState } from '@app/lib/persistence';
@@ -146,10 +147,11 @@ export const [ChannelsViewProvider, useChannelsView] =
         channel: ChannelPreviewSelection,
         replace = false
       ) => {
-        const channelId =
-          channel.type === 'channel' ? channel.id : channel.channelId;
         navigate(
-          { route: channelDetailRoute, params: { channelId } },
+          {
+            route: channelDetailRoute,
+            params: { channelId: channelIdForPreviewNavigation(channel) },
+          },
           {
             replace,
             search: { [channelsSearch.namespace]: routeSearch(channel) },

@@ -11,6 +11,7 @@ import {
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import {
   type ChannelPreviewSelection,
+  channelPreviewSelection,
   getChannelEntityTarget,
   navigateChannelEntityToTarget,
 } from '@app/features/next-soup/utils';
@@ -158,16 +159,18 @@ export function ChannelsRail(props: ChannelsRailProps) {
     toast.failure('Unable to open conversation. Please try again.');
   };
 
-  const selectChannel = async (channel: WithNotification<ChannelEntity>) => {
+  const selectChannel = async (
+    channel: WithNotification<ChannelEntity>,
+    channelId: string
+  ) => {
     try {
       const entity = withEntityNotifications(channel, notificationSource);
-      const target = getChannelEntityTarget(entity, {
-        scopeChannelThreads: false,
+      const selection = channelPreviewSelection(channelId, {
+        target: getChannelEntityTarget(entity, {
+          scopeChannelThreads: false,
+        }),
+        notifications: entity.notifications,
       });
-      const selection = {
-        ...entity,
-        target: target?.kind === 'message' ? target : undefined,
-      };
       const previous = selectedChannel();
       if (!setSelectedChannel(selection)) return;
       // Repeated clicks must navigate even when the route stays the same.
@@ -185,14 +188,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const selectHydratedChannel = async (
     pending: Promise<WithNotification<ChannelEntity>>,
-    request: number
+    request: number,
+    channelId: string
   ) => {
     try {
       const channel = await pending;
       if (request !== activation) return;
       // Only fetched selections need to join the browser router's transition.
       await startTransition(() => {
-        if (request === activation) void selectChannel(channel);
+        if (request === activation) void selectChannel(channel, channelId);
       });
     } catch (error) {
       if (request === activation) reportActivationError(error);
@@ -201,14 +205,21 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const activateChannel = (channel: ChannelEntity) => {
     const request = ++activation;
+    // Capture before hydrate/await — store proxies from the list can lose
+    // fields if the query refreshes while notifications are fetched.
+    const channelId = channel.id;
+    if (!channelId) {
+      reportActivationError(new Error('Missing channel id'));
+      return;
+    }
     const selection = hydrateChannelNotificationSelection(
       channel,
       notificationSource.withLocalOverrides
     );
     if (selection instanceof Promise) {
-      void selectHydratedChannel(selection, request);
+      void selectHydratedChannel(selection, request, channelId);
     } else {
-      void selectChannel(selection);
+      void selectChannel(selection, channelId);
     }
   };
 

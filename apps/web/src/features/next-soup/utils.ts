@@ -472,6 +472,55 @@ export type ChannelPreviewSelection = WithNotification<
     >
 >;
 
+/**
+ * Build the route selection a channels-rail click navigates with.
+ *
+ * Takes a plain `id` (capture it before any `await` — store proxies held across
+ * hydration can lose fields) and a resolved `ChannelClickTarget`. Stamps only
+ * `ChannelEntityTarget` fields onto `target` — never `kind`, which belongs on
+ * the click intent, not the route selection.
+ */
+export function channelPreviewSelection(
+  channelId: string,
+  options: {
+    target?: ChannelClickTarget;
+    notifications?: WithNotification<ChannelEntity>['notifications'];
+  } = {}
+): ChannelPreviewSelection {
+  if (!channelId) {
+    throw new Error('Missing channel id for channel preview selection');
+  }
+  const target =
+    options.target?.kind === 'message'
+      ? {
+          messageId: options.target.messageId,
+          ...(options.target.threadId != null
+            ? { threadId: options.target.threadId }
+            : {}),
+        }
+      : undefined;
+  return {
+    type: 'channel',
+    id: channelId,
+    ...(target ? { target } : {}),
+    ...(options.notifications
+      ? { notifications: options.notifications }
+      : {}),
+  };
+}
+
+/** Resolve the path param for a channel preview route, or throw. */
+export function channelIdForPreviewNavigation(
+  channel: ChannelPreviewSelection
+): string {
+  const channelId =
+    channel.type === 'channel' ? channel.id : channel.channelId;
+  if (typeof channelId !== 'string' || channelId.length === 0) {
+    throw new Error('Missing channel id for channel preview navigation');
+  }
+  return channelId;
+}
+
 export function getChannelEntityTarget(
   entity: EntityData | ChannelPreviewSelection,
   options: { scopeChannelThreads?: boolean } = {}
