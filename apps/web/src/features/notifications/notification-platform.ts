@@ -1,3 +1,4 @@
+import { isEntityDiscussionEvent } from './entity-discussion';
 import { getFaviconUrl } from '@app/util/favicon';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
@@ -55,7 +56,7 @@ async function resolveActorName(
   ) {
     return meta.content.botName;
   }
-  if (meta.tag === 'initiative_discussion' && meta.content.senderDisplayName) {
+  if (isEntityDiscussionEvent(meta) && meta.content.senderDisplayName) {
     return meta.content.senderDisplayName;
   }
   if (meta.tag === 'agent_session_mentioned') {

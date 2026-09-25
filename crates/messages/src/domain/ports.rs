@@ -393,3 +393,32 @@ impl MessageGroupRecipients for NoMessageGroups {
         ))
     }
 }
+
+/// Identity of a CRM company or contact that hosts a discussion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmParentFacts {
+    /// The team that owns the record.
+    pub team_id: Uuid,
+    /// The company itself, or the contact's company.
+    pub company_id: Uuid,
+    /// Display name: a company's custom or directory name (else its primary
+    /// domain), a contact's name (else its email).
+    pub name: String,
+}
+
+/// Read-only CRM parent identity, implemented by the CRM domain. Returned facts
+/// grant nothing: callers verify capabilities before exposing them.
+pub trait CrmParentReader: Send + Sync + 'static {
+    /// The facts for a live CRM company or contact parent, or `None` once it has
+    /// been deleted or when the parent is not a CRM record.
+    fn read_crm_parent(
+        &self,
+        parent: &MessageParent,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<Option<CrmParentFacts>, rootcause::Report>>
+                + Send
+                + '_,
+        >,
+    >;
+}

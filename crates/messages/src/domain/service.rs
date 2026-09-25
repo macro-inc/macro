@@ -709,6 +709,8 @@ fn parent_from_receipt<P: RequiredPermission>(
         EntityType::Channel => "channel",
         EntityType::Document => "document",
         EntityType::Initiative => "initiative",
+        EntityType::CrmCompany => "crm_company",
+        EntityType::CrmContact => "crm_contact",
         _ => return Err(MessageError::Forbidden),
     };
     MessageParent::parse(kind, &entity.entity_id)

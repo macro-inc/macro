@@ -241,7 +241,8 @@ pub fn shared_message_service<E: messages::domain::ports::MessageEventPublisher>
         messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone())
             .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
                 initiative::outbound::PgInitiativeRepo::new(pool.clone()),
-            )),
+            ))
+            .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
         effects,
     )
     .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
@@ -362,7 +363,14 @@ fn message_service_with_side_effects(
                 realtime.clone(),
             ),
             messages::domain::delivery::DiscussionDelivery::new(
-                messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()),
+                messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
+                    .with_initiatives(
+                        initiative::domain::lookup::InitiativeLookup::new(
+                            initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+                        ),
+                        build_properties_service(pool.clone(), Arc::new(access.clone())),
+                    )
+                    .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
                 messages::outbound::entity_access_audience::EntityAccessMessageAudience(access),
                 realtime,
                 messages::outbound::notification_sender::MessageNotificationSender(

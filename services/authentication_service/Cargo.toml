@@ -31,6 +31,7 @@ rate_limit = []
 return_passwordless_code = []
 
 [dependencies]
+crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
 ai_billing = { path = "../../crates/ai_billing" }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 codex_connection = { path = "../../crates/codex_connection" }
