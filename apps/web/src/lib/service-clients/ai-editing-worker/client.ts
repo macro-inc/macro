@@ -1,6 +1,7 @@
 import type { DocumentOp } from '@ai-ops/editor';
 import { resumeDocumentSpan } from '@block-md/observability';
 import { toast } from '@core/component/Toast/Toast';
+import { MACRO_AGENT_NAME } from '@core/constant/macroAgent';
 import { Telemetry } from '@macro-inc/observability';
 import { getDocumentPermissionToken } from '@service-storage/client';
 import { createSignal } from 'solid-js';
@@ -133,6 +134,9 @@ export async function requestAiEdit(args: {
         prompt: args.prompt,
         models: MODELS,
         mode: args.mode,
+        // Inline edits are Macro's own; its name labels the cursors readers
+        // watch, the same way an agent's edits carry the agent's name.
+        editor: { name: MACRO_AGENT_NAME },
         interpret: false,
         propagate: args.onOps === undefined ? undefined : false,
       }),
