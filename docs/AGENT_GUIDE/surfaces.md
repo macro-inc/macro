@@ -693,10 +693,20 @@ returning from an opened file.
 
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
+Event composer dropdown triggers and date/time inputs use the theme control
+surface, so they blend with the dialog instead of using the darker page fill.
+
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
+
+Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
+the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the
+flag loads or is off, those controls stay hidden and meeting routes do not mount
+call setup. Existing channel calls and the upcoming-events list remain available.
+For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
+
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
@@ -707,18 +717,68 @@ footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
 
-Week view with `New event`, `Choose calendar view` menu, prev/next week, `Search events`,
-`Calendar settings`, and a mini month picker in the side panel. Events require connecting a
-Google account (`Connect calendar`). The `Calendar settings` (gear) menu has an `Accounts`
+The calendar header has matching `New event` and `New Call` buttons. Both stay
+available in narrow splits and on phones, where compact icons have accessible
+labels. `New Call` opens call setup; it is no longer in the right side panel.
+Week view also has a `Choose calendar view` menu, prev/next week,
+`Search events`, `Calendar settings`, and a mini month picker in the right side panel.
+The mini calendar's month label opens a month picker; arrows also change months.
+The right side panel has a collapsible `Upcoming events` box.
+Active Quick Calls you created, participated in, or were invited to appear above your
+next five events (including ones in progress), whether or not they have call links.
+The active area is hidden when no calls are active. Event rows show the name and
+time; click one to open its details. An event with a call link shows `Join` while
+it is in progress. Upcoming events follow today's date even when you browse another week;
+hidden calendars, cancelled events, and invitations you declined are omitted.
+`New Call` opens `/app/meet/new` without creating a meeting. The `Invite Teammates`
+button above `Start call` opens the task assignee picker with name search, profile
+pictures and multiple selections, without bots or external contacts. The closed
+button shows up to three stacked selected profile pictures and the total teammate
+count; hover shows selected names, and reopening keeps the same selections. Selection
+stays local until `Start call` creates the Quick Call, connects the creator, and
+rings selected teammates. Microphone and camera are not shared before starting.
+If invitations fail after connecting, `Retry invites` sends them again without
+creating another call. Shared-link join screens do not show the teammate picker.
+Incoming invitations appear in a bottom-left notification with the call name,
+caller initials/name, and `Decline` and `Join` buttons. This stays visible across
+app pages, including call setup, hidden sidebars, narrow splits, and mobile (above
+the bottom dock). The card uses the app's menu surface, with semantic success
+color for `Join` and danger color for `Decline`. A top bar and seconds counter
+show the time remaining before the 30-second dismissal deadline.
+`Join` opens call setup; `Decline` stops ringing across the
+recipient's tabs. Unanswered invitations disappear and stop ringing after 30 seconds.
+Declining or timing out does not remove an invited live call from Channels `Live`.
+The list updates as calls end and new calls start. Calls from other conferencing
+providers open their own join links. A failed upcoming-list request has a `Retry`
+action and does not prevent creating a call.
+Events require connecting a Google account (`Connect calendar`). The
+`Calendar settings` (gear) menu has an `Accounts`
 section listing each connected account with a per-account `Enable` (grant calendar) or
 `Turn off` action, plus `Connect another account` to connect a new Google account
 (email + calendar).
 
+`New event` opens the compact composer with All day in the date/time fields.
+The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`
+for new events, defaulting to `Macro call` when quick calls are enabled. Keeping
+that selection creates and attaches a Macro call after the event saves. Selecting
+`Google Meet` or `No meeting link` skips the Macro call. Out-of-office entries do
+not create calls. There is no separate call toggle or Scheduled Call menu option.
+All-day events get an untimed call link, so setup does not display a misleading midnight time.
+A failed link attachment keeps the composer open with a retry message; Save reuses
+the saved event and call instead of creating duplicates. The invitation includes
+the call link in its description and, when no location was entered, its location.
+Event details show a plain icon row with a standard gray `Join Macro call` button
+and `Copy call link`, without an enclosing border or the full URL.
+Editing or rescheduling an owned event retains and updates its selected Macro call.
+Selecting `Macro call` on an owned editable event without one adds a call on save;
+choosing another option removes its generated Macro link from the invitation.
+Removing the link or deleting the calendar event does not revoke the reusable call.
+
 The side panel's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
-name, per-calendar checkbox). Subscribed system calendars (Google holidays, birthdays)
-carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
+name, per-calendar checkbox). Accounts start collapsed. Subscribed system calendars
+(Google holidays, birthdays) carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
 warning icon whose tooltip shows the provider error; the account keeps syncing its other
 calendars and the badge clears on its own once that calendar syncs again.
 
@@ -783,7 +843,13 @@ refetches the PR without leaving the current detail.
 
 ## Calls — `/app/component/calls`
 
-Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, transcriptions
+Tabs `All` / `Missed` / `Unattended`; `New call` offers `Call a channel or contact`
+and, with `enable-quick-calls` enabled, `Manage call links`. Create Quick Calls
+with `New Call` beside Calendar's
+`New event`, or with `Create` → `Call` (`C C`). Scheduled calls are created through
+Calendar and can be shared with people who do not have a Macro account.
+The channel/contact option opens the recipient picker.
+Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
 Opening a recording uses `/app/drive/call/<callId>` inside the Drive shell,
@@ -805,18 +871,84 @@ If a recording fails to play, reload the page to obtain a fresh recording link,
 or use **Open or download recording**. The playback warning does not assume
 that the failure is caused by an unsupported media format.
 
+### Call links and guests — `/app/meet/join/:shareToken`
+
+These routes require `enable-quick-calls` for both signed-in users and guests.
+In Calendar, create an event with `Macro call` selected (the default).
+The composer waits for the quick-call flag to load before choosing its default.
+Saving creates the call and includes its link in the invitation;
+the room starts on the first join. Use Calendar to edit the event or invite guests.
+Teammate rings require a live call; selecting teammates during new-call setup
+sends invitations after the call connects.
+
+`New call` → `Manage call links` lists your standalone links with `Join call`, `Copy
+link`, and `Revoke link`. Revocation prevents new joins; it does not delete calendar
+events or disconnect current participants. Each active channel call also shows its
+URL and `Copy link`. A channel call's link stops working when that call ends.
+
+Guests can use standalone meeting links without a Macro account. Links to channel
+calls only admit signed-in Macro users; visitors without an account see a sign-in
+prompt instead of the guest name form. Inside a channel call, the shareable link is
+created on request via `Get shareable call link`.
+
+New calls use `/app/meet/new`; shared links open setup at
+`/app/meet/join/:shareToken`. A successful connection replaces the URL with
+`/app/meet/:shareToken` without restarting the call. Leaving returns to Macro.
+An unexpected disconnection returns to setup so the user can retry.
+Opening or reloading an in-call URL returns to setup and requires a deliberate
+join; existing shared links continue to work.
+
+Guests enter `Your name`, choose their microphone and camera preferences, and
+press `Join call`. Setup requests device
+permissions and previews video locally; sharing starts only after joining.
+Permission denial leaves the affected device off and still allows joining.
+The creator presses `Start call`; invitees press `Join call`. Loading the page or
+completing authentication never joins automatically, including old `?join=true`
+URLs. `Back to Macro` exits setup.
+Channel-linked calls require sign-in. While authentication is loading or the
+viewer is signed out, setup must not request microphone or camera access; the
+guest name form is available only for standalone meetings.
+
+The call page shows a recording/transcription notice. It uses the normal call controls
+for audio, video, device selection, screen sharing, and effects. `Leave call` returns
+to Macro. `Copy Meeting Url` is available during the call.
+Rejoining from a new page waits for the prior page's pending leave cleanup before
+requesting another connection, so a slow leave cannot disconnect the replacement.
+It keeps its label and shows a checkmark for a few seconds after copying, then
+restores the copy icon.
+
+Guest access is limited to the call room; joining does not expose the channel or grant
+anonymous access to saved transcripts and recordings. Guest names are preserved in
+the host's call history. Signed-in attendees receive access to that session's saved
+call without gaining access to the channel.
+
+The join screen, in-call participant tiles, and incoming direct-call badges use
+profile pictures; initials are the fallback when no photo is available.
+The join screen uses small switches for Microphone and Camera. Join and
+`Copy Meeting Url` use gray buttons; the copy action includes a copy icon.
+The in-call header uses the same copy button and shows the current local time
+before the call name. Owners can click the name to rename it, then Save or press
+Enter; Cancel or Escape discards the edit. Guests and other participants see a
+read-only name.
+
 ### Sharing a call
 
-A call's **Share** dialog has a `Team access` control (None or View) for the same canonical
-team share. The side panel has a `Sharing` section with one `Share with team` checkbox, and the
+A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
+team share. Its side panel has a `Sharing` section with one `Share with team` checkbox, and the
 in-call controls carry the same checkbox while a call is live. It is canonical team sharing (the
 same `Team access` model documents and AI chats use), fixed at **view**. While the call is **live**
-the checkbox is a pending toggle (on by default) that any participant with edit access can flip;
+the checkbox is a pending toggle (on by default for channel calls)
+that any participant with edit access can flip;
 other participants see it update live. When the call ends it is applied: with the toggle on,
 everyone on the creator's team can open the recorded call, read the transcript and AI summary,
 and find it under Calls and in search; off means nothing is shared. Afterwards only the call's
 **creator** can change it — everyone else sees the checkbox read-only with a note saying so.
 Team sharing is independent of channel access and of link sharing.
+
+Standalone instant and scheduled calls are excluded from team memory. They have no
+`Share with team` or `Team access` controls during the call or on the saved recording.
+Signed-in participants keep direct access to their recordings, transcripts, and summaries;
+joining a standalone call never makes its content available to the wider team.
 
 ## Customers (CRM) — `/app/component/companies`
 
@@ -1017,15 +1149,21 @@ outside tap, or a downward swipe dismisses the sheet. Opening Settings again
 starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms
-scroll, including with the keyboard open. Desktop settings retain their panel
-and split navigation.
+scroll, including with the keyboard open. On desktop, `/app/settings/<tab>`
+opens settings fullscreen, while `/app/inbox/~/settings/<tab>` docks it beside
+Inbox. **Open fullscreen** pushes a standalone settings URL; browser Back
+restores the preceding split layout. **Move to split** restores the app layout
+and docks the selected tab, while closing a docked settings pane minimizes it.
+A direct fullscreen link returns to Inbox when there is no prior app layout.
 
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing` (current plan card with
-`Manage`; on paid plans an **AI usage** card with the period meter, credit
+`Manage`; only in dev (`dev.macro.com/app` or a local frontend using the dev
+backend), paid plans show an **AI usage** card with the period meter, credit
 balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
-Checkout, and a `Usage billing` toggle with per-period limit pills; an
+Checkout, and a `Usage billing` toggle with per-period limit pills; these
+controls and usage-billing promotional copy are hidden outside dev; an
 `Upgrade`/`Upgrade to Max` card, or a `Switch to Premium` link on Max; on a team
 the plan change moves only the viewer's own seat),
 `Appearance`, `Agents`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);

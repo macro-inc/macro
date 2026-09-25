@@ -16,6 +16,7 @@ use super::ports::{
     PaymentGateway, PendingCharge, UsageReader,
 };
 use chrono::{DateTime, Utc};
+use macro_env::Environment;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use teams::domain::open_seat_release::OpenSeatRelease;
@@ -27,16 +28,18 @@ pub struct BillingServiceImpl<E, U, R, P> {
     usage: U,
     repo: R,
     payments: P,
+    environment: Environment,
 }
 
 impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
-    /// Construct the service.
-    pub fn new(entitlements: E, usage: U, repo: R, payments: P) -> Self {
+    /// Construct the service. Allowance enforcement and settlement run only in dev.
+    pub fn new(entitlements: E, usage: U, repo: R, payments: P, environment: Environment) -> Self {
         Self {
             entitlements,
             usage,
             repo,
             payments,
+            environment,
         }
     }
 }
@@ -442,6 +445,9 @@ where
 {
     #[tracing::instrument(skip(self), err)]
     async fn check_allowance(&self, user: &MacroUserIdStr<'_>) -> Result<AllowanceDecision> {
+        if !matches!(self.environment, Environment::Develop) {
+            return Ok(AllowanceDecision::Allow);
+        }
         let position = self.position(user, Utc::now()).await?;
         if position.entitlement.unlimited || position.entitlement.tier == PlanTier::Free {
             return Ok(AllowanceDecision::Allow);
@@ -453,11 +459,20 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn snapshot(&self, user: &MacroUserIdStr<'_>) -> Result<UsageSnapshot> {
         let position = self.position(user, Utc::now()).await?;
-        self.snapshot_at(user, &position).await
+        let mut snapshot = self.snapshot_at(user, &position).await?;
+        // Keep the summary consistent with the allowance gate outside dev.
+        if !matches!(self.environment, Environment::Develop) {
+            snapshot.blocked_reason = None;
+        }
+        Ok(snapshot)
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn settle(&self, user: &MacroUserIdStr<'_>) -> Result<()> {
+        // Guard every caller: summary reads, settings, purchases, and internal settlement.
+        if !matches!(self.environment, Environment::Develop) {
+            return Ok(());
+        }
         let now = Utc::now();
         let position = self.position(user, now).await?;
         if position.entitlement.unlimited || !position.entitlement.tier.is_paid() {

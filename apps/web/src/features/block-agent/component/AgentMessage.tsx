@@ -28,9 +28,9 @@ import {
   FailureNoticeCard,
   isToolActive,
   Thought,
-  ToolGroup,
   WorkingLine,
 } from '../ui';
+import { LiveToolGroup } from '../views/LiveToolGroup';
 import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
@@ -123,29 +123,39 @@ function ToolGroupPart(props: {
   const parts = () => props.message.parts.slice(props.start, props.end);
   const calls = () =>
     parts().filter((part): part is ToolUsePart => part.kind === 'tool_use');
-  const live = () => props.inFlight && props.end === props.message.parts.length;
   // A call the log left running in a finished turn is over (see
   // `settledToolStatus`), so a settled turn's run is never "Calling".
-  const active = () =>
-    props.inFlight && calls().some((call) => isToolActive(call.status));
+  const activeIndex = () =>
+    props.inFlight
+      ? parts().findIndex(
+          (part) => part.kind === 'tool_use' && isToolActive(part.status)
+        )
+      : -1;
+  const active = () => activeIndex() !== -1;
   const renderParts = () => (
     <Index each={parts()}>
       {(part, offset) => (
-        <AgentMessagePart
-          part={part()}
-          message={props.message}
-          index={props.start + offset}
-          inFlight={props.inFlight}
-        />
+        <div class="min-h-8 shrink-0">
+          <AgentMessagePart
+            part={part()}
+            message={props.message}
+            index={props.start + offset}
+            inFlight={props.inFlight}
+          />
+        </div>
       )}
     </Index>
   );
 
   return (
     <Show when={calls().length > 0} fallback={renderParts()}>
-      <ToolGroup count={calls().length} active={active()} live={live()}>
+      <LiveToolGroup
+        count={calls().length}
+        active={active()}
+        activeIndex={active() ? activeIndex() : undefined}
+      >
         {renderParts()}
-      </ToolGroup>
+      </LiveToolGroup>
     </Show>
   );
 }

@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CallTokenResponseChannelId } from './callTokenResponseChannelId';
+import type { CallTokenResponseShareToken } from './callTokenResponseShareToken';
 
 /**
  * Response returned when creating or joining a call.
@@ -12,11 +14,15 @@ export interface CallTokenResponse {
   /** The call identifier. */
   callId: string;
   /** The channel this call is associated with. */
-  channelId: string;
+  channelId?: CallTokenResponseChannelId;
+  /** RTC participant identity. */
+  participantId: string;
   /** The RTC room name. */
   roomName: string;
   /** The RTC server URL for the frontend SDK to connect to. */
   serverUrl: string;
+  /** Meeting link capability, when joined using a link. */
+  shareToken?: CallTokenResponseShareToken;
   /** The RTC token for connecting to the room. */
   token: string;
 }

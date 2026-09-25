@@ -130,7 +130,7 @@ function CommandMenuShellRoot(props: SurfaceProps) {
 
 function CommandMenuHeader(props: ParentProps<{ class?: string }>) {
   return (
-    <Panel.Header class={cn('gap-2 px-4 py-2', props.class)}>
+    <Panel.Header class={cn('gap-3 px-5 py-3', props.class)}>
       {props.children}
     </Panel.Header>
   );
@@ -153,7 +153,7 @@ function CommandMenuBody(
 function CommandMenuFooter(props: ParentProps<{ class?: string }>) {
   return (
     <Panel.Footer
-      class={cn('gap-4 px-4 text-xs text-ink-extra-muted/80', props.class)}
+      class={cn('gap-4 px-5 py-2 text-xs text-ink-extra-muted/80', props.class)}
     >
       {props.children}
     </Panel.Footer>
@@ -221,7 +221,7 @@ export function CommandMenuList<T>(props: {
       ref={listRef}
       role="listbox"
       class={cn(
-        'max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2',
+        'max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2.5',
         props.class
       )}
       onScroll={() => {
@@ -258,7 +258,7 @@ export function CommandMenuSearchInput(
   return (
     <input
       class={cn(
-        'min-w-0 flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder',
+        'min-w-0 flex-1 py-0.5 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder',
         local.class
       )}
       {...rest}

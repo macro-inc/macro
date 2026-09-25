@@ -10,7 +10,15 @@ import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
 import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
+import {
+  useRegisterPriorityCollapseItem,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
+import type { PriorityCollapser } from '@components/app/split-layout/utils/createPriorityCollapser';
 import { TabsInset } from '@core/component/TabsInset';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelName, useChannelType } from '@core/context/channels';
@@ -35,6 +43,7 @@ import {
 } from './ChannelSurface';
 import { ChannelTabProvider, useChannelTab } from './ChannelTabContext';
 import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
+import { toIconTabItems } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
 import {
   canUseInlineCallTab,
@@ -92,13 +101,29 @@ export function ChannelDetailTitle(props: ChannelDetailHeaderProps) {
   );
 }
 
-export function ChannelDetailTabs(props: { channelId: string }) {
+/**
+ * The channel's tab strip. Given the top bar's `collapser`, the strip
+ * registers as its first item to give up space, dropping text labels for
+ * icons when the bar overflows and taking them back as room returns.
+ */
+export function ChannelDetailTabs(props: {
+  channelId: string;
+  collapser?: PriorityCollapser;
+}) {
   const { activeTab, setActiveTab } = useChannelTab();
   const tabs = useChannelTabItems(props.channelId);
+  // Read once by design: a registration lives for the component's lifetime.
+  const isCollapsed = props.collapser
+    ? useRegisterPriorityCollapseItem(props.collapser, {
+        id: 'channel-tabs',
+        priority: 1,
+      })
+    : () => false;
 
   return (
     <TabsInset
-      list={tabs()}
+      class="shrink-0"
+      list={isCollapsed() ? toIconTabItems(tabs()) : tabs()}
       value={activeTab()}
       onChange={(value) => setActiveTab(value as ChannelTabId)}
     />
@@ -137,12 +162,46 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   );
 }
 
-export function ChannelDetailTopBar(props: ChannelDetailHeaderProps) {
+/**
+ * Channel top bar: leading content and tabs share one priority-collapse row
+ * so a narrow pane shrinks the tabs to icons before the title truncates.
+ * `leading` replaces the default title (a host's breadcrumbs, say).
+ */
+export function ChannelDetailTopBar(
+  props: ChannelDetailHeaderProps & { leading?: JSX.Element }
+) {
+  const collapse = createPriorityCollapseController();
+
   return (
-    <ViewShell.TopBar class="gap-3">
-      <ChannelDetailTitle {...props} />
-      <ChannelDetailTabs channelId={props.channelId} />
-      <ChannelDetailActions {...props} />
+    // py-0 gives the clipping sensor the bar's full height; the tab track is
+    // taller than the padded content box and would be cut off.
+    <ViewShell.TopBar ref={collapse.setRow} class="gap-3 py-0">
+      <PriorityCollapseOverflowSensor
+        controller={collapse}
+        truncateAsLastResort
+        class="relative h-full min-w-0 shrink overflow-hidden"
+        contentClass="flex h-full items-center gap-3"
+      >
+        <Show
+          when={props.leading}
+          fallback={
+            <ChannelDetailTitle
+              channelId={props.channelId}
+              fallbackName={props.fallbackName}
+            />
+          }
+        >
+          {props.leading}
+        </Show>
+        <ChannelDetailTabs
+          channelId={props.channelId}
+          collapser={collapse.collapser}
+        />
+      </PriorityCollapseOverflowSensor>
+      <ChannelDetailActions
+        channelId={props.channelId}
+        fallbackName={props.fallbackName}
+      />
     </ViewShell.TopBar>
   );
 }

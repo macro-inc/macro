@@ -3,7 +3,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import type { CallRecord } from '@service-call/client';
 import { format } from 'date-fns';
 import {
   createEffect,
@@ -228,6 +228,7 @@ export function CallRecordingBody(props: {
                     <CallTranscript
                       transcript={record().transcript}
                       channelId={record().channelId}
+                      record={record()}
                       timelineStartMs={timelineStartMs()}
                       activeSequenceNum={activeSequenceNum()}
                       videoSeekGeneration={videoSeekGeneration()}

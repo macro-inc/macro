@@ -3,7 +3,7 @@ import {
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import type { CallRecord } from '@service-call/client';
 import { createMemo, Show } from 'solid-js';
 
 export function CallRecordingSummarySection(props: { record: CallRecord }) {

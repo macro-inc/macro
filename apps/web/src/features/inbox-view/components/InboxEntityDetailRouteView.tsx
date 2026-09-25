@@ -3,10 +3,7 @@ import type { EntityDetailTarget } from '@app/components/entity-detail/EntityDet
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { useParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
-import {
-  ChannelDetailActions,
-  ChannelDetailTabs,
-} from '@channel/Channel/ChannelDetail';
+import { ChannelDetailTopBar } from '@channel/Channel/ChannelDetail';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import type { PreviewBlockTarget } from '@components/app/previewTarget';
@@ -124,11 +121,12 @@ function InboxEntityDetailBody(props: {
                 </ViewBreadcrumbs.Item>
                 <Show when={channel()}>
                   {(current) => (
-                    <ViewShell.TopBar class="gap-3">
-                      <ViewBreadcrumbs.Outlet aria-label="Channel location" />
-                      <ChannelDetailTabs channelId={current().channelId} />
-                      <ChannelDetailActions channelId={current().channelId} />
-                    </ViewShell.TopBar>
+                    <ChannelDetailTopBar
+                      channelId={current().channelId}
+                      leading={
+                        <ViewBreadcrumbs.Outlet aria-label="Channel location" />
+                      }
+                    />
                   )}
                 </Show>
               </>

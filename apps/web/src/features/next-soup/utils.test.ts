@@ -126,6 +126,8 @@ import type { NotificationSource, UnifiedNotification } from '@notifications';
 import {
   type CalendarPreviewSelection,
   type ChannelPreviewSelection,
+  channelIdForPreviewNavigation,
+  channelPreviewSelection,
   executeMarkEntitiesDone,
   executeMarkEntitiesUndone,
   getChannelEntityTarget,
@@ -330,6 +332,74 @@ describe('channel unread clicks', () => {
     ...sendNotification('send', 'older'),
     created_at: '2026-09-23T12:00:00Z',
   };
+
+  it('builds a route selection with a plain id and ChannelEntityTarget', () => {
+    expect(
+      channelPreviewSelection('channel-1', {
+        target: {
+          kind: 'message',
+          messageId: 'newer',
+          threadId: 'thread',
+        },
+      })
+    ).toEqual({
+      type: 'channel',
+      id: 'channel-1',
+      target: { messageId: 'newer', threadId: 'thread' },
+    });
+    expect(
+      channelPreviewSelection('channel-1', { target: { kind: 'latest' } })
+    ).toEqual({ type: 'channel', id: 'channel-1' });
+    expect(() => channelPreviewSelection('')).toThrow(/Missing channel id/);
+  });
+
+  it('resolves a path channelId and rejects empty selections', () => {
+    expect(
+      channelIdForPreviewNavigation({ type: 'channel', id: 'channel-1' })
+    ).toBe('channel-1');
+    expect(
+      channelIdForPreviewNavigation({
+        type: 'channel_message',
+        id: 'msg',
+        channelId: 'channel-1',
+        messageId: 'msg',
+      })
+    ).toBe('channel-1');
+    expect(() =>
+      channelIdForPreviewNavigation({
+        type: 'channel',
+        id: undefined as unknown as string,
+      })
+    ).toThrow(/Missing channel id for channel preview navigation/);
+    expect(() =>
+      channelIdForPreviewNavigation({
+        type: 'channel_thread',
+        id: 'root',
+        channelId: undefined as unknown as string,
+        messageId: 'root',
+        threadId: 'root',
+      })
+    ).toThrow(/Missing channel id for channel preview navigation/);
+  });
+
+  it('keeps a captured id when the entity proxy later loses its id', () => {
+    const entity = {
+      type: 'channel' as const,
+      id: undefined as unknown as string,
+      notifications: () => [newer],
+    };
+    const selection = channelPreviewSelection('channel-1', {
+      target: getChannelEntityTarget(entity, { scopeChannelThreads: false }),
+      notifications: entity.notifications,
+    });
+    expect(selection).toMatchObject({
+      type: 'channel',
+      id: 'channel-1',
+      target: { messageId: 'newer', threadId: 'thread' },
+    });
+    expect(selection).not.toHaveProperty('kind');
+    expect(selection.target).not.toHaveProperty('kind');
+  });
 
   it('reads current unread state on every click without revisiting read targets', () => {
     let notifications = [older, newer, { ...newer, id: 'mention' }];
