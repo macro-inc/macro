@@ -23,6 +23,7 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
     async fn compose(
         &self,
         prompt_markdown: &str,
+        instructions: Option<&str>,
         parent: Option<&messages::domain::models::MessageParent>,
         context: Option<&ConversationContext>,
     ) -> Result<String> {
@@ -63,6 +64,7 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
         self.lexical
             .compose_agent_context(
                 prompt_markdown,
+                instructions,
                 parent,
                 anchor.as_ref(),
                 messages.as_deref(),
