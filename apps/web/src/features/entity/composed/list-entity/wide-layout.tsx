@@ -271,7 +271,10 @@ export function WideLayout(props: LayoutProps) {
                 )}
               </Show>
               <span class="flex w-10 shrink-0 justify-end">
-                <CallParticipants participantIds={entity().participantIds} />
+                <CallParticipants
+                  participantIds={entity().participantIds}
+                  guests={entity().guests}
+                />
               </span>
             </>
           )}

@@ -110,7 +110,7 @@ impl FakeEntityAccessService {
     fn new(call_exists: bool, permission: EntityPermission) -> Self {
         Self {
             call_info: call_exists.then(|| CallChannelInfo {
-                channel_id: Uuid::parse_str(CHANNEL_ID).expect("channel id should be valid"),
+                channel_id: Some(Uuid::parse_str(CHANNEL_ID).expect("channel id should be valid")),
                 share_permission_id: SHARE_PERMISSION_ID.to_string(),
             }),
             call_lookup_fails: false,
@@ -462,7 +462,7 @@ async fn channel_view_handler(
 fn receipt_json<T: RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
     share_permission_id: &str,
-    channel_id: Uuid,
+    channel_id: impl Into<Option<Uuid>>,
 ) -> Value {
     let (auth, user_id) = match receipt.auth() {
         EntityAccessAuth::Authenticated(user_id) => ("authenticated", Some(user_id.as_ref())),
@@ -484,7 +484,7 @@ fn receipt_json<T: RequiredPermission>(
         "user_id": user_id,
         "role": permission,
         "share_permission_id": share_permission_id,
-        "channel_id": channel_id,
+        "channel_id": channel_id.into(),
     })
 }
 

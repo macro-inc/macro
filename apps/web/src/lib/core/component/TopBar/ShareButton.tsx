@@ -1032,10 +1032,7 @@ export function ShareModal(props: ShareModalProps) {
 
   const updateTeamSharePermissions = createCallback(
     async (sharePermission: TeamSharePayload) => {
-      if (
-        userPermissions() !== Permissions.OWNER ||
-        !isTeamShareSupportedForItem(props.itemType)
-      ) {
+      if (userPermissions() !== Permissions.OWNER || !canShareWithTeam()) {
         return;
       }
       const itemNoun = getShareItemNoun(props.itemType);
@@ -1100,8 +1097,13 @@ export function ShareModal(props: ShareModalProps) {
     return updateTeamSharePermissions(buildTeamSharePayload(scope));
   });
 
-  const teamShareControls = (): TeamShareControls | undefined =>
+  const canShareWithTeam = () =>
     isTeamShareSupportedForItem(props.itemType) &&
+    (props.itemType !== 'call' ||
+      (callRecordQuery.isSuccess && callRecordQuery.data.channelId != null));
+
+  const teamShareControls = (): TeamShareControls | undefined =>
+    canShareWithTeam() &&
     userPermissions() === Permissions.OWNER &&
     currentTeamQuery.isSuccess &&
     currentTeamQuery.data

@@ -647,7 +647,7 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
 #[derive(Debug, Clone)]
 pub struct CallChannelInfo {
     /// The channel the call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// The share permission ID for this call.
     pub share_permission_id: String,
 }

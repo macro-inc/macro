@@ -471,6 +471,7 @@ async fn main() -> anyhow::Result<()> {
         ai_billing::outbound::PgUsageReader::new(db.clone()),
         ai_billing::outbound::PgBillingRepo::new(db.clone()),
         ai_billing::outbound::NoOpPaymentGateway,
+        config.environment,
     ));
     let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
         internal_api_key.clone(),
@@ -483,6 +484,7 @@ async fn main() -> anyhow::Result<()> {
             )),
             ai_billing.clone(),
             ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client),
+            config.environment,
         ));
 
     // The import pipeline: staged/imported external items, gather jobs over

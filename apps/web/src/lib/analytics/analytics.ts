@@ -10,6 +10,10 @@ import {
 import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform } from '@core/util/platform';
+import {
+  redactCallLinkProperties,
+  redactCallLinkTokens,
+} from '@core/util/telemetryUrl';
 import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
 import { getPlanAnalyticsProperties } from './planProperties';
@@ -116,6 +120,11 @@ const IGNORABLE_ERRORS = [
 const POSTHOG_RECORDER_SCRIPT_NAME = 'posthog-recorder.js';
 const POSTHOG_RECORDER_PROXY_SCRIPT_NAME = 'runtime.js';
 
+function isPrivateCallPage() {
+  const path = window.location.pathname + window.location.hash;
+  return redactCallLinkTokens(path) !== path;
+}
+
 const initializePosthog = (instance: PostHog) => {
   const key = import.meta.env.VITE_POSTHOG_API_KEY;
   if (!key) return;
@@ -135,7 +144,14 @@ const initializePosthog = (instance: PostHog) => {
       return script;
     },
     before_send: (cr) => {
+      // Call URLs are bearer capabilities and meeting content must not replay.
+      if (isPrivateCallPage()) return null;
       if (cr) {
+        cr.properties = redactCallLinkProperties(cr.properties);
+        if (cr.$set) cr.$set = redactCallLinkProperties(cr.$set);
+        if (cr.$set_once) {
+          cr.$set_once = redactCallLinkProperties(cr.$set_once);
+        }
         cr.properties.env = DEV_MODE_ENV
           ? 'DEV'
           : PROD_MODE_ENV
@@ -174,8 +190,10 @@ const createAnalytics = () => {
   const initializeProviders = () => {
     if (disabled) return;
 
-    tryInitialize(initializeGoogleAnalytics);
-    tryInitialize(initializeMetaPixel);
+    if (!isPrivateCallPage()) {
+      tryInitialize(initializeGoogleAnalytics);
+      tryInitialize(initializeMetaPixel);
+    }
     tryInitialize(() => initializePosthog(posthog));
   };
 
@@ -187,7 +205,7 @@ const createAnalytics = () => {
     data?: Record<string, unknown>,
     options?: TrackOptions & { eventID?: string }
   ) => {
-    if (disabled) return;
+    if (disabled || isPrivateCallPage()) return;
 
     const enriched = {
       ...data,
@@ -342,8 +360,13 @@ const createAnalytics = () => {
   const pageView = (pageTitle: string, opts?: PageViewOptions) => {
     if (disabled) return;
 
-    const pagePath = opts?.path ?? window.location.pathname;
-    const pageLocation = opts?.location ?? window.location.href;
+    if (isPrivateCallPage()) return;
+    const pagePath = redactCallLinkTokens(
+      opts?.path ?? window.location.pathname
+    );
+    const pageLocation = redactCallLinkTokens(
+      opts?.location ?? window.location.href
+    );
     const deviceType = getDeviceType();
     const environment = getEnvironment();
 

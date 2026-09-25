@@ -6,11 +6,12 @@
  */
 
 import type { SearchHighlight } from './searchHighlight';
+import type { SimpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelId } from './simpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelId';
 import type { SimpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName } from './simpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName';
 
 export interface SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp {
   call_id: string;
-  channel_id: string;
+  channel_id?: SimpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelId;
   channel_name?: SimpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName;
   duration_ms: number;
   /** DateTime<Utc> ts_seconds deserialization + RFC3339 serialization */

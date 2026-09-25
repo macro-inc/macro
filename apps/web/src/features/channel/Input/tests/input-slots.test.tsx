@@ -21,6 +21,11 @@ const editorMocks = vi.hoisted(() => ({
   onEnter: undefined as (() => boolean) | undefined,
 }));
 
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({ StaticMarkdown: () => null })
+);
+
 // These slots render the microphone, so they run with dictation rolled out.
 // Other flags keep their real values.
 vi.mock('@core/constant/featureFlags', async (original) => {

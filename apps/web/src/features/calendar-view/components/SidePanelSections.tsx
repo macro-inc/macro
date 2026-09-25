@@ -22,6 +22,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { CalendarCallsSidePanelSection } from '../calendar-call-sidebar';
 
 function CalendarMiniCalendarSidePanelSection() {
   const calendarView = useCalendarView();
@@ -220,6 +221,7 @@ export function SidePanelSections() {
   return (
     <Show when={!sidePanel?.isNarrow()}>
       <CalendarMiniCalendarSidePanelSection />
+      <CalendarCallsSidePanelSection />
       <CalendarSourcesSidePanelSection />
       <ShowFeatureFlag flag={enableCalendarTeamOoo}>
         <CalendarTeamOooSidePanelSection />

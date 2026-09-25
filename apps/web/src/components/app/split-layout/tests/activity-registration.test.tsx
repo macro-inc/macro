@@ -13,6 +13,16 @@ const state = vi.hoisted(() => ({
   mountActivity: vi.fn(),
 }));
 
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
 vi.mock('@core/auth', () => ({
   useIsAuthenticated: () => () => state.authenticated(),
 }));
@@ -44,6 +54,11 @@ vi.mock('@app/features/activity/open-entity-in-split', () => ({
   openEntityInSplit: vi.fn(),
 }));
 
+vi.mock(
+  '@app/features/inbox-view/components/InboxEntityDetailRouteView',
+  () => ({ InboxEntityDetailRouteView: () => null })
+);
+
 // Quarantine unrelated registered views and their module-load side effects.
 // Route/preview codecs otherwise pull the full block-definition graph into this test.
 vi.mock('@app/features/inbox-view/inbox-route', () => ({}));
@@ -64,6 +79,7 @@ vi.mock('@app/features/getting-started', () => ({}));
 vi.mock('@app/features/home', () => ({}));
 vi.mock('@app/features/inbox-view/inbox-view', () => ({
   InboxDetailRouteView: () => null,
+  InboxCalendarRouteView: () => null,
 }));
 vi.mock('@app/features/next-soup/filters/filter-store', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
@@ -90,7 +106,9 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => false,
 }));
 vi.mock('@queries/agent-schedule/entities', () => ({}));
-vi.mock('@ui', () => ({}));
+vi.mock('@ui', () => ({
+  createVariants: () => () => '',
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
