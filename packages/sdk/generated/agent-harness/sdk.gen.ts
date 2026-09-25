@@ -181,7 +181,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-
+    
     /**
      * The latest captured changes of an agent session: the changed files with
      * statuses and line counts, and how the latest capture attempt went.

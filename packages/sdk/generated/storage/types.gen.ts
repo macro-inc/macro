@@ -8902,6 +8902,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      */
     id: string;
     /**
+     * Whether the session is archived and read-only.
+     */
+    isArchived: boolean;
+    /**
      * The user-facing name of the session
      */
     name: string;
