@@ -1,8 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
-import { isBotPrincipalId, isMacroAgentId } from '@core/constant/macroAgent';
-import { isMacroCoderId } from '@core/constant/macroCoder';
-import { isMacroNewId } from '@core/constant/macroNew';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -15,12 +13,13 @@ import {
   tryMacroId,
   useIsConnectedSecondaryInbox,
 } from '@core/user';
-import MacroLogo from '@icon/macro-logo.svg';
 import RobotIcon from '@phosphor/robot.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { Avatar, type AvatarSize, cn } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { firstPartyBotMark, firstPartyBotMarkTone } from './firstPartyBotMark';
 import { UserCardTrigger } from './UserCardTrigger';
 
 export type UserIconSize = AvatarSize;
@@ -175,21 +174,21 @@ export function UserIcon(props: UserIconProps) {
 
   return (
     <Switch>
-      <Match
-        when={
-          isMacroAgentId(props.id) ||
-          isMacroCoderId(props.id) ||
-          isMacroNewId(props.id)
-        }
-      >
-        <Avatar
-          size={size()}
-          class={cn('bg-surface text-accent ring ring-edge-muted', props.class)}
-        >
-          <Avatar.Fallback>
-            <MacroLogo class="size-[62%]" />
-          </Avatar.Fallback>
-        </Avatar>
+      <Match when={firstPartyBotMark(props.id)} keyed>
+        {(mark) => (
+          <Avatar
+            size={size()}
+            class={cn(
+              'bg-surface ring ring-edge-muted',
+              firstPartyBotMarkTone(mark),
+              props.class
+            )}
+          >
+            <Avatar.Fallback>
+              <Dynamic component={mark.Icon} class="size-[62%]" />
+            </Avatar.Fallback>
+          </Avatar>
+        )}
       </Match>
 
       <Match when={isBotPrincipalId(props.id)}>

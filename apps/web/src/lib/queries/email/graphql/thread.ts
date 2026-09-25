@@ -90,12 +90,13 @@ export function mapGraphqlThreadError(error: CombinedError): ThrownResultError {
  * thrown as a ThrownResultError with typed result codes.
  */
 export async function fetchGraphqlEmailThread(
-  threadId: string
+  threadId: string,
+  offset = 0
 ): Promise<ApiThread> {
   const client = getGraphqlSoupClient();
   const variables: EmailThreadPageQueryVariables = {
     threadId,
-    offset: 0,
+    offset,
     limit: DEFAULT_THREAD_MESSAGES_LIMIT,
   };
   const result = await client

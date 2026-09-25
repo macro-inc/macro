@@ -29,6 +29,9 @@ export const emailViewForTab = (tab: EmailTab): string =>
   match(tab)
     .with('important', 'noise', () => 'inbox')
     .with('drafts', () => 'drafts')
+    // Scheduled has a dedicated REST-backed message list. Keep the dormant
+    // Soup source on drafts so its query shape remains valid while disabled.
+    .with('scheduled', () => 'drafts')
     .with('sent', () => 'sent')
     .with('calendar', 'shared', 'all', () => 'all')
     .exhaustive();
@@ -72,7 +75,7 @@ function tabClause(tab: EmailTab): TargetExpr {
       .with('shared', () => clause.eq('emailShared', 'only'))
       // Sent and Drafts are scoped entirely by `emailView`; the server's sent
       // view already covers every linked inbox, so no sender filter is needed.
-      .with('drafts', 'sent', 'all', anyThread)
+      .with('drafts', 'scheduled', 'sent', 'all', anyThread)
       .exhaustive()
   );
 }

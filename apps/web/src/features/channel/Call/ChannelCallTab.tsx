@@ -5,6 +5,7 @@ import PhoneIcon from '@phosphor/phone-call.svg';
 import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
+import { ActiveCallLink } from './ActiveCallLink';
 import { CallOverlay } from './CallOverlay';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
@@ -127,7 +128,14 @@ export function ChannelCallTab(props: {
       }
     >
       <Match when={call.isInThisChannel() && !call.joinError()}>
-        <CallOverlay onLeave={call.leaveCall} />
+        <div class="flex size-full min-h-0 flex-col">
+          <div class="px-2 pt-2">
+            <ActiveCallLink />
+          </div>
+          <div class="min-h-0 flex-1">
+            <CallOverlay onLeave={call.leaveCall} />
+          </div>
+        </div>
       </Match>
       <Match when={call.joinError()}>
         <div class="flex size-full flex-col items-center justify-center gap-3 text-ink-muted px-4">

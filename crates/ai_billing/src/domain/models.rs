@@ -1,5 +1,6 @@
 //! Plans, the margin math, billing periods, and the API-facing snapshot.
 
+use ai_usage::AiFeature;
 use chrono::{DateTime, Datelike, Months, TimeZone, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -14,6 +15,15 @@ use utoipa::ToSchema;
 pub const TARGET_GROSS_MARGIN_BPS: i64 = 6_000;
 
 const BPS_PER_UNIT: i64 = 10_000;
+
+/// Features whose provider costs are recorded but never consume allowances,
+/// prepaid credits, or overage. Dictation is the Whispr transcription feature.
+pub const NON_BILLABLE_AI_FEATURES: [AiFeature; 4] = [
+    AiFeature::Memory,
+    AiFeature::AiProjection,
+    AiFeature::CallSummary,
+    AiFeature::Dictation,
+];
 
 /// Convert a provider cost in USD to Macro's list rate in whole cents,
 /// rounding up so fractional cents never accrue in the customer's favour.
@@ -179,6 +189,57 @@ impl BillingPeriod {
     pub fn has_ended(&self, now: DateTime<Utc>) -> bool {
         now >= self.end
     }
+
+    /// `Some` while `now` is inside `[start, end)`.
+    pub fn open_start(self, now: DateTime<Utc>) -> Option<OpenPeriodStart> {
+        if self.has_ended(now) {
+            None
+        } else {
+            Some(OpenPeriodStart(self.start))
+        }
+    }
+}
+
+/// Start of the period that contains `now`.
+///
+/// Closed periods cannot be named by this type, so open-period writers cannot
+/// target them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OpenPeriodStart(DateTime<Utc>);
+
+impl OpenPeriodStart {
+    /// Inclusive start of the open period.
+    pub const fn start(self) -> DateTime<Utc> {
+        self.0
+    }
+}
+
+/// Monotonic generation of a payer's open-seat roster.
+///
+/// A missing `ai_billing_account` row is generation zero. Releasing a seat
+/// moves it forward so a roster read from before the release cannot be stored.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SeatGeneration(i64);
+
+impl SeatGeneration {
+    /// The generation stored in Postgres.
+    pub const fn from_raw(raw: i64) -> Self {
+        Self(raw)
+    }
+
+    /// The generation stored in Postgres.
+    pub const fn raw(self) -> i64 {
+        self.0
+    }
+}
+
+/// Outcome of a conditional open-period allowance store.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AllowanceStore {
+    /// The open-period row matches the supplied seats.
+    Stored,
+    /// `seat_generation` moved after it was observed. The arrays were not written.
+    Conflict,
 }
 
 /// Who pays for a user's AI, and through what.
@@ -282,7 +343,7 @@ impl Entitlement {
     }
 }
 
-/// The payer's overage settings and Stripe period anchor.
+/// The payer's overage settings, Stripe period anchor, and open-seat generation.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BillingSettings {
     /// Whether usage past allowance and credits is billed as overage.
@@ -293,6 +354,8 @@ pub struct BillingSettings {
     pub overage_suspended_at: Option<DateTime<Utc>>,
     /// The subscription period last synced from Stripe.
     pub period_anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
+    /// Generation of the payer's open-seat roster. Zero when no account row exists.
+    pub seat_generation: SeatGeneration,
 }
 
 impl BillingSettings {

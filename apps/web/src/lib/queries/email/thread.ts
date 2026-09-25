@@ -118,6 +118,45 @@ export async function fetchAndCacheThread(
 }
 
 /**
+ * Read authoritative thread pages directly from REST, without GraphQL's
+ * in-flight deduplication or offline cache fallback. Drafts have no internal
+ * date and sort after sent messages, so continue until the requested message
+ * is present or the server has no more pages.
+ */
+export async function fetchFreshEmailThread(
+  threadId: string,
+  requiredMessageId?: string
+): Promise<Thread> {
+  let offset = 0;
+  let merged: Thread | undefined;
+
+  while (true) {
+    const page = (
+      await throwOnErr(() =>
+        emailClient.getThread({
+          thread_id: threadId,
+          offset,
+          limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+        })
+      )
+    ).thread;
+
+    merged = merged
+      ? { ...page, messages: [...merged.messages, ...page.messages] }
+      : page;
+
+    if (
+      !requiredMessageId ||
+      page.messages.some((message) => message.db_id === requiredMessageId) ||
+      page.messages.length < DEFAULT_THREAD_MESSAGES_LIMIT
+    ) {
+      return merged;
+    }
+    offset += page.messages.length;
+  }
+}
+
+/**
  * Whether a thread's done state can actually be reversed.
  *
  * Doneness is derived, not stored: `inbox_visible` is recomputed server-side
@@ -684,6 +723,9 @@ function _useScheduleMessageMutation(
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });
+          queryClient.invalidateQueries({
+            queryKey: emailKeys.scheduledMessages._def,
+          });
         },
       },
       callbacks
@@ -722,6 +764,11 @@ export function useUnscheduleMessageMutation(
             void queryClient
               .invalidateQueries({
                 queryKey: emailKeys.previews._def,
+              })
+              .catch(Telemetry.error);
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.scheduledMessages._def,
               })
               .catch(Telemetry.error);
           } catch (error) {

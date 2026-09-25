@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_settings (link_id, signature_on_replies_forwards, signature) VALUES ($1, true, '<p>Regards</p>')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "61c509d7de04b81793ff8cb4b12eb50fdf6d4d7dd8222377ab3156fcc1b95f62"
+}

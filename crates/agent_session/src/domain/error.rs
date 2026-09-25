@@ -29,6 +29,10 @@ pub enum AgentSessionError {
     Handshake(String),
     #[error("agent session {0} is no longer connected")]
     Disconnected(AgentSessionId),
+    /// A session cannot be opened because the bot's externally run runtime
+    /// is not in a state to serve it. Says what the operator has to fix.
+    #[error("{0}")]
+    RuntimeUnavailable(&'static str),
     #[error("this bot already has a session for this thread")]
     ThreadSessionExists,
     /// A create named an id a session already holds. Ids are minted by the

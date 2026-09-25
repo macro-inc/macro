@@ -14,7 +14,7 @@ pub(crate) struct PermissionTokenClaims {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) user_id: Option<MacroUserIdStr<'static>>,
     document_id: String,
-    access_level: AccessLevel,
+    pub(crate) access_level: AccessLevel,
     exp: usize,
     iss: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -3,6 +3,8 @@ import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import { useMessageBotMentionUsers } from '@channel/use-channel-bot-mention-users';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useUserId } from '@core/context/user';
+import CaretDown from '@phosphor/caret-down.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import { useMessageLink } from '@queries/messages/document-messages';
 import {
   newMessageId,
@@ -54,6 +56,9 @@ export function DocumentConversation(props: {
   parent: MessageParent;
   canWrite: boolean;
   targetId?: string | null;
+  /** The linked view stays around `targetId`, but its message is no longer highlighted. */
+  targetCleared?: boolean;
+  onClearTarget?: () => void;
   buildLink?: (message: MessageData) => string;
   label?: string;
   /** The composer is rendered elsewhere, such as a floating mobile accessory. */
@@ -93,10 +98,15 @@ export function DocumentConversation(props: {
       <section class="mt-3 pb-12" data-document-conversation>
         <button
           type="button"
-          class="text-xs"
+          class="flex items-center gap-1"
           onClick={() => setExpanded(!expanded())}
         >
-          {expanded() ? '▾' : '▸'} {props.label ?? 'Discussion'}
+          {expanded() ? (
+            <CaretDown class="size-3" />
+          ) : (
+            <CaretRight class="size-3" />
+          )}
+          <span class="text-xs">{props.label ?? 'Discussion'}</span>
         </button>
         <Show when={expanded() || props.targetId}>
           <StaticMarkdownContext>
@@ -121,7 +131,12 @@ export function DocumentConversation(props: {
                 <MessageThread
                   data={messagesById().get(id)!}
                   canWrite={props.canWrite}
-                  targetId={target.rootId() === id ? target.messageId() : null}
+                  targetId={
+                    target.rootId() === id && !props.targetCleared
+                      ? target.messageId()
+                      : null
+                  }
+                  onClearTarget={props.onClearTarget}
                   buildLink={props.buildLink}
                 />
               )}

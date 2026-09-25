@@ -1,0 +1,37 @@
+# The badge can gain a channel that was absent from its unread-filtered page.
+# Select only identity so inserting it never replays other notification states.
+query ChannelUnreadMembershipCacheWrite($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items { __typename id }
+		}
+	}
+}
+
+# Local cache entrypoint only: subscription roots are not persisted as query
+# membership. Write the channel relationship without rewriting its other fields.
+subscription ChannelUnreadCacheWrite {
+	soupUpdates {
+		__typename
+		... on SoupUpdated {
+			item {
+				__typename
+				id
+				... on GraphqlSoupChannel {
+					unreadNotifications: notifications(
+						filter: {
+							states: [UNSEEN]
+							eventTypes: ["channel_mention", "channel_message_send", "channel_message_reply", "document_mention"]
+						}
+						limit: 1
+					) {
+						id
+						state
+						createdAt
+					}
+				}
+			}
+		}
+	}
+}

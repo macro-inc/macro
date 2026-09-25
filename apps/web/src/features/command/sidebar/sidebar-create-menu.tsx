@@ -59,7 +59,8 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
     if (!open() || context.eventType !== 'keydown') return false;
 
     if (
-      context.pressedKeysString === 'c' ||
+      (context.pressedKeysString === 'c' &&
+        !blocks().some((block) => block.hotkey === 'c')) ||
       context.pressedKeysString === 'escape'
     ) {
       setOpen(false);
@@ -76,6 +77,11 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
     });
 
     if (!matchingBlock) return false;
+    if (
+      context.isEditableFocused &&
+      matchingBlock.runWithInputFocused === false
+    )
+      return false;
 
     setOpen(false);
     matchingBlock.keyDownHandler?.(context.event);

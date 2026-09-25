@@ -1,3 +1,4 @@
+import type { Bot } from '@service-storage/generated/schemas/bot';
 import type { ChannelWithParticipants, ContactInfo, IUser } from './types';
 
 // this type is extracted from the user's message info
@@ -17,6 +18,7 @@ type EntityMap = {
   channel: ChannelWithParticipants;
   contact: ExtractedContactInfo;
   custom: CustomUserInput;
+  agent: Bot;
 };
 
 type Entity<T extends keyof EntityMap> = {

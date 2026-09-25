@@ -35,6 +35,23 @@ import { createAppSplitRouterMiddleware } from '../split-router/app-middleware';
 import { appSplitRoutes } from '../split-router/app-routes';
 import { createAppSplitRouterLayout } from '../splitRouterLayout';
 
+// Settings navigation has its own route tests; avoid loading it through unrelated views.
+vi.mock('@core/constant/settingsSplitUrl', () => ({
+  appendSettingsSplitToUrl: vi.fn(),
+  settingsTabSlugFromUrl: vi.fn(),
+  stripSettingsSplitFromUrl: vi.fn(),
+}));
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: vi.fn() },
 }));
@@ -48,6 +65,7 @@ vi.mock('../componentRegistry', () => ({
 }));
 
 vi.mock('@core/constant/allBlocks', () => ({
+  fileTypeToBlockName: vi.fn((type: string) => type),
   isBlockAlias: vi.fn(() => false),
   resolveBlockAlias: vi.fn((type: string) => type),
 }));
@@ -999,7 +1017,7 @@ describe('layoutManager', () => {
         messageId: ['explicit'],
         extra: ['keep'],
       });
-      expect(router.search(channel.id, 'channel-detail')).toEqual({
+      expect(router.search(channel.id, 'channels')).toEqual({
         messageId: ['first', 'last'],
         threadId: ['thread'],
       });
@@ -1012,6 +1030,100 @@ describe('layoutManager', () => {
       ).toBe('code');
       expect(location.read().hash).toBe('#focus');
       expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
+    it('migrates legacy channel targets on Inbox preview routes', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/inbox/channel/c1?channel_message_id=first&channel_message_id=last&channel_thread_id=thread'
+      );
+      await router.settled();
+      const split = manager.splits()[0];
+      expect(router.search(split.id, 'channels')).toEqual({
+        messageId: ['first', 'last'],
+        threadId: ['thread'],
+      });
+      expect(
+        new URLSearchParams(location.read().search).getAll(
+          's0.channels.messageId'
+        )
+      ).toEqual(['first', 'last']);
+      router.dispose();
+      dispose();
+    });
+
+    it.each([
+      ['md', 'comment_id'],
+      ['task', 'comment_id'],
+      ['pdf', 'pdf_ann_id'],
+      ['spreadsheet', 'comment_id'],
+    ])(
+      'migrates unprefixed %s comments on Inbox document routes',
+      async (type, key) => {
+        const { manager, location, router, dispose } = ingressRouter(
+          `/inbox/${type}/document-1?${key}=comment-1`
+        );
+        await router.settled();
+        const split = manager.splits()[0];
+        expect(router.search(split.id, 'drive')).toEqual({
+          commentId: ['comment-1'],
+        });
+        expect(
+          new URLSearchParams(location.read().search).get('s0.drive.commentId')
+        ).toBe('comment-1');
+        router.dispose();
+        dispose();
+      }
+    );
+
+    it('prefers an explicit Inbox document comment over an unprefixed key', async () => {
+      const { manager, router, dispose } = ingressRouter(
+        '/inbox/md/document-1?comment_id=legacy&s0.drive.commentId=explicit'
+      );
+      await router.settled();
+      expect(router.search(manager.splits()[0].id, 'drive')).toEqual({
+        commentId: ['explicit'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('preserves Drive facets during comment link migration', async () => {
+      const { manager, router, dispose } = ingressRouter(
+        '/inbox/md/document-1?comment_id=comment-1&s0.drive.tags=first&s0.drive.tags=second'
+      );
+      await router.settled();
+      expect(router.search(manager.splits()[0].id, 'drive')).toEqual({
+        commentId: ['comment-1'],
+        tags: ['first', 'second'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('applies a new-split location when an entity pane is reused', async () => {
+      const { manager, router, dispose } = ingressRouter('/channel/one', {
+        enabled: false,
+      });
+      await router.settled();
+      const split = manager.splits()[0];
+
+      router.navigate(split.id, '/channel/one', {
+        target: 'new-split',
+        allowDuplicate: true,
+        search: {
+          channels: { messageId: ['second'] },
+        },
+      });
+      await router.settled();
+
+      expect(manager.splits()).toHaveLength(1);
+      expect(manager.splits()[0].content.entryMetadata).toMatchObject({
+        search: {
+          channels: { messageId: ['second'] },
+        },
+      });
       router.dispose();
       dispose();
     });

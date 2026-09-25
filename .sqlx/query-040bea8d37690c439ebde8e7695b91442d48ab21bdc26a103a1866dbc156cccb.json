@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sent, processing FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "processing",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "040bea8d37690c439ebde8e7695b91442d48ab21bdc26a103a1866dbc156cccb"
+}

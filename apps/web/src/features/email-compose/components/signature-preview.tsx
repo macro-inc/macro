@@ -36,6 +36,7 @@ export function SignaturePreview(props: {
   mobile: boolean;
   prepareLinks?: (root: ShadowRoot) => void;
   onDismiss: () => void;
+  dismissable?: boolean;
 }) {
   let mountEl!: HTMLDivElement;
   // Always starts collapsed to just the bar; the user expands to preview it.
@@ -84,16 +85,18 @@ export function SignaturePreview(props: {
             </Tooltip>
           </Show>
         </div>
-        <Tooltip label="Don't include signature" as="span">
-          <button
-            type="button"
-            class="-m-1 rounded-md p-1 text-ink-muted hover:bg-hover hover:text-ink"
-            aria-label="Don't include signature"
-            onClick={() => props.onDismiss()}
-          >
-            <XIcon class="size-3.5" />
-          </button>
-        </Tooltip>
+        <Show when={props.dismissable !== false}>
+          <Tooltip label="Don't include signature" as="span">
+            <button
+              type="button"
+              class="-m-1 rounded-md p-1 text-ink-muted hover:bg-hover hover:text-ink"
+              aria-label="Don't include signature"
+              onClick={() => props.onDismiss()}
+            >
+              <XIcon class="size-3.5" />
+            </button>
+          </Tooltip>
+        </Show>
       </div>
       <div
         ref={mountEl}

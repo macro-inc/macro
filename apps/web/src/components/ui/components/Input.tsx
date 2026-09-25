@@ -19,12 +19,12 @@ const INPUT_SIZE_VARIANTS: Record<InputSize, string> = {
 
 /** Shared focus treatment for outlined text-entry controls. */
 export const inputOutlineFocusClasses =
-  'focus-visible:border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] focus-visible:ring-2 focus-visible:ring-edge-muted';
+  'focus-visible:ring-2 focus-visible:ring-edge-muted';
 
 /** Canonical visual variants for standalone inputs. */
 export const inputVariants = createVariants(
   cn(
-    'w-full min-w-0 rounded-md border text-ink caret-current outline-none transition-[background-color,border-color,box-shadow]',
+    'w-full min-w-0 rounded-full border text-ink caret-current outline-none transition-[background-color,border-color,box-shadow] duration-120 motion-reduce:transition-none',
     'file:inline-flex file:border-0 file:bg-transparent file:text-[inherit] file:font-medium file:text-ink',
     'placeholder:text-ink-placeholder',
     'aria-invalid:border-failure aria-invalid:ring-2 aria-invalid:ring-failure/20',
@@ -32,7 +32,7 @@ export const inputVariants = createVariants(
   ),
   {
     variant: {
-      outline: cn('border-edge-muted bg-input', inputOutlineFocusClasses),
+      outline: cn('border-edge-frame bg-control', inputOutlineFocusClasses),
       bare: 'border-transparent bg-transparent',
     },
     size: INPUT_SIZE_VARIANTS,

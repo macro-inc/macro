@@ -39,6 +39,7 @@ vi.mock('@app/components/view-shell', () => ({
   },
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
+  getChannelEntityTarget: () => undefined,
   markChannelNotificationsSeenOnOpen: mocks.markRead,
 }));
 vi.mock('@app/features/soup', () => ({
@@ -55,9 +56,9 @@ vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
 vi.mock('@components/app/PreviewPanel', () => ({
-  PreviewPanel: (props: { selectedEntity: ChannelEntity }) => (
-    <div data-testid="preview">
-      {props.selectedEntity.id}
+  PreviewPanel: (props: { target: { blockId: string } }) => (
+    <div data-testid="legacy-preview">
+      {props.target.blockId}
       <textarea aria-label="Composer" />
     </div>
   ),
@@ -75,7 +76,7 @@ vi.mock(
 vi.mock('@entity', () => ({ ListEntityMetadataQueryProvider: mocks.pass }));
 vi.mock('./components/ChannelDetailView', () => ({
   ChannelDetailView: (props: { channel: ChannelEntity }) => (
-    <div data-testid="preview">
+    <div data-testid="channel-detail">
       {props.channel.id}
       <textarea aria-label="Composer" />
     </div>
@@ -212,7 +213,7 @@ describe('channel selection loading and recovery', () => {
       setQuery('data', { entities: [full('one', ['new'])] });
       setQuery('isFetching', false);
     });
-    expect(screen.getByTestId('preview').textContent).toBe('one');
+    expect(screen.getByTestId('channel-detail').textContent).toBe('one');
     expect(mocks.markRead).toHaveBeenCalledOnce();
   });
 

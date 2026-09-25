@@ -9,17 +9,35 @@ import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmailTab, EmailViewState } from '../types';
 import { buildEmailQuery } from './email-query';
-import { type EmailDataSource, useEmailDataSource } from './use-email-query';
+import {
+  type EmailDataSource,
+  type EmailDataSourceItem,
+  useEmailDataSource,
+} from './use-email-query';
 
 const searchQueryMock = vi.hoisted(() => vi.fn());
+const scheduledRows = vi.hoisted(() => ({
+  current: [] as EmailDataSourceItem[],
+}));
 
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
   ...(await import('@app/features/soup/search/create-search-state')),
 }));
-vi.mock('@queries/soup/search', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@queries/soup/search')>()),
+// Exercise query transitions without loading UI barrels or the local-search provider.
+vi.mock('@entity', async () => ({
+  ...(await import('@entity/types/entity')),
+  ...(await import('@entity/utils/notification')),
+  ...(await import('@entity/utils/task-properties')),
+  ...(await import('@entity/utils/company-properties')),
+}));
+vi.mock('@app/features/soup/search/context', () => ({
+  useOptionalSearchContext: () => undefined,
+}));
+vi.mock('@notifications', async () => await import('@notifications/types'));
+vi.mock('@queries/soup/search', () => ({
+  validateSearchServiceText: (text: string) => text.length >= 3,
   useSearchSoupQuery: searchQueryMock,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
@@ -27,6 +45,18 @@ vi.mock('@components/app/GlobalAppState', () => ({
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'alice' }));
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery: vi.fn() }));
+vi.mock('./use-scheduled-email-source', () => ({
+  useScheduledEmailSource: () => ({
+    items: () => scheduledRows.current,
+    isLoading: () => false,
+    isFetching: () => false,
+    error: () => undefined,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+    refresh: async () => {},
+  }),
+}));
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
   createWebSocketJob: vi.fn(),
@@ -199,8 +229,34 @@ function mount(search = '') {
 }
 
 describe('Email list query transitions', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    scheduledRows.current = [];
+  });
   afterEach(() => dispose?.());
+
+  it('lists the scheduled source on the Scheduled tab instead of soup rows', () => {
+    scheduledRows.current = [
+      {
+        kind: 'entity',
+        id: 'scheduled-row',
+        entity: {
+          ...email('scheduled'),
+          isDraft: true,
+          scheduledSendTime: '2026-09-27T12:00:00Z',
+        },
+      } as EmailDataSourceItem,
+    ];
+    const { source, setState } = mount();
+    expect(ids(source)).toEqual(['noise']);
+
+    setState('tab', 'scheduled');
+    expect(ids(source)).toEqual(['scheduled']);
+    expect(source.hasMore()).toBe(false);
+
+    setState('tab', 'noise');
+    expect(ids(source)).toEqual(['noise']);
+  });
 
   it('does not show Noise rows under other tabs while their cache reads are pending', () => {
     const { source, setState, setEntities, setLoading } = mount();

@@ -9,6 +9,11 @@ import {
   Track,
 } from 'livekit-client';
 import { batch } from 'solid-js';
+import {
+  type CallPrejoinTracks,
+  type CallSessionConnectMetadata,
+  stopPrejoinTracks,
+} from './CallSessionController';
 import { startReceiverStatsSampling } from './call-audio-receiver-stats';
 
 type LivekitJsCallControllerState = {
@@ -25,13 +30,17 @@ type LivekitJsCallControllerOptions = {
   isActiveConnectionState: (state: ConnectionState) => boolean;
   cancelPendingMediaSetup: () => void;
   nextMediaSetupVersion: () => number;
-  finishLocalMediaSetup: (room: Room, setupVersion: number) => Promise<void>;
+  finishLocalMediaSetup: (
+    room: Room,
+    setupVersion: number,
+    prejoinTracks?: CallPrejoinTracks
+  ) => Promise<void>;
   destroyProcessors: () => void;
   resetState: () => void;
   setConnectionState: (state: ConnectionState) => void;
-  setActiveCall: (channelId: string, callId: string) => void;
+  setActiveCall: (channelId: string | null, callId: string) => void;
   setDuplicateConnectCallId: (callId: string) => void;
-  setInitialMediaState: () => void;
+  setInitialMediaState: (preferences?: CallSessionConnectMetadata) => void;
   setRemoteParticipants: (participants: Map<string, RemoteParticipant>) => void;
   clearOptimisticJoin: () => void;
   bumpTrackVersion: () => void;
@@ -133,8 +142,25 @@ export function createLivekitJsCallController(
     options.resetState();
   }
 
-  async function connect(tokenResponse: CallTokenResponse) {
-    if (disposed) return;
+  async function connect(
+    tokenResponse: CallTokenResponse,
+    preferences?: CallSessionConnectMetadata
+  ) {
+    let prejoinTracks = preferences?.localTracks;
+    try {
+      prejoinTracks = await connectRoom(tokenResponse, preferences);
+    } finally {
+      stopPrejoinTracks(prejoinTracks);
+    }
+  }
+
+  /** Returns the prejoin tracks it did not hand to media setup. */
+  async function connectRoom(
+    tokenResponse: CallTokenResponse,
+    preferences?: CallSessionConnectMetadata
+  ): Promise<CallPrejoinTracks | undefined> {
+    const prejoinTracks = preferences?.localTracks;
+    if (disposed) return prejoinTracks;
     const existingRoom = options.room();
     const state = options.state();
 
@@ -153,7 +179,7 @@ export function createLivekitJsCallController(
         state: state.connectionState,
       });
       options.setDuplicateConnectCallId(tokenResponse.callId);
-      return;
+      return prejoinTracks;
     }
 
     const generation = ++connectGeneration;
@@ -166,7 +192,7 @@ export function createLivekitJsCallController(
       await existingRoom.disconnect();
       // An earlier leave may have cleared this room while we waited. The
       // latest join should still proceed; only a newer request supersedes it.
-      if (disposed || generation !== connectGeneration) return;
+      if (disposed || generation !== connectGeneration) return prejoinTracks;
       destroyRoom(existingRoom);
     }
 
@@ -189,7 +215,7 @@ export function createLivekitJsCallController(
     try {
       await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
       if (!isCurrentRoom(targetRoom) || generation !== connectGeneration)
-        return;
+        return prejoinTracks;
       options.clearOptimisticJoin();
     } catch (e) {
       console.error('failed to connect to LiveKit room', e);
@@ -204,12 +230,12 @@ export function createLivekitJsCallController(
     // flushes one summary analytics event when stopped at teardown.
     stopReceiverStats();
     stopReceiverStatsSampling = startReceiverStatsSampling(targetRoom, {
-      channelId: tokenResponse.channelId,
+      channelId: tokenResponse.channelId ?? '',
       callId: tokenResponse.callId,
     });
 
     // Default to microphone on, video off as soon as the room is connected.
-    options.setInitialMediaState();
+    options.setInitialMediaState(preferences);
 
     // Treat the LiveKit connection itself as the join success boundary. Local
     // media/device setup can be interrupted by OS-level flows (e.g. macOS
@@ -218,9 +244,12 @@ export function createLivekitJsCallController(
     // run failed-join cleanup, which calls DELETE /call/:channel and kicks the
     // user out. Run the non-critical setup in the background instead.
     const setupVersion = options.nextMediaSetupVersion();
-    void options.finishLocalMediaSetup(targetRoom, setupVersion).catch((e) => {
-      console.error('failed to finish local call media setup', e);
-    });
+    void options
+      .finishLocalMediaSetup(targetRoom, setupVersion, prejoinTracks)
+      .catch((e) => {
+        console.error('failed to finish local call media setup', e);
+      });
+    return undefined;
   }
 
   async function disconnect() {

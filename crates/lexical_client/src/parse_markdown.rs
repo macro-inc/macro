@@ -210,6 +210,36 @@ struct AgentConnectionPromptRequest<'a> {
     connection_prompt: &'a AgentConnectionPrompt,
 }
 
+/// What a chat agent's thread message says below its session link, in the
+/// shape the lexical service `/agent-announcement` endpoint validates.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AgentChatReplyBody {
+    /// The spinner while the turn runs.
+    Pending,
+    /// Prose, posted as written: the answer, or what the harness says for a
+    /// turn that answered with nothing or stopped to ask.
+    Markdown {
+        /// The prose, as channel markdown.
+        markdown: String,
+    },
+}
+
+/// A chat agent's thread message in one of its states.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentChatReply {
+    /// Session the message speaks for; linked ahead of the body.
+    pub session_id: String,
+    pub body: AgentChatReplyBody,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentChatReplyRequest<'a> {
+    chat_reply: &'a AgentChatReply,
+}
+
 /// A channel message included as context for an agent prompt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub struct AgentContextMessage<'a> {
@@ -542,6 +572,24 @@ impl LexicalClient {
                 .json(&AgentConnectionPromptRequest {
                     connection_prompt: prompt,
                 })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentAnnouncementResponse =
+            response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
+    /// Compose a chat agent's thread message - its session link over the
+    /// spinner or its prose - through the lexical service's real nodes.
+    #[tracing::instrument(skip(self, reply), err)]
+    pub async fn compose_agent_chat_reply(&self, reply: &AgentChatReply) -> Result<String> {
+        let url = format!("{}/agent-announcement", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&AgentChatReplyRequest { chat_reply: reply })
                 .send()
                 .await?,
         )

@@ -147,6 +147,20 @@ async fn remove_team_invite_not_found_response_is_preserved() {
 }
 
 #[tokio::test]
+async fn remove_user_from_team_open_seat_release_error_stays_generic() {
+    let error = RemoveUserFromTeamError::OpenSeatRelease(Box::new(std::io::Error::other(
+        "open seat release failed",
+    )));
+    let (status, body_text, _) = response_parts(error).await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        body_text,
+        r#"{"message":"unable to remove user from team"}"#
+    );
+}
+
+#[tokio::test]
 async fn remove_team_owner_validation_response_is_preserved() {
     let (status, body_text, _) = response_parts(RemoveUserFromTeamError::CannotRemoveOwner).await;
 

@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   mutedEntitiesQuery: {} as Record<string, unknown>,
   notificationsQuery: {} as Record<string, unknown>,
   optimisticInsertNotification: vi.fn(),
+  updateSoupForNotification: vi.fn(),
   socketCallback: undefined as
     | ((data: { type: string; data: string }) => void)
     | undefined,
@@ -56,6 +57,10 @@ vi.mock('@macro-inc/collaboration/websocket', () => ({
       mocks.socketCallback = callback;
     }
   ),
+}));
+
+vi.mock('@queries/notification/notification-soup', () => ({
+  updateSoupForNotification: mocks.updateSoupForNotification,
 }));
 
 vi.mock('@queries/notification/user-notifications', () => ({
@@ -128,6 +133,7 @@ describe('createNotificationSource', () => {
     mocks.graphqlPatchCallback = undefined;
     mocks.socketCallback = undefined;
     mocks.optimisticInsertNotification.mockReset();
+    mocks.updateSoupForNotification.mockReset();
     mocks.seenMutation.mutateAsync.mockReset().mockResolvedValue(undefined);
     mocks.doneMutation.mutateAsync.mockReset().mockResolvedValue(undefined);
     mocks.mutedEntitiesQuery = {
@@ -180,6 +186,7 @@ describe('createNotificationSource', () => {
         });
         await Promise.resolve();
         expect(receive).toHaveBeenCalledWith(incoming);
+        expect(mocks.updateSoupForNotification).toHaveBeenCalledWith(incoming);
         expect(started).toBe(false);
         expect(dataRead).not.toHaveBeenCalled();
         expect(refetch).not.toHaveBeenCalled();
@@ -941,6 +948,12 @@ describe('createNotificationSource', () => {
       expect(onNotification).toHaveBeenCalledWith(incoming);
       expect(subscriber).toHaveBeenCalledOnce();
       expect(subscriber).toHaveBeenCalledWith(incoming);
+      expect(mocks.updateSoupForNotification).toHaveBeenCalledExactlyOnceWith(
+        incoming
+      );
+      expect(
+        mocks.updateSoupForNotification.mock.invocationCallOrder[0]
+      ).toBeLessThan(subscriber.mock.invocationCallOrder[0]);
       expect(refetch).not.toHaveBeenCalled();
       await Promise.resolve();
       expect(refetch).toHaveBeenCalledOnce();
@@ -1056,6 +1069,10 @@ describe('createNotificationSource', () => {
       });
       expect(onNotification).toHaveBeenCalledOnce();
       expect(mocks.optimisticInsertNotification).toHaveBeenCalledOnce();
+      expect(
+        mocks.optimisticInsertNotification.mock.invocationCallOrder[0]
+      ).toBeLessThan(onNotification.mock.invocationCallOrder[0]);
+      expect(mocks.updateSoupForNotification).not.toHaveBeenCalled();
     } finally {
       dispose();
     }
