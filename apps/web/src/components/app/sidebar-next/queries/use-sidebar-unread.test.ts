@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   hasUnreadEntity: vi.fn(),
   transformEntities: vi.fn(),
   userId: vi.fn(() => 'user' as string | undefined),
+  tabFocused: vi.fn(() => true),
+  inboxRefetch: vi.fn(async () => {}),
+  emailRefetch: vi.fn(async () => {}),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -41,6 +44,7 @@ vi.mock('@components/app/GlobalAppState', () => ({
   }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => mocks.userId }));
+vi.mock('@core/signal/tabFocus', () => ({ isTabFocused: mocks.tabFocused }));
 // Query builders import the soup barrel, which otherwise opens real sockets.
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
@@ -115,6 +119,8 @@ function setup(graphql = false) {
     dispose = cleanup;
     const [graphqlEnabled, setGraphqlEnabled] = createSignal(graphql);
     const [done, setDone] = createSignal(false);
+    const [tabFocused, setTabFocused] = createSignal(true);
+    mocks.tabFocused.mockImplementation(tabFocused);
     mocks.withLocalState.mockImplementation(({ state }) =>
       done() ? 'done' : state
     );
@@ -139,24 +145,29 @@ function setup(graphql = false) {
     const [notifications, setNotifications] = createSignal<
       UnifiedNotification[]
     >([]);
-    const query = {
+    const makeQuery = (refetch: () => Promise<void>) => ({
       get isLoading() {
         return loading();
+      },
+      get isFetching() {
+        return false;
       },
       get data() {
         if (loading()) throw new Error('Read pending resource');
         return { entities: emails() };
       },
-    };
+      refetch,
+    });
+    const inboxQuery = makeQuery(mocks.inboxRefetch);
     mocks.hasUnreadEntity.mockImplementation((items: EmailEntity[]) =>
       items.some((item) => !item.done && !item.isRead)
     );
     mocks.inbox.mockReturnValue({
-      query,
+      query: inboxQuery,
       hasUnreadEntity: mocks.hasUnreadEntity,
       transformEntities: mocks.transformEntities,
     });
-    mocks.email.mockReturnValue(query);
+    mocks.email.mockReturnValue(makeQuery(mocks.emailRefetch));
     mocks.notifications.mockImplementation(notifications);
     return {
       unread: useSidebarUnread(),
@@ -166,6 +177,7 @@ function setup(graphql = false) {
       setWitnesses,
       setGraphqlEnabled,
       setDone,
+      setTabFocused,
     };
   });
 }
@@ -229,6 +241,44 @@ describe('sidebar unread presence', () => {
           data: { ...unreadThreadItem.data, ...overrides },
         })
       ).toBe(false);
+    }
+  });
+
+  it('re-reads unread evidence when the tab regains focus', async () => {
+    vi.useFakeTimers();
+    try {
+      const { unread, setLoading, setEmails, setTabFocused } = setup();
+      setLoading(false);
+      setEmails([unreadEmail]);
+      expect(unread('mail')).toBe(true);
+
+      // The pages were just fetched with the app shell.
+      setTabFocused(false);
+      setTabFocused(true);
+      expect(mocks.emailRefetch).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(60_000);
+      setTabFocused(false);
+      setTabFocused(true);
+      expect(mocks.emailRefetch).toHaveBeenCalledTimes(1);
+      expect(mocks.inboxRefetch).toHaveBeenCalledTimes(1);
+
+      // A thread read in Gmail while the tab was away: the refetched page no
+      // longer carries it, so the dot goes out without a reload.
+      setEmails([]);
+      expect(unread('mail')).toBe(false);
+
+      // Window hopping must not turn the dots into a poll.
+      setTabFocused(false);
+      setTabFocused(true);
+      expect(mocks.emailRefetch).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(60_000);
+      setTabFocused(false);
+      setTabFocused(true);
+      expect(mocks.emailRefetch).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
     }
   });
 

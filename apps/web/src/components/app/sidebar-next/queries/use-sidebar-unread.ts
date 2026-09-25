@@ -20,6 +20,10 @@ import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
 import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { createMemo } from 'solid-js';
+import {
+  createUnreadRevalidation,
+  revalidateUnread,
+} from './revalidate-unread';
 
 /** Presence in the loaded unread page, never a total or a pagination loop. */
 export function useSidebarUnread() {
@@ -57,6 +61,11 @@ export function useSidebarUnread() {
       meta: { insertFilter: (item) => soupItemIsUnreadSignal(item, userId()) },
     })
   );
+
+  // Nothing else refetches these: the dots outlive every view that would.
+  createUnreadRevalidation(() => {
+    void revalidateUnread([inbox.query, email]);
+  });
 
   // Guard resource reads so loading a badge cannot suspend the app shell.
   // Re-check cached rows: optimistic read/done changes can leave them in a page.
