@@ -253,6 +253,7 @@ export function EmailDetailView(props: {
                     title={title()}
                     onCreateTask={createTask}
                     onMarkedUnread={closeThread}
+                    onDeleted={closeThread}
                     listNavigation={listNavigation}
                     value={breadcrumbValue()}
                     focusThread={focusContainer}

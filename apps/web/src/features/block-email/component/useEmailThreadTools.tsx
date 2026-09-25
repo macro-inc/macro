@@ -43,6 +43,7 @@ export type EmailThreadToolsOptions = {
   isDraft?: boolean;
   onCreateTask?: () => void;
   onMarkedUnread?: () => void;
+  onDeleted?: () => void;
   listNavigation?: EmailThreadListNavigation;
 };
 
@@ -133,7 +134,9 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
 
     const handle = trashEmails([{ id: thread.db_id, linkId: thread.link_id }]);
 
-    if (soup && nextRow) {
+    if (props.onDeleted) {
+      props.onDeleted();
+    } else if (soup && nextRow) {
       soup.selection.clear();
       soup.focus.set(nextRow.id);
       openEntityInSplitFromUnifiedList(nextRow.original, {});
