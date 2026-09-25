@@ -764,6 +764,16 @@ Every calendar mention's hover card shows the schedule, location, organizer and 
 count, plus the first lines of the event description (its links open), and no last-updated
 byline.
 
+## Pull requests — `/app/tasks/pr/<foreignEntityId>`
+
+Macro-linked GitHub pull requests open inside the Tasks shell, with a Tasks breadcrumb,
+PR title/status, GitHub action, discussion timeline, and Details/Checks side panel below
+the top bar. PRs are not tasks and do not appear in the Tasks list.
+Old `/app/pr/<foreignEntityId>` links redirect to the Tasks detail.
+Check an old link, a PR opened from a list or agent session,
+a second split, breadcrumb return, side-panel toggle, and phone layout. If cached
+GitHub data fails, the detail shows an error banner.
+
 ## Calls — `/app/component/calls`
 
 Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, transcriptions

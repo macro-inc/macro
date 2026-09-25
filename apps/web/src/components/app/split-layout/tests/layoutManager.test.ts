@@ -884,27 +884,81 @@ describe('layoutManager', () => {
       }
     );
 
-    it('opens a PR on its standalone route and keeps the existing block content identity', async () => {
-      const { manager, location, router, dispose } = ingressRouter('/pr/pr-1');
+    it('opens PR details in Tasks and redirects legacy PR links', async () => {
+      for (const path of ['/pr/pr-1', '/tasks/pr/pr-1']) {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        const split = manager.splits()[0];
+        expect(split.content).toMatchObject({
+          type: 'component',
+          id: 'tasks',
+        });
+        expect(split.mount.kind).toBe('component');
+        expect(router.route(split.id)?.matches).toEqual([
+          { id: 'view-tasks', params: {} },
+          { id: 'tasks-pr', params: { foreignEntityId: 'pr-1' } },
+        ]);
+        expect(location.read().pathname).toBe('/tasks/pr/pr-1');
+        router.dispose();
+        dispose();
+      }
+    });
+
+    it('keeps PR details in Tasks on touch', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/pr/pr-1', {
+        touch: true,
+      });
       await router.settled();
-      const split = manager.splits()[0];
-      expect(split.content).toMatchObject({ type: 'pr', id: 'pr-1' });
-      expect(router.route(split.id)?.matches).toEqual([
-        { id: 'pr-detail', params: { foreignEntityId: 'pr-1' } },
-      ]);
-      expect(location.read().pathname).toBe('/pr/pr-1');
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'tasks',
+      });
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(location.read().pathname).toBe('/tasks/pr/pr-1');
       router.dispose();
       dispose();
     });
 
-    it('uses the PR route for existing split navigation', async () => {
+    it('uses the Tasks PR route for existing split navigation', async () => {
       const { manager, location, router, dispose } = ingressRouter('/inbox');
       await router.settled();
       manager.getSplit(manager.splits()[0].id)!.replace({
         next: { type: 'pr', id: 'pr-2' },
       });
       await router.settled();
-      expect(location.read().pathname).toBe('/pr/pr-2');
+      expect(location.read().pathname).toBe('/tasks/pr/pr-2');
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'tasks',
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('upgrades stored PR route metadata to Tasks content', async () => {
+      const { manager, router, dispose } = ingressRouter('/inbox');
+      await router.settled();
+      const split = manager.getSplit(manager.splits()[0].id)!;
+      split.replace({
+        next: {
+          type: 'pr',
+          id: 'pr-1',
+          entryMetadata: {
+            route: {
+              matches: [
+                { id: 'pr-detail', params: { foreignEntityId: 'pr-1' } },
+              ],
+            },
+          },
+        },
+      });
+      await router.settled();
+      expect(split.content()).toMatchObject({
+        type: 'component',
+        id: 'tasks',
+      });
+      expect(router.route(split.id)?.matches.at(-1)?.id).toBe('tasks-pr');
       router.dispose();
       dispose();
     });

@@ -1,5 +1,5 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
-import { SplitRouter } from '@app/lib/split-router';
+import { SplitRouter, useParams } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ListEntityMetadataQueryProvider } from '@entity';
@@ -30,7 +30,9 @@ function TasksListFallback() {
 
 function TasksViewBreadcrumbs(props: ParentProps) {
   const { closeTask, selectedTask } = useTasksView();
+  const params = useParams<{ foreignEntityId?: string }>();
   const value = () => {
+    if (params.foreignEntityId) return `pr:${params.foreignEntityId}`;
     const task = selectedTask();
     return task ? `task:${task.id}` : 'tasks-view';
   };

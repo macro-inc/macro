@@ -1,24 +1,23 @@
+import { ViewShell } from '@app/components/view-shell';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
+import { SplitPanel } from '@components/app/split-panel';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { openExternalUrl } from '@core/util/url';
 import { DebouncedNotificationReadMarker } from '@notifications';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
-import { cn, Layer, Scroll } from '@ui';
-import { type Accessor, createMemo, Show } from 'solid-js';
+import { Button, cn, Layer, Scroll } from '@ui';
+import { type Accessor, createMemo, type JSX, Show } from 'solid-js';
 import {
   PrDescriptionSkeleton,
   PrMetadataSkeleton,
   PrTimelineSkeleton,
   PrTitleSkeleton,
 } from '../component/PrSkeletons';
-import {
-  PR_PILL_CLASS,
-  PrSplitHeader,
-  PrStatusChip,
-} from '../component/PrSplitHeader';
+import { PR_PILL_CLASS, PrStatusChip, PrStatusIcon } from '../component/PrStatus';
 import { PrTimeline } from '../component/PrTimeline';
 import { PrSidePanelSections } from '../component/sidepanel/PrSidePanelSections';
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
@@ -29,76 +28,147 @@ import {
   githubDisplayLogin,
 } from '../util/githubMarkdown';
 import type { PrRef } from '../util/prKey';
-import { prDisplayName } from '../util/prKey';
+import { prDisplayName, prHtmlUrl } from '../util/prKey';
 
-export function PrDetail(props: { foreignEntityId: string }) {
+export type PrDetailContext = {
+  prRef: Accessor<PrRef | undefined>;
+  pullRequest: Accessor<GithubPullRequestWithDetails | undefined>;
+  loadFailed: Accessor<boolean>;
+  discussionSource: ReturnType<typeof createPrDiscussionSource>;
+};
+
+/** Owns the PR query and discussion state; consumers compose their own chrome. */
+export function PrDetail(props: {
+  foreignEntityId: string;
+  children: (context: PrDetailContext) => JSX.Element;
+}) {
   const notificationSource = useGlobalNotificationSource();
   const foreignEntityQuery = usePrForeignEntityQuery(
     () => props.foreignEntityId
   );
-
-  const prRef = createMemo(() => foreignEntityQuery.data?.prRef);
-  const pullRequest = createMemo(() => foreignEntityQuery.data?.pullRequest);
-
-  const loadFailed = createMemo(
-    () => !pullRequest() && !!foreignEntityQuery.error
-  );
+  const data = () =>
+    foreignEntityQuery.isSuccess ? foreignEntityQuery.data : undefined;
+  const prRef = () => data()?.prRef;
+  const pullRequest = () => data()?.pullRequest;
+  const loadFailed = () => !pullRequest() && !!foreignEntityQuery.error;
 
   // Detail-lifetime local Macro discussion (prototype-only, lost on reload).
   const discussionSource = createPrDiscussionSource();
 
   return (
-    <div class="size-full overflow-hidden flex flex-col relative">
+    <>
       <DebouncedNotificationReadMarker
         notificationSource={notificationSource}
         entity={{ type: 'foreign_entity', id: props.foreignEntityId }}
       />
-      <SidePanel.Layout>
-        <PrSidePanelSections enrichment={pullRequest} />
-        <div class="flex flex-col size-full min-w-0">
-          <Show when={prRef()}>
-            {(ref) => (
-              <PrSplitHeader
-                foreignEntityId={props.foreignEntityId}
-                prRef={ref()}
-                enrichment={pullRequest()}
-              />
-            )}
-          </Show>
+      {props.children({ prRef, pullRequest, loadFailed, discussionSource })}
+    </>
+  );
+}
 
-          <Scroll class="flex-1 min-h-0">
-            <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
-              <Show
-                when={prRef()}
-                fallback={
-                  <>
-                    <PrTitleSkeleton />
-                    <div class="spacer h-3" />
-                    <PrMetadataSkeleton />
-                    <PrDescriptionSkeleton />
-                    <PrTimelineSkeleton />
-                  </>
-                }
-              >
-                {(ref) => (
-                  <>
-                    <PrTitle prRef={ref()} pullRequest={pullRequest} />
-                    <div class="spacer h-3" />
-                    <PrMetadata prRef={ref()} pullRequest={pullRequest} />
-                    <PrDescription pullRequest={pullRequest} />
-                    <PrLoadErrorBanner loadFailed={loadFailed} />
-                    <PrTimeline
-                      githubItems={pullRequest()?.comments ?? []}
-                      source={discussionSource}
-                    />
-                  </>
-                )}
-              </Show>
+export function PrDetailBody(props: { detail: PrDetailContext }) {
+  return (
+    <Scroll class="flex-1 min-h-0">
+      <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
+        <Show
+          when={props.detail.prRef()}
+          fallback={
+            <Show
+              when={!props.detail.loadFailed()}
+              fallback={
+                <PrLoadErrorBanner loadFailed={props.detail.loadFailed} />
+              }
+            >
+              <PrTitleSkeleton />
+              <div class="spacer h-3" />
+              <PrMetadataSkeleton />
+              <PrDescriptionSkeleton />
+              <PrTimelineSkeleton />
+            </Show>
+          }
+        >
+          {(ref) => (
+            <>
+              <PrTitle prRef={ref()} pullRequest={props.detail.pullRequest} />
+              <div class="spacer h-3" />
+              <PrMetadata prRef={ref()} pullRequest={props.detail.pullRequest} />
+              <PrDescription pullRequest={props.detail.pullRequest} />
+              <PrLoadErrorBanner loadFailed={props.detail.loadFailed} />
+              <PrTimeline
+                githubItems={props.detail.pullRequest()?.comments ?? []}
+                source={props.detail.discussionSource}
+              />
+            </>
+          )}
+        </Show>
+      </div>
+    </Scroll>
+  );
+}
+
+/** Shared native layout. The consumer supplies the top bar above the content and side panel. */
+export function PrDetailLayout(props: {
+  foreignEntityId: string;
+  detail: PrDetailContext;
+  children: JSX.Element;
+}) {
+  return (
+    <SidePanel.Root persistKey={`pr:${props.foreignEntityId}`}>
+      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+        {props.children}
+        <div class="relative min-h-0 min-w-0 flex-1">
+          <SidePanel.Layout headerToggle={false}>
+            <PrSidePanelSections enrichment={props.detail.pullRequest} />
+            <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+              <PrDetailBody detail={props.detail} />
             </div>
-          </Scroll>
+          </SidePanel.Layout>
         </div>
-      </SidePanel.Layout>
+      </div>
+    </SidePanel.Root>
+  );
+}
+
+export function PrDetailActions(props: { detail: PrDetailContext }) {
+  return (
+    <div class="ml-auto flex shrink-0 items-center gap-2">
+      <Show when={props.detail.prRef()}>
+        {(ref) => (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              openExternalUrl(props.detail.pullRequest()?.url ?? prHtmlUrl(ref()))
+            }
+          >
+            Open on GitHub
+          </Button>
+        )}
+      </Show>
+      <SidePanel.Toggle />
     </div>
+  );
+}
+
+export function StandalonePrDetail(props: { foreignEntityId: string }) {
+  return (
+    <PrDetail foreignEntityId={props.foreignEntityId}>
+      {(detail) => (
+        <PrDetailLayout foreignEntityId={props.foreignEntityId} detail={detail}>
+          <ViewShell.TopBar class="touch:flex">
+            <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+            <Show when={detail.pullRequest()?.status}>
+              {(status) => <PrStatusIcon status={status()} />}
+            </Show>
+            <span class="min-w-0 truncate text-sm font-semibold">
+              {detail.pullRequest()?.name ??
+                (detail.prRef() ? prDisplayName(detail.prRef()!) : 'Pull request')}
+            </span>
+            <PrDetailActions detail={detail} />
+          </ViewShell.TopBar>
+        </PrDetailLayout>
+      )}
+    </PrDetail>
   );
 }
 

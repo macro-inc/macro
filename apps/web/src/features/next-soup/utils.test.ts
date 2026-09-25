@@ -492,7 +492,44 @@ describe('calendar view navigation', () => {
   });
 });
 
-describe('Drive document routing', () => {
+describe('Hosted details and Drive document routing', () => {
+  it('opens GitHub pull requests as Tasks-hosted content', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      {
+        type: 'foreign',
+        id: 'pr-1',
+        foreignSource: 'github_pull_request',
+        metadata: { url: 'https://github.com/example/repo/pull/1' },
+      } as EntityData,
+      { openInNewSplit: true }
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'tasks',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'view-tasks', params: {} },
+              { id: 'tasks-pr', params: { foreignEntityId: 'pr-1' } },
+            ],
+          },
+        },
+      },
+      expect.objectContaining({
+        allowDuplicate: true,
+        preferNewSplit: true,
+      })
+    );
+  });
+
   it('keeps task documents as legacy task blocks on touch', async () => {
     vi.mocked(isTouchDevice).mockReturnValue(true);
     const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));

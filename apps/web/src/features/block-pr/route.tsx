@@ -4,8 +4,8 @@ import { withAuth } from '@components/app/split-layout/split-router/app-route-sh
 import { lazy, onMount } from 'solid-js';
 import { z } from 'zod';
 
-const PrDetail = lazy(async () => ({
-  default: (await import('./views/PrDetail')).PrDetail,
+const StandalonePrDetail = lazy(async () => ({
+  default: (await import('./views/PrDetail')).StandalonePrDetail,
 }));
 
 const PrDetailRouteView = withAuth(() => {
@@ -18,7 +18,7 @@ const PrDetailRouteView = withAuth(() => {
       entityId: params.foreignEntityId,
     });
   });
-  return <PrDetail foreignEntityId={params.foreignEntityId} />;
+  return <StandalonePrDetail foreignEntityId={params.foreignEntityId} />;
 });
 
 export const prDetailRoute = defineRoute({
