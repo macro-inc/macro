@@ -52,6 +52,7 @@ type PrDetailBodyProps = {
   data?: PrForeignEntityData;
   status: ReturnType<typeof usePrForeignEntityQuery>['status'];
   discussionSource: ReturnType<typeof createPrDiscussionSource>;
+  onRetry: () => void;
 };
 
 function PrDetailSkeleton() {
@@ -81,7 +82,7 @@ export function PrDetailBody(props: PrDetailBodyProps) {
             fallback={
               <Show
                 when={props.status !== 'error'}
-                fallback={<PrLoadErrorBanner />}
+                fallback={<PrLoadErrorBanner onRetry={props.onRetry} />}
               >
                 <PrDetailSkeleton />
               </Show>
@@ -134,6 +135,7 @@ export function PrDetailContent(props: PrDetailBodyProps) {
               foreignEntityId={props.foreignEntityId}
               data={props.data}
               status={props.status}
+              onRetry={props.onRetry}
               discussionSource={props.discussionSource}
             />
           </div>
@@ -191,6 +193,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
           data={detail.data()}
           status={detail.query.status}
           discussionSource={detail.discussionSource}
+          onRetry={() => void detail.query.refetch()}
         />
       </div>
     </SidePanel.Root>
@@ -289,10 +292,13 @@ function PrDescription(props: { pullRequest?: GithubPullRequestWithDetails }) {
   );
 }
 
-function PrLoadErrorBanner() {
+function PrLoadErrorBanner(props: { onRetry: () => void }) {
   return (
-    <div class="mt-6 px-3 py-2 rounded-lg border border-edge-muted text-xs text-ink-muted">
-      Couldn't load this pull request from cached GitHub data.
+    <div class="mt-6 flex flex-col items-start gap-3 rounded-lg border border-edge-muted px-3 py-2 text-xs text-ink-muted">
+      <span>Couldn't load this pull request from cached GitHub data.</span>
+      <Button variant="outline" size="sm" onClick={props.onRetry}>
+        Retry
+      </Button>
     </div>
   );
 }

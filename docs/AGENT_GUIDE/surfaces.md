@@ -784,7 +784,7 @@ Copy Link from a PR in Quick Access copies `/app/reviews/pr/<foreignEntityId>`.
 Old `/app/pr/<foreignEntityId>` links redirect to Reviews. Check a copied link,
 a PR opened from a list or agent session, a second split, breadcrumb return,
 side-panel toggle, and phone layout. If no GitHub data loads, the detail shows
-an error banner.
+an error banner with a Retry button; pressing it refetches the PR in place.
 
 ## Calls — `/app/component/calls`
 
