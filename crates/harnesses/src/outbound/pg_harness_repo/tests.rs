@@ -345,8 +345,9 @@ async fn bound_agents_lists_only_live_agents_of_this_harness(pool: PgPool) {
     .unwrap();
     sqlx::query!(
         r#"
-        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id)
-        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2)
+        INSERT INTO agent_configs
+            (bot_id, instructions, harness, default_model, channel_scope, harness_id, is_coding)
+        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2, true)
         "#,
         bot_id,
         harness_id,
@@ -371,8 +372,9 @@ async fn bound_agents_lists_only_live_agents_of_this_harness(pool: PgPool) {
     .unwrap();
     sqlx::query!(
         r#"
-        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope)
-        VALUES ($1, 'prompt', 'in-memory', 'default', 'all')
+        INSERT INTO agent_configs
+            (bot_id, instructions, harness, default_model, channel_scope, is_coding)
+        VALUES ($1, 'prompt', 'in-memory', 'default', 'all', false)
         "#,
         other_bot,
     )
@@ -422,8 +424,9 @@ async fn sessions_list_only_this_harness_newest_first(pool: PgPool) {
     .unwrap();
     sqlx::query!(
         r#"
-        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id)
-        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2)
+        INSERT INTO agent_configs
+            (bot_id, instructions, harness, default_model, channel_scope, harness_id, is_coding)
+        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2, true)
         "#,
         bot_id,
         harness_id,
@@ -472,8 +475,9 @@ async fn sessions_list_only_this_harness_newest_first(pool: PgPool) {
     .unwrap();
     sqlx::query!(
         r#"
-        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope)
-        VALUES ($1, 'prompt', 'in-memory', 'default', 'all')
+        INSERT INTO agent_configs
+            (bot_id, instructions, harness, default_model, channel_scope, is_coding)
+        VALUES ($1, 'prompt', 'in-memory', 'default', 'all', false)
         "#,
         other_bot,
     )
