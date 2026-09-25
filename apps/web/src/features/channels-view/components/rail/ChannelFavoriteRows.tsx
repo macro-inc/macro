@@ -33,6 +33,12 @@ export function ChannelFavoriteRow(props: { favorite: Favorite }) {
     props.favorite.entityType === 'channel'
       ? rail.channelById(props.favorite.entityId)
       : undefined;
+  const focusRow = () => {
+    rail.list.focus.set(rowKeyForFavorite(props.favorite), {
+      reason: 'pointer',
+      force: true,
+    });
+  };
 
   const row = (
     <ViewSidebar.Item
@@ -65,7 +71,13 @@ export function ChannelFavoriteRow(props: { favorite: Favorite }) {
     <Show
       when={channel()}
       fallback={
-        <FavoriteContextMenu favorite={props.favorite} triggerClass="block">
+        <FavoriteContextMenu
+          favorite={props.favorite}
+          triggerClass="block"
+          onOpenChange={(open) => {
+            if (open) focusRow();
+          }}
+        >
           {row}
         </FavoriteContextMenu>
       }

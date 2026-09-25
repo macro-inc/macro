@@ -15,6 +15,7 @@ import { ChannelFavoriteRow } from './ChannelFavoriteRows';
 const rail = vi.hoisted(() => ({
   channelById: (_channelId: string): ChannelEntity | undefined => undefined,
   activateRow: vi.fn(),
+  list: { focus: { set: vi.fn() } },
 }));
 
 vi.mock('./ChannelsRailContext', async (importOriginal) => ({
@@ -61,8 +62,16 @@ vi.mock('./ChannelLabelRows', () => ({
   ),
 }));
 vi.mock('@app/features/favorites/FavoriteContextMenu', () => ({
-  FavoriteContextMenu: (props: ParentProps<{ favorite: Favorite }>) => (
+  FavoriteContextMenu: (
+    props: ParentProps<{
+      favorite: Favorite;
+      onOpenChange?: (open: boolean) => void;
+    }>
+  ) => (
     <div data-testid="favorite-actions" data-entity={props.favorite.entityId}>
+      <button type="button" onClick={() => props.onOpenChange?.(true)}>
+        Open favorite menu
+      </button>
       {props.children}
     </div>
   ),
@@ -138,6 +147,16 @@ describe('favorite rows in the chat rail', () => {
     expect(screen.getByTestId('channel-actions')).toBeTruthy();
     expect(screen.queryByTestId('favorite-actions')).toBeNull();
     expect(screen.getByRole('treeitem')).toBe(row);
+  });
+
+  it('focuses the favorite row when the fallback menu opens', () => {
+    render(() => <ChannelFavoriteRow favorite={favorite} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open favorite menu' }));
+    expect(rail.list.focus.set).toHaveBeenCalledWith(
+      'favorite:channel:design',
+      { reason: 'pointer', force: true }
+    );
   });
 
   it('still activates the favorite row on click', () => {
