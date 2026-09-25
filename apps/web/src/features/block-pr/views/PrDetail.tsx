@@ -10,7 +10,7 @@ import { openExternalUrl } from '@core/util/url';
 import { DebouncedNotificationReadMarker } from '@notifications';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { Button, cn, Layer, Scroll } from '@ui';
-import { type Accessor, createMemo, type JSX, Show } from 'solid-js';
+import { type Accessor, createMemo, Show } from 'solid-js';
 import {
   PrDescriptionSkeleton,
   PrMetadataSkeleton,
@@ -30,22 +30,9 @@ import {
 import type { PrRef } from '../util/prKey';
 import { prDisplayName, prHtmlUrl } from '../util/prKey';
 
-export type PrDetailContext = {
-  prRef: Accessor<PrRef | undefined>;
-  pullRequest: Accessor<GithubPullRequestWithDetails | undefined>;
-  loadFailed: Accessor<boolean>;
-  discussionSource: ReturnType<typeof createPrDiscussionSource>;
-};
-
-/** Owns the PR query and discussion state; consumers compose their own chrome. */
-export function PrDetail(props: {
-  foreignEntityId: string;
-  children: (context: PrDetailContext) => JSX.Element;
-}) {
-  const notificationSource = useGlobalNotificationSource();
-  const foreignEntityQuery = usePrForeignEntityQuery(
-    () => props.foreignEntityId
-  );
+/** Share PR query state without coupling the host's header to the detail body. */
+export function usePrDetail(foreignEntityId: Accessor<string>) {
+  const foreignEntityQuery = usePrForeignEntityQuery(foreignEntityId);
   const data = () =>
     foreignEntityQuery.isSuccess ? foreignEntityQuery.data : undefined;
   const prRef = () => data()?.prRef;
@@ -54,91 +41,95 @@ export function PrDetail(props: {
 
   // Detail-lifetime local Macro discussion (prototype-only, lost on reload).
   const discussionSource = createPrDiscussionSource();
+  return { prRef, pullRequest, loadFailed, discussionSource };
+}
 
+type PrDetailBodyProps = {
+  foreignEntityId: string;
+  prRef?: PrRef;
+  pullRequest?: GithubPullRequestWithDetails;
+  loadFailed: boolean;
+  discussionSource: ReturnType<typeof createPrDiscussionSource>;
+};
+
+export function PrDetailBody(props: PrDetailBodyProps) {
+  const notificationSource = useGlobalNotificationSource();
   return (
     <>
       <DebouncedNotificationReadMarker
         notificationSource={notificationSource}
         entity={{ type: 'foreign_entity', id: props.foreignEntityId }}
       />
-      {props.children({ prRef, pullRequest, loadFailed, discussionSource })}
+      <Scroll class="flex-1 min-h-0">
+        <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
+          <Show
+            when={props.prRef}
+            fallback={
+              <Show
+                when={!props.loadFailed}
+                fallback={<PrLoadErrorBanner loadFailed={props.loadFailed} />}
+              >
+                <PrTitleSkeleton />
+                <div class="spacer h-3" />
+                <PrMetadataSkeleton />
+                <PrDescriptionSkeleton />
+                <PrTimelineSkeleton />
+              </Show>
+            }
+          >
+            {(ref) => (
+              <>
+                <PrTitle prRef={ref()} pullRequest={props.pullRequest} />
+                <div class="spacer h-3" />
+                <PrMetadata prRef={ref()} pullRequest={props.pullRequest} />
+                <PrDescription pullRequest={props.pullRequest} />
+                <PrLoadErrorBanner loadFailed={props.loadFailed} />
+                <PrTimeline
+                  githubItems={props.pullRequest?.comments ?? []}
+                  source={props.discussionSource}
+                />
+              </>
+            )}
+          </Show>
+        </div>
+      </Scroll>
     </>
   );
 }
 
-export function PrDetailBody(props: { detail: PrDetailContext }) {
+/** Native hosts own their header and place this content below it. */
+export function PrDetailContent(props: PrDetailBodyProps) {
   return (
-    <Scroll class="flex-1 min-h-0">
-      <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
-        <Show
-          when={props.detail.prRef()}
-          fallback={
-            <Show
-              when={!props.detail.loadFailed()}
-              fallback={
-                <PrLoadErrorBanner loadFailed={props.detail.loadFailed} />
-              }
-            >
-              <PrTitleSkeleton />
-              <div class="spacer h-3" />
-              <PrMetadataSkeleton />
-              <PrDescriptionSkeleton />
-              <PrTimelineSkeleton />
-            </Show>
-          }
-        >
-          {(ref) => (
-            <>
-              <PrTitle prRef={ref()} pullRequest={props.detail.pullRequest} />
-              <div class="spacer h-3" />
-              <PrMetadata prRef={ref()} pullRequest={props.detail.pullRequest} />
-              <PrDescription pullRequest={props.detail.pullRequest} />
-              <PrLoadErrorBanner loadFailed={props.detail.loadFailed} />
-              <PrTimeline
-                githubItems={props.detail.pullRequest()?.comments ?? []}
-                source={props.detail.discussionSource}
-              />
-            </>
-          )}
-        </Show>
-      </div>
-    </Scroll>
+    <div class="relative min-h-0 min-w-0 flex-1">
+      <SidePanel.Layout headerToggle={false}>
+        <PrSidePanelSections enrichment={props.pullRequest} />
+        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+          <PrDetailBody
+            foreignEntityId={props.foreignEntityId}
+            prRef={props.prRef}
+            pullRequest={props.pullRequest}
+            loadFailed={props.loadFailed}
+            discussionSource={props.discussionSource}
+          />
+        </div>
+      </SidePanel.Layout>
+    </div>
   );
 }
 
-/** Shared native layout. The consumer supplies the top bar above the content and side panel. */
-export function PrDetailLayout(props: {
-  foreignEntityId: string;
-  detail: PrDetailContext;
-  children: JSX.Element;
+export function PrDetailActions(props: {
+  prRef?: PrRef;
+  pullRequest?: GithubPullRequestWithDetails;
 }) {
   return (
-    <SidePanel.Root persistKey={`pr:${props.foreignEntityId}`}>
-      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-        {props.children}
-        <div class="relative min-h-0 min-w-0 flex-1">
-          <SidePanel.Layout headerToggle={false}>
-            <PrSidePanelSections enrichment={props.detail.pullRequest} />
-            <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-              <PrDetailBody detail={props.detail} />
-            </div>
-          </SidePanel.Layout>
-        </div>
-      </div>
-    </SidePanel.Root>
-  );
-}
-
-export function PrDetailActions(props: { detail: PrDetailContext }) {
-  return (
     <div class="ml-auto flex shrink-0 items-center gap-2">
-      <Show when={props.detail.prRef()}>
+      <Show when={props.prRef}>
         {(ref) => (
           <Button
             variant="outline"
             size="sm"
             onClick={() =>
-              openExternalUrl(props.detail.pullRequest()?.url ?? prHtmlUrl(ref()))
+              openExternalUrl(props.pullRequest?.url ?? prHtmlUrl(ref()))
             }
           >
             Open on GitHub
@@ -151,50 +142,60 @@ export function PrDetailActions(props: { detail: PrDetailContext }) {
 }
 
 export function StandalonePrDetail(props: { foreignEntityId: string }) {
+  const detail = usePrDetail(() => props.foreignEntityId);
+  const name = () => {
+    const ref = detail.prRef();
+    return (
+      detail.pullRequest()?.name ?? (ref ? prDisplayName(ref) : 'Pull request')
+    );
+  };
   return (
-    <PrDetail foreignEntityId={props.foreignEntityId}>
-      {(detail) => (
-        <PrDetailLayout foreignEntityId={props.foreignEntityId} detail={detail}>
-          <ViewShell.TopBar class="touch:flex">
-            <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-            <Show when={detail.pullRequest()?.status}>
-              {(status) => <PrStatusIcon status={status()} />}
-            </Show>
-            <span class="min-w-0 truncate text-sm font-semibold">
-              {detail.pullRequest()?.name ??
-                (detail.prRef() ? prDisplayName(detail.prRef()!) : 'Pull request')}
-            </span>
-            <PrDetailActions detail={detail} />
-          </ViewShell.TopBar>
-        </PrDetailLayout>
-      )}
-    </PrDetail>
+    <SidePanel.Root persistKey={`pr:${props.foreignEntityId}`}>
+      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+        <ViewShell.TopBar class="touch:flex">
+          <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+          <Show when={detail.pullRequest()?.status}>
+            {(status) => <PrStatusIcon status={status()} />}
+          </Show>
+          <span class="min-w-0 truncate text-sm font-semibold">{name()}</span>
+          <PrDetailActions
+            prRef={detail.prRef()}
+            pullRequest={detail.pullRequest()}
+          />
+        </ViewShell.TopBar>
+        <PrDetailContent
+          foreignEntityId={props.foreignEntityId}
+          prRef={detail.prRef()}
+          pullRequest={detail.pullRequest()}
+          loadFailed={detail.loadFailed()}
+          discussionSource={detail.discussionSource}
+        />
+      </div>
+    </SidePanel.Root>
   );
 }
 
 function PrTitle(props: {
   prRef: PrRef;
-  pullRequest: Accessor<GithubPullRequestWithDetails | undefined>;
+  pullRequest?: GithubPullRequestWithDetails;
 }) {
   return (
     <h1 class="ph-no-capture text-2xl font-semibold">
-      {props.pullRequest()?.name ?? prDisplayName(props.prRef)}
+      {props.pullRequest?.name ?? prDisplayName(props.prRef)}
     </h1>
   );
 }
 
 function PrMetadata(props: {
   prRef: PrRef;
-  pullRequest: Accessor<GithubPullRequestWithDetails | undefined>;
+  pullRequest?: GithubPullRequestWithDetails;
 }) {
-  const pullRequest = () => props.pullRequest();
-
   return (
     <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
-      <Show when={pullRequest()?.status}>
+      <Show when={props.pullRequest?.status}>
         {(status) => <PrStatusChip status={status()} />}
       </Show>
-      <Show when={pullRequest()?.authorLogin}>
+      <Show when={props.pullRequest?.authorLogin}>
         {(authorLogin) => (
           <Layer depth={2}>
             <a
@@ -216,7 +217,7 @@ function PrMetadata(props: {
       </Show>
       <Layer depth={2}>
         <a
-          href={pullRequest()?.url}
+          href={props.pullRequest?.url}
           target="_blank"
           rel="noreferrer"
           class={cn(PR_PILL_CLASS, 'text-ink-muted hover:bg-hover')}
@@ -226,13 +227,14 @@ function PrMetadata(props: {
       </Layer>
       <Show
         when={
-          pullRequest()?.additions != null || pullRequest()?.deletions != null
+          props.pullRequest?.additions != null ||
+          props.pullRequest?.deletions != null
         }
       >
         <Layer depth={2}>
           <span class={PR_PILL_CLASS}>
-            <span class="text-success">+{pullRequest()?.additions ?? 0}</span>
-            <span class="text-failure">−{pullRequest()?.deletions ?? 0}</span>
+            <span class="text-success">+{props.pullRequest?.additions ?? 0}</span>
+            <span class="text-failure">−{props.pullRequest?.deletions ?? 0}</span>
           </span>
         </Layer>
       </Show>
@@ -240,11 +242,9 @@ function PrMetadata(props: {
   );
 }
 
-function PrDescription(props: {
-  pullRequest: Accessor<GithubPullRequestWithDetails | undefined>;
-}) {
+function PrDescription(props: { pullRequest?: GithubPullRequestWithDetails }) {
   const description = createMemo(() => {
-    const raw = props.pullRequest()?.description;
+    const raw = props.pullRequest?.description;
     if (!raw) return null;
     const cleaned = cleanGithubMarkdown(raw);
     return cleaned || null;
@@ -263,9 +263,9 @@ function PrDescription(props: {
   );
 }
 
-function PrLoadErrorBanner(props: { loadFailed: Accessor<boolean> }) {
+function PrLoadErrorBanner(props: { loadFailed: boolean }) {
   return (
-    <Show when={props.loadFailed()}>
+    <Show when={props.loadFailed}>
       <div class="mt-6 px-3 py-2 rounded-lg border border-edge-muted text-xs text-ink-muted">
         Couldn't load this pull request from cached GitHub data.
       </div>
