@@ -10,7 +10,7 @@ import type { ChatSendInput } from '@core/component/AI/component/input/buildRequ
 import { ModelSelector } from '@core/component/AI/component/input/ModelSelector';
 import {
   defaultModelForPlan,
-  Model,
+  type Model,
   modelsForPlan,
   PAID_MODELS,
   SUPPORTED_ATTACHMENT_EXTENSIONS,
