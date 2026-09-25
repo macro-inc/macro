@@ -55,13 +55,17 @@ export function TopBar(props: {
   onCreateTask?: () => void;
 }) {
   const emailCtx = useEmailThreadState();
-  const openShare = useShareModal(() => ({
-    id: props.id,
-    blockAlias: 'email',
-    itemType: 'email',
-    name: props.title,
-    userPermissions: getPermissions(emailCtx.thread()?.access_level),
-  }));
+  const openShare = useShareModal(() => {
+    const thread = emailCtx.thread();
+    if (!thread) return;
+    return {
+      id: props.id,
+      blockAlias: 'email',
+      itemType: 'email',
+      name: props.title,
+      userPermissions: getPermissions(thread.access_level),
+    };
+  });
   const soup = useMaybeSoup();
   const linksQuery = useEmailLinksQuery();
   const moveToProjectAction = makeMoveToProjectAction();

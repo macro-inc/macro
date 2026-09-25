@@ -90,13 +90,17 @@ export function EmailDetailView(props: {
       'Email'
     );
   };
-  const openShare = useShareModal(() => ({
-    id: props.thread.id,
-    blockAlias: 'email',
-    itemType: 'email',
-    name: title(),
-    userPermissions: getPermissions(threadData()?.thread?.access_level),
-  }));
+  const openShare = useShareModal(() => {
+    const thread = threadData()?.thread;
+    if (!thread) return;
+    return {
+      id: props.thread.id,
+      blockAlias: 'email',
+      itemType: 'email',
+      name: title(),
+      userPermissions: getPermissions(thread.access_level),
+    };
+  });
   const commandEntity = createMemo(() => {
     if (!threadQuery.isSuccess) return undefined;
     const thread = threadQuery.data?.thread;

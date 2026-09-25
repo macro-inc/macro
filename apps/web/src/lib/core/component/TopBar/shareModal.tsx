@@ -10,7 +10,13 @@ import {
   openDialog,
   useImperativeDialog,
 } from '@ui';
-import { type Accessor, type ComponentProps, Suspense } from 'solid-js';
+import {
+  type Accessor,
+  type ComponentProps,
+  createEffect,
+  createSignal,
+  Suspense,
+} from 'solid-js';
 import { getPermissions } from '../SharePermissions';
 import { ShareModal } from './ShareButton';
 
@@ -35,15 +41,30 @@ export function openShareModal(props: ShareModalInput): DialogHandle {
 /**
  * Returns an opener for a share modal owned by the calling component. The
  * modal follows `props` while open and closes when the component unmounts.
+ * Return `undefined` from `props` until the share data has loaded; opening
+ * before then waits for it, so the modal never shows placeholder permissions.
  */
 export function useShareModal(
   props: Accessor<ShareModalInput | undefined>
 ): () => void {
   const dialog = useImperativeDialog(SuspendedShareModal);
+  const [pending, setPending] = createSignal(false);
+
+  const openWith = (initial: ShareModalInput) => {
+    setPending(false);
+    dialog.open(() => props() ?? initial);
+  };
+
+  createEffect(() => {
+    if (!pending()) return;
+    const initial = props();
+    if (initial) openWith(initial);
+  });
+
   return () => {
     const initial = props();
-    if (!initial) return;
-    dialog.open(() => props() ?? initial);
+    if (initial) openWith(initial);
+    else setPending(true);
   };
 }
 
@@ -67,20 +88,20 @@ export function useDocumentShareModal(
 
   return useShareModal(() => {
     const current = target();
-    if (!current) return;
-    const metadata = queryReadyGate(metadataQuery)
-      ? metadataQuery.data
-      : undefined;
-    const accessLevel = queryReadyGate(accessLevelQuery)
-      ? accessLevelQuery.data
-      : undefined;
+    if (
+      !current ||
+      !queryReadyGate(metadataQuery) ||
+      !queryReadyGate(accessLevelQuery)
+    ) {
+      return;
+    }
     return {
       id: current.documentId,
       blockAlias: current.blockAlias,
       itemType: 'document',
-      name: metadata?.documentName ?? '',
-      owner: metadata?.owner,
-      userPermissions: getPermissions(accessLevel),
+      name: metadataQuery.data.documentName,
+      owner: metadataQuery.data.owner,
+      userPermissions: getPermissions(accessLevelQuery.data),
       copyLink: current.copyLink,
     };
   });
