@@ -10,6 +10,7 @@ import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
 import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
@@ -22,12 +23,12 @@ import type { PriorityCollapser } from '@components/app/split-layout/utils/creat
 import { TabsInset } from '@core/component/TabsInset';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelName, useChannelType } from '@core/context/channels';
+import { createMethodRegistration } from '@core/orchestrator';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import {
   type Accessor,
   children,
   createComputed,
-  createMemo,
   createSignal,
   type JSX,
   Match,
@@ -45,6 +46,7 @@ import { ChannelTabProvider, useChannelTab } from './ChannelTabContext';
 import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
 import { toIconTabItems } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
+import { toChannelTargetRequest } from './link';
 import {
   canUseInlineCallTab,
   normalizeChannelTab,
@@ -216,26 +218,38 @@ function ChannelDetailHeader(props: {
 
 function ChannelDetailContent(props: ChannelDetailProps) {
   const panel = useSplitPanelOrThrow();
+  const orchestrator = useGlobalBlockOrchestrator();
   const channelId = props.channelId;
   const channelName = useChannelName(channelId, props.fallbackName);
 
-  // Convert the value-semantic target prop into identity-stable surface
-  // requests: only a changed target or explicit re-open produces a new request.
-  let lastTargetKey: string | undefined;
-  const targetRequest = createMemo<ChannelTargetRequest | undefined>(
-    (previous) => {
-      const target = props.target;
-      const location = !target
-        ? ''
-        : target.kind === 'latest'
-          ? 'latest'
-          : `${target.messageId}:${target.threadId ?? ''}`;
-      const key = `${location}:${props.navigationRequest ?? 0}`;
-      if (lastTargetKey !== undefined && key === lastTargetKey) return previous;
-      lastTargetKey = key;
-      return target ? { ...target } : undefined;
-    }
-  );
+  const requestFromTarget = (
+    target: ChannelTargetRequest | undefined
+  ): ChannelTargetRequest | undefined => (target ? { ...target } : undefined);
+
+  const targetKey = () => {
+    const target = props.target;
+    const location = !target
+      ? ''
+      : target.kind === 'latest'
+        ? 'latest'
+        : `${target.messageId}:${target.threadId ?? ''}`;
+    return `${location}:${props.navigationRequest ?? 0}`;
+  };
+
+  // The surface navigates on a fresh request object. The host's `target` is
+  // value-semantic, so it only produces one when its value changes; a mention
+  // chip or notification arriving through the block handle always does.
+  let lastTargetKey = targetKey();
+  const [targetRequest, setTargetRequest] = createSignal<
+    ChannelTargetRequest | undefined
+  >(requestFromTarget(props.target));
+
+  createComputed(() => {
+    const key = targetKey();
+    if (key === lastTargetKey) return;
+    lastTargetKey = key;
+    setTargetRequest(requestFromTarget(props.target));
+  });
 
   const callCtx = useCallContextOptional();
   // A channel that owns this client's active call opens on the Call tab, so
@@ -261,6 +275,24 @@ function ChannelDetailContent(props: ChannelDetailProps) {
       { defer: true }
     )
   );
+
+  // Mention chips and notifications aim an open channel at a message through
+  // its block handle; without one the click only activates the view.
+  createComputed(() => {
+    const handle = orchestrator.registerBlockHandle('channel', channelId);
+    createMethodRegistration(() => handle, {
+      goToLocationFromParams: async (params: Record<string, unknown>) => {
+        const request = toChannelTargetRequest(params);
+        if (!request) return;
+        setTargetRequest(request);
+        setActiveTab(DEFAULT_CHANNEL_TAB);
+      },
+      goToLatest: async () => {
+        setTargetRequest({ kind: 'latest' });
+        setActiveTab(DEFAULT_CHANNEL_TAB);
+      },
+    });
+  });
 
   // CallContext: which channel has the Call tab selected (for isCallPage(), etc.).
   createComputed(() =>
