@@ -50,7 +50,6 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
-| `/app/debug/ui?ui=magic-chip` | Magic Chip prototype: status badges, desktop/mobile widths, PR/session previews, and simulated lazy loading. Actions inspect local fixtures only. |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
 
 When an event opens inline from Home, changing the Calendar period stays under
