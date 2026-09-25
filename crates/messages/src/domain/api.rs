@@ -53,6 +53,15 @@ pub trait MessageCommands: Send + Sync + 'static {
         access: EntityAccessReceipt<MessageWrite>,
         input: PostMessage,
     ) -> Result<Message, MessageError>;
+    /// Idempotently post a trusted server event, using its UUIDv7 as the message
+    /// id without a client clock-skew limit. Replays return the original message,
+    /// including tombstones, after checking its parent, author, and thread.
+    async fn post_from_event(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        event_id: Uuid,
+        input: PostMessage,
+    ) -> Result<Message, MessageError>;
     /// Apply partial body, mention, and attachment changes under the common policy.
     async fn patch(
         &self,
@@ -156,6 +165,14 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
     ) -> Result<Message, MessageError> {
         MessageService::post(self, access, input).await
     }
+    async fn post_from_event(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        event_id: Uuid,
+        input: PostMessage,
+    ) -> Result<Message, MessageError> {
+        MessageService::post_from_event(self, access, event_id, input).await
+    }
     async fn patch(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -250,6 +267,13 @@ mockall::mock! {
     async fn post(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
+        input: PostMessage,
+    ) -> Result<Message, MessageError>;
+    /// Post or recover the message belonging to a trusted server event.
+    async fn post_from_event(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        event_id: Uuid,
         input: PostMessage,
     ) -> Result<Message, MessageError>;
     /// Apply partial body, mention, and attachment changes under the common policy.

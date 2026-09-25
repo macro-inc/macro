@@ -1,8 +1,9 @@
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata,
-    ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata, ThreadMessageKind,
+    AgentAssignedToTaskEvent, AgentBotMentionedEvent, AgentMentionedEvent, AgentTriggerTopicEvent,
+    ChannelEventMetadata, ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata,
+    ThreadMessageKind,
 };
 use bot_id::{BotId, MACRO_CODER_BOT_ID};
 use channel_sender::ChannelSender;
@@ -303,6 +304,107 @@ fn a_document_mention_opens_and_follows_up_on_its_document() {
     };
     assert_eq!(session_id, AgentSessionId::TEST_A);
     assert_eq!(prompt.origin.parent, document());
+}
+
+fn assigned_to_task(sender: ChannelSender<'static>) -> AgentTriggerTopicEvent {
+    AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
+        AgentAssignedToTaskEvent {
+            bot_id: BotId::TEST_A,
+            message: MessagePostedMetadata {
+                content: "Complete the assigned task".to_owned(),
+                ..document_message(sender)
+            },
+        },
+    ))
+}
+
+#[test]
+fn assigning_a_managed_agent_opens_on_the_task_discussion() {
+    let event = assigned_to_task(ChannelSender::new_from_user(user()));
+    assert_eq!(agent_trigger_bot_id(&event), Some(BotId::TEST_A));
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
+        route_agent_trigger(event, runtime(AgentKind::InMemory), &links())
+            .expect("a managed assignment opens a session")
+    else {
+        panic!("an assignment should open a session");
+    };
+    assert_eq!(open.bot_id, BotId::TEST_A);
+    assert_eq!(open.origin.parent, document());
+    assert_eq!(open.origin.thread_id, Uuid::from_u128(2));
+    assert_eq!(open.origin.message_id, Uuid::from_u128(2));
+    assert_eq!(open.origin.sender, user());
+    assert_eq!(open.origin.content, "Complete the assigned task");
+}
+
+#[test]
+fn assigning_an_external_agent_leaves_session_creation_to_its_runtime() {
+    assert_eq!(
+        route_agent_trigger(
+            assigned_to_task(ChannelSender::new_from_user(user())),
+            runtime(AgentKind::External),
+            &links(),
+        )
+        .unwrap_err(),
+        Skipped::ForeignBot,
+    );
+}
+
+#[test]
+fn assigning_an_agent_requires_a_human_session_owner() {
+    assert_eq!(
+        route_agent_trigger(
+            assigned_to_task(ChannelSender::new_from_bot(BotId::TEST_B)),
+            runtime(AgentKind::InMemory),
+            &links(),
+        )
+        .unwrap_err(),
+        Skipped::NotFromUser,
+    );
+}
+
+#[test]
+fn task_discussion_followups_keep_the_managed_and_external_session_origin() {
+    let thread_id = Uuid::from_u128(7);
+    let message_id = Uuid::from_u128(8);
+    let followed =
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
+            bot_id: BotId::TEST_A,
+            session_id: AgentSessionId::TEST_A,
+            kind: ThreadMessageKind::MentionThread,
+            message: MessagePostedMetadata {
+                message_id,
+                thread_id: Some(thread_id),
+                root_id: thread_id,
+                content: "Include a regression test".to_owned(),
+                ..document_message(ChannelSender::new_from_user(user()))
+            },
+        }));
+    let RoutedTrigger::Command(session_id, HarnessCommand::Deliver(deliver)) =
+        route_agent_trigger(followed.clone(), runtime(AgentKind::InMemory), &links())
+            .expect("a managed follow-up delivers")
+    else {
+        panic!("a managed follow-up should deliver");
+    };
+    assert_eq!(session_id, AgentSessionId::TEST_A);
+    assert_eq!(
+        deliver.action,
+        AgentAction::prompt("Include a regression test")
+    );
+    let origin = deliver.announce.expect("a task follow-up announces");
+    assert_eq!(origin.parent, document());
+    assert_eq!(origin.thread_id, thread_id);
+    assert_eq!(origin.message_id, message_id);
+
+    let RoutedTrigger::Announce(session_id, prompt) =
+        route_agent_trigger(followed, runtime(AgentKind::External), &links())
+            .expect("an external follow-up announces")
+    else {
+        panic!("an external follow-up should announce");
+    };
+    assert_eq!(session_id, AgentSessionId::TEST_A);
+    assert_eq!(prompt.origin.parent, document());
+    assert_eq!(prompt.origin.thread_id, thread_id);
+    assert_eq!(prompt.origin.message_id, message_id);
 }
 
 #[test]

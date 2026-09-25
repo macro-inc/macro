@@ -102,11 +102,11 @@ pub type ToolEmailService = EmailServiceImpl<
 /// graceful shutdown by the hosting process.
 pub type ToolEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
-/// Event broker used by bot tools across hosts that either do or do not have
+/// Event broker used by bot and property tools across hosts that either do or do not have
 /// Kafka lifecycle publishing configured.
 #[derive(Clone)]
 pub enum ToolBotEventBroker {
-    /// Publish bot lifecycle events through the shared Kafka broker.
+    /// Publish lifecycle events through the shared Kafka broker.
     Real(ToolEventBroker),
     /// Drop lifecycle events in hosts that do not configure Kafka.
     NoOp(NoopMacroEventBroker),
@@ -442,7 +442,13 @@ pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
-    let properties = build_properties_service(pool.clone(), entity_access_service.clone());
+    // This CRM-only context does not assign tasks. Task writes use the host's
+    // shared properties context, which carries its lifecycle event broker.
+    let properties = build_properties_service(
+        pool.clone(),
+        entity_access_service.clone(),
+        ToolBotEventBroker::NoOp(NoopMacroEventBroker),
+    );
     CrmToolContext {
         service: Arc::new(crm::domain::service::CrmServiceImpl::new(
             crm::outbound::companies_repo::CompaniesRepositoryImpl::new(pool.clone()),
@@ -868,6 +874,7 @@ pub type ToolPropertiesService = properties::PropertiesServiceImpl<
     properties::PropertiesPgRepo,
     properties::PermissionServiceImpl<ToolEntityAccessService>,
     NoOpNotificationService,
+    ToolBotEventBroker,
 >;
 
 /// Imported-document property enrichment backed by the AI tool host's Properties service.
@@ -882,15 +889,19 @@ pub type ToolPropertiesToolContext =
 pub fn build_properties_service(
     pool: sqlx::PgPool,
     entity_access_service: Arc<ToolEntityAccessService>,
+    event_broker: ToolBotEventBroker,
 ) -> Arc<ToolPropertiesService> {
-    Arc::new(properties::PropertiesServiceImpl::new(
-        properties::PropertiesPgRepo::new(pool.clone()),
-        Some(properties::PermissionServiceImpl::new(
-            pool,
-            entity_access_service,
-        )),
-        Some(NoOpNotificationService),
-    ))
+    Arc::new(
+        properties::PropertiesServiceImpl::new(
+            properties::PropertiesPgRepo::new(pool.clone()),
+            Some(properties::PermissionServiceImpl::new(
+                pool,
+                entity_access_service,
+            )),
+            Some(NoOpNotificationService),
+        )
+        .with_event_broker(event_broker),
+    )
 }
 
 /// Build the real task properties adapter used by document creation tools.

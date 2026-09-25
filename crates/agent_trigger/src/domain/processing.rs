@@ -40,6 +40,9 @@ pub trait ChannelTypeLookup: Send + Sync + 'static {
 /// Failure while evaluating or publishing one message event.
 #[derive(Debug, thiserror::Error)]
 pub enum ProcessMessageEventError {
+    /// The assignment's discussion could not be read or created.
+    #[error("failed to open the task assignment discussion: {0}")]
+    Discussion(#[source] messages::domain::ports::MessageError),
     /// Trigger evaluation could not read its session or bot context.
     #[error(transparent)]
     Evaluate(#[from] AgentSessionError),

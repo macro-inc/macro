@@ -56,6 +56,7 @@ macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_queues = { path = "../../crates/macro_queues" }
 lexical_client = { path = "../../crates/lexical_client" }
+document_storage_service_client = { path = "../../crates/document_storage_service_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 messages = { path = "../../crates/messages", features = ["broker", "delivery"] }

@@ -1,5 +1,8 @@
 //! General entity property query helpers.
 
+#[cfg(test)]
+mod test;
+
 use models_properties::service::{entity_property::EntityProperty, property_value::PropertyValue};
 use models_properties::{EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
@@ -26,8 +29,8 @@ impl EntityPropertyMutationRow {
             Some(value) if !value.is_null() => Some(serde_json::from_value(value)?),
             Some(_) | None => None,
         };
-        // The pre-write value is display metadata; a row whose stored shape
-        // no longer decodes must not fail the mutation that fixes it.
+        // The pre-write value supports display metadata and change triggers.
+        // Treat undecodable legacy values as absent so a mutation can fix them.
         let previous_value = self
             .previous
             .filter(|value| !value.is_null())
@@ -51,8 +54,8 @@ impl EntityPropertyMutationRow {
 /// Upsert an entity property value (insert or update).
 /// If the property doesn't exist, it will be created and attached to the entity.
 /// If it exists, the value will be updated. The returned snapshot carries the
-/// pre-write value (snapshotted by the CTE in the same statement) for
-/// activity's "changed X from A to B" transitions.
+/// pre-write value captured after serializing concurrent writes, so consumers
+/// can distinguish newly assigned agents from unchanged values.
 pub async fn upsert_entity_property(
     pool: &Pool<Postgres>,
     entity_id: &str,
@@ -60,6 +63,52 @@ pub async fn upsert_entity_property(
     property_definition_id: Uuid,
     value: Option<PropertyValue>,
 ) -> anyhow::Result<EntityPropertyMutationSnapshot> {
+    let mut tx = pool.begin().await?;
+    let snapshot = upsert_entity_property_in_transaction(
+        &mut tx,
+        entity_id,
+        entity_type,
+        property_definition_id,
+        value,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(snapshot)
+}
+
+async fn upsert_entity_property_in_transaction(
+    tx: &mut sqlx::PgConnection,
+    entity_id: &str,
+    entity_type: EntityType,
+    property_definition_id: Uuid,
+    value: Option<PropertyValue>,
+) -> anyhow::Result<EntityPropertyMutationSnapshot> {
+    // Serialize first assignments even when no row exists to lock yet. Keep
+    // this separate from the UPSERT so its statement snapshot starts after
+    // the preceding writer commits, rather than before waiting for that row.
+    sqlx::query!(
+        r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
+        format!("entity_property:{entity_type}:{entity_id}:{property_definition_id}"),
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    // Other property operations use row locks rather than this advisory lock.
+    // Wait for those writers too before the UPSERT captures its previous value.
+    sqlx::query_scalar!(
+        r#"
+            SELECT values as "values: serde_json::Value"
+            FROM entity_properties
+            WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+            FOR UPDATE
+            "#,
+        entity_id,
+        entity_type as EntityType,
+        property_definition_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
     let id = macro_uuid::generate_uuid_v7();
 
     // Serialize PropertyValue to JSONB (or NULL if None)
@@ -70,9 +119,7 @@ pub async fn upsert_entity_property(
 
     tracing::debug!(value_json = ?value_json, "upserting entity property");
 
-    // Single UPSERT operation - handles both INSERT and UPDATE cases.
-    // RETURNING yields the canonical assignment for both branches without a
-    // second query; the CTE snapshots the pre-statement value.
+    // The locks above make this fresh statement snapshot authoritative.
     let row = sqlx::query_as!(
         EntityPropertyMutationRow,
         r#"
@@ -102,7 +149,7 @@ pub async fn upsert_entity_property(
         property_definition_id,
         value_json
     )
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
 
     tracing::debug!("successfully upserted entity property");

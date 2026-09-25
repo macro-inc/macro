@@ -9,16 +9,19 @@
 //! until the producer retires it. Only one source is read at a time: every
 //! channel post is published on both topics, so reading both would evaluate
 //! every channel mention twice.
+//! Both configurations also read `macro.properties` for task assignments.
 
 #[cfg(test)]
 mod test;
 
 use super::broker_events::posted_from_channel_event;
 use super::processing::TriggerInput;
+use super::task_assignment::TaskAssignment;
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use macro_event_broker::{MacroEvent as _, MacroEventCollection};
 use macro_uuid::Uuid;
 use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
+use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use serde::Deserialize;
 
 /// Which topic a trigger consumer subscribes to.
@@ -46,8 +49,8 @@ impl std::str::FromStr for TriggerEventSource {
     }
 }
 
-macro_event_broker::declare_topics!(MessageTriggerEvents: MessageMacroEvent);
-macro_event_broker::declare_topics!(ChannelTriggerEvents: ChannelMacroEvent);
+macro_event_broker::declare_topics!(MessageTriggerEvents: MessageMacroEvent, PropertyMacroEvent);
+macro_event_broker::declare_topics!(ChannelTriggerEvents: ChannelMacroEvent, PropertyMacroEvent);
 
 /// A decoded broker record from one trigger source.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,6 +62,8 @@ pub struct DecodedTrigger {
     /// The committed post, when the record was one; other facts on the topic
     /// carry no trigger.
     pub posted: Option<TriggerInput>,
+    /// Newly assigned agents, independent of the configured message source.
+    pub assignment: Option<TaskAssignment>,
 }
 
 /// A topic collection whose records may carry a committed post.
@@ -74,7 +79,10 @@ impl TriggerEvents for MessageTriggerEvents {
     const SOURCE: TriggerEventSource = TriggerEventSource::Messages;
 
     fn into_trigger(self) -> DecodedTrigger {
-        let Self::MessageMacroEvent(event) = self;
+        let event = match self {
+            Self::MessageMacroEvent(event) => event,
+            Self::PropertyMacroEvent(event) => return property_trigger(event),
+        };
         let envelope = event.event();
         let (event_type, posted) = match &envelope.event {
             MessageTopicEvent::Posted(posted) => (
@@ -94,6 +102,7 @@ impl TriggerEvents for MessageTriggerEvents {
             event_id: envelope.event_id,
             event_type,
             posted,
+            assignment: None,
         }
     }
 }
@@ -102,7 +111,10 @@ impl TriggerEvents for ChannelTriggerEvents {
     const SOURCE: TriggerEventSource = TriggerEventSource::Channels;
 
     fn into_trigger(self) -> DecodedTrigger {
-        let Self::ChannelMacroEvent(event) = self;
+        let event = match self {
+            Self::ChannelMacroEvent(event) => event,
+            Self::PropertyMacroEvent(event) => return property_trigger(event),
+        };
         let envelope = event.event();
         let posted = match &envelope.event {
             ChannelTopicEvent::MessagePosted(posted) => Some(TriggerInput {
@@ -115,7 +127,31 @@ impl TriggerEvents for ChannelTriggerEvents {
             event_id: envelope.event_id,
             event_type: channel_event_type(&envelope.event),
             posted,
+            assignment: None,
         }
+    }
+}
+
+fn property_trigger(event: PropertyMacroEvent) -> DecodedTrigger {
+    let envelope = event.event();
+    let (event_type, assignment) = match &envelope.event {
+        PropertyTopicEvent::EntityPropertyUpdated(updated) => (
+            "entity_property.updated",
+            TaskAssignment::from_update(envelope.event_id, updated),
+        ),
+        PropertyTopicEvent::Created(_) => ("property.created", None),
+        PropertyTopicEvent::Deleted(_) => ("property.deleted", None),
+        PropertyTopicEvent::OptionCreated(_) => ("property_option.created", None),
+        PropertyTopicEvent::OptionUpdated(_) => ("property_option.updated", None),
+        PropertyTopicEvent::OptionDeleted(_) => ("property_option.deleted", None),
+        PropertyTopicEvent::EntityPropertyDeleted(_) => ("entity_property.deleted", None),
+        PropertyTopicEvent::EntityPropertiesCleared(_) => ("entity_properties.cleared", None),
+    };
+    DecodedTrigger {
+        event_id: envelope.event_id,
+        event_type,
+        posted: None,
+        assignment,
     }
 }
 

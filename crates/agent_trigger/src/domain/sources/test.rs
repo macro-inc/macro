@@ -159,9 +159,15 @@ fn the_message_source_carries_the_persisted_parent_through() {
 }
 
 #[test]
-fn each_source_reads_exactly_one_topic() {
-    assert_eq!(MessageTriggerEvents::topics(), ["macro.messages"]);
-    assert_eq!(ChannelTriggerEvents::topics(), ["macro.channels"]);
+fn each_source_reads_one_message_topic_and_properties() {
+    assert_eq!(
+        MessageTriggerEvents::topics(),
+        ["macro.messages", "macro.properties"]
+    );
+    assert_eq!(
+        ChannelTriggerEvents::topics(),
+        ["macro.channels", "macro.properties"]
+    );
     assert_eq!(
         "channels".parse::<TriggerEventSource>().unwrap(),
         TriggerEventSource::Channels

@@ -98,6 +98,15 @@ impl MessageReader for FakeMessages {
 
 #[async_trait::async_trait]
 impl MessageCommands for FakeMessages {
+    async fn post_from_event(
+        &self,
+        _: EntityAccessReceipt<MessageWrite>,
+        _: Uuid,
+        _: PostMessage,
+    ) -> Result<Message, MessageError> {
+        unimplemented!("comment tools do not post broker events")
+    }
+
     async fn post(
         &self,
         access: EntityAccessReceipt<MessageWrite>,

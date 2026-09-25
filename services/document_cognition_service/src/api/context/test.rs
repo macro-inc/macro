@@ -246,20 +246,22 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
-    let properties_service =
-        ai_tools::build_properties_service(pool.clone(), entity_access_service.clone());
-    let task_properties_service = ai_tools::build_task_properties_adapter(
-        pool.clone(),
-        properties_service.clone(),
-        entity_access_service.clone(),
-    );
-
     // Producer creation is lazy: nothing connects to Kafka unless an event
     // is published, so a dummy broker address is safe for tests.
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new("localhost:9092")
             .expect("kafka producer config is valid"),
         TaskTracker::new(),
+    );
+    let properties_service = ai_tools::build_properties_service(
+        pool.clone(),
+        entity_access_service.clone(),
+        ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
+    );
+    let task_properties_service = ai_tools::build_task_properties_adapter(
+        pool.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
     );
 
     let document_service = documents::domain::service::DocumentServiceImpl::new(

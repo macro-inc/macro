@@ -136,14 +136,18 @@ pub async fn build_tool_service_context(
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         pool.clone(),
     )));
-    let properties_service =
-        ai_tools::build_properties_service(pool.clone(), entity_access_service.clone());
-    let task_properties_service =
-        ai_tools::build_task_properties_adapter(
-            pool.clone(),
-            properties_service.clone(),
-            entity_access_service.clone(),
-        );
+    // This legacy context has no Kafka publisher configured; the memory binary
+    // uses build_tool_service_context_from_env with its shared real broker.
+    let properties_service = ai_tools::build_properties_service(
+        pool.clone(),
+        entity_access_service.clone(),
+        ai_tools::ToolBotEventBroker::NoOp(Default::default()),
+    );
+    let task_properties_service = ai_tools::build_task_properties_adapter(
+        pool.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
     let document_service = documents::domain::service::DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -227,7 +231,6 @@ pub async fn build_tool_service_context(
         ),
         (*entity_access_service).clone(),
     );
-
 
     let skill_tool_context =
         ai_tools::build_skill_tool_context(search_client.clone(), soup_service.clone());

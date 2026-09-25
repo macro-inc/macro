@@ -91,6 +91,16 @@ including properties that do not have a value yet. Click a preview pill to edit 
 opening the task; the property picker keeps the preview open while you make a selection.
 Users with view or comment access see the same pills read-only.
 
+The Assignees picker offers people and available agents together. Agent rows show
+their name and an `Agent` label; saved agents also show their `@handle`. Search by
+name or handle to find one. Built-in session agents follow the same availability
+as message mentions, alongside your own and team agents.
+Select an agent in the task composer, then create the task to start its session.
+For an existing task, add an agent to Assignees and dismiss the picker to save and
+start the session. The agent replies in the task's Discussion. People and agents
+can remain assigned together. Removing an agent and saving, then assigning it
+again starts a new session; saving an unchanged assignment does not restart it.
+
 Selecting Status or Priority dismisses the picker immediately, without waiting
 for the save request. With the GraphQL cache active, the pill updates
 optimistically while the request is pending. To verify, delay `SetEntityProperty`

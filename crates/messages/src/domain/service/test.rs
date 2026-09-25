@@ -3,6 +3,8 @@ use chrono::Utc;
 use entity_access::domain::models::{AccessLevel, EntityAccessAuth};
 use std::sync::{Arc, Mutex};
 
+mod event_posts;
+
 #[derive(Clone)]
 struct Repo {
     message: Message,
@@ -12,6 +14,7 @@ struct Repo {
     thread_deletes: Arc<Mutex<Vec<Uuid>>>,
     creates: Arc<Mutex<Vec<CreateMessage>>>,
     edits: Arc<Mutex<Vec<EditMessage>>>,
+    concurrent_create: bool,
 }
 
 impl Repo {
@@ -50,6 +53,9 @@ impl MessageRepository for Repo {
         Ok(true)
     }
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
+        if self.concurrent_create && self.creates.lock().unwrap().is_empty() {
+            return Ok(None);
+        }
         let mut message = std::iter::once(&self.message)
             .chain(&self.replies)
             .find(|message| message.parent == *parent && message.id == id)
@@ -102,7 +108,12 @@ impl MessageRepository for Repo {
         })
     }
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
+        if command.input.id == Some(self.message.id) {
+            self.creates.lock().unwrap().push(command);
+            return Err(MessageError::Conflict);
+        }
         let mut message = self.message.clone();
+        message.id = command.input.id.unwrap_or(message.id);
         message.parent = command.parent.clone();
         message.sender_id = command.actor.clone();
         message.content = command.input.content.clone();
@@ -230,6 +241,7 @@ fn fixture() -> Repo {
         thread_deletes: Arc::default(),
         creates: Arc::default(),
         edits: Arc::default(),
+        concurrent_create: false,
     }
 }
 

@@ -182,6 +182,49 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     pub async fn post(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
+        input: PostMessage,
+    ) -> Result<Message, MessageError> {
+        if let Some(id) = input.id {
+            validate_client_id(id, chrono::Utc::now())?;
+        }
+        self.post_validated(access, input).await
+    }
+
+    /// Post a trusted server event once, including after long broker delays.
+    /// Replays return the stored message even if its discussion was deleted;
+    /// they never restore deleted content or publish another message event.
+    #[tracing::instrument(err, skip(self, access, input))]
+    pub async fn post_from_event(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        event_id: Uuid,
+        mut input: PostMessage,
+    ) -> Result<Message, MessageError> {
+        validate_uuid_v7(event_id)?;
+        let parent = parent_from_receipt(&access)?;
+        let actor = actor_from_receipt(&access, &parent)?;
+        self.ensure_parent(&parent).await?;
+        let thread_id = input.thread_id;
+        if let Some(message) = self.repo.get(&parent, event_id).await? {
+            return validate_event_message(message, &parent, &actor, thread_id);
+        }
+        input.id = Some(event_id);
+        match self.post_validated(access, input).await {
+            Err(MessageError::Conflict) => {
+                let message = self
+                    .repo
+                    .get(&parent, event_id)
+                    .await?
+                    .ok_or(MessageError::Conflict)?;
+                validate_event_message(message, &parent, &actor, thread_id)
+            }
+            result => result,
+        }
+    }
+
+    async fn post_validated(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
         mut input: PostMessage,
     ) -> Result<Message, MessageError> {
         let parent = parent_from_receipt(&access)?;
@@ -751,10 +794,29 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
     {
         return Err(MessageError::Invalid("invalid PDF comment geometry"));
     }
-    if let Some(id) = input.id {
-        validate_client_id(id, chrono::Utc::now())?;
-    }
     Ok(())
+}
+
+fn validate_event_message(
+    message: Message,
+    parent: &MessageParent,
+    actor: &ChannelSender<'static>,
+    thread_id: Option<Uuid>,
+) -> Result<Message, MessageError> {
+    if message.parent != *parent || message.sender_id != *actor || message.thread_id != thread_id {
+        return Err(MessageError::Conflict);
+    }
+    Ok(message)
+}
+
+fn validate_uuid_v7(id: Uuid) -> Result<chrono::DateTime<chrono::Utc>, MessageError> {
+    id.get_timestamp()
+        .filter(|_| id.get_version_num() == 7)
+        .and_then(|timestamp| {
+            let (seconds, nanos) = timestamp.to_unix();
+            chrono::DateTime::from_timestamp(i64::try_from(seconds).ok()?, nanos)
+        })
+        .ok_or(MessageError::Invalid("message id must be a UUIDv7"))
 }
 
 /// How far a client-minted id's timestamp may drift from the server clock.
@@ -765,14 +827,7 @@ const CLIENT_ID_MAX_SKEW: chrono::TimeDelta = chrono::TimeDelta::days(1);
 /// A client-minted id must be a UUIDv7 stamped near now, so its embedded time
 /// stays roughly the message's creation time.
 fn validate_client_id(id: Uuid, now: chrono::DateTime<chrono::Utc>) -> Result<(), MessageError> {
-    let minted_at = id
-        .get_timestamp()
-        .filter(|_| id.get_version_num() == 7)
-        .and_then(|timestamp| {
-            let (seconds, nanos) = timestamp.to_unix();
-            chrono::DateTime::from_timestamp(i64::try_from(seconds).ok()?, nanos)
-        })
-        .ok_or(MessageError::Invalid("message id must be a UUIDv7"))?;
+    let minted_at = validate_uuid_v7(id)?;
     if (now - minted_at).abs() > CLIENT_ID_MAX_SKEW {
         return Err(MessageError::Invalid(
             "message id timestamp is too far from the server clock",

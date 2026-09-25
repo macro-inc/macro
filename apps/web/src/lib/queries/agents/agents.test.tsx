@@ -9,6 +9,7 @@ import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { botKeys } from '../bots/keys';
 import { channelKeys } from '../channel/keys';
 import { agentKeys } from './keys';
 
@@ -115,6 +116,12 @@ describe('agent channel-bot cache invalidation', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: channelKeys.channelBots('channel-other').queryKey,
     });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: botKeys.list.queryKey,
+    });
+    expect(
+      testQueryClient.getQueryData(botKeys.detail(created.bot.id).queryKey)
+    ).toEqual(created.bot);
   });
 
   it('invalidates old and new channel bot queries after editing', async () => {
@@ -134,6 +141,12 @@ describe('agent channel-bot cache invalidation', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: channelKeys.channelBots('channel-new').queryKey,
     });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: botKeys.list.queryKey,
+    });
+    expect(
+      testQueryClient.getQueryData(botKeys.detail(updated.bot.id).queryKey)
+    ).toEqual(updated.bot);
   });
 
   it('removes a deleted agent and invalidates its channel bot queries', async () => {

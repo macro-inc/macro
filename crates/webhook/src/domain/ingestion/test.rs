@@ -1441,6 +1441,94 @@ async fn a_document_trigger_is_gated_by_its_document() {
     );
 }
 
+fn agent_trigger_task_assignment_event() -> Event<AgentTriggerTopicEvent> {
+    use agent_trigger::domain::broker_events::{AgentAssignedToTaskEvent, NewAgentSessionEvent};
+
+    Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::AssignedToTask(AgentAssignedToTaskEvent {
+            bot_id: bot_id::BotId::TEST_A,
+            message: messages::domain::events::MessagePostedMetadata {
+                parent: messages::domain::models::MessageParent::parse("document", DOCUMENT_ID)
+                    .unwrap(),
+                message_id: uuid::Uuid::from_u128(2),
+                thread_id: None,
+                root_id: uuid::Uuid::from_u128(2),
+                sender: sender("macro|asker@example.com"),
+                triggered_by: None,
+                content: "Complete the assigned task".to_owned(),
+                mentions: vec![],
+                attachments: vec![],
+                created_at: timestamp(),
+            },
+        }),
+    ))
+}
+
+#[tokio::test]
+async fn a_task_assignment_is_gated_by_the_task_and_delivered_under_the_bot() {
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    let event = agent_trigger_task_assignment_event();
+
+    service
+        .ingest_agent_trigger_event(event.clone())
+        .await
+        .expect("task assignments are ingested");
+
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(DOCUMENT_ID.to_owned(), EntityType::Document)],
+    );
+    let repository_state = lock(&repository.state);
+    assert_eq!(
+        repository_state.workspace_calls,
+        vec![vec![user_id(PERSONAL_WORKSPACE_ID)]],
+    );
+    assert_eq!(repository_state.match_calls.len(), 1);
+    assert_eq!(
+        repository_state.match_calls[0].entity_id,
+        bot_id::BotId::TEST_A.to_string(),
+    );
+    assert_eq!(
+        repository_state.match_calls[0].event_name,
+        "agent_trigger.new"
+    );
+    drop(repository_state);
+    let enqueuer_state = lock(&enqueuer.state);
+    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+    assert_eq!(
+        enqueuer_state.attempted_messages[0].event.broker_envelope,
+        serde_json::to_value(event).expect("serialize assignment envelope"),
+    );
+}
+
+#[tokio::test]
+async fn a_task_assignment_does_not_grant_the_assigner_access_to_the_trigger() {
+    let access = MockAccessService::with_users(vec![]);
+    let repository = MockRepository::new(vec![], vec![]);
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+
+    service
+        .ingest_agent_trigger_event(agent_trigger_task_assignment_event())
+        .await
+        .expect("an assignment without any readers is ingested");
+
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(DOCUMENT_ID.to_owned(), EntityType::Document)],
+    );
+    let repository_state = lock(&repository.state);
+    assert_eq!(repository_state.workspace_calls, vec![vec![]]);
+    assert!(repository_state.match_calls[0].workspace_ids.is_empty());
+    assert!(lock(&enqueuer.state).attempted_messages.is_empty());
+}
+
 /// An existing session does not grant a webhook access to a new message parent.
 #[tokio::test]
 async fn an_existing_session_trigger_is_gated_by_its_message_parent() {

@@ -7,6 +7,7 @@ import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { AgentChannelScope } from '@service-storage/generated/schemas/agentChannelScope';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { agentKeys } from './keys';
 
 /**
@@ -53,9 +54,10 @@ export type DeleteAgentParams = {
   channelIds: string[];
 };
 
-export function useAgentsQuery() {
+export function useAgentsQuery(enabled: Accessor<boolean> = () => true) {
   return useQuery(() => ({
     queryKey: agentKeys.list.queryKey,
+    enabled: enabled(),
     queryFn: async (): Promise<AgentWithHarnessId[]> =>
       await throwOnErr(() => storageServiceClient.getAgents()),
   }));
@@ -102,7 +104,14 @@ export function useCreateAgentMutation() {
         agentKeys.list.queryKey,
         (current = []) => [...current, agent]
       );
-      await invalidateAgentChannelBots(agent.channel_ids);
+      queryClient.setQueryData(
+        botKeys.detail(agent.bot.id).queryKey,
+        agent.bot
+      );
+      await Promise.all([
+        invalidateAgentChannelBots(agent.channel_ids),
+        queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
+      ]);
     },
     onError: (error) => console.error('failed to create agent', error),
   }));
@@ -143,9 +152,16 @@ export function useUpdateAgentMutation() {
             agent.bot.id === updated.bot.id ? updated : agent
           )
       );
-      await invalidateAgentChannelBots([
-        ...previousChannelIds,
-        ...updated.channel_ids,
+      queryClient.setQueryData(
+        botKeys.detail(updated.bot.id).queryKey,
+        updated.bot
+      );
+      await Promise.all([
+        invalidateAgentChannelBots([
+          ...previousChannelIds,
+          ...updated.channel_ids,
+        ]),
+        queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
       ]);
     },
     onError: (error) => console.error('failed to update agent', error),

@@ -9,7 +9,7 @@ version = "0.1.0"
 # models_search → models_soup → notification → rdkafka, and the self-hosted
 # daemon only needs domain events from this crate. Services that construct
 # the adapters enable this; do not add it to coding_agent_worker.
-outbound = ["dep:agent", "dep:ai_usage", "dep:lexical_client", "dep:sqlx", "channels/ports"]
+outbound = ["dep:agent", "dep:ai_usage", "dep:document_storage_service_client", "dep:document_sub_type", "dep:lexical_client", "dep:sqlx", "channels/ports"]
 
 [dependencies]
 agent = { path = "../agent", optional = true }
@@ -17,6 +17,8 @@ agent_session = { path = "../agent_session", default-features = false }
 ai_usage = { path = "../ai_usage", optional = true }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }
+document_storage_service_client = { path = "../document_storage_service_client", optional = true }
+document_sub_type = { path = "../document_sub_type", optional = true }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 bots = { path = "../bots", default-features = false, features = ["ports"] }
 lexical_client = { path = "../lexical_client", optional = true }
@@ -31,6 +33,9 @@ macro_user_id = { path = "../macro_user_id" }
 channel_sender = { path = "../channel_sender" }
 macro_uuid = { path = "../macro_uuid" }
 messages = { path = "../messages", features = ["broker", "ports"] }
+properties = { path = "../properties", default-features = false }
+models_properties = { path = "../models_properties" }
+system_properties = { path = "../system_properties" }
 # Domain vocabulary: channel-parent trigger events keep the channel-only post
 # shape, and the channel topic's `message_posted` can still feed the trigger.
 channels = { path = "../channels", default-features = false }

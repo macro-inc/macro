@@ -219,6 +219,16 @@ where
             return Ok(false);
         };
 
+        self.agent_is_available_for(&caller, &posted.parent, bot_id)
+            .await
+    }
+
+    async fn agent_is_available_for(
+        &self,
+        caller: &MacroUserIdStr<'static>,
+        parent: &MessageParent,
+        bot_id: BotId,
+    ) -> Result<bool> {
         if let Some(agent) = self.bots.get_agent(bot_id).await? {
             if !agent.bot.has_agent {
                 return Ok(false);
@@ -226,23 +236,23 @@ where
             // Channel selection restricts channel placement. Document invocation
             // requires ownership or team membership and is independently bounded
             // by the invoking user's document access at execution time.
-            if matches!(posted.parent, MessageParent::Document(_)) {
-                return self.owner_allows(&caller, agent.bot.owner.as_ref()).await;
+            if matches!(parent, MessageParent::Document(_)) {
+                return self.owner_allows(caller, agent.bot.owner.as_ref()).await;
             }
-            let MessageParent::Channel(channel_id) = posted.parent else {
+            let MessageParent::Channel(channel_id) = parent else {
                 unreachable!()
             };
             return match agent.channel_scope {
                 AgentChannelScope::All => match agent.bot.owner {
                     Some(BotOwner::User { user_id }) => Ok(user_id == caller.as_ref()),
                     Some(BotOwner::Team { team_id }) => {
-                        self.teams.user_has_team(caller, team_id).await
+                        self.teams.user_has_team(caller.clone(), team_id).await
                     }
                     None => Ok(false),
                 },
                 AgentChannelScope::Selected => {
                     self.channels
-                        .bot_active_in_channel(channel_id, bot_id)
+                        .bot_active_in_channel(*channel_id, bot_id)
                         .await
                 }
             };
@@ -256,15 +266,43 @@ where
         }
         match bot.kind {
             BotKind::System => Ok(true),
-            BotKind::Owned => match &posted.parent {
+            BotKind::Owned => match parent {
                 MessageParent::Channel(channel_id) => {
                     self.channels
                         .bot_active_in_channel(*channel_id, bot_id)
                         .await
                 }
-                MessageParent::Document(_) => self.owner_allows(&caller, bot.owner.as_ref()).await,
+                MessageParent::Document(_) => self.owner_allows(caller, bot.owner.as_ref()).await,
             },
         }
+    }
+
+    /// Recheck task access and agent ownership before an assignment starts work.
+    pub async fn authorize_task_assignment(
+        &self,
+        caller: &MacroUserIdStr<'static>,
+        parent: &MessageParent,
+        root_id: Uuid,
+        bot_id: BotId,
+    ) -> Result<Option<AuthorizedInvocation>> {
+        if !matches!(parent, MessageParent::Document(_))
+            || !self.agent_is_available_for(caller, parent, bot_id).await?
+        {
+            return Ok(None);
+        }
+        self.history
+            .authorize_invocation(caller, parent, root_id)
+            .await
+    }
+
+    /// Whether this assignment's discussion already has a session for the agent.
+    pub async fn assignment_has_session(&self, root_id: Uuid, bot_id: BotId) -> Result<bool> {
+        Ok(matches!(
+            self.sessions
+                .find_for_thread(Some(root_id), Some(bot_id))
+                .await?,
+            ThreadSession::CreatedFromThread(_)
+        ))
     }
 
     async fn owner_allows(

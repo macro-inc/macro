@@ -58,6 +58,16 @@ pub struct AgentMentionedEvent {
     pub message: MessagePostedMetadata,
 }
 
+/// A session opened when a task is assigned to an agent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentAssignedToTaskEvent {
+    /// The agent assigned to the task.
+    pub bot_id: BotId,
+    /// The persisted opening discussion message on the task document, authored
+    /// by the user who assigned the agent and containing the assignment prompt.
+    pub message: MessagePostedMetadata,
+}
+
 /// A session somebody asked for from Macro itself - the composer - rather
 /// than by mentioning the bot. Nothing was posted anywhere, so there is no
 /// thread to announce into and no message to quote.
@@ -85,23 +95,25 @@ pub enum NewAgentSessionEvent {
     TopLevelMentioned(AgentBotMentionedEvent),
     /// Opened by a bot mention on a message parent other than a channel.
     Mentioned(AgentMentionedEvent),
+    /// Opened by assigning the agent to a task, with a discussion to answer in.
+    AssignedToTask(AgentAssignedToTaskEvent),
     /// Asked for from the composer, with no mention behind it. Consumers that
     /// only know mentions see no [`OpeningMention`] here and skip it.
     Requested(AgentSessionRequestedEvent),
 }
 
-/// The mention a new-session event carries, whichever parent it was on.
+/// The opening discussion message carried by a mention or task assignment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpeningMention {
-    /// The bot that was mentioned.
+    /// The bot that should answer.
     pub bot_id: BotId,
-    /// The mentioning message, with its parent.
+    /// The opening message, with its parent.
     pub message: MessagePostedMetadata,
 }
 
 impl NewAgentSessionEvent {
-    /// The mention this event carries; `None` for a shape this build does
-    /// not recognise, which a consumer skips rather than routes.
+    /// The opening discussion message, shared by mentions and task assignments;
+    /// `None` for requests without a discussion to answer in.
     #[must_use]
     pub fn mention(&self) -> Option<OpeningMention> {
         match self {
@@ -113,6 +125,10 @@ impl NewAgentSessionEvent {
                 bot_id: mentioned.bot_id,
                 message: mentioned.message.clone(),
             }),
+            Self::AssignedToTask(assigned) => Some(OpeningMention {
+                bot_id: assigned.bot_id,
+                message: assigned.message.clone(),
+            }),
             Self::Requested(_) => None,
         }
     }
@@ -122,7 +138,7 @@ impl NewAgentSessionEvent {
     pub fn requested(&self) -> Option<&AgentSessionRequestedEvent> {
         match self {
             Self::Requested(requested) => Some(requested),
-            Self::TopLevelMentioned(_) | Self::Mentioned(_) => None,
+            Self::TopLevelMentioned(_) | Self::Mentioned(_) | Self::AssignedToTask(_) => None,
         }
     }
 }
@@ -383,6 +399,7 @@ impl AgentSessionMacroEvent {
         let bot_id = match &event {
             NewAgentSessionEvent::TopLevelMentioned(mentioned) => mentioned.bot_id,
             NewAgentSessionEvent::Mentioned(mentioned) => mentioned.bot_id,
+            NewAgentSessionEvent::AssignedToTask(assigned) => assigned.bot_id,
             NewAgentSessionEvent::Requested(requested) => requested.bot_id,
         };
         Self::new(bot_id, AgentTriggerTopicEvent::New(event))

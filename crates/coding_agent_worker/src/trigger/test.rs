@@ -1,7 +1,7 @@
 use super::*;
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentMentionedEvent, ChannelEventMetadata, ExistingAgentSessionEvent,
-    NewAgentSessionEvent, ThreadEventMetadata, ThreadMessageKind,
+    AgentAssignedToTaskEvent, AgentBotMentionedEvent, AgentMentionedEvent, ChannelEventMetadata,
+    ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata, ThreadMessageKind,
 };
 use channel_sender::ChannelSender;
 use channels::domain::broker_events::ChannelMessagePostedMetadata;
@@ -107,6 +107,41 @@ fn document_triggers_become_work_on_the_document() {
             content: "and this".to_owned(),
         }
     );
+}
+
+#[test]
+fn a_task_assignment_opens_and_prompts_in_the_task_discussion() {
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
+        AgentAssignedToTaskEvent {
+            bot_id: BotId::TEST_A,
+            message: document_message("Complete the assigned task", None),
+        },
+    ));
+    assert_eq!(
+        trigger_to_work(event).expect("a task assignment is work"),
+        TriggerWork::OpenAndPrompt {
+            bot: BotId::TEST_A,
+            sender: sender(),
+            parent: document(),
+            thread_id: Uuid::from_u128(2),
+            message_id: Uuid::from_u128(2),
+            content: "Complete the assigned task".to_owned(),
+        }
+    );
+}
+
+#[test]
+fn a_task_assignment_without_a_human_owner_is_skipped() {
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
+        AgentAssignedToTaskEvent {
+            bot_id: BotId::TEST_A,
+            message: MessagePostedMetadata {
+                sender: ChannelSender::new_from_bot(BotId::TEST_B),
+                ..document_message("Complete the assigned task", None)
+            },
+        },
+    ));
+    assert_eq!(trigger_to_work(event), Err(Skipped::NotFromUser));
 }
 
 #[test]

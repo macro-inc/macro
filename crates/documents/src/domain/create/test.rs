@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use activity::Attribution;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -27,6 +27,8 @@ fn owner() -> MacroUserIdStr<'static> {
 #[derive(Default)]
 struct FakeCreationService {
     calls: Mutex<Vec<CreateDocumentRepoArgs>>,
+    lifecycle: Arc<Mutex<Vec<&'static str>>>,
+    fail_content_update: bool,
 }
 
 impl DocumentCreationService for FakeCreationService {
@@ -37,6 +39,7 @@ impl DocumentCreationService for FakeCreationService {
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         let file_type = args.file_type.map(|kind| kind.to_string());
+        self.lifecycle.lock().unwrap().push("create");
         self.calls.lock().unwrap().push(args);
         Ok(CreateDocumentResponseData {
             document_response: DocumentResponse {
@@ -73,6 +76,7 @@ impl DocumentCreationService for FakeCreationService {
         _request: &CreateTaskRequest,
         _attribution: &Attribution,
     ) -> Result<(), DocumentError> {
+        self.lifecycle.lock().unwrap().push("properties");
         Ok(())
     }
 
@@ -85,11 +89,17 @@ impl DocumentCreationService for FakeCreationService {
         _document_id: &str,
         _content: DocumentContent,
     ) -> Result<(), DocumentError> {
+        self.lifecycle.lock().unwrap().push("content_ready");
+        if self.fail_content_update {
+            return Err(DocumentError::Internal(anyhow::anyhow!(
+                "content update failed"
+            )));
+        }
         Ok(())
     }
 
     async fn cleanup_created_document(&self, _document_id: &str) {
-        panic!("unexpected cleanup_created_document call")
+        self.lifecycle.lock().unwrap().push("cleanup");
     }
 }
 
@@ -101,6 +111,27 @@ impl MarkdownInitializationPort for FakeMarkdownInitializer {
         _document_id: &str,
         _markdown: &str,
     ) -> Result<Vec<u8>, DocumentError> {
+        Ok(vec![1, 2, 3])
+    }
+}
+
+struct RecordingMarkdownInitializer {
+    lifecycle: Arc<Mutex<Vec<&'static str>>>,
+    fail: bool,
+}
+
+impl MarkdownInitializationPort for RecordingMarkdownInitializer {
+    async fn initialize_existing_markdown(
+        &self,
+        _document_id: &str,
+        _markdown: &str,
+    ) -> Result<Vec<u8>, DocumentError> {
+        self.lifecycle.lock().unwrap().push("initialize");
+        if self.fail {
+            return Err(DocumentError::Internal(anyhow::anyhow!(
+                "initialization failed"
+            )));
+        }
         Ok(vec![1, 2, 3])
     }
 }
@@ -163,6 +194,67 @@ fn task_document(markdown: &str) -> NewMarkdownTextDocument {
             share_with_team: false,
             team_id: None,
         },
+    }
+}
+
+#[tokio::test]
+async fn task_assignments_are_applied_only_after_content_is_readable() {
+    let lifecycle = Arc::new(Mutex::new(Vec::new()));
+    let tracker = RecordingMentionTracker::default();
+    let creator = DocumentCreator::new(
+        FakeCreationService {
+            lifecycle: lifecycle.clone(),
+            ..Default::default()
+        },
+        RecordingMarkdownInitializer {
+            lifecycle: lifecycle.clone(),
+            fail: false,
+        },
+        FakeBytesUploader,
+        &tracker,
+    );
+
+    creator
+        .create_markdown_text(owner(), task_document("Do the assigned work"))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *lifecycle.lock().unwrap(),
+        ["create", "initialize", "content_ready", "properties"]
+    );
+}
+
+#[tokio::test]
+async fn failed_task_content_never_applies_assignments() {
+    for fail_initialization in [true, false] {
+        let lifecycle = Arc::new(Mutex::new(Vec::new()));
+        let tracker = RecordingMentionTracker::default();
+        let creator = DocumentCreator::new(
+            FakeCreationService {
+                lifecycle: lifecycle.clone(),
+                fail_content_update: !fail_initialization,
+                ..Default::default()
+            },
+            RecordingMarkdownInitializer {
+                lifecycle: lifecycle.clone(),
+                fail: fail_initialization,
+            },
+            FakeBytesUploader,
+            &tracker,
+        );
+
+        assert!(
+            creator
+                .create_markdown_text(owner(), task_document("Do the assigned work"))
+                .await
+                .is_err()
+        );
+
+        let lifecycle = lifecycle.lock().unwrap();
+        assert!(!lifecycle.contains(&"properties"));
+        assert_eq!(lifecycle.last(), Some(&"cleanup"));
+        assert!(tracker.calls().is_empty());
     }
 }
 
