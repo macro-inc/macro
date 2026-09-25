@@ -31,6 +31,7 @@ import {
   useChannelTab,
 } from '@channel/Channel/ChannelTabContext';
 import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
+import { CHANNEL_TAB_ICONS } from '@channel/Channel/channel-tab-icons';
 import {
   type ChannelTabId,
   DEFAULT_CHANNEL_TAB,
@@ -87,7 +88,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { CHANNEL_TAB_ICONS, ChannelTopLeft } from './Top';
+import { ChannelTopLeft } from './Top';
 
 const CHANNEL_STATE_ENTRY_KEY = 'channel.state';
 
