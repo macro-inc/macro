@@ -833,7 +833,7 @@ impl<
     async fn create_document(
         &self,
         principal: &CreationPrincipal,
-        mut document: NewDocument,
+        document: NewDocument,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         <Self as DocumentService>::create_document(self, principal, document, job_id).await
