@@ -25,8 +25,5 @@ fn max_is_rejected_as_a_purchase_target() {
 
 #[test]
 fn configured_max_prices_are_still_recognized() {
-    assert_eq!(
-        prices().plan_for_price("price_max"),
-        Some(PaidPlan::Max)
-    );
+    assert_eq!(prices().plan_for_price("price_max"), Some(PaidPlan::Max));
 }

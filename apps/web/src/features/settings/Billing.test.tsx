@@ -167,9 +167,7 @@ describe.each([false, true])('Billing with DEV_MODE_ENV=%s', (dev) => {
       state.tier = tier;
       render(() => <Billing />);
 
-      expect(
-        screen.queryByRole('button', { name: 'Get Max' })
-      ).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Get Max' })).toBeNull();
       expect(
         screen.queryByRole('button', { name: 'Upgrade to Max' })
       ).toBeNull();
@@ -182,13 +180,9 @@ describe.each([false, true])('Billing with DEV_MODE_ENV=%s', (dev) => {
 
     expect(screen.getByRole('heading', { name: 'Max plan' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Get Max' })).toBeNull();
-    expect(
-      screen.queryByRole('button', { name: 'Upgrade to Max' })
-    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upgrade to Max' })).toBeNull();
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Switch to Premium' })
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to Premium' }));
     await waitFor(() =>
       expect(state.changePlan).toHaveBeenCalledWith({ plan: 'premium' })
     );
