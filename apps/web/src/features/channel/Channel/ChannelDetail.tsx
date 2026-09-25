@@ -173,7 +173,9 @@ export function ChannelDetailTopBar(
   const collapse = createPriorityCollapseController();
 
   return (
-    <ViewShell.TopBar ref={collapse.setRow} class="gap-3">
+    // py-0 gives the clipping sensor the bar's full height; the tab track is
+    // taller than the padded content box and would be cut off.
+    <ViewShell.TopBar ref={collapse.setRow} class="gap-3 py-0">
       <PriorityCollapseOverflowSensor
         controller={collapse}
         truncateAsLastResort
