@@ -203,6 +203,7 @@ export default defineConfig({
         extends: './src/lib/core/vitest.config.ts',
         test: {
           environment: 'jsdom',
+          setupFiles: ['./scripts/vitest-hang-setup.ts'],
           exclude: [
             ...configDefaults.exclude,
             'src/components/view-shell/**/*',
