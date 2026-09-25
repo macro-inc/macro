@@ -6,7 +6,9 @@ mod test;
 use super::{EnrichedSoupItem, SoupPropertiesField};
 use indexmap::IndexMap;
 use item_filters::ast::EntityFilterAst;
-use models_grouping::{GroupByField, date_bucket_label, date_bucket_order};
+use models_grouping::{
+    GroupByField, date_bucket_label, date_bucket_order, gtd_bucket_label, gtd_bucket_order,
+};
 use models_pagination::{
     Base64Str, CursorVal, CursorWithValAndFilter, Identify, SimpleSortMethod, SortOn,
 };
@@ -25,6 +27,10 @@ fn resolve_group_label_and_order(key: &str, group_by: &GroupByField) -> (String,
         GroupByField::EntityType => (
             entity_type_labels::label(key).to_string(),
             Some(entity_type_labels::display_order(key)),
+        ),
+        GroupByField::DueDateBucket { .. } => (
+            gtd_bucket_label(key).to_string(),
+            Some(gtd_bucket_order(key)),
         ),
         GroupByField::Project if key.is_empty() => ("No Project".to_string(), Some(i32::MAX)),
         GroupByField::Property { .. } if key.is_empty() => ("Not Set".to_string(), Some(i32::MAX)),
