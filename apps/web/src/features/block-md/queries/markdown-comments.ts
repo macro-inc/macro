@@ -1,6 +1,6 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
 import { storageServiceClient } from '@service-storage/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 const MARKDOWN_COMMENTS_STALE_TIME = 60 * 1000;
@@ -19,13 +19,14 @@ async function fetchMarkdownComments(documentId: string) {
   return commentThreads.value.data;
 }
 
-export function useMarkdownCommentsQuery(documentId: Accessor<string>) {
-  return useQuery(() => {
-    const id = documentId();
-    return {
-      queryKey: markdownCommentKeys.document(id).queryKey,
-      queryFn: () => fetchMarkdownComments(id),
-      staleTime: MARKDOWN_COMMENTS_STALE_TIME,
-    };
+function markdownCommentsQueryOptions(documentId: string) {
+  return queryOptions({
+    queryKey: markdownCommentKeys.document(documentId).queryKey,
+    queryFn: () => fetchMarkdownComments(documentId),
+    staleTime: MARKDOWN_COMMENTS_STALE_TIME,
   });
+}
+
+export function useMarkdownCommentsQuery(documentId: Accessor<string>) {
+  return useQuery(() => markdownCommentsQueryOptions(documentId()));
 }

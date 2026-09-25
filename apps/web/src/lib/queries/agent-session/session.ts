@@ -12,7 +12,7 @@
 
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { agentSessionKeys } from './keys';
 
@@ -38,37 +38,37 @@ export const EXTERNAL_URL_POLL_ATTEMPTS = 15;
 export function useAgentSessionExternalUrlQuery(
   sessionId: Accessor<string | undefined>
 ) {
-  return useQuery(() => {
-    const id = sessionId();
-    return {
-      queryKey: ['agentSession', 'externalUrl', id ?? ''] as const,
-      queryFn: async () =>
-        await throwOnErr(() => agentHarnessServiceClient.get(id!)),
-      enabled: Boolean(id),
-      // Stop once the url lands or the attempt budget is spent. Failed
-      // fetches count too, so a streak of errors cannot poll forever.
-      refetchInterval: (query) => {
-        if (query.state.data?.external?.url) return false;
-        const attempts =
-          query.state.dataUpdateCount + query.state.errorUpdateCount;
-        if (attempts >= EXTERNAL_URL_POLL_ATTEMPTS) return false;
-        return EXTERNAL_URL_POLL_INTERVAL_MS;
-      },
-      retry: false,
-      staleTime: 0,
-      gcTime: 0,
-    };
+  return useQuery(() => agentSessionExternalUrlQueryOptions(sessionId()));
+}
+
+function agentSessionExternalUrlQueryOptions(id: string | undefined) {
+  return queryOptions({
+    queryKey: ['agentSession', 'externalUrl', id ?? ''] as const,
+    queryFn: async () =>
+      await throwOnErr(() => agentHarnessServiceClient.get(id!)),
+    enabled: Boolean(id),
+    // Stop once the url lands or the attempt budget is spent. Failed
+    // fetches count too, so a streak of errors cannot poll forever.
+    refetchInterval: (query) => {
+      if (query.state.data?.external?.url) return false;
+      const attempts =
+        query.state.dataUpdateCount + query.state.errorUpdateCount;
+      if (attempts >= EXTERNAL_URL_POLL_ATTEMPTS) return false;
+      return EXTERNAL_URL_POLL_INTERVAL_MS;
+    },
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
   });
 }
 
 const STATUS_POLL_INTERVAL_MS = 5_000;
 const MAX_STATUS_POLLS = 120;
 
-/** Shared session metadata, polling only while the session is starting. */
-export function useAgentSessionQuery(id: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: agentSessionKeys.detail(id()).queryKey,
-    queryFn: () => throwOnErr(() => agentHarnessServiceClient.get(id())),
+function agentSessionQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: agentSessionKeys.detail(id).queryKey,
+    queryFn: () => throwOnErr(() => agentHarnessServiceClient.get(id)),
     staleTime: 0,
     retry: false,
     refetchInterval: (query) => {
@@ -81,5 +81,10 @@ export function useAgentSessionQuery(id: Accessor<string>) {
         return STATUS_POLL_INTERVAL_MS;
       return false;
     },
-  }));
+  });
+}
+
+/** Shared session metadata, polling only while the session is starting. */
+export function useAgentSessionQuery(id: Accessor<string>) {
+  return useQuery(() => agentSessionQueryOptions(id()));
 }

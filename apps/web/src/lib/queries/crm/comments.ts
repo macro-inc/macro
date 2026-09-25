@@ -1,7 +1,7 @@
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { CrmCommentEntityType } from '@service-storage/generated/schemas/crmCommentEntityType';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { crmKeys } from './keys';
 
@@ -16,21 +16,25 @@ export function useCrmCommentsQuery(
   entityType: CrmCommentEntityType,
   entityId: Accessor<string | undefined>
 ) {
-  return useQuery(() => {
-    const id = entityId();
-    return {
-      queryKey: crmKeys.comments(entityType, id ?? '').queryKey,
-      queryFn: () => {
-        if (!id) {
-          throw new Error('entity id is required to fetch comments');
-        }
-        return throwOnErr(() =>
-          storageServiceClient.crmComments.list({ entityType, entityId: id })
-        );
-      },
-      enabled: !!id,
-      staleTime: CRM_COMMENTS_STALE_TIME,
-    };
+  return useQuery(() => crmCommentsQueryOptions(entityType, entityId()));
+}
+
+function crmCommentsQueryOptions(
+  entityType: CrmCommentEntityType,
+  entityId: string | undefined
+) {
+  return queryOptions({
+    queryKey: crmKeys.comments(entityType, entityId ?? '').queryKey,
+    queryFn: () => {
+      if (!entityId) {
+        throw new Error('entity id is required to fetch comments');
+      }
+      return throwOnErr(() =>
+        storageServiceClient.crmComments.list({ entityType, entityId })
+      );
+    },
+    enabled: !!entityId,
+    staleTime: CRM_COMMENTS_STALE_TIME,
   });
 }
 

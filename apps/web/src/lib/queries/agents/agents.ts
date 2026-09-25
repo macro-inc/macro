@@ -53,11 +53,14 @@ export type DeleteAgentParams = {
   channelIds: string[];
 };
 
+async function fetchAgents(): Promise<AgentWithHarnessId[]> {
+  return await throwOnErr(() => storageServiceClient.getAgents());
+}
+
 export function useAgentsQuery() {
   return useQuery(() => ({
     queryKey: agentKeys.list.queryKey,
-    queryFn: async (): Promise<AgentWithHarnessId[]> =>
-      await throwOnErr(() => storageServiceClient.getAgents()),
+    queryFn: fetchAgents,
   }));
 }
 

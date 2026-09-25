@@ -1,6 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import { claudeAuthClient } from '@service-agent-harness/claude-auth';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
 import type { ClaudeConnectionSource } from '../../../features/claude-connection/core/connection';
 import { claudeAuthKeys } from './keys';
 
@@ -9,14 +9,25 @@ export function useClaudeConnectionStatusQuery(
   owner: () => string | undefined,
   enabled: () => boolean = () => true
 ) {
-  return useQuery(() => ({
-    queryKey: claudeAuthKeys.status(owner()).queryKey,
-    queryFn: ({ signal }) => throwOnErr(() => claudeAuthClient.status(signal)),
-    enabled: !!owner() && enabled(),
+  return useQuery(() => claudeConnectionStatusQueryOptions(owner(), enabled()));
+}
+
+function fetchClaudeConnectionStatus({ signal }: { signal: AbortSignal }) {
+  return throwOnErr(() => claudeAuthClient.status(signal));
+}
+
+function claudeConnectionStatusQueryOptions(
+  owner: string | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: claudeAuthKeys.status(owner).queryKey,
+    queryFn: fetchClaudeConnectionStatus,
+    enabled: !!owner && enabled,
     staleTime: 0,
     gcTime: 0,
     retry: false,
-  }));
+  });
 }
 
 /** Only safe status is cached. One-time codes never enter a mutation cache. */

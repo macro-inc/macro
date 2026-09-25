@@ -5,6 +5,7 @@ import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import {
+  keepPreviousData,
   type QueryClient,
   queryOptions,
   type Updater,
@@ -91,6 +92,32 @@ type HistoryQueryKey =
   | typeof historyKeys.list.queryKey
   | typeof historyKeys.graphqlList.queryKey;
 
+type HistoryGraphqlCacheHost = NonNullable<
+  ReturnType<typeof getGraphqlSoupCacheHost>
+>;
+
+// Cached options outlive the hook. The host is the app-level cache service,
+// not component state, so the factory may close over it.
+function cachedGraphqlHistoryQueryOptions(cacheHost: HistoryGraphqlCacheHost) {
+  return {
+    queryKey: historyKeys.graphqlList.queryKey,
+    queryFn: () => readCachedGraphqlHistoryItems(cacheHost),
+    placeholderData: keepPreviousData,
+    staleTime: Infinity,
+    refetchOnMount: 'always' as const,
+    reconcile: 'id' as const,
+  };
+}
+
+const restHistoryQueryOptions = {
+  queryKey: historyKeys.list.queryKey,
+  queryFn: fetchHistory,
+  staleTime: HISTORY_STALE_TIME,
+  gcTime: HISTORY_GC_TIME,
+  placeholderData: keepPreviousData,
+  reconcile: 'id' as const,
+};
+
 export function useHistoryQuery() {
   const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const activeQueryClient = useQueryClient();
@@ -120,25 +147,9 @@ export function useHistoryQuery() {
     HistoryQueryKey
   >(() => {
     const cacheHost = graphqlCacheHost();
-    if (cacheHost) {
-      return {
-        queryKey: historyKeys.graphqlList.queryKey,
-        queryFn: () => readCachedGraphqlHistoryItems(cacheHost),
-        placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
-        staleTime: Infinity,
-        refetchOnMount: 'always' as const,
-        reconcile: 'id',
-      };
-    }
-
-    return {
-      queryKey: historyKeys.list.queryKey,
-      queryFn: fetchHistory,
-      staleTime: HISTORY_STALE_TIME,
-      gcTime: HISTORY_GC_TIME,
-      placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
-      reconcile: 'id',
-    };
+    return cacheHost
+      ? cachedGraphqlHistoryQueryOptions(cacheHost)
+      : restHistoryQueryOptions;
   });
 }
 

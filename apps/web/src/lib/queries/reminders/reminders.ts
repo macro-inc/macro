@@ -6,7 +6,7 @@ import type { ListRemindersParams } from '@service-storage/generated/schemas/lis
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
 import type { RemindersList } from '@service-storage/generated/schemas/remindersList';
 import type { UpdateReminderRequest } from '@service-storage/generated/schemas/updateReminderRequest';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -159,17 +159,20 @@ export function useCreateReminderMutation(callbacks?: CreateReminderCallbacks) {
   }));
 }
 
+// Cached callbacks outlive the caller; only plain request values enter here.
+function remindersQueryOptions(params: ListRemindersParams) {
+  return queryOptions({
+    queryKey: reminderKeys.list(params).queryKey,
+    queryFn: () =>
+      throwOnErr(() => storageServiceClient.reminders.listReminders(params)),
+  });
+}
+
 /** One page of the caller's reminders, soonest firing first. */
 export function useRemindersQuery(
   params: () => ListRemindersParams = () => ({})
 ) {
-  return useQuery(() => ({
-    queryKey: reminderKeys.list(params()).queryKey,
-    queryFn: async () =>
-      await throwOnErr(() =>
-        storageServiceClient.reminders.listReminders(params())
-      ),
-  }));
+  return useQuery(() => remindersQueryOptions(params()));
 }
 
 /**
@@ -193,16 +196,20 @@ export async function getReminderById(
   }
 }
 
+function reminderQueryOptions(id: string | undefined) {
+  return queryOptions({
+    queryKey: reminderKeys.detail(id ?? '').queryKey,
+    queryFn: () =>
+      throwOnErr(() =>
+        storageServiceClient.reminders.getReminder(id as string)
+      ),
+    enabled: !!id,
+  });
+}
+
 /** A single reminder by id. */
 export function useReminderQuery(id: () => string | undefined) {
-  return useQuery(() => ({
-    queryKey: reminderKeys.detail(id() ?? '').queryKey,
-    queryFn: async () =>
-      await throwOnErr(() =>
-        storageServiceClient.reminders.getReminder(id() as string)
-      ),
-    enabled: !!id(),
-  }));
+  return useQuery(() => reminderQueryOptions(id()));
 }
 
 type UpdateReminderArgs = { id: string; patch: UpdateReminderRequest };

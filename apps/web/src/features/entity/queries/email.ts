@@ -1,13 +1,15 @@
 /** Email queries adapted to the entity data model. */
+
+import { throwOnErr } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import { emailClient } from '@service-email/client';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import type { PreviewsInboxCursorParams } from '@service-email/generated/schemas/previewsInboxCursorParams';
-import { useInfiniteQuery } from '@tanstack/solid-query';
+import { infiniteQueryOptions, useInfiniteQuery } from '@tanstack/solid-query';
 
 import { type Accessor, createMemo } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
-import { createApiTokenQuery, withApiTokenRetry } from './auth';
+import { createApiTokenQuery, withCachedApiTokenRetry } from './auth';
 import { queryKeys } from './key';
 
 type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
@@ -25,22 +27,72 @@ const fetchPaginatedEmails = async ({
     headers: { Authorization },
   };
 
-  const result = await emailClient.getPreviews(
-    {
-      view,
-      limit: params.limit,
-      sort_method: params.sort_method,
-      cursor: params.cursor,
-    },
-    init
+  // Throw the result error itself so a 401 keeps its UNAUTHORIZED code and the
+  // token retry helper can recognize it.
+  return throwOnErr(() =>
+    emailClient.getPreviews(
+      {
+        view,
+        limit: params.limit,
+        sort_method: params.sort_method,
+        cursor: params.cursor,
+      },
+      init
+    )
   );
-
-  if (result.isErr()) {
-    throw new Error('Failed to fetch email');
-  }
-
-  return result.value;
 };
+
+type EmailPreviewPage = Awaited<ReturnType<typeof fetchPaginatedEmails>>;
+
+function selectEmailEntities(data: {
+  pages: EmailPreviewPage[];
+}): EmailEntity[] {
+  return data.pages.flatMap(({ items }) =>
+    items.map((email): EmailEntity => {
+      const participants = email.contacts.map((p) => ({
+        email: p.emailAddress ?? '',
+        name: p.name ?? '',
+      }));
+
+      return {
+        ...email,
+        type: 'email',
+        name: email.name || 'No Subject',
+        createdAt: email.createdAt,
+        updatedAt: email.updatedAt,
+        frecencyScore: email.frecencyScore ?? undefined,
+        viewedAt: email.viewedAt,
+        snippet: email.snippet ?? undefined,
+        isImportant: email.isImportant ?? false,
+        done: !email.inboxVisible,
+        participants,
+        senderEmail: email.senderEmail ?? undefined,
+        senderName: email.senderName ?? email.senderEmail ?? undefined,
+      };
+    })
+  );
+}
+
+// Cached callbacks only close over the resolved request params.
+function emailsInfiniteQueryOptions(
+  params: FetchPaginatedEmailsParams,
+  enabled: boolean,
+  refetchInterval: number | undefined
+) {
+  return infiniteQueryOptions({
+    queryKey: queryKeys.email({ infinite: true, ...params }),
+    queryFn: ({ pageParam }) =>
+      withCachedApiTokenRetry((apiToken) =>
+        fetchPaginatedEmails({ apiToken, ...pageParam })
+      ),
+    initialPageParam: params,
+    getNextPageParam: ({ next_cursor: cursor }) =>
+      cursor ? { ...params, cursor } : undefined,
+    select: selectEmailEntities,
+    enabled,
+    refetchInterval,
+  });
+}
 
 export function createEmailsInfiniteQuery(
   args?: Accessor<FetchPaginatedEmailsParams>,
@@ -67,43 +119,11 @@ export function createEmailsInfiniteQuery(
   const enabled = createMemo(
     () => authQuery.isSuccess && !options?.disabled?.()
   );
-  return useInfiniteQuery(() => {
-    return {
-      queryKey: queryKeys.email({ infinite: true, ...params() }),
-      queryFn: ({ pageParam }) =>
-        withApiTokenRetry(authQuery, (apiToken) =>
-          fetchPaginatedEmails({ apiToken, ...pageParam })
-        ),
-      initialPageParam: params(),
-      getNextPageParam: ({ next_cursor: cursor }) =>
-        cursor ? { ...params(), cursor } : undefined,
-      select: (data) =>
-        data.pages.flatMap(({ items }) =>
-          items.map((email): EmailEntity => {
-            const participants = email.contacts.map((p) => ({
-              email: p.emailAddress ?? '',
-              name: p.name ?? '',
-            }));
-
-            return {
-              ...email,
-              type: 'email',
-              name: email.name || 'No Subject',
-              createdAt: email.createdAt,
-              updatedAt: email.updatedAt,
-              frecencyScore: email.frecencyScore ?? undefined,
-              viewedAt: email.viewedAt,
-              snippet: email.snippet ?? undefined,
-              isImportant: email.isImportant ?? false,
-              done: !email.inboxVisible,
-              participants,
-              senderEmail: email.senderEmail ?? undefined,
-              senderName: email.senderName ?? email.senderEmail ?? undefined,
-            };
-          })
-        ),
-      enabled: enabled(),
-      refetchInterval: options?.refetchInterval?.(),
-    };
-  });
+  return useInfiniteQuery(() =>
+    emailsInfiniteQueryOptions(
+      params(),
+      enabled(),
+      options?.refetchInterval?.()
+    )
+  );
 }

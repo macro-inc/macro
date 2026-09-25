@@ -4,13 +4,32 @@ import type { CrmCompanyEntity } from '@entity';
 import { storageServiceClient } from '@service-storage/client';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
-import { type QueryKey, useMutation, useQuery } from '@tanstack/solid-query';
+import {
+  type QueryKey,
+  queryOptions,
+  useMutation,
+  useQuery,
+} from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { queryClient } from '../client';
 import { soupKeys } from '../soup/keys';
 import { crmKeys } from './keys';
 
 const COMPANY_STALE_TIME = 60 * 1000;
+
+function companyQueryOptions(companyId: string) {
+  return queryOptions({
+    queryKey: crmKeys.company(companyId).queryKey,
+    queryFn: () => {
+      if (!companyId) {
+        throw new Error('company id is required to fetch company');
+      }
+      return throwOnErr(() => storageServiceClient.getCompany({ companyId }));
+    },
+    staleTime: COMPANY_STALE_TIME,
+    enabled: !!companyId && companyId !== NIL_UUID,
+  });
+}
 
 /** A contact row as embedded in the company response. */
 export type CompanyContact = CrmContactResponse;
@@ -27,22 +46,7 @@ export type CompanyContact = CrmContactResponse;
  * doomed 404.
  */
 export function useCompanyQuery(companyId: Accessor<string>) {
-  const query = useQuery(() => {
-    const id = companyId();
-    return {
-      queryKey: crmKeys.company(id).queryKey,
-      queryFn: () => {
-        if (!id) {
-          throw new Error('company id is required to fetch company');
-        }
-        return throwOnErr(() =>
-          storageServiceClient.getCompany({ companyId: id })
-        );
-      },
-      staleTime: COMPANY_STALE_TIME,
-      enabled: !!companyId() && companyId() !== NIL_UUID,
-    };
-  });
+  const query = useQuery(() => companyQueryOptions(companyId()));
 
   const company = createMemo<CrmCompanyEntity | undefined>(() => {
     const data = query.isSuccess ? query.data : undefined;

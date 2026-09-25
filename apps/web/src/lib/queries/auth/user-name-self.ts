@@ -2,7 +2,7 @@ import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { authServiceClient } from '@service-auth/client';
 import type { UserName } from '@service-auth/generated/schemas/userName';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { authKeys } from './keys';
 
@@ -15,13 +15,20 @@ const OWN_USER_NAME_STALE_TIME = 15_000;
  * useUserNamesQuery (other users, batched by macro id).
  */
 export function useOwnUserNameQuery() {
-  return useQuery(() => ({
+  return useQuery(ownUserNameQueryOptions);
+}
+
+function fetchOwnUserName() {
+  return throwOnErr(() => authServiceClient.getUserName());
+}
+
+function ownUserNameQueryOptions() {
+  return queryOptions({
     queryKey: authKeys.userNameSelf.queryKey,
-    queryFn: async () =>
-      throwOnErr(async () => await authServiceClient.getUserName()),
+    queryFn: fetchOwnUserName,
     staleTime: OWN_USER_NAME_STALE_TIME,
-    refetchOnWindowFocus: 'always' as const,
-  }));
+    refetchOnWindowFocus: 'always',
+  });
 }
 
 /**

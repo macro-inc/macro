@@ -69,6 +69,43 @@ export type CreateGroupedSoupQueriesArgs = {
   }>;
 };
 
+// Retained by the query cache after the group unmounts: plain snapshots only.
+function groupPageQueryFn(input: {
+  initialPage: GroupQueryPage;
+  field: GroupByField;
+  groupKey: string;
+  soupParams: SoupParams;
+  soupBody: SoupAstBody;
+}) {
+  return async (ctx: { pageParam: string | null }): Promise<GroupQueryPage> => {
+    if (ctx.pageParam == null) {
+      return input.initialPage;
+    }
+
+    const response = await throwOnErr(async () =>
+      storageServiceClient.getGroupedSoupAstGroupPage({
+        params: {
+          cursor: ctx.pageParam,
+          group_by: serializeGroupByField(input.field),
+          group_key: input.groupKey,
+          limit: input.soupParams.limit,
+          sort_method: groupedSortMethod(input.soupParams.sort_method),
+        },
+        body: input.soupBody,
+      })
+    );
+
+    return {
+      items: response.items,
+      group: parseGroupMeta(response.group),
+    };
+  };
+}
+
+function getNextGroupPageParam(lastPage: GroupQueryPage): string | null {
+  return lastPage.group.nextCursor;
+}
+
 export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
   const usesGraphql = () => args.transport() === 'graphql';
   const instructionsIdQuery = useInstructionsMdIdQuery();
@@ -131,6 +168,8 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     }
 
     const options = args.queryOptions();
+    const soupParams = args.soupParams();
+    const soupBody = args.soupBody();
 
     return initialGroupedPage.groups.map((group) => {
       const initialPage = makeInitialPage(initialGroupedPage, group);
@@ -138,37 +177,19 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
       return {
         key: group.key,
         queryKey: soupKeys.groupedGroup({
-          params: args.soupParams(),
-          body: args.soupBody(),
+          params: soupParams,
+          body: soupBody,
           groupBy: field,
           groupKey: group.key,
         }).queryKey,
-        queryFn: async (ctx: { pageParam: string | null }) => {
-          if (ctx.pageParam == null) {
-            return initialPage;
-          }
-
-          const response = await throwOnErr(async () =>
-            storageServiceClient.getGroupedSoupAstGroupPage({
-              params: {
-                cursor: ctx.pageParam,
-                group_by: serializeGroupByField(field),
-                group_key: group.key,
-                limit: args.soupParams().limit,
-                sort_method: groupedSortMethod(args.soupParams().sort_method),
-              },
-              body: args.soupBody(),
-            })
-          );
-
-          return {
-            items: response.items,
-            group: parseGroupMeta(response.group),
-          };
-        },
-        getNextPageParam: (lastPage: GroupQueryPage): string | null => {
-          return lastPage.group.nextCursor;
-        },
+        queryFn: groupPageQueryFn({
+          initialPage,
+          field,
+          groupKey: group.key,
+          soupParams,
+          soupBody,
+        }),
+        getNextPageParam: getNextGroupPageParam,
         select: (pages: GroupQueryPage[]) =>
           combineGroupPages(pages, options.meta?.itemFilter),
         initialData: {

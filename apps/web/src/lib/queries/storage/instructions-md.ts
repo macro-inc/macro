@@ -75,25 +75,32 @@ const getInstructionsMdText = async (id: string | null | undefined) => {
   return plaintext;
 };
 
+// Cached callbacks outlive the caller; only the resolved id enters them.
+function instructionsMdTextQueryOptions(
+  id: string | null | undefined,
+  enabled: boolean
+) {
+  return {
+    // Use a placeholder key when id is null/undefined - query is disabled anyway
+    queryKey: id
+      ? instructionsMdKeys.text(id).queryKey
+      : ['instructionsMd', 'text', null],
+    queryFn: () => getInstructionsMdText(id),
+    enabled: enabled && !!id,
+    staleTime: Infinity,
+    throwOnError: false,
+    retry: false,
+    retryOnMount: false,
+  };
+}
+
 /** useQuery hook for retrieving the instructions md document text content */
 export function useInstructionsMdTextQuery() {
   const idQuery = useInstructionsMdIdQuery();
 
-  return useQuery(() => {
-    const id = idQuery.data;
-    return {
-      // Use a placeholder key when id is null/undefined - query is disabled anyway
-      queryKey: id
-        ? instructionsMdKeys.text(id).queryKey
-        : ['instructionsMd', 'text', null],
-      queryFn: () => getInstructionsMdText(id),
-      enabled: idQuery.isSuccess && !!id,
-      staleTime: Infinity,
-      throwOnError: false,
-      retry: false,
-      retryOnMount: false,
-    };
-  });
+  return useQuery(() =>
+    instructionsMdTextQueryOptions(idQuery.data, idQuery.isSuccess)
+  );
 }
 
 /** Creates the instructions md document. Backend prevents duplicates */

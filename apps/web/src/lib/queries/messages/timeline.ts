@@ -13,6 +13,7 @@ import {
 } from '@service-storage/messages';
 import {
   type InfiniteData,
+  queryOptions,
   useInfiniteQuery,
   useQuery,
 } from '@tanstack/solid-query';
@@ -359,27 +360,32 @@ export function useMessageTimelineQuery(
   }));
 }
 
+// Cached callbacks outlive the hook; only plain request values enter here.
+function messageTimelineByIdsQueryOptions(
+  parent: MessageParent,
+  messageIds: string[]
+) {
+  return queryOptions({
+    queryKey: messageKeys.messagesByIds(parent, messageIds).queryKey,
+    queryFn: async (): Promise<MessageListItem[]> => {
+      const page = await entityMessagesClient.list(parent, {
+        ids: messageIds,
+        limit: 100,
+      });
+      return page.items.map(normalizeChannelMessageSender);
+    },
+    enabled: messageIds.length > 0,
+    staleTime: Infinity,
+  });
+}
+
 export function useMessageTimelineByIdsQuery(
   parent: Accessor<MessageParent>,
   messageIds: Accessor<string[]>
 ) {
-  return useQuery(() => {
-    const resolvedParent = parent();
-    const resolvedMessageIds = messageIds();
-    return {
-      queryKey: messageKeys.messagesByIds(resolvedParent, resolvedMessageIds)
-        .queryKey,
-      queryFn: async (): Promise<MessageListItem[]> => {
-        const page = await entityMessagesClient.list(resolvedParent, {
-          ids: resolvedMessageIds,
-          limit: 100,
-        });
-        return page.items.map(normalizeChannelMessageSender);
-      },
-      enabled: resolvedMessageIds.length > 0,
-      staleTime: Infinity,
-    };
-  });
+  return useQuery(() =>
+    messageTimelineByIdsQueryOptions(parent(), messageIds())
+  );
 }
 
 /** Returns the cache key for one channel message query variant. */

@@ -15,6 +15,7 @@ import type { EntityData } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
 import type { GroupByField } from '@queries/soup/grouped/types';
 import {
+  type SoupApiItemFilter,
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
@@ -118,6 +119,13 @@ const GROUP_BY_BY_NAME: Record<
  * dispatches per `entity.type` and works for every type here already,
  * `email` included.
  */
+
+// Cached query meta outlives the widget; the gate closes over the plain query
+// snapshot only, never the component scope.
+function queryItemFilter(source: Query): SoupApiItemFilter {
+  return (item) => soupItemMatchesQuery(item, source);
+}
+
 function Row(props: { entity: EntityData }) {
   const notificationSource = useGlobalNotificationSource();
   return (
@@ -158,10 +166,7 @@ function Rows(props: {
       // normalized cache would prepend ANY optimistically/WS-inserted entity
       // into it (a new task landing in an email-scoped list, etc.). Gate inserts
       // on the same `Query` that produced the AST so only matching items appear.
-      const source = query();
-      return {
-        meta: { itemFilter: (item) => soupItemMatchesQuery(item, source) },
-      };
+      return { meta: { itemFilter: queryItemFilter(query()) } };
     }
   );
 

@@ -10,7 +10,7 @@ import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { FavoritesList } from '@service-storage/generated/schemas/favoritesList';
 import type { ListFavoritesParams } from '@service-storage/generated/schemas/listFavoritesParams';
 import type { ReorderFavoritesResult } from '@service-storage/graphql-favorites';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 import { queryClient } from '../client';
@@ -81,15 +81,20 @@ export function useFavoritesQuery(filter?: FavoritesFilter) {
   return createRestFavoritesQuery(filter);
 }
 
-function createRestFavoritesQuery(filter?: FavoritesFilter) {
-  return useQuery(() => ({
+// Cached callbacks outlive the hook; only the plain filter enters this closure.
+function restFavoritesQueryOptions(filter?: FavoritesFilter) {
+  return queryOptions({
     queryKey: favoriteKeys.list(filter).queryKey,
     queryFn: async () =>
       await throwOnErr(() =>
         storageServiceClient.favorites.getFavorites(filter)
       ),
     staleTime: 60_000,
-  }));
+  });
+}
+
+function createRestFavoritesQuery(filter?: FavoritesFilter) {
+  return useQuery(() => restFavoritesQueryOptions(filter));
 }
 
 /**

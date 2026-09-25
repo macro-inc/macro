@@ -9,7 +9,7 @@ import { authServiceClient } from '@service-auth/client';
 import type { CreateGtmInviteLinkRequest } from '@service-auth/generated/schemas/createGtmInviteLinkRequest';
 import type { GtmInviteLink } from '@service-auth/generated/schemas/gtmInviteLink';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 import { queryClient } from '../client';
@@ -22,17 +22,20 @@ export type { GtmInviteLink, GtmInviteOffer };
 const LINKS_REFETCH_INTERVAL_MS = 30_000;
 const OFFER_STALE_TIME_MS = 60_000;
 
-/** Staff dashboard: every staff member's links, or just the caller's. */
-export function useGtmInviteLinksQuery(mine: Accessor<boolean>) {
-  return useQuery(() => ({
-    queryKey: gtmInviteKeys.links(mine()).queryKey,
+// Cached callbacks outlive the hooks; only plain values enter these closures.
+function gtmInviteLinksQueryOptions(mine: boolean) {
+  return queryOptions({
+    queryKey: gtmInviteKeys.links(mine).queryKey,
     queryFn: async () =>
-      await throwOnErr(() =>
-        authServiceClient.listGtmInviteLinks({ mine: mine() })
-      ),
+      await throwOnErr(() => authServiceClient.listGtmInviteLinks({ mine })),
     // Opens and signups land server-side; keep the dashboard live.
     refetchInterval: LINKS_REFETCH_INTERVAL_MS,
-  }));
+  });
+}
+
+/** Staff dashboard: every staff member's links, or just the caller's. */
+export function useGtmInviteLinksQuery(mine: Accessor<boolean>) {
+  return useQuery(() => gtmInviteLinksQueryOptions(mine()));
 }
 
 export function invalidateGtmInviteLinks() {
@@ -97,32 +100,40 @@ export function useRevokeGtmInviteLinkMutation(
  * The public welcome page's view of a link. Every fetch counts as an "open"
  * on the dashboard, so the result is pinned for the page's lifetime.
  */
-export function usePublicGtmInviteLinkQuery(
-  token: Accessor<string | undefined>
-) {
-  return useQuery(() => ({
-    queryKey: gtmInviteKeys.publicLink(token() ?? '').queryKey,
+function publicGtmInviteLinkQueryOptions(token: string) {
+  return queryOptions({
+    queryKey: gtmInviteKeys.publicLink(token).queryKey,
     queryFn: async () =>
-      await throwOnErr(() =>
-        authServiceClient.resolveGtmInviteLink(token() ?? '')
-      ),
-    enabled: !!token(),
+      await throwOnErr(() => authServiceClient.resolveGtmInviteLink(token)),
+    enabled: !!token,
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-  }));
+  });
+}
+
+export function usePublicGtmInviteLinkQuery(
+  token: Accessor<string | undefined>
+) {
+  return useQuery(() => publicGtmInviteLinkQueryOptions(token() ?? ''));
+}
+
+function gtmInviteOfferQueryOptions(enabled: boolean) {
+  return queryOptions({
+    queryKey: gtmInviteKeys.offer.queryKey,
+    queryFn: async () =>
+      await throwOnErr(() => authServiceClient.getGtmInviteOffer()),
+    enabled,
+    staleTime: OFFER_STALE_TIME_MS,
+  });
 }
 
 /** The promotion the signed-in account holds from an invite link, or null. */
 export function useGtmInviteOfferQuery(options?: { enabled?: () => boolean }) {
-  return useQuery(() => ({
-    queryKey: gtmInviteKeys.offer.queryKey,
-    queryFn: async () =>
-      await throwOnErr(() => authServiceClient.getGtmInviteOffer()),
-    enabled: options?.enabled ? options.enabled() : true,
-    staleTime: OFFER_STALE_TIME_MS,
-  }));
+  return useQuery(() =>
+    gtmInviteOfferQueryOptions(options?.enabled ? options.enabled() : true)
+  );
 }
 
 export function invalidateGtmInviteOffer() {

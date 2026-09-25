@@ -17,6 +17,12 @@ const KEYS = {
 /** Stable placeholder for `neverSuspend` consumers (see below). */
 const NO_SERVERS: ServerResponse[] = [];
 
+function fetchMcpServers() {
+  return throwOnErr(
+    async () => await cognitionApiServiceClient.listMcpServers()
+  );
+}
+
 export function useMcpServersQuery(options?: {
   /**
    * Poll for connection changes. OAuth finishes in another tab, and if this
@@ -36,8 +42,7 @@ export function useMcpServersQuery(options?: {
 }) {
   return useQuery(() => ({
     queryKey: KEYS.list,
-    queryFn: async () =>
-      throwOnErr(async () => await cognitionApiServiceClient.listMcpServers()),
+    queryFn: fetchMcpServers,
     refetchOnMount: 'always' as const,
     refetchOnWindowFocus: 'always' as const,
     refetchInterval: options?.refetchInterval,

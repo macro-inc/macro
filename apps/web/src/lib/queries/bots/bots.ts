@@ -43,12 +43,16 @@ export function useBotsQuery() {
   return useQuery(botsQueryOptions);
 }
 
-export function useBotQuery(botId: () => string) {
-  return useQuery(() => ({
-    queryKey: botKeys.detail(botId()).queryKey,
+function botQueryOptions(botId: string) {
+  return queryOptions({
+    queryKey: botKeys.detail(botId).queryKey,
     queryFn: async (): Promise<Bot> =>
-      await throwOnErr(() => storageServiceClient.getBot({ bot_id: botId() })),
-  }));
+      await throwOnErr(() => storageServiceClient.getBot({ bot_id: botId })),
+  });
+}
+
+export function useBotQuery(botId: () => string) {
+  return useQuery(() => botQueryOptions(botId()));
 }
 
 export function invalidateBots() {
@@ -149,14 +153,18 @@ export function useCreateBotTokenMutation() {
   }));
 }
 
-export function useBotChannelsQuery(botId: () => string) {
-  return useQuery(() => ({
-    queryKey: botKeys.channels(botId()).queryKey,
+function botChannelsQueryOptions(botId: string) {
+  return queryOptions({
+    queryKey: botKeys.channels(botId).queryKey,
     queryFn: async () =>
       await throwOnErr(() =>
-        storageServiceClient.getBotChannels({ bot_id: botId() })
+        storageServiceClient.getBotChannels({ bot_id: botId })
       ),
-  }));
+  });
+}
+
+export function useBotChannelsQuery(botId: () => string) {
+  return useQuery(() => botChannelsQueryOptions(botId()));
 }
 
 export function invalidateBotChannels(botId: string) {

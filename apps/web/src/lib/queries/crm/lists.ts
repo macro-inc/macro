@@ -8,12 +8,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { crmKeys } from './keys';
 
+function fetchSavedViews() {
+  return throwOnErr(() => storageServiceClient.views.getSavedViews());
+}
+
 /** Personal collections use saved-view storage, with explicit membership and team scope. */
 export function useCrmLists(teamId: Accessor<string | undefined>) {
   const client = useQueryClient();
   const query = useQuery(() => ({
     queryKey: crmKeys.lists.queryKey,
-    queryFn: () => throwOnErr(() => storageServiceClient.views.getSavedViews()),
+    queryFn: fetchSavedViews,
     enabled: !!teamId(),
   }));
   const lists = () =>

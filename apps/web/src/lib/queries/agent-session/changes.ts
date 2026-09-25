@@ -10,7 +10,7 @@
 
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { invalidateAgentSessionChanges } from './changes-sync';
 import { agentSessionChangesKeys } from './keys';
@@ -22,22 +22,38 @@ import { agentSessionChangesKeys } from './keys';
  */
 export const CAPTURE_POLL_INTERVAL_MS = 3_000;
 
+// Cached callbacks close over the resolved id only, never the accessor.
+function agentSessionChangesQueryOptions(id: string | undefined) {
+  return queryOptions({
+    queryKey: agentSessionChangesKeys.summary(id ?? '').queryKey,
+    queryFn: () => throwOnErr(() => agentHarnessServiceClient.getChanges(id!)),
+    enabled: Boolean(id),
+    retry: false,
+    staleTime: 30_000,
+    refetchInterval: (query) =>
+      query.state.data?.capturing ? CAPTURE_POLL_INTERVAL_MS : false,
+  });
+}
+
 /** The session's latest changes summary. Disabled while `sessionId` is unset. */
 export function useAgentSessionChangesQuery(
   sessionId: Accessor<string | undefined>
 ) {
-  return useQuery(() => {
-    const id = sessionId();
-    return {
-      queryKey: agentSessionChangesKeys.summary(id ?? '').queryKey,
-      queryFn: () =>
-        throwOnErr(() => agentHarnessServiceClient.getChanges(id!)),
-      enabled: Boolean(id),
-      retry: false,
-      staleTime: 30_000,
-      refetchInterval: (query) =>
-        query.state.data?.capturing ? CAPTURE_POLL_INTERVAL_MS : false,
-    };
+  return useQuery(() => agentSessionChangesQueryOptions(sessionId()));
+}
+
+function agentSessionChangesPatchQueryOptions(
+  id: string | undefined,
+  changeset: string | undefined
+) {
+  return queryOptions({
+    queryKey: agentSessionChangesKeys.patch(id ?? '', changeset ?? '').queryKey,
+    queryFn: () =>
+      throwOnErr(() => agentHarnessServiceClient.getChangesPatch(id!)),
+    enabled: Boolean(id) && Boolean(changeset),
+    retry: 1,
+    // A changeset's body never changes once captured.
+    staleTime: Number.POSITIVE_INFINITY,
   });
 }
 
@@ -50,20 +66,9 @@ export function useAgentSessionChangesPatchQuery(
   sessionId: Accessor<string | undefined>,
   changesetId: Accessor<string | undefined>
 ) {
-  return useQuery(() => {
-    const id = sessionId();
-    const changeset = changesetId();
-    return {
-      queryKey: agentSessionChangesKeys.patch(id ?? '', changeset ?? '')
-        .queryKey,
-      queryFn: () =>
-        throwOnErr(() => agentHarnessServiceClient.getChangesPatch(id!)),
-      enabled: Boolean(id) && Boolean(changeset),
-      retry: 1,
-      // A changeset's body never changes once captured.
-      staleTime: Number.POSITIVE_INFINITY,
-    };
-  });
+  return useQuery(() =>
+    agentSessionChangesPatchQueryOptions(sessionId(), changesetId())
+  );
 }
 
 /**

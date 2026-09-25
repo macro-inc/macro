@@ -113,11 +113,14 @@ export function estimateEtaSeconds(
  * can lag the live counters — so consumers should read this only for terminal
  * (e.g. completed) jobs.
  */
+function fetchBackfillJobs() {
+  return throwOnErr(() => emailClient.listBackfillJobs());
+}
+
 export function useBackfillJobsQuery() {
   return useQuery(() => ({
     queryKey: emailKeys.backfillJobs.queryKey,
-    queryFn: async () =>
-      throwOnErr(async () => await emailClient.listBackfillJobs()),
+    queryFn: fetchBackfillJobs,
   }));
 }
 

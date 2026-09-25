@@ -30,7 +30,10 @@ import {
 } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
 import type { UnifiedNotification } from '@notifications/types';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
+import {
+  type SoupApiItemFilter,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { startOfDay, subWeeks } from 'date-fns';
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -113,6 +116,13 @@ function matchesTab(
 }
 
 /** Shared feed membership for the Inbox list and its sidebar unread indicator. */
+
+// Cached query meta outlives the view; build the gate at module scope over the
+// plain tab value so it cannot retain this hook's scope.
+function inboxTabInsertFilter(tab: InboxTab): SoupApiItemFilter {
+  return (item) => soupItemMatchesInboxTab(item, tab);
+}
+
 export function useInboxEntitiesQuery(
   state: Pick<InboxDataSourceInput, 'tab' | 'facets'>
 ) {
@@ -153,7 +163,7 @@ export function useInboxEntitiesQuery(
       enabled: true,
       showSupportedForeignEntities: foreignEntities().enabled,
       meta: {
-        insertFilter: (item) => soupItemMatchesInboxTab(item, tab),
+        insertFilter: inboxTabInsertFilter(tab),
       },
     };
   });

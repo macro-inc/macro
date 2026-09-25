@@ -6,7 +6,7 @@ import { storageServiceClient } from '@service-storage/client';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
 import type { ChannelLabelsList } from '@service-storage/generated/schemas/channelLabelsList';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { withCallbacks } from '../utils';
@@ -14,19 +14,22 @@ import { channelLabelKeys } from './keys';
 
 export type { ChannelLabel };
 
-/** Shared labels for team members; account-private labels otherwise. */
-export function useChannelLabelsQuery() {
-  const channelTagsFlag = useFeatureFlag(enableChannelTags);
-  return useQuery(() => ({
+function channelLabelsQueryOptions(enabled: boolean) {
+  return queryOptions({
     queryKey: channelLabelKeys.list.queryKey,
-    enabled: channelTagsFlag().enabled,
-    queryFn: async () =>
-      await throwOnErr(() => storageServiceClient.channelLabels.list()),
+    enabled,
+    queryFn: () => throwOnErr(() => storageServiceClient.channelLabels.list()),
     staleTime: 30_000,
     refetchInterval: (query) =>
       query.state.data?.labels.some((label) => label.rule) ? 30_000 : false,
     retry: false,
-  }));
+  });
+}
+
+/** Shared labels for team members; account-private labels otherwise. */
+export function useChannelLabelsQuery() {
+  const channelTagsFlag = useFeatureFlag(enableChannelTags);
+  return useQuery(() => channelLabelsQueryOptions(channelTagsFlag().enabled));
 }
 
 /** Non-suspending view of labels, undefined until successfully loaded. */
@@ -57,27 +60,33 @@ async function cancelLabelFetch() {
   await queryClient.cancelQueries({ queryKey: channelLabelKeys.list.queryKey });
 }
 
+function smartTagPreviewQueryOptions(contains: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: channelLabelKeys.preview(contains).queryKey,
+    enabled,
+    queryFn: ({ signal }) =>
+      throwOnErr(() =>
+        storageServiceClient.channelLabels.preview(
+          { attribute: 'name', contains },
+          signal
+        )
+      ),
+    staleTime: 0,
+    retry: false,
+  });
+}
+
 export function useSmartTagPreviewQuery(pattern: Accessor<string>) {
   const channelTagsFlag = useFeatureFlag(enableChannelTags);
   const debouncedPattern = debouncedDependent(pattern, 150);
   return useQuery(() => {
     const contains = pattern();
-    return {
-      queryKey: channelLabelKeys.preview(contains).queryKey,
-      enabled:
-        channelTagsFlag().enabled &&
+    return smartTagPreviewQueryOptions(
+      contains,
+      channelTagsFlag().enabled &&
         contains.length > 0 &&
-        contains === debouncedPattern(),
-      queryFn: async ({ signal }) =>
-        await throwOnErr(() =>
-          storageServiceClient.channelLabels.preview(
-            { attribute: 'name', contains },
-            signal
-          )
-        ),
-      staleTime: 0,
-      retry: false,
-    };
+        contains === debouncedPattern()
+    );
   });
 }
 

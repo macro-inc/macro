@@ -80,6 +80,10 @@ export function buildCrmViewShareUrl(config: CrmViewConfig): string {
 
 const CRM_SAVED_VIEWS_QUERY_KEY = ['crm', 'saved-views'] as const;
 
+function fetchPersonalCrmViews() {
+  return throwOnErr(() => storageServiceClient.views.getSavedViews());
+}
+
 export type PersonalCrmView = View & { config: CrmViewConfig };
 
 /** Personal saved views (server-persisted via /saved_views). */
@@ -88,10 +92,7 @@ export function usePersonalCrmViews() {
 
   const viewsQuery = useQuery(() => ({
     queryKey: CRM_SAVED_VIEWS_QUERY_KEY,
-    queryFn: async () =>
-      await throwOnErr(
-        async () => await storageServiceClient.views.getSavedViews()
-      ),
+    queryFn: fetchPersonalCrmViews,
   }));
 
   const views = createMemo((): PersonalCrmView[] =>

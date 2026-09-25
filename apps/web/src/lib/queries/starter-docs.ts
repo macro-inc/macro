@@ -13,11 +13,14 @@ const STARTER_DOCS_STALE_TIME = 5 * 60 * 1000;
  * Ids of the documents seeded for the user at signup. Resolved server-side —
  * clients should never identify a starter doc by name.
  */
+function fetchStarterDocs() {
+  return throwOnErr(() => storageServiceClient.getStarterDocs());
+}
+
 export function useStarterDocsQuery() {
   return useQuery(() => ({
     queryKey: KEYS.all,
-    queryFn: async () =>
-      throwOnErr(async () => await storageServiceClient.getStarterDocs()),
+    queryFn: fetchStarterDocs,
     staleTime: STARTER_DOCS_STALE_TIME,
   }));
 }
