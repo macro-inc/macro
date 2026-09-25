@@ -40,7 +40,7 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
           <PropertiesSectionContent record={props.record} />
         </Suspense>
       </SidePanel.Section>
-      <Show when={props.record().channelId != null}>
+      <Show when={props.record.channelId != null}>
         <SidePanel.Section id="sharing" title="Sharing" order={20}>
           <SharingSectionContent record={props.record} />
         </SidePanel.Section>

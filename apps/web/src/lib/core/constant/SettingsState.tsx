@@ -12,7 +12,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, onCleanup } from 'solid-js';
 import { settingsTabToSlug } from './settingsTabsConfig';
 
 export type SettingsTab =
@@ -95,6 +95,12 @@ export const useSettingsState = () => {
   const location = useLocation();
   const currentUrl = () =>
     `${toBaseRelative(location.pathname)}${location.search}${location.hash}`;
+  let focusTimer: ReturnType<typeof setTimeout> | undefined;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+    clearTimeout(focusTimer);
+  });
 
   const getSettingsSplit = () => {
     const splitManager = globalSplitManager();
@@ -149,8 +155,10 @@ export const useSettingsState = () => {
   };
 
   const focusSettingsPanel = () => {
-    if (isTouchDevice()) return;
-    setTimeout(() => {
+    if (isTouchDevice() || disposed) return;
+    clearTimeout(focusTimer);
+    focusTimer = setTimeout(() => {
+      focusTimer = undefined;
       const settingsSplit = getSettingsSplit();
 
       if (!settingsSplit) return;

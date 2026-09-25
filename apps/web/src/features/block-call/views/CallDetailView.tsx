@@ -57,13 +57,14 @@ export function useCallDetail(callId: Accessor<string>) {
 
 export function CallDetailActions(props: {
   callId: string;
-  channelId: string;
+  channelId?: string | null;
   name: string;
   isActive: boolean;
 }) {
   const panel = useSplitPanelOrThrow();
-  const call = useCall(() => props.channelId);
+  const call = useCall(() => props.channelId ?? '');
   const join = async () => {
+    if (!props.channelId) return;
     try {
       await call.joinCall();
     } catch (error) {
@@ -73,7 +74,7 @@ export function CallDetailActions(props: {
 
   return (
     <div class="ml-auto flex shrink-0 items-center gap-2">
-      <Show when={!isMobile() && !props.isActive}>
+      <Show when={!isMobile() && !props.isActive && props.channelId}>
         <Button variant="outline" size="sm" onClick={join}>
           <PhoneCallIcon class="size-4" />
           Call Again
