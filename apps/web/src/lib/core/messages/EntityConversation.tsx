@@ -18,7 +18,7 @@ import { MessageThread } from './MessageThread';
 import type { MessageData } from './types';
 
 /** The root composer, inline below the roots or floating on touch devices. */
-export function DocumentConversationComposer(props: {
+export function EntityConversationComposer(props: {
   parent: MessageParent;
   collapsible?: boolean;
   /** Dismiss the keyboard after submitting from a floating mobile composer. */
@@ -53,7 +53,7 @@ export function DocumentConversationComposer(props: {
   );
 }
 
-export function DocumentConversation(props: {
+export function EntityConversation(props: {
   parent: MessageParent;
   canWrite: boolean;
   targetId?: string | null;
@@ -102,7 +102,7 @@ export function DocumentConversation(props: {
   );
   return (
     <Show when={!props.hideWhenEmpty || messages().length > 0}>
-      <section class="mt-3 pb-12" data-document-conversation>
+      <section class="mt-3 pb-12" data-entity-conversation>
         <button
           type="button"
           class="flex items-center gap-1"
@@ -167,7 +167,7 @@ export function DocumentConversation(props: {
               when={props.canWrite && !props.hideComposer && !unavailable()}
             >
               <div class="mt-4">
-                <DocumentConversationComposer parent={props.parent} />
+                <EntityConversationComposer parent={props.parent} />
               </div>
             </Show>
           </StaticMarkdownContext>
