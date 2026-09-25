@@ -179,13 +179,14 @@ pub trait MessagePromptContext: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ConversationContext>> + Send;
 }
 
-/// Composes an agent prompt from raw markdown and optional conversation context.
+/// Composes an agent prompt from raw markdown and trusted session context.
 pub trait AgentPromptComposer: Send + Sync + 'static {
     /// Return the markdown that should be delivered to the agent runtime.
-    /// `None` sanitizes a prompt without adding a conversation-context node.
+    /// Empty context sanitizes a prompt without adding a private context node.
     fn compose(
         &self,
         prompt_markdown: &str,
+        instructions: Option<&str>,
         parent: Option<&messages::domain::models::MessageParent>,
         context: Option<&ConversationContext>,
     ) -> impl Future<Output = Result<String>> + Send;

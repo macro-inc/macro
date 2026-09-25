@@ -149,6 +149,7 @@ where
     /// cannot eat the prompt.
     pub(super) async fn compose_action(
         &self,
+        session_id: AgentSessionId,
         action: &mut AgentAction,
         actor: Option<&MacroUserIdStr<'static>>,
         announce: Option<&AnnounceOrigin>,
@@ -157,6 +158,11 @@ where
             return Ok(());
         };
         let raw_prompt = prompt.prompt.clone();
+        let session = self.sessions.get_session(session_id).await?;
+        let instructions = (AgentKind::for_session(session.bot_id, &session.harness)
+            == AgentKind::External)
+            .then_some(session.instructions.as_deref())
+            .flatten();
         let context = if let Some(origin) = announce {
             Some(self.load_prompt_context(origin, actor).await?)
         } else {
@@ -166,6 +172,7 @@ where
             .prompt_composer
             .compose(
                 &raw_prompt,
+                instructions,
                 announce.map(|origin| &origin.parent),
                 context.as_ref(),
             )

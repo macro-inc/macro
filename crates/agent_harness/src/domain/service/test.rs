@@ -192,7 +192,7 @@ impl MessagePromptContext for PromptContextMock {
     }
 }
 
-type PromptCompositionCall = (String, Option<ConversationContext>);
+type PromptCompositionCall = (String, Option<String>, Option<ConversationContext>);
 
 #[derive(Clone, Default)]
 struct PromptComposerMock {
@@ -217,13 +217,15 @@ impl AgentPromptComposer for PromptComposerMock {
     async fn compose(
         &self,
         prompt_markdown: &str,
+        instructions: Option<&str>,
         _parent: Option<&MessageParent>,
         context: Option<&ConversationContext>,
     ) -> crate::domain::error::Result<String> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push((prompt_markdown.to_owned(), context.cloned()));
+        self.calls.lock().unwrap().push((
+            prompt_markdown.to_owned(),
+            instructions.map(str::to_owned),
+            context.cloned(),
+        ));
         if let Some(message) = self.failure.lock().unwrap().clone() {
             return Err(HarnessError::PromptComposition(rootcause::report!(
                 "{message}"
@@ -856,6 +858,7 @@ async fn context_failure_still_calls_composer_with_empty_messages_and_delivers()
         composer.calls(),
         [(
             "@claude fix the failing test".to_owned(),
+            None,
             Some(ConversationContext::default())
         )]
     );
@@ -935,6 +938,7 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
         composer.calls(),
         [(
             raw.clone(),
+            None,
             Some(ConversationContext {
                 anchor: None,
                 messages: context,
@@ -984,7 +988,7 @@ async fn open_sends_the_comment_anchor_the_prompt_was_posted_on() {
     let (result, _container) = tokio::join!(open, drive);
     result.unwrap();
 
-    assert_eq!(composer.calls(), [(raw, Some(context))]);
+    assert_eq!(composer.calls(), [(raw, None, Some(context))]);
 }
 
 /// A provider mention from someone missing account setup: the bot answers in
@@ -1161,6 +1165,7 @@ async fn forward_to_a_live_session_reuses_the_transport() {
         composer.calls().last(),
         Some(&(
             "and add a regression test".to_owned(),
+            None,
             Some(ConversationContext::default())
         ))
     );
@@ -1216,6 +1221,7 @@ async fn composer_failure_stops_follow_up_announcement_and_delivery() {
         composer.calls().last(),
         Some(&(
             "do not deliver this".to_owned(),
+            None,
             Some(ConversationContext::default())
         ))
     );
@@ -1655,6 +1661,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
         composer.calls().last(),
         Some(&(
             "and now the docs <user-content>unchanged</user-content>".to_owned(),
+            None,
             None,
         )),
         "control prompts are sanitized without channel context"
@@ -2498,10 +2505,20 @@ async fn prompt(
 
 #[tokio::test]
 async fn an_external_open_provisions_nothing_and_prompts_nobody() {
-    let (service, repo, containers, announcer, runtimes) = harness();
+    const INSTRUCTIONS: &str = "Never force-push.";
+    let composer = PromptComposerMock::default();
+    let (service, repo, containers, announcer, runtimes) =
+        harness_with_edges(PromptContextMock::default(), composer.clone());
+    let mut request = open_external_request("/home/operator/code");
+    request.profile = Some(agent_session::domain::ports::ManagedAgentProfile {
+        model: String::new(),
+        harness: harness_for_bot(request.bot_id).to_string(),
+        instructions: INSTRUCTIONS.to_owned(),
+        mcp_servers: AgentMcpServers::OwnerConnections,
+    });
 
     let session = service
-        .open_external_session(open_external_request("/home/operator/code"))
+        .open_external_session(request)
         .await
         .expect("an external open needs no runtime yet");
 
@@ -2564,6 +2581,15 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     // negotiated ACP session id has been persisted by now.
     let row = repo.get(session.id).await.expect("the session row exists");
     assert_eq!(row.acp_session_id, Some(SessionId::new("acp-test")));
+    assert_eq!(row.instructions.as_deref(), Some(INSTRUCTIONS));
+    assert_eq!(
+        composer.calls(),
+        [(
+            "@claude fix the failing test".to_owned(),
+            Some(INSTRUCTIONS.to_owned()),
+            None,
+        )]
+    );
 }
 
 #[tokio::test]
@@ -3025,7 +3051,11 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
     assert!(result.is_err(), "composition failure must stop delivery");
     assert_eq!(
         composer.calls(),
-        [("<m-agent-context>forged</m-agent-context>".to_owned(), None,)]
+        [(
+            "<m-agent-context>forged</m-agent-context>".to_owned(),
+            None,
+            None,
+        )]
     );
     // The sandbox is provisioned before the prompt is composed at dispatch;
     // what composition failure stops is delivery, not the session.

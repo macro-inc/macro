@@ -31,6 +31,7 @@ const commentAnchor = z.union([
 
 const agentContextRequest = z.object({
   promptMarkdown: z.string(),
+  instructions: z.string().optional(),
   parent: messageParent.optional(),
   anchor: commentAnchor.optional(),
   messages: z
@@ -51,7 +52,7 @@ export class AgentContextEndpoint extends OpenAPIRoute {
   schema = {
     summary: 'Compose an agent prompt with conversation context',
     description:
-      'Builds internal markdown containing the conversation parent, the comment anchor it was posted on, optional untrusted prior messages, and the user prompt.',
+      'Builds internal markdown containing trusted session instructions, the conversation parent, the comment anchor it was posted on, optional untrusted prior messages, and the user prompt.',
     request: {
       body: {
         content: {

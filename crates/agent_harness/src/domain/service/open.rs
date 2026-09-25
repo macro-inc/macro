@@ -89,9 +89,13 @@ where
                 })?;
         }
         let defaults = self.inner.defaults.for_bot(request.bot_id);
-        let (model, harness) = match request.profile {
-            Some(profile) => (profile.model, profile.harness),
-            None => (defaults.model.clone(), defaults.harness.clone()),
+        let (model, harness, profile_instructions) = match request.profile {
+            Some(profile) => (
+                profile.model,
+                profile.harness,
+                Some(profile.instructions).filter(|value| !value.trim().is_empty()),
+            ),
+            None => (defaults.model.clone(), defaults.harness.clone(), None),
         };
         let session = self
             .inner
@@ -108,7 +112,7 @@ where
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
-                instructions: request.instructions,
+                instructions: request.instructions.or(profile_instructions),
                 // No egress, so no MCP servers of ours to select from.
                 mcp_servers: AgentMcpServers::OwnerConnections,
                 // Mint the internal-tool credential when an authenticated
