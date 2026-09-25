@@ -1280,7 +1280,7 @@ impl<
     async fn create_document(
         &self,
         principal: &CreationPrincipal,
-        document: NewDocument,
+        mut document: NewDocument,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         validate_spreadsheet_creation(document.file_type, &document.sha)?;

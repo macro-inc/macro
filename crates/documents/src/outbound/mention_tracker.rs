@@ -52,7 +52,7 @@ impl DocumentMentionTrackingPort for LexicalCommsMentionTracker {
             &self.db,
             "document",
             document_id,
-            user_id.map(AsRef::as_ref),
+            user_id.map(|user| user.as_ref()),
             &mentions,
         )
         .await?;
