@@ -25,6 +25,7 @@ vi.mock('@notifications', () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'viewer@example.com',
+  useHasPermission: () => () => true,
   useUserContext: () => ({ isLoading: () => false }),
 }));
 vi.mock('@core/user', () => ({ useContacts: () => () => [] }));

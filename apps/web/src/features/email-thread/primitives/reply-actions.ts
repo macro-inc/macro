@@ -6,7 +6,7 @@ import type { EmailThreadState } from './email-thread-state';
 
 export function openEmailReplyComposerForMessage(args: {
   ctx: EmailThreadState;
-  isMobile: boolean;
+  useReplyDrawer: boolean;
   message: EmailMessage;
   replyType: ReplyType;
   suggestedBody?: string;
@@ -22,7 +22,7 @@ export function openEmailReplyComposerForMessage(args: {
   // the registry key includes a seed only the composer knows.
   args.ctx.replyRequest.set(messageId, args.replyType, args.suggestedBody);
 
-  if (args.isMobile) {
+  if (args.useReplyDrawer) {
     args.ctx.mobileReplyComposer.openForMessage(messageId);
     return true;
   }

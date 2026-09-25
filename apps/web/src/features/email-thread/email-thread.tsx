@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useEmail, useUserContext } from '@core/context/user';
+import { PERMISSION_IDS } from '@core/constant/permissions';
+import { useEmail, useHasPermission, useUserContext } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContacts } from '@core/user';
@@ -40,6 +41,9 @@ export function EmailThread(props: EmailThreadProps) {
   const contacts = useContacts();
   const viewerEmail = useEmail();
   const user = useUserContext();
+  const hasProfessionalFeatures = useHasPermission(
+    PERMISSION_IDS.READ_PROFESSIONAL_FEATURES
+  );
   const compose = createEmailComposeContext({
     threadTransport: props.threadTransport,
   });
@@ -65,6 +69,7 @@ export function EmailThread(props: EmailThreadProps) {
         );
     },
     thread: threadContext,
+    hasProfessionalFeatures,
     compose,
     composeHost: createEmailComposeHost(),
     rendering: {

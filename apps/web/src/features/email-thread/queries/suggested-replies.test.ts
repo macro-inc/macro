@@ -1,5 +1,5 @@
 import { createAIProjection } from '@queries/ai/projection';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../tests/fixtures';
 import { createSuggestedReplies } from './suggested-replies';
@@ -67,6 +67,69 @@ describe('suggested reply query', () => {
 
       expect(suggestions.replies()).toEqual([
         { label: 'Reply', body: 'Smart reply' },
+      ]);
+      dispose();
+    }));
+
+  it('keeps loading when fast returns no replies while smart is still running', () =>
+    createRoot((dispose) => {
+      const [smartGenerating, setSmartGenerating] = createSignal(true);
+      const projection = (
+        data: { replies: [] } | undefined,
+        isGenerating: () => boolean
+      ) =>
+        ({
+          data: () => data,
+          isGenerating,
+          error: () => undefined,
+          refresh: vi.fn(),
+        }) as unknown as ReturnType<typeof createAIProjection>;
+      vi.mocked(createAIProjection)
+        .mockReturnValueOnce(projection({ replies: [] }, () => false))
+        .mockReturnValueOnce(projection(undefined, smartGenerating));
+
+      const suggestions = createSuggestedReplies({
+        threadId: () => 'thread-123',
+        latestMessage: () =>
+          message('latest', { from: { email: 'sender@example.com' } }),
+        viewerEmails: () => ['viewer@example.com'],
+        enabled: () => true,
+        hasProfessionalFeatures: () => true,
+      });
+
+      expect(suggestions.replies()).toEqual([]);
+      expect(suggestions.isGenerating()).toBe(true);
+      setSmartGenerating(false);
+      expect(suggestions.isGenerating()).toBe(false);
+      dispose();
+    }));
+
+  it('keeps a useful fast reply when the smart result is empty', () =>
+    createRoot((dispose) => {
+      const projection = (replies: { label: string; body: string }[]) =>
+        ({
+          data: () => ({ replies }),
+          isGenerating: () => false,
+          error: () => undefined,
+          refresh: vi.fn(),
+        }) as unknown as ReturnType<typeof createAIProjection>;
+      vi.mocked(createAIProjection)
+        .mockReturnValueOnce(
+          projection([{ label: 'Reply', body: 'Fast reply' }])
+        )
+        .mockReturnValueOnce(projection([]));
+
+      const suggestions = createSuggestedReplies({
+        threadId: () => 'thread-123',
+        latestMessage: () =>
+          message('latest', { from: { email: 'sender@example.com' } }),
+        viewerEmails: () => ['viewer@example.com'],
+        enabled: () => true,
+        hasProfessionalFeatures: () => true,
+      });
+
+      expect(suggestions.replies()).toEqual([
+        { label: 'Reply', body: 'Fast reply' },
       ]);
       dispose();
     }));

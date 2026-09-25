@@ -54,12 +54,17 @@ export function createSuggestedReplies(args: {
     const result = projection.data();
     return typeof result === 'string' ? undefined : result?.replies;
   };
-  const replies = () => repliesFrom(smart) ?? repliesFrom(fast);
+  const smartReplies = () => repliesFrom(smart);
+  const fastReplies = () => repliesFrom(fast);
+  const replies = () => {
+    const smartResult = smartReplies();
+    return smartResult?.length ? smartResult : (fastReplies() ?? smartResult);
+  };
 
   return {
     replies,
     isGenerating: () =>
-      replies() === undefined &&
+      (replies()?.length ?? 0) === 0 &&
       (fast.isGenerating() ||
         (args.hasProfessionalFeatures() && smart.isGenerating())),
     error: () =>

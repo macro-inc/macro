@@ -469,7 +469,7 @@ export function createThreadNavigation(
 
     return openEmailReplyComposerForMessage({
       ctx: context,
-      isMobile: threadContext.isMobile(),
+      useReplyDrawer: threadContext.isTouch(),
       message: target.message,
       replyType,
       isLastMessage: target.isLastMessage,
@@ -533,7 +533,7 @@ export function createThreadNavigation(
 
       return openEmailReplyComposerForMessage({
         ctx: context,
-        isMobile: threadContext.isMobile(),
+        useReplyDrawer: threadContext.isTouch(),
         message: target.message,
         replyType: 'reply-all',
         isLastMessage: target.isLastMessage,

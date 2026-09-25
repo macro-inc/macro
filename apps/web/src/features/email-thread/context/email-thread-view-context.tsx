@@ -1,4 +1,4 @@
-import { createContext, type JSX, useContext } from 'solid-js';
+import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
 import type {
   EmailComposeContext,
   EmailComposeHost,
@@ -11,6 +11,7 @@ import type { EmailThreadContext } from './email-thread-context';
 
 export interface EmailThreadViewContext {
   thread: EmailThreadContext;
+  hasProfessionalFeatures: Accessor<boolean>;
   copySubject?: (subject: string) => void;
   compose: EmailComposeContext;
   composeHost?: EmailComposeHost;

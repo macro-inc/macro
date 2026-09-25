@@ -38,6 +38,12 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
 function ThreadReplyInputSession(props: ThreadReplyInputProps) {
   const ctx = useEmailThreadState();
   const viewContext = useEmailThreadViewContext();
+  // The composer consumes and clears replyRequest after mounting. Keep this
+  // one-shot seed for later draft-version remounts within the same reply session.
+  const initialSuggestedBody =
+    ctx.replyRequest.messageId() === props.replyingTo()?.db_id
+      ? ctx.replyRequest.suggestedBody()
+      : undefined;
 
   // The seed identity of this composer: which version of which draft it
   // mounts from. When the server sends a newer save of that draft (a thread
@@ -61,11 +67,7 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
     if (!encoded) {
       const plainText = props.draft?.body_text;
       if (plainText) return plainTextToHtml(plainText);
-      const suggestedBody =
-        ctx.replyRequest.messageId() === props.replyingTo()?.db_id
-          ? ctx.replyRequest.suggestedBody()
-          : undefined;
-      return suggestedBody ? plainTextToHtml(suggestedBody) : '';
+      return initialSuggestedBody ? plainTextToHtml(initialSuggestedBody) : '';
     }
     const decodedHtml = decodeBase64Utf8(encoded);
     return decodedHtml;

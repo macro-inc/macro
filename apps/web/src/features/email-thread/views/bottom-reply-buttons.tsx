@@ -74,8 +74,11 @@ export function BottomReplyButtons(props: {
           .map((inbox) => inbox.email_address),
       ];
     },
-    enabled: () => ctx.permissions().isOwner,
-    hasProfessionalFeatures: viewContext.compose.hasPaidAccess,
+    enabled: () =>
+      ctx.permissions().isOwner &&
+      !viewContext.compose.accounts.loading() &&
+      !viewContext.compose.accounts.failed(),
+    hasProfessionalFeatures: viewContext.hasProfessionalFeatures,
   });
 
   const open = (type: ReplyType, suggestedBody?: string) =>
@@ -83,7 +86,7 @@ export function BottomReplyButtons(props: {
       const messageId = props.lastMessage.db_id;
       if (!messageId) return;
       openEmailReplyComposerForMessage({
-        isMobile: viewContext.thread.isMobile(),
+        useReplyDrawer: viewContext.thread.isTouch(),
         ctx,
         message: props.lastMessage,
         replyType: type,
@@ -100,7 +103,21 @@ export function BottomReplyButtons(props: {
     <Show
       when={suggested.replies()?.length}
       fallback={
-        <Show when={suggested.isGenerating()}>
+        <Show
+          when={suggested.isGenerating()}
+          fallback={
+            <Show when={suggested.error()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="text-ink-placeholder"
+                onClick={() => void suggested.retry()}
+              >
+                Retry suggested replies
+              </Button>
+            </Show>
+          }
+        >
           <div class="flex items-center gap-1.5 text-xs text-ink-placeholder">
             <SparkleIcon class="size-3 animate-pulse" />
             <span>Drafting replies…</span>
@@ -128,6 +145,12 @@ export function BottomReplyButtons(props: {
       </div>
     </Show>
   );
+  const showSuggestedReplies = () =>
+    Boolean(
+      suggested.replies()?.length ||
+        suggested.isGenerating() ||
+        suggested.error()
+    );
 
   const currentUserIconProps = () => {
     const email = currentUserEmail();
@@ -155,7 +178,9 @@ export function BottomReplyButtons(props: {
       when={viewContext.thread.isTouch()}
       fallback={
         <div class="flex w-full flex-col gap-3 pt-4">
-          <SuggestedReplyButtons />
+          <Show when={showSuggestedReplies()}>
+            <SuggestedReplyButtons />
+          </Show>
           <div class="flex items-center">
             <button
               type="button"
@@ -176,9 +201,11 @@ export function BottomReplyButtons(props: {
     >
       <FloatRegionOrInline region="accessory">
         <div class="w-full p-2 pb-2 pt-4 touch:px-(--mobile-chrome-gutter) touch:py-0">
-          <div class="mb-2 touch:pointer-events-auto">
-            <SuggestedReplyButtons />
-          </div>
+          <Show when={showSuggestedReplies()}>
+            <div class="mb-2 touch:pointer-events-auto">
+              <SuggestedReplyButtons />
+            </div>
+          </Show>
           <div class="flex flex-row flex-wrap items-center gap-2 justify-between touch:pointer-events-auto">
             <div class="flex flex-row items-center gap-2">
               <ReplyActionButton

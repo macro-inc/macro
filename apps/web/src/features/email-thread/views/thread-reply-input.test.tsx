@@ -53,6 +53,7 @@ function ThreadTestProvider(props: {
     <EmailThreadViewProvider
       value={{
         thread: context,
+        hasProfessionalFeatures: () => true,
         compose: createComposeContext(),
         rendering: {},
       }}
