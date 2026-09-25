@@ -1,3 +1,4 @@
+import '../../../../../scripts/vitest-hang-setup';
 import {
   createRoutesManifest,
   decodeRoute,
