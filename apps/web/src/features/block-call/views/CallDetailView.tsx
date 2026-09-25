@@ -57,7 +57,7 @@ export function useCallDetail(callId: Accessor<string>) {
 
 export function CallDetailActions(props: {
   callId: string;
-  channelId?: string;
+  channelId?: string | null;
   name: string;
   isActive: boolean;
 }) {
