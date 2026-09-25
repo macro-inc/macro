@@ -2,8 +2,8 @@ import { createEffect, on, onCleanup } from 'solid-js';
 import { type PagerDirection, usePager } from './Pager';
 
 const DEFAULT_DIRECTION_LOCK_DISTANCE = 8;
-const DEFAULT_VELOCITY_ACTIVATION_DISTANCE = 24;
-const DEFAULT_VELOCITY_THRESHOLD = 0.5;
+const DEFAULT_VELOCITY_ACTIVATION_DISTANCE = 16;
+const DEFAULT_VELOCITY_THRESHOLD = 0.3;
 const RELEASE_VELOCITY_WINDOW = 100;
 
 interface ActiveGesture {
