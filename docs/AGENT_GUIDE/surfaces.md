@@ -780,10 +780,11 @@ byline.
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, GitHub action, discussion timeline, and Details/Checks
 side panel below the top bar. PRs are not tasks and do not appear in the Tasks list.
+Copy Link from a PR in Quick Access copies `/app/reviews/pr/<foreignEntityId>`.
 Old `/app/pr/<foreignEntityId>` and `/app/tasks/pr/<foreignEntityId>` links
-redirect to Reviews. Check an old link, a PR opened from a list or agent session,
-a second split, breadcrumb return, side-panel toggle, and phone layout. If cached
-GitHub data fails, the detail shows an error banner.
+redirect to Reviews. Check a copied link, a PR opened from a list or agent session,
+a second split, breadcrumb return, side-panel toggle, and phone layout. If no
+GitHub data loads, the detail shows an error banner.
 
 ## Calls — `/app/component/calls`
 
