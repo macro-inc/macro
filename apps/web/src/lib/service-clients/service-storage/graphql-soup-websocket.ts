@@ -172,7 +172,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       unsubscribeAll();
       if (!client || suspended) return;
       activity = createActivityUpdatesHandler(client);
-      channels = createChannelListUpdatesHandler(client);
+      channels = createChannelListUpdatesHandler(client, host);
       const activityHandler = activity;
       const channelHandler = channels;
 
@@ -199,7 +199,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               const patch = (result.data as NotificationUpdatesSubscription)
                 .notificationUpdates;
               publishNotificationPatch(patch);
-              channelHandler.onPatch(patch);
+              void channelHandler.onPatch(patch);
             }
             if (result.error) {
               console.warn(errorMessage, result.error);

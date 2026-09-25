@@ -1,6 +1,10 @@
 import type { NotificationType } from '@core/types';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import type { NotificationStack } from '@notifications';
+import {
+  getNotificationAgentSender,
+  getUniqueAgentSenders,
+} from '@notifications/notification-sender';
 import { createMemo } from 'solid-js';
 import type { Notification } from '../types/notification';
 import {
@@ -57,7 +61,8 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
   // Sender display labels for the notification/stack. GitHub PR senders are
   // always named by the GitHub login carried in the notification metadata —
   // never by a linked Macro user's name, even when the notification has a
-  // `sender_id`. Macro senders resolve to their display name.
+  // `sender_id`. Macro senders resolve to their display name; agents, which
+  // have no `sender_id`, are named from the metadata.
   // Memoized so the per-sender name resolution (which has side effects: it
   // queues a fetch and registers a reactive effect) runs once per dependency
   // change rather than on every call from the description() formatters.
@@ -71,14 +76,19 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
       if (props.notification.sender_id) {
         return [macroFirstName(props.notification.sender_id)];
       }
-      return [];
+      const agent = getNotificationAgentSender(props.notification);
+      return agent ? [agent.name] : [];
     }
     if (props.stack) {
       if (isGithubNotificationType(props.stack.type)) {
         return getUniqueGithubLogins(props.stack.notifications);
       }
       const macroIds = getUniqueSenderIds(props.stack.notifications);
-      return macroIds.map(macroFirstName);
+      const agents = getUniqueAgentSenders(props.stack.notifications);
+      return [
+        ...macroIds.map(macroFirstName),
+        ...agents.map((agent) => agent.name),
+      ];
     }
     return [];
   });

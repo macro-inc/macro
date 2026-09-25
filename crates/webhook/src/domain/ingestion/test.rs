@@ -1350,6 +1350,23 @@ fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::Agen
     ))
 }
 
+fn agent_trigger_requested_event()
+-> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
+    use agent_trigger::domain::broker_events::{
+        AgentSessionRequestedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+
+    Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::Requested(AgentSessionRequestedEvent {
+            bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
+            session_id: agent_session::domain::model::AgentSessionId::new_from_uuid(
+                uuid::Uuid::from_u128(0x5E55),
+            ),
+            owner: "macro|asker@example.com".to_owned(),
+        }),
+    ))
+}
+
 fn agent_trigger_document_event()
 -> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
     use agent_trigger::domain::broker_events::{
@@ -1442,6 +1459,44 @@ async fn an_existing_session_trigger_is_gated_by_its_message_parent() {
     assert_eq!(
         lock(&access.calls).as_slice(),
         &[(uuid::Uuid::from_u128(1).to_string(), EntityType::Channel)],
+    );
+}
+
+/// A session asked for from the composer was posted nowhere, so there is no
+/// parent whose readers decide who sees it: the requester alone does, and
+/// their workspaces are where the bot's runtime subscribes from.
+#[tokio::test]
+async fn a_requested_session_is_scoped_to_its_requester_and_named_by_the_bot() {
+    let access = MockAccessService::with_users(vec![]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    let event = agent_trigger_requested_event();
+
+    service
+        .ingest_agent_trigger_event(event.clone())
+        .await
+        .expect("requested sessions are ingested");
+
+    // Nobody's access was consulted: the requester is the audience.
+    assert!(lock(&access.calls).is_empty());
+    let bot_id = bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)).to_string();
+    let repository_state = lock(&repository.state);
+    assert_eq!(repository_state.match_calls.len(), 1);
+    assert_eq!(repository_state.match_calls[0].entity_id, bot_id);
+    assert_eq!(
+        repository_state.match_calls[0].event_name,
+        "agent_trigger.new"
+    );
+    drop(repository_state);
+    let enqueuer_state = lock(&enqueuer.state);
+    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+    assert_eq!(
+        enqueuer_state.attempted_messages[0].event.broker_envelope,
+        serde_json::to_value(&event).expect("a serializable envelope"),
     );
 }
 

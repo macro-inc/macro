@@ -7,7 +7,7 @@ import {
   useNavigationStack,
 } from '@app/components/navigation-stack/NavigationStack';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
-import type { PreviewPanelSelection } from '@components/app/PreviewPanel';
+import type { PreviewPanelSelection } from '@components/app/previewTarget';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export type EntityDetailTarget = PreviewPanelSelection & {

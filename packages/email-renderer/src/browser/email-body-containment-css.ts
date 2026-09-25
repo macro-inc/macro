@@ -1,9 +1,9 @@
 /** Shadow-root containment shared with the email rendering snapshot harness.
  *
  * Images already cap at the pane. Long signature lines wrap instead of
- * tripping whole-message zoom. Quote nesting indents left only. GitHub
+ * overflowing the pane. Quote nesting indents left only. GitHub
  * review mail uses one unwrapped `<pre>` line; wrap like Gmail. Leave
- * designed tables alone so newsletters can still use the fit-to-width floor.
+ * designed tables alone so newsletters stay at native type and scroll.
  */
 export const EMAIL_BODY_CONTAINMENT_CSS = [
   'img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}',

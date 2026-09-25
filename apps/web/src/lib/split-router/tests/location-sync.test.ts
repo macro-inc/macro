@@ -80,4 +80,34 @@ describe('external location synchronization', () => {
     expect(acknowledge(parseExternalLocation('/item/first'))).toBe(true);
     expect(acknowledge(parseExternalLocation('/item/second'))).toBe(false);
   });
+
+  it('distinguishes commits with the same URL by entry identity', () => {
+    const current = parseExternalLocation('/item/initial');
+    const commit = vi.fn();
+    const sync = createLocationSync({
+      routes,
+      location: {
+        read: () => current,
+        commit,
+        subscribe: () => () => {},
+      },
+    });
+    const entry = decodeRoute(routes, ['item', 'same'])!;
+
+    sync.commit([{ ...entry, key: 'entry-1', state: { feature: 'first' } }], {
+      history: 'push',
+      preserveHash: false,
+    });
+    sync.commit([{ ...entry, key: 'entry-2', state: { feature: 'second' } }], {
+      history: 'push',
+      preserveHash: false,
+    });
+
+    expect(commit).toHaveBeenCalledTimes(2);
+    expect(commit.mock.calls[0]?.[0].pathname).toBe('/item/same');
+    expect(commit.mock.calls[1]?.[0].pathname).toBe('/item/same');
+    expect(commit.mock.calls[0]?.[0].state).not.toEqual(
+      commit.mock.calls[1]?.[0].state
+    );
+  });
 });

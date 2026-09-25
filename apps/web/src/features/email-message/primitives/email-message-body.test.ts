@@ -64,6 +64,8 @@ describe('independent email body', () => {
     try {
       await Promise.resolve();
       const host = root.body.host()!;
+      expect(host.style.minWidth).toBe('0');
+      expect(host.style.width).toBe('100%');
       expect(host.shadowRoot?.textContent).toContain('Hello Person');
       root.body.setShowFullHTML(true);
       await Promise.resolve();

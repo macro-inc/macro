@@ -1,5 +1,10 @@
 # AI Chat (Agents)
 
+User-sent messages in chat and agent transcripts use an ink-colored bubble with
+`InvertUtil` in light themes. Dark themes use `Layer depth={3}` for the slightly
+lighter bubble with the normal text palette. Preview Markdown and controls at
+`/app/debug/ui?ui=invert-util` under **User-sent AI message**.
+
 ## Uploading files with AI
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
@@ -61,10 +66,14 @@ permission failures should display a failed tool call without a successful resul
 - The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
   grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
   Macro’s available models with readable names (for example, **Sonnet 5**) and
-  provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
-  Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
+  provider or model icons aligned with the agent icons. The in-memory catalog
+  offers the closed Anthropic and OpenAI chat models, Fireworks-hosted
+  **Kimi K3**, **DeepSeek V4 Pro**, and **Muse Glimmer**, and Google's
+  **Gemini 3.8 Flash**; older Sonnet and Opus versions are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
+  A model chosen from that **Models** list is remembered in local storage as the
+  default for Macro's in-memory agent until another Models entry is picked.
   The built-in Macro agent is the only agent excluded from these sections; its models remain available.
   Unavailable paired agents stay visible with a reason. Model discovery uses the
   selected runtime, including Claude Cloud. Every coding agent opens the repository
@@ -276,7 +285,16 @@ documents:
 
 ## AI usage limits
 
-Paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
+AI usage billing is enabled only in the dev environment (`dev.macro.com/app`,
+including a local frontend pointed at the dev backend). The backend enforces
+allowances and settles usage only in `Environment::Develop`. In production and
+local-backend environments, requests are not blocked by credits, spending caps,
+or failed-overage-payment state, and usage is recorded without settlement.
+Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
+are hidden outside frontend development mode. Normal paid-model access rules
+still apply everywhere.
+
+In dev, paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
 usage rates). When it is used up and no credits or usage billing cover the
 request, sending a message answers HTTP 402 and the app opens the
 **AI usage limit** dialog (title `You've used this month's included AI`, or the
@@ -342,7 +360,8 @@ existing text sizing.
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
 - Model picker button showing the current model (e.g. `Haiku 4.5`). Paid plans list
   `Sonnet 5`, `Opus 5`, `Fable 5.1`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
-  heavy models carry a `2.5× usage` / `5× usage` hint. On the free plan everything but `Haiku 4.5` is
+  in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
+  On the free plan everything but `Haiku 4.5` is
   dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
 
@@ -387,7 +406,12 @@ stream over the app's websocket, not the HTTP response.
 When asked, the agent also answers document comments in place. A reply row reads
 **Replied to a comment on** (or **Commented on** for a new Discussion comment) followed
 by the document, and expands to the posted text; a resolve row reads **Resolved** or
-**Reopened a comment on** the document. The comment is posted as the agent with a
+**Reopened a comment on** the document. Asked to comment on part of a markdown
+document, the agent starts an inline comment on the quoted passage: the row reads
+**Commented on text in** the document and expands to the quoted text and the comment,
+and the passage is highlighted in the document with the comment floating beside it.
+A passage that is missing, spans blocks, or repeats with no occurrence chosen is
+refused with no highlight left behind. The comment is posted as the agent with a
 **from <user>** pill, and needs the user's comment access to the document.
 
 ## Agent sessions asking a question
@@ -415,9 +439,12 @@ marked done.
 
 ## In channels
 
-Mention `@Macro` in any channel message for the classic in-channel reply. Mention
-`@macro-new` (or `@coder` / `@cursor`) to open an **agent session** — a dedicated
-transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
+Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
+the classic in-channel reply; with it, the same mention opens an **agent session** — a
+dedicated transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
+`@coder` / `@cursor` always open a session. There is only ever one Macro entry in the
+mention menu; which of the two answers is the rollout's decision, not a second choice in
+the menu.
 
 ## Agent sessions
 
@@ -496,15 +523,24 @@ Only tools with a supported result view can expand. Unknown tools, unsupported
 drafts, and payloads that do not fit their renderer stay as summary rows with
 no caret. Tool arguments and results never fall back to raw JSON.
 
-Consecutive calls collect under an expanded **Calling N tools** group while
-running. Rows appear as calls arrive; after the calls finish, the group briefly
-settles and collapses to **Called N tools**. Group growth and collapse happen
-immediately, without animation, including fast batches. Completed groups in
-history start collapsed and can be reopened. The group caret sits immediately
-after its label and appears on hover or keyboard focus. Expand an edit row to
-view its diffs. Result bodies load only when their row opens; syntax highlighting
-may appear after the diff text. Opening a session or expanding a group should
-leave the app responsive, even when the session contains many file edits.
+Tool runs keep one group from their first call. Historical runs start collapsed;
+live calls get a 150 ms buffer, so fast parallel bursts can finish as **Called N
+tools** without flashing a list. Ongoing work opens a scrollable window of at
+most five compact rows. The window follows unfinished calls first, keeping slow
+work visible even when later calls finish, until you scroll or interact with it;
+scrolling back to the bottom resumes following. An automatically opened window
+stays visible for at least 600 ms and waits for 150 ms without an active call
+before collapsing smoothly. These delays are shared by the group, never queued
+per call, and do not delay answer text or tool execution. Manually opening,
+closing, or interacting with a group overrides automatic collapse. Subagents
+and tools requiring user input remain outside these groups so they stay visible
+during other tool bursts. Nested agent activity has its own scrollable window.
+
+The group caret sits immediately after its label and appears on hover or keyboard
+focus. Expand an edit row to view its diffs. Result bodies load only when their
+row opens; syntax highlighting may appear after the diff text. Opening a session
+or expanding a group should leave the app responsive, even when the session
+contains many file edits.
 
 `DisplayResults` renders its dynamic view directly in the reply and stays visible
 without opening a tool row. It breaks tool groups before and after itself,
@@ -519,8 +555,9 @@ server do not currently receive this tool.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
-rows accumulate, completed calls stop shimmering, the group collapses after
-completion without height animation, and its carets still expand the results.
+ongoing rows accumulate in the five-row window, completed calls stop shimmering,
+fast batches stay compact, and the group collapses smoothly after completion.
+Its carets should still expand the results, and reduced motion disables animation.
 Check that rich result controls still work and `DisplayResults` stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat

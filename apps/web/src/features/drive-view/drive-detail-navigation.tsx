@@ -4,13 +4,7 @@ import type {
   EntityDetailNavigationStackEntry,
   EntityDetailTarget,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
-import {
-  routeParams,
-  useCanGo,
-  useNavigate,
-  useParams,
-  useSplitHistory,
-} from '@app/split-router';
+import { useNavigate, useParams, useRouteState } from '@app/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -25,22 +19,33 @@ import {
 import type { DriveLocation } from './core/types';
 import { driveDestination } from './drive-route-navigation';
 import {
+  type DriveDocumentTarget,
+  documentRouteFromTarget,
+  documentTargetFromRoute,
+  sameDocumentRoute,
+} from './primitives/drive-detail-trail';
+import {
   type DriveDocumentRoute,
   type DriveRouteParams,
   driveDocumentFromParams,
   driveDocumentRoute,
 } from './primitives/drive-route';
+import { driveSplitRoute } from './route';
 
-type DriveDetailHistoryEntry = EntityDetailNavigationStackEntry & {
-  historyIndex: number;
+type DriveDetailRootOptions = EntityDetailNavigationOptions & {
+  location?: DriveLocation;
 };
 
 type DriveDetailNavigation = {
-  entries: Accessor<readonly DriveDetailHistoryEntry[]>;
-  active: Accessor<DriveDetailHistoryEntry | undefined>;
+  entries: Accessor<readonly EntityDetailNavigationStackEntry[]>;
+  active: Accessor<EntityDetailNavigationStackEntry | undefined>;
   navigate: (
     target: EntityDetailTarget,
     options?: EntityDetailNavigationOptions
+  ) => boolean;
+  openRoot: (
+    target: EntityDetailTarget,
+    options?: DriveDetailRootOptions
   ) => boolean;
   pop: () => void;
   popTo: (value: string) => void;
@@ -49,60 +54,16 @@ type DriveDetailNavigation = {
 
 const Context = createContext<DriveDetailNavigation>();
 
-function targetFromDocument(
-  document: DriveDocumentRoute | undefined
-): Extract<EntityDetailTarget, { type: 'document' }> | undefined {
-  if (!document) return;
-
-  const target = {
-    type: 'document' as const,
-    id: document.id,
-  };
-
-  switch (document.type) {
-    case 'task':
-      return {
-        ...target,
-        fileType: 'md',
-        subType: { type: 'task', is_completed: false },
-      };
-    case 'snippet':
-    case 'skill':
-      return {
-        ...target,
-        fileType: 'md',
-        subType: { type: document.type },
-      };
-    default:
-      return { ...target, fileType: document.type };
-  }
-}
-
-function targetFromParams(params: DriveRouteParams) {
-  return targetFromDocument(driveDocumentFromParams(params));
-}
-
-function sameTarget(
-  left: EntityDetailTarget | undefined,
-  right: EntityDetailTarget | undefined
-) {
-  if (left?.type !== 'document' || right?.type !== 'document') {
-    return left === right;
-  }
-
-  return (
-    left.id === right.id &&
-    left.fileType === right.fileType &&
-    left.subType?.type === right.subType?.type
-  );
-}
-
 function opensInline(options?: EntityDetailNavigationOptions) {
+  if (isTouchDevice()) return false;
+
   const event = options?.event;
-  return (
-    !isTouchDevice() &&
-    !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
-  );
+  if (!event) return true;
+  if (event.shiftKey) return false;
+  if (event.metaKey) return false;
+  if (event.ctrlKey) return false;
+  if (event.altKey) return false;
+  return true;
 }
 
 export function DriveDetailNavigationProvider(
@@ -110,82 +71,131 @@ export function DriveDetailNavigationProvider(
 ) {
   const params = useParams<DriveRouteParams>();
   const navigate = useNavigate();
-  const canGoBack = useCanGo(-1);
-  const history = useSplitHistory();
+  const routeTrail = useRouteState(driveSplitRoute);
   const selectPreview = createPreviewSelectionGuard();
-  const activeTarget = createMemo(() => targetFromParams(params));
+  const activeDocument = createMemo(() => driveDocumentFromParams(params));
+  const activeTarget = createMemo(() =>
+    documentTargetFromRoute(activeDocument())
+  );
 
   createEffect(on(activeTarget, (target) => selectPreview(target)));
 
-  const entries = createMemo<DriveDetailHistoryEntry[]>(() => {
-    const snapshot = history();
-    if (!snapshot) return [];
+  const trail = (): DriveDocumentTarget[] => {
+    const restored = routeTrail();
+    const endpoint = restored?.at(-1);
+    const endpointMatches =
+      endpoint !== undefined &&
+      sameDocumentRoute(documentRouteFromTarget(endpoint), activeDocument());
+    if (restored && endpointMatches) return restored;
 
-    const result: DriveDetailHistoryEntry[] = [];
-    for (let index = 0; index <= snapshot.index; index += 1) {
-      const target = targetFromParams(
-        routeParams(snapshot.entries[index]?.route) as DriveRouteParams
-      );
+    const target = activeTarget();
+    if (!target) return [];
+    return [target];
+  };
 
-      if (!target) {
-        result.splice(0);
-        continue;
-      }
-
-      const entry = {
-        value: `drive-history:${index}`,
-        data: target,
-        historyIndex: index,
-      };
-      const previous = result.at(-1);
-      if (sameTarget(previous?.data, target)) result[result.length - 1] = entry;
-      else result.push(entry);
-    }
-
-    return result;
-  });
+  const entries = createMemo<EntityDetailNavigationStackEntry[]>(() =>
+    trail().map((target, index) => ({
+      value: `drive-detail:${index}:${documentRouteFromTarget(target).type}:${target.id}`,
+      data: target,
+    }))
+  );
   const active = () => entries().at(-1);
+
+  const resolveTarget = (
+    target: EntityDetailTarget,
+    options?: EntityDetailNavigationOptions
+  ):
+    | { target: DriveDocumentTarget; document: DriveDocumentRoute }
+    | undefined => {
+    if (target.type !== 'document') return;
+    if (!opensInline(options)) return;
+
+    const blockType = entityDetailBlockType(target);
+    if (!blockType) return;
+    if (!selectPreview(target)) return;
+
+    return {
+      target,
+      document: driveDocumentRoute({
+        id: target.id,
+        fileType: target.fileType ?? blockType,
+        subType: target.subType?.type,
+      }),
+    };
+  };
 
   const value: DriveDetailNavigation = {
     entries,
     active,
 
     navigate(target, options) {
-      if (target.type !== 'document' || !opensInline(options)) return false;
+      const resolved = resolveTarget(target, options);
+      if (!resolved) return false;
 
-      const blockType = entityDetailBlockType(target);
-      if (!blockType || !selectPreview(target)) return false;
+      const currentTrail = trail();
+      const endpoint = currentTrail.at(-1);
+      const endpointMatches =
+        endpoint !== undefined &&
+        sameDocumentRoute(documentRouteFromTarget(endpoint), resolved.document);
+      if (endpointMatches) return true;
+
+      navigate(driveDestination(props.location(), resolved.document), {
+        state: [...currentTrail, resolved.target],
+      });
+      return true;
+    },
+
+    openRoot(target, options) {
+      const resolved = resolveTarget(target, options);
+      if (!resolved) return false;
 
       navigate(
         driveDestination(
-          props.location(),
-          driveDocumentRoute({
-            id: target.id,
-            fileType: target.fileType ?? blockType,
-            subType: target.subType?.type,
-          })
-        )
+          options?.location ?? props.location(),
+          resolved.document
+        ),
+        { state: [resolved.target] }
       );
       return true;
     },
 
     pop() {
-      if (canGoBack()) navigate(-1);
-      else value.clear({ replace: true });
+      const currentEntries = entries();
+      if (currentEntries.length > 1) {
+        value.popTo(currentEntries.at(-2)!.value);
+        return;
+      }
+      value.clear({ replace: true });
     },
 
     popTo(value) {
-      const entry = entries().find((candidate) => candidate.value === value);
-      const snapshot = history();
-      if (!entry || !snapshot) return;
+      const currentEntries = entries();
+      const entryIndex = currentEntries.findIndex(
+        (candidate) => candidate.value === value
+      );
+      if (entryIndex < 0) return;
+      if (entryIndex === currentEntries.length - 1) return;
 
-      navigate(entry.historyIndex - snapshot.index);
+      const nextTrail = currentEntries
+        .slice(0, entryIndex + 1)
+        .map((candidate) => candidate.data)
+        .filter(
+          (candidate): candidate is DriveDocumentTarget =>
+            candidate.type === 'document'
+        );
+      const target = nextTrail.at(-1);
+      if (!target) return;
+
+      navigate(
+        driveDestination(props.location(), documentRouteFromTarget(target)),
+        { state: nextTrail }
+      );
     },
 
     clear(options) {
       // Location navigation already lands on a list route. Clearing again must
       // not climb out of the folder/tab the user just selected.
-      if (!driveDocumentFromParams(params)) return;
+      if (!activeDocument()) return;
       selectPreview(undefined);
       navigate(driveDestination(props.location()), {
         replace: options?.replace,

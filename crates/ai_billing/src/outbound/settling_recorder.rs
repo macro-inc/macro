@@ -1,9 +1,13 @@
 //! A [`UsageRecorder`] that books usage and then asks for settlement when the
 //! payer has usage past their allowance.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{BillingService, SettlementTrigger};
 use ai_usage::domain::service::UsageServiceImpl;
 use ai_usage::{SYSTEM_USER_ID, UsageEvent, UsageRecorder, UsageRepo};
+use macro_env::Environment;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -28,15 +32,22 @@ pub struct SettlingUsageRecorder<Repo, B, T> {
     inner: Arc<UsageServiceImpl<Repo>>,
     billing: Arc<B>,
     trigger: T,
+    environment: Environment,
 }
 
 impl<Repo, B, T> SettlingUsageRecorder<Repo, B, T> {
-    /// Build the recorder.
-    pub fn new(inner: Arc<UsageServiceImpl<Repo>>, billing: Arc<B>, trigger: T) -> Self {
+    /// Build the recorder. Usage is recorded everywhere; settlement is requested only in dev.
+    pub fn new(
+        inner: Arc<UsageServiceImpl<Repo>>,
+        billing: Arc<B>,
+        trigger: T,
+        environment: Environment,
+    ) -> Self {
         Self {
             inner,
             billing,
             trigger,
+            environment,
         }
     }
 }
@@ -51,6 +62,7 @@ where
         let inner = self.inner.clone();
         let billing = self.billing.clone();
         let trigger = self.trigger.clone();
+        let environment = self.environment;
         tokio::spawn(async move {
             let user = event.user.clone();
             let mut backoff = RECORD_RETRY_BACKOFF.iter();
@@ -75,7 +87,9 @@ where
                     }
                 }
             }
-            if user.as_ref() == SYSTEM_USER_ID.as_ref() {
+            if !matches!(environment, Environment::Develop)
+                || user.as_ref() == SYSTEM_USER_ID.as_ref()
+            {
                 return;
             }
             match billing.snapshot(&user).await {

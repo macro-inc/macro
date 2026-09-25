@@ -9,6 +9,62 @@ mod test;
 /// Marker class wrapping an injected signature.
 const SIGNATURE_CLASS: &str = "macro-email-signature";
 
+/// Pure send-time signature policy, shared by immediate and scheduled delivery.
+/// Settings are fetched before entering the persistence transaction; application
+/// uses the current locked body so an autosave cannot race body preparation.
+#[derive(Debug, Clone, Default)]
+pub struct SignaturePreparation {
+    pub(crate) settings: Option<crate::domain::ports::LinkEmailSettings>,
+    pub(crate) include_signature: Option<bool>,
+}
+
+impl SignaturePreparation {
+    /// Apply the existing per-message override and inbox reply/forward defaults.
+    pub fn apply(
+        &self,
+        is_reply: bool,
+        body_html: &mut Option<String>,
+        body_text: &mut Option<String>,
+    ) {
+        if self.include_signature == Some(false) {
+            if body_html.as_deref().is_some_and(has_signature)
+                && let Some(html) = body_html.take()
+            {
+                *body_html = Some(strip_signature(&html));
+            }
+            return;
+        }
+        if body_html.as_deref().is_some_and(has_signature) {
+            return;
+        }
+        let Some(settings) = &self.settings else {
+            return;
+        };
+        let Some(signature) = settings
+            .signature
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        else {
+            return;
+        };
+        if !self
+            .include_signature
+            .unwrap_or(!is_reply || settings.signature_on_replies_forwards)
+        {
+            return;
+        }
+        if let Some(html) = body_html.take() {
+            *body_html = Some(inject_signature(&html, signature));
+        }
+        let plain = signature_plain_text(signature);
+        if !plain.is_empty()
+            && let Some(existing) = body_text.take().filter(|s| !s.is_empty())
+        {
+            *body_text = Some(format!("{existing}\n\n{plain}"));
+        }
+    }
+}
+
 /// Whether the body already carries our signature in its own content (idempotency
 /// for re-sends / an old client that still bakes it in). A signature inside a
 /// quoted thread (`.macro_quote`) is the replied-to message's and is ignored.

@@ -15,8 +15,20 @@ import type {
  */
 export type DraftIdentity =
   | { kind: 'none' }
-  | { kind: 'handle'; draftId: string; threadId?: string; queued: boolean }
-  | { kind: 'server'; draftId: string; threadId?: string; queued: boolean };
+  | {
+      kind: 'handle';
+      draftId: string;
+      threadId?: string;
+      inboxId?: string;
+      queued: boolean;
+    }
+  | {
+      kind: 'server';
+      draftId: string;
+      threadId?: string;
+      inboxId?: string;
+      queued: boolean;
+    };
 
 /**
  * Whether edits may autosave. A deterministic server rejection latches the
@@ -42,17 +54,27 @@ export type DraftSessionState = {
 
 export type DraftSessionEvent =
   /** Mounted on (or restored to) a draft the server already holds. */
-  | { type: 'seeded'; draftId?: string | null; threadId?: string | null }
+  | {
+      type: 'seeded';
+      draftId?: string | null;
+      threadId?: string | null;
+      inboxId?: string;
+    }
   /** Client handles minted before the first dispatch of a new draft. */
   | { type: 'minted'; draftId: string; threadId?: string }
   /** A save resolved; `epoch` is the value captured before dispatch. */
   | {
       type: 'saved';
       epoch: number;
-      identity: Pick<DraftSaveResult, 'draftId' | 'threadId' | 'persistence'>;
+      identity: Pick<
+        DraftSaveResult,
+        'draftId' | 'threadId' | 'persistence'
+      > & { inboxId?: string };
     }
   /** The server rejected a save or delete deterministically. */
   | { type: 'rejected'; epoch: number; code: DraftPersistFailureCode }
+  /** An authoritative cancellation makes a schedule-locked draft editable. */
+  | { type: 'schedule-cancelled' }
   /** The draft has no content left; its row was (or is being) deleted. */
   | { type: 'emptied' }
   /** The composer dropped its draft: sent, discarded, or superseded. */
@@ -66,6 +88,7 @@ const FRESH: Omit<DraftSessionState, 'epoch'> = {
 export function initialDraftSession(seed?: {
   draftId?: string | null;
   threadId?: string | null;
+  inboxId?: string;
 }): DraftSessionState {
   return reduceDraftSession(
     { ...FRESH, epoch: 0 },
@@ -89,6 +112,7 @@ export function reduceDraftSession(
               queued: false,
               draftId: event.draftId,
               threadId: event.threadId ?? undefined,
+              inboxId: event.inboxId,
             }
           : { kind: 'none' },
         policy: { kind: 'autosaving' },
@@ -112,6 +136,9 @@ export function reduceDraftSession(
       const draftId = event.identity.draftId ?? currentDraftId(state);
       if (!draftId) return state;
       const threadId = event.identity.threadId ?? currentThreadId(state);
+      const inboxId =
+        event.identity.inboxId ??
+        (state.identity.kind === 'none' ? undefined : state.identity.inboxId);
       if (event.identity.persistence === 'queued') {
         // Durable locally under the caller's handles; the server has not
         // confirmed them. A server id stays a server id.
@@ -119,12 +146,18 @@ export function reduceDraftSession(
           ? { ...state, identity: { ...state.identity, queued: true } }
           : {
               ...state,
-              identity: { kind: 'handle', draftId, threadId, queued: true },
+              identity: {
+                kind: 'handle',
+                draftId,
+                threadId,
+                inboxId,
+                queued: true,
+              },
             };
       }
       return {
         ...state,
-        identity: { kind: 'server', draftId, threadId, queued: false },
+        identity: { kind: 'server', draftId, threadId, inboxId, queued: false },
       };
     })
     .with({ type: 'rejected' }, (event) => {
@@ -135,6 +168,15 @@ export function reduceDraftSession(
         return { ...FRESH, epoch: state.epoch + 1 };
       }
       return { ...state, policy: { kind: 'latched', code: event.code } };
+    })
+    .with({ type: 'schedule-cancelled' }, () => {
+      if (state.policy.kind !== 'latched' || state.policy.code !== 'INVALID')
+        return state;
+      return {
+        ...state,
+        policy: { kind: 'autosaving' },
+        epoch: state.epoch + 1,
+      };
     })
     .with({ type: 'emptied' }, { type: 'reset' }, () => {
       // A fresh draft: nothing in flight belongs to it, and a rejection
@@ -157,6 +199,7 @@ export type DraftSession = ReturnType<typeof createDraftSession>;
 export function createDraftSession(seed?: {
   draftId?: string | null;
   threadId?: string | null;
+  inboxId?: string;
 }) {
   const [state, setState] = createSignal(initialDraftSession(seed));
   return {
@@ -170,6 +213,10 @@ export function createDraftSession(seed?: {
     identity: () => state().identity,
     draftId: () => currentDraftId(state()),
     threadId: () => currentThreadId(state()),
+    inboxId: () => {
+      const identity = state().identity;
+      return identity.kind === 'none' ? undefined : identity.inboxId;
+    },
     /** The server holds the draft under these ids, so any transport can address it. */
     serverConfirmed: () => {
       const identity = state().identity;

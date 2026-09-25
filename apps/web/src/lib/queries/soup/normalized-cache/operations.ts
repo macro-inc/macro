@@ -38,6 +38,7 @@ import {
 } from './normalizer';
 import { raiseNotifiedFloor } from './notified-floor';
 import { ownTouchStamp } from './own-touch';
+import { retainRestoredSoupItem } from './restored-membership';
 import type {
   SoupEntityPartial,
   SoupEntityTag,
@@ -80,6 +81,14 @@ function cancelSoupQueries() {
 export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   partial: SoupEntityPartial<T>
 ): SoupTransaction {
+  return updateSoupEntity(partial, true);
+}
+
+/** Server hydration must not cancel the list revalidation it accompanies. */
+function updateSoupEntity<T extends SoupEntityTag>(
+  partial: SoupEntityPartial<T>,
+  cancelRefetches: boolean
+): SoupTransaction {
   const normalizer = getSoupNormalizer();
   const normKey = getNormalizationObjectKey(partial);
 
@@ -92,7 +101,7 @@ export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   // list refetching on mount): the fetch dies and nothing retries it.
   // Skip cold initial fetches (data === undefined); cancelling those can leave
   // the query stuck pending, which is why cancelSoupQueries has the same guard.
-  for (const queryKey of dependentKeys) {
+  for (const queryKey of cancelRefetches ? dependentKeys : []) {
     if (
       partialMatchKey(queryKey, soupKeys.items._def) ||
       partialMatchKey(queryKey, soupKeys.astItems._def)
@@ -184,9 +193,9 @@ export function bumpSoupEntityTouchedAt(
  * without waiting for a refetch. Newest wins: an out-of-order delivery never
  * moves a row back down. The stamp is also recorded as a floor (see
  * `notified-floor.ts`) so a notified page that was in flight when the
- * notification landed cannot overwrite it with the previous stamp; the floor
- * clears once the server's value catches up. Non-notified responses omit the
- * field, so the field-merge never clears the stamp either.
+ * notification landed cannot overwrite it with the previous stamp. The floor
+ * survives optimistic reads and overlapping refreshes for a bounded interval.
+ * Non-notified responses omit the field, so field merges preserve the stamp.
  */
 export function bumpSoupEntityNotifiedAt(
   entityId: string,
@@ -231,7 +240,9 @@ export function invalidateSoupEntity(entityId: string): void {
   const normalizer = getSoupNormalizer();
   const keys = normalizer.getDependentQueriesByIds([soupNormKey(entityId)]);
   for (const queryKey of keys) {
-    queryClient.invalidateQueries({ queryKey });
+    // Normy JSON-roundtrips complete keys, turning undefined array slots into
+    // null. Exact matching uses the same hash; partial matching misses them.
+    void queryClient.invalidateQueries({ queryKey, exact: true });
   }
 }
 
@@ -578,6 +589,7 @@ export function restoreSoupEntityToDoneFilteredQueries(
         index === 0 ? { ...page, items: [item, ...page.items] } : page
       ),
     });
+    retainRestoredSoupItem(queryClient, key, item);
   }
 
   for (const [
@@ -613,6 +625,7 @@ export function restoreSoupEntityToDoneFilteredQueries(
             : page
         ),
       });
+      retainRestoredSoupItem(queryClient, key, item);
       continue;
     }
 
@@ -828,7 +841,7 @@ export async function refetchSoupEntity(
       item = { ...item, touched_at: ownTouchStamp(itemId) };
     }
     if (hasSoupEntity(itemId)) {
-      optimisticUpdateSoupEntity(item);
+      updateSoupEntity(item, false);
     } else {
       insertSoupEntity(item);
       if (options?.created) continue;

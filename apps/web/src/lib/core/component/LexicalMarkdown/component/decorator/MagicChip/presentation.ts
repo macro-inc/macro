@@ -1,5 +1,6 @@
 import { modelLabel } from '@core/component/AI/constant/model-label';
 import type { MagicChipStatus } from '@macro-inc/lexical-core';
+import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import type {
   FoldedMessage,
   MessagePart,
@@ -371,6 +372,76 @@ function latestChunk(response: FoldedMessage | undefined): string {
 }
 
 /** The one line the chip's header reads for the turn. */
+/**
+ * What the status dot says at a glance: the turn is running, it has stopped
+ * to ask, or it is over. Colour only - whether the dot pulses is the
+ * activity's `busy`, which a running turn can drop while still running.
+ */
+export type MagicChipTone = 'busy' | 'asking' | 'done';
+
+export function presentationTone(
+  presentation: MagicChipPresentation
+): MagicChipTone {
+  return match(presentation)
+    .with({ kind: 'asking' }, () => 'asking' as const)
+    .with({ kind: 'settled' }, () => 'done' as const)
+    .with({ kind: 'working' }, { kind: 'answering' }, () => 'busy' as const)
+    .exhaustive();
+}
+
+/**
+ * Markdown flattened to the single line the console's output row shows.
+ *
+ * The row is one line of prose, so the block structure goes: fences, list
+ * bullets, heading hashes and quote marks are dropped and every run of
+ * whitespace becomes one space. Emphasis and inline code markers go too -
+ * the row has no formatting to carry them. Macro's own `<m-*>` tags are
+ * resolved first, so a mention reads as its name rather than its JSON.
+ *
+ * An underscore between two word characters is left alone: agents write
+ * about `turn_ended` and `agent_fold` far more often than they emphasise a
+ * word, and stripping those would rename the thing being discussed.
+ */
+export function flattenToLine(markdown: string): string {
+  return markdownToPlainText(markdown)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/gm, '')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/[*~`]/g, '')
+    .replace(/_+/g, (run, at: number, text: string) =>
+      isWordChar(text[at - 1]) && isWordChar(text[at + run.length]) ? run : ''
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isWordChar(character: string | undefined): boolean {
+  return character !== undefined && /[A-Za-z0-9]/.test(character);
+}
+
+/**
+ * The one line the console's output row shows, or `undefined` when the turn
+ * has written nothing yet and the row should say so itself.
+ *
+ * A turn that has stopped to ask shows the question rather than the prose
+ * before it: the question is why the chip is sitting there.
+ */
+export function presentationLine(
+  presentation: MagicChipPresentation
+): string | undefined {
+  if (presentation.kind === 'asking') {
+    const { request, action, detail } = presentation.asking;
+    const asked =
+      request.kind === 'elicitation'
+        ? request.message
+        : [action, detail].filter(Boolean).join(' · ');
+    return asked || undefined;
+  }
+  if (presentation.kind === 'working') return undefined;
+  return flattenToLine(presentation.markdown) || undefined;
+}
+
 export function presentationStatus(
   presentation: MagicChipPresentation
 ): MagicChipActivity {

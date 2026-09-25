@@ -23,7 +23,7 @@ import { makePersistedState } from '@app/lib/persistence';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
-import type { PreviewPanelSelection } from '@components/app/previewTarget';
+import type { PreviewSelection } from '@components/app/previewTarget';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
@@ -89,8 +89,8 @@ type InboxListActivationMetadata = {
 };
 
 type InboxListProps = {
-  previewEntity: PreviewPanelSelection | undefined;
-  onPreviewEntityChange: (entity: PreviewPanelSelection | undefined) => void;
+  hasPreview: boolean;
+  onPreviewEntityChange: (entity: PreviewSelection | undefined) => void;
   onPreviewActivate?: () => void;
 };
 
@@ -277,7 +277,7 @@ export function InboxList(props: InboxListProps) {
   const createActionNavigationHandler = ():
     | EntityActionNavigationHandler
     | undefined => {
-    if (props.previewEntity === undefined) return;
+    if (!props.hasPreview) return;
 
     return ({ entity }) => {
       previewAfterNavigation.clear();

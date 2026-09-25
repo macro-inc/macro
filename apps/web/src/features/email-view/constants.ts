@@ -9,6 +9,7 @@ export const EMAIL_TABS: EmailTabItem[] = [
   { id: 'important', label: 'Signal' },
   { id: 'noise', label: 'Noise' },
   { id: 'sent', label: 'Sent' },
+  { id: 'scheduled', label: 'Scheduled' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'drafts', label: 'Drafts' },
   { id: 'shared', label: 'Shared' },

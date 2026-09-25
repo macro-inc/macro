@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT anchor AS \"anchor!\" FROM comms_message_threads WHERE root_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "anchor!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "73ade1d5ca9b510d490338f98d32548a9dffc2b313ddcb9fbd1eae3a6e782d76"
+}

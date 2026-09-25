@@ -176,6 +176,7 @@ function StackEntityDetail(props: {
           }
         >
           {(context) => {
+            if (context.type !== 'document') return null;
             return (
               <FileDetailBreadcrumbItem
                 value={props.entry.value}

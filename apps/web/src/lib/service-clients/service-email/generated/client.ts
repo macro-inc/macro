@@ -871,9 +871,19 @@ export type upsertScheduledMessageResponse200 = {
   status: 200;
 };
 
+export type upsertScheduledMessageResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
 export type upsertScheduledMessageResponse401 = {
   data: ErrorResponse;
   status: 401;
+};
+
+export type upsertScheduledMessageResponse403 = {
+  data: ErrorResponse;
+  status: 403;
 };
 
 export type upsertScheduledMessageResponse404 = {
@@ -891,7 +901,9 @@ export type upsertScheduledMessageResponseSuccess =
     headers: Headers;
   };
 export type upsertScheduledMessageResponseError = (
+  | upsertScheduledMessageResponse400
   | upsertScheduledMessageResponse401
+  | upsertScheduledMessageResponse403
   | upsertScheduledMessageResponse404
   | upsertScheduledMessageResponse500
 ) & {
@@ -931,7 +943,7 @@ export const upsertScheduledMessage = async (
 };
 
 /**
- * @summary Remove the scheduled send from a draft.
+ * @summary Remove the scheduled send from a draft, including immediate-send undo.
  */
 export type deleteScheduledDraftResponse204 = {
   data: void;
@@ -946,6 +958,11 @@ export type deleteScheduledDraftResponse400 = {
 export type deleteScheduledDraftResponse401 = {
   data: ErrorResponse;
   status: 401;
+};
+
+export type deleteScheduledDraftResponse403 = {
+  data: ErrorResponse;
+  status: 403;
 };
 
 export type deleteScheduledDraftResponse404 = {
@@ -965,6 +982,7 @@ export type deleteScheduledDraftResponseSuccess =
 export type deleteScheduledDraftResponseError = (
   | deleteScheduledDraftResponse400
   | deleteScheduledDraftResponse401
+  | deleteScheduledDraftResponse403
   | deleteScheduledDraftResponse404
   | deleteScheduledDraftResponse500
 ) & {

@@ -6,7 +6,9 @@
  */
 
 import type { CallStatus } from './callStatus';
+import type { SoupCallRecordGuest } from './soupCallRecordGuest';
 import type { SoupCallRecordParticipant } from './soupCallRecordParticipant';
+import type { SoupCallRecordSoupPropertiesFieldAllOfTwoChannelId } from './soupCallRecordSoupPropertiesFieldAllOfTwoChannelId';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoChannelName } from './soupCallRecordSoupPropertiesFieldAllOfTwoChannelName';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoCustomName } from './soupCallRecordSoupPropertiesFieldAllOfTwoCustomName';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoDurationMs } from './soupCallRecordSoupPropertiesFieldAllOfTwoDurationMs';
@@ -20,7 +22,7 @@ and derived from `status == ATTENDED`. */
   /** The call identifier. */
   callId: string;
   /** The channel this call belongs to. */
-  channelId: string;
+  channelId?: SoupCallRecordSoupPropertiesFieldAllOfTwoChannelId;
   /** Resolved display name for the channel. */
   channelName?: SoupCallRecordSoupPropertiesFieldAllOfTwoChannelName;
   /** User who created the call. */
@@ -31,9 +33,11 @@ and derived from `status == ATTENDED`. */
   durationMs?: SoupCallRecordSoupPropertiesFieldAllOfTwoDurationMs;
   /** When the call ended (None if still active). */
   endedAt?: SoupCallRecordSoupPropertiesFieldAllOfTwoEndedAt;
+  /** Non-account guests in the call. */
+  guests: SoupCallRecordGuest[];
   /** Whether the call is currently active. */
   isActive: boolean;
-  /** Participants in the call. */
+  /** Macro-account participants in the call. */
   participants: SoupCallRecordParticipant[];
   /** When the call started. */
   startedAt: string;

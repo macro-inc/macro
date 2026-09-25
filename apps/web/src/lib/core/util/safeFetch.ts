@@ -4,6 +4,7 @@ import { err, ok, type Result } from 'neverthrow';
 import { platformFetch } from './platformFetch';
 import type { ObjectLike, ResultError } from './result';
 import { sleep } from './sleep';
+import { redactCallLinkTokens } from './telemetryUrl';
 
 const tracedOrigins: ReadonlySet<string> = (() => {
   const origins = new Set<string>();
@@ -43,10 +44,11 @@ function tracedFetch(
   const url = requestUrl(input);
   if (!url) return platformFetch(input, init);
   const method = (init.method ?? 'GET').toUpperCase();
-  const span = Telemetry.clientSpan(`http ${method} ${url.pathname}`);
+  const path = redactCallLinkTokens(url.pathname);
+  const span = Telemetry.clientSpan(`http ${method} ${path}`);
   span.setAttr('http.method', method);
   // Path only: query strings can carry tokens.
-  span.setAttr('http.url', `${url.origin}${url.pathname}`);
+  span.setAttr('http.url', `${url.origin}${path}`);
   return span.run(async () => {
     try {
       if (isTracedOrigin(url)) {
@@ -62,7 +64,7 @@ function tracedFetch(
           span.setAttr('http.expected_status', true);
           return response;
         }
-        const message = `HTTP ${response.status} for ${method} ${url.pathname}`;
+        const message = `HTTP ${response.status} for ${method} ${path}`;
         span.error({
           name: 'HttpError',
           message,
@@ -71,7 +73,17 @@ function tracedFetch(
       }
       return response;
     } catch (error) {
-      span.error(error);
+      span.error(
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: redactCallLinkTokens(error.message),
+              stack: error.stack
+                ? redactCallLinkTokens(error.stack)
+                : undefined,
+            }
+          : redactCallLinkTokens(String(error))
+      );
       throw error;
     } finally {
       span.end();
@@ -339,7 +351,9 @@ export async function safeFetch<
         return fetchErr([
           {
             code: 'UNKNOWN_ERROR',
-            message: `An unknown error occurred: ${error}`,
+            message: redactCallLinkTokens(
+              `An unknown error occurred: ${error}`
+            ),
           },
         ]);
       }

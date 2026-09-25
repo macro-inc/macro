@@ -40,10 +40,11 @@ export function HoverCard(props: HoverCardProps) {
         content={
           <Surface
             class={cn(
-              'flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word bg-tooltip',
+              'menu-surface rounded-xl flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word',
               props.contentClass
             )}
             depth={3}
+            hideBorder
           >
             {props.content}
           </Surface>

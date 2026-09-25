@@ -688,6 +688,9 @@ pub enum RemoveUserFromTeamError {
     /// Remove roles from user error
     #[error("Remove roles from user error")]
     RemoveRolesFromUserError(#[from] UserRolesAndPermissionsError),
+    /// The removed member's open seat could not be released, and the removal was rolled back.
+    #[error("failed to release the removed member's open seat")]
+    OpenSeatRelease(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Arguments for creating a subscription

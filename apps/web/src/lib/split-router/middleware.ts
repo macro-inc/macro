@@ -32,6 +32,7 @@ function withSearch(
   if (!search || entry.location.search) return entry;
 
   return {
+    ...entry,
     location: {
       ...entry.location,
       search,
@@ -87,7 +88,14 @@ export function runSplitRouterMiddleware(
         );
       }
 
-      return runEntry(withSearch(next, current.location.search));
+      const redirected: SplitRouterEntry = {
+        ...next,
+        key: current.key,
+      };
+      if (Object.hasOwn(current, 'state')) {
+        redirected.state = current.state;
+      }
+      return runEntry(withSearch(redirected, current.location.search));
     };
 
     const runAt = (index: number): SplitRouterMiddlewareRun => {
@@ -109,9 +117,10 @@ export function runSplitRouterMiddleware(
         redirect: (to) => ({ type: 'redirect', to }),
       });
 
-      return isPromise(result)
-        ? result.then((settled) => handleResult(settled, index + 1))
-        : handleResult(result, index + 1);
+      if (isPromise(result)) {
+        return result.then((settled) => handleResult(settled, index + 1));
+      }
+      return handleResult(result, index + 1);
     };
 
     return runAt(0);
@@ -141,9 +150,10 @@ export function prepareEntry(
   try {
     const prepared = runSplitRouterMiddleware(config, request);
 
-    return isPromise(prepared)
-      ? prepared.catch((error) => recoverFailure(error, config, request))
-      : prepared;
+    if (isPromise(prepared)) {
+      return prepared.catch((error) => recoverFailure(error, config, request));
+    }
+    return prepared;
   } catch (error) {
     return recoverFailure(error, config, request);
   }
@@ -163,7 +173,6 @@ export function prepareEntries(
     })
   );
 
-  return prepared.some(isPromise)
-    ? Promise.all(prepared)
-    : (prepared as SplitRouterEntry[]);
+  if (prepared.some(isPromise)) return Promise.all(prepared);
+  return prepared as SplitRouterEntry[];
 }

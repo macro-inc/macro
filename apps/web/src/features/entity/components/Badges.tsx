@@ -1,8 +1,15 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { formatTimeZoneAbbreviation } from '@core/util/date';
+import ClockIcon from '@phosphor/clock.svg';
 import HashIcon from '@phosphor/hash.svg';
 import UserPlus from '@phosphor/user-plus.svg';
 import { cn, HoverCard } from '@ui';
+import { differenceInCalendarDays } from 'date-fns/differenceInCalendarDays';
+import { format } from 'date-fns/format';
+import { isThisYear } from 'date-fns/isThisYear';
+import { isToday } from 'date-fns/isToday';
+import { isTomorrow } from 'date-fns/isTomorrow';
 import type { ParentProps } from 'solid-js';
 import type { CallStatus } from '../types/entity';
 
@@ -82,6 +89,43 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
 
 export function DraftBadge() {
   return <Badge class="text-warning border-edge-muted px-2">draft</Badge>;
+}
+
+function scheduledSendLabel(time: Date): string {
+  const clock = format(time, 'h:mm a');
+  if (isToday(time)) return `Today, ${clock}`;
+  if (isTomorrow(time)) return `Tomorrow, ${clock}`;
+  // Only an upcoming send reads as a weekday; an overdue one keeps its date.
+  const daysAway = differenceInCalendarDays(time, new Date());
+  if (daysAway > 0 && daysAway < 7) return format(time, 'EEE, h:mm a');
+  if (isThisYear(time)) return format(time, 'MMM d, h:mm a');
+  return format(time, 'MMM d, yyyy');
+}
+
+/** When a scheduled row sends; list layouts show it in the timestamp slot. */
+export function ScheduledBadge(props: { sendTime: string }) {
+  const sendTime = () => new Date(props.sendTime);
+  const overdue = () => sendTime().getTime() <= Date.now();
+  return (
+    <Badge
+      class={cn(
+        'ml-auto w-fit shrink-0 px-2',
+        overdue()
+          ? 'text-failure border-failure/20'
+          : 'text-accent border-accent/20'
+      )}
+      title={[
+        overdue() ? 'Overdue scheduled send' : 'Scheduled to send',
+        format(sendTime(), "EEE, MMM d, yyyy 'at' h:mm a"),
+        formatTimeZoneAbbreviation(sendTime()),
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <ClockIcon class="size-3" />
+      <span class="whitespace-nowrap">{scheduledSendLabel(sendTime())}</span>
+    </Badge>
+  );
 }
 
 function _ImportantBadge() {

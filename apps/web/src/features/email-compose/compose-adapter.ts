@@ -23,6 +23,7 @@ import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { Telemetry } from '@macro-inc/observability';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowSquareOut from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
   useAddForwardedAttachmentsMutation,
@@ -75,8 +76,12 @@ import {
 } from './context/compose-capabilities';
 import { decodeBase64Utf8 } from './core/decode-base64';
 import type { EmailDraft } from './core/email-draft';
-import { readDroppedEmailFiles } from './editor-adapter';
+import { readDroppedEmailFiles, withVideoAttachments } from './editor-adapter';
 import { makeAttachmentPublic } from './make-attachment-public';
+import {
+  emailDraftLifecycleSource,
+  publishDraftLifecycleChange,
+} from './queries/draft-lifecycle';
 import { createEmailInboxSource } from './queries/inbox-source';
 import { restoreDraftBodyAfterUndo, runUndoSend } from './undo-send';
 
@@ -113,13 +118,37 @@ export function createEmailComposeContext(
   const { users } = useCombinedRecipients();
   const notice = (options?: ComposeNoticeOptions) => ({
     ...options,
-    actions: options?.actions?.map((action) => ({
+    actions: options?.actions?.map(({ kind, ...action }) => ({
       ...action,
-      icon: ArrowCounterClockwise,
+      icon: kind === 'open' ? ArrowSquareOut : ArrowCounterClockwise,
     })),
   });
   const reportError = (error: unknown) =>
     Telemetry.error(error instanceof Error ? error : new Error(String(error)));
+  // A thread view renders its latest draft as the composer until the thread
+  // is read again, so every delivery change refetches it.
+  const refreshThread = (threadId: string | undefined) => {
+    if (!threadId) return;
+    if (isFeatureEnabled(enableGraphqlSoup)) {
+      void (async () => {
+        const result = await fetchAndCacheThread(threadId);
+        if (result.isErr())
+          reportError(
+            new Error(
+              `Failed to refresh email thread ${threadId}: ${result.error
+                .map((error) => `${error.code}: ${error.message}`)
+                .join(', ')}`
+            )
+          );
+      })().catch(reportError);
+      return;
+    }
+    void queryClient
+      .invalidateQueries({
+        queryKey: emailKeys.threadMessages(threadId).queryKey,
+      })
+      .catch(reportError);
+  };
 
   // Queued writes address a draft by handles: the composer's minted ones, or a
   // confirmed draft's server ids, which resolve as their own handles.
@@ -169,6 +198,7 @@ export function createEmailComposeContext(
   });
 
   return {
+    draftLifecycle: emailDraftLifecycleSource,
     recipientName: (id) => getDisplayName(tryMacroId(id)),
     recordMention: (sourceId, targetId) => {
       void trackMention(sourceId, 'document', targetId).catch(reportError);
@@ -198,15 +228,19 @@ export function createEmailComposeContext(
         handleFileFolderDrop(
           input.files,
           input.directories,
-          createFilesReadyHandler(
-            input.editor,
-            input.sourceId,
-            input.sourceId ? 'email' : undefined,
-            input.dropEvent && input.editor
-              ? () => getDragDropPosition(input.editor!, input.dropEvent!, true)
-              : undefined,
-            input.onUploaded,
-            { width: 542, height: 542 }
+          withVideoAttachments(
+            createFilesReadyHandler(
+              input.editor,
+              input.sourceId,
+              input.sourceId ? 'email' : undefined,
+              input.dropEvent && input.editor
+                ? () =>
+                    getDragDropPosition(input.editor!, input.dropEvent!, true)
+                : undefined,
+              input.onUploaded,
+              { width: 542, height: 542 }
+            ),
+            input.onVideos
           )
         );
       },
@@ -298,6 +332,7 @@ export function createEmailComposeContext(
           skipSoupRefetch: completingThread,
         });
         try {
+          publishDraftLifecycleChange(input.draftId, inboxId);
           if (input.threadId) markThreadDraftSaved(input.threadId);
         } catch (error) {
           reportError(error);
@@ -336,8 +371,15 @@ export function createEmailComposeContext(
           skipSoupRefetch: completingThread,
         });
         try {
-          if (result.message.thread_db_id)
+          if (result.message.db_id)
+            publishDraftLifecycleChange(
+              result.message.db_id,
+              result.message.link_id
+            );
+          if (result.message.thread_db_id) {
             markThreadDraftSaved(result.message.thread_db_id);
+            refreshThread(result.message.thread_db_id);
+          }
         } catch (error) {
           reportError(error);
         }
@@ -347,22 +389,44 @@ export function createEmailComposeContext(
           inboxId: result.message.link_id,
         };
       },
-      async unschedule({ draftId, inboxId }) {
+      async unschedule({ draftId, threadId, inboxId }) {
         await unschedule.mutateAsync({
           draftID: draftId,
           linkId: headerId(inboxId),
         });
         try {
+          publishDraftLifecycleChange(draftId, inboxId);
           invalidateSoupEntity(draftId);
+          refreshThread(threadId);
         } catch (error) {
           reportError(error);
         }
       },
-      schedule: async ({ draftId, sendTime }, inboxId) => {
+      schedule: async (
+        { draftId, threadId, sendTime, includeSignature },
+        inboxId
+      ) => {
         await scheduleEmailMessage(
-          { draftID: draftId, send_time: sendTime },
+          {
+            draftID: draftId,
+            send_time: sendTime,
+            include_signature: includeSignature,
+          },
           headerId(inboxId)
         );
+        try {
+          publishDraftLifecycleChange(draftId, inboxId);
+          refreshThread(threadId);
+          void queryClient
+            .invalidateQueries({
+              queryKey: emailKeys.scheduledMessages._def,
+            })
+            .catch(reportError);
+        } catch (error) {
+          // Cache and cross-tab notifications are post-commit UI work. A
+          // failure here must not make a successful schedule retryable.
+          reportError(error);
+        }
       },
       archive: async ({ threadId, value }, inboxId) => {
         await archiveEmailThread({ id: threadId, value }, headerId(inboxId));

@@ -5,7 +5,7 @@ import type {
   MessageThread as ThreadData,
 } from '@service-storage/messages';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MessageThread, threadListItem } from './MessageThread';
 
@@ -70,6 +70,12 @@ vi.mock('@channel/Thread/ChannelThread', () => ({
         >
           Long press message
         </button>
+        <button
+          onClick={() => props.targetNavigation?.onClearTarget(props.data().id)}
+        >
+          Click linked message
+        </button>
+        <p>{props.isExpanded() ? 'expanded' : 'collapsed'}</p>
       </>
     );
   },
@@ -176,6 +182,26 @@ describe('document discussion controls', () => {
     expect(
       view.queryByRole('button', { name: 'Delete discussion' })
     ).toBeNull();
+  });
+});
+
+describe('linked message highlight', () => {
+  it('releases the highlight when the linked message is clicked, keeping the thread expanded', () => {
+    const [targetId, setTargetId] = createSignal<string | null>('root');
+    const clearTarget = vi.fn(() => setTargetId(null));
+    const view = render(() => (
+      <MessageThread
+        data={message}
+        canWrite
+        targetId={targetId()}
+        onClearTarget={clearTarget}
+      />
+    ));
+    expect(view.getByText('expanded')).toBeTruthy();
+    fireEvent.click(view.getByRole('button', { name: 'Click linked message' }));
+    expect(clearTarget).toHaveBeenCalledOnce();
+    expect(targetId()).toBeNull();
+    expect(view.getByText('expanded')).toBeTruthy();
   });
 });
 

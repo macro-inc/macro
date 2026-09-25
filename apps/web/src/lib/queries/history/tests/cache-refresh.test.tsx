@@ -94,6 +94,68 @@ describe('cache-backed history refresh', () => {
     client.clear();
   });
 
+  it('populates initially empty history during a slow hydration burst, then catches up once', async () => {
+    let notify: (() => void) | undefined;
+    mocks.subscribe.mockImplementation((callback: () => void) => {
+      notify = callback;
+      return mocks.unsubscribe;
+    });
+    const first = [
+      { id: 'first', name: 'First', type: 'document', ownerId: 'owner' },
+    ];
+    const latest = [...first, { ...first[0], id: 'latest' }];
+    let finishFirst!: (data: typeof first) => void;
+    let finishLatest!: (data: typeof first) => void;
+    mocks.readHistory
+      .mockResolvedValueOnce([])
+      .mockReturnValueOnce(
+        new Promise<typeof first>((resolve) => {
+          finishFirst = resolve;
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise<typeof first>((resolve) => {
+          finishLatest = resolve;
+        })
+      );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let query: ReturnType<typeof useHistoryQuery> | undefined;
+    const Probe = () => {
+      query = useHistoryQuery();
+      return null;
+    };
+    const view = render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    try {
+      await waitFor(() => expect(query?.isSuccess).toBe(true));
+      expect(query?.data).toEqual([]);
+      vi.useFakeTimers();
+      notify?.();
+      for (let i = 0; i < 8; i++) {
+        notify?.();
+        await vi.advanceTimersByTimeAsync(250);
+      }
+      expect(mocks.readHistory).toHaveBeenCalledTimes(2);
+      finishFirst(first);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(query?.data).toEqual(first);
+      expect(mocks.readHistory).toHaveBeenCalledTimes(3);
+      finishLatest(latest);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(query?.data).toEqual(latest);
+      expect(mocks.readHistory).toHaveBeenCalledTimes(3);
+      expect(mocks.fetchHistory).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  });
+
   it('opts into hydration, refreshes only local history, and unsubscribes on disposal', async () => {
     let notify: (() => void) | undefined;
     mocks.subscribe.mockImplementation(

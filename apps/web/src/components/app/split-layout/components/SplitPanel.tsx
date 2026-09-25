@@ -10,6 +10,7 @@ import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow'
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { splitContainerAttribute } from '@core/dom-selectors';
+import { EVENT_MODIFIER_KEYS } from '@core/hotkey/constants';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
@@ -67,6 +68,7 @@ export function SplitPanel(props: SplitPanelProps) {
   const [bottomPanel, setBottomPanel] =
     createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
+  let pointerTarget: Element | undefined;
 
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const headerCollapseController = createPriorityCollapseController();
@@ -228,6 +230,7 @@ export function SplitPanel(props: SplitPanelProps) {
           replaceOwnedSlot: ownedSlots.replace,
           panelSize,
           panelRef,
+          pointerTarget: () => pointerTarget,
         }}
       >
         <SplitDrawerGroup panelSize={panelSize}>
@@ -260,6 +263,23 @@ export function SplitPanel(props: SplitPanelProps) {
               setPanelRef(ref);
               props.setPanelRef(ref);
               attachHotKeys(ref);
+            }}
+            on:pointerdown={{
+              capture: true,
+              handleEvent: (e) => {
+                pointerTarget =
+                  e.target instanceof Element ? e.target : undefined;
+              },
+            }}
+            // A split opened from the keyboard has no pressed element to keep
+            // in view. Modifiers are held through Shift- and Cmd-clicks.
+            on:keydown={{
+              capture: true,
+              handleEvent: (e) => {
+                if (!EVENT_MODIFIER_KEYS.has(e.key.toLowerCase())) {
+                  pointerTarget = undefined;
+                }
+              },
             }}
             data-split-id={props.split.id}
             {...splitContainerAttribute}
@@ -329,8 +349,8 @@ export function SplitPanel(props: SplitPanelProps) {
                   </div>
                   <Show when={!usesComposableLayout() && bottomPanel()}>
                     {(panel) => (
-                      <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-muted bg-surface flex flex-col">
-                        <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-muted px-2">
+                      <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-frame bg-surface flex flex-col">
+                        <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-frame px-2">
                           <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-ink-muted">
                             {panel().title}
                           </h3>

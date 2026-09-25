@@ -1,5 +1,11 @@
 # Other Surfaces
 
+## Top bars
+
+Right-aligned split-header actions (including Calendar's New event and Channel's
+Call and Ask Macro) are borderless with a rounded-xl background on hover. Channel
+header tabs use fully rounded tracks and selected pills.
+
 ## User cards
 
 Avatar and user-mention cards open on hover on pointer devices and as a bottom
@@ -96,6 +102,18 @@ loading settles, including when the list itself uses REST (notified-at sorting).
 Email alone is not sufficient verification: its inbox membership does not require
 the global notification feed.
 
+Check live Home recency with two accounts: leave the recipient on Home without
+opening the conversation, then send a DM from the other account. The row should
+move into **Last few minutes** and show unread without reloading, including when
+notifications use GraphQL but Home's notified-at list uses REST. Read the DM,
+return to Home, and repeat; also check a row previously marked done and a thread
+reply. Delay the Home list response while allowing single-entity hydration to
+finish: hydration must not cancel the list refresh or leave an old notification
+timestamp. Older in-flight snapshots must not move the delivered row backward.
+Also test a stale response that entirely omits a just-restored, previously done
+row: the row must stay visible. Marking it done again must override that restore,
+and other filter scopes must not inherit the retained membership.
+
 GraphQL-attached notification rows share the global feed's local seen/done
 overrides: Mark Done and Undo reflect local intent without waiting for an older
 cached notification snapshot to be replaced. These display overrides do not turn
@@ -143,8 +161,8 @@ colors; unknown foreign sources use the generic file icon.
 New agent-session rows always use a sparkle in the left slot, including while
 working. A coding session adds a second line with repository, captured working
 branch (when available), and PR number/status. Non-coding sessions stay on one
-line. Their timestamps and unread dots stay visible; hovering reveals the full
-title, activity, and repository/branch. Missing repository metadata is omitted.
+line. Their timestamps and unread dots stay visible. Missing repository metadata
+is omitted.
 The Agents workspace uses a single left dot for activity and unread state in
 place of the sparkle. Opening a loaded session from Home or Agents marks its
 notifications read after the viewing delay, including notifications arriving
@@ -470,28 +488,71 @@ A failure from an older, unmounted editor must not overwrite a newer edited repl
 A presentation or refresh error after successful delivery is not a reason to send
 again.
 
-Send and schedule are refused with a notice while the device is offline, while a
-draft is still syncing (its save was accepted locally but not yet confirmed by the
-server; retry after a moment), or while an attachment has no completed upload. The
-composer keeps its content in each case. Attachments cannot be added while
-offline: a blocking notice explains and nothing is attached.
-For a new standalone email, a failed REST draft save is best-effort: Send can
-still proceed without a draft ID when no save was queued and no attachment is
-waiting to upload. A server rejection blocks sending even an existing draft.
-An internal draft-save failure, including a failed response read after the save
-commits, stays queued and retries with backoff. It must not permanently disable
-autosave; Send stays blocked until a save is confirmed. Invalid or unauthorized
-writes still stop retrying.
-Test this with a previously saved draft as well as a new one: a queued edit must
-block Send and scheduling until a save commits. Reopening a cached draft while
-offline must retain its uploaded attachments and confirmed scheduled time.
+Choosing or clearing a send time is local preparation only. The composer remains
+editable and autosaves normally, shows **Scheduled send: ...** (the time and the
+viewer's timezone, e.g. **Sep 25 at 8:00 AM EDT**) in a bar attached
+below the composer (a strip along the bottom of the message card for replies), and
+performs no schedule, unschedule, archive, or delivery request. The bar's **Cancel**,
+at its far right, clears the local choice; the clock's tooltip reads **Schedule send
+time**. The clock and
+primary arrow remain icon-sized; the clock turns accent-colored when a time is
+selected, while the primary action's accessible name and tooltip change from
+**Send email** to **Schedule send**. Clicking it or pressing `Ctrl`/`Cmd`+`Enter
+runs the same validation and is the only initial scheduling commitment. A selected
+time that has passed is rejected at submission rather than falling back to immediate
+send. Touch toolbars keep the summary inline beside their icons, with Cancel next to
+the time; when space is tight, that summary truncates or wraps separately from the
+fixed icon group. The
+former picker-auto-commit behavior was a defect and must not be restored.
 
-While a schedule change is pending, immediate send and further schedule changes
-are disabled. Reply recipients cannot be edited or dragged during scheduling,
-sending, or discarding. A failed schedule or unschedule keeps the last confirmed time.
+Only a successful scheduling response or authoritative lifecycle reconciliation
+shows **Scheduled for ...**. Confirmed scheduled composers are content-locked.
+Picking another time creates a local proposal while the original remains active;
+the bar continues to show the original time plus the proposed replacement and
+explains that the original remains active. **Update schedule** commits the proposal.
+Clearing that proposal does not cancel the original. **Cancel schedule** is a
+separate explicit action, and only its
+confirmed success returns the message to an editable draft. Failed schedule,
+update, or cancel requests retain the user's local intent and last authoritative
+time, and never fall through to immediate Send. At narrow split widths the bar's
+label truncates while Cancel stays at its far edge; the bar never covers discard,
+attachment, formatting, the clock, or the primary action. Reply recipients
+cannot be edited or dragged during a confirmed schedule or active delivery mutation.
+
+When verifying, use an intercepted or isolated delivery fixture: choose a time,
+confirm that the editable **Scheduled send** preview makes zero delivery calls, then use
+the primary button and `Ctrl`/`Cmd`+`Enter separately to confirm exactly one schedule
+call. Reopen a confirmed schedule to exercise proposal/update and explicit cancel.
+If a later lifecycle refresh fails, the confirmed result remains in place; stale
+observations must not undo it or create a recovery draft after a failed inbox move.
+Reconciliation resumes when a fresh poll or event-driven read succeeds.
 If scheduling succeeds but marking the thread done fails, the email remains
 scheduled and a notice explains the separate failure. Check the confirmed time
 before retrying; do not treat that notice as a failed schedule.
+Keep a scheduled composer open through its due time when verifying the flow. It
+reconciles on email events, tab focus/reconnect, cross-tab schedule changes, and a
+short due-time poll. Confirmed delivery closes or disables the old composer and
+stops autosave/delete against the sent ID. Text from an edit that raced delivery
+is preserved as a new unsent draft, never submitted with the sent message ID.
+Recovery re-uploads local attachment files and restores forwarded attachments.
+Remote-only draft attachments cannot be copied after the original draft is gone;
+their pills are removed and a notice asks you to attach those files again.
+
+A successful initial schedule shows an **Email scheduled** notice whose description
+gives the full send time, with **Undo** and **View message** on their own row below
+it; a rescheduled email
+shows **Email rescheduled** with **View message**. Undo cancels the captured draft in
+the captured inbox and restores its editable body, envelope, and attachments; it must
+not overwrite a newer reply. View message opens the scheduled thread, or scrolls an
+inline reply back into view.
+The Email view's **Scheduled** tab lists only server-confirmed scheduled drafts,
+soonest first across the selected inboxes, as ordinary email rows: the recipients,
+subject, and snippet, with a clock-and-time badge (for example **Tomorrow, 2:12
+PM**) in place of the row's date; hovering it gives the full date, time, and
+timezone.
+Opening a row previews its thread like any other email; cancel from the opened
+message's bar. Search and filters are hidden on this tab. Immediate-send undo-window
+queue rows are not scheduled drafts and must not appear.
 
 With the new app views enabled, mobile and tablet Email use a floating, horizontally
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the
@@ -616,8 +677,11 @@ details include Print, and DOCX files include Download DOCX. Markdown details
 use the document menu, which already includes Download. Spreadsheets keep the
 editor's Import and export menu for Excel and CSV downloads. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
-entries. Opening a list row or sidebar favorite starts a new detail path; only
-navigation originating inside a detail appends to that path. Cmd/Ctrl-clicking a
+entries. Opening a list row or sidebar favorite pushes a new one-item detail path;
+sidebar favorites start from My Files instead of inheriting a previously selected
+folder. Only navigation originating inside a detail appends to that path. Browser
+Back and Forward restore the exact path saved with each entry, and renamed files
+update in mounted ancestor breadcrumbs without rewriting history. Cmd/Ctrl-clicking a
 row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Enter
 opens the focused row in a new split. Cmd/Ctrl-clicking a row's folder link or
 search hit opens a new tab. Short filtered pages load more results automatically;
@@ -629,10 +693,20 @@ returning from an opened file.
 
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
+Event composer dropdown triggers and date/time inputs use the theme control
+surface, so they blend with the dialog instead of using the darker page fill.
+
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
+
+Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
+the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the
+flag loads or is off, those controls stay hidden and meeting routes do not mount
+call setup. Existing channel calls and the upcoming-events list remain available.
+For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
+
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
@@ -643,18 +717,68 @@ footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
 
-Week view with `New event`, `Choose calendar view` menu, prev/next week, `Search events`,
-`Calendar settings`, and a mini month picker in the side panel. Events require connecting a
-Google account (`Connect calendar`). The `Calendar settings` (gear) menu has an `Accounts`
+The calendar header has matching `New event` and `New Call` buttons. Both stay
+available in narrow splits and on phones, where compact icons have accessible
+labels. `New Call` opens call setup; it is no longer in the right side panel.
+Week view also has a `Choose calendar view` menu, prev/next week,
+`Search events`, `Calendar settings`, and a mini month picker in the right side panel.
+The mini calendar's month label opens a month picker; arrows also change months.
+The right side panel has a collapsible `Upcoming events` box.
+Active Quick Calls you created, participated in, or were invited to appear above your
+next five events (including ones in progress), whether or not they have call links.
+The active area is hidden when no calls are active. Event rows show the name and
+time; click one to open its details. An event with a call link shows `Join` while
+it is in progress. Upcoming events follow today's date even when you browse another week;
+hidden calendars, cancelled events, and invitations you declined are omitted.
+`New Call` opens `/app/meet/new` without creating a meeting. The `Invite Teammates`
+button above `Start call` opens the task assignee picker with name search, profile
+pictures and multiple selections, without bots or external contacts. The closed
+button shows up to three stacked selected profile pictures and the total teammate
+count; hover shows selected names, and reopening keeps the same selections. Selection
+stays local until `Start call` creates the Quick Call, connects the creator, and
+rings selected teammates. Microphone and camera are not shared before starting.
+If invitations fail after connecting, `Retry invites` sends them again without
+creating another call. Shared-link join screens do not show the teammate picker.
+Incoming invitations appear in a bottom-left notification with the call name,
+caller initials/name, and `Decline` and `Join` buttons. This stays visible across
+app pages, including call setup, hidden sidebars, narrow splits, and mobile (above
+the bottom dock). The card uses the app's menu surface, with semantic success
+color for `Join` and danger color for `Decline`. A top bar and seconds counter
+show the time remaining before the 30-second dismissal deadline.
+`Join` opens call setup; `Decline` stops ringing across the
+recipient's tabs. Unanswered invitations disappear and stop ringing after 30 seconds.
+Declining or timing out does not remove an invited live call from Channels `Live`.
+The list updates as calls end and new calls start. Calls from other conferencing
+providers open their own join links. A failed upcoming-list request has a `Retry`
+action and does not prevent creating a call.
+Events require connecting a Google account (`Connect calendar`). The
+`Calendar settings` (gear) menu has an `Accounts`
 section listing each connected account with a per-account `Enable` (grant calendar) or
 `Turn off` action, plus `Connect another account` to connect a new Google account
 (email + calendar).
 
+`New event` opens the compact composer with All day in the date/time fields.
+The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`
+for new events, defaulting to `Macro call` when quick calls are enabled. Keeping
+that selection creates and attaches a Macro call after the event saves. Selecting
+`Google Meet` or `No meeting link` skips the Macro call. Out-of-office entries do
+not create calls. There is no separate call toggle or Scheduled Call menu option.
+All-day events get an untimed call link, so setup does not display a misleading midnight time.
+A failed link attachment keeps the composer open with a retry message; Save reuses
+the saved event and call instead of creating duplicates. The invitation includes
+the call link in its description and, when no location was entered, its location.
+Event details show a plain icon row with a standard gray `Join Macro call` button
+and `Copy call link`, without an enclosing border or the full URL.
+Editing or rescheduling an owned event retains and updates its selected Macro call.
+Selecting `Macro call` on an owned editable event without one adds a call on save;
+choosing another option removes its generated Macro link from the invitation.
+Removing the link or deleting the calendar event does not revoke the reusable call.
+
 The side panel's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
-name, per-calendar checkbox). Subscribed system calendars (Google holidays, birthdays)
-carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
+name, per-calendar checkbox). Accounts start collapsed. Subscribed system calendars
+(Google holidays, birthdays) carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
 warning icon whose tooltip shows the provider error; the account keeps syncing its other
 calendars and the badge clears on its own once that calendar syncs again.
 
@@ -708,7 +832,13 @@ byline.
 
 ## Calls — `/app/component/calls`
 
-Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, transcriptions
+Tabs `All` / `Missed` / `Unattended`; `New call` offers `Call a channel or contact`
+and, with `enable-quick-calls` enabled, `Manage call links`. Create Quick Calls
+with `New Call` beside Calendar's
+`New event`, or with `Create` → `Call` (`C C`). Scheduled calls are created through
+Calendar and can be shared with people who do not have a Macro account.
+The channel/contact option opens the recipient picker.
+Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
@@ -721,18 +851,84 @@ If a recording fails to play, reload the page to obtain a fresh recording link,
 or use **Open or download recording**. The playback warning does not assume
 that the failure is caused by an unsupported media format.
 
+### Call links and guests — `/app/meet/join/:shareToken`
+
+These routes require `enable-quick-calls` for both signed-in users and guests.
+In Calendar, create an event with `Macro call` selected (the default).
+The composer waits for the quick-call flag to load before choosing its default.
+Saving creates the call and includes its link in the invitation;
+the room starts on the first join. Use Calendar to edit the event or invite guests.
+Teammate rings require a live call; selecting teammates during new-call setup
+sends invitations after the call connects.
+
+`New call` → `Manage call links` lists your standalone links with `Join call`, `Copy
+link`, and `Revoke link`. Revocation prevents new joins; it does not delete calendar
+events or disconnect current participants. Each active channel call also shows its
+URL and `Copy link`. A channel call's link stops working when that call ends.
+
+Guests can use standalone meeting links without a Macro account. Links to channel
+calls only admit signed-in Macro users; visitors without an account see a sign-in
+prompt instead of the guest name form. Inside a channel call, the shareable link is
+created on request via `Get shareable call link`.
+
+New calls use `/app/meet/new`; shared links open setup at
+`/app/meet/join/:shareToken`. A successful connection replaces the URL with
+`/app/meet/:shareToken` without restarting the call. Leaving returns to Macro.
+An unexpected disconnection returns to setup so the user can retry.
+Opening or reloading an in-call URL returns to setup and requires a deliberate
+join; existing shared links continue to work.
+
+Guests enter `Your name`, choose their microphone and camera preferences, and
+press `Join call`. Setup requests device
+permissions and previews video locally; sharing starts only after joining.
+Permission denial leaves the affected device off and still allows joining.
+The creator presses `Start call`; invitees press `Join call`. Loading the page or
+completing authentication never joins automatically, including old `?join=true`
+URLs. `Back to Macro` exits setup.
+Channel-linked calls require sign-in. While authentication is loading or the
+viewer is signed out, setup must not request microphone or camera access; the
+guest name form is available only for standalone meetings.
+
+The call page shows a recording/transcription notice. It uses the normal call controls
+for audio, video, device selection, screen sharing, and effects. `Leave call` returns
+to Macro. `Copy Meeting Url` is available during the call.
+Rejoining from a new page waits for the prior page's pending leave cleanup before
+requesting another connection, so a slow leave cannot disconnect the replacement.
+It keeps its label and shows a checkmark for a few seconds after copying, then
+restores the copy icon.
+
+Guest access is limited to the call room; joining does not expose the channel or grant
+anonymous access to saved transcripts and recordings. Guest names are preserved in
+the host's call history. Signed-in attendees receive access to that session's saved
+call without gaining access to the channel.
+
+The join screen, in-call participant tiles, and incoming direct-call badges use
+profile pictures; initials are the fallback when no photo is available.
+The join screen uses small switches for Microphone and Camera. Join and
+`Copy Meeting Url` use gray buttons; the copy action includes a copy icon.
+The in-call header uses the same copy button and shows the current local time
+before the call name. Owners can click the name to rename it, then Save or press
+Enter; Cancel or Escape discards the edit. Guests and other participants see a
+read-only name.
+
 ### Sharing a call
 
-A call's **Share** dialog has a `Team access` control (None or View) for the same canonical
-team share. The side panel has a `Sharing` section with one `Share with team` checkbox, and the
+A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
+team share. Its side panel has a `Sharing` section with one `Share with team` checkbox, and the
 in-call controls carry the same checkbox while a call is live. It is canonical team sharing (the
 same `Team access` model documents and AI chats use), fixed at **view**. While the call is **live**
-the checkbox is a pending toggle (on by default) that any participant with edit access can flip;
+the checkbox is a pending toggle (on by default for channel calls)
+that any participant with edit access can flip;
 other participants see it update live. When the call ends it is applied: with the toggle on,
 everyone on the creator's team can open the recorded call, read the transcript and AI summary,
 and find it under Calls and in search; off means nothing is shared. Afterwards only the call's
 **creator** can change it — everyone else sees the checkbox read-only with a note saying so.
 Team sharing is independent of channel access and of link sharing.
+
+Standalone instant and scheduled calls are excluded from team memory. They have no
+`Share with team` or `Team access` controls during the call or on the saved recording.
+Signed-in participants keep direct access to their recordings, transcripts, and summaries;
+joining a standalone call never makes its content available to the wider team.
 
 ## Customers (CRM) — `/app/component/companies`
 
@@ -933,15 +1129,21 @@ outside tap, or a downward swipe dismisses the sheet. Opening Settings again
 starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms
-scroll, including with the keyboard open. Desktop settings retain their panel
-and split navigation.
+scroll, including with the keyboard open. On desktop, `/app/settings/<tab>`
+opens settings fullscreen, while `/app/inbox/~/settings/<tab>` docks it beside
+Inbox. **Open fullscreen** pushes a standalone settings URL; browser Back
+restores the preceding split layout. **Move to split** restores the app layout
+and docks the selected tab, while closing a docked settings pane minimizes it.
+A direct fullscreen link returns to Inbox when there is no prior app layout.
 
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing` (current plan card with
-`Manage`; on paid plans an **AI usage** card with the period meter, credit
+`Manage`; only in dev (`dev.macro.com/app` or a local frontend using the dev
+backend), paid plans show an **AI usage** card with the period meter, credit
 balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
-Checkout, and a `Usage billing` toggle with per-period limit pills; an
+Checkout, and a `Usage billing` toggle with per-period limit pills; these
+controls and usage-billing promotional copy are hidden outside dev; an
 `Upgrade`/`Upgrade to Max` card, or a `Switch to Premium` link on Max; on a team
 the plan change moves only the viewer's own seat),
 `Appearance`, `Agents`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
@@ -991,6 +1193,12 @@ mention picker; select text to open the formatting menu. Saved instructions
 retain mention identities using the shared editor's Markdown format and reopen
 with their formatting intact. Enter adds a new paragraph; use `Create agent` or
 `Save changes` to submit. The form also includes runtime selectors.
+Under the runtime, `Answering a mention` chooses between `Coding agent` (a
+channel mention is answered with a magic chip that opens into the live session)
+and `Chat agent` (the agent replies in the thread, like `@macro`). It is the
+agent's own setting and always saved: a new form starts from the selected runtime
+- Macro's in-memory runtime as chat, every other runtime as coding - and picking a
+different runtime resets it to that default, but only the saved choice counts.
 The model list is loaded live and independently for Macro Agent, connected Cursor, and every
 registered macrod harness. The selected harness stays selected when the list refreshes.
 A paired macrod connects on startup, so models can load before any agents are bound.

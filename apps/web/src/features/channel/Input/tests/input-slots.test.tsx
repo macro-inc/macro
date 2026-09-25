@@ -12,6 +12,7 @@ import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const editorMocks = vi.hoisted(() => ({
+  agentsEnabled: false,
   cursorEnabled: false,
   clear: vi.fn(),
   focus: vi.fn(),
@@ -19,6 +20,11 @@ const editorMocks = vi.hoisted(() => ({
   emitChange: undefined as ((markdown: string) => void) | undefined,
   onEnter: undefined as (() => boolean) | undefined,
 }));
+
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({ StaticMarkdown: () => null })
+);
 
 // These slots render the microphone, so they run with dictation rolled out.
 // Other flags keep their real values.
@@ -98,6 +104,9 @@ vi.mock('@core/codex/flag', () => ({
 }));
 vi.mock('@core/cursor/flag', () => ({
   useCursorAgentsAccess: () => () => editorMocks.cursorEnabled,
+}));
+vi.mock('../../use-chat-v3-agents-flag', () => ({
+  useChatV3AgentsFlag: () => () => editorMocks.agentsEnabled,
 }));
 
 // Several service clients in StaticMarkdown's import graph build websocket
@@ -325,6 +334,8 @@ vi.mock('@queries/messages/typing', () => ({
   usePostTypingUpdateMutation: () => ({ mutate: vi.fn() }),
 }));
 
+import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
+import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import { cursorMentionUser } from '../../macroAi';
 import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
 import { createInputAttachmentTracker } from '../attachment-tracker';
@@ -356,6 +367,7 @@ function render(ui: () => JSX.Element) {
 
 describe('Input slots', () => {
   beforeEach(() => {
+    editorMocks.agentsEnabled = false;
     editorMocks.cursorEnabled = false;
     editorMocks.clear.mockClear();
     editorMocks.focus.mockClear();
@@ -421,6 +433,31 @@ describe('Input slots', () => {
     expect(editorMocks.mentionUsers?.().map((user) => user.name)).toEqual(
       expect.arrayContaining(['Cursor', 'Claude', 'Codex'])
     );
+  });
+
+  it('offers a single Macro mention, aimed by the agents rollout', () => {
+    render(() => <ChannelInput input={baseInput} />);
+    expect(
+      editorMocks.mentionUsers?.().filter((user) => user.name === 'Macro')
+    ).toEqual([
+      {
+        id: MACRO_AGENT_PRINCIPAL_ID,
+        name: 'Macro',
+        email: 'Macro',
+      },
+    ]);
+
+    editorMocks.agentsEnabled = true;
+    render(() => <ChannelInput input={baseInput} />);
+    expect(
+      editorMocks.mentionUsers?.().filter((user) => user.name === 'Macro')
+    ).toEqual([
+      {
+        id: MACRO_NEW_PRINCIPAL_ID,
+        name: 'Macro',
+        email: 'Macro',
+      },
+    ]);
   });
 
   it('hides Cursor outside its rollout, including supplied bot entries', () => {

@@ -1,4 +1,3 @@
-import { toBaseRelative } from '@app/constants/routerBase';
 import { useParams, useNavigate as useSplitNavigate } from '@app/split-router';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
@@ -11,10 +10,8 @@ import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import {
   isSoloSettings,
   type SettingsTab,
-  settingsTabFromSplitPath,
   useSettingsState,
 } from '@core/constant/SettingsState';
-import { stripSettingsSplitFromUrl } from '@core/constant/settingsSplitUrl';
 import {
   settingsSlugToTab,
   settingsTabToSlug,
@@ -29,7 +26,6 @@ import ArrowsIn from '@phosphor/arrows-in.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
-import { useLocation, useNavigate } from '@solidjs/router';
 import { Button, cn, Layer, SideNav } from '@ui';
 import {
   createRenderEffect,
@@ -53,7 +49,6 @@ const COMPACT_WIDTH = 660;
 const NARROW_WIDTH = 820;
 
 export function SettingsPanelComponentWrapper() {
-  const location = useLocation();
   const params = useParams<{ tab?: string }>();
 
   // Sync the active page from the docked split's URL (`settings/<slug>`). Read
@@ -65,11 +60,9 @@ export function SettingsPanelComponentWrapper() {
   // activeTabId read is untracked so a tab click (which sets it, then updates
   // the URL) isn't reverted by this effect firing before the URL catches up.
   createRenderEffect(() => {
-    const tab =
-      (params.tab && settingsSlugToTab(params.tab)) ??
-      settingsTabFromSplitPath(location.pathname);
+    const tab = settingsSlugToTab(params.tab ?? '') ?? 'Account';
 
-    if (tab && untrack(activeTabId) !== tab) setActiveTabId(tab);
+    if (untrack(activeTabId) !== tab) setActiveTabId(tab);
   });
 
   return (
@@ -81,20 +74,12 @@ export function SettingsPanelComponentWrapper() {
 
 /** Old settings URLs still open their section, over the restored app surface. */
 function MobileSettingsDeepLink() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { openSettings } = useSettingsState();
+  const params = useParams<{ tab?: string }>();
+  const { openSettings, restoreMobileDeepLink } = useSettingsState();
 
   onMount(() => {
-    const tab = settingsTabFromSplitPath(location.pathname) ?? activeTabId();
-
-    openSettings(tab);
-    navigate(
-      stripSettingsSplitFromUrl(
-        `${toBaseRelative(location.pathname)}${location.search}${location.hash}`
-      ),
-      { replace: true }
-    );
+    openSettings(settingsSlugToTab(params.tab ?? '') ?? 'Account');
+    restoreMobileDeepLink();
   });
 
   return null;
