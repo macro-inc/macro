@@ -282,6 +282,12 @@ export type AgentSessionLifecycleEvent = {
      * The session was deleted.
      */
     metadata: SessionDeletedMetadata;
+} | {
+    event_type: 'agent_session.command_rejected';
+    /**
+     * Accepted work was rejected without starting a runtime turn.
+     */
+    metadata: CommandRejectedMetadata;
 };
 
 export type Anchor = PdfAnchor;
@@ -3089,6 +3095,28 @@ export type CollabSurfaceTokenResponse = {
      * The signed JWT to pass to the sync-service websocket connect.
      */
     token: string;
+};
+
+/**
+ * Accepted work was terminally rejected before reaching the runtime.
+ */
+export type CommandRejectedMetadata = {
+    /**
+     * The rejected action, correlated with the queue/control response.
+     */
+    action_id: AgentActionId;
+    /**
+     * Stable public denial code.
+     */
+    code: string;
+    /**
+     * Safe public failure message, never internal billing diagnostics.
+     */
+    error: string;
+    /**
+     * The session that was to run the action.
+     */
+    identity: SessionIdentity;
 };
 
 export type Comment = {

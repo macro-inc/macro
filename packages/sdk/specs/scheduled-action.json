@@ -332,6 +332,16 @@
               }
             }
           },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
             "content": {
@@ -358,6 +368,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI billing unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
                 }
               }
             }
@@ -546,6 +566,21 @@
           },
           "user_prompt": {
             "type": "string"
+          }
+        }
+      },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "A public admission failure, without payer or internal diagnostic details.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable code distinguishing quota denials from retryable billing failures."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation and recovery guidance."
           }
         }
       },

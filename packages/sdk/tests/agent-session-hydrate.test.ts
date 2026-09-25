@@ -88,6 +88,27 @@ describe('hydrateAgentSessionEvent', () => {
     expect(event.channel?.id).toBe(identity.origin.channel_id);
   });
 
+  test('command rejection preserves recovery details and identity handles', () => {
+    const metadata = {
+      identity,
+      action_id: '01a00000-0000-7000-8000-000000000006',
+      code: 'ai_allowance_exhausted',
+      error: 'Your AI allowance is exhausted.',
+    };
+    const event = hydrateAgentSessionEvent(client, {
+      event_type: 'agent_session.command_rejected',
+      metadata,
+    });
+    if (event.event_type !== 'agent_session.command_rejected')
+      throw new Error(event.event_type);
+
+    expect(event.metadata).toEqual(metadata);
+    expect(event.session.id).toBe(identity.session_id);
+    expect(event.owner.id).toBe(identity.owner_id);
+    expect(event.channel?.id).toBe(identity.origin.channel_id);
+    expect(event.thread).toBeDefined();
+  });
+
   test('mentioned hands out the author and everyone named', () => {
     const event = hydrateAgentSessionEvent(client, {
       event_type: 'agent_session.mentioned',

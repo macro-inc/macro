@@ -6,6 +6,6 @@
  */
 
 /**
- * Stable machine-readable code for payment-required errors.
+ * Stable machine-readable code for quota denials or unavailable billing.
  */
 export type ChatMessageErrorCode = string | null;

@@ -7,7 +7,7 @@
 import type { StructuredCompletionErrorCode } from './structuredCompletionErrorCode';
 
 export interface StructuredCompletionError {
-  /** Stable machine-readable code for payment-required errors. */
+  /** Stable machine-readable code for quota denials or unavailable billing. */
   code?: StructuredCompletionErrorCode;
   error: string;
 }

@@ -1081,8 +1081,28 @@
               }
             }
           },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error"
+          },
+          "503": {
+            "description": "AI billing unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
           }
         }
       }
@@ -1139,8 +1159,28 @@
           "400": {
             "description": "Unknown import source"
           },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error"
+          },
+          "503": {
+            "description": "AI billing unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
           }
         }
       }
@@ -2020,6 +2060,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "AI billing unavailable — retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageError"
+                }
+              }
+            }
           }
         }
       }
@@ -2103,10 +2153,27 @@
             "description": "Unauthorized"
           },
           "402": {
-            "description": "Payment required"
+            "description": "Payment required — the user's AI allowance is used up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI billing unavailable — retry later",
             "content": {
               "application/json": {
                 "schema": {
@@ -2138,6 +2205,21 @@
           "url": {
             "type": "string",
             "description": "The MCP server's streamable HTTP URL."
+          }
+        }
+      },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "A public admission failure, without payer or internal diagnostic details.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable code distinguishing quota denials from retryable billing failures."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation and recovery guidance."
           }
         }
       },
@@ -2569,7 +2651,7 @@
         "properties": {
           "code": {
             "type": ["string", "null"],
-            "description": "Stable machine-readable code for payment-required errors."
+            "description": "Stable machine-readable code for quota denials or unavailable billing."
           },
           "error": {
             "type": "string"
@@ -4588,7 +4670,7 @@
         "properties": {
           "code": {
             "type": ["string", "null"],
-            "description": "Stable machine-readable code for payment-required errors."
+            "description": "Stable machine-readable code for quota denials or unavailable billing."
           },
           "error": {
             "type": "string"

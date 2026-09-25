@@ -7,6 +7,7 @@
 
 export * from './accessLevel';
 export * from './addServerRequest';
+export * from './aiAdmissionErrorBody';
 export * from './aiFeature';
 export * from './assistantMessagePart';
 export * from './assistantMessagePartOneOf';

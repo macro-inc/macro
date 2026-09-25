@@ -29,6 +29,13 @@ impl EntitlementSource for FixedEntitlement {
     ) -> ai_billing::domain::Result<Option<String>> {
         panic!("admission and credit-only recovery must not contact Stripe")
     }
+
+    async fn team_payer(
+        &self,
+        _: uuid::Uuid,
+    ) -> ai_billing::domain::Result<Option<MacroUserIdStr<'static>>> {
+        panic!("admission and credit-only recovery must not resolve team payers")
+    }
 }
 
 type TestBilling =

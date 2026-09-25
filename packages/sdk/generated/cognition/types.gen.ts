@@ -24,6 +24,20 @@ export type AddServerRequest = {
 };
 
 /**
+ * A public admission failure, without payer or internal diagnostic details.
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable code distinguishing quota denials from retryable billing failures.
+     */
+    code: string;
+    /**
+     * Human-readable explanation and recovery guidance.
+     */
+    error: string;
+};
+
+/**
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
@@ -294,7 +308,7 @@ export type ChatMessageContent = string | Array<AssistantMessagePart>;
  */
 export type ChatMessageError = {
     /**
-     * Stable machine-readable code for payment-required errors.
+     * Stable machine-readable code for quota denials or unavailable billing.
      */
     code?: string | null;
     error: string;
@@ -1415,7 +1429,7 @@ export type StringIdResponse = {
 
 export type StructuredCompletionError = {
     /**
-     * Stable machine-readable code for payment-required errors.
+     * Stable machine-readable code for quota denials or unavailable billing.
      */
     code?: string | null;
     error: string;
@@ -2225,10 +2239,20 @@ export type RunImportHandlerData = {
 
 export type RunImportHandlerErrors = {
     /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
      * Internal server error
      */
     500: unknown;
+    /**
+     * AI billing unavailable
+     */
+    503: AiAdmissionErrorBody;
 };
+
+export type RunImportHandlerError = RunImportHandlerErrors[keyof RunImportHandlerErrors];
 
 export type RunImportHandlerResponses = {
     /**
@@ -2289,10 +2313,20 @@ export type RetryGatherHandlerErrors = {
      */
     400: unknown;
     /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
      * Internal server error
      */
     500: unknown;
+    /**
+     * AI billing unavailable
+     */
+    503: AiAdmissionErrorBody;
 };
+
+export type RetryGatherHandlerError = RetryGatherHandlerErrors[keyof RetryGatherHandlerErrors];
 
 export type RetryGatherHandlerResponses = {
     /**
@@ -2749,6 +2783,10 @@ export type SendChatMessageErrors = {
      * Forbidden — user lacks access to the requested model
      */
     403: ChatMessageError;
+    /**
+     * AI billing unavailable — retry later
+     */
+    503: ChatMessageError;
 };
 
 export type SendChatMessageError = SendChatMessageErrors[keyof SendChatMessageErrors];
@@ -2804,13 +2842,17 @@ export type StructuredCompletionErrors = {
      */
     401: unknown;
     /**
-     * Payment required
+     * Payment required — the user's AI allowance is used up
      */
-    402: unknown;
+    402: StructuredCompletionError;
     /**
      * Internal error
      */
     500: StructuredCompletionError;
+    /**
+     * AI billing unavailable — retry later
+     */
+    503: StructuredCompletionError;
 };
 
 export type StructuredCompletionError2 = StructuredCompletionErrors[keyof StructuredCompletionErrors];

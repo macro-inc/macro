@@ -262,6 +262,16 @@
               }
             }
           },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "403": {
             "description": "",
             "content": {
@@ -298,6 +308,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
                 }
               }
             }
@@ -720,6 +740,16 @@
               }
             }
           },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "403": {
             "description": "",
             "content": {
@@ -746,6 +776,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
                 }
               }
             }
@@ -2044,6 +2084,21 @@
           "model": {
             "type": "string",
             "description": "The model slug the agent should switch to."
+          }
+        }
+      },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "A public admission failure, without payer or internal diagnostic details.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable code distinguishing quota denials from retryable billing failures."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation and recovery guidance."
           }
         }
       },
