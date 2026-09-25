@@ -21,11 +21,17 @@ interface TrackedEntity {
   entityType: TrackEntityMessage['entity_type'];
   count: number;
   heartbeat: ReturnType<typeof setInterval>;
+  /** When this tab last told the gateway it is watching, by `open` or `ping`. */
+  lastSeen: number;
   refreshCallbacks: Map<EntityRefresh, number>;
 }
 const trackedEntities: Map<EntityId, TrackedEntity> = new Map();
 type EntityTarget = Pick<TrackEntityMessage, 'entity_id' | 'entity_type'>;
 type EntityRefresh = (entity: EntityTarget) => void;
+
+// The gateway sends an entity's events only to connections that opened or
+// pinged it this recently (connection_gateway's DEFAULT_TIMEOUT_THRESHOLD).
+const GATEWAY_ACTIVITY_WINDOW_MS = 60_000;
 
 export const connectionGatewayClient = {
   async trackEntity(args: TrackEntityMessage) {
@@ -45,9 +51,12 @@ export const connectionGatewayClient = {
                 action: 'ping',
               });
           }, 20_000),
+          lastSeen: Date.now(),
           refreshCallbacks: new Map(),
         });
       }
+    } else if (args.action === 'ping') {
+      if (tracked) tracked.lastSeen = Date.now();
     } else if (args.action === 'close') {
       if (!tracked) return ok({});
       else if (tracked.count > 1) {
@@ -67,7 +76,7 @@ export const connectionGatewayClient = {
   },
 };
 
-/** Share tracking and heartbeats; refresh once on subscription and reconnect. */
+/** Share tracking and heartbeats; refresh once on subscription, reconnect, and refocus after a long absence. */
 export function useEntitySubscription(
   entity: Accessor<EntityTarget | undefined>,
   onRefresh?: EntityRefresh
@@ -109,17 +118,46 @@ export function useEntitySubscription(
  */
 export function useReopenTrackedEntitiesOnReconnect(): void {
   createReconnectEffect(ws, () => {
-    for (const [
-      entity_id,
-      { entityType, refreshCallbacks },
-    ] of trackedEntities) {
-      const entity = { entity_id, entity_type: entityType };
+    for (const [entity_id, tracked] of trackedEntities) {
+      const entity = { entity_id, entity_type: tracked.entityType };
       ws.send({
         type: 'track_entity',
         ...entity,
         action: 'open',
       });
-      for (const onRefresh of refreshCallbacks.keys()) onRefresh(entity);
+      tracked.lastSeen = Date.now();
+      for (const onRefresh of tracked.refreshCallbacks.keys())
+        onRefresh(entity);
     }
   });
+}
+
+/**
+ * Pings every tracked entity as soon as the tab regains focus, since the heartbeat pauses in
+ * the background. A tab that went unseen longer than the gateway's activity window was left
+ * out of the entity's events meanwhile, so its views refresh as they do after a reconnect.
+ */
+export function useRefreshTrackedEntitiesOnFocus(): void {
+  createEffect(
+    on(
+      isTabFocused,
+      (focused) => {
+        if (!focused) return;
+        const now = Date.now();
+        for (const [entity_id, tracked] of trackedEntities) {
+          const entity = { entity_id, entity_type: tracked.entityType };
+          const missedEvents =
+            now - tracked.lastSeen >= GATEWAY_ACTIVITY_WINDOW_MS;
+          void connectionGatewayClient.trackEntity({
+            ...entity,
+            action: 'ping',
+          });
+          if (missedEvents)
+            for (const onRefresh of tracked.refreshCallbacks.keys())
+              onRefresh(entity);
+        }
+      },
+      { defer: true }
+    )
+  );
 }
