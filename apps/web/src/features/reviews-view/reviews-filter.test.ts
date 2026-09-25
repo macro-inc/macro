@@ -17,6 +17,7 @@ const review = (
       authorLogin,
       number: Number(id),
       status: id === '3' ? 'merged' : 'open',
+      authorId: Number(id),
     },
   }) as unknown as GithubPullRequestEntity;
 
@@ -50,6 +51,15 @@ describe('Reviews filters', () => {
     );
   });
 
+  it('matches authored PRs by GitHub user ID when the login is missing', () => {
+    expect(
+      filterReviews(reviews, {
+        ...defaults,
+        scope: 'authored',
+        authorId: '3',
+      }).map((item) => item.foreignId)
+    ).toEqual(['3']);
+  });
   it('combines repository, author, and text filters', () => {
     expect(
       filterReviews(reviews, {

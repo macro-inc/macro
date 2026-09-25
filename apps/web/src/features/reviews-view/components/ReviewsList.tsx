@@ -14,6 +14,9 @@ export type ReviewsListProps = {
   source: ReturnType<typeof useReviewsQuery>;
   scope: ReviewsScope;
   authorLogin?: string;
+  authorId?: string;
+  githubIdentityLoading: boolean;
+  linkedGithubAccount: boolean;
   search: string;
   selectedRepositories: readonly string[];
   selectedAuthors: readonly string[];
@@ -52,6 +55,7 @@ export function ReviewsList(props: ReviewsListProps) {
     filterReviews(props.source.reviews(), {
       scope: props.scope,
       authorLogin: props.authorLogin,
+      authorId: props.authorId,
       search: props.search,
       repositories: props.selectedRepositories,
       authors: props.selectedAuthors,
@@ -79,7 +83,12 @@ export function ReviewsList(props: ReviewsListProps) {
         }
       >
         <Switch>
-          <Match when={source.isLoading()}>
+          <Match
+            when={
+              source.isLoading() ||
+              (props.scope === 'authored' && props.githubIdentityLoading)
+            }
+          >
             <div
               role="status"
               class="grid flex-1 place-items-center text-ink-muted"
@@ -111,8 +120,12 @@ export function ReviewsList(props: ReviewsListProps) {
                 when={reviews().length > 0}
                 fallback={
                   <div class="grid min-h-32 place-items-center text-sm text-ink-muted">
-                    {props.scope === 'authored' && !props.authorLogin
-                      ? 'Connect GitHub to see pull requests you authored.'
+                    {props.scope === 'authored' &&
+                    !props.authorLogin &&
+                    !props.authorId
+                      ? props.linkedGithubAccount
+                        ? 'Linked GitHub account details are unavailable.'
+                        : 'Connect GitHub to see pull requests you authored.'
                       : props.search.trim() ||
                           props.selectedRepositories.length ||
                           props.selectedAuthors.length

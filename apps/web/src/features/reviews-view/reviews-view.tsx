@@ -57,6 +57,8 @@ function ReviewsRoot() {
   const githubLink = useGithubLinkStatusQuery({ enabled: listEnabled });
   const authorLogin = () =>
     githubLink.isPending ? undefined : githubLink.data?.username;
+  const authorId = () =>
+    githubLink.isPending ? undefined : githubLink.data?.userId;
   const repositories = createMemo(() =>
     [
       ...new Set(
@@ -181,6 +183,11 @@ function ReviewsRoot() {
           source={source}
           scope={scope()}
           authorLogin={authorLogin()}
+          authorId={authorId()}
+          githubIdentityLoading={githubLink.isPending}
+          linkedGithubAccount={
+            !githubLink.isPending && githubLink.data?.status === 'linked'
+          }
           search={search()}
           selectedRepositories={selectedRepositories()}
           selectedAuthors={selectedAuthors()}
