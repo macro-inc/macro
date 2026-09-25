@@ -20,6 +20,7 @@ export function InboxListLayout(
 ) {
   return (
     <div
+      data-tour="home-list"
       class="relative flex size-full min-h-0 min-w-0 flex-col"
       style={{
         '--mobile-content-inset-top': 'calc(var(--safe-top, 0px) + 3.75rem)',

@@ -52,7 +52,15 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
 export function EmailNavigation(props: { onNavigate?: () => void }) {
   return (
     <ViewSidebar.Nav aria-label="Email tabs">
-      <For each={EMAIL_TABS}>
+      <div
+        data-tour="email-signal-noise"
+        class="flex flex-col gap-(--sidebar-row-gap)"
+      >
+        <For each={EMAIL_TABS.slice(0, 2)}>
+          {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
+        </For>
+      </div>
+      <For each={EMAIL_TABS.slice(2)}>
         {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
       </For>
     </ViewSidebar.Nav>
@@ -90,12 +98,14 @@ export function EmailSidebar() {
 
         <EmailNavigation />
 
-        <SidebarTagsSection
-          activeIds={state.facets.tags ?? []}
-          onActiveIdsChange={showTags}
-          open={isSidebarSectionOpen('tags')}
-          onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
-        />
+        <div data-tour="email-tags">
+          <SidebarTagsSection
+            activeIds={state.facets.tags ?? []}
+            onActiveIdsChange={showTags}
+            open={isSidebarSectionOpen('tags')}
+            onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
+          />
+        </div>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

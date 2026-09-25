@@ -120,7 +120,7 @@ export function Header() {
 
       <SplitHeaderRight>
         <HeaderIsland class="px-1">
-          <div class="flex items-center gap-1">
+          <div data-tour="calendar-period" class="flex items-center gap-1">
             <Show
               when={isMobile()}
               fallback={

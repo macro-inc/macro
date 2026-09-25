@@ -1,4 +1,5 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import { SplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -60,6 +61,7 @@ function TasksViewRoot() {
       <ViewShell.Header>
         <TasksHeader onSearchEscape={() => listElement()?.focus()} />
       </ViewShell.Header>
+      <ViewGettingStarted view="tasks" />
       <ViewShell.Content>
         <Suspense fallback={<TasksListFallback />}>
           <TaskList ref={setListElement} />

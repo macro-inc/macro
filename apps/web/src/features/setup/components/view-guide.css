@@ -1,0 +1,22 @@
+/* One quiet edge and a diffuse shadow keep the flyover lifted without a lip. */
+.view-guide-card {
+  box-shadow: 0 18px 48px rgb(0 0 0 / 35%);
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1);
+}
+html[data-theme-light='true'] .view-guide-card {
+  box-shadow: 0 12px 36px rgb(0 0 0 / 10%);
+}
+.view-guide-highlight {
+  position: fixed;
+  z-index: 69;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 70%, var(--color-ink));
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-guide-card { transition: none; }
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .view-guide-card, .view-guide-highlight { display: none; }
+}

@@ -1,4 +1,5 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import { SplitRouter } from '@app/lib/split-router';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -69,6 +70,7 @@ function EmailDesktopLayout(
       <ViewShell.Header>
         <EmailHeader onSearchEscape={props.onSearchEscape} />
       </ViewShell.Header>
+      <ViewGettingStarted view="mail" />
       <ViewShell.Content>{props.children}</ViewShell.Content>
     </>
   );

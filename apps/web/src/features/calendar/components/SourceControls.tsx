@@ -33,7 +33,7 @@ export function SourceControls(props: SourceControlsProps) {
     });
 
   return (
-    <div class="flex flex-col gap-0.5">
+    <div data-tour="calendar-sources" class="flex flex-col gap-0.5">
       <For each={groups()}>
         {(group) => {
           const visibleCount = () =>

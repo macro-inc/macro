@@ -228,6 +228,7 @@ export function InboxFilterDropdown() {
         label="Filter Home"
         customTrigger={
           <Dropdown.Trigger
+            data-tour="home-filter"
             variant="ghost"
             size="sm"
             square

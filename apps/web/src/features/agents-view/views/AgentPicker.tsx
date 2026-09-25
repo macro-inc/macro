@@ -54,6 +54,7 @@ export function AgentPicker(props: {
       <Dropdown.Trigger
         variant="plain"
         aria-label="Agent"
+        data-tour="agent-picker"
         title={
           rawModel()
             ? label()

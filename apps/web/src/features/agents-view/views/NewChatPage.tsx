@@ -182,7 +182,7 @@ export function NewChatPage(props: {
 
   return (
     <section class="page newchat" data-active aria-label="New conversation">
-      <div class="col">
+      <div data-tour="agent-composer" class="col">
         <div class="greeting">
           <h2>
             {coding() ? 'What should we build?' : 'What should we work on?'}

@@ -97,6 +97,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             when={props.variant === 'icon'}
             fallback={
               <Dropdown.Trigger
+                data-tour="create-menu"
                 as={NavRow}
                 class="center h-8 bg-ink/4 text-[13px]"
                 fullWidth
@@ -127,6 +128,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             }
           >
             <Dropdown.Trigger
+              data-tour="create-menu"
               as={Button}
               variant="outline"
               size="icon-sm"
@@ -146,6 +148,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
       >
         {(trigger) => (
           <Dropdown.Trigger
+            data-tour="create-menu"
             as={trigger()}
             // `Dropdown.Trigger` hardcodes `variant`/`size` for its default
             // `as={Button}` and spreads props after them, so both leak into a

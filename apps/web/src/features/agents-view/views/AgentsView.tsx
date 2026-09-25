@@ -3,6 +3,7 @@ import { startPendingSession } from '@app/features/block-agent/context/pending-s
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { McpConnections } from '@app/features/settings/McpConnections';
+import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import {
   useGlobalBlockOrchestrator,
@@ -298,7 +299,19 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                     fallback={
                       <>
                         <Topbar title={pageTitle()} />
-                        <div class="body">
+                        <ViewGettingStarted
+                          view="agents"
+                          onStepChange={(step) => {
+                            if (step.agentPage === 'new') showComposer();
+                            else if (step.agentPage) openRoster(step.agentPage);
+                          }}
+                        />
+                        <div
+                          data-tour={
+                            page() === 'agents' ? 'agent-team' : undefined
+                          }
+                          class="body"
+                        >
                           <Suspense fallback={<LoadingComposer />}>
                             <Switch>
                               <Match when={page() === 'connections'}>

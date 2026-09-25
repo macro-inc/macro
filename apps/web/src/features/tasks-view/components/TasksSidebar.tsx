@@ -170,12 +170,16 @@ export function TasksSidebar() {
         />
 
         {/* Tags narrow the current tab; switching tabs clears them like any facet. */}
-        <SidebarTagsSection
-          activeIds={state.facets.tags ?? []}
-          onActiveIdsChange={(ids) => setFacets({ ...state.facets, tags: ids })}
-          open={isSidebarSectionOpen('tags')}
-          onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
-        />
+        <div data-tour="tasks-tags">
+          <SidebarTagsSection
+            activeIds={state.facets.tags ?? []}
+            onActiveIdsChange={(ids) =>
+              setFacets({ ...state.facets, tags: ids })
+            }
+            open={isSidebarSectionOpen('tags')}
+            onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
+          />
+        </div>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );
