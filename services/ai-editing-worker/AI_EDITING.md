@@ -135,10 +135,15 @@ node ids. It is what turns DocumentOps into actual edits to the lexical document
 **The live cursor** is ephemeral. While a writer works, `realAwarenessSource`
 encodes its caret/selection as a Loro cursor and broadcasts it over the
 ephemeral awareness channel, so the website renders a remote cursor walking
-through the text. Each writer draws a name from a pool (`Sam (AI)`, `Alex (AI)`)
-and one of a few accent colors; the cursor lingers ~700ms after the writer
-finishes, then clears. We have some ugly code that manages resolving a block id
-to the `LoroText` that actually owns the characters for this :/
+through the text. The cursor's label is the editor `POST /edit` names
+(`editor: { name }`): the agent or persona that asked for the edit, so a
+`Macro` or `Grunk` session's edits read `Macro (AI)` / `Grunk (AI)` on every
+cursor they draw (`PeerPool.forEditor`). A request that names nobody falls back
+to the pool of distinct names (`Sam (AI)`, `Alex (AI)`). Every label ends in
+`(AI)`; the website keys off that suffix to keep AI name tags pinned. Each
+writer also gets one of a few accent colors; the cursor lingers ~700ms after the
+writer finishes, then clears. We have some ugly code that manages resolving a
+block id to the `LoroText` that actually owns the characters for this :/
 
 **The peer id** Human peers get random ids from the whole 64b range, and we have
 it so that AI commits use a small reserved range in
