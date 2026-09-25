@@ -724,7 +724,7 @@ pub trait CallService: Send + Sync + 'static {
         token: MeetingToken,
     ) -> impl Future<Output = Result<MeetingInvitePermissions, CallError>> + Send;
 
-    /// Ring selected registered teammates, authorized by meeting ownership.
+    /// Ring selected registered teammates in a live session, authorized by meeting ownership.
     /// Inviting does not create an RTC room or join the caller to the meeting.
     fn invite_users_to_meeting<'a>(
         &self,

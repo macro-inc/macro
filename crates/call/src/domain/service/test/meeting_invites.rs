@@ -11,7 +11,7 @@ const OTHER_EMAIL: &str = "other@example.com";
 fn invitation() -> Meeting {
     let mut meeting = invitation_for_test();
     meeting.user_id = user(OWNER_EMAIL).to_string();
-    meeting.call_id = None;
+    meeting.call_id = Some(Uuid::now_v7());
     meeting
 }
 
@@ -50,6 +50,8 @@ fn service(
         repo.expect_get_participants()
             .return_once(move |_| Box::pin(async move { Ok(participants) }));
     }
+    repo.expect_add_meeting_invitees()
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
     service_with_repo(repo, access, connection)
 }
 
@@ -70,7 +72,7 @@ fn service_with_repo(
 }
 
 #[tokio::test]
-async fn owner_rings_distinct_teammates_before_any_session_exists() {
+async fn owner_rings_distinct_teammates_in_a_live_session() {
     let meeting = invitation();
     let meeting_id = meeting.id;
     let token = meeting.share_token.clone();
@@ -109,6 +111,29 @@ async fn owner_rings_distinct_teammates_before_any_session_exists() {
     assert!(sent.message.get("channel_id").is_none());
     assert!(sent.message.get("call_id").is_none());
     // The RTC mock has no expectations: touching room or token allocation fails this test.
+}
+
+#[tokio::test]
+async fn prejoin_invites_require_starting_a_session_before_any_delivery() {
+    let mut meeting = invitation();
+    meeting.call_id = None;
+    let token = meeting.share_token.clone();
+    let connection = RecordingConnectionService::default();
+    let service = service(Some(meeting), same_team(), connection.clone(), vec![]);
+    assert!(
+        !service
+            .get_meeting_invite_permissions(user(OWNER_EMAIL), token.clone())
+            .await
+            .unwrap()
+            .can_invite
+    );
+    assert!(matches!(
+        service
+            .invite_users_to_meeting(user(OWNER_EMAIL), token, request(&[TEAMMATE_EMAIL]))
+            .await,
+        Err(CallError::InvalidRequest(_))
+    ));
+    assert!(connection.messages().is_empty());
 }
 
 #[tokio::test]

@@ -30,7 +30,7 @@ where
     ) -> Result<MeetingInvitePermissions, CallError> {
         let meeting = self.resolve_invitation(&token).await?;
         Ok(MeetingInvitePermissions {
-            can_invite: may_invite(&meeting, &actor),
+            can_invite: may_invite(&meeting, &actor) && meeting.call_id.is_some(),
         })
     }
 
@@ -47,6 +47,9 @@ where
                 "Only the meeting owner can invite teammates to a standalone call".to_string(),
             ));
         }
+        let call_id = meeting.call_id.ok_or_else(|| {
+            CallError::InvalidRequest("Start the call before inviting teammates".to_string())
+        })?;
         let mut recipients = request.recipients(&actor)?;
         let actor_team = self
             .entity_access_service
@@ -68,29 +71,25 @@ where
                 ));
             }
         }
-        if let Some(call_id) = meeting.call_id {
-            let participants = self
-                .repo
-                .get_participants(&call_id)
-                .await
-                .map_err(|error| CallError::Internal(error.into()))?;
-            recipients.retain(|recipient| {
-                !participants
-                    .iter()
-                    .any(|participant| participant.user_id == recipient.as_ref())
-            });
-        }
+        let participants = self
+            .repo
+            .get_participants(&call_id)
+            .await
+            .map_err(|error| CallError::Internal(error.into()))?;
+        recipients.retain(|recipient| {
+            !participants
+                .iter()
+                .any(|participant| participant.user_id == recipient.as_ref())
+        });
         if recipients.is_empty() {
             return Ok(());
         }
 
         // Persist session-scoped discovery before publishing so Live survives
         // a dismissed or missed notification.
-        if let Some(call_id) = meeting.call_id {
-            self.repo
-                .add_meeting_invitees(&meeting.id, &call_id, &recipients)
-                .await?;
-        }
+        self.repo
+            .add_meeting_invitees(&meeting.id, &call_id, &recipients)
+            .await?;
 
         let invited_at = Utc::now();
         self.connection_service

@@ -855,8 +855,11 @@ that the failure is caused by an unsupported media format.
 
 These routes require `enable-quick-calls` for both signed-in users and guests.
 In Calendar, create an event with `Macro call` selected (the default).
+The composer waits for the quick-call flag to load before choosing its default.
 Saving creates the call and includes its link in the invitation;
 the room starts on the first join. Use Calendar to edit the event or invite guests.
+Teammate rings require a live call; selecting teammates during new-call setup
+sends invitations after the call connects.
 
 `New call` → `Manage call links` lists your standalone links with `Join call`, `Copy
 link`, and `Revoke link`. Revocation prevents new joins; it does not delete calendar
