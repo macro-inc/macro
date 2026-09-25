@@ -1,7 +1,15 @@
 import { type Client, CombinedError } from '@urql/core';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import { fromValue, makeSubject } from 'wonka';
 
 const getGraphqlSoupClientMock = vi.hoisted(() => vi.fn());
@@ -67,6 +75,9 @@ function renderHook<T>(factory: () => T): T {
 
 describe('GraphQL favorites queries', () => {
   beforeEach(() => {
+    // Unwatched favorites queries stay live for a retention window. Fake the
+    // timer so each test can end that window instead of leaking into the next.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     executeQuery = vi.fn(() =>
       fromValue(
         favoritesResult([
@@ -95,6 +106,8 @@ describe('GraphQL favorites queries', () => {
   afterEach(() => {
     dispose?.();
     dispose = undefined;
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
     document.body.replaceChildren();
     vi.clearAllMocks();
   });
@@ -178,7 +191,8 @@ describe('GraphQL favorites queries', () => {
       query: createGraphqlFavoritesQuery(),
       data: useFavoritesData(),
     }));
-    await vi.waitFor(() => expect(executeQuery).toHaveBeenCalledTimes(2));
+    // Both callers share one live query.
+    await vi.waitFor(() => expect(executeQuery).toHaveBeenCalledOnce());
     subject.next(favoritesResult([graphqlFavorite('document-1', 0)]));
     await vi.waitFor(() => expect(state.data()?.favorites).toHaveLength(1));
     subject.next({
@@ -186,6 +200,53 @@ describe('GraphQL favorites queries', () => {
     });
     await vi.waitFor(() => expect(state.query.isError).toBe(true));
     expect(state.data()?.favorites).toHaveLength(1);
+  });
+
+  it('renders loaded favorites on the first frame of a later caller', async () => {
+    const subject = makeSubject<ReturnType<typeof favoritesResult>>();
+    executeQuery.mockReturnValue(subject.source);
+    const disposeFirst = render(() => {
+      useFavoritesData();
+      return null as unknown as JSX.Element;
+    }, document.createElement('div'));
+    onTestFinished(disposeFirst);
+    await vi.waitFor(() => expect(executeQuery).toHaveBeenCalledOnce());
+    subject.next(favoritesResult([graphqlFavorite('document-1', 0)]));
+
+    // A view that mounts after the list loaded must not start empty while an
+    // async cache read catches up, and must outlive the first caller.
+    const data = renderHook(() => useFavoritesData());
+    expect(data()?.favorites.map((favorite) => favorite.entityId)).toEqual([
+      'document-1',
+    ]);
+    disposeFirst();
+    subject.next(favoritesResult([graphqlFavorite('document-2', 0)]));
+    expect(data()?.favorites.map((favorite) => favorite.entityId)).toEqual([
+      'document-2',
+    ]);
+    expect(executeQuery).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an unwatched query live until its retention window ends', async () => {
+    renderHook(() => useFavoritesData());
+    await vi.waitFor(() => expect(executeQuery).toHaveBeenCalledOnce());
+    dispose?.();
+
+    // Reopening a view within the window joins the retained query.
+    vi.advanceTimersByTime(60_000);
+    const data = renderHook(() => useFavoritesData());
+    expect(data()?.favorites).toHaveLength(2);
+    expect(executeQuery).toHaveBeenCalledOnce();
+    dispose?.();
+
+    // Rejoining restarted the window; once it ends, the query is torn down.
+    vi.advanceTimersByTime(4 * 60_000);
+    renderHook(() => useFavoritesData());
+    expect(executeQuery).toHaveBeenCalledOnce();
+    dispose?.();
+    vi.advanceTimersByTime(5 * 60_000);
+    renderHook(() => useFavoritesData());
+    expect(executeQuery).toHaveBeenCalledTimes(2);
   });
 
   it('keeps cache subscriptions alive after a failed explicit refresh', async () => {

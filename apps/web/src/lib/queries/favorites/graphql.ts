@@ -29,7 +29,7 @@ import {
 } from '@service-storage/graphql-favorites';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { AnyVariables, Client, OperationResult } from '@urql/core';
-import { onCleanup } from 'solid-js';
+import { createRoot, onCleanup } from 'solid-js';
 import type { FavoriteMutationCallbacks } from './mutation';
 
 type GraphqlReorderFavoritesArgs = { favorites: SetFavoriteArgs[] };
@@ -46,6 +46,25 @@ type ActiveFavoritesQuery = {
 };
 
 const activeFavoritesQueries = new Set<ActiveFavoritesQuery>();
+
+type SharedFavoritesQuery = {
+  query: GraphqlFavoritesQuery;
+  subscribers: number;
+  dispose: () => void;
+  release?: ReturnType<typeof setTimeout>;
+};
+
+// Cache reads are async, and urql replays only stale results to a new
+// subscriber. A fresh observer per mount would start empty every time, so
+// callers join the live query for their variables instead.
+//
+// An unwatched query stays live as long as TanStack's default gcTime keeps the
+// REST list, so a view that is closed and reopened still renders at once.
+const FAVORITES_QUERY_RETENTION_MS = 5 * 60_000;
+const sharedFavoritesQueries = new WeakMap<
+  Client,
+  Map<string, SharedFavoritesQuery>
+>();
 
 function selectFavorites(data: FavoritesQuery): FavoritesList {
   return {
@@ -100,28 +119,57 @@ function activeFavoritesCacheTargets(
   return [...targets.values()];
 }
 
-/** Creates the live urql-solid favorites query. */
+function startFavoritesQuery(
+  client: Client,
+  filter: ListFavoritesParams | undefined,
+  variables: FavoritesQueryVariables
+): SharedFavoritesQuery {
+  // Detached, so the query outlives the caller that happened to start it.
+  return createRoot((dispose) => {
+    const query = createUrqlQuery<
+      FavoritesQuery,
+      FavoritesQueryVariables,
+      FavoritesList
+    >(() => ({
+      query: FavoritesDocument,
+      client,
+      variables,
+      requestPolicy: 'cache-and-network',
+      keepPreviousData: false,
+      select: selectFavorites,
+    }));
+
+    const active = { query, filter, variables };
+    activeFavoritesQueries.add(active);
+    onCleanup(() => activeFavoritesQueries.delete(active));
+    return { query, subscribers: 0, dispose };
+  }, null);
+}
+
+/** Joins the live urql-solid favorites query for this filter. */
 export function createGraphqlFavoritesQuery(
   filter?: ListFavoritesParams
 ): GraphqlFavoritesQuery {
+  const client = getGraphqlSoupClient();
   const variables = favoritesQueryVariables(filter);
-  const query = createUrqlQuery<
-    FavoritesQuery,
-    FavoritesQueryVariables,
-    FavoritesList
-  >(() => ({
-    query: FavoritesDocument,
-    client: getGraphqlSoupClient(),
-    variables,
-    requestPolicy: 'cache-and-network',
-    keepPreviousData: false,
-    select: selectFavorites,
-  }));
+  const key = JSON.stringify(variables);
+  const queries = sharedFavoritesQueries.get(client) ?? new Map();
+  sharedFavoritesQueries.set(client, queries);
+  const shared =
+    queries.get(key) ?? startFavoritesQuery(client, filter, variables);
+  queries.set(key, shared);
 
-  const active = { query, filter, variables };
-  activeFavoritesQueries.add(active);
-  onCleanup(() => activeFavoritesQueries.delete(active));
-  return query;
+  shared.subscribers += 1;
+  clearTimeout(shared.release);
+  onCleanup(() => {
+    shared.subscribers -= 1;
+    if (shared.subscribers > 0) return;
+    shared.release = setTimeout(() => {
+      queries.delete(key);
+      shared.dispose();
+    }, FAVORITES_QUERY_RETENTION_MS);
+  });
+  return shared.query;
 }
 
 /** Refetches mounted lists, including clients running without the cache exchange. */

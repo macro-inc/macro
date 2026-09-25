@@ -212,7 +212,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
   };
 
-  const favoritesData = useFavoritesData({ entityType: ['channel'] });
+  // Filter the app-wide list rather than querying channels only: other
+  // surfaces keep it live, so the rail renders favorites on its first frame.
+  const favoritesData = useFavoritesData();
 
   const listDomId = createUniqueId();
 
@@ -393,7 +395,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const channelActivity = useChannelRailActivity(allChannels, channelCalls);
 
-  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
+  const favorites = createMemo(() =>
+    (favoritesData()?.favorites ?? []).filter(
+      (favorite) => favorite.entityType === 'channel'
+    )
+  );
 
   const isLabelOpen = (labelId: string) =>
     !state.collapsedLabels.includes(labelId);

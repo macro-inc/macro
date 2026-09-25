@@ -5,6 +5,7 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { favoriteEntityKey } from '@queries/favorites/favorites';
 import {
   type ItemEntity,
   isAccessiblePreviewItem,
@@ -123,6 +124,11 @@ export function useFavoriteDmRecipientId(
   });
 }
 
+// Preview reads are async, so a remounted row would show its entity-kind label
+// until the preview reconnects. Rows show the last name the favorite resolved
+// to meanwhile, and the live preview replaces it once it arrives.
+const lastFavoriteNames = new Map<string, string>();
+
 /**
  * Reactive display name for a favorite: subscribes to the entity's preview
  * (fetching it if needed) and resolves like `favoriteDisplayName`.
@@ -133,10 +139,18 @@ export function useFavoriteDmRecipientId(
 export function useFavoriteDisplayName(favorite: Favorite): Accessor<string> {
   const entity = favoritePreviewEntity(favorite);
   if (!entity) return () => favoriteDisplayName(favorite);
+  const key = favoriteEntityKey(favorite.entityType, favorite.entityId);
   const [preview] = useItemPreview(() => entity);
-  return () => {
+  return createMemo(() => {
     const item = preview();
-    if (isAccessiblePreviewItem(item) && item.name.trim()) return item.name;
+    if (item.loading) {
+      return lastFavoriteNames.get(key) ?? favoriteDisplayName(favorite);
+    }
+    if (isAccessiblePreviewItem(item) && item.name.trim()) {
+      lastFavoriteNames.set(key, item.name);
+      return item.name;
+    }
+    lastFavoriteNames.delete(key);
     return favoriteDisplayName(favorite);
-  };
+  });
 }
