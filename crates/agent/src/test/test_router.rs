@@ -1,7 +1,7 @@
 use crate::model::PredefinedModel;
 use crate::model::router::*;
 use crate::model::types::Model;
-use rig_core::providers::{anthropic, openai};
+use rig_core::providers::{anthropic, gemini, openai};
 
 fn test_router() -> ModelRouter {
     let anthropic = anthropic::Client::builder()
@@ -92,18 +92,21 @@ fn fireworks_provider_routes_to_chat_completions() {
 }
 
 #[test]
-fn google_provider_routes_to_chat_completions() {
-    let router = test_router().with_openai_client(
-        "google",
-        openai::CompletionsClient::builder()
+fn google_provider_routes_to_native_gemini() {
+    let router = test_router().with_gemini_client(
+        gemini::Client::builder()
             .api_key("test-google-key")
-            .base_url("https://generativelanguage.googleapis.com/v1beta/openai")
             .build()
             .unwrap(),
     );
 
     let routed = router.route("google/gemini-3.8-flash").unwrap();
-    assert!(matches!(routed, RoutedModel::OpenAiChatCompletions(_)));
+    assert!(matches!(routed, RoutedModel::Gemini(_)));
     assert_eq!(routed.provider(), "google");
     assert_eq!(routed.model_name(), "gemini-3.8-flash");
+}
+
+#[test]
+fn google_provider_without_a_client_is_unroutable() {
+    assert!(test_router().route("google/gemini-3.8-flash").is_err());
 }

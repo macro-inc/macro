@@ -73,3 +73,80 @@ fn anthropic_wire_parses_stringified_object_tool_use_input() {
     };
     assert_eq!(input, serde_json::json!({"value": "ok"}));
 }
+
+/// Gemini 3 rejects a function-call part that is missing `thought_signature`.
+/// Native GenerateContent copies [`ToolCall::signature`] onto the part; that
+/// is why Google ids do not ride the OpenAI-compatible Chat Completions path.
+#[test]
+fn gemini_wire_copies_tool_call_signature_onto_the_function_call_part() {
+    use rig_core::providers::gemini::completion::gemini_api_types::{Part, PartKind};
+
+    let message = Message::Assistant {
+        id: None,
+        content: OneOrMany::one(AssistantContent::ToolCall(
+            ToolCall::new(
+                "list-companies".to_string(),
+                ToolFunction {
+                    name: "ListCompanies".to_string(),
+                    arguments: serde_json::json!({}),
+                },
+            )
+            .with_signature(Some("thought-sig".to_owned())),
+        )),
+    };
+
+    let content: rig_core::providers::gemini::completion::gemini_api_types::Content = message
+        .try_into()
+        .expect("assistant tool call must convert");
+    let Part {
+        thought_signature,
+        part: PartKind::FunctionCall(call),
+        ..
+    } = content.parts.first().expect("one part")
+    else {
+        panic!("expected a functionCall part");
+    };
+    assert_eq!(call.name, "ListCompanies");
+    assert_eq!(thought_signature.as_deref(), Some("thought-sig"));
+}
+
+/// The OpenAI Chat Completions serializer has no `extra_content` field, so a
+/// Gemini thought signature stored on [`ToolCall::signature`] is dropped. Pin
+/// that hole so a future rig bump either preserves it (and this assertion
+/// fails for us to delete the native Gemini route) or stays dropped.
+#[test]
+fn openai_chat_completions_wire_drops_tool_call_signatures() {
+    use rig_core::providers::openai::completion::Message as OpenAiMessage;
+
+    let message = Message::Assistant {
+        id: None,
+        content: OneOrMany::one(AssistantContent::ToolCall(
+            ToolCall::new(
+                "list-companies".to_string(),
+                ToolFunction {
+                    name: "ListCompanies".to_string(),
+                    arguments: serde_json::json!({}),
+                },
+            )
+            .with_signature(Some("thought-sig".to_owned())),
+        )),
+    };
+
+    let wire: Vec<OpenAiMessage> = message
+        .try_into()
+        .expect("assistant tool call must convert");
+    let json = serde_json::to_value(&wire).expect("openai messages serialize");
+    let dumped = json.to_string();
+    assert!(
+        dumped.contains("ListCompanies"),
+        "expected a tool call on the wire: {dumped}"
+    );
+    assert!(
+        !dumped.contains("thought-sig"),
+        "Chat Completions must not silently start echoing signatures: {dumped}"
+    );
+    assert!(
+        !dumped.contains("extra_content"),
+        "Chat Completions gained extra_content; re-evaluate the native Gemini route: {dumped}"
+    );
+}
