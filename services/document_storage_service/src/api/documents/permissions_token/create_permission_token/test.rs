@@ -6,8 +6,9 @@ use super::token_identity;
 
 #[test]
 fn bot_tokens_keep_the_actor_without_inventing_a_user() {
+    let bot_id = BotId::new_from_uuid(Uuid::from_u128(42));
     let bot = BotAuthentication {
-        bot_id: BotId::TEST_A,
+        bot_id,
         token_id: Uuid::nil(),
         bot_scope: BotScope::Team,
         team_id: Some(Uuid::from_u128(7)),
@@ -16,7 +17,7 @@ fn bot_tokens_keep_the_actor_without_inventing_a_user() {
 
     assert_eq!(
         token_identity(Some(&MacroAuthorization::Bot(bot))),
-        Ok((None, Some(BotId::TEST_A.into_storage_id().to_string())))
+        Ok((None, Some(bot_id.into_storage_id().to_string())))
     );
 }
 
