@@ -438,6 +438,8 @@ follow the current filtered list and disable at its ends. Mark done advances in
 that list. Mark as unread (in the header or title menu) returns to the originating
 list with its tab, inbox, and filters preserved. Mark as not done and Mark as read
 stay on the current thread.
+**Delete** in the title menu moves the thread to Trash and returns to the same
+filtered list. Its toast offers **Undo** to restore the email.
 Verify that opening the title menu, returning to the list, and reopening a thread
 preserve working menu actions and header controls. Repeatedly navigate forward
 and backward, including after returning to the list: the subject and email body
