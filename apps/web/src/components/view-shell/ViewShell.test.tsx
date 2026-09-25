@@ -336,6 +336,57 @@ describe('required navigation', () => {
     expect(savePreference).not.toHaveBeenCalled();
   });
 
+  it('animates the pin like a manual toggle', async () => {
+    const originalAnimate = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'animate'
+    );
+    const animate = vi.fn<HTMLElement['animate']>(
+      () => ({ cancel: vi.fn() }) as unknown as Animation
+    );
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: false }))
+    );
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: animate,
+    });
+    try {
+      const [required, setRequired] = createSignal(false);
+      render(() => <Workspace app="channels" asideRequired={required()} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+      await Promise.resolve();
+      expect(animate).toHaveBeenCalled();
+      const panelsAnimated = () =>
+        new Set(animate.mock.contexts as HTMLElement[]);
+
+      animate.mockClear();
+      setRequired(true);
+      await Promise.resolve();
+      expect(
+        panelsAnimated().has(
+          document.querySelector('[data-view-shell-aside]')!.parentElement!
+        )
+      ).toBe(true);
+
+      animate.mockClear();
+      setRequired(false);
+      await Promise.resolve();
+      expect(animate).toHaveBeenCalled();
+    } finally {
+      if (originalAnimate) {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          'animate',
+          originalAnimate
+        );
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+      }
+    }
+  });
+
   it('ignores a programmatic collapse while pinned', () => {
     const [required, setRequired] = createSignal(true);
     function Pinned() {
