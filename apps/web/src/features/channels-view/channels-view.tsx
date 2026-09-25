@@ -3,6 +3,7 @@ import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/util
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { SplitRouter } from '@app/lib/split-router';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -17,7 +18,6 @@ import {
   on,
   onMount,
   Show,
-  Suspense,
   useContext,
 } from 'solid-js';
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
@@ -43,7 +43,7 @@ export type ChannelsViewProps = {
 
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, mobileLayout, setAsideWidth, setMobileTab } =
+  const { state, mobileLayout, selectedChannel, setAsideWidth, setMobileTab } =
     useChannelsView();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
@@ -71,6 +71,8 @@ function ChannelsViewRoot() {
                 <div class="size-full min-h-0 bg-panel">
                   <ViewShell.Root
                     asidePreferenceKey="channels"
+                    // The empty state only points at the rail, so keep it open.
+                    asideRequired={selectedChannel() === undefined}
                     aside={{
                       width: state.asideWidth,
                       preserveDuringResize: false,
@@ -79,34 +81,40 @@ function ChannelsViewRoot() {
                     resizable
                   >
                     <ViewShell.Aside onWidthChangeEnd={setAsideWidth}>
-                      <ChannelsRail
-                        sources={sources}
-                        searchOpen={railSearchOpen()}
-                        onSearchOpenChange={setRailSearchOpen}
-                      />
+                      <DebugSuspense name="ChannelsView.rail">
+                        <ChannelsRail
+                          sources={sources}
+                          searchOpen={railSearchOpen()}
+                          onSearchOpenChange={setRailSearchOpen}
+                        />
+                      </DebugSuspense>
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
                       <ChannelSourcesContext.Provider value={sources}>
-                        <SplitRouter.Outlet
-                          fallback={() => (
-                            <>
-                              <ViewShell.TopBar>
-                                <span class="text-sm font-semibold">Chat</span>
-                              </ViewShell.TopBar>
-                              <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
-                                <div class="flex max-w-sm flex-col gap-2">
-                                  <h2 class="text-base font-semibold text-ink">
-                                    Select a conversation
-                                  </h2>
-                                  <p class="text-sm leading-5 text-ink-muted">
-                                    Choose a channel or person from the sidebar
-                                    to open the conversation here.
-                                  </p>
+                        <DebugSuspense name="ChannelsView.outlet">
+                          <SplitRouter.Outlet
+                            fallback={() => (
+                              <>
+                                <ViewShell.TopBar>
+                                  <span class="text-sm font-semibold">
+                                    Chat
+                                  </span>
+                                </ViewShell.TopBar>
+                                <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+                                  <div class="flex max-w-sm flex-col gap-2">
+                                    <h2 class="text-base font-semibold text-ink">
+                                      Select a conversation
+                                    </h2>
+                                    <p class="text-sm leading-5 text-ink-muted">
+                                      Choose a channel or person from the
+                                      sidebar to open the conversation here.
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            </>
-                          )}
-                        />
+                              </>
+                            )}
+                          />
+                        </DebugSuspense>
                       </ChannelSourcesContext.Provider>
                     </ViewShell.Main>
                   </ViewShell.Root>
@@ -114,7 +122,8 @@ function ChannelsViewRoot() {
               }
             >
               <MaybeSoupEntityActionDrawerManager>
-                <Suspense
+                <DebugSuspense
+                  name="ChannelsView.mobile"
                   fallback={
                     <div class="grid size-full place-items-center text-ink-muted">
                       <SpinnerIcon
@@ -129,7 +138,7 @@ function ChannelsViewRoot() {
                     tab={state.mobileTab}
                     onTabChange={setMobileTab}
                   />
-                </Suspense>
+                </DebugSuspense>
               </MaybeSoupEntityActionDrawerManager>
             </Show>
           </SplitPanel.Body>
@@ -139,7 +148,7 @@ function ChannelsViewRoot() {
   );
 }
 
-export function ChannelDetailRouteView() {
+function ChannelDetailRouteContent() {
   const { selectedChannel } = useChannelsView();
   const notificationSource = useGlobalNotificationSource();
   const channelId = () => selectedChannel()?.id;
@@ -211,7 +220,7 @@ export function ChannelDetailRouteView() {
   );
 
   return (
-    <Suspense>
+    <DebugSuspense name="ChannelsView.detail-content">
       <Show
         when={hydrated()}
         fallback={
@@ -231,15 +240,25 @@ export function ChannelDetailRouteView() {
       >
         {(channel) => <ChannelDetailView channel={channel()} />}
       </Show>
-    </Suspense>
+    </DebugSuspense>
+  );
+}
+
+export function ChannelDetailRouteView() {
+  return (
+    <DebugSuspense name="ChannelsView.detail-route">
+      <ChannelDetailRouteContent />
+    </DebugSuspense>
   );
 }
 
 /** Chat workspace with shared workspace navigation. */
 export function ChannelsView(props: ChannelsViewProps) {
   return (
-    <ChannelsViewProvider initialState={props.initialState}>
-      <ChannelsViewRoot />
-    </ChannelsViewProvider>
+    <DebugSuspense name="ChannelsView.root">
+      <ChannelsViewProvider initialState={props.initialState}>
+        <ChannelsViewRoot />
+      </ChannelsViewProvider>
+    </DebugSuspense>
   );
 }

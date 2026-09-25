@@ -2,6 +2,7 @@ import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
 import { CalendarView } from '@app/features/calendar-view/calendar-view';
 import { createSearchParams, SplitRouter } from '@app/lib/split-router';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewFrame, PreviewPanel } from '@components/app/PreviewPanel';
 import type { PreviewSelection } from '@components/app/previewTarget';
@@ -11,7 +12,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createEffect, onCleanup, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, onCleanup, onMount, Show } from 'solid-js';
 import { HomeChatStart } from './components/HomeChatStart';
 import { HomeReturnBreadcrumb } from './components/HomeReturnBreadcrumb';
 import { InboxListLayout } from './components/InboxHeader';
@@ -47,19 +48,23 @@ function HomeListPane(props: {
 
   return (
     <InboxListLayout
-      tabs={<InboxTabs />}
+      tabs={
+        <DebugSuspense name="InboxView.tabs">
+          <InboxTabs />
+        </DebugSuspense>
+      }
       onNewChat={() => {
         props.onNewChat();
         showContent();
       }}
     >
-      <Suspense fallback={<InboxFallback />}>
+      <DebugSuspense name="InboxView.list" fallback={<InboxFallback />}>
         <InboxList
           hasPreview={props.hasPreview}
           onPreviewEntityChange={props.onPreviewEntityChange}
           onPreviewActivate={showContent}
         />
-      </Suspense>
+      </DebugSuspense>
     </InboxListLayout>
   );
 }
@@ -131,17 +136,22 @@ function InboxViewRoot() {
                     resizable
                   >
                     <ViewShell.Aside class="flex flex-col bg-panel">
-                      <HomeListPane
-                        hasPreview={detailOpen()}
-                        onPreviewEntityChange={onPreviewEntityChange}
-                        onNewChat={newChat}
-                      />
+                      <DebugSuspense name="InboxView.list-pane">
+                        <HomeListPane
+                          hasPreview={detailOpen()}
+                          onPreviewEntityChange={onPreviewEntityChange}
+                          onNewChat={newChat}
+                        />
+                      </DebugSuspense>
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
                       {/* Detail routes load lazily. Suspend only this area, so
                           the list stays mounted and a pending detail's effects
                           wait until it resolves. */}
-                      <Suspense fallback={<InboxFallback />}>
+                      <DebugSuspense
+                        name="InboxView.outlet"
+                        fallback={<InboxFallback />}
+                      >
                         <SplitRouter.Outlet
                           fallback={() => {
                             // Consumed once per mount, not through a prop
@@ -157,7 +167,7 @@ function InboxViewRoot() {
                             );
                           }}
                         />
-                      </Suspense>
+                      </DebugSuspense>
                     </ViewShell.Main>
                   </ViewShell.Root>
                 </div>
@@ -165,11 +175,13 @@ function InboxViewRoot() {
             >
               <ViewShell.Root aside={false} main={{ min: 224 }}>
                 <ViewShell.Main>
-                  <HomeListPane
-                    hasPreview={detailOpen()}
-                    onPreviewEntityChange={onPreviewEntityChange}
-                    onNewChat={newChat}
-                  />
+                  <DebugSuspense name="InboxView.list-pane">
+                    <HomeListPane
+                      hasPreview={detailOpen()}
+                      onPreviewEntityChange={onPreviewEntityChange}
+                      onNewChat={newChat}
+                    />
+                  </DebugSuspense>
                 </ViewShell.Main>
               </ViewShell.Root>
             </Show>
@@ -181,7 +193,7 @@ function InboxViewRoot() {
 }
 
 /** The Calendar view aimed at an event, inside Home's inline preview chrome. */
-export function InboxCalendarRouteView() {
+function InboxCalendarRouteContent() {
   const panel = useSplitPanelOrThrow();
   const { closePreview, calendarRefocus } = useInboxView();
   const [search] = createSearchParams(calendarSearch);
@@ -199,14 +211,22 @@ export function InboxCalendarRouteView() {
   );
 }
 
-export function InboxDetailRouteView() {
+export function InboxCalendarRouteView() {
+  return (
+    <DebugSuspense name="InboxView.calendar-route">
+      <InboxCalendarRouteContent />
+    </DebugSuspense>
+  );
+}
+
+function InboxDetailRouteContent() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
   const { previewTarget, previewNavigationRequest, closePreview } =
     useInboxView();
 
   return (
-    <Suspense>
+    <DebugSuspense name="InboxView.detail-content">
       <PreviewPanel
         target={previewTarget()}
         navigationRequest={previewNavigationRequest()}
@@ -214,15 +234,25 @@ export function InboxDetailRouteView() {
         splitPanelContext={panel}
         headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}
       />
-    </Suspense>
+    </DebugSuspense>
+  );
+}
+
+export function InboxDetailRouteView() {
+  return (
+    <DebugSuspense name="InboxView.detail-route">
+      <InboxDetailRouteContent />
+    </DebugSuspense>
   );
 }
 
 /** Composable heterogeneous Inbox built on the shared view and Soup primitives. */
 export function InboxView(props: InboxViewProps) {
   return (
-    <InboxViewProvider initialState={props.initialState}>
-      <InboxViewRoot />
-    </InboxViewProvider>
+    <DebugSuspense name="InboxView.root">
+      <InboxViewProvider initialState={props.initialState}>
+        <InboxViewRoot />
+      </InboxViewProvider>
+    </DebugSuspense>
   );
 }

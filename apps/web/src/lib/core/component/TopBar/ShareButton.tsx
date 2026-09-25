@@ -18,24 +18,18 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { type TabItem, Tabs } from '@core/component/Tabs';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
-import { useReferralCode, useUserId } from '@core/context/user';
+import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import {
-  blockEditPermissionEnabledSignal,
-  blockMetadataSignal,
-} from '@core/signal/load';
-import {
-  useGetPermissions,
-  useIsDocumentOwner,
-} from '@core/signal/permissions';
+import { blockEditPermissionEnabledSignal } from '@core/signal/load';
+import { useIsDocumentOwner } from '@core/signal/permissions';
 import { idToEmail } from '@core/user';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import { useCopyLink } from '@core/util/useCopyLink';
 import IconShared from '@icon/share.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
@@ -70,11 +64,17 @@ import type { LinkShare } from '@service-storage/generated/schemas/linkShare';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button, cn, Dropdown, Panel, SegmentedControl, Tooltip } from '@ui';
+import {
+  Button,
+  cn,
+  Dropdown,
+  type ManagedDialogProps,
+  Panel,
+  SegmentedControl,
+  Tooltip,
+} from '@ui';
 import type { Result } from 'neverthrow';
 import {
-  type Accessor,
-  createContext,
   createMemo,
   createResource,
   createSignal,
@@ -83,9 +83,7 @@ import {
   onCleanup,
   onMount,
   Show,
-  Suspense,
   Switch,
-  useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { CustomScrollbar } from '../CustomScrollbar';
@@ -136,27 +134,11 @@ async function fetchSharePermissions(id: string, itemType: ItemType) {
   }
 }
 
+const SHARE_LINK_SUBTEXT =
+  'Sending this link in a Macro message will automatically update permissions to include recipients.';
+
 const agentSessionShareDescription =
   'Only the owner can share access to this session. You can copy a link for people who already have access.';
-
-interface IShareDialogContext {
-  isOpen: Accessor<boolean>;
-  open: () => void;
-  close: () => void;
-  /** Override the entity-only URL with a host view's contextual URL. */
-  copyLink?: () => void;
-}
-
-export const ShareDialogContext = createContext<IShareDialogContext>();
-
-export function useShareDialogContext() {
-  const ctx = useContext(ShareDialogContext);
-  if (!ctx)
-    throw new Error(
-      'useShareDialogContext must be used within a ShareDialogContext.Provider'
-    );
-  return ctx;
-}
 
 const permissionsBlockResource = createBlockResource(
   () => {
@@ -215,15 +197,15 @@ export function getShareDrawerRecipientInput(): HTMLElement | null {
   );
 }
 
-interface ShareModalProps {
-  setIsSharePermOpen: (value: boolean) => void;
+interface ShareModalProps extends ManagedDialogProps {
   userPermissions: Permissions;
-  isSharePermOpen: boolean;
   blockAlias: BlockName | BlockAlias;
   itemType: ItemType;
   owner?: string;
   name: string;
   id: string;
+  /** Override the entity-only URL with a host view's contextual URL. */
+  copyLink?: () => void;
 }
 
 function DmRecipientIcon(props: { channelId: string }) {
@@ -697,7 +679,6 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
 export function ShareModal(props: ShareModalProps) {
   const navigate = useNavigate();
   const analytics = useAnalytics();
-  const shareContext = useContext(ShareDialogContext);
   const currentTeamQuery = useCurrentTeamQuery();
   const callRecordQuery = useCallRecordQuery(() =>
     props.itemType === 'call' ? props.id : ''
@@ -736,31 +717,17 @@ export function ShareModal(props: ShareModalProps) {
   const [recipientScrollRef, setRecipientScrollRef] =
     createSignal<HTMLElement>();
 
-  const referralCode = useReferralCode();
+  const copyEntityLink = useCopyLink();
 
   const copyLink = createCallback(() => {
-    const contextualCopyLink = shareContext?.copyLink;
-    if (contextualCopyLink) return contextualCopyLink();
-
-    const params: Record<string, string> = {};
-    const code = referralCode();
-    if (code) {
-      params.referral_code = code;
-    }
-    const url = buildSimpleEntityUrl(
+    if (props.copyLink) return props.copyLink();
+    copyEntityLink(
+      buildSimpleEntityUrl({ type: props.blockAlias, id: props.id }),
       {
-        type: props.blockAlias,
-        id: props.id,
-      },
-      params
+        subtext:
+          props.itemType === 'agent_session' ? undefined : SHARE_LINK_SUBTEXT,
+      }
     );
-    navigator.clipboard.writeText(url);
-    toast.success('Link copied to clipboard.', {
-      subtext:
-        props.itemType === 'agent_session'
-          ? undefined
-          : 'Sending this link in a Macro message will automatically update permissions to include recipients.',
-    });
   });
 
   const [channelNamesResource] = createResource(
@@ -815,7 +782,7 @@ export function ShareModal(props: ShareModalProps) {
   // Function to navigate to a channel
   const navigateToChannel = createCallback((channelId: string) => {
     navigate(`/channel/${channelId}`);
-    props.setIsSharePermOpen(false); // Close the dialog after navigation
+    props.onOpenChange(false); // Close the dialog after navigation
   });
 
   const removeChannelAccess = createCallback(async (channelId: string) => {
@@ -1216,8 +1183,8 @@ export function ShareModal(props: ShareModalProps) {
         <MobileShareDrawer
           editPermissionEnabled={editPermissionEnabled()}
           canForward={canForward()}
-          isOpen={props.isSharePermOpen}
-          setIsOpen={props.setIsSharePermOpen}
+          isOpen={props.open}
+          setIsOpen={props.onOpenChange}
           blockAlias={props.blockAlias}
           name={props.name}
           id={props.id}
@@ -1240,10 +1207,7 @@ export function ShareModal(props: ShareModalProps) {
         />
       }
     >
-      <Dialog
-        onOpenChange={props.setIsSharePermOpen}
-        open={props.isSharePermOpen}
-      >
+      <Dialog onOpenChange={props.onOpenChange} open={props.open}>
         <Dialog.Portal>
           <Dialog.Overlay class="z-modal fixed inset-0 scrim-glass" />
           <div class="z-modal fixed inset-0">
@@ -1279,8 +1243,8 @@ export function ShareModal(props: ShareModalProps) {
                         userPermissions: userPermissions(),
                         channelSharePermissions: recipients(),
                       }}
-                      onSubmit={() => props.setIsSharePermOpen(false)}
-                      onCancel={() => props.setIsSharePermOpen(false)}
+                      onSubmit={() => props.onOpenChange(false)}
+                      onCancel={() => props.onOpenChange(false)}
                       refetch={refetch}
                       name={props.name}
                       hideAccessLevelSelector={props.itemType === 'email'}
@@ -1477,12 +1441,12 @@ export function ShareModal(props: ShareModalProps) {
 }
 
 export function ShareTrigger(props: {
+  onClick: () => void;
   id?: string;
   blockType?: BlockName | BlockAlias;
   hotkeyScope?: string;
   copyLink?: () => void;
 }) {
-  const shareCtx = useShareDialogContext();
   const isAuthenticated = useIsAuthenticated();
   const inBlock = isInBlock();
   const contextualBlockType =
@@ -1521,7 +1485,7 @@ export function ShareTrigger(props: {
           openLoginModal();
         } else {
           analytics.track('share_menu_open', { blockType: blockType() });
-          shareCtx.open();
+          props.onClick();
         }
         return true;
       },
@@ -1534,31 +1498,14 @@ export function ShareTrigger(props: {
     onCleanup(() => registration.dispose());
   });
 
-  const referralCode = useReferralCode();
-
-  const defaultUrl = () => {
-    const id = blockId();
-    const type = blockType();
-
-    const params: Record<string, string> = {};
-    const code = referralCode();
-    if (code) {
-      params.referral_code = code;
-    }
-    return buildSimpleEntityUrl({ id, type }, params);
-  };
+  const copyEntityLink = useCopyLink();
 
   const copyLink = createCallback(() => {
     if (props.copyLink) return props.copyLink();
-    if (shareCtx.copyLink) return shareCtx.copyLink();
-    navigator.clipboard.writeText(defaultUrl());
-    analytics.track('copy_share_link', { blockType: blockType() });
-    toast.success('Link copied to clipboard.', {
-      subtext:
-        blockType() === 'agent'
-          ? undefined
-          : 'Sending this link in a Macro message will automatically update permissions to include recipients.',
+    copyEntityLink(buildSimpleEntityUrl({ id: blockId(), type: blockType() }), {
+      subtext: blockType() === 'agent' ? undefined : SHARE_LINK_SUBTEXT,
     });
+    analytics.track('copy_share_link', { blockType: blockType() });
   });
 
   const ShareLinkAction = createMemo(() => ({
@@ -1602,7 +1549,7 @@ export function ShareTrigger(props: {
               openLoginModal();
             } else {
               analytics.track('share_menu_open', { blockType: blockType() });
-              shareCtx.open();
+              props.onClick();
             }
           }}
         >
@@ -1621,38 +1568,6 @@ export function ShareTrigger(props: {
         <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
       </Button>
     </div>
-  );
-}
-
-export function ShareBlockModal(props: {
-  name?: string;
-  userPermissions?: Permissions;
-  owner?: string;
-}) {
-  const ctx = useShareDialogContext();
-  const id = useBlockId();
-  const blockAlias = useBlockAliasedName();
-  const blockName = useBlockName();
-  const itemType = blockNameToItemType(blockName);
-  const documentName = useBlockDocumentName();
-  const permissions = useGetPermissions();
-  const ownerDerived = () => blockMetadataSignal()?.owner;
-
-  if (!itemType) return null;
-
-  return (
-    <Suspense>
-      <ShareModal
-        isSharePermOpen={ctx.isOpen()}
-        setIsSharePermOpen={(v) => (v ? ctx.open() : ctx.close())}
-        id={id}
-        blockAlias={blockAlias}
-        itemType={itemType}
-        name={props.name ?? documentName() ?? ''}
-        userPermissions={props.userPermissions ?? permissions()}
-        owner={props.owner ?? ownerDerived()}
-      />
-    </Suspense>
   );
 }
 

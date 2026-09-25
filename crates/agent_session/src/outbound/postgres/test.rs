@@ -1,4 +1,5 @@
 use super::*;
+mod queue;
 mod search;
 mod user_cleanup;
 mod working_branch;

@@ -10,11 +10,7 @@ import {
 import { downloadFile } from '@filesystem/download';
 import { useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
-import {
-  FileDetailLayout,
-  FileDetailLoadGate,
-  type FileDetailShareProps,
-} from '../components/FileDetail';
+import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
 import { downloadFileOperation } from '../components/file-detail-operations';
 import {
   type CanvasDocumentData,
@@ -58,13 +54,11 @@ function CanvasDetailContent(props: {
   );
 }
 
-export function CanvasDetailDocument(
-  props: FileDetailShareProps & {
-    documentId: string;
-    data: CanvasDocumentData;
-    children?: (context: CanvasDetailContext) => JSX.Element;
-  }
-) {
+export function CanvasDetailDocument(props: {
+  documentId: string;
+  data: CanvasDocumentData;
+  children?: (context: CanvasDetailContext) => JSX.Element;
+}) {
   const panel = useSplitPanelOrThrow();
   const [searchParams] = useSearchParams();
   const canEdit = () =>
@@ -78,9 +72,6 @@ export function CanvasDetailDocument(
       documentId={props.documentId}
       documentMetadata={props.data.documentMetadata}
       userAccessLevel={props.data.userAccessLevel}
-      blockType="canvas"
-      shareOpen={props.shareOpen}
-      onShareOpenChange={props.onShareOpenChange}
     >
       <CanvasDocument
         documentId={props.documentId}
@@ -102,12 +93,10 @@ export function CanvasDetailDocument(
   );
 }
 
-export function CanvasDetail(
-  props: FileDetailShareProps & {
-    documentId: string;
-    children?: (context: CanvasDetailContext) => JSX.Element;
-  }
-) {
+export function CanvasDetail(props: {
+  documentId: string;
+  children?: (context: CanvasDetailContext) => JSX.Element;
+}) {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
@@ -118,8 +107,6 @@ export function CanvasDetail(
         <CanvasDetailDocument
           documentId={props.documentId}
           data={data}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
           children={props.children}
         />
       )}

@@ -16,7 +16,10 @@ export const badgeVariants = createVariants(
       ghost: 'bg-transparent text-ink-muted',
       outline: 'bg-transparent text-ink-muted border-edge-muted',
     },
-    size: CONTROL_SIZE_VARIANTS,
+    size: {
+      xs: "h-5 gap-1 px-2 text-xs [&>svg:not([class*='size-'])]:size-3",
+      ...CONTROL_SIZE_VARIANTS,
+    },
   },
   {
     variant: 'ghost',

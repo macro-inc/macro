@@ -336,6 +336,43 @@ pub struct SessionBot {
     pub avatar_url: Option<String>,
 }
 
+/// One waiting action as the session store records it.
+///
+/// The harness keeps an in-memory working copy beside the live actor; this
+/// is the durable form a restart or a reader on another replica consults.
+/// `announce` is the harness's channel/document origin, stored as JSON so
+/// this crate does not depend on harness types.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredQueuedAction {
+    /// The id the action was accepted under.
+    pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
+    /// What will be delivered - a prompt's text is the raw user text.
+    pub action: agent_runtime_protocol::domain::action::AgentAction,
+    /// The user who queued it, absent when a bot acted on nobody's behalf.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// When it was accepted.
+    pub created_at: DateTime<Utc>,
+    /// Harness announce origin, opaque to this crate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub announce: Option<serde_json::Value>,
+    /// Chip message id, once posted, so a retry does not announce twice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub announced_message_id: Option<Uuid>,
+}
+
+impl From<&StoredQueuedAction> for super::ports::QueuedControl {
+    fn from(stored: &StoredQueuedAction) -> Self {
+        Self {
+            action_id: stored.action_id,
+            action: stored.action.clone(),
+            actor: stored.actor.clone(),
+            created_at: stored.created_at,
+        }
+    }
+}
+
 /// One action waiting in a session's queue.
 ///
 /// Clients deserialize this, so both derives are used.

@@ -1,4 +1,5 @@
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
@@ -57,13 +58,15 @@ function getGreeting() {
 
 export function Home() {
   return (
-    <ShowFeatureFlag flag={enableHomeView} fallback={<Navigate href="/" />}>
-      <ChatInputProvider>
-        <DragDropWrapper class="relative size-full">
-          <HomeContent />
-        </DragDropWrapper>
-      </ChatInputProvider>
-    </ShowFeatureFlag>
+    <DebugSuspense name="Home.root">
+      <ShowFeatureFlag flag={enableHomeView} fallback={<Navigate href="/" />}>
+        <ChatInputProvider>
+          <DragDropWrapper class="relative size-full">
+            <HomeContent />
+          </DragDropWrapper>
+        </ChatInputProvider>
+      </ShowFeatureFlag>
+    </DebugSuspense>
   );
 }
 
@@ -131,12 +134,14 @@ function HomeContent() {
         </div>
       </div>
 
-      <FloatRegionOrInline region="accessory">
-        <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
-          <HomeChatInput />
-          <HomeGettingStartedLink preferences={preferences} />
-        </div>
-      </FloatRegionOrInline>
+      <DebugSuspense name="Home.accessory">
+        <FloatRegionOrInline region="accessory">
+          <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
+            <HomeChatInput />
+            <HomeGettingStartedLink preferences={preferences} />
+          </div>
+        </FloatRegionOrInline>
+      </DebugSuspense>
     </main>
   );
 }

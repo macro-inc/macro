@@ -1,11 +1,7 @@
 import { ImageContent } from '@block-image/component/ImageContent';
 import { downloadFile } from '@filesystem/download';
 import type { JSX } from 'solid-js';
-import {
-  FileDetailLayout,
-  FileDetailLoadGate,
-  type FileDetailShareProps,
-} from '../components/FileDetail';
+import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
 import { downloadFileOperation } from '../components/file-detail-operations';
 import {
   type ImageDocumentData,
@@ -16,13 +12,11 @@ import type { FileDetailContext } from '../util/file-detail-context';
 
 export type ImageDetailContext = FileDetailContext<ImageDocumentData>;
 
-export function ImageDetailDocument(
-  props: FileDetailShareProps & {
-    documentId: string;
-    data: ImageDocumentData;
-    children?: (context: ImageDetailContext) => JSX.Element;
-  }
-) {
+export function ImageDetailDocument(props: {
+  documentId: string;
+  data: ImageDocumentData;
+  children?: (context: ImageDetailContext) => JSX.Element;
+}) {
   const operations = [
     downloadFileOperation(() => {
       downloadFile(
@@ -37,9 +31,6 @@ export function ImageDetailDocument(
       documentId={props.documentId}
       documentMetadata={props.data.documentMetadata}
       userAccessLevel={props.data.userAccessLevel}
-      blockType="image"
-      shareOpen={props.shareOpen}
-      onShareOpenChange={props.onShareOpenChange}
     >
       {props.children?.({
         data: props.data,
@@ -55,12 +46,10 @@ export function ImageDetailDocument(
   );
 }
 
-export function ImageDetail(
-  props: FileDetailShareProps & {
-    documentId: string;
-    children?: (context: ImageDetailContext) => JSX.Element;
-  }
-) {
+export function ImageDetail(props: {
+  documentId: string;
+  children?: (context: ImageDetailContext) => JSX.Element;
+}) {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
@@ -71,8 +60,6 @@ export function ImageDetail(
         <ImageDetailDocument
           documentId={props.documentId}
           data={data}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
           children={props.children}
         />
       )}

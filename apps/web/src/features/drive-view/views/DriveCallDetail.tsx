@@ -61,7 +61,7 @@ export function DriveCallDetail(props: {
   });
 
   return (
-    <CallDetailRoot callId={props.callId} data={detail.data()}>
+    <CallDetailRoot callId={props.callId}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
         <ViewShell.TopBar class="touch:flex">
           <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
@@ -73,9 +73,8 @@ export function DriveCallDetail(props: {
             {(data) => (
               <CallDetailActions
                 callId={props.callId}
-                channelId={data().record.channelId}
+                record={data().record}
                 name={data().name}
-                isActive={data().record.isActive}
               />
             )}
           </Show>

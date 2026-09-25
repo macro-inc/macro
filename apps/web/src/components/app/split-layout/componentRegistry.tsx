@@ -222,7 +222,17 @@ registerComponent('email-compose', (params) => {
       .filter(Boolean);
   const draftID =
     typeof params.draftID === 'string' ? params.draftID : undefined;
-  return <EmailCompose draftId={draftID} initialTo={initialTo} />;
+  const initialInboxId =
+    typeof params.initialInboxId === 'string'
+      ? params.initialInboxId
+      : undefined;
+  return (
+    <EmailCompose
+      draftId={draftID}
+      initialTo={initialTo}
+      initialInboxId={initialInboxId}
+    />
+  );
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');

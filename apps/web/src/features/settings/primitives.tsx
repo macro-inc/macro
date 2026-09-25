@@ -37,6 +37,7 @@ export function SettingsPage(props: {
   const inSheet = useContext(SettingsSheetContext);
   return (
     <div
+      data-settings-page
       data-drawer-scroll-body={inSheet ? true : undefined}
       class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children"
     >
@@ -234,7 +235,6 @@ export function ChoiceRow(props: {
       class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted p-3 has-checked:border-accent has-checked:bg-accent-bg"
       classList={{
         'cursor-not-allowed opacity-50': props.disabled,
-        'cursor-pointer': !props.disabled,
       }}
     >
       <input

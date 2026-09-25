@@ -316,6 +316,12 @@ while selected tag sets are pending. Background refreshes retain the current lis
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
 
+If a saved inbox selection references an unlinked account, successfully loading
+linked accounts resets the filter to All inboxes while preserving an open or
+restored thread. Check this with a stale saved scope and a thread route, including
+when no linked accounts remain. Explicitly choosing another inbox or All inboxes
+still closes the thread.
+
 The new views reuse the legacy filter option rows and searchable submenus.
 Their triggers are icon-only buttons matching the surrounding view controls;
 Clear/Reset filters and the mobile Clear all action use destructive text styling.
@@ -434,7 +440,24 @@ HTTP and WebSockets. iOS shares the native cache code but is not yet covered by
 that driver.
 
 In the new Email view, ordinary row activation opens the thread inside
-`/app/component/mail`; the Email breadcrumb returns to the filtered list.
+`/app/component/mail`; the view breadcrumb (for example Signal) has a hover
+background and returns to the filtered list. The inline header uses the existing
+email title menu: open the menu button beside the subject for **Ask AI**, **Create a
+Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
+and **Previous item** / **Next item** sit at the right of that header. The arrows
+follow the current filtered list and disable at its ends. Mark done advances in
+that list. Mark as unread (in the header or title menu) returns to the originating
+list with its tab, inbox, and filters preserved. Mark as not done and Mark as read
+stay on the current thread.
+Opening a saved draft from **Drafts** keeps the subject breadcrumb, title menu,
+and applicable header controls visible above the composer. Verify these remain
+available when returning to Drafts and reopening the draft.
+**Delete** in the title menu moves the thread to Trash and returns to the same
+filtered list. Its toast offers **Undo** to restore the email.
+Verify that opening the title menu, returning to the list, and reopening a thread
+preserve working menu actions and header controls. Repeatedly navigate forward
+and backward, including after returning to the list: the subject and email body
+should remain visible without reloading.
 Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
 the destination for direct links and legacy surfaces. Click a message header to
 expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
@@ -567,9 +590,37 @@ glass bottom sheet for status, done, attachment, calendar and tag filters, plus 
 section when the user can pick one: `All inboxes` or a single address, never several.
 `Clear all` resets those filters and the inbox selection. Desktop keeps its sidebar,
 search field, filter menu and preview control. The sidebar lists the inboxes above the
-tabs as plain rows; clicking one shows only that inbox, and the `+` beside
-`All inboxes` (`Connect another account`) starts the add-inbox flow. Sidebar rows,
-`New`, and the panel's back, forward and close controls act on primary-button
+`New email` button and tabs as plain rows; clicking one shows only that inbox.
+`Connect another account` starts the add-inbox flow from its own row below the
+scrolling list. `New email` prefills From with the selected inbox, or the primary
+inbox when All inboxes is selected; reopening a draft keeps its saved sender.
+If an explicitly selected sending inbox is unavailable, Send reports
+`Unable to find linked email account. Select a sending inbox.` without delivering
+through another account. The From picker stays available as `Select sending inbox`,
+including when only one linked inbox remains. On mobile, expand `Cc/Bcc, From:`
+to choose the sender. Selecting an available inbox clears the error and allows
+sending; the picker never displays another inbox as selected before that choice.
+With no explicit selection, an unavailable primary still falls back to
+the first linked inbox.
+Sidebar rows, including `All inboxes`, replace their icon with an accent-colored checkmark when
+selected. With exactly one connected inbox, only its address appears as the selected
+row, followed by `Connect another account`; there is no `All inboxes` row, title
+inbox dropdown, or inbox section in the mobile filter drawer. The inbox section shows up to four rows (including `All inboxes`), then
+scrolls independently without overscroll so the email tabs stay in place. With many
+accounts, scroll to the last inbox and check that selecting it updates the header filter.
+Selecting one inbox also shows `from [email address]` beside the list title.
+The address is a borderless ghost dropdown with the title's font weight and a
+consistent 14px font size at all widths; `from` is 12px. Both align to the title's baseline, without
+a tooltip or a separate clear button.
+Its single-select menu includes `All inboxes`, which clears the account selection
+and removes the filter. Saved selections from the old multi-select picker restore
+the first saved inbox; an empty saved selection restores All inboxes. Once linked
+accounts load successfully, a selected inbox that no longer exists resets to All
+inboxes. This runs for the whole email view, including on touch devices before
+the filter drawer opens. New email uses the originating email-view split even if another split
+is active. Verify that
+sidebar and menu selection stay in sync and that clearing preserves the current tab and other filters.
+Sidebar rows, `New`, and the panel's back, forward and close controls act on primary-button
 mousedown, so the selection changes before the click completes; a normal click
 still works. The sidebar ends with a collapsible `Tags` section (every personal and
 team tag, plus a `New tag` button): clicking a tag opens the `All` tab filtered to
@@ -1149,8 +1200,10 @@ On phones, **More views → Settings** opens an inset glass sheet over the curre
 page. The main page has a profile shortcut and grouped Account, Preferences,
 Workspace, and enabled agent/admin sections. Tap a row to open that settings
 page inside the sheet; **Back to settings** returns to the grouped list at its
-previous scroll position. **Close settings** at the top right, Escape, an
-outside tap, or a downward swipe dismisses the sheet. Opening Settings again
+previous scroll position. `API Keys` is desktop-only and has no row here.
+**Close settings** at the top right, Escape, an
+outside tap, or a downward swipe dismisses the sheet. A tap that dismisses a
+menu opened inside the sheet leaves the sheet itself open. Opening Settings again
 starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms
@@ -1286,7 +1339,8 @@ without comment permission have no comment composer, so Ask AI remains visible.
 On touch devices, an email thread's floating action bar has Previous email and
 Next email arrows beside the larger Mark done checkmark. The arrows follow the
 source list's filtered order, skip non-email items, and disable at its ends.
-`J` and `K` use that same order in the Email view. They do not wrap; a thread
+`J` / `ArrowRight` and `K` / `ArrowLeft` use that same order in the Email view.
+Arrow keys in a reply editor or other text input keep their normal editing behavior. They do not wrap; a thread
 opened without a source list has disabled arrows.
 Mark done archives the current thread and opens the next email in that same
 filtered list, loading pages until another email is found or the list ends.

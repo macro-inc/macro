@@ -14,7 +14,6 @@ import { useSearchParams } from '@solidjs/router';
 import { Show } from 'solid-js';
 import type { CanvasView } from '../context/canvas-document-context';
 import { CanvasDocument, type CanvasDocumentMethods } from './CanvasDocument';
-import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 
 export type BlockCanvasProps = {
@@ -59,17 +58,15 @@ export default function BlockCanvas(props: BlockCanvasProps) {
               if (isNested) event.stopPropagation();
             }}
           >
-            <ModalsProvider>
-              <Show when={!isNested} fallback={content}>
-                <SidePanel.Layout defaultOpen={false}>
-                  <FileSidePanelSections />
-                  <div class="flex size-full min-w-0 flex-col overflow-hidden">
-                    <TopBar />
-                    {content}
-                  </div>
-                </SidePanel.Layout>
-              </Show>
-            </ModalsProvider>
+            <Show when={!isNested} fallback={content}>
+              <SidePanel.Layout defaultOpen={false}>
+                <FileSidePanelSections />
+                <div class="flex size-full min-w-0 flex-col overflow-hidden">
+                  <TopBar />
+                  {content}
+                </div>
+              </SidePanel.Layout>
+            </Show>
           </div>
         )}
       </CanvasDocument>

@@ -4,11 +4,8 @@ import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { getPermissions } from '@core/component/SharePermissions';
-import {
-  ShareDialogContext,
-  ShareModal,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -23,7 +20,6 @@ import { Button } from '@ui';
 import {
   type Accessor,
   createMemo,
-  createSignal,
   Match,
   onMount,
   type ParentProps,
@@ -57,19 +53,26 @@ export function useCallDetail(callId: Accessor<string>) {
 
 export function CallDetailActions(props: {
   callId: string;
-  channelId?: string | null;
+  record: CallRecord;
   name: string;
-  isActive: boolean;
 }) {
   const panel = useSplitPanelOrThrow();
   const { canCallAgain, callAgain } = useCallAgain(
     () => props.callId,
-    () => props.channelId
+    () => props.record.channelId
   );
+  const openShare = useShareModal(() => ({
+    id: props.callId,
+    blockAlias: 'call',
+    itemType: 'call',
+    name: props.name,
+    userPermissions: getPermissions(props.record.userAccessLevel ?? undefined),
+    owner: props.record.createdBy,
+  }));
 
   return (
     <div class="ml-auto flex shrink-0 items-center gap-2">
-      <Show when={!isMobile() && !props.isActive && canCallAgain()}>
+      <Show when={!isMobile() && !props.record.isActive && canCallAgain()}>
         <Button variant="outline" size="sm" onClick={callAgain}>
           <PhoneCallIcon class="size-4" />
           Call Again
@@ -84,6 +87,7 @@ export function CallDetailActions(props: {
         }}
       />
       <ShareTrigger
+        onClick={openShare}
         id={props.callId}
         blockType="call"
         hotkeyScope={panel.splitHotkeyScope}
@@ -93,41 +97,12 @@ export function CallDetailActions(props: {
   );
 }
 
-/** Keep sharing and side-panel state alive across call-record query updates. */
-export function CallDetailRoot(
-  props: ParentProps<{ callId: string; data?: CallDetailData }>
-) {
-  const [shareOpen, setShareOpen] = createSignal(false);
+/** Keep side-panel state alive across call-record query updates. */
+export function CallDetailRoot(props: ParentProps<{ callId: string }>) {
   return (
-    <ShareDialogContext.Provider
-      value={{
-        isOpen: shareOpen,
-        open: () => setShareOpen(true),
-        close: () => setShareOpen(false),
-      }}
-    >
-      <SidePanel.Root persistKey={`call:${props.callId}`}>
-        {props.children}
-      </SidePanel.Root>
-      <Show when={props.data}>
-        {(data) => (
-          <Suspense>
-            <ShareModal
-              isSharePermOpen={shareOpen()}
-              setIsSharePermOpen={setShareOpen}
-              id={props.callId}
-              blockAlias="call"
-              itemType="call"
-              name={data().name}
-              userPermissions={getPermissions(
-                data().record.userAccessLevel ?? undefined
-              )}
-              owner={data().record.createdBy}
-            />
-          </Suspense>
-        )}
-      </Show>
-    </ShareDialogContext.Provider>
+    <SidePanel.Root persistKey={`call:${props.callId}`}>
+      {props.children}
+    </SidePanel.Root>
   );
 }
 
@@ -231,7 +206,7 @@ export function StandaloneCallDetail(props: {
 }) {
   const detail = useCallDetail(() => props.callId);
   return (
-    <CallDetailRoot callId={props.callId} data={detail.data()}>
+    <CallDetailRoot callId={props.callId}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
         <ViewShell.TopBar class="touch:flex">
           <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
@@ -243,9 +218,8 @@ export function StandaloneCallDetail(props: {
             {(data) => (
               <CallDetailActions
                 callId={props.callId}
-                channelId={data().record.channelId}
+                record={data().record}
                 name={data().name}
-                isActive={data().record.isActive}
               />
             )}
           </Show>

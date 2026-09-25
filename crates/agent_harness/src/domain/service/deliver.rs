@@ -92,6 +92,10 @@ where
                                 .permission_policy(permission_policy),
                         )
                         .await?;
+                    // The sandbox is back; take waiting prompts from the store
+                    // so a restart cannot drop what was queued while this
+                    // replica was gone.
+                    self.restore_queue(session_id).await?;
                 } else {
                     // An external runtime is not ours to start - only its
                     // operator can dial - but a bot whose runtime is already
@@ -131,6 +135,7 @@ where
                                 .mcp_servers(vec![egress.sandbox.internal_mcp_server()]),
                         )
                         .await?;
+                    self.restore_queue(session_id).await?;
                 }
                 self.sessions
                     .send_action(session_id, actor, action, id)

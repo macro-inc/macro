@@ -7,7 +7,7 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, type JSX, onMount } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ViewShell } from './ViewShell';
+import { useViewShell, ViewShell } from './ViewShell';
 import { ViewSidebar } from './ViewSidebar';
 
 const measurement = vi.hoisted(() => ({ width: (): number => 1200 }));
@@ -211,14 +211,21 @@ describe('ViewShell aside resize preference', () => {
   });
 });
 
-function Workspace(props: { app: string; mounted?: () => void }) {
+function Workspace(props: {
+  app: string;
+  asideRequired?: boolean;
+  mounted?: () => void;
+}) {
   function Content() {
     onMount(() => props.mounted?.());
     return <input aria-label={`${props.app} draft`} />;
   }
   return (
     <section aria-label={props.app}>
-      <ViewShell.Root asidePreferenceKey={props.app}>
+      <ViewShell.Root
+        asidePreferenceKey={props.app}
+        asideRequired={props.asideRequired}
+      >
         <ViewShell.Aside>
           <ViewSidebar.Header>
             <ViewSidebar.Title>{props.app}</ViewSidebar.Title>
@@ -297,6 +304,159 @@ it('reopens automatic narrow collapse as a dismissible overlay', () => {
   expect(
     screen.queryByRole('button', { name: 'Close navigation backdrop' })
   ).toBeNull();
+});
+
+describe('required navigation', () => {
+  const asideDocked = () =>
+    !document
+      .querySelector('[data-view-shell-aside]')!
+      .parentElement!.classList.contains('hidden');
+
+  it('docks a hidden wide sidebar without a collapse control until a selection returns', () => {
+    const [required, setRequired] = createSignal(false);
+    render(() => <Workspace app="channels" asideRequired={required()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+    expect(asideDocked()).toBe(false);
+    const savePreference = vi.spyOn(localStorage, 'setItem');
+
+    setRequired(true);
+    expect(asideDocked()).toBe(true);
+    expect(
+      screen.queryByRole('button', { name: 'Hide navigation' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Show navigation' })
+    ).toBeNull();
+
+    setRequired(false);
+    expect(asideDocked()).toBe(false);
+    expect(
+      screen.getByRole('button', { name: 'Show navigation' })
+    ).toBeTruthy();
+    expect(savePreference).not.toHaveBeenCalled();
+  });
+
+  it('animates the pin like a manual toggle', async () => {
+    const originalAnimate = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'animate'
+    );
+    const animate = vi.fn<HTMLElement['animate']>(
+      () => ({ cancel: vi.fn() }) as unknown as Animation
+    );
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: false }))
+    );
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: animate,
+    });
+    try {
+      const [required, setRequired] = createSignal(false);
+      render(() => <Workspace app="channels" asideRequired={required()} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+      await Promise.resolve();
+      expect(animate).toHaveBeenCalled();
+      const panelsAnimated = () =>
+        new Set(animate.mock.contexts as HTMLElement[]);
+
+      animate.mockClear();
+      setRequired(true);
+      await Promise.resolve();
+      expect(
+        panelsAnimated().has(
+          document.querySelector('[data-view-shell-aside]')!.parentElement!
+        )
+      ).toBe(true);
+
+      animate.mockClear();
+      setRequired(false);
+      await Promise.resolve();
+      expect(animate).toHaveBeenCalled();
+    } finally {
+      if (originalAnimate) {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          'animate',
+          originalAnimate
+        );
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+      }
+    }
+  });
+
+  it('ignores a programmatic collapse while pinned', () => {
+    const [required, setRequired] = createSignal(true);
+    function Pinned() {
+      const shell = useViewShell();
+      return (
+        <button type="button" onClick={shell.aside.collapse}>
+          Collapse programmatically
+        </button>
+      );
+    }
+    render(() => (
+      <ViewShell.Root asidePreferenceKey="channels" asideRequired={required()}>
+        <ViewShell.Aside>
+          <ViewSidebar.Header>
+            <ViewSidebar.Title>channels</ViewSidebar.Title>
+          </ViewSidebar.Header>
+          <Pinned />
+        </ViewShell.Aside>
+        <ViewShell.Main>
+          <ViewShell.TopBar />
+        </ViewShell.Main>
+      </ViewShell.Root>
+    ));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse programmatically' })
+    );
+    expect(asideDocked()).toBe(true);
+
+    setRequired(false);
+    expect(asideDocked()).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Hide navigation' })
+    ).toBeTruthy();
+  });
+
+  it('opens the narrow overlay and closes it again once something is selected', () => {
+    const [width, setWidth] = createSignal(1000);
+    const [required, setRequired] = createSignal(true);
+    measurement.width = width;
+    render(() => <Workspace app="channels" asideRequired={required()} />);
+
+    setWidth(600);
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Show navigation' })
+    ).toBeTruthy();
+
+    setRequired(false);
+    setRequired(true);
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
+    setRequired(false);
+    expect(
+      screen.queryByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeNull();
+
+    setWidth(1000);
+    expect(
+      screen.getByRole('button', { name: 'Hide navigation' })
+    ).toBeTruthy();
+  });
 });
 
 describe.each(['inbox', 'channels', 'tasks', 'email'])(

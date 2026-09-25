@@ -224,6 +224,35 @@ fn enqueue_front_puts_the_entry_ahead_of_waiting_work() {
 }
 
 #[test]
+fn a_snapshot_round_trips_through_the_durable_shape() {
+    let session = AgentSessionId::TEST_A;
+    let mut entry = prompt_entry("keep me");
+    entry.announce = Some(AnnounceOrigin {
+        parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(0xf0)),
+        thread_id: Uuid::from_u128(0xf1),
+        message_id: Uuid::from_u128(0xf2),
+    });
+    entry.announced = Some(Uuid::from_u128(0xf3));
+    let queues = SessionQueues::new();
+    queues.enqueue(session, entry.clone()).unwrap();
+
+    let stored = queues.snapshot(session)[0].to_stored().unwrap();
+    let restored = QueuedEntry::from_stored(stored).unwrap();
+    assert_eq!(restored.action_id, entry.action_id);
+    assert_eq!(prompt_text(&restored.action), "keep me");
+    assert_eq!(restored.announce, entry.announce);
+    assert_eq!(restored.announced, entry.announced);
+
+    let other = SessionQueues::new();
+    other.replace(session, vec![restored]);
+    assert_eq!(other.list(session).len(), 1);
+    assert_eq!(
+        prompt_text(&other.claim_next(session).unwrap().action),
+        "keep me"
+    );
+}
+
+#[test]
 fn the_cap_refuses_the_overflowing_entry() {
     let queues = SessionQueues::new();
     let session = AgentSessionId::TEST_A;

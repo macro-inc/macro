@@ -7,11 +7,12 @@ export function useListNavigationHotkeys(options: {
   scopeId: string;
   enabled: Accessor<boolean>;
   navigation: ListDetailNavigationTarget;
+  arrowKeys?: boolean;
 }) {
   const group = createHotkeyGroup();
 
   registerHotkey({
-    hotkey: 'j',
+    hotkey: options.arrowKeys ? ['j', 'arrowright'] : 'j',
     hotkeyToken: TOKENS.entity.step.end,
     scopeId: options.scopeId,
     description: 'Next item',
@@ -24,7 +25,7 @@ export function useListNavigationHotkeys(options: {
   }).withGroup(group);
 
   registerHotkey({
-    hotkey: 'k',
+    hotkey: options.arrowKeys ? ['k', 'arrowleft'] : 'k',
     hotkeyToken: TOKENS.entity.step.start,
     scopeId: options.scopeId,
     description: 'Previous item',

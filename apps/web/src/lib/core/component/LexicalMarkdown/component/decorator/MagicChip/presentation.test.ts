@@ -172,6 +172,7 @@ describe('deriveMagicChipPresentation', () => {
       kind: 'working',
       activity: {
         label: 'Running command',
+        tone: 'tool',
         detail: 'cargo test',
         busy: true,
       },
@@ -304,6 +305,7 @@ describe('deriveMagicChipPresentation', () => {
       markdown: 'Let me check the tests.',
       activity: {
         label: 'Running command',
+        tone: 'tool',
         detail: 'cargo test',
         busy: true,
       },
@@ -322,7 +324,7 @@ describe('deriveMagicChipPresentation', () => {
     expect(presentation).toEqual({
       kind: 'answering',
       markdown: 'Half an ans',
-      activity: { label: 'Stopped', busy: false },
+      activity: { label: 'Stopped', busy: false, tone: 'stopped' },
     });
   });
 
@@ -351,6 +353,7 @@ describe('deriveMagicChipPresentation', () => {
       kind: 'working',
       activity: {
         label: 'Cursor usage limit reached',
+        tone: 'failure',
         detail:
           'Raise the spending limit in your Cursor dashboard, then send it again.',
         busy: false,
@@ -375,6 +378,7 @@ describe('deriveMagicChipPresentation', () => {
       kind: 'working',
       activity: {
         label: "Agent couldn't answer",
+        tone: 'failure',
         detail:
           "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again.",
         busy: false,
@@ -568,9 +572,9 @@ describe('flattenToLine', () => {
     );
   });
 
-  it('drops fenced code entirely', () => {
+  it('keeps code content when flattening fences', () => {
     expect(
       flattenToLine('Run it:\n\n```sh\ncargo test\n```\n\nThen look.')
-    ).toBe('Run it: Then look.');
+    ).toBe('Run it: cargo test Then look.');
   });
 });

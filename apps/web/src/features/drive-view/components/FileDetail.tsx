@@ -2,98 +2,51 @@ import {
   DocumentFileSidePanelSections,
   SidePanel,
 } from '@components/app/side-panel';
-import type { BlockAlias, BlockName } from '@core/block';
 import {
   getPermissions,
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
-import {
-  ShareDialogContext,
-  ShareModal,
-} from '@core/component/TopBar/ShareButton';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { Button } from '@ui';
 import {
   createResource,
-  createSignal,
   ErrorBoundary,
   type JSX,
   Match,
   type ParentProps,
-  type Setter,
   Suspense,
   Switch,
-  useContext,
 } from 'solid-js';
 
-export type FileDetailShareProps = {
-  shareOpen?: boolean;
-  onShareOpenChange?: (open: boolean) => void;
-};
-
-export type FileDetailLayoutProps = ParentProps<
-  FileDetailShareProps & {
-    documentId: string;
-    documentMetadata: DocumentMetadata;
-    userAccessLevel: AccessLevel;
-    blockType: BlockName | BlockAlias;
-    defaultSidePanelOpen?: boolean;
-  }
->;
+export type FileDetailLayoutProps = ParentProps<{
+  documentId: string;
+  documentMetadata: DocumentMetadata;
+  userAccessLevel: AccessLevel;
+  defaultSidePanelOpen?: boolean;
+}>;
 
 export function FileDetailLayout(props: FileDetailLayoutProps) {
-  const parentShareContext = useContext(ShareDialogContext);
-  const [localShareOpen, setLocalShareOpen] = createSignal(false);
-  const shareOpen = () => props.shareOpen ?? localShareOpen();
-  const setShareOpen: Setter<boolean> = (next) => {
-    const open = typeof next === 'function' ? next(shareOpen()) : next;
-    props.onShareOpenChange?.(open);
-    if (props.shareOpen === undefined) setLocalShareOpen(() => open);
-    return open;
-  };
   const permissions = () => getPermissions(props.userAccessLevel);
   const canEdit = () => hasPermissions(permissions(), Permissions.CAN_EDIT);
-  const documentName = () => props.documentMetadata.documentName;
 
   return (
-    <ShareDialogContext.Provider
-      value={{
-        isOpen: shareOpen,
-        open: () => setShareOpen(true),
-        close: () => setShareOpen(false),
-        copyLink: parentShareContext?.copyLink,
-      }}
+    <SidePanel.Layout
+      defaultOpen={props.defaultSidePanelOpen ?? false}
+      persistKey={`file:${props.documentId}`}
+      headerToggle={false}
     >
-      <SidePanel.Layout
-        defaultOpen={props.defaultSidePanelOpen ?? false}
-        persistKey={`file:${props.documentId}`}
-        headerToggle={false}
-      >
-        <DocumentFileSidePanelSections
-          documentId={props.documentId}
-          documentName={documentName()}
-          canEdit={canEdit()}
-        />
-        <div class="relative size-full min-h-0 min-w-0 overflow-hidden">
-          {props.children}
-        </div>
-      </SidePanel.Layout>
-      <Suspense>
-        <ShareModal
-          isSharePermOpen={shareOpen()}
-          setIsSharePermOpen={setShareOpen}
-          id={props.documentId}
-          blockAlias={props.blockType}
-          itemType="document"
-          name={documentName()}
-          userPermissions={permissions()}
-          owner={props.documentMetadata.owner}
-        />
-      </Suspense>
-    </ShareDialogContext.Provider>
+      <DocumentFileSidePanelSections
+        documentId={props.documentId}
+        documentName={props.documentMetadata.documentName}
+        canEdit={canEdit()}
+      />
+      <div class="relative size-full min-h-0 min-w-0 overflow-hidden">
+        {props.children}
+      </div>
+    </SidePanel.Layout>
   );
 }
 

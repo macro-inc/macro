@@ -139,6 +139,8 @@ permission failures should display a failed tool call without a successful resul
   Its trigger, model options, and session metadata use the same readable model names
   as the new-conversation picker. The menu includes provider icons, search, a short
   **Recommended** list, and a scrollable **More models** submenu shared with Settings.
+  At phone width there is no room beside the menu, so **More models** replaces the
+  list in place and a **Recommended** row at the top goes back.
 - Chat agents' empty input cycles tips about connectors, skills, mentions, and
   agents; coding agents show **Describe what you want to build**. Type `@` for
   mentions and `/` for skills.
@@ -746,7 +748,9 @@ must stay hidden; subsequent live messages must still appear.
 - Sending is never blocked by a running turn. A prompt sent mid-turn is queued
   **server-side** and dispatches automatically when the current turn ends, one per turn.
   The queue holds at most 50 entries; past that a send is refused with an error rather
-  than queued.
+  than queued. Waiting prompts are written through to the session store as they are
+  accepted, edited, or removed, and are restored when the session resumes after a
+  harness restart — they must not disappear if the managing replica drains.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.
   Each row shows a `Queued` label (with `by {user}` when someone else queued it —
