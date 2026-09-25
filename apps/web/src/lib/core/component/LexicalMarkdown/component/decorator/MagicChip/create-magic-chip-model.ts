@@ -131,6 +131,9 @@ export function createMagicChipModel(props: MagicChipData): {
     }
   };
   const unsubscribe = live.subscribe(applyEvents);
+  // A chip scrolled out of a virtualized list mid-load releases the session,
+  // which rejects the load or the snapshot. That is not a fault.
+  let released = false;
   void live
     .load()
     .then(() => live.snapshot())
@@ -139,10 +142,12 @@ export function createMagicChipModel(props: MagicChipData): {
       setMetadata(snapshot.metadata);
     })
     .catch((error: unknown) => {
+      if (released) return;
       console.error('[magic-chip] session log could not be folded', error);
     });
 
   onCleanup(() => {
+    released = true;
     unsubscribe();
     live.release();
   });
