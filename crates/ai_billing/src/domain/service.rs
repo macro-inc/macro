@@ -461,7 +461,12 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn snapshot(&self, user: &MacroUserIdStr<'_>) -> Result<UsageSnapshot> {
         let position = self.position(user, Utc::now()).await?;
-        self.snapshot_at(user, &position).await
+        // self.snapshot_at(user, &position).await
+        let mut snapshot = self.snapshot_at(user, &position).await?;
+        // Match check_allowance while enforcement is paused. Restore the original
+        // return above when re-enabling; keep build_snapshot's billing logic intact.
+        snapshot.blocked_reason = None;
+        Ok(snapshot)
     }
 
     #[tracing::instrument(skip(self), err)]

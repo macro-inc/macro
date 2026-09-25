@@ -528,8 +528,10 @@ async fn billing_pause_allows_exhausted_allowances_caps_and_failed_payments() {
         svc.check_allowance(&payer).await.unwrap(),
         AllowanceDecision::Allow
     );
+    assert_eq!(svc.snapshot(&payer).await.unwrap().blocked_reason, None);
 
-    svc.update_overage(&payer, true, 1_000).await.unwrap();
+    let snapshot = svc.update_overage(&payer, true, 1_000).await.unwrap();
+    assert_eq!(snapshot.blocked_reason, None);
     assert_eq!(
         svc.check_allowance(&payer).await.unwrap(),
         AllowanceDecision::Allow
@@ -540,6 +542,7 @@ async fn billing_pause_allows_exhausted_allowances_caps_and_failed_payments() {
         svc.check_allowance(&payer).await.unwrap(),
         AllowanceDecision::Allow
     );
+    assert_eq!(svc.snapshot(&payer).await.unwrap().blocked_reason, None);
 }
 
 #[tokio::test]
