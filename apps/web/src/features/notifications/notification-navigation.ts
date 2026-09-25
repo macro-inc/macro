@@ -16,6 +16,7 @@ import {
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import type { EntityType, NotificationType } from '@core/types';
 import { openExternalUrl } from '@core/util/url';
 import { getNotificationById } from '@queries/notification/user-notifications';
@@ -348,11 +349,14 @@ function getSupportedHandler(
         };
       })
       .with('crm_discussion', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'crm_discussion') return null;
         const blockName =
           notification.entity_type === 'crm_contact' ? 'contact' : 'company';
         return async (lm: SplitManager, newSplit: boolean = false) =>
           openSplitIfNotOpen(lm, blockName, notification.entity_id, {
             newSplit,
+            params: { [COMMENT_LINK_PARAM]: meta.content.messageId },
             sourceHandle,
           });
       })

@@ -1027,6 +1027,13 @@ Company and contact headers have `Copy link` beside the side-panel toggle.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
 
+Company and contact pages have a **Discussion** section built from the same
+message conversation as a document's Discussion: threaded replies, reactions,
+attachments, and edit/delete from the message menu. `@` suggests the team's
+members and agents. A message's copied link is the standalone record URL
+with `comment_id`; opening it, or a CRM discussion notification, scrolls to and
+highlights that message. Deleting a thread's first comment deletes the thread.
+
 Company selection actions **Set owner** and **Set revenue** remain available
 while team deal-stage definitions are loading. **Set stage** waits for the active
 team definition rather than opening an editor with system defaults. Check both

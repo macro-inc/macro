@@ -7,59 +7,19 @@ import {
 } from '@core/comments/discussion';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
-  useParamNavigationCount,
-  useUrlParams,
-} from '@core/component/ParamsProvider';
-import {
   enableUnifiedDocumentDiscussions,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import {
-  DocumentConversation,
-  DocumentConversationComposer,
-} from '@core/messages/DocumentConversation';
-import { scrollToRenderedTarget } from '@core/messages/scroll-to-rendered-target';
+import { EntityDiscussion } from '@core/messages/EntityDiscussion';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { buildSimpleEntityUrl } from '@core/util/url';
-import type { MessageParent } from '@service-storage/messages';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { Show } from 'solid-js';
 import { createDocumentDiscussionSource } from '../comments/documentDiscussionSource';
-import { URL_PARAMS } from '../constants';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 function MobileDiscussionComposer(props: { hidden: boolean }) {
   // Preserve the editor and draft while its placement is hidden.
   const input = <DiscussionComposer collapsible blurOnSend />;
-
-  return (
-    <FloatRegion region="accessory">
-      <Show when={!props.hidden}>
-        <ChannelInputContainer>{input}</ChannelInputContainer>
-      </Show>
-    </FloatRegion>
-  );
-}
-
-function MobileMessageComposer(props: {
-  parent: MessageParent;
-  hidden: boolean;
-}) {
-  // Preserve the editor and draft while its placement is hidden.
-  const input = (
-    <DocumentConversationComposer
-      parent={props.parent}
-      collapsible
-      blurOnSend
-    />
-  );
 
   return (
     <FloatRegion region="accessory">
@@ -84,73 +44,15 @@ export function MessageDocumentDiscussion(props: {
   const id = documentId();
   const documentKind = kind();
   const blockName = documentKind === 'document' ? 'md' : documentKind;
-  const params = useUrlParams(URL_PARAMS);
-  const parent: MessageParent = { type: 'document', id };
-  const floating = () =>
-    props.floatingComposerOnTouch === true && isTouchDevice();
-  let container: HTMLDivElement | undefined;
-  // Scroll to the linked message once per navigation of `comment_id`, as the
-  // margin does for anchored comments. A repeat navigation to the same message
-  // still scrolls; the URL value showing through after a navigation cleared it
-  // does not.
-  const commentNavigationCount = useParamNavigationCount(URL_PARAMS.commentId);
-  const scrollRequest = createMemo(
-    () => {
-      const commentId = params.commentId();
-      if (!commentId) return undefined;
-      const count = commentNavigationCount();
-      return {
-        commentId,
-        key: count === 0 ? `url:${commentId}` : `navigation:${count}`,
-      };
-    },
-    undefined,
-    { equals: (a, b) => a?.key === b?.key }
-  );
-  // Clicking the linked message releases its highlight until the next
-  // navigation to a comment.
-  const [clearedKey, setClearedKey] = createSignal<string>();
-  const targetCleared = () => {
-    const key = scrollRequest()?.key;
-    return key !== undefined && key === clearedKey();
-  };
-  let scrolledKey: string | undefined;
-  createEffect(
-    on(scrollRequest, (request) => {
-      if (!request || !container || request.key === scrolledKey) return;
-      scrolledKey = request.key;
-      onCleanup(scrollToRenderedTarget(container, request.commentId));
-    })
-  );
   return (
-    <>
-      <div ref={container} class="contents">
-        <DocumentConversation
-          parent={parent}
-          canWrite={permissions.canComment()}
-          targetId={params.commentId()}
-          targetCleared={targetCleared()}
-          onClearTarget={() => setClearedKey(scrollRequest()?.key)}
-          label={props.label}
-          buildLink={(message) =>
-            buildSimpleEntityUrl(
-              { type: blockName, id },
-              { [URL_PARAMS.commentId]: message.id }
-            )
-          }
-          hideComposer={floating()}
-          hideWhenEmpty={floating()}
-        />
-      </div>
-      <Show when={floating() && permissions.canComment()}>
-        <StaticMarkdownContext>
-          <MobileMessageComposer
-            parent={parent}
-            hidden={props.editorHasFocus === true && virtualKeyboardVisible()}
-          />
-        </StaticMarkdownContext>
-      </Show>
-    </>
+    <EntityDiscussion
+      parent={{ type: 'document', id }}
+      canWrite={permissions.canComment()}
+      link={{ type: blockName, id }}
+      label={props.label}
+      floatingComposerOnTouch={props.floatingComposerOnTouch}
+      editorHasFocus={props.editorHasFocus}
+    />
   );
 }
 

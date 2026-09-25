@@ -89,6 +89,8 @@ export function applyMessage(
           created_at: message.created_at,
           updated_at: message.created_at,
           resolved: false,
+          // Only document roots can be anchored; theirs load with the thread.
+          ...(parent.type !== 'document' && { anchor: null }),
         },
         thread: { reply_count: 0, preview: [], latest_reply_at: null },
       };

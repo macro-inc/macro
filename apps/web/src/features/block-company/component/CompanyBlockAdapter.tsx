@@ -3,6 +3,12 @@ import { CrmCopyLinkButton } from '@companies/components/CrmCopyLinkButton';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { useBlockId } from '@core/block';
+import {
+  createParamsState,
+  ParamsProvider,
+} from '@core/component/ParamsProvider';
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockHandleSignal } from '@core/signal/load';
 
 /**
  * Legacy adapter: bridges the block/split-layout system to the standalone
@@ -11,6 +17,10 @@ import { useBlockId } from '@core/block';
  */
 export function CompanyBlockAdapter() {
   const companyId = useBlockId();
+  const params = createParamsState();
+  createMethodRegistration(blockHandleSignal.get, {
+    goToLocationFromParams: params.navigate,
+  });
   return (
     <>
       <SplitHeaderRight>
@@ -18,7 +28,9 @@ export function CompanyBlockAdapter() {
           <CrmCopyLinkButton type="company" id={companyId} />
         </HeaderIsland>
       </SplitHeaderRight>
-      <Company companyId={companyId} />
+      <ParamsProvider state={params}>
+        <Company companyId={companyId} />
+      </ParamsProvider>
     </>
   );
 }

@@ -76,7 +76,7 @@ afterEach(() => {
   testQueryClient.clear();
   clearTypingIndicators();
 });
-describe.each(['channel', 'document'] as const)(
+describe.each(['channel', 'document', 'crm_company'] as const)(
   '%s uses the shared live cache',
   (type) => {
     const parent: MessageParent = { type, id: 'source' };
@@ -380,6 +380,7 @@ describe.each(['channel', 'document'] as const)(
         } else {
           expect(mocks.thread).not.toHaveBeenCalled();
           expect(newestRoot().id).toBe('newer-root');
+          expect(newestRoot().state.anchor).toBeNull();
         }
         // Only the soft invalidation that leaves mounted timelines alone may run.
         for (const [filters] of invalidate.mock.calls) {
