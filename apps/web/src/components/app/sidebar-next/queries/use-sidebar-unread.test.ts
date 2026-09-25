@@ -1,5 +1,6 @@
 import type { EmailEntity } from '@entity/types/entity';
 import type { UnifiedNotification } from '@notifications/types';
+import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { NotificationState } from '@service-storage/graphql/generated/graphql';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   withLocalState: vi.fn(),
   hasUnreadEntity: vi.fn(),
   transformEntities: vi.fn(),
+  userId: vi.fn(() => 'user' as string | undefined),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -38,6 +40,7 @@ vi.mock('@components/app/GlobalAppState', () => ({
     withLocalState: mocks.withLocalState,
   }),
 }));
+vi.mock('@core/context/user', () => ({ useUserId: () => mocks.userId }));
 // Query builders import the soup barrel, which otherwise opens real sockets.
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
@@ -58,7 +61,31 @@ const unreadEmail: EmailEntity = {
   isRead: false,
   isDraft: false,
   isImportant: true,
+  isSignal: true,
   done: false,
+};
+
+const unreadThreadItem: SoupApiItem = {
+  tag: 'emailThread',
+  frecency_score: 0,
+  is_favorited: false,
+  data: {
+    id: 'email',
+    name: 'Important email',
+    ownerId: 'user',
+    createdAt: '2026-09-24T12:00:00Z',
+    updatedAt: '2026-09-24T12:00:00Z',
+    sortTs: '2026-09-24T12:00:00Z',
+    inboxVisible: true,
+    isDraft: false,
+    isImportant: true,
+    isRead: false,
+    isSignal: true,
+    properties: [],
+    attachments: [],
+    labels: [],
+    participants: [],
+  },
 };
 
 const message: UnifiedNotification = {
@@ -173,6 +200,36 @@ describe('sidebar unread presence', () => {
     setEmails([{ ...unreadEmail, done: true }]);
     expect(unread('inbox')).toBe(false);
     expect(unread('mail')).toBe(false);
+  });
+
+  it('keeps the mail dot on the membership the unread query asks for', () => {
+    const { unread, setLoading, setEmails } = setup();
+    setLoading(false);
+    setEmails([{ ...unreadEmail, ownerId: 'colleague' }]);
+    expect(unread('mail')).toBe(false);
+    setEmails([{ ...unreadEmail, isSignal: false }]);
+    expect(unread('mail')).toBe(false);
+    setEmails([{ ...unreadEmail, isSignal: undefined }]);
+    expect(unread('mail')).toBe(true);
+  });
+
+  it('gates cache inserts into the unread page on the same membership', () => {
+    setup();
+    const insertFilter = mocks.email.mock.calls[0][1]().meta.insertFilter;
+    expect(insertFilter(unreadThreadItem)).toBe(true);
+    for (const overrides of [
+      { isRead: true },
+      { inboxVisible: false },
+      { isSignal: false },
+      { ownerId: 'colleague' },
+    ]) {
+      expect(
+        insertFilter({
+          ...unreadThreadItem,
+          data: { ...unreadThreadItem.data, ...overrides },
+        })
+      ).toBe(false);
+    }
   });
 
   it('uses bounded GraphQL witnesses without reading the full feed', () => {

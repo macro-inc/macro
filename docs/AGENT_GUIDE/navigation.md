@@ -205,6 +205,9 @@ Noise does not light either dot. These are presence indicators, not counts; they
 do not fetch additional pages to find every unread item. Opening a view alone does
 not clear its dot — reading or completing the represented items does. The button's
 accessible description is `Unread items` while its dot is active.
+The Email dot counts only threads the Signal tab itself lists: the viewer's own,
+still in the inbox, still unread. A thread shared with the viewer lives in Shared
+and never lights it.
 The Home dot stops checking rows at the first eligible unread item, using the
 same Signal membership, channel/thread scoping, and local read/done overrides as
 the list. Check that reading that item keeps the dot lit if another loaded row

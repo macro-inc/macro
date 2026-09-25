@@ -1,5 +1,8 @@
 import { buildEmailQuery } from '@app/features/email-view/queries/email-query';
-import { soupItemMatchesInboxTab } from '@app/features/inbox-view/queries/inbox-item-filter';
+import {
+  emailEntityIsUnreadSignal,
+  soupItemIsUnreadSignal,
+} from '@app/features/email-view/queries/unread-presence';
 import { useInboxEntitiesQuery } from '@app/features/inbox-view/queries/use-inbox-query';
 import {
   compileToAst,
@@ -10,6 +13,7 @@ import { EMPTY_TAG_FACET_CONTEXT } from '@app/features/soup/filters/facets/tag-f
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 import { notificationIsRead } from '@entity/utils/notification';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
@@ -20,6 +24,7 @@ import { createMemo } from 'solid-js';
 /** Presence in the loaded unread page, never a total or a pagination loop. */
 export function useSidebarUnread() {
   const notificationSource = useGlobalNotificationSource();
+  const userId = useUserId();
   const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
   const channels = createChannelUnreadQuery(
     makeGraphqlSoupInput({
@@ -49,7 +54,7 @@ export function useSidebarUnread() {
         facetContext: EMPTY_TAG_FACET_CONTEXT,
       }),
     () => ({
-      meta: { insertFilter: (item) => soupItemMatchesInboxTab(item, 'signal') },
+      meta: { insertFilter: (item) => soupItemIsUnreadSignal(item, userId()) },
     })
   );
 
@@ -61,8 +66,9 @@ export function useSidebarUnread() {
   });
   const emailUnread = createMemo(() => {
     if (email.isLoading) return false;
-    return (email.data?.entities ?? []).some(
-      (entity) => entity.type === 'email' && !entity.isRead && !entity.done
+    const viewerId = userId();
+    return (email.data?.entities ?? []).some((entity) =>
+      emailEntityIsUnreadSignal(entity, viewerId)
     );
   });
   const channelsUnread = createMemo(() => {
