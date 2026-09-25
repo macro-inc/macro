@@ -44,6 +44,7 @@ use uuid::Uuid;
 use super::*;
 
 mod email_archive;
+mod entity_property_options;
 mod soup_patches;
 
 const VALID_USER_ID: &str = "macro|user@example.com";

@@ -66,7 +66,13 @@ type CompleteMutationRoot {
 	"""
 	Add and remove options across one entity's multi-select properties.
 	"""
-	updateEntityPropertyOptions(input: UpdateEntityPropertyOptionsInput!): [GraphqlProperty!]!
+	updateEntityPropertyOptions(input: UpdateEntityPropertyOptionsInput!): [GraphqlProperty!]! @deprecated(reason: "Use applyEntityPropertyOptionDeltas, which also refreshes the entity's Soup record.")
+	"""
+	Add and remove options across one entity's multi-select properties,
+	returning the entity's refreshed Soup record alongside the touched
+	properties so a newly created assignment reaches every cached list.
+	"""
+	applyEntityPropertyOptionDeltas(input: UpdateEntityPropertyOptionsInput!): EntityPropertyOptionsPayload!
 	"""
 	Rename heterogeneous entities in one request.
 	"""
@@ -255,6 +261,22 @@ input EntityPropertyOptionDeltaInput {
 	Options to strip from the currently stored value.
 	"""
 	removeOptionIds: [ID!]!
+}
+
+"""
+Committed option selection plus the entity's refreshed Soup record.
+"""
+type EntityPropertyOptionsPayload {
+	"""
+	Each touched property as committed.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Normalized-cache effects: the entity's refreshed Soup record, whose
+	`properties` carries every assignment including newly created ones.
+	Empty when the entity has no visible Soup representation.
+	"""
+	effects: [SoupPatch!]!
 }
 
 """
@@ -6559,6 +6581,10 @@ input UpdateNotificationsInput {
 	operation: NotificationUpdateOperation!
 }
 
+"""
+Marks an element of a GraphQL schema as no longer supported.
+"""
+directive @deprecated(reason: String = "No longer supported") on FIELD_DEFINITION | ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION | ENUM_VALUE
 """
 Directs the executor to include this field or fragment only when the `if` argument is true.
 """

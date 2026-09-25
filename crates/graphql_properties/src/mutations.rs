@@ -1,8 +1,10 @@
 use async_graphql::{Context, ID, Object};
 use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
-use graphql_common::{GraphqlPropertyEntityType, parse_id};
+use graphql_common::{GraphqlPropertyEntityType, parse_id, require_authenticated_user};
+use graphql_soup::{SoupEntityEdges, SoupItemDataLoader, SoupPatch};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::shared::EntityReference;
@@ -14,13 +16,18 @@ use uuid::Uuid;
 use crate::objects::GraphqlProperty;
 
 /// Mutation root for entity property writes.
-#[derive(Default)]
-pub struct PropertiesMutationRoot<T>(PhantomData<T>);
+pub struct PropertiesMutationRoot<T, E>(PhantomData<fn() -> (T, E)>);
 
-impl<T> PropertiesMutationRoot<T> {
+impl<T, E> PropertiesMutationRoot<T, E> {
     /// Create a mutation root for the configured property writer.
     pub fn new() -> Self {
         Self(PhantomData)
+    }
+}
+
+impl<T, E> Default for PropertiesMutationRoot<T, E> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -378,11 +385,49 @@ impl GraphqlSetPropertyValue {
     }
 }
 
+/// Committed option selection plus the entity's refreshed Soup record.
+pub struct EntityPropertyOptionsPayload<E> {
+    /// Each touched property as committed.
+    properties: Vec<EntityPropertyWithDefinition>,
+    /// The entity whose properties changed.
+    entity: Entity<'static>,
+    /// Associates the payload with the composed Soup edge object.
+    edges: PhantomData<fn() -> E>,
+}
+
+/// Committed option selection plus the entity's refreshed Soup record.
+#[Object]
+impl<E: SoupEntityEdges> EntityPropertyOptionsPayload<E> {
+    /// Each touched property as committed.
+    async fn properties(&self) -> Vec<GraphqlProperty> {
+        self.properties
+            .iter()
+            .cloned()
+            .map(GraphqlProperty::new)
+            .collect()
+    }
+
+    /// Normalized-cache effects: the entity's refreshed Soup record, whose
+    /// `properties` carries every assignment including newly created ones.
+    /// Empty when the entity has no visible Soup representation.
+    async fn effects(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<SoupPatch<E>>> {
+        let user_id = require_authenticated_user(ctx)?;
+        let loader = ctx.data_opt::<SoupItemDataLoader>();
+        Ok(
+            SoupPatch::hydrate_updated(user_id, self.entity.clone(), loader)
+                .await?
+                .into_iter()
+                .collect(),
+        )
+    }
+}
+
 /// Mutations for assigning and updating entity properties.
 #[Object]
-impl<T> PropertiesMutationRoot<T>
+impl<T, E> PropertiesMutationRoot<T, E>
 where
     T: EntityPropertyWriter,
+    E: SoupEntityEdges,
 {
     /// Set or attach one property on an entity.
     async fn set_entity_property(
@@ -412,36 +457,65 @@ where
     }
 
     /// Add and remove options across one entity's multi-select properties.
+    #[graphql(
+        deprecation = "Use applyEntityPropertyOptionDeltas, which also refreshes the entity's Soup record."
+    )]
     async fn update_entity_property_options(
         &self,
         ctx: &Context<'_>,
         input: UpdateEntityPropertyOptionsInput,
     ) -> async_graphql::Result<Vec<GraphqlProperty>> {
-        let writer = ctx.data::<T>()?;
-        let updates = input
-            .properties
-            .into_iter()
-            .map(EntityPropertyOptionDeltaInput::try_into_model)
-            .collect::<async_graphql::Result<Vec<_>>>()?;
-
-        let properties = writer
-            .update_entity_property_options(
-                input.entity_type.into_model(),
-                input.entity_id,
-                updates,
-            )
-            .await
-            .map_err(|err| async_graphql::Error::new(err.to_string()))?;
-
+        let (_, properties) = apply_option_deltas::<T>(ctx, input).await?;
         Ok(properties.into_iter().map(GraphqlProperty::new).collect())
     }
+
+    /// Add and remove options across one entity's multi-select properties,
+    /// returning the entity's refreshed Soup record alongside the touched
+    /// properties so a newly created assignment reaches every cached list.
+    async fn apply_entity_property_option_deltas(
+        &self,
+        ctx: &Context<'_>,
+        input: UpdateEntityPropertyOptionsInput,
+    ) -> async_graphql::Result<EntityPropertyOptionsPayload<E>> {
+        let (entity, properties) = apply_option_deltas::<T>(ctx, input).await?;
+        Ok(EntityPropertyOptionsPayload {
+            properties,
+            entity,
+            edges: PhantomData,
+        })
+    }
+}
+
+/// Applies one options update through the configured writer, returning the
+/// targeted entity and each touched property as committed.
+async fn apply_option_deltas<T: EntityPropertyWriter>(
+    ctx: &Context<'_>,
+    input: UpdateEntityPropertyOptionsInput,
+) -> async_graphql::Result<(Entity<'static>, Vec<EntityPropertyWithDefinition>)> {
+    let writer = ctx.data::<T>()?;
+    let updates = input
+        .properties
+        .into_iter()
+        .map(EntityPropertyOptionDeltaInput::try_into_model)
+        .collect::<async_graphql::Result<Vec<_>>>()?;
+    let entity = input
+        .entity_type
+        .into_model()
+        .with_entity_string(input.entity_id);
+
+    let properties = writer
+        .update_entity_property_options(entity.entity_type, entity.entity_id.to_string(), updates)
+        .await
+        .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+
+    Ok((entity, properties))
 }
 
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use async_graphql::{EmptySubscription, Object, Schema};
+    use async_graphql::{EmptySubscription, Object, Schema, SimpleObject};
 
     use super::*;
 
@@ -452,6 +526,88 @@ mod tests {
     impl QueryRoot {
         async fn health(&self) -> bool {
             true
+        }
+    }
+
+    /// Minimal composed edge object needed by the options payload.
+    #[derive(Clone, SimpleObject)]
+    struct TestSoupEdges {
+        available: bool,
+    }
+
+    /// Minimal email edge object needed by the Soup edge trait.
+    #[derive(Clone, SimpleObject)]
+    struct TestEmailEdges {
+        available: bool,
+    }
+
+    /// Minimal agent-session edge object needed by the Soup edge trait.
+    #[derive(Clone, SimpleObject)]
+    struct TestAgentSessionEdges {
+        available: bool,
+    }
+
+    impl SoupEntityEdges for TestSoupEdges {
+        type Property = String;
+        type Notification = String;
+        type NotificationFilter = String;
+        type ActivityEvent = String;
+        type EmailThreadEdges = TestEmailEdges;
+        type AgentSessionEdges = TestAgentSessionEdges;
+
+        fn from_entity(_entity: Entity<'static>) -> Self {
+            Self { available: true }
+        }
+
+        fn email_thread_edges(_email_thread_id: Uuid) -> Self::EmailThreadEdges {
+            TestEmailEdges { available: true }
+        }
+
+        async fn resolve_email_cache_projection(
+            &self,
+            _ctx: &Context<'_>,
+            _email_thread_id: Uuid,
+        ) -> async_graphql::Result<Option<String>> {
+            Ok(None)
+        }
+
+        fn agent_session_edges(_bot_id: Uuid) -> Self::AgentSessionEdges {
+            TestAgentSessionEdges { available: true }
+        }
+
+        async fn resolve_properties(
+            &self,
+            _ctx: &Context<'_>,
+        ) -> async_graphql::Result<Vec<Self::Property>> {
+            Ok(Vec::new())
+        }
+
+        async fn resolve_notifications(
+            &self,
+            _ctx: &Context<'_>,
+            _filter: Option<String>,
+            _limit: Option<i32>,
+        ) -> async_graphql::Result<Vec<Self::Notification>> {
+            Ok(Vec::new())
+        }
+
+        async fn resolve_is_favorited(&self, _ctx: &Context<'_>) -> async_graphql::Result<bool> {
+            Ok(false)
+        }
+
+        async fn resolve_viewer_permission(
+            &self,
+            _ctx: &Context<'_>,
+        ) -> async_graphql::Result<Option<graphql_permission::GraphqlEntityPermission>> {
+            Ok(None)
+        }
+
+        async fn resolve_activity(
+            &self,
+            _ctx: &Context<'_>,
+            _limit: Option<i32>,
+        ) -> async_graphql::Result<Vec<Self::ActivityEvent>> {
+            Ok(Vec::new())
         }
     }
 
@@ -553,7 +709,7 @@ mod tests {
         let writer_data = writer.clone();
         let schema = Schema::build(
             QueryRoot,
-            PropertiesMutationRoot::<CapturingWriter>::new(),
+            PropertiesMutationRoot::<CapturingWriter, TestSoupEdges>::new(),
             EmptySubscription,
         )
         .data(writer_data)
@@ -674,7 +830,7 @@ mod tests {
         let writer_data = writer.clone();
         let schema = Schema::build(
             QueryRoot,
-            PropertiesMutationRoot::<CapturingWriter>::new(),
+            PropertiesMutationRoot::<CapturingWriter, TestSoupEdges>::new(),
             EmptySubscription,
         )
         .data(writer_data)
@@ -738,6 +894,84 @@ mod tests {
                     vec![added_option_id],
                     vec![removed_option_id],
                 )],
+            ))
+        );
+    }
+
+    #[tokio::test]
+    async fn apply_entity_property_option_deltas_forwards_deltas_and_returns_properties() {
+        // This isolated schema has no Soup loader. Hydrated `effects` are
+        // covered by complete_graph's composed-schema tests.
+        let property_assignment_id = Uuid::from_u128(17);
+        let property_definition_id = Uuid::from_u128(14);
+        let added_option_id = Uuid::from_u128(15);
+        let writer = CapturingWriter {
+            write: Arc::default(),
+            options_write: Arc::default(),
+            property: tag_property(
+                property_assignment_id,
+                property_definition_id,
+                vec![added_option_id],
+            ),
+        };
+        let schema = Schema::build(
+            QueryRoot,
+            PropertiesMutationRoot::<CapturingWriter, TestSoupEdges>::new(),
+            EmptySubscription,
+        )
+        .data(writer.clone())
+        .finish();
+        let response = schema
+            .execute(format!(
+                r#"
+                mutation {{
+                    applyEntityPropertyOptionDeltas(input: {{
+                        entityType: THREAD,
+                        entityId: "doc-1",
+                        properties: [{{
+                            propertyDefinitionId: "{property_definition_id}",
+                            addOptionIds: ["{added_option_id}"],
+                            removeOptionIds: []
+                        }}]
+                    }}) {{
+                        properties {{
+                            id
+                            value {{
+                                ... on GraphqlSelectOptionPropertyValue {{
+                                    optionIds
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+                "#
+            ))
+            .await;
+
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(
+            response.data,
+            async_graphql::value!({
+                "applyEntityPropertyOptionDeltas": {
+                    "properties": [{
+                        "id": property_assignment_id.to_string(),
+                        "value": {
+                            "optionIds": [added_option_id.to_string()],
+                        },
+                    }],
+                }
+            })
+        );
+        assert_eq!(
+            writer
+                .options_write
+                .lock()
+                .expect("capture mutex poisoned")
+                .clone(),
+            Some((
+                model_entity::EntityType::EmailThread,
+                "doc-1".to_string(),
+                vec![(property_definition_id, vec![added_option_id], vec![])],
             ))
         );
     }

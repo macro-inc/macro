@@ -96,6 +96,40 @@ mutation UpdateNotifications($input: UpdateNotificationsInput!) {
 }
 "#;
 
+const APPLY_PROPERTY_OPTIONS_MUTATION: &str = r#"
+mutation ApplyEntityPropertyOptionDeltas($input: UpdateEntityPropertyOptionsInput!) {
+  applyEntityPropertyOptionDeltas(input: $input) {
+    properties { __typename id propertyDefinitionId }
+    effects {
+      __typename
+      ... on SoupUpdated {
+        item {
+          __typename
+          id
+          properties { __typename id propertyDefinitionId }
+        }
+      }
+    }
+  }
+}
+"#;
+
+const PROPERTIES_QUERY: &str = r#"
+query SoupProperties($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        properties { __typename id propertyDefinitionId }
+      }
+      nextCursor
+    }
+  }
+}
+"#;
+
 fn vars(limit: u64) -> serde_json::Map<String, Json> {
     let Json::Object(map) = json!({ "input": { "limit": limit } }) else {
         unreachable!()
@@ -594,6 +628,109 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
         let notification = &data["user"]["soup"]["items"][0]["notifications"][0];
         assert_eq!(notification["state"], json!("SEEN"));
         assert_eq!(notification["viewedAt"], json!("2025-01-01T00:00:02Z"));
+    });
+}
+
+#[test]
+fn committed_entity_effect_links_a_new_property_into_every_cached_page() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let property = |id: &str, definition: &str| {
+            json!({
+                "__typename": "GraphqlProperty",
+                "id": id,
+                "propertyDefinitionId": definition
+            })
+        };
+        let soup_page = |properties: Vec<Json>| {
+            json!({
+                "user": {
+                    "id": "user-1",
+                    "soup": {
+                        "items": [{
+                            "__typename": "GraphqlSoupDocument",
+                            "id": "doc-1",
+                            "properties": properties
+                        }],
+                        "nextCursor": null
+                    }
+                }
+            })
+        };
+        // Two distinct cached variants reference the same entity record.
+        for (op, limit) in [(1, 10), (2, 20)] {
+            engine
+                .write_query(
+                    Some(op),
+                    PROPERTIES_QUERY,
+                    Some("SoupProperties"),
+                    &vars(limit),
+                    &soup_page(vec![property("assignment-1", "status-def")]),
+                    None,
+                )
+                .await
+                .unwrap();
+        }
+
+        let Json::Object(mutation_variables) = json!({
+            "input": {
+                "entityType": "DOCUMENT",
+                "entityId": "doc-1",
+                "properties": [{
+                    "propertyDefinitionId": "tag-def",
+                    "addOptionIds": ["spotlight"],
+                    "removeOptionIds": []
+                }]
+            }
+        }) else {
+            unreachable!()
+        };
+        engine
+            .write_query(
+                Some(3),
+                APPLY_PROPERTY_OPTIONS_MUTATION,
+                Some("ApplyEntityPropertyOptionDeltas"),
+                &mutation_variables,
+                &json!({
+                    "applyEntityPropertyOptionDeltas": {
+                        "properties": [property("assignment-2", "tag-def")],
+                        "effects": [{
+                            "__typename": "SoupUpdated",
+                            "item": {
+                                "__typename": "GraphqlSoupDocument",
+                                "id": "doc-1",
+                                "properties": [
+                                    property("assignment-1", "status-def"),
+                                    property("assignment-2", "tag-def")
+                                ]
+                            }
+                        }]
+                    }
+                }),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let expected = soup_page(vec![
+            property("assignment-1", "status-def"),
+            property("assignment-2", "tag-def"),
+        ]);
+        for (op, limit) in [(1, 10), (2, 20)] {
+            let ReadResult::Hit { data } = engine
+                .read_query(
+                    Some(op),
+                    PROPERTIES_QUERY,
+                    Some("SoupProperties"),
+                    &vars(limit),
+                )
+                .await
+                .unwrap()
+            else {
+                panic!("expected cached page {limit} after the options mutation");
+            };
+            assert_eq!(data, expected);
+        }
     });
 }
 

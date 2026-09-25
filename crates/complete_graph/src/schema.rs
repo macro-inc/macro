@@ -75,7 +75,7 @@ pub struct CompleteMutationRoot<
     A: ChannelActivityAuthorizer,
     ES: EmailService,
 >(
-    PropertiesMutationRoot<W>,
+    PropertiesMutationRoot<W, E>,
     EntityMutationRoot<M, E>,
     FavoriteMutationRoot<F, E>,
     ChannelMutationRoot<C, A>,
@@ -97,7 +97,7 @@ impl<
     /// Construct the composed mutation root.
     fn new() -> Self {
         Self(
-            PropertiesMutationRoot::<W>::new(),
+            PropertiesMutationRoot::<W, E>::new(),
             EntityMutationRoot::<M, E>::new(),
             FavoriteMutationRoot::<F, E>::new(),
             ChannelMutationRoot::<C, A>::new(),

@@ -7774,6 +7774,8 @@ dependencies = [
  "chrono",
  "entity_access",
  "graphql_common",
+ "graphql_permission",
+ "graphql_soup",
  "macro_user_id",
  "model-entity",
  "models_properties",
