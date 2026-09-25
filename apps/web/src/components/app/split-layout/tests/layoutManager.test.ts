@@ -7,13 +7,17 @@ import {
   emailSplitRoute,
   emailThreadRoute,
 } from '@app/features/email-view/route';
+import { reviewsSplitRoute } from '@app/features/reviews-view/route';
 import {
   getListNavigationSource,
   listNavigationSourceId,
   registerListNavigationSource,
   withListNavigationSource,
 } from '@app/features/soup/collection/list-navigation-source';
-import { taskDetailRoute } from '@app/features/tasks-view/route';
+import {
+  taskDetailRoute,
+  tasksSplitRoute,
+} from '@app/features/tasks-view/route';
 import { createMemorySplitRouterLocation } from '@app/lib/split-router/integrations/memory';
 import { createSplitRouter } from '@app/lib/split-router/router';
 import { createRoutesManifest } from '@app/lib/split-router/routes';
@@ -896,6 +900,31 @@ describe('layoutManager', () => {
         'view-reviews'
       );
       expect(location.read().pathname).toBe('/reviews');
+      router.dispose();
+      dispose();
+    });
+    it('navigates from Tasks to Reviews and back in the same pane', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/tasks');
+      await router.settled();
+      const splitId = manager.splits()[0].id;
+
+      router.navigate(splitId, { route: reviewsSplitRoute, params: {} });
+      await router.settled();
+      expect(manager.splits()[0].id).toBe(splitId);
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'reviews',
+      });
+      expect(location.read().pathname).toBe('/reviews');
+
+      router.navigate(splitId, { route: tasksSplitRoute, params: {} });
+      await router.settled();
+      expect(manager.splits()[0].id).toBe(splitId);
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'tasks',
+      });
+      expect(location.read().pathname).toBe('/tasks');
       router.dispose();
       dispose();
     });
