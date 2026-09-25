@@ -1,8 +1,8 @@
+import { isModelPickerOption } from '@core/component/AI/constant/model';
 import {
   type AgentModelTarget,
   useAgentModelsQueries,
 } from '@queries/agents/models';
-import { isModelPickerOption } from '@core/component/AI/constant/model';
 import { ModelHarnessDto } from '@service-agent-harness/generated/schemas/modelHarnessDto';
 import type { Accessor } from 'solid-js';
 import type { RosterAgent } from '../core/roster';
