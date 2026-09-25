@@ -2,6 +2,8 @@ import {
   optimisticContextOf,
   withOptimisticMutationDisposition,
 } from '@graphql-cache/exchange/optimistic';
+import type { CacheHost } from '@graphql-cache/host/types';
+import { parseCacheRevision } from '@graphql-cache/protocol';
 import type { Client, Operation } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerGraphqlSoupRevalidations } from '../../queries/soup/graphql/active-queries';
@@ -85,7 +87,80 @@ const newNotification: GraphqlNotificationPatch = {
   },
 };
 
+function setupCached() {
+  const { query } = setup();
+  const writeResult = {
+    revision: parseCacheRevision('1'),
+    revisionAdvanced: true,
+    changed: [],
+    affectedOps: [],
+    reset: false,
+  };
+  const host = {
+    writeQuery: vi.fn<CacheHost['writeQuery']>().mockResolvedValue(writeResult),
+    readQuery: vi
+      .fn<CacheHost['readQuery']>()
+      .mockResolvedValue({ kind: 'miss' }),
+    onCacheGenerationChanged: vi.fn<CacheHost['onCacheGenerationChanged']>(
+      () => () => {}
+    ),
+  };
+  const handler = createChannelListUpdatesHandler(
+    { query } as unknown as Client,
+    host as unknown as CacheHost
+  );
+  cleanup.push(handler.dispose);
+  return { handler, query, host, writeResult };
+}
+
 describe('channel unread edge revalidation', () => {
+  it('writes delivered unread evidence locally before starting background reconciliation', async () => {
+    const { handler, query, host } = setupCached();
+    await handler.onPatch(newNotification);
+    expect(host.writeQuery).toHaveBeenCalledOnce();
+    expect(query).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(299);
+    expect(query).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('falls back immediately if a local cache write fails', async () => {
+    const { handler, query, host } = setupCached();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    host.writeQuery.mockRejectedValue(new Error('cache unavailable'));
+    await handler.onPatch(newNotification);
+    expect(query).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it('serializes deliveries and drops queued patches after cache replacement', async () => {
+    const { handler, host, writeResult } = setupCached();
+    let finish: (() => void) | undefined;
+    host.writeQuery.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(writeResult);
+        })
+    );
+    const first = handler.onPatch(newNotification);
+    const second = handler.onPatch(newNotification);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(host.writeQuery).toHaveBeenCalledOnce();
+    host.onCacheGenerationChanged.mock.calls[0][0]({ storage: 'reset' });
+    finish?.();
+    await Promise.all([first, second]);
+    expect(host.writeQuery).toHaveBeenCalledOnce();
+  });
+
+  it('does not start cache or network work after disposal', async () => {
+    const { handler, host, query } = setupCached();
+    handler.dispose();
+    await handler.onPatch(newNotification);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(host.writeQuery).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
   it('refreshes channel dots and the Chat badge immediately on a new notification', async () => {
     const { handler, query } = setup();
     cleanup.push(

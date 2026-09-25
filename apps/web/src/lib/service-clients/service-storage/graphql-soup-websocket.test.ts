@@ -100,7 +100,11 @@ describe('GraphQL Soup subscription lifecycle', () => {
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
     const listener = vi.fn();
     const unregister = subscribeToGraphqlNotificationPatches(listener);
-    for (const host of [{ disabled: false }, { disabled: true }, undefined]) {
+    for (const host of [
+      { disabled: false, onCacheGenerationChanged: () => () => {} },
+      { disabled: true },
+      undefined,
+    ]) {
       client.subscription.mockClear();
       lifecycle.replace(client as never, host as never);
       const documents = client.subscription.mock.calls.map(
@@ -140,7 +144,13 @@ describe('GraphQL Soup subscription lifecycle', () => {
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle({
       suspendOnPagehide: true,
     });
-    lifecycle.replace(client as never, { disabled: false } as never);
+    lifecycle.replace(
+      client as never,
+      {
+        disabled: false,
+        onCacheGenerationChanged: () => () => {},
+      } as never
+    );
     expect(client.subscription).toHaveBeenCalledTimes(3);
     for (let cycle = 0; cycle < 2; cycle += 1) {
       dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
@@ -188,7 +198,13 @@ describe('GraphQL Soup subscription lifecycle', () => {
       })),
     };
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
-    lifecycle.replace(client as never, { disabled: false } as never);
+    lifecycle.replace(
+      client as never,
+      {
+        disabled: false,
+        onCacheGenerationChanged: () => () => {},
+      } as never
+    );
 
     receive[0]?.({ error: new Error('retry budget exhausted') });
     receive[1]?.({ error: new Error('duplicate terminal result') });
