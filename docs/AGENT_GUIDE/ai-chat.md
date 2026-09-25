@@ -137,6 +137,8 @@ permission failures should display a failed tool call without a successful resul
   Its trigger, model options, and session metadata use the same readable model names
   as the new-conversation picker. The menu includes provider icons, search, a short
   **Recommended** list, and a scrollable **More models** submenu shared with Settings.
+  At phone width there is no room beside the menu, so **More models** replaces the
+  list in place and a **Recommended** row at the top goes back.
 - Chat agents' empty input cycles tips about connectors, skills, mentions, and
   agents; coding agents show **Describe what you want to build**. Type `@` for
   mentions and `/` for skills.
