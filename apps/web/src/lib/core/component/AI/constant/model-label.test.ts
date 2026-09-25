@@ -13,6 +13,8 @@ describe('modelLabel', () => {
       'DeepSeek V4 Pro'
     );
     expect(modelLabel('fireworks/muse-glimmer-30b')).toBe('Muse Glimmer');
+    expect(modelLabel('google/gemini-3.8-flash')).toBe('Gemini 3.8 Flash');
+    expect(modelLabel('gemini-3.8-flash')).toBe('Gemini 3.8 Flash');
   });
 
   it('reads an unknown slug as a name rather than showing it raw', () => {

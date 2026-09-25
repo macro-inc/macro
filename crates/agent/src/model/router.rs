@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 use ai_toolset::RequestContext;
 use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt;
-use macro_env_var::{env_var, maybe_env_var};
+use macro_env_var::env_var;
 use rig_agent::agent::{Agent, AgentBuilder, MultiTurnStreamItem};
 use rig_agent::streaming::StreamingPrompt;
 use rig_agent::tool::server::ToolServerHandle;
@@ -45,13 +45,11 @@ env_var! {
     struct ApiKeys {
         AnthropicApiKey,
         OpenaiApiKey,
-        CerebrasApiKey
+        CerebrasApiKey,
+        /// Doppler name is `FIREWORK_API_KEY` (singular), from `shared_ai`.
+        FireworkApiKey,
+        GoogleGenerativeAiApiKey
     }
-}
-
-maybe_env_var! {
-    /// Doppler name is `FIREWORK_API_KEY` (singular), from `shared_ai`.
-    struct FireworkApiKey;
 }
 
 /// Provider segment for native Anthropic.
@@ -68,6 +66,12 @@ const CEREBRAS_BASE_URL: &str = "https://api.cerebras.ai/v1";
 const FIREWORKS_PROVIDER: &str = "fireworks";
 /// Fireworks inference endpoint (OpenAI-compatible Chat Completions API).
 const FIREWORKS_BASE_URL: &str = "https://api.fireworks.ai/inference/v1";
+/// Provider segment Google Gemini is registered under (OpenAI-compatible Chat
+/// Completions).
+const GOOGLE_PROVIDER: &str = "google";
+/// Gemini's OpenAI-compatible Chat Completions endpoint. The native
+/// `generativelanguage` API is a different wire format and is not used here.
+const GOOGLE_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/openai";
 
 /// A routed model id bound to the provider client that serves it.
 pub(crate) enum RoutedModel<'a> {
@@ -276,10 +280,9 @@ impl ModelRouter {
 
     /// Build a router with the built-in providers from the environment.
     ///
-    /// Requires `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `CEREBRAS_API_KEY`.
-    /// Registers Fireworks when `FIREWORK_API_KEY` is set so `fireworks/<model>`
-    /// ids resolve. Chain [`with_openai_provider`](Self::with_openai_provider)
-    /// to add more.
+    /// Requires `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CEREBRAS_API_KEY`,
+    /// `FIREWORK_API_KEY`, and `GOOGLE_GENERATIVE_AI_API_KEY`. Chain
+    /// [`with_openai_provider`](Self::with_openai_provider) to add more.
     pub fn try_from_env() -> Result<Self, AgentError> {
         let env = ApiKeys::new()?;
         let anthropic = anthropic::Client::builder()
@@ -290,21 +293,21 @@ impl ModelRouter {
         let openai = openai::Client::builder()
             .api_key(env.openai_api_key.to_string())
             .build()?;
-        // Cerebras speaks the OpenAI Chat Completions API, so it rides the
-        // compatible-provider registry: `cerebras/<model>` ids route to it.
-        let router = Self::new(anthropic, openai).with_openai_provider(
-            CEREBRAS_PROVIDER,
-            CEREBRAS_BASE_URL,
-            &env.cerebras_api_key,
-        )?;
-        // Fireworks is additive: a missing key leaves `fireworks/` ids
-        // unroutable (they fall back to the default model) so existing
-        // deployments keep booting until the secret is in Doppler
-        // (`shared_ai` → `FIREWORK_API_KEY`).
-        match FireworkApiKey::new() {
-            Some(key) => router.with_openai_provider(FIREWORKS_PROVIDER, FIREWORKS_BASE_URL, &*key),
-            None => Ok(router),
-        }
+        // Cerebras, Fireworks, and Gemini all speak the OpenAI Chat Completions
+        // API, so they ride the compatible-provider registry: a `<provider>/`
+        // segment routes to the client registered under that name.
+        Self::new(anthropic, openai)
+            .with_openai_provider(CEREBRAS_PROVIDER, CEREBRAS_BASE_URL, &env.cerebras_api_key)?
+            .with_openai_provider(
+                FIREWORKS_PROVIDER,
+                FIREWORKS_BASE_URL,
+                &env.firework_api_key,
+            )?
+            .with_openai_provider(
+                GOOGLE_PROVIDER,
+                GOOGLE_BASE_URL,
+                &env.google_generative_ai_api_key,
+            )
     }
 
     /// The process-wide full router, built from the environment on first use.

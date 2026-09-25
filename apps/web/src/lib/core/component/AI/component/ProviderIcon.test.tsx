@@ -23,6 +23,8 @@ describe('AI provider icons', () => {
     ['deepseek-v4-pro-0813', 'deepseek'],
     ['fireworks/muse-glimmer-30b', 'muse'],
     ['muse-glimmer-30b', 'muse'],
+    ['google/gemini-3.8-flash', 'google'],
+    ['gemini-3.8-flash', 'google'],
   ])('recognizes %s as %s', (model, provider) => {
     expect(modelProvider(model)).toBe(provider);
   });

@@ -90,3 +90,20 @@ fn fireworks_provider_routes_to_chat_completions() {
     assert_eq!(routed.provider(), "fireworks");
     assert_eq!(routed.model_name(), "kimi-k3");
 }
+
+#[test]
+fn google_provider_routes_to_chat_completions() {
+    let router = test_router().with_openai_client(
+        "google",
+        openai::CompletionsClient::builder()
+            .api_key("test-google-key")
+            .base_url("https://generativelanguage.googleapis.com/v1beta/openai")
+            .build()
+            .unwrap(),
+    );
+
+    let routed = router.route("google/gemini-3.8-flash").unwrap();
+    assert!(matches!(routed, RoutedModel::OpenAiChatCompletions(_)));
+    assert_eq!(routed.provider(), "google");
+    assert_eq!(routed.model_name(), "gemini-3.8-flash");
+}

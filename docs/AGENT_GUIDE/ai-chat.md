@@ -62,9 +62,9 @@ permission failures should display a failed tool call without a successful resul
   grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
   Macro’s available models with readable names (for example, **Sonnet 5**) and
   provider or model icons aligned with the agent icons. The in-memory catalog
-  offers the closed Anthropic and OpenAI chat models plus Fireworks-hosted
-  **Kimi K3**, **DeepSeek V4 Pro**, and **Muse Glimmer**; older Sonnet and Opus
-  versions are not offered.
+  offers the closed Anthropic and OpenAI chat models, Fireworks-hosted
+  **Kimi K3**, **DeepSeek V4 Pro**, and **Muse Glimmer**, and Google's
+  **Gemini 3.8 Flash**; older Sonnet and Opus versions are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
   A model chosen from that **Models** list is remembered in local storage as the
