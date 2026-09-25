@@ -581,3 +581,42 @@ export function Root() {
                                 <ChatAttachmentsInit />
                                 <ReactiveFavicon />
                                 <Title>{tabTitle()}</Title>
+                                {/* Loading boundaries belong inside Layout so
+                                    a pending resource cannot detach the app shell. */}
+                                <IsomorphicRouter
+                                  transformUrl={transformShortIdInUrlPathname}
+                                  root={AppRouteLayout}
+                                  rootPreload={rootPreload}
+                                  base={ROUTER_BASE}
+                                >
+                                  {{
+                                    path: '/',
+                                    component: TauriRouteListener,
+                                    children: ROUTES,
+                                  }}
+                                </IsomorphicRouter>
+                                <ToastRegion />
+                              </SearchProvider>
+                            </QuickAccessProvider>
+                          </CallProvider>
+                        </ChannelsContextProvider>
+                      </MutationUndoProvider>
+                    </ConfiguredGlobalAppStateProvider>
+                  </TeamContextProvider>
+                </EmailLinksContextProvider>
+              </UserContextProvider>
+            </EntityProvider>
+          </PosthogProvider>
+        </AnalyticsContextProvider>
+      </MetaProvider>
+    </MaybeTauriProvider>
+  );
+}
+
+// A router component that correctly handles both the web and tauri routing
+function IsomorphicRouter(props: RouterProps): JSX.Element {
+  if (isTauri()) {
+    return <HashRouter {...props} />;
+  }
+  return <Router {...props} />;
+}

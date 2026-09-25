@@ -639,10 +639,9 @@ impl CallRepository for PgCallRepo {
             "INSERT INTO call_participants (call_id, user_id) VALUES ($1, $2) ON CONFLICT (call_id, user_id) DO UPDATE SET left_at = NULL, joined_at = now() RETURNING call_id, user_id, joined_at",
             call_id, user_id.as_ref(),
         ).fetch_one(tx.as_mut()).await.map_err(classify_add_participant_err)?;
-        entity_access_db_utils::ensure_user_view_access(
+        entity_access_db_utils::ensure_call_participant_view_access(
             tx.as_mut(),
             call_id,
-            entity_access_db_utils::EntityType::Call,
             user_id.copied(),
         )
         .await

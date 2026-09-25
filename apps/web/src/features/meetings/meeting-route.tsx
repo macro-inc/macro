@@ -86,11 +86,11 @@ function MeetingRouteContent(props: { shareToken: string }) {
           join.mutateAsync({ shareToken: props.shareToken, displayName }),
         release: leaveMeeting,
         connect: (credentials, preferences) =>
-          call.connectSession(credentials, {
+          call.meetingSession.connectWithToken(credentials, {
             ...preferences,
             useBrowserSession: true,
           }),
-        disconnect: call.disconnectSession,
+        disconnect: call.meetingSession.disconnect,
       }}
       renderCall={(onLeave, name) => (
         <CallOverlay

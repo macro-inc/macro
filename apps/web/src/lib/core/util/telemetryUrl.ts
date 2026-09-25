@@ -1,7 +1,7 @@
 /** Meeting URLs contain bearer capabilities; retain the route, never the token. */
 export function redactCallLinkTokens(value: string): string {
   return value.replace(
-    /(\/(?:call\/(?:meetings\/)?join|(?:app\/)?meet)\/)[^/?#\s"']+/g,
+    /(\/(?:call\/(?:meetings\/(?:join|invite)|join)|(?:app\/)?meet)\/)[^/?#\s"']+/g,
     '$1:shareToken'
   );
 }

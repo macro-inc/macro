@@ -20,3 +20,29 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
         if (id === channelId()) options.onLeave?.();
       })
     );
+  }
+
+  return {
+    joinCall: () => lifecycle.join(channelId(), options?.onJoin),
+    leaveCall: (options?: CallSessionDisconnectOptions) =>
+      lifecycle.leave(channelId(), options),
+    isJoining: () => {
+      const state = lifecycle.getState();
+      return state.t === 'joining' && state.request.channelId === channelId();
+    },
+    isLeaving: () => {
+      const state = lifecycle.getState();
+      return state.t === 'leaving' && state.request.channelId === channelId();
+    },
+    isInCall: callCtx.isInCall,
+    isInThisChannel: () =>
+      callCtx.isInCall() && callCtx.activeChannelId() === channelId(),
+    joinError: () => {
+      const state = lifecycle.getState();
+      return state.t === 'active' && state.call.channelId === channelId()
+        ? null
+        : callCtx.joinError();
+    },
+    callCtx,
+  };
+}

@@ -1959,3 +1959,622 @@ where
                 .0
                 .channel_id
                 .map(|id| graphql_entity(model_entity::EntityType::Channel, id)),
+            created_at: Some(self.0.started_at.to_rfc3339()),
+            updated_at: self.0.ended_at.map(|ts| ts.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    /// The identifier of the channel.
+    async fn channel_id(&self) -> Option<ID> {
+        self.0.channel_id.map(|id| ID(id.to_string()))
+    }
+
+    /// The channel name.
+    async fn channel_name(&self) -> Option<&str> {
+        self.0.channel_name.as_deref()
+    }
+
+    /// The user who created the call.
+    async fn created_by(&self) -> &str {
+        &self.0.created_by
+    }
+
+    /// The custom name.
+    async fn custom_name(&self) -> Option<&str> {
+        self.0.custom_name.as_deref()
+    }
+
+    /// The name.
+    async fn name(&self) -> Option<&str> {
+        self.0
+            .custom_name
+            .as_deref()
+            .or(self.0.channel_name.as_deref())
+    }
+
+    /// The summary.
+    async fn summary(&self) -> Option<&str> {
+        self.0.summary.as_deref()
+    }
+
+    /// The started timestamp in RFC 3339 format.
+    async fn started_at(&self) -> String {
+        self.0.started_at.to_rfc3339()
+    }
+
+    /// The ended timestamp in RFC 3339 format.
+    async fn ended_at(&self) -> Option<String> {
+        self.0.ended_at.map(|ts| ts.to_rfc3339())
+    }
+
+    /// The duration ms.
+    async fn duration_ms(&self) -> Option<i64> {
+        self.0.duration_ms
+    }
+
+    /// Whether the call is currently active.
+    async fn is_active(&self) -> bool {
+        self.0.is_active
+    }
+
+    /// The status.
+    async fn status(&self) -> &'static str {
+        match self.0.status {
+            item_filters::CallStatus::Attended => "ATTENDED",
+            item_filters::CallStatus::Missed => "MISSED",
+            item_filters::CallStatus::Unattended => "UNATTENDED",
+        }
+    }
+
+    /// Whether the requesting user attended this call.
+    async fn attended(&self) -> bool {
+        self.0.attended
+    }
+
+    /// The participant count.
+    async fn participant_count(&self) -> usize {
+        self.0.participants.len()
+    }
+
+    /// The identifiers of the participants.
+    async fn participant_ids(&self) -> Vec<String> {
+        self.0
+            .participants
+            .iter()
+            .map(|participant| participant.user_id.clone())
+            .collect()
+    }
+
+    /// The participants.
+    async fn participants(&self) -> Vec<GraphqlSoupCallParticipant> {
+        self.0
+            .participants
+            .iter()
+            .map(GraphqlSoupCallParticipant::new)
+            .collect()
+    }
+
+    #[graphql(flatten)]
+    /// The edges.
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
+/// GraphQL CRM company entity.
+pub struct GraphqlSoupCrmCompany<E: SoupEntityEdges>(SoupCrmCompany<()>, E, Option<f64>);
+
+/// GraphQL representation of the soup crm company.
+#[Object(name = "GraphqlSoupCrmCompany")]
+impl<E> GraphqlSoupCrmCompany<E>
+where
+    E: SoupEntityEdges,
+{
+    /// The unique identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::CrmCompany
+    }
+
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
+    /// User-visible company name.
+    async fn display_name(&self) -> Option<String> {
+        self.0.name.clone()
+    }
+
+    /// Common CRM-company metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: None,
+            owner_type: None,
+            parent: Some(graphql_entity(
+                model_entity::EntityType::Team,
+                self.0.team_id,
+            )),
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
+            deleted_at: None,
+        }
+    }
+
+    /// The identifier of the team.
+    async fn team_id(&self) -> ID {
+        ID(self.0.team_id.to_string())
+    }
+
+    /// The name.
+    async fn name(&self) -> Option<&str> {
+        self.0.name.as_deref()
+    }
+
+    /// The description.
+    async fn description(&self) -> Option<&str> {
+        self.0.description.as_deref()
+    }
+
+    /// Whether email sync is enabled for this company.
+    async fn email_sync(&self) -> bool {
+        self.0.email_sync
+    }
+
+    /// Whether the company is hidden from CRM listings.
+    async fn hidden(&self) -> bool {
+        self.0.hidden
+    }
+
+    /// The created timestamp in RFC 3339 format.
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    /// The updated timestamp in RFC 3339 format.
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    /// The viewed timestamp in RFC 3339 format.
+    async fn viewed_at(&self) -> Option<String> {
+        self.0.viewed_at.map(|ts| ts.to_rfc3339())
+    }
+
+    /// The domains.
+    async fn domains(&self) -> Vec<String> {
+        self.0
+            .domains
+            .iter()
+            .map(|domain| domain.domain.clone())
+            .collect()
+    }
+
+    #[graphql(flatten)]
+    /// The edges.
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
+/// GraphQL foreign entity.
+pub struct GraphqlSoupForeignEntity<E: SoupEntityEdges>(SoupForeignEntity, E, Option<f64>);
+
+/// GraphQL representation of the soup foreign entity.
+#[Object(name = "GraphqlSoupForeignEntity")]
+impl<E> GraphqlSoupForeignEntity<E>
+where
+    E: SoupEntityEdges,
+{
+    /// The unique identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::ForeignEntity
+    }
+
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
+    /// Foreign entities do not expose a common display name.
+    async fn display_name(&self) -> Option<String> {
+        None
+    }
+
+    /// Common foreign-entity metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: None,
+            owner_type: None,
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    /// The identifier of the foreign entity.
+    async fn foreign_entity_id(&self) -> &str {
+        &self.0.foreign_entity_id
+    }
+
+    /// The foreign entity source.
+    async fn foreign_entity_source(&self) -> &str {
+        &self.0.foreign_entity_source
+    }
+
+    /// The identifier of the stored for.
+    async fn stored_for_id(&self) -> &str {
+        &self.0.stored_for_id
+    }
+
+    /// The stored for auth entity.
+    async fn stored_for_auth_entity(&self) -> &str {
+        &self.0.stored_for_auth_entity
+    }
+
+    /// Source-specific metadata.
+    async fn source_metadata(&self) -> Json<Value> {
+        Json(self.0.metadata.clone())
+    }
+
+    /// The created timestamp in RFC 3339 format.
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    /// The updated timestamp in RFC 3339 format.
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    #[graphql(flatten)]
+    /// The edges.
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
+/// How often a reminder fires.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlReminderScheduleType {
+    /// Fires once, at `remindAt`.
+    Once,
+    /// Fires repeatedly, on `cron` evaluated in `timezone`.
+    Recurring,
+}
+
+/// The entity a reminder is about, resolved server-side.
+///
+/// Carries `file_type`/`sub_type` rather than just the reference: a reminder is
+/// iconed as whatever it points at, and the client's icon path is synchronous,
+/// so resolving them here saves a fetch per row.
+#[derive(SimpleObject)]
+pub struct GraphqlSoupReminderReference {
+    /// The referenced entity's id.
+    pub id: ID,
+    /// The referenced entity's type.
+    pub entity_type: GraphqlEntityType,
+    /// File type, when the reference is a document — `md`, `pdf`, and so on.
+    pub file_type: Option<String>,
+    /// Sub type, when the reference is a task or snippet document.
+    pub sub_type: Option<String>,
+}
+
+/// GraphQL reminder entity.
+pub struct GraphqlSoupReminder<E: SoupEntityEdges>(SoupReminder<()>, E, Option<f64>);
+
+/// GraphQL representation of the soup reminder.
+#[Object(name = "GraphqlSoupReminder")]
+impl<E> GraphqlSoupReminder<E>
+where
+    E: SoupEntityEdges,
+{
+    /// The unique identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Reminder
+    }
+
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
+    /// User-visible display name — a reminder's description is its name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.description.clone())
+    }
+
+    /// Common reminder metadata.
+    ///
+    /// `owner_id` is absent because a reminder is only ever readable by its
+    /// owner, and `parent` because a reminder is not contained by the entity it
+    /// references — see [`Self::referenced_entity`].
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: None,
+            owner_type: None,
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    /// The entity this reminder is about, when it is attached to one.
+    ///
+    /// Only the reference is returned; the client resolves it into a Soup item
+    /// through the edges that already exist for that entity type.
+    async fn referenced_entity(&self) -> Option<GraphqlSoupReminderReference> {
+        self.0
+            .referenced_entity
+            .as_ref()
+            .map(|r| GraphqlSoupReminderReference {
+                id: ID(r.id.clone()),
+                entity_type: GraphqlEntityType::new(r.entity_type),
+                file_type: r.file_type.clone(),
+                sub_type: r.sub_type.clone(),
+            })
+    }
+
+    /// What to remind the user about.
+    async fn description(&self) -> &str {
+        &self.0.description
+    }
+
+    /// Whether the reminder fires once or repeatedly.
+    async fn schedule_type(&self) -> GraphqlReminderScheduleType {
+        match self.0.schedule {
+            SoupReminderSchedule::Once { .. } => GraphqlReminderScheduleType::Once,
+            SoupReminderSchedule::Recurring { .. } => GraphqlReminderScheduleType::Recurring,
+        }
+    }
+
+    /// The instant a one-shot reminder fires at, in RFC 3339 format.
+    async fn remind_at(&self) -> Option<String> {
+        match &self.0.schedule {
+            SoupReminderSchedule::Once { remind_at } => Some(remind_at.to_rfc3339()),
+            SoupReminderSchedule::Recurring { .. } => None,
+        }
+    }
+
+    /// The cron expression a recurring reminder fires on.
+    async fn cron(&self) -> Option<&str> {
+        match &self.0.schedule {
+            SoupReminderSchedule::Recurring { cron, .. } => Some(cron),
+            SoupReminderSchedule::Once { .. } => None,
+        }
+    }
+
+    /// The timezone a recurring reminder's cron is evaluated in.
+    async fn timezone(&self) -> Option<&str> {
+        match &self.0.schedule {
+            SoupReminderSchedule::Recurring { timezone, .. } => Some(timezone),
+            SoupReminderSchedule::Once { .. } => None,
+        }
+    }
+
+    /// The next firing, in RFC 3339 format. Soup orders reminders on this.
+    async fn next_run_at(&self) -> String {
+        self.0.next_run_at.to_rfc3339()
+    }
+
+    /// When false, the dispatcher skips this reminder.
+    async fn enabled(&self) -> bool {
+        self.0.enabled
+    }
+
+    /// When a one-shot reminder fired, in RFC 3339 format.
+    async fn completed_at(&self) -> Option<String> {
+        self.0.completed_at.map(|ts| ts.to_rfc3339())
+    }
+
+    /// The created timestamp in RFC 3339 format.
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    /// The updated timestamp in RFC 3339 format.
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    #[graphql(flatten)]
+    /// The edges.
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
+/// Implement interface-only dispatch methods for fields whose concrete
+/// GraphQL definitions are supplied by the flattened edge object.
+macro_rules! impl_common_interface_edges {
+    ($($entity:ident),+ $(,)?) => {
+        $(
+            impl<E: SoupEntityEdges> $entity<E> {
+                /// Resolve shared properties through the composed edge adapter.
+                async fn interface_properties(
+                    &self,
+                    ctx: &Context<'_>,
+                ) -> async_graphql::Result<Vec<E::Property>> {
+                    self.1.resolve_properties(ctx).await
+                }
+
+                /// Resolve shared notifications through the composed edge adapter.
+                async fn interface_notifications(
+                    &self,
+                    ctx: &Context<'_>,
+                    filter: Option<E::NotificationFilter>,
+                    limit: Option<i32>,
+                ) -> async_graphql::Result<Vec<E::Notification>> {
+                    self.1.resolve_notifications(ctx, filter, limit).await
+                }
+
+                /// Resolve shared favorite state through the composed edge adapter.
+                async fn interface_is_favorited(
+                    &self,
+                    ctx: &Context<'_>,
+                ) -> async_graphql::Result<bool> {
+                    self.1.resolve_is_favorited(ctx).await
+                }
+
+                /// Resolve shared viewer permission through the composed edge adapter.
+                async fn interface_viewer_permission(
+                    &self,
+                    ctx: &Context<'_>,
+                ) -> async_graphql::Result<Option<GraphqlEntityPermission>> {
+                    self.1.resolve_viewer_permission(ctx).await
+                }
+
+                /// Resolve shared activity through the composed edge adapter.
+                async fn interface_activity(
+                    &self,
+                    ctx: &Context<'_>,
+                    limit: Option<i32>,
+                ) -> async_graphql::Result<Vec<E::ActivityEvent>> {
+                    self.1.resolve_activity(ctx, limit).await
+                }
+
+            }
+        )+
+    };
+}
+
+impl_common_interface_edges!(
+    GraphqlSoupCalendarEvent,
+    GraphqlSoupDocument,
+    GraphqlSoupChat,
+    GraphqlSoupProject,
+    GraphqlSoupEmailThread,
+    GraphqlSoupChannel,
+    GraphqlSoupChannelMessage,
+    GraphqlSoupCall,
+    GraphqlSoupCrmCompany,
+    GraphqlSoupForeignEntity,
+    GraphqlSoupReminder,
+    GraphqlSoupAgentSession,
+);
+
+/// Realtime Soup patch represented as exactly one update or cache deletion.
+#[derive(Union)]
+pub enum SoupPatch<E: SoupEntityEdges> {
+    /// An entity that was created or updated.
+    Updated(SoupUpdated<E>),
+    /// A normalized entity record that must be deleted.
+    Deleted(GraphqlCacheDeletion),
+}
+
+impl<E: SoupEntityEdges> SoupPatch<E> {
+    /// Construct an update only after its viewer-scoped item has been hydrated.
+    pub fn updated(item: SoupProjectionHydration) -> Self {
+        Self::Updated(SoupUpdated {
+            item: Box::new(GraphqlSoupEntity::new_with_projection(item)),
+        })
+    }
+
+    /// Construct a deletion patch for one normalized Soup entity.
+    pub fn deleted(entity: Entity<'static>) -> async_graphql::Result<Self> {
+        let entity_type = entity.entity_type;
+        let graphql_type_name = GraphqlSoupEntity::<E>::graphql_type_name_for(entity_type)
+            .ok_or_else(|| {
+                async_graphql::Error::new(format!(
+                    "{entity_type} cannot be represented as a Soup cache deletion"
+                ))
+            })?;
+        Ok(Self::Deleted(GraphqlCacheDeletion::new(
+            graphql_type_name,
+            ID(entity.entity_id.into_owned()),
+        )))
+    }
+
+    /// Hydrate an updated entity through the existing viewer-scoped Soup service.
+    /// Missing items are logged and omitted; service failures remain errors.
+    /// Neither outcome is interpreted as a deletion.
+    pub async fn hydrate_updated(
+        user_id: MacroUserIdStr<'static>,
+        entity: Entity<'static>,
+        loader: Option<&SoupItemDataLoader>,
+    ) -> async_graphql::Result<Option<Self>> {
+        let loader = loader.ok_or_else(|| {
+            async_graphql::Error::new("SoupItemDataLoader is required to hydrate Soup updates")
+        })?;
+        let item = loader
+            .load_one((user_id.clone(), entity.clone()))
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    user_id = %user_id,
+                    entity_type = %entity.entity_type,
+                    entity_id = %entity.entity_id,
+                    "failed to hydrate Soup update"
+                );
+            })?;
+        match item {
+            Some(item) => Ok(Some(Self::updated(item))),
+            None => {
+                tracing::warn!(
+                    user_id = %user_id,
+                    entity_type = %entity.entity_type,
+                    entity_id = %entity.entity_id,
+                    "Soup update hydration returned no visible item; omitting update"
+                );
+                Ok(None)
+            }
+        }
+    }
+}
+
+/// Created or updated Soup entity with its current viewer-scoped data already hydrated.
+pub struct SoupUpdated<E: SoupEntityEdges> {
+    /// Canonical hydrated entity, never a nullable lookup result.
+    item: Box<GraphqlSoupEntity<E>>,
+}
+
+/// GraphQL representation of a created or updated Soup entity.
+#[Object]
+impl<E: SoupEntityEdges> SoupUpdated<E> {
+    /// The hydrated entity for this update.
+    async fn item(&self) -> &GraphqlSoupEntity<E> {
+        &self.item
+    }
+}

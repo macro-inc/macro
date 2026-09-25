@@ -90,7 +90,7 @@ beforeEach(() => {
 });
 
 describe('scheduling a Macro call', () => {
-  it('schedules an all-day call for the event’s exclusive date range', async () => {
+  it('keeps an all-day call untimed instead of inventing local-midnight times', async () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
@@ -109,8 +109,8 @@ describe('scheduling a Macro call', () => {
       });
       expect(mocks.createMeeting).toHaveBeenCalledWith({
         title: 'Planning',
-        scheduledStart: new Date(2026, 8, 22).toISOString(),
-        scheduledEnd: new Date(2026, 8, 24).toISOString(),
+        scheduledStart: null,
+        scheduledEnd: null,
       });
     } finally {
       dispose();
@@ -307,6 +307,35 @@ describe('scheduling a Macro call', () => {
       await saving;
       expect(editor.pending()).toBe(false);
       expect(mocks.createMeeting).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('clears the existing meeting schedule when an event becomes all-day', async () => {
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({ event: () => savedEvent, onSaved: vi.fn() }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save({
+        ...values,
+        time: {
+          kind: 'allDay',
+          startDate: '2026-09-22',
+          endDate: '2026-09-24',
+        },
+      });
+      expect(mocks.updateMeeting).toHaveBeenCalledWith({
+        meetingId: 'meeting-1',
+        title: 'Planning',
+        scheduledStart: null,
+        scheduledEnd: null,
+        clearSchedule: true,
+      });
     } finally {
       dispose();
     }

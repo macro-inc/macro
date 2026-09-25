@@ -269,7 +269,19 @@ export function createCallLifecycle(options: {
                 delay,
               ]);
               if (!active) return;
-              if (!needsConnection && call && !sameCall(call, token)) {
+              if (token.channelId !== request.channelId) {
+                throw new Error(
+                  'Call token does not belong to the requested channel'
+                );
+              }
+              if (
+                !needsConnection &&
+                call &&
+                !sameCall(call, {
+                  channelId: token.channelId,
+                  callId: token.callId,
+                })
+              ) {
                 // The server ended the session native still reports. Release
                 // the newly issued membership and the stale native session.
                 await releaseStaleNativeSession(call);

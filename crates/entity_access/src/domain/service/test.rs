@@ -431,10 +431,19 @@ impl AccessRepository for MockRepo {
             EntityType::Project => Ok(self.project_users.lock().await.clone()),
             EntityType::EmailThread => Ok(self.thread_users.lock().await.clone()),
             EntityType::AgentSession => Ok(self.agent_session_users.lock().await.clone()),
-            EntityType::Call => Ok(self.call_users.lock().await.clone()),
+            EntityType::Call => panic!("standalone calls must use direct grants"),
             EntityType::Initiative => Ok(vec![]),
             _ => Err(AccessError::BadRequest("unsupported entity type")),
         }
+    }
+
+    async fn get_direct_entity_users(
+        &self,
+        _entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        assert_eq!(entity_type, EntityType::Call);
+        Ok(self.call_users.lock().await.clone())
     }
 
     async fn get_channel_users(

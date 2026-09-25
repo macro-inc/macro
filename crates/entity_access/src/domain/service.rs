@@ -644,7 +644,9 @@ where
                     let call_id = Uuid::parse_str(entity_id).map_err(|_| {
                         AccessError::BadRequest("invalid call_id for get_users_by_entity")
                     })?;
-                    self.repo.get_entity_users(&call_id, EntityType::Call).await
+                    self.repo
+                        .get_direct_entity_users(&call_id, EntityType::Call)
+                        .await
                 }
             },
             _ => Err(AccessError::BadRequest(

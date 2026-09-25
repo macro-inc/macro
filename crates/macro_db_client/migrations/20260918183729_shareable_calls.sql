@@ -20,7 +20,7 @@ CREATE TABLE call_meetings (
     cancelled_at TIMESTAMPTZ,
     CONSTRAINT meeting_schedule CHECK (
         (scheduled_start IS NULL AND scheduled_end IS NULL)
-        OR (scheduled_start IS NOT NULL AND scheduled_end > scheduled_start)
+        OR (scheduled_start IS NOT NULL AND scheduled_end IS NOT NULL AND scheduled_end > scheduled_start)
     ),
     CONSTRAINT meeting_channel_call CHECK ((channel_id IS NULL) = (channel_call_id IS NULL))
 );

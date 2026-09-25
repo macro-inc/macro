@@ -743,7 +743,8 @@ checkmark for a few seconds after copying, then restores the copy icon.
 `Event` opens the original compact composer with All day in the date/time fields.
 Every regular event created here automatically gets a Macro call after the event
 saves. Out-of-office entries do not create calls. There is no separate call toggle
-or Scheduled Call menu option. Quick Calls do not create calendar events.
+or Scheduled Call menu option. All-day events get an untimed call link, so setup
+does not display a misleading midnight time. Quick Calls do not create calendar events.
 A failed link attachment keeps the composer open with a retry message; Save reuses
 the saved event and call instead of creating duplicates. The invitation includes
 the call link in its description and, when no location was entered, its location.

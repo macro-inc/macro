@@ -27,7 +27,10 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { CallAudioSink } from './CallAudioSink';
-import { createCallSessionController } from './CallSessionController';
+import {
+  type CallSessionController,
+  createCallSessionController,
+} from './CallSessionController';
 import { createCallLifecycle } from './call-lifecycle';
 import { publishCallResolution } from './call-resolution';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
@@ -353,6 +356,11 @@ const [persistedNoiseSuppressionMode, setPersistedNoiseSuppressionMode] =
   });
 
 export type CallState = {
+  /** Media connection owned by the meeting session; channel calls use callLifecycle. */
+  meetingSession: Pick<
+    CallSessionController,
+    'connectWithToken' | 'disconnect'
+  >;
   /** Shared join, leave, and recovery lifecycle, with a reactive snapshot. */
   callLifecycle: ReturnType<typeof createCallLifecycle>;
   /** The LiveKit Room instance, null when not in a call */
@@ -1425,7 +1433,9 @@ function createCallState() {
     requestToken: requestCallToken,
     connect: (token) =>
       callSession.connectWithToken(token, {
-        channelTitle: channels.channelsById()[token.channelId]?.name ?? null,
+        channelTitle: token.channelId
+          ? (channels.channelsById()[token.channelId]?.name ?? null)
+          : null,
       }),
     disconnect: callSession.disconnect,
     leave: (id) => leaveMutation.mutateAsync(id),
@@ -1508,6 +1518,10 @@ function createCallState() {
   // --- public API ---
 
   const state: CallState = {
+    meetingSession: {
+      connectWithToken: callSession.connectWithToken,
+      disconnect: callSession.disconnect,
+    },
     callLifecycle: {
       ...lifecycle,
       getState: () => {

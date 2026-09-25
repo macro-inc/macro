@@ -96,7 +96,7 @@ impl<
         if let Some(meeting) = self.repo.get_meeting_for_call(&call_id).await? {
             // Channel links only describe the pinned active session.
             if meeting.channel_id.is_none() || record.is_active {
-                return Ok(meeting);
+                return self.resolve_invitation(&meeting.share_token).await;
             }
         }
         if !record.is_active {

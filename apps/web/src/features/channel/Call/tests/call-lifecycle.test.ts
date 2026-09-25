@@ -19,11 +19,13 @@ function deferred<T>() {
 }
 
 const call = { channelId: 'channel-1', callId: 'call-1' };
-const token = {
+const token: CallTokenResponse = {
   ...call,
   roomName: 'room-1',
   token: 'token',
   serverUrl: 'ws://localhost',
+  participantId: 'macro|test@example.com',
+  shareToken: null,
 } satisfies CallTokenResponse;
 const cleanups: (() => void)[] = [];
 

@@ -1,4 +1,5 @@
 import type { BackgroundEffect, CallState } from '@channel/Call/CallContext';
+import { createCallLifecycle } from '@channel/Call/call-lifecycle';
 import { LK_CONNECTION_STATE } from '@channel/Call/livekit-loader';
 import { RemoteParticipant, Room } from 'livekit-client';
 import { createSignal, onCleanup } from 'solid-js';
@@ -46,9 +47,25 @@ export function createPreviewCallState(): CallState {
     activeAudioInputDeviceId: () => null,
     activeAudioOutputDeviceId: () => null,
     activeVideoInputDeviceId: () => null,
-    shouldRequestSessionToken: () => false,
-    connectSession: asyncNoop,
-    disconnectSession: asyncNoop,
+    meetingSession: { connectWithToken: asyncNoop, disconnect: asyncNoop },
+    callLifecycle: createCallLifecycle({
+      shouldRequestToken: () => false,
+      requestToken: async () => {
+        throw new Error('Preview cannot join calls');
+      },
+      connect: asyncNoop,
+      disconnect: asyncNoop,
+      leave: asyncNoop,
+      lookup: async () => null,
+      currentCall: () => undefined,
+      beginJoin: noop,
+      rollbackJoin: noop,
+      setError: noop,
+      watch: () => noop,
+      onJoined: noop,
+      onLeft: noop,
+      reportError: noop,
+    }),
     toggleAudio: async () => {
       setMuted((value) => !value);
     },
@@ -66,11 +83,8 @@ export function createPreviewCallState(): CallState {
     toggleNoiseSuppression: async () => {
       setNoise((value) => !value);
     },
-    beginOptimisticJoin: noop,
-    rollbackOptimisticJoin: noop,
     isConnecting: () => false,
     joinError: () => null,
-    setJoinError: noop,
     callPageChannelId: () => null,
     syncCallPageTab: noop,
     isCallPage: () => true,

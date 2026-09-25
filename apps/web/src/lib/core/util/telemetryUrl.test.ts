@@ -13,6 +13,7 @@ describe('meeting URL telemetry', () => {
     ],
     ['/call/join/secret/leave', '/call/join/:shareToken/leave'],
     ['/call/meetings/join/secret', '/call/meetings/join/:shareToken'],
+    ['/call/meetings/invite/secret', '/call/meetings/invite/:shareToken'],
     [
       'https://macro.com/app/meet/secret?join=true',
       'https://macro.com/app/meet/:shareToken',

@@ -12,7 +12,6 @@ import {
   useUpdateMeetingMutation,
 } from '@queries/call/meetings';
 import type { CalendarUpdateScope } from '@service-email/client';
-import { parseISO } from 'date-fns';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import {
   calendarEventToEditorInitialValues,
@@ -135,8 +134,8 @@ export function useEventEditor(props: UseEventEditorProps) {
           scheduledEnd: values.time.endsAt,
         }
       : {
-          scheduledStart: parseISO(values.time.startDate).toISOString(),
-          scheduledEnd: parseISO(values.time.endDate).toISOString(),
+          scheduledStart: null,
+          scheduledEnd: null,
         };
 
   const createScheduledMeeting = async (values: EventEditorSubmitValues) => {
@@ -163,6 +162,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     const meeting = await fetchMeeting(shareToken);
     await updateMeeting.mutateAsync({
       meetingId: meeting.id,
+      ...(values.time.kind === 'allDay' ? { clearSchedule: true } : {}),
       title: values.title,
       ...meetingSchedule(values),
     });
