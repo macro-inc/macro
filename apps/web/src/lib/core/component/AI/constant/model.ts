@@ -84,8 +84,13 @@ export const DEFAULT_MODEL: TModel = Model.sonnet5;
  */
 export const FREE_DEFAULT_MODEL: TModel = Model.haiku45;
 
-/** Models a paid user may select — the full set. */
-export const PAID_MODELS: readonly TModel[] = Object.values(Model);
+/**
+ * Models a paid user may select. Fable remains a known model so persisted
+ * chats can still be parsed, but it is intentionally absent from the picker.
+ */
+export const PAID_MODELS: readonly TModel[] = Object.values(Model).filter(
+  (model) => model !== Model.fable51
+);
 
 /**
  * Models a free user may select. Free users only get the fast model
@@ -150,9 +155,6 @@ export function alternateProviderModel(
   excluded.add(MODEL_PROVIDER[current]);
 
   const candidates = options?.candidates;
-  const pool =
-    candidates && candidates.length > 0
-      ? candidates
-      : (Object.values(Model) as readonly TModel[]);
+  const pool = candidates && candidates.length > 0 ? candidates : PAID_MODELS;
   return pool.find((id) => !excluded.has(MODEL_PROVIDER[id]));
 }
