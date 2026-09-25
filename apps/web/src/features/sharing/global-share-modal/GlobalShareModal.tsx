@@ -1,20 +1,11 @@
 import { Permissions } from '@core/component/SharePermissions';
-import { ShareModal } from '@core/component/TopBar/ShareButton';
+import { openShareModal } from '@core/component/TopBar/shareModal';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import { type DialogHandle, openDialog } from '@ui';
-import { type ComponentProps, Suspense } from 'solid-js';
+import type { DialogHandle } from '@ui';
 import {
   isShareableEntityType,
   type ShareableEntityData,
 } from './shareable-entity';
-
-function SuspendedShareModal(props: ComponentProps<typeof ShareModal>) {
-  return (
-    <Suspense>
-      <ShareModal {...props} />
-    </Suspense>
-  );
-}
 
 /** Opens the share modal for an entity outside of its block. */
 export const openGlobalShareModal = (props: {
@@ -26,7 +17,7 @@ export const openGlobalShareModal = (props: {
     return;
   }
 
-  return openDialog(SuspendedShareModal, {
+  return openShareModal({
     id: entity.id,
     blockAlias: itemToBlockName(entity) ?? 'unknown',
     itemType: entity.type,

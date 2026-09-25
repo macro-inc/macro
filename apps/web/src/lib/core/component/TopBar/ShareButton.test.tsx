@@ -4,12 +4,7 @@ import { ok } from 'neverthrow';
 import { createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Permissions } from '../SharePermissions';
-import {
-  ShareDialogContext,
-  ShareModal,
-  ShareOptions,
-  ShareTrigger,
-} from './ShareButton';
+import { ShareModal, ShareOptions, ShareTrigger } from './ShareButton';
 
 const mocks = vi.hoisted(() => ({
   sendToChannel: vi.fn(),
@@ -512,11 +507,7 @@ describe('agent session sharing', () => {
   it('uses explicit identity outside a block', () => {
     mocks.inBlock = false;
     render(() => (
-      <ShareDialogContext.Provider
-        value={{ isOpen: () => false, open: vi.fn(), close: vi.fn() }}
-      >
-        <ShareTrigger id="task-1" blockType="task" />
-      </ShareDialogContext.Provider>
+      <ShareTrigger onClick={vi.fn()} id="task-1" blockType="task" />
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
     expect(mocks.copyLink).toHaveBeenCalledWith(
@@ -524,20 +515,27 @@ describe('agent session sharing', () => {
     );
   });
 
+  it('opens sharing through the provided handler', () => {
+    mocks.inBlock = false;
+    const onClick = vi.fn();
+    render(() => (
+      <ShareTrigger onClick={onClick} id="task-1" blockType="task" />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
   it('uses a host view contextual link when provided', () => {
     mocks.inBlock = false;
     const copyContextLink = vi.fn();
     render(() => (
-      <ShareDialogContext.Provider
-        value={{
-          isOpen: () => false,
-          open: vi.fn(),
-          close: vi.fn(),
-          copyLink: copyContextLink,
-        }}
-      >
-        <ShareTrigger id="task-1" blockType="task" />
-      </ShareDialogContext.Provider>
+      <ShareTrigger
+        onClick={vi.fn()}
+        id="task-1"
+        blockType="task"
+        copyLink={copyContextLink}
+      />
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
@@ -548,25 +546,17 @@ describe('agent session sharing', () => {
   it('uses the host view contextual link inside the share modal', () => {
     const copyContextLink = vi.fn();
     render(() => (
-      <ShareDialogContext.Provider
-        value={{
-          isOpen: () => true,
-          open: vi.fn(),
-          close: vi.fn(),
-          copyLink: copyContextLink,
-        }}
-      >
-        <ShareModal
-          id="persisted-session"
-          name="Fix the menu"
-          owner="someone-else"
-          itemType="agent_session"
-          blockAlias="agent"
-          userPermissions={Permissions.CAN_VIEW}
-          open
-          onOpenChange={vi.fn()}
-        />
-      </ShareDialogContext.Provider>
+      <ShareModal
+        id="persisted-session"
+        name="Fix the menu"
+        owner="someone-else"
+        itemType="agent_session"
+        blockAlias="agent"
+        userPermissions={Permissions.CAN_VIEW}
+        open
+        onOpenChange={vi.fn()}
+        copyLink={copyContextLink}
+      />
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy Link' }));
@@ -576,13 +566,7 @@ describe('agent session sharing', () => {
 
   it('copies the saved session link from the shared header trigger', () => {
     const [id, setId] = createSignal('saved-session');
-    render(() => (
-      <ShareDialogContext.Provider
-        value={{ isOpen: () => false, open: vi.fn(), close: vi.fn() }}
-      >
-        <ShareTrigger id={id()} />
-      </ShareDialogContext.Provider>
-    ));
+    render(() => <ShareTrigger onClick={vi.fn()} id={id()} />);
     setId('current-session');
     fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
     expect(mocks.copyLink).toHaveBeenCalledWith(

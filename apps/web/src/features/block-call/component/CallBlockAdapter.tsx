@@ -9,7 +9,6 @@ import { useCallRecordQuery } from '@queries/call/call';
 import { useSearchParams } from '@solidjs/router';
 import { createSignal, Show } from 'solid-js';
 import { CallRecordingBody } from './CallRecording/CallRecordingBody';
-import { ModalsProvider } from './ModalsProvider';
 import { CallSidePanelSections } from './sidepanel/CallSidePanelSections';
 
 export type CallBlockProps = {
@@ -58,21 +57,19 @@ export function CallBlockAdapter(props: CallBlockProps) {
   return (
     <DocumentBlockContainer>
       <div class="h-full flex flex-col @container">
-        <ModalsProvider>
-          <Show when={callRecord.data}>
-            {(data) => (
-              <SidePanel.Layout>
-                <CallSidePanelSections record={data} />
-                <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-                  <CallRecordingBody
-                    data={data}
-                    transcriptTarget={transcriptTarget}
-                  />
-                </div>
-              </SidePanel.Layout>
-            )}
-          </Show>
-        </ModalsProvider>
+        <Show when={callRecord.data}>
+          {(data) => (
+            <SidePanel.Layout>
+              <CallSidePanelSections record={data} />
+              <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+                <CallRecordingBody
+                  data={data}
+                  transcriptTarget={transcriptTarget}
+                />
+              </div>
+            </SidePanel.Layout>
+          )}
+        </Show>
       </div>
     </DocumentBlockContainer>
   );
