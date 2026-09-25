@@ -90,8 +90,7 @@ function ScheduleSummaryAction(props: {
 }) {
   return (
     <Button
-      variant="accent"
-      size="xs"
+      size="sm"
       aria-label={props.summary.accessibleActionLabel}
       tooltip={props.summary.accessibleActionLabel}
       disabled={props.operation !== 'idle'}
