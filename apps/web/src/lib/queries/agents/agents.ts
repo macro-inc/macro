@@ -104,7 +104,14 @@ export function useCreateAgentMutation() {
         agentKeys.list.queryKey,
         (current = []) => [...current, agent]
       );
-      await invalidateAgentChannelBots(agent.channel_ids);
+      queryClient.setQueryData(
+        botKeys.detail(agent.bot.id).queryKey,
+        agent.bot
+      );
+      await Promise.all([
+        invalidateAgentChannelBots(agent.channel_ids),
+        queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
+      ]);
     },
     onError: (error) => console.error('failed to create agent', error),
   }));
@@ -145,9 +152,16 @@ export function useUpdateAgentMutation() {
             agent.bot.id === updated.bot.id ? updated : agent
           )
       );
-      await invalidateAgentChannelBots([
-        ...previousChannelIds,
-        ...updated.channel_ids,
+      queryClient.setQueryData(
+        botKeys.detail(updated.bot.id).queryKey,
+        updated.bot
+      );
+      await Promise.all([
+        invalidateAgentChannelBots([
+          ...previousChannelIds,
+          ...updated.channel_ids,
+        ]),
+        queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
       ]);
     },
     onError: (error) => console.error('failed to update agent', error),

@@ -1,6 +1,7 @@
-import { getDisplayNameParts, tryMacroId } from '@core/user';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
+import { usePropertyUserDisplay } from '../hooks/usePropertyUserDisplay';
 import type { Property } from '../types';
 import {
   formatBoolean,
@@ -97,12 +98,7 @@ function UserPropertyText(props: {
   fallback?: JSX.Element;
   class?: string;
 }) {
-  const text = () => {
-    const parts = getDisplayNameParts(tryMacroId(props.id), {
-      emailFallback: 'local-part',
-    });
-    return parts.firstName || parts.fullName;
-  };
+  const { shortName: text } = usePropertyUserDisplay(() => props.id);
 
   return (
     <Show when={text()} fallback={props.fallback ?? null}>
@@ -131,6 +127,9 @@ function extractText(property: Property): string {
     const entities = getEntityValues(property);
     if (entities.length === 0) return '';
     if (property.specificEntityType === 'USER') {
+      if (entities.some((entity) => isBotPrincipalId(entity.entity_id))) {
+        return `${entities.length} assignees`;
+      }
       return entities.length === 2 ? '2 people' : `${entities.length} people`;
     }
     return entities.length === 1 ? '1 item' : `${entities.length} items`;
