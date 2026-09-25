@@ -50,9 +50,9 @@ import { tasksTabSearch, tasksTabSearchCodec } from './tasks-tab-search';
 import type {
   TaskDetailTarget,
   TaskSortId,
+  TasksTab,
   TasksViewState,
   TasksViewStateOptions,
-  TasksTab,
 } from './types';
 
 type TasksViewProviderProps = ContextProviderProps & {

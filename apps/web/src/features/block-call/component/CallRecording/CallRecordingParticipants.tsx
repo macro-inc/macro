@@ -7,7 +7,9 @@ import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { createMemo, For } from 'solid-js';
 import { dedupeCallRecordingParticipants } from './call-recording-utils';
 
-export function CallRecordingParticipantsSection(props: { record: CallRecord }) {
+export function CallRecordingParticipantsSection(props: {
+  record: CallRecord;
+}) {
   const { openWithSplit } = useSplitLayout();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
   const participants = createMemo(() =>

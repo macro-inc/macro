@@ -5,6 +5,7 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { lazy } from 'solid-js';
 import { z } from 'zod';
+import { reviewsTabSearch } from './reviews-tab-search';
 
 const ReviewsView = lazy(async () => ({
   default: (await import('./reviews-view')).ReviewsView,
@@ -37,5 +38,6 @@ export const reviewsSplitRoute = defineRoute({
   id: 'view-reviews',
   path: 'reviews',
   component: ReviewsRouteView,
+  search: [reviewsTabSearch.namespace],
   children: [reviewsPrRoute],
 });

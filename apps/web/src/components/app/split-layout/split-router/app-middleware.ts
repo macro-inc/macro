@@ -65,10 +65,7 @@ function redirectLegacyRoutes(
       return redirect(`/drive/call/${encodeURIComponent(callId)}`);
     }
   }
-  if (
-    route.matches[0].id === 'pr-detail' ||
-    route.matches.at(-1)?.id === 'tasks-pr'
-  ) {
+  if (route.matches[0].id === 'pr-detail') {
     const { foreignEntityId } = routeParams(route);
     if (typeof foreignEntityId === 'string') {
       return redirect(`/reviews/pr/${encodeURIComponent(foreignEntityId)}`);

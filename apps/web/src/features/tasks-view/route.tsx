@@ -56,23 +56,6 @@ export const TasksRouteView = withAuth(() => {
   );
 });
 
-// Preserve older Tasks-hosted PR links while the Reviews route owns PR details.
-function TasksLegacyPrRedirectView() {
-  const params = useParams<{ foreignEntityId: string }>();
-  return <RedirectSplit to={{ type: 'pr', id: params.foreignEntityId }} />;
-}
-export const tasksPrRoute = defineRoute({
-  id: 'tasks-pr',
-  path: 'pr/:foreignEntityId',
-  params: z.object({ foreignEntityId: z.string().min(1) }),
-  component: TasksLegacyPrRedirectView,
-  remountKey: ({ foreignEntityId }) => foreignEntityId,
-  claim: ({ foreignEntityId }) => ({
-    namespace: 'block',
-    id: `pr:${foreignEntityId}`,
-  }),
-});
-
 export const taskDetailRoute = defineRoute({
   id: 'tasks-task',
   path: ':taskId',
@@ -90,5 +73,5 @@ export const tasksSplitRoute = defineRoute({
   path: 'tasks',
   component: TasksRouteView,
   search: '*' as const,
-  children: [tasksPrRoute, taskDetailRoute],
+  children: [taskDetailRoute],
 });

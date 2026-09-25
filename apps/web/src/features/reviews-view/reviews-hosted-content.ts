@@ -1,4 +1,4 @@
-import type { SplitRouteMatch } from '@app/lib/split-router';
+import type { SplitLocation, SplitRouteMatch } from '@app/lib/split-router';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 
 const hostedDetailRoutes = {
@@ -9,10 +9,10 @@ const hostedDetailRoutes = {
 } satisfies Record<string, (id: string) => SplitRouteMatch>;
 
 /** Open a Reviews-hosted detail without mounting its legacy block. */
-export function reviewsHostedContent(content: {
-  type: string;
-  id: string;
-}): SplitContent | undefined {
+export function reviewsHostedContent(
+  content: { type: string; id: string },
+  search?: SplitLocation['search']
+): SplitContent | undefined {
   const detail = hostedDetailRoutes[
     content.type as keyof typeof hostedDetailRoutes
   ]?.(content.id);
@@ -23,6 +23,7 @@ export function reviewsHostedContent(content: {
     id: 'reviews',
     entryMetadata: {
       route: { matches: [{ id: 'view-reviews', params: {} }, detail] },
+      ...(search ? { search } : {}),
     },
   };
 }

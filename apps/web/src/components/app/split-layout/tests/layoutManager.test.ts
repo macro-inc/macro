@@ -7,6 +7,7 @@ import {
   emailSplitRoute,
   emailThreadRoute,
 } from '@app/features/email-view/route';
+import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { reviewsSplitRoute } from '@app/features/reviews-view/route';
 import {
   getListNavigationSource,
@@ -40,6 +41,23 @@ import { createAppSplitRouterMiddleware } from '../split-router/app-middleware';
 import { appSplitRoutes } from '../split-router/app-routes';
 import { createAppSplitRouterLayout } from '../splitRouterLayout';
 
+// Settings UI imports the app route registry and is unrelated to layout behavior.
+vi.mock('@core/constant/SettingsState', () => ({
+  useSettingsState: vi.fn(),
+}));
+
+// The route graph imports websocket clients; jsdom cannot open their sockets.
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: vi.fn() },
 }));
@@ -50,12 +68,6 @@ vi.mock('../componentRegistry', () => ({
     id,
     params,
   })),
-}));
-
-vi.mock('@core/constant/allBlocks', () => ({
-  fileTypeToBlockName: vi.fn((type: string) => type),
-  isBlockAlias: vi.fn(() => false),
-  resolveBlockAlias: vi.fn((type: string) => type),
 }));
 
 beforeAll(() => {
@@ -929,7 +941,7 @@ describe('layoutManager', () => {
       dispose();
     });
     it('opens PR details in Reviews and redirects older PR links', async () => {
-      for (const path of ['/pr/pr-1', '/tasks/pr/pr-1', '/reviews/pr/pr-1']) {
+      for (const path of ['/pr/pr-1', '/reviews/pr/pr-1']) {
         const { manager, location, router, dispose } = ingressRouter(path);
         await router.settled();
         const split = manager.splits()[0];
@@ -948,6 +960,32 @@ describe('layoutManager', () => {
       }
     });
 
+    it('opens a Reviews PR in a new split without reusing the Reviews list', async () => {
+      const { manager, router, dispose } = ingressRouter('/reviews');
+      await router.settled();
+      const listSplit = manager.splits()[0];
+      const content = reviewsHostedContent({ type: 'pr', id: 'pr-1' });
+      if (!content) throw new Error('Expected hosted PR content');
+
+      const opened = manager.openWithSplit(content, {
+        handle: manager.getSplit(listSplit.id),
+        preferNewSplit: true,
+        allowDuplicate: true,
+      });
+      await router.settled();
+
+      expect(opened.status).toBe('opened');
+      expect(manager.splits()).toHaveLength(2);
+      expect(manager.splits()[0].id).toBe(listSplit.id);
+      if (opened.status === 'opened') {
+        expect(router.route(opened.split.id)?.matches.at(-1)).toEqual({
+          id: 'reviews-pr',
+          params: { foreignEntityId: 'pr-1' },
+        });
+      }
+      router.dispose();
+      dispose();
+    });
     it('keeps PR details in Reviews on touch', async () => {
       const { manager, location, router, dispose } = ingressRouter('/pr/pr-1', {
         touch: true,

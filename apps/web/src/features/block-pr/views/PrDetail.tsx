@@ -17,7 +17,11 @@ import {
   PrTimelineSkeleton,
   PrTitleSkeleton,
 } from '../component/PrSkeletons';
-import { PR_PILL_CLASS, PrStatusChip, PrStatusIcon } from '../component/PrStatus';
+import {
+  PR_PILL_CLASS,
+  PrStatusChip,
+  PrStatusIcon,
+} from '../component/PrStatus';
 import { PrTimeline } from '../component/PrTimeline';
 import { PrSidePanelSections } from '../component/sidepanel/PrSidePanelSections';
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
@@ -169,7 +173,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
   };
   const githubUrl = () => {
     const data = detail.data();
-    return data ? data.pullRequest.url ?? prHtmlUrl(data.prRef) : undefined;
+    return data ? (data.pullRequest.url ?? prHtmlUrl(data.prRef)) : undefined;
   };
   return (
     <SidePanel.Root persistKey={`pr:${props.foreignEntityId}`}>
@@ -251,8 +255,12 @@ function PrMetadata(props: {
       >
         <Layer depth={2}>
           <span class={PR_PILL_CLASS}>
-            <span class="text-success">+{props.pullRequest?.additions ?? 0}</span>
-            <span class="text-failure">−{props.pullRequest?.deletions ?? 0}</span>
+            <span class="text-success">
+              +{props.pullRequest?.additions ?? 0}
+            </span>
+            <span class="text-failure">
+              −{props.pullRequest?.deletions ?? 0}
+            </span>
           </span>
         </Layer>
       </Show>

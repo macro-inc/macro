@@ -10,34 +10,59 @@ export type ReviewsFilter = {
   authors: readonly string[];
 };
 
+export function isAuthoredBy(
+  review: GithubPullRequestEntity,
+  authorLogin?: string,
+  authorId?: string
+): boolean {
+  const reviewAuthorId = review.metadata.authorId;
+  if (authorId && reviewAuthorId !== undefined) {
+    if (String(reviewAuthorId) === authorId) return true;
+  }
+
+  const reviewAuthor = review.metadata.authorLogin;
+  if (!authorLogin || !reviewAuthor) return false;
+
+  return reviewAuthor.toLowerCase() === authorLogin.toLowerCase();
+}
+
 export function filterReviews(
   reviews: readonly GithubPullRequestEntity[],
   filter: ReviewsFilter
 ): GithubPullRequestEntity[] {
   const search = filter.search.trim().toLocaleLowerCase();
+
   return reviews.filter((review) => {
-    const repository = `${review.metadata.owner}/${review.metadata.repo}`;
-    const author = review.metadata.authorLogin;
-    if (filter.scope === 'authored') {
-      const loginMatches =
-        filter.authorLogin !== undefined &&
-        author?.toLowerCase() === filter.authorLogin.toLowerCase();
-      const idMatches =
-        filter.authorId !== undefined &&
-        review.metadata.authorId !== undefined &&
-        String(review.metadata.authorId) === filter.authorId;
-      if (!loginMatches && !idMatches) return false;
+    if (
+      filter.scope === 'authored' &&
+      !isAuthoredBy(review, filter.authorLogin, filter.authorId)
+    ) {
+      return false;
     }
-    if (filter.repositories.length && !filter.repositories.includes(repository))
+
+    const repository = `${review.metadata.owner}/${review.metadata.repo}`;
+    if (
+      filter.repositories.length > 0 &&
+      !filter.repositories.includes(repository)
+    ) {
       return false;
-    if (filter.authors.length && (!author || !filter.authors.includes(author)))
-      return false;
+    }
+
+    const author = review.metadata.authorLogin;
+    if (filter.authors.length > 0) {
+      if (!author || !filter.authors.includes(author)) return false;
+    }
+
     if (!search) return true;
-    return [
+
+    const searchableFields = [
       review.metadata.name,
       repository,
       String(review.metadata.number),
       author ?? '',
-    ].some((value) => value.toLocaleLowerCase().includes(search));
+    ];
+    return searchableFields.some((value) =>
+      value.toLocaleLowerCase().includes(search)
+    );
   });
 }

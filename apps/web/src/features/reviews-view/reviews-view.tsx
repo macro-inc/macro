@@ -3,11 +3,17 @@ import {
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
-import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
+import {
+  createSearchParams,
+  SplitRouter,
+  useNavigate,
+  useParams,
+} from '@app/lib/split-router';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
@@ -26,14 +32,23 @@ import {
 } from './components/ReviewsControls';
 import { ReviewsList } from './components/ReviewsList';
 import { ReviewsSidebar } from './components/ReviewsSidebar';
+import { createReviewsListController } from './primitives/create-reviews-list-controller';
 import { useReviewsQuery } from './queries/use-reviews-query';
+import { filterReviews } from './reviews-filter';
 import { reviewsHostedContent } from './reviews-hosted-content';
+import { reviewsTabSearch, reviewsTabSearchCodec } from './reviews-tab-search';
 import type { ReviewsScope, ReviewsSortId } from './reviews-types';
 import { reviewsPrRoute, reviewsSplitRoute } from './route';
 
+const REVIEW_SCOPE_TITLES: Record<ReviewsScope, string> = {
+  all: 'All PRs',
+  involving: 'Involving me',
+  authored: 'Authored by me',
+};
 const REVIEW_SCOPE_TABS: PillTabItem<ReviewsScope>[] = [
-  { value: 'all', label: 'All PRs' },
-  { value: 'authored', label: 'Authored by me' },
+  { value: 'involving', label: REVIEW_SCOPE_TITLES.involving },
+  { value: 'all', label: REVIEW_SCOPE_TITLES.all },
+  { value: 'authored', label: REVIEW_SCOPE_TITLES.authored },
 ];
 function ReviewsRoot() {
   const panel = useSplitPanelOrThrow();
@@ -43,9 +58,9 @@ function ReviewsRoot() {
   );
   const navigate = useNavigate();
   const params = useParams<{ foreignEntityId?: string }>();
-  const [scope, setScope] = createSignal<ReviewsScope>('all');
-  const scopeTitle = () =>
-    scope() === 'authored' ? 'Authored by me' : 'All PRs';
+  const [tabSearch] = createSearchParams(reviewsTabSearch);
+  const scope = (): ReviewsScope => tabSearch.tab;
+  const scopeTitle = () => REVIEW_SCOPE_TITLES[scope()];
   const [search, setSearch] = createSignal('');
   const [sort, setSort] = createSignal<ReviewsSortId>('updated_at');
   const [selectedRepositories, setSelectedRepositories] = createSignal<
@@ -53,8 +68,9 @@ function ReviewsRoot() {
   >([]);
   const [selectedAuthors, setSelectedAuthors] = createSignal<string[]>([]);
   const listEnabled = () => !params.foreignEntityId;
-  const source = useReviewsQuery(sort, listEnabled);
+  const source = useReviewsQuery(sort, scope, listEnabled);
   const githubLink = useGithubLinkStatusQuery({ enabled: listEnabled });
+  const viewer = useUserContext();
   const authorLogin = () =>
     githubLink.isPending ? undefined : githubLink.data?.username;
   const authorId = () =>
@@ -99,22 +115,53 @@ function ReviewsRoot() {
     setSelectedRepositories([]);
     setSelectedAuthors([]);
   };
-  const openList = () => navigate({ route: reviewsSplitRoute, params: {} });
-  const selectScope = (next: ReviewsScope) => {
-    setScope(next);
-    if (params.foreignEntityId) openList();
-  };
+  const clearSearch = () => setSearch('');
+  const searchForTab = (tab: ReviewsScope) => ({
+    [reviewsTabSearch.namespace]: reviewsTabSearchCodec.serialize({ tab }),
+  });
+  const openList = () =>
+    navigate(
+      { route: reviewsSplitRoute, params: {} },
+      { search: searchForTab(scope()) }
+    );
+  const selectScope = (next: ReviewsScope) =>
+    navigate(
+      { route: reviewsSplitRoute, params: {} },
+      { search: searchForTab(next) }
+    );
   const openReview = (foreignEntityId: string, newSplit: boolean) => {
     if (newSplit) {
-      const content = reviewsHostedContent({ type: 'pr', id: foreignEntityId });
+      const tabSearchParams = reviewsTabSearchCodec.serialize({ tab: scope() });
+      const content = reviewsHostedContent(
+        { type: 'pr', id: foreignEntityId },
+        tabSearchParams
+          ? { [reviewsTabSearch.namespace]: tabSearchParams }
+          : undefined
+      );
       if (content)
         layout.openWithSplit(content, {
           preferNewSplit: true,
+          // List and detail share the Reviews shell component identity.
+          allowDuplicate: true,
         });
       return;
     }
-    navigate({ route: reviewsPrRoute, params: { foreignEntityId } });
+    navigate(
+      { route: reviewsPrRoute, params: { foreignEntityId } },
+      { search: searchForTab(scope()) }
+    );
   };
+  const reviews = createMemo(() =>
+    filterReviews(source.reviews(), {
+      scope: scope(),
+      authorLogin: authorLogin(),
+      authorId: authorId(),
+      search: search(),
+      repositories: selectedRepositories(),
+      authors: selectedAuthors(),
+    })
+  );
+  const listController = createReviewsListController(reviews, openReview);
   const controls = () => ({
     sort: sort(),
     onSortChange: setSort,
@@ -180,17 +227,25 @@ function ReviewsRoot() {
       </ViewShell.Header>
       <ViewShell.Content>
         <ReviewsList
+          list={listController}
           source={source}
           scope={scope()}
           authorLogin={authorLogin()}
           authorId={authorId()}
+          viewerName={viewer.userInfo()?.name ?? undefined}
           githubIdentityLoading={githubLink.isPending}
-          linkedGithubAccount={
-            !githubLink.isPending && githubLink.data?.status === 'linked'
+          githubAccountStatus={
+            githubLink.isError
+              ? 'error'
+              : githubLink.isPending
+                ? undefined
+                : githubLink.data?.status
           }
           search={search()}
           selectedRepositories={selectedRepositories()}
           selectedAuthors={selectedAuthors()}
+          onClearFilters={clearFilters}
+          onClearSearch={clearSearch}
           onOpen={openReview}
         />
       </ViewShell.Content>
@@ -231,7 +286,12 @@ function ReviewsRoot() {
             main={{ preferredWidth: 640 }}
           >
             <ViewShell.Aside>
-              <ReviewsSidebar scope={scope()} onScopeChange={selectScope} />
+              <ReviewsSidebar
+                scope={scope()}
+                onScopeChange={selectScope}
+                onOpenReview={openReview}
+                activeForeignEntityId={params.foreignEntityId}
+              />
             </ViewShell.Aside>
             <ViewShell.Main>
               <Suspense

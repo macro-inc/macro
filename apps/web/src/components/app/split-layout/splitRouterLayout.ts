@@ -93,7 +93,9 @@ export function createAppSplitRouterLayout(
       if (!deepEqual(current.route, next.route)) {
         handle.captureEntryState();
       }
-      handle.updateCurrentEntry(() => content);
+      handle.updateCurrentEntry((currentContent) =>
+        contentForLocation(next, currentContent)
+      );
     },
 
     open({ location, target, replace }) {

@@ -15,13 +15,13 @@ import {
 } from '@app/features/calendar-view/types';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
+import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
   type EntityWithRawNotifications,
   getEntityNotifications,
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
-import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { isRecord } from '@app/lib/split-router/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
@@ -666,7 +666,7 @@ export const openEntityInSplitFromUnifiedList = async (
 
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {
-      const content = { type: 'pr', id: entity.id };
+      const content = { type: 'pr' as const, id: entity.id };
       const result = splitManager.openWithSplit(
         reviewsHostedContent(content) ?? content,
         {

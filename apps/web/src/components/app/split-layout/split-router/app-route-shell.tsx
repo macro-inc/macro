@@ -69,7 +69,8 @@ export function NewAppView(props: {
   const surfaceSupported = () => !props.desktopOnly || !isTouchDevice();
   const renderModern = () =>
     (enabled() ||
-      (ready() && Boolean(props.alwaysRenderDetail && props.detailRequested?.()))) &&
+      (ready() &&
+        Boolean(props.alwaysRenderDetail && props.detailRequested?.()))) &&
     surfaceSupported() &&
     !detailUnsupported();
   const fallback = () => {

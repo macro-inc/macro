@@ -8,8 +8,8 @@ import {
   PrDetailContent,
   usePrDetail,
 } from '@block-pr/views/PrDetail';
-import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SidePanel } from '@components/app/side-panel';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitPanel } from '@components/app/split-panel';
 import { Permissions } from '@core/component/SharePermissions';
 import { onMount } from 'solid-js';
@@ -89,7 +89,7 @@ export function ReviewsPrDetail(props: { foreignEntityId: string }) {
         <ReviewsPrBreadcrumb
           foreignEntityId={props.foreignEntityId}
           name={name()}
-          status={detail.data()?.pullRequest.status}
+          status={detail.data()?.pullRequest.status ?? undefined}
         />
         <PrDetailContent
           foreignEntityId={props.foreignEntityId}
