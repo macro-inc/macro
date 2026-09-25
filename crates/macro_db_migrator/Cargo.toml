@@ -17,9 +17,24 @@ comment-import = [
   "dep:tracing",
 ]
 
+crm-comment-import = [
+  "dep:clap",
+  "dep:database_env_vars",
+  "dep:macro_entrypoint",
+  "dep:macro_env",
+  "dep:macro_uuid",
+  "dep:rootcause",
+  "dep:serde_json",
+  "dep:tokio",
+]
+
 [[bin]]
 name = "comment_import"
 required-features = ["comment-import"]
+
+[[bin]]
+name = "crm_comment_import"
+required-features = ["crm-comment-import"]
 
 [dependencies]
 clap = { workspace = true, optional = true }
