@@ -38,8 +38,9 @@ pub trait EntitlementSource: Send + Sync + 'static {
 pub trait UsageReader: Send + Sync + 'static {
     /// List-rate usage for each of `users` within `period`.
     ///
-    /// AI projections remain in `ai_usage` for cost tracking but do not
-    /// consume a user's allowance, credits, or overage.
+    /// [`NON_BILLABLE_AI_FEATURES`](super::models::NON_BILLABLE_AI_FEATURES)
+    /// remain in `ai_usage` for cost tracking but do not consume a user's
+    /// allowance, credits, or overage.
     fn list_rate_usage_cents_by_user(
         &self,
         users: &[MacroUserIdStr<'static>],
