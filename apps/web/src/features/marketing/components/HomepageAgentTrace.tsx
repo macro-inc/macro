@@ -1,4 +1,5 @@
 import { Message } from '@app/features/block-agent/component/AgentMessage';
+import { TextPart } from '@app/features/block-agent/component/parts/TextPart';
 import { PrDocument } from '@block-pr/component/PrDocument';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
@@ -6,6 +7,7 @@ import XIcon from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { Tabs } from '@ui/components/Tabs';
+import { UserMessageBubble } from '@ui/components/UserMessageBubble';
 import { Show } from 'solid-js';
 import {
   DEPLOY_PR,
@@ -76,16 +78,10 @@ export default function HomepageAgentTrace(props: {
           }
         >
           <StaticMarkdownContext>
-            <div class="mb-8">
-              <Message
-                message={{
-                  ...DEPLOY_TRACE,
-                  author: { kind: 'user', userId: 'demo-teo' },
-                  parts: [{ kind: 'text', text: DEPLOY_PROMPT }],
-                  stop: null,
-                }}
-                inFlight={false}
-              />
+            <div class="mb-8 flex w-full flex-col items-end">
+              <UserMessageBubble>
+                <TextPart text={DEPLOY_PROMPT} />
+              </UserMessageBubble>
             </div>
             <div class="mb-4 flex items-center gap-2 text-sm font-medium">
               <CursorIcon class="size-4" />
