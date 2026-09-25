@@ -183,7 +183,7 @@ LEVEL = {  # per-type bus level (linear, relative to the UI bus)
 
 
 SONGS = {  # Mixkit Stock Music Free License
-    "ambient": ("song-ambient-kodama-night-town.mp3", 11.6186),  # "Kodama Night Town", Alejandro Magaña; section entry downbeat
+    "ambient": ("song-ambient-kodama-night-town.mp3", 11.6186),  # section entry downbeat  # "Kodama Night Town", Alejandro Magaña; section entry downbeat
     "funk": ("song-funk-are-u-ready.mp3", 17.8605),              # "Are U Ready For This?"; accented bar downbeat
 }
 

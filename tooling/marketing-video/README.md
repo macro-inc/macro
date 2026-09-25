@@ -4,8 +4,8 @@ A 28-second, 1440×1440, 60 fps loop. It's entirely code: one HTML file, no Afte
 One shape morphs through Macro's product without a cut. A cursor drives every
 change on a 120 BPM grid: 28 steps, one every other beat (14 bars), so each moment has room to land.
 
-- `macro-trailer.mp4`: master, 1440×1440, 60 fps, motion blur, AAC audio
-- `macro-trailer-1080.mp4`: 1080×1080 for social uploads
+- `VIBE=ambient|funk OUT=name ./build.sh` renders one single-vibe cut (1440 master and 1080)
+- `PROMPT.md`: the template for new feature videos; `ROUTINE.md`: the weekday routine
 - `trailer.html`: the source. Open it in a browser to watch it play live; click to start the audio.
   Add `?t=7.25` to freeze on any time. If your browser blocks fonts over `file://`, run `npx serve .`
   and open it from there.

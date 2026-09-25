@@ -132,12 +132,14 @@ html.render body { display: block; min-height: 0; }
 // The story is 28 steps. Music alternates an ambient track (~78 BPM) and a funk
 // track (~110 BPM); each step lasts a whole number of that section's beats, and
 // every section is whole bars, so every change lands on a beat.
-const MUSIC = [ // [song, bpm, beats per step for each step in the section]
-  ["ambient", 78.01, [1, 1, 1, 1, 1, 1, 1, 1]],      // steps 0-7   Get Macro → Home
-  ["funk", 109.95, [1, 2, 2, 1, 1, 1]],             // steps 8-13  Team chat → agent
-  ["ambient", 78.01, [1, 2, 1, 1, 1, 2]],            // steps 14-19 Docs → split view
-  ["funk", 109.95, [1, 1, 1, 1, 2, 1, 2, 3]],       // steps 20-27 Tasks → ⌘K → Get Macro
-];
+// One vibe per video; the daily series alternates them by day (Austin).
+//   ambient: electronic, mysterious, ~80 BPM ("Kodama Night Town", 78.01)
+//   funk:    drum-focused, restless, ~110 BPM ("Are U Ready For This?", 109.95)
+// Each step lasts a whole number of beats; the total is whole bars.
+const VIBE = new URLSearchParams(location.search).get("vibe") || "ambient";
+const MUSIC = VIBE === "funk"
+  ? [["funk", 109.95, [1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2, 1, 1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 2, 1, 2, 1, 3, 3]]]   // 40 beats = 10 bars
+  : [["ambient", 78.01, Array(28).fill(1)]];                                                              // 28 beats = 7 bars
 const STEP_T = [0];
 for (const [, bpm, beats] of MUSIC) for (const n of beats) STEP_T.push(STEP_T[STEP_T.length - 1] + (n * 60) / bpm);
 const BEATS = STEP_T.length - 1, T = STEP_T[BEATS];

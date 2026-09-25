@@ -1,4 +1,4 @@
-# Macro feature video: prompt template (draft)
+# Macro feature video: prompt template
 
 Use this to make one short, code-rendered motion video about one Macro feature.
 The toolkit is in this folder: `trailer.html` is the reference implementation;
@@ -10,7 +10,16 @@ copy its engine and change the story. Nothing is made in After Effects.
   "a task linked to its GitHub PR", "import from Linear", "draft an email from a call transcript".
 - STORY: the 6–12 UI states that show it, in order, driven by a cursor and keyboard.
 - LABELS: 2–5 short feature labels (1–3 words, e.g. "Team chat", "Tasks", "Docs").
+- VIBE: ambient or funk (see the music section).
 </inputs>
+
+<format>
+- Render every video in all three aspect ratios from the same seek(t): 1:1 at 1440×1440
+  (Instagram feed), 9:16 at 1080×1920 (Reels, Stories, TikTok) and 16:9 at 1920×1080 (X).
+  Parameterize the stage size, re-fit the camera per format, and move labels to a safe
+  area (9:16 labels sit higher, about 14% from the top). Check stills in all three.
+- Length: 10–25 s. Short, single-idea cuts are fine.
+</format>
 
 <brand>
 Match the marketing homepage (`apps/web/marketing` on `codex/marketing-homepage`,
@@ -47,7 +56,9 @@ One shape, never cut: every state is the same element morphing its size, radius 
 while its content swaps with a short blur (separate exit and enter timing, so text never overlaps).
 A cursor drives every change with real clicks and drags. Springs everywhere, with a tiny overshoot at most.
 The camera zooms so each state fills the frame and leaves room under the label.
-The first frame (the Get Macro pill) has no text beyond the button. The last frame is the first frame.
+Vary the opening. Don't always start on the Get Macro pill; start inside the UI, on the
+Macro mark, on an empty composer, and so on. The first slide carries no label or headline text.
+The last frame is the first frame (a seamless loop).
 Pacing: roughly 0.6–0.8 s per step, with holds on the moment that explains the feature.
 Viewers on Instagram aren't reading the UI, so the label must say what's happening.
 A container may grow as content arrives but never shrinks and regrows. Menus overflow their
@@ -57,14 +68,23 @@ dead time, orange, fake-looking UI, anything that looks like a template.
 </direction>
 
 <music>
-Alternate two Mixkit tracks (Free License): an electronic, ambient, mysterious one (~80 BPM,
-default "Kodama Night Town", Mixkit 114) and a drum-focused, funky, restless one (~110 BPM,
-default "Are U Ready For This?", Mixkit 1127). Sections are whole bars. Each song resumes where
-it left off, cuts land on downbeats, and there's no fade at the end. Measure tempo and downbeats with
-numpy (`audio/analyze.py`, `structure.py`) and check the waveform against the grid by eye.
-Keep the synthesized click, key, pop and whoosh sounds, each placed by its measured peak.
-Master to about −15 LUFS and −1 dBTP.
+One vibe per video. Alternate between days (Austin's direction), never within a video:
+- ambient: electronic, ambient, mysterious, about 80 BPM (Mon / Wed / Fri)
+- funk: drum-focused, funky, upbeat, restless, about 110 BPM (Tue / Thu)
+Pick fresh Mixkit tracks (Free License) that match, or reuse the defaults: "Kodama Night Town"
+(Mixkit 114, 78.01 BPM, downbeat 11.619 s) and "Are U Ready For This?" (Mixkit 1127,
+109.95 BPM, downbeat 17.861 s). Measure tempo and downbeats with numpy (`audio/analyze.py`,
+`structure.py`, `tempo2.py`) and check the waveform against the grid by eye. Every step lasts a
+whole number of beats and the video is whole bars, so every change lands on a beat.
+There's no fade at the end. Keep the synthesized click, key, pop and whoosh sounds,
+each placed by its measured peak. Master to about −15 LUFS and −1 dBTP.
 </music>
+
+<copy>
+Write X copy in a technical voice: plain, specific and concrete about what the feature does
+and how. No hype, no emoji walls, at most one hashtag. Name integrations exactly (Cursor,
+Linear, GitHub). Either one post, or a 2–3 post thread with one video per post.
+</copy>
 
 <build>
 1. One HTML file, 1440×1440. Every style is computed from time inside seek(t), with no
@@ -77,7 +97,7 @@ Master to about −15 LUFS and −1 dBTP.
    The fastest-moving cursor also gets a speed-scaled directional blur.
 5. Before the full render, render one still per step and fix anything early, cramped,
    off-grid or unreadable. Run `purity.mjs` and `probe.mjs`: t=0, t=T and t=2T must hash identically.
-6. Deliver the 1440 master and a 1080 cut.
+6. Deliver 1:1, 9:16 and 16:9 MP4s (H.264, AAC, faststart).
 </build>
 
 <gotchas>

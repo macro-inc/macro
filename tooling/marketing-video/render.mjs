@@ -7,7 +7,7 @@ try { ({ chromium } = await import("playwright")); } catch { ({ chromium } = awa
 import fs from "node:fs";
 import path from "node:path";
 
-const HTML = "file://" + path.resolve("trailer.html") + "?render=1";
+const HTML = "file://" + path.resolve(process.env.PAGE || "trailer.html") + "?render=1" + (process.env.VIBE ? "&vibe=" + process.env.VIBE : "");
 const FPS = 60, SUB = 4, SHUTTER = 0.5; // 180° shutter, 4 samples per frame
 
 async function openPage(browser) {
