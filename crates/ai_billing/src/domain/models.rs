@@ -429,7 +429,7 @@ impl DenyReason {
     pub fn message(self) -> &'static str {
         match self {
             DenyReason::AllowanceExhausted => {
-                "You've used this period's included AI. Add credits, turn on usage billing, or upgrade to keep going."
+                "You've used this period's included AI. Add credits or turn on usage billing to keep going."
             }
             DenyReason::OverageLimitReached => {
                 "You've reached your AI spending limit for this period. Raise the limit or add credits to keep going."

@@ -19,6 +19,7 @@ use macro_authorization::{
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use teams::domain::model::SeatPlan;
 use utoipa::ToSchema;
 
 /// Error response body.
@@ -42,7 +43,7 @@ pub struct PlanCatalogEntry {
 /// The plan catalog and the knobs the billing UI offers.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct PlanCatalogResponse {
-    /// Every plan, cheapest first.
+    /// Free and every purchasable paid plan, cheapest first.
     pub plans: Vec<PlanCatalogEntry>,
     /// Credit packs a payer may buy, cents.
     pub credit_packs_cents: Vec<i64>,
@@ -281,8 +282,8 @@ pub async fn get_summary_handler<B: BillingService, Auth: MacroAuthorizationServ
 )]
 pub async fn get_plans_handler() -> Json<PlanCatalogResponse> {
     Json(PlanCatalogResponse {
-        plans: [PlanTier::Free, PlanTier::Premium, PlanTier::Max]
-            .into_iter()
+        plans: std::iter::once(PlanTier::Free)
+            .chain(SeatPlan::PURCHASABLE.into_iter().map(PlanTier::from))
             .map(|tier| PlanCatalogEntry {
                 tier,
                 monthly_price_cents: tier.monthly_price_cents(),
@@ -415,52 +416,4 @@ pub async fn settle_handler<B: BillingService, Auth: MacroAuthorizationService>(
 }
 
 #[cfg(test)]
-mod test {
-    use super::{ReturnUrlError, validate_return_url};
-
-    #[test]
-    fn return_urls_must_be_https_on_the_calling_origin() {
-        let origin = Some("https://macro.com");
-        assert_eq!(
-            validate_return_url("https://macro.com/app/settings/billing?x=1", origin),
-            Ok(())
-        );
-        // Without an Origin header any https URL without credentials passes.
-        assert_eq!(
-            validate_return_url("https://preview.macro.com/app", None),
-            Ok(())
-        );
-        assert_eq!(
-            validate_return_url("http://localhost:3000/app", Some("http://localhost:3000")),
-            Ok(())
-        );
-        assert_eq!(
-            validate_return_url("https://macro.com:443/app", origin),
-            Ok(())
-        );
-        assert_eq!(
-            validate_return_url("https://macro.com:8443/app", origin),
-            Err(ReturnUrlError::Origin)
-        );
-        assert_eq!(
-            validate_return_url("https://evil.example/app", origin),
-            Err(ReturnUrlError::Origin)
-        );
-        assert_eq!(
-            validate_return_url("http://macro.com/app", None),
-            Err(ReturnUrlError::Scheme)
-        );
-        assert_eq!(
-            validate_return_url("javascript:alert(1)", None),
-            Err(ReturnUrlError::Unparseable)
-        );
-        assert_eq!(
-            validate_return_url("/app/settings/billing", None),
-            Err(ReturnUrlError::Unparseable)
-        );
-        assert_eq!(
-            validate_return_url("https://user:pw@macro.com/app", None),
-            Err(ReturnUrlError::Credentials)
-        );
-    }
-}
+mod test;

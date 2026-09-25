@@ -310,6 +310,7 @@ export const Billing = () => {
                   </ul>
                 </section>
               </SettingsCard>
+              {/*
               <SettingsCard>
                 <section class="flex flex-col gap-4 p-4">
                   <header class="flex items-center gap-2">
@@ -331,8 +332,10 @@ export const Billing = () => {
                   </ul>
                 </section>
               </SettingsCard>
+              */}
             </SettingsSection>
           </Match>
+          {/*
           <Match when={tier() === 'premium'}>
             <SettingsSection title={DEV_MODE_ENV ? 'Need more AI?' : 'Upgrade'}>
               <SettingsCard>
@@ -367,6 +370,7 @@ export const Billing = () => {
               </SettingsCard>
             </SettingsSection>
           </Match>
+          */}
           <Match when={tier() === 'max'}>
             <SettingsSection>
               <p class="px-6 text-xs text-ink-extra-muted">

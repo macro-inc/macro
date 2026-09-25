@@ -15,34 +15,40 @@ export type Plan = {
 /** Tiers that correspond to real Stripe products. Excludes 'free'. */
 export type PaidPlanTier = Exclude<PlanTier, 'free'>;
 
+const FREE_PLAN = {
+  tier: 'free',
+  name: 'Free',
+  price: 0,
+  highlighted: false,
+  aiIncluded: 0,
+} as const satisfies Plan;
+
+const PREMIUM_PLAN = {
+  tier: 'premium',
+  name: 'Premium',
+  price: 40,
+  highlighted: true,
+  aiIncluded: 40,
+} as const satisfies Plan;
+
+const MAX_PLAN = {
+  tier: 'max',
+  name: 'Max',
+  price: 200,
+  highlighted: false,
+  aiIncluded: 200,
+} as const satisfies Plan;
+
 export const PLANS = [
-  {
-    tier: 'free' as const,
-    name: 'Free',
-    price: 0,
-    highlighted: false,
-    aiIncluded: 0,
-  },
-  {
-    tier: 'premium' as const,
-    name: 'Premium',
-    price: 40,
-    highlighted: true,
-    aiIncluded: 40,
-  },
-  {
-    tier: 'max' as const,
-    name: 'Max',
-    price: 200,
-    highlighted: false,
-    aiIncluded: 200,
-  },
+  FREE_PLAN,
+  PREMIUM_PLAN,
+  // MAX_PLAN,
 ] as const satisfies Plan[];
 
 export const PLAN_BY_TIER: Record<PlanTier, Plan> = {
-  free: PLANS[0],
-  premium: PLANS[1],
-  max: PLANS[2],
+  free: FREE_PLAN,
+  premium: PREMIUM_PLAN,
+  max: MAX_PLAN,
 };
 
 interface PlanFeature {

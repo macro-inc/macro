@@ -24,6 +24,7 @@ const state = vi.hoisted(() => ({
   summarySuccess: true,
   unlimited: false,
   toastSuccess: vi.fn(),
+  changePlan: vi.fn(),
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
@@ -63,7 +64,10 @@ vi.mock('@queries/auth', () => ({
       };
     },
   }),
-  useChangePlanMutation: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useChangePlanMutation: () => ({
+    isPending: false,
+    mutateAsync: state.changePlan,
+  }),
   useCreateCheckoutSessionMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@service-stripe/client', () => ({
@@ -101,6 +105,7 @@ describe.each([false, true])('Billing with DEV_MODE_ENV=%s', (dev) => {
     state.summarySuccess = true;
     state.unlimited = false;
     state.toastSuccess.mockClear();
+    state.changePlan.mockClear();
   });
 
   it.each<PlanTier>(['free', 'premium', 'max'])(
@@ -127,11 +132,6 @@ describe.each([false, true])('Billing with DEV_MODE_ENV=%s', (dev) => {
           name: tier === 'free' ? 'Upgrade now' : 'Manage',
         })
       ).toBeTruthy();
-      if (tier === 'premium') {
-        expect(
-          screen.getByText(dev ? 'Need more AI?' : 'Upgrade')
-        ).toBeTruthy();
-      }
     }
   );
 
@@ -161,15 +161,36 @@ describe.each([false, true])('Billing with DEV_MODE_ENV=%s', (dev) => {
     ).toBe(dev);
   });
 
-  it('only advertises an increased allowance in the dev upgrade toast', async () => {
+  it.each<PlanTier>(['free', 'premium'])(
+    'does not offer Max purchases from the %s plan',
+    (tier) => {
+      state.tier = tier;
+      render(() => <Billing />);
+
+      expect(
+        screen.queryByRole('button', { name: 'Get Max' })
+      ).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Upgrade to Max' })
+      ).toBeNull();
+    }
+  );
+
+  it('keeps the current Max plan visible and allows a Premium downgrade', async () => {
+    state.tier = 'max';
     render(() => <Billing />);
-    fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Max' }));
+
+    expect(screen.getByRole('heading', { name: 'Max plan' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Get Max' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Upgrade to Max' })
+    ).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Switch to Premium' })
+    );
     await waitFor(() =>
-      expect(state.toastSuccess).toHaveBeenCalledWith(
-        dev
-          ? 'Upgraded to Max. Your larger AI allowance applies right away.'
-          : 'Upgraded to Max.'
-      )
+      expect(state.changePlan).toHaveBeenCalledWith({ plan: 'premium' })
     );
   });
 });
