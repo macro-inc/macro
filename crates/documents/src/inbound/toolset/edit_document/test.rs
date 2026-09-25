@@ -11,7 +11,7 @@ use crate::domain::models::{
 };
 use crate::domain::permission_token::decode_permission_token;
 use crate::domain::ports::editing::{
-    CommentMarkPlacement, EditMode, EditResult, EditingWorkerService,
+    CommentMarkPlacement, EditMode, EditResult, EditingWorkerService, EditorName,
 };
 use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
@@ -412,6 +412,8 @@ pub(in crate::inbound::toolset) struct FakeEditingWorker {
     edit_calls: Arc<Mutex<Vec<String>>>,
     modes: Arc<Mutex<Vec<EditMode>>>,
     tokens: Arc<Mutex<Vec<DocumentPermissionToken>>>,
+    /// The editor name each edit was presented as.
+    editors: Arc<Mutex<Vec<Option<EditorName>>>>,
     /// Answer every comment mark placement with this refusal.
     comment_mark_refusal: Option<String>,
     /// Fail every comment mark placement as a worker whose push was never acked.
@@ -503,6 +505,7 @@ impl EditingWorkerService for FakeEditingWorker {
         document_token: &DocumentPermissionToken,
         _instructions: &str,
         mode: EditMode,
+        editor: Option<EditorName>,
     ) -> anyhow::Result<EditResult> {
         self.edit_calls
             .lock()
@@ -516,6 +519,10 @@ impl EditingWorkerService for FakeEditingWorker {
             .lock()
             .expect("edit tokens lock poisoned")
             .push(document_token.clone());
+        self.editors
+            .lock()
+            .expect("edit editors lock poisoned")
+            .push(editor);
 
         Ok(EditResult {
             edits_applied: 1,
@@ -577,6 +584,18 @@ async fn call_edit_document_with(
     actor: Option<BotId>,
     fast: bool,
 ) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
+    call_edit_document_in(file_type, fast, |context| match actor {
+        Some(actor) => context.with_actor(actor),
+        None => context,
+    })
+    .await
+}
+
+async fn call_edit_document_in(
+    file_type: &str,
+    fast: bool,
+    configure: impl FnOnce(TestToolContext) -> TestToolContext,
+) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
     let editing = FakeEditingWorker::default();
     let tool = EditDocument {
         document_id: TEST_DOCUMENT_ID.to_string(),
@@ -585,12 +604,25 @@ async fn call_edit_document_with(
     };
 
     let mut context = tool_context(FakeDocumentService::new(file_type), editing.clone());
-    if let Some(actor) = actor {
-        context.0 = context.0.with_actor(actor);
-    }
+    context.0 = configure(context.0);
     let result = tool.call(context, request_context()).await;
 
     (result, editing)
+}
+
+fn presented_editor(editing: &FakeEditingWorker) -> Option<String> {
+    editing
+        .editors
+        .lock()
+        .expect("edit editors lock poisoned")
+        .first()
+        .expect("edit reached the worker")
+        .as_ref()
+        .map(|editor| editor.as_str().to_owned())
+}
+
+fn editor_name(name: &str) -> Option<String> {
+    EditorName::new(name).map(|editor| editor.as_str().to_owned())
 }
 
 fn minted_token_actor(editing: &FakeEditingWorker) -> Option<String> {
@@ -701,6 +733,83 @@ async fn edit_token_carries_the_context_actor() {
         minted_token_actor(&editing).as_deref(),
         Some(BotId::TEST_A.into_storage_id().as_ref())
     );
+}
+
+/// The default actor is Macro AI, a first-party bot whose name is a constant,
+/// so the cursor readers watch is labelled `Macro` without any host wiring.
+#[tokio::test]
+async fn edit_is_presented_as_the_default_actor_by_name() {
+    let (result, editing) = call_edit_document("md").await;
+    result.expect("a markdown document should be editable");
+
+    assert_eq!(
+        presented_editor(&editing).as_deref(),
+        Some(bot_id::MACRO_AI_NAME)
+    );
+}
+
+/// A host running a named agent hands its name over with the actor, and that
+/// is the name the edit is presented under - not Macro's, not a pooled one.
+#[tokio::test]
+async fn edit_is_presented_as_the_named_actor() {
+    let (result, editing) = call_edit_document_in("md", false, |context| {
+        context.with_actor(BotId::TEST_A).with_actor_name("Grunk")
+    })
+    .await;
+    result.expect("a markdown document should be editable");
+
+    assert_eq!(presented_editor(&editing).as_deref(), Some("Grunk"));
+    assert_eq!(
+        minted_token_actor(&editing).as_deref(),
+        Some(BotId::TEST_A.into_storage_id().as_ref())
+    );
+}
+
+/// A user-owned bot the host never named has no name to present; the worker
+/// then falls back to its own labels rather than mislabelling the edit.
+#[tokio::test]
+async fn edit_by_an_unnamed_custom_bot_presents_no_editor() {
+    let (result, editing) = call_edit_document_as("md", Some(BotId::TEST_A)).await;
+    result.expect("a markdown document should be editable");
+
+    assert_eq!(presented_editor(&editing), None);
+}
+
+#[test]
+fn a_blank_actor_name_is_no_name() {
+    let context = tool_context(FakeDocumentService::new("md"), FakeEditingWorker::default());
+
+    let named = context.0.clone().with_actor_name("   ");
+    assert_eq!(
+        named.actor_editor_name(),
+        EditorName::new(bot_id::MACRO_AI_NAME)
+    );
+
+    let named = context.0.with_actor(BotId::TEST_A).with_actor_name("");
+    assert_eq!(named.actor_editor_name(), None);
+}
+
+/// The host's name wins over the first-party constant, and every first-party
+/// bot presents under its own name.
+#[test]
+fn actor_editor_name_prefers_the_host_name_then_the_first_party_name() {
+    let context = tool_context(FakeDocumentService::new("md"), FakeEditingWorker::default());
+
+    let cursor = context.0.clone().with_actor(bot_id::CURSOR_BOT_ID);
+    assert_eq!(
+        cursor.actor_editor_name(),
+        EditorName::new(bot_id::CURSOR_NAME)
+    );
+
+    let renamed = cursor.with_actor_name("  Cursor (dev) ");
+    assert_eq!(renamed.actor_editor_name(), EditorName::new("Cursor (dev)"));
+}
+
+#[test]
+fn editor_name_is_trimmed_and_never_blank() {
+    assert_eq!(editor_name("  Grunk "), Some("Grunk".to_owned()));
+    assert_eq!(editor_name("   "), None);
+    assert_eq!(editor_name(""), None);
 }
 
 #[test]
