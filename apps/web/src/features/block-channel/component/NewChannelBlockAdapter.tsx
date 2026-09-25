@@ -40,6 +40,7 @@ import {
   URL_PARAMS as CHANNEL_URL_PARAMS,
   isJoinCallRequested,
   isOpenCallTabRequested,
+  toChannelTargetRequest,
 } from '@channel/Channel/link';
 import {
   canUseInlineCallTab,
@@ -105,22 +106,6 @@ type ChannelEntryStateSnapshot = {
   activeTab?: ChannelTabId;
   messages?: MessageTimelineStateSnapshot;
 };
-
-/**
- * Decode channel target params into a surface request. A bare `thread` param
- * becomes a request whose message is the thread root itself, which the
- * surface collapses to a top-level target — same rule convertTargetMessage
- * applied when this decoding lived here.
- */
-function toTargetRequest(
-  params: ChannelTargetMessageParams
-): ChannelTargetRequest | undefined {
-  const messageId = params[URL_PARAMS.message];
-  const threadId = params[URL_PARAMS.thread];
-  const primary = messageId ?? threadId;
-  if (!primary) return undefined;
-  return { kind: 'message', messageId: primary, threadId };
-}
 
 const initialChannelTab = (options: {
   wantsJoinCall: boolean;
@@ -391,7 +376,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // whenever a fresh request lands, whether or not it was mounted at the time.
   const [targetRequest, setTargetRequest] = createSignal<
     ChannelTargetRequest | undefined
-  >(toTargetRequest(initialTargetMessageParams()));
+  >(toChannelTargetRequest(initialTargetMessageParams()));
   let surfaceApi: ChannelSurfaceApi | undefined;
 
   const setActiveTab = (tab: ChannelTabId) => {
@@ -445,7 +430,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
         return;
       }
 
-      const target = toTargetRequest(params);
+      const target = toChannelTargetRequest(params);
       if (target) {
         setActiveTab(DEFAULT_CHANNEL_TAB);
         setTargetRequest(target);

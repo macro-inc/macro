@@ -1,13 +1,16 @@
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createComputed, type JSX } from 'solid-js';
+import { type Accessor, createComputed, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelTargetRequest } from '../ChannelSurface';
+import { useChannelTab } from '../ChannelTabContext';
+import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from '../channel-tabs';
 
 const orchestrator = createBlockOrchestrator();
 const mocks = vi.hoisted(() => ({
   pass: (props: { children?: JSX.Element }) => props.children,
   requests: [] as (ChannelTargetRequest | undefined)[],
+  joinRequested: false,
 }));
 
 vi.mock('@channel/Channel/ChannelSurface', () => ({
@@ -42,6 +45,14 @@ vi.mock('@channel/Call/CallContext', () => ({
   useCallContextOptional: () => undefined,
 }));
 vi.mock('@channel/Call/CallEventSync', () => ({ CallEventSync: () => null }));
+vi.mock('@channel/Call/ChannelCallAutoJoin', () => ({
+  ChannelCallAutoJoin: (props: { pendingJoinCall: () => boolean }) => {
+    createComputed(() => {
+      if (props.pendingJoinCall()) mocks.joinRequested = true;
+    });
+    return null;
+  },
+}));
 vi.mock('@channel/Call/ChannelCallButton', () => ({
   ChannelCallButton: () => null,
 }));
@@ -116,6 +127,7 @@ const messageRequests = () =>
 
 beforeEach(() => {
   mocks.requests.length = 0;
+  mocks.joinRequested = false;
 });
 afterEach(cleanup);
 
@@ -160,5 +172,29 @@ describe('channel detail navigation', () => {
     expect(messageRequests()).toEqual([
       { kind: 'message', messageId: 'deep-link' },
     ]);
+  });
+
+  it('sends call params to the call tab and joins only when asked', async () => {
+    let activeTab: Accessor<ChannelTabId> | undefined;
+    render(() => (
+      <ChannelDetail channelId={CHANNEL_ID}>
+        {() => {
+          activeTab = useChannelTab().activeTab;
+          return null;
+        }}
+      </ChannelDetail>
+    ));
+    expect(activeTab?.()).toBe(DEFAULT_CHANNEL_TAB);
+
+    await navigate({ open_call_tab: 'true' });
+    expect(activeTab?.()).toBe('call');
+    expect(mocks.joinRequested).toBe(false);
+
+    await navigate({ channel_message_id: 'message-1' });
+    expect(activeTab?.()).toBe(DEFAULT_CHANNEL_TAB);
+
+    await navigate({ join_call: 'true' });
+    expect(activeTab?.()).toBe('call');
+    expect(mocks.joinRequested).toBe(true);
   });
 });

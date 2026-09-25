@@ -4,8 +4,10 @@ import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTa
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
+import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
 import { ChannelCallButton } from '@channel/Call/ChannelCallButton';
 import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
+import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
 import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
@@ -46,7 +48,12 @@ import { ChannelTabProvider, useChannelTab } from './ChannelTabContext';
 import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
 import { toIconTabItems } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
-import { toChannelTargetRequest } from './link';
+import {
+  isJoinCallRequested,
+  isOpenCallTabRequested,
+  toChannelTargetRequest,
+  URL_PARAMS,
+} from './link';
 import {
   canUseInlineCallTab,
   normalizeChannelTab,
@@ -263,6 +270,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const setActiveTab = (tab: ChannelTabId) => {
     setActiveTabInternal(normalizeChannelTab(tab));
   };
+  const [pendingJoinCall, setPendingJoinCall] = createSignal(false);
 
   // A new target within the already-mounted channel (a notification jump)
   // must land on the messages pane, whichever tab is open.
@@ -276,20 +284,27 @@ function ChannelDetailContent(props: ChannelDetailProps) {
     )
   );
 
-  // Mention chips and notifications aim an open channel at a message through
-  // its block handle; without one the click only activates the view.
+  // Mention chips, notifications, and call deep links aim an open channel
+  // through its block handle; without one the click only activates the view.
   createComputed(() => {
     const handle = orchestrator.registerBlockHandle('channel', channelId);
     createMethodRegistration(() => handle, {
       goToLocationFromParams: async (params: Record<string, unknown>) => {
+        if (isOpenCallTabRequested(params[URL_PARAMS.openCallTab])) {
+          setActiveTab(getCallJoinTab());
+          return;
+        }
+
         const request = toChannelTargetRequest(params);
-        if (!request) return;
-        setTargetRequest(request);
-        setActiveTab(DEFAULT_CHANNEL_TAB);
+        if (request) setTargetRequest(request);
+
+        if (isJoinCallRequested(params[URL_PARAMS.joinCall])) {
+          setActiveTab(getCallJoinTab());
+          setPendingJoinCall(true);
+        }
       },
       goToLatest: async () => {
         setTargetRequest({ kind: 'latest' });
-        setActiveTab(DEFAULT_CHANNEL_TAB);
       },
     });
   });
@@ -310,6 +325,11 @@ function ChannelDetailContent(props: ChannelDetailProps) {
     <ChannelSurface channelId={channelId} targetRequest={targetRequest()}>
       <CallEventSync />
       <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
+        <ChannelCallAutoJoin
+          channelId={channelId}
+          pendingJoinCall={pendingJoinCall}
+          onHandled={() => setPendingJoinCall(false)}
+        />
         <div class="flex size-full min-h-0 flex-col">
           <ChannelDetailHeader
             render={props.children}
@@ -341,7 +361,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
               <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
                 <ChannelCallTab
                   channelId={channelId}
-                  pendingJoin={() => false}
+                  pendingJoin={pendingJoinCall}
                 />
               </Match>
             </Switch>
