@@ -1,7 +1,6 @@
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useActiveCallsQuery } from '@queries/call/call';
-import { createMemo } from 'solid-js';
 import { useActiveQuickCallsSource } from '../meetings/queries/active-quick-calls';
 import { useQuickCallsFlag } from '../meetings/use-quick-calls-flag';
 
@@ -11,14 +10,12 @@ export function useHasActiveChannelsCall() {
   const userId = useUserId();
   const channels = useActiveCallsQuery();
   const flag = useQuickCallsFlag();
-  const quickCalls = createMemo(() =>
-    !flag().loading && flag().enabled
-      ? useActiveQuickCallsSource(userId)
-      : undefined
+  const quickCalls = useActiveQuickCallsSource(() =>
+    !flag().loading && flag().enabled ? userId() : undefined
   );
 
   return () =>
     Boolean(userId()) &&
     ((!channels.isPending && (channels.data?.length ?? 0) > 0) ||
-      (quickCalls()?.calls().length ?? 0) > 0);
+      quickCalls.calls().length > 0);
 }

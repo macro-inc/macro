@@ -152,22 +152,22 @@ export const [CalendarViewContextProvider, useCalendarView] =
 
       const closeEventDetails = () => selection.close();
 
-    const refreshSelectedEventFromPage = (
-      eventsById: ReadonlyMap<string, CalendarEvent>,
-      rangeIsCurrent: boolean
-    ) => {
-      const selected = selection.event();
-      if (!selected) return;
-      const event = eventsById.get(selected.id);
-      if (event) {
-        if (isCalendarEventVisible(event, isSourceVisible))
-          selection.refresh(event);
-        else closeEventDetails();
-      } else if (rangeIsCurrent && selection.origin() === 'grid') {
-        // Agenda selections can be outside the visible grid's date range.
-        closeEventDetails();
-      }
-    };
+      const refreshSelectedEventFromPage = (
+        eventsById: ReadonlyMap<string, CalendarEvent>,
+        rangeIsCurrent: boolean
+      ) => {
+        const selected = selection.event();
+        if (!selected) return;
+        const event = eventsById.get(selected.id);
+        if (event) {
+          if (isCalendarEventVisible(event, isSourceVisible))
+            selection.refresh(event);
+          else closeEventDetails();
+        } else if (rangeIsCurrent && selection.origin() === 'grid') {
+          // Agenda selections can be outside the visible grid's date range.
+          closeEventDetails();
+        }
+      };
 
       const setSourceVisibility = (sourceId: string, visible: boolean) => {
         setPreferences('hiddenSourceIds', (current) =>

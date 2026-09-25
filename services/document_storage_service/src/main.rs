@@ -724,10 +724,18 @@ async fn run() -> anyhow::Result<()> {
             .with_event_broker(macro_event_broker.clone()),
     );
 
-    tokio::spawn(call::inbound::stale_call_sweeper::run_stale_call_sweeper(
-        call_service.clone(),
-        call::inbound::stale_call_sweeper::SWEEP_INTERVAL,
-    ));
+    consumer_tracker.spawn({
+        let service = call_service.clone();
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            cancellation_token
+                .run_until_cancelled(call::inbound::stale_call_sweeper::run_stale_call_sweeper(
+                    service,
+                    call::inbound::stale_call_sweeper::SWEEP_INTERVAL,
+                ))
+                .await;
+        }
+    });
 
     let call_state = CallRouterState::new(
         call_service.clone(),

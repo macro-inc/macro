@@ -3993,7 +3993,7 @@ async fn sharing_a_cancelled_standalone_meeting_rejects_the_revoked_link() {
         .return_once(move |_| Box::pin(async move { Ok(Some(record)) }));
     repo.expect_get_meeting_for_call()
         .times(1)
-        .return_once(move |_| Box::pin(async move { Ok(Some(meeting)) }));
+        .return_once(move |_, _| Box::pin(async move { Ok(Some(meeting)) }));
     repo.expect_get_meeting()
         .times(1)
         .return_once(|_| Box::pin(async { Ok(None) }));

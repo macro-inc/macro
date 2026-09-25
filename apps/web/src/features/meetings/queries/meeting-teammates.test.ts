@@ -36,6 +36,7 @@ function roster(ids: string[]): TeamWithMembers {
       user_id,
       team_id: 'team-1',
       role: 'member',
+      plan: 'premium',
     })),
   };
 }

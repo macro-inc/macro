@@ -586,20 +586,20 @@ export function Root() {
                                 <ReactiveFavicon />
                                 <Title>{tabTitle()}</Title>
                                 <MeetingSessionProvider>
-                                {/* Loading boundaries belong inside Layout so
+                                  {/* Loading boundaries belong inside Layout so
                                     a pending resource cannot detach the app shell. */}
-                                <IsomorphicRouter
-                                  transformUrl={transformShortIdInUrlPathname}
-                                  root={AppRouteLayout}
-                                  rootPreload={rootPreload}
-                                  base={ROUTER_BASE}
-                                >
-                                  {{
-                                    path: '/',
-                                    component: TauriRouteListener,
-                                    children: ROUTES,
-                                  }}
-                                </IsomorphicRouter>
+                                  <IsomorphicRouter
+                                    transformUrl={transformShortIdInUrlPathname}
+                                    root={AppRouteLayout}
+                                    rootPreload={rootPreload}
+                                    base={ROUTER_BASE}
+                                  >
+                                    {{
+                                      path: '/',
+                                      component: TauriRouteListener,
+                                      children: ROUTES,
+                                    }}
+                                  </IsomorphicRouter>
                                 </MeetingSessionProvider>
                                 <ToastRegion />
                               </SearchProvider>

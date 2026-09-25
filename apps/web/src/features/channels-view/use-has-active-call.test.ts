@@ -55,7 +55,11 @@ function setup() {
       return channelCalls();
     },
   });
-  mocks.quickCalls.mockReturnValue({ calls: quickCalls });
+  mocks.quickCalls.mockImplementation(
+    (enabledUserId: () => string | undefined) => ({
+      calls: () => (enabledUserId() ? quickCalls() : []),
+    })
+  );
   const active = createRoot((dispose) => {
     disposers.push(dispose);
     return useHasActiveChannelsCall();
@@ -73,7 +77,8 @@ it('shows the indicator for either call type and clears after both end', () => {
   expect(state.active()).toBe(true);
   state.setChannelCalls([]);
   expect(state.active()).toBe(false);
-  expect(mocks.quickCalls).toHaveBeenCalledExactlyOnceWith(mocks.userId);
+  expect(mocks.quickCalls).toHaveBeenCalledOnce();
+  expect(mocks.quickCalls.mock.calls[0][0]()).toBe(mocks.userId());
 });
 
 it('can show a quick call without reading pending channel data', () => {
@@ -108,13 +113,15 @@ it('preserves channel indicators while the quick-call flag loads or is disabled'
   mocks.flag = flag;
   const state = setup();
   state.setQuickCalls(['quick']);
-  expect(mocks.quickCalls).not.toHaveBeenCalled();
+  expect(mocks.quickCalls).toHaveBeenCalledOnce();
+  expect(mocks.quickCalls.mock.calls[0][0]()).toBeUndefined();
   expect(state.active()).toBe(false);
   state.setChannelCalls(['channel']);
   expect(state.active()).toBe(true);
 
   setFlag({ enabled: false, loading: false });
-  expect(mocks.quickCalls).not.toHaveBeenCalled();
+  expect(mocks.quickCalls).toHaveBeenCalledOnce();
+  expect(mocks.quickCalls.mock.calls[0][0]()).toBeUndefined();
   expect(state.active()).toBe(true);
   state.setChannelCalls([]);
   setFlag({ enabled: true, loading: false });
@@ -122,6 +129,7 @@ it('preserves channel indicators while the quick-call flag loads or is disabled'
   expect(state.active()).toBe(true);
 
   setFlag({ enabled: false, loading: false });
+  expect(mocks.quickCalls).toHaveBeenCalledOnce();
   expect(state.active()).toBe(false);
   state.setChannelCalls(['channel']);
   expect(state.active()).toBe(true);

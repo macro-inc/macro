@@ -7,6 +7,3 @@ ALTER TABLE calls ADD CONSTRAINT calls_meeting_id_fkey
     FOREIGN KEY (meeting_id) REFERENCES call_meetings(id) ON DELETE SET NULL NOT VALID;
 ALTER TABLE call_records ADD CONSTRAINT call_records_meeting_id_fkey
     FOREIGN KEY (meeting_id) REFERENCES call_meetings(id) ON DELETE SET NULL NOT VALID;
-
-ALTER TABLE calls VALIDATE CONSTRAINT calls_meeting_id_fkey;
-ALTER TABLE call_records VALIDATE CONSTRAINT call_records_meeting_id_fkey;

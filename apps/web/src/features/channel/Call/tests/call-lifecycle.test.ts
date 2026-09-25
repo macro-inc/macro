@@ -326,6 +326,21 @@ describe('shared call lifecycle', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('leaves the channel view before slow media teardown completes', async () => {
+    const { lifecycle, ports, join } = setup();
+    await join();
+    const teardown = deferred<void>();
+    ports.disconnect.mockReturnValueOnce(teardown.promise);
+    const onLeave = vi.fn();
+    lifecycle.onLeave(onLeave);
+    const leaving = lifecycle.leave(call.channelId);
+    expect(onLeave).toHaveBeenCalledExactlyOnceWith(call.channelId);
+    expect(ports.leave).not.toHaveBeenCalled();
+    teardown.resolve();
+    await leaving;
+    expect(onLeave).toHaveBeenCalledOnce();
+  });
+
   it('handles native call end through the same leave lifecycle', async () => {
     const { ports, nativeEnd, join } = setup();
     await join();

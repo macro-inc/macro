@@ -882,6 +882,9 @@ Permission denial leaves the affected device off and still allows joining.
 The creator presses `Start call`; invitees press `Join call`. Loading the page or
 completing authentication never joins automatically, including old `?join=true`
 URLs. `Back to Macro` exits setup.
+Channel-linked calls require sign-in. While authentication is loading or the
+viewer is signed out, setup must not request microphone or camera access; the
+guest name form is available only for standalone meetings.
 
 The call page shows a recording/transcription notice. It uses the normal call controls
 for audio, video, device selection, screen sharing, and effects. `Leave call` returns

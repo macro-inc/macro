@@ -428,6 +428,8 @@ export function createCallLifecycle(options: {
       leaving: ({ request }, dispatch) => {
         let active = true;
         let settled = false;
+        // Leave the call surface immediately; media teardown may be slow or fail.
+        notifyLeft(request.channelId);
         options.rollbackJoin();
         options.setError(null);
         const finish = (error?: unknown) => {
@@ -446,7 +448,6 @@ export function createCallLifecycle(options: {
             try {
               await options.disconnect(request.options);
               if (!active) return;
-              notifyLeft(request.channelId);
               options.onLeft(request.channelId);
             } finally {
               if (active && !request.skipServerLeave)

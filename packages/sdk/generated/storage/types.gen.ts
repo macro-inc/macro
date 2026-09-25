@@ -47,6 +47,26 @@ export type ActiveCallsResponse = {
 };
 
 /**
+ * Active quick-call metadata available to its authenticated owner or attendees.
+ */
+export type ActiveMeeting = Meeting & {
+    /**
+     * Creator identity for displaying the caller in the authenticated active list.
+     */
+    createdBy: string;
+};
+
+/**
+ * The authenticated actor's active quick calls, including their creators.
+ */
+export type ActiveMeetingsResponse = {
+    /**
+     * Persistent meeting invitations for currently active sessions.
+     */
+    meetings: Array<ActiveMeeting>;
+};
+
+/**
  * The kind of activity a user performs in a channel.
  */
 export type ActivityType = 'view' | 'interact';
@@ -6775,6 +6795,16 @@ export type InviteMeetingRequest = {
     email: string;
 };
 
+/**
+ * Registered teammates selected for an incoming call invitation.
+ */
+export type InviteMeetingUsersRequest = {
+    /**
+     * Human user principals; bot principals and historical bare bot UUIDs are invalid.
+     */
+    userIds: Array<string>;
+};
+
 export type Item = ({
     type: 'document';
 } & BasicDocument) | ({
@@ -6915,12 +6945,22 @@ export type Meeting = {
 };
 
 /**
+ * Whether the authenticated caller can invite teammates to this meeting.
+ */
+export type MeetingInvitePermissions = {
+    /**
+     * True for the owner of an uncancelled standalone meeting.
+     */
+    canInvite: boolean;
+};
+
+/**
  * A bearer capability that grants access only to a meeting's RTC room.
  */
 export type MeetingToken = string;
 
 /**
- * The actor's most recent uncancelled standalone meetings.
+ * Uncancelled standalone meetings visible in the requested meeting list.
  */
 export type MeetingsResponse = {
     /**
@@ -11623,6 +11663,47 @@ export type MeetingCreateResponses = {
 
 export type MeetingCreateResponse = MeetingCreateResponses[keyof MeetingCreateResponses];
 
+export type MeetingListActiveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings/active';
+};
+
+export type MeetingListActiveErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingListActiveError = MeetingListActiveErrors[keyof MeetingListActiveErrors];
+
+export type MeetingListActiveResponses = {
+    200: ActiveMeetingsResponse;
+};
+
+export type MeetingListActiveResponse = MeetingListActiveResponses[keyof MeetingListActiveResponses];
+
+export type MeetingInvitePermissionsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}';
+};
+
+export type MeetingInvitePermissionsErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingInvitePermissionsError = MeetingInvitePermissionsErrors[keyof MeetingInvitePermissionsErrors];
+
+export type MeetingInvitePermissionsResponses = {
+    200: MeetingInvitePermissions;
+};
+
+export type MeetingInvitePermissionsResponse = MeetingInvitePermissionsResponses[keyof MeetingInvitePermissionsResponses];
+
 export type MeetingInviteData = {
     body: InviteMeetingRequest;
     path: {
@@ -11644,6 +11725,30 @@ export type MeetingInviteResponses = {
 };
 
 export type MeetingInviteResponse = MeetingInviteResponses[keyof MeetingInviteResponses];
+
+export type MeetingInviteUsersData = {
+    body: InviteMeetingUsersRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}/users';
+};
+
+export type MeetingInviteUsersErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingInviteUsersError = MeetingInviteUsersErrors[keyof MeetingInviteUsersErrors];
+
+export type MeetingInviteUsersResponses = {
+    204: void;
+};
+
+export type MeetingInviteUsersResponse = MeetingInviteUsersResponses[keyof MeetingInviteUsersResponses];
 
 export type MeetingJoinData = {
     body?: never;

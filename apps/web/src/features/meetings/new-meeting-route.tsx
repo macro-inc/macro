@@ -117,7 +117,7 @@ function NewMeetingSetup(props: {
         join: () => join.mutateAsync({ shareToken: shareToken() }),
         release: leaveMeeting,
         connect: async (credentials, preferences) => {
-          await call.connectSession(credentials, {
+          await call.meetingSession.connectWithToken(credentials, {
             ...preferences,
             useBrowserSession: true,
           });
@@ -125,7 +125,7 @@ function NewMeetingSetup(props: {
             await draft.ring();
           }
         },
-        disconnect: call.disconnectSession,
+        disconnect: call.meetingSession.disconnect,
       }}
       renderCall={(onLeave, name) => (
         <div class="flex h-full min-h-0 flex-col">

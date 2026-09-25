@@ -28,8 +28,8 @@ import {
 import { createStore } from 'solid-js/store';
 import { CallAudioSink } from './CallAudioSink';
 import {
-  type CallSessionController,
   type CallPrejoinTracks,
+  type CallSessionController,
   createCallSessionController,
   stopPrejoinTracks,
 } from './CallSessionController';

@@ -62,7 +62,7 @@ where
                 .get_user_team(recipient)
                 .await
                 .map_err(|error| CallError::Internal(error.into()))?;
-            if !team.is_some_and(|team| team.team_id == actor_team.team_id) {
+            if team.is_none_or(|team| team.team_id != actor_team.team_id) {
                 return Err(CallError::Forbidden(
                     "Call invitations can only be sent to your teammates".to_string(),
                 ));

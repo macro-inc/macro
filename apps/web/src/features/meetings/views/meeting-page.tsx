@@ -58,7 +58,7 @@ export function MeetingPage(props: {
   };
   /** Guests cannot join channel-linked meetings; they must sign in first. */
   const membersOnly = () =>
-    ready()?.channelId != null && props.authenticated() === false;
+    ready()?.channelId != null && props.authenticated() !== true;
   const displayName = () =>
     props.authenticated() ? props.author() : name().trim();
   const inCall = () =>
@@ -88,7 +88,7 @@ export function MeetingPage(props: {
     if (videoElement) videoElement.srcObject = stream ?? null;
   });
   const join = () => {
-    if (leaving() || media.pending()) return;
+    if (membersOnly() || leaving() || media.pending()) return;
     // The call publishes the preview tracks rather than re-opening the
     // devices, so the waiting room is the only place permission is asked.
     return session.join(props.authenticated() ? undefined : name(), {

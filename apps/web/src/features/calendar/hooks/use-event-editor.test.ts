@@ -727,7 +727,11 @@ describe('scheduling a Macro call', () => {
     const [editor, dispose] = createRoot(
       (dispose) =>
         [
-          useEventEditor({ event: () => savedEvent, onSaved: vi.fn() }),
+          useEventEditor({
+            event: () => savedEvent,
+            onSaved: vi.fn(),
+            macroCallsEnabled: () => true,
+          }),
           dispose,
         ] as const
     );
