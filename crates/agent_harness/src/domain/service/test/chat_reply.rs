@@ -21,7 +21,17 @@ async fn chat_session_with_a_running_turn(
     containers: &MockContainerManager,
     id: AgentSessionId,
 ) -> ContainerMock {
-    let open = service.execute(id, HarnessCommand::Open(chat_open_command()));
+    session_with_a_running_turn(service, containers, id, chat_open_command()).await
+}
+
+/// Open the session `command` asks for and leave its first turn running.
+async fn session_with_a_running_turn(
+    service: &TestHarness,
+    containers: &MockContainerManager,
+    id: AgentSessionId,
+    command: OpenSession,
+) -> ContainerMock {
+    let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         loop {
             if containers.spawned() == 1 {
@@ -82,10 +92,10 @@ async fn a_chat_mention_is_announced_as_a_pending_reply_and_resolved_with_the_an
 
     let announced = announcer.announced();
     assert_eq!(announced.len(), 1);
-    assert_eq!(announced[0].kind, AgentKind::InMemory);
+    assert!(!announced[0].is_coding);
     let pending = announcer.announced_messages()[0];
     let resolved = one_resolved(&announcer);
-    assert_eq!(resolved.kind, AgentKind::InMemory);
+    assert!(!resolved.is_coding);
     assert_eq!(resolved.message_id, pending.message_id);
     // The same bot, into the same parent, for the same person who asked.
     assert_eq!(resolved.bot_id, announced[0].bot_id);
@@ -232,11 +242,66 @@ async fn a_coding_turn_is_offered_to_the_announcer_as_a_coder_and_still_notifies
     turns.lifecycle_published(4).await;
 
     let resolved = one_resolved(&announcer);
-    assert_eq!(resolved.kind, AgentKind::SandboxedCoder);
+    assert!(resolved.is_coding);
     assert_eq!(
         resolved.message_id,
         announcer.announced_messages()[0].message_id
     );
+    assert!(
+        matches!(
+            turns.notifier.notified().as_slice(),
+            [PlannedNotification::Settled(_)]
+        ),
+        "{:#?}",
+        turns.notifier.notified()
+    );
+}
+
+/// The shape of the reply is the persona's to choose, not the runtime's: a
+/// bot that says it chats is answered with a reply even on a coding runtime,
+/// and its thread hears the answer through that reply rather than `settled`.
+#[tokio::test]
+async fn a_persona_that_chose_to_chat_gets_a_reply_on_a_coding_runtime() {
+    let ((service, _, containers, announcer, _), turns) = harness_with_coding_choice(false);
+    let id = AgentSessionId::new();
+    let mut command = open_command();
+    command.bot_id = bot_id::MACRO_CODER_BOT_ID;
+    command.origin.sender = staff_sender();
+    let container = session_with_a_running_turn(&service, &containers, id, command).await;
+    let agent = container.agent();
+
+    says(&agent, "Done.");
+    agent.completes_prompt().await;
+    turns.lifecycle_published(4).await;
+
+    let announced = announcer.announced();
+    assert_eq!(announced.len(), 1);
+    assert!(!announced[0].is_coding);
+    let resolved = one_resolved(&announcer);
+    assert!(!resolved.is_coding);
+    assert_eq!(resolved.outcome, ReplyOutcome::Answered("Done.".to_owned()));
+    assert!(
+        turns.notifier.notified().is_empty(),
+        "{:#?}",
+        turns.notifier.notified()
+    );
+}
+
+/// And the other way: a bot that says it codes is announced as a chip on
+/// the in-memory runtime, and its audience hears `settled`.
+#[tokio::test]
+async fn a_persona_that_chose_to_code_gets_a_chip_on_the_in_memory_runtime() {
+    let ((service, _, containers, announcer, _), turns) = harness_with_coding_choice(true);
+    let id = AgentSessionId::new();
+    let container = chat_session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+
+    says(&agent, "Hello there.");
+    agent.completes_prompt().await;
+    turns.lifecycle_published(4).await;
+
+    assert!(announcer.announced()[0].is_coding);
+    assert!(one_resolved(&announcer).is_coding);
     assert!(
         matches!(
             turns.notifier.notified().as_slice(),

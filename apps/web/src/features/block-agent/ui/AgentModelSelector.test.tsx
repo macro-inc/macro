@@ -22,6 +22,7 @@ const INMEM_MODELS: ModelOption[] = [
   'anthropic/claude-sonnet-5',
   'anthropic/claude-haiku-4-5',
   'openai/gpt-5.5',
+  'fireworks/kimi-k3',
 ].map((id) => ({ id, name: id, description: null, group: null }));
 
 let motionStyles: HTMLStyleElement;
@@ -73,6 +74,9 @@ describe('agent model selector', () => {
     expect(providerOf(haiku)).toBe('anthropic');
     expect(providerOf(screen.getByRole('menuitem', { name: /^GPT-5.5/ }))).toBe(
       'openai'
+    );
+    expect(providerOf(screen.getByRole('menuitem', { name: /^Kimi K3/ }))).toBe(
+      'kimi'
     );
     expect(screen.queryByText('anthropic/claude-haiku-4-5')).toBeNull();
 

@@ -16,13 +16,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { createStore, type Store } from 'solid-js/store';
-import {
-  CHANNEL_DETAIL_SEARCH_NAMESPACE,
-  channelDetailSearch,
-  channelDetailSearchCodec,
-  channelsTabSearch,
-  channelsTabSearchCodec,
-} from './channels-route';
+import { channelsSearch, channelsSearchCodec } from './channels-route';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
   CHANNELS_DEFAULT_SORT_BY,
@@ -96,8 +90,7 @@ export const [ChannelsViewProvider, useChannelsView] =
       const userId = useUserId();
       const navigate = useNavigate();
       const params = useRouteParams(channelDetailRoute);
-      const [detailSearch] = createSearchParams(channelDetailSearch);
-      const [tabSearch, setTabSearch] = createSearchParams(channelsTabSearch);
+      const [search, setSearch] = createSearchParams(channelsSearch);
       const selectPreview = createPreviewSelectionGuard();
       const initial = props.initialState ?? {};
       const [state, setState] = makePersistedState(
@@ -113,7 +106,7 @@ export const [ChannelsViewProvider, useChannelsView] =
 
       createEffect(
         on(
-          () => [tabSearch.tab, tabSearch.mobileTab] as const,
+          () => [search.tab, search.mobileTab] as const,
           ([tab, mobileTab]) => {
             if (state.tab !== tab) setState('tab', tab);
             if (state.mobileTab !== mobileTab) setState('mobileTab', mobileTab);
@@ -126,12 +119,10 @@ export const [ChannelsViewProvider, useChannelsView] =
         () => {
           const channelId = params.channelId;
           if (typeof channelId !== 'string') return undefined;
-          const target = detailSearch.messageId
+          const target = search.messageId
             ? {
-                messageId: detailSearch.messageId,
-                ...(detailSearch.threadId
-                  ? { threadId: detailSearch.threadId }
-                  : {}),
+                messageId: search.messageId,
+                ...(search.threadId ? { threadId: search.threadId } : {}),
               }
             : undefined;
           return {
@@ -141,13 +132,15 @@ export const [ChannelsViewProvider, useChannelsView] =
           };
         }
       );
-      const routeSearch = (channel: ChannelPreviewSelection) => {
-        const target = getChannelEntityTarget(channel);
-        const value = {
+      const routeSearch = (channel?: ChannelPreviewSelection) => {
+        const target = channel && getChannelEntityTarget(channel);
+        return channelsSearchCodec.serialize({
+          ...channelsSearch.defaults,
+          tab: state.tab,
+          mobileTab: state.mobileTab,
           messageId: target?.kind === 'message' ? target.messageId : '',
           threadId: target?.kind === 'message' ? (target.threadId ?? '') : '',
-        };
-        return channelDetailSearchCodec.serialize(value);
+        });
       };
       const navigateToChannel = (
         channel: ChannelPreviewSelection,
@@ -159,13 +152,7 @@ export const [ChannelsViewProvider, useChannelsView] =
           { route: channelDetailRoute, params: { channelId } },
           {
             replace,
-            search: {
-              [CHANNEL_DETAIL_SEARCH_NAMESPACE]: routeSearch(channel),
-              [channelsTabSearch.namespace]: channelsTabSearchCodec.serialize({
-                tab: state.tab,
-                mobileTab: state.mobileTab,
-              }),
-            },
+            search: { [channelsSearch.namespace]: routeSearch(channel) },
           }
         );
       };
@@ -175,16 +162,7 @@ export const [ChannelsViewProvider, useChannelsView] =
         if (!channel) {
           navigate(
             { route: channelsSplitRoute, params: {} },
-            {
-              search: {
-                [channelsTabSearch.namespace]: channelsTabSearchCodec.serialize(
-                  {
-                    tab: state.tab,
-                    mobileTab: state.mobileTab,
-                  }
-                ),
-              },
-            }
+            { search: { [channelsSearch.namespace]: routeSearch() } }
           );
           return true;
         }
@@ -202,13 +180,7 @@ export const [ChannelsViewProvider, useChannelsView] =
                 { route: channelsSplitRoute, params: {} },
                 {
                   replace: true,
-                  search: {
-                    [channelsTabSearch.namespace]:
-                      channelsTabSearchCodec.serialize({
-                        tab: state.tab,
-                        mobileTab: state.mobileTab,
-                      }),
-                  },
+                  search: { [channelsSearch.namespace]: routeSearch() },
                 }
               );
           }
@@ -222,12 +194,12 @@ export const [ChannelsViewProvider, useChannelsView] =
         setTab: (tab) => {
           if (state.tab === tab) return;
           setState('tab', tab);
-          setTabSearch({ tab });
+          setSearch({ tab });
         },
         setMobileTab: (mobileTab) => {
           if (state.mobileTab === mobileTab) return;
           setState('mobileTab', mobileTab);
-          setTabSearch({ mobileTab });
+          setSearch({ mobileTab });
         },
         setSelectedChannel,
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),

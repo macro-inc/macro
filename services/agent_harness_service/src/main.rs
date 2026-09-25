@@ -10,6 +10,7 @@
 mod agent_runtime_directory;
 mod api;
 mod bots_directory;
+mod coding_agent;
 mod config;
 mod containers;
 mod external_session_requests;
@@ -98,6 +99,7 @@ use channels::outbound::contacts_dispatcher::ContactsChannelDispatcher;
 use channels::outbound::notification_sender::NotificationChannelSender;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
+use coding_agent::PgCodingAgentSource;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
@@ -860,6 +862,7 @@ async fn run() -> anyhow::Result<()> {
             EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url),
             RedisCommandForwarder::new(redis.clone()),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
+            PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),
             defaults,
             Arc::clone(&lifecycle_publisher),
             pending_commands,

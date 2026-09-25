@@ -7,7 +7,7 @@ use bot_id::BotId;
 fn announcement() -> SessionAnnouncement {
     SessionAnnouncement {
         bot_id: BotId::TEST_A,
-        kind: crate::domain::model::AgentKind::SandboxedCoder,
+        is_coding: true,
         session_id: agent_session::domain::model::AgentSessionId::TEST_A,
         origin_parent: MessageParent::Channel(Uuid::from_u128(1)),
         origin_thread_id: Uuid::from_u128(2),

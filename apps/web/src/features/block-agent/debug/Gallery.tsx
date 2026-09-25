@@ -926,7 +926,7 @@ function MagicChipStateDemo(props: { presentation: MagicChipPresentation }) {
   );
 }
 
-/** The chip asking, one per request kind; answers land in the console. */
+/** The chip asking: the question on its line, answered in the session. */
 function MagicChipAskingDemo(props: {
   request: PendingElicitation['request'];
 }) {
@@ -951,12 +951,6 @@ function MagicChipAskingDemo(props: {
       agentSessionId="gallery"
       presentation={presentation}
       header={GALLERY_CHIP_HEADER}
-      answer={{
-        respond: async (answer) => {
-          console.log('[gallery] elicitation answer', answer);
-          return true;
-        },
-      }}
       onOpen={() => console.log('[gallery] open session')}
     />
   );

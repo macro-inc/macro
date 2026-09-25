@@ -54,6 +54,9 @@ export function DocumentConversation(props: {
   parent: MessageParent;
   canWrite: boolean;
   targetId?: string | null;
+  /** The linked view stays around `targetId`, but its message is no longer highlighted. */
+  targetCleared?: boolean;
+  onClearTarget?: () => void;
   buildLink?: (message: MessageData) => string;
   label?: string;
   /** The composer is rendered elsewhere, such as a floating mobile accessory. */
@@ -121,7 +124,12 @@ export function DocumentConversation(props: {
                 <MessageThread
                   data={messagesById().get(id)!}
                   canWrite={props.canWrite}
-                  targetId={target.rootId() === id ? target.messageId() : null}
+                  targetId={
+                    target.rootId() === id && !props.targetCleared
+                      ? target.messageId()
+                      : null
+                  }
+                  onClearTarget={props.onClearTarget}
                   buildLink={props.buildLink}
                 />
               )}

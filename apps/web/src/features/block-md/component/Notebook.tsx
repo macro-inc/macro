@@ -18,6 +18,11 @@ import { useIsMacroTeam } from '@core/context/team';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import {
+  captureScrollAnchor,
+  restoreScrollAnchor,
+  type ScrollAnchor,
+} from '@core/util/scrollAnchor';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
@@ -47,11 +52,6 @@ import {
   MarkdownOutline,
   useMarkdownOutline,
 } from './MarkdownOutline';
-import {
-  captureScrollAnchor,
-  restoreScrollAnchor,
-  type ScrollAnchor,
-} from './scrollAnchor';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
 import {
@@ -300,7 +300,9 @@ export function Notebook(props: {
 
   const contentDivClasses = createMemo(() => {
     const mode = layoutMode();
-    const shared = 'grow max-w-3xl pt-12 touch:pt-6 min-w-0';
+    // A zero basis keeps WebKit from sizing the column by the max-content width
+    // of its text, which it recomputes slowly for long unbroken runs.
+    const shared = 'grow basis-0 max-w-3xl pt-12 touch:pt-6 min-w-0';
     switch (mode) {
       case CommentLayoutMode.lg:
         return `${shared} mx-auto`;

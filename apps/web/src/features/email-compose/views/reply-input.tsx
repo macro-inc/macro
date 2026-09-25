@@ -18,6 +18,7 @@ import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
 import { createSignal, For, onMount, Show } from 'solid-js';
+import { createAttachmentViewer } from '../components/attachment-viewer';
 import { EmailDateSelector } from '../components/email-date-selector';
 import {
   EmailScheduleBar,
@@ -177,6 +178,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
             ids.forEach(composeContext.editorFiles.makePublic);
             scheduleDraftSave();
           },
+          onVideos: handleAddAttachments,
         });
       },
     });
@@ -268,6 +270,8 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     }
   });
 
+  const attachmentViewer = createAttachmentViewer();
+
   const AttachmentsRow = (rowProps?: { class?: string }) => (
     <Show when={form.attachments.list().length > 0}>
       <div
@@ -295,9 +299,11 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               onRemove={() => {
                 if (!editingDisabled()) handleRemoveAttachment(attachment);
               }}
+              onClick={attachmentViewer.onClickFor(attachment)}
             />
           )}
         </For>
+        <attachmentViewer.Viewer />
       </div>
     </Show>
   );
@@ -446,6 +452,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                     ids.forEach(composeContext.editorFiles.makePublic);
                     scheduleDraftSave();
                   },
+                  onVideos: handleAddAttachments,
                 });
               },
             }}

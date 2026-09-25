@@ -4,6 +4,7 @@ import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
 import { useActiveCallsQuery } from '@queries/call/call';
+import { cn } from '@ui';
 import { For } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
@@ -52,10 +53,10 @@ export const SidebarRail = () => {
     <div
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
-      classList={{
-        'border-r': (globalSplitManager()?.splits().length ?? 1) <= 1,
-      }}
-      class="relative flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-hidden border-edge-muted bg-surface px-2.5 pb-3 pt-3"
+      class={cn(
+        'relative flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-hidden border-edge-frame bg-panel px-2.5 pb-3 pt-3',
+        (globalSplitManager()?.splits().length ?? 1) <= 1 && 'border-r'
+      )}
     >
       <SidebarRailCreateButton />
       <SearchRailButton />

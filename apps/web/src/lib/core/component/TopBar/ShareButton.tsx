@@ -36,6 +36,7 @@ import { idToEmail } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import IconShared from '@icon/share.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
 import IconComment from '@phosphor/chat-teardrop.svg';
@@ -44,7 +45,6 @@ import CopyIcon from '@phosphor/copy.svg';
 import IconEye from '@phosphor/eye.svg';
 import IconLink from '@phosphor/link.svg';
 import IconEdit from '@phosphor/pencil.svg';
-import IconShared from '@phosphor/share.svg';
 import UserCircle from '@phosphor/user-circle.svg';
 import UsersIcon from '@phosphor/users.svg';
 import IconX from '@phosphor/x.svg';
@@ -70,15 +70,7 @@ import type { LinkShare } from '@service-storage/generated/schemas/linkShare';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import {
-  Button,
-  ButtonGroup,
-  cn,
-  Dropdown,
-  Panel,
-  SegmentedControl,
-  Tooltip,
-} from '@ui';
+import { Button, cn, Dropdown, Panel, SegmentedControl, Tooltip } from '@ui';
 import type { Result } from 'neverthrow';
 import {
   type Accessor,
@@ -1588,7 +1580,7 @@ export function ShareTrigger(props: {
   });
 
   return (
-    <ButtonGroup variant="outline" size="sm" class="bg-surface" depth={2}>
+    <div class="flex items-center gap-1">
       <Tooltip
         label={
           shareStatus()?.tooltip ??
@@ -1600,6 +1592,9 @@ export function ShareTrigger(props: {
         }
       >
         <Button
+          variant="plain"
+          size="md"
+          class="rounded-xl"
           onClick={() => {
             if (!isAuthenticated()) {
               openLoginModal();
@@ -1614,16 +1609,16 @@ export function ShareTrigger(props: {
         </Button>
       </Tooltip>
 
-      <ButtonGroup.Divider />
-
       <Button
+        variant="plain"
         tooltip="Copy Share Link"
-        size="icon-sm"
+        size="icon-md"
+        class="rounded-xl"
         onClick={ShareLinkAction().action}
       >
         <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
       </Button>
-    </ButtonGroup>
+    </div>
   );
 }
 

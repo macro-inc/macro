@@ -22,7 +22,8 @@ import type { SetPredicatesInput } from '../next-soup/filters/filter-store/predi
 import { mergeQuery } from '../next-soup/filters/filter-store/query-store';
 import type { Query } from '../next-soup/filters/filter-store/types';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
-import type { DriveViewProps } from './drive-view';
+import { DriveDetailView } from './components/DriveDetailView';
+import { DriveView, type DriveViewProps } from './drive-view';
 import { driveDetailTrailSchema } from './primitives/drive-detail-trail';
 import {
   DRIVE_DOCUMENT_TYPES,
@@ -31,12 +32,6 @@ import {
 
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-const DriveView = lazy(async () => ({
-  default: (await import('./drive-view')).DriveView,
-}));
-const DriveDetailView = lazy(async () => ({
-  default: (await import('./components/DriveDetailView')).DriveDetailView,
 }));
 const DriveCallDetail = lazy(async () => ({
   default: (await import('./views/DriveCallDetail')).DriveCallDetail,

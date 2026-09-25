@@ -998,7 +998,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   return (
     // The shared shell stopped painting its own pane (cmd+k gets one from the
     // app Dialog wrapper); this raw-Kobalte dialog carries it here.
-    <div class="create-menu-pane w-200 max-w-[calc(100vw-16px)] rounded-xl touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)]">
+    <div class="elevated-surface create-menu-pane w-200 max-w-[calc(100vw-16px)] touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)]">
       <div
         aria-hidden="true"
         class="hidden touch:flex h-5 shrink-0 items-center justify-center"

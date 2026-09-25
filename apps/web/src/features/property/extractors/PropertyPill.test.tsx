@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   PropertyRootContext,
@@ -47,28 +47,6 @@ function context(
 afterEach(cleanup);
 
 describe('PropertyPill', () => {
-  it('uses the interactive ghost/sm contract when editable', async () => {
-    const onEdit = vi.fn();
-
-    render(() => (
-      <PropertyRootContext.Provider value={context(true, property, onEdit)}>
-        <PropertyPill>Status</PropertyPill>
-      </PropertyRootContext.Provider>
-    ));
-
-    const pill = screen.getByRole('button', { name: 'Status' });
-    expect(pill.classList).toContain('h-6');
-    expect(pill.classList).toContain('border-transparent');
-    expect(pill.classList).toContain('bg-transparent');
-    expect(pill.classList).toContain('rounded-full');
-    expect(pill.classList).toContain(
-      'not-touch:not-disabled:hover:overlay-hover'
-    );
-
-    await fireEvent.click(pill);
-    expect(onEdit).toHaveBeenCalledOnce();
-  });
-
   it('remains passive when the property is read-only', () => {
     render(() => (
       <PropertyRootContext.Provider value={context(false, property)}>

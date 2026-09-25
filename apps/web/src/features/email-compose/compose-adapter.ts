@@ -76,7 +76,7 @@ import {
 } from './context/compose-capabilities';
 import { decodeBase64Utf8 } from './core/decode-base64';
 import type { EmailDraft } from './core/email-draft';
-import { readDroppedEmailFiles } from './editor-adapter';
+import { readDroppedEmailFiles, withVideoAttachments } from './editor-adapter';
 import { makeAttachmentPublic } from './make-attachment-public';
 import {
   emailDraftLifecycleSource,
@@ -125,6 +125,30 @@ export function createEmailComposeContext(
   });
   const reportError = (error: unknown) =>
     Telemetry.error(error instanceof Error ? error : new Error(String(error)));
+  // A thread view renders its latest draft as the composer until the thread
+  // is read again, so every delivery change refetches it.
+  const refreshThread = (threadId: string | undefined) => {
+    if (!threadId) return;
+    if (isFeatureEnabled(enableGraphqlSoup)) {
+      void (async () => {
+        const result = await fetchAndCacheThread(threadId);
+        if (result.isErr())
+          reportError(
+            new Error(
+              `Failed to refresh email thread ${threadId}: ${result.error
+                .map((error) => `${error.code}: ${error.message}`)
+                .join(', ')}`
+            )
+          );
+      })().catch(reportError);
+      return;
+    }
+    void queryClient
+      .invalidateQueries({
+        queryKey: emailKeys.threadMessages(threadId).queryKey,
+      })
+      .catch(reportError);
+  };
 
   // Queued writes address a draft by handles: the composer's minted ones, or a
   // confirmed draft's server ids, which resolve as their own handles.
@@ -204,15 +228,19 @@ export function createEmailComposeContext(
         handleFileFolderDrop(
           input.files,
           input.directories,
-          createFilesReadyHandler(
-            input.editor,
-            input.sourceId,
-            input.sourceId ? 'email' : undefined,
-            input.dropEvent && input.editor
-              ? () => getDragDropPosition(input.editor!, input.dropEvent!, true)
-              : undefined,
-            input.onUploaded,
-            { width: 542, height: 542 }
+          withVideoAttachments(
+            createFilesReadyHandler(
+              input.editor,
+              input.sourceId,
+              input.sourceId ? 'email' : undefined,
+              input.dropEvent && input.editor
+                ? () =>
+                    getDragDropPosition(input.editor!, input.dropEvent!, true)
+                : undefined,
+              input.onUploaded,
+              { width: 542, height: 542 }
+            ),
+            input.onVideos
           )
         );
       },
@@ -348,8 +376,10 @@ export function createEmailComposeContext(
               result.message.db_id,
               result.message.link_id
             );
-          if (result.message.thread_db_id)
+          if (result.message.thread_db_id) {
             markThreadDraftSaved(result.message.thread_db_id);
+            refreshThread(result.message.thread_db_id);
+          }
         } catch (error) {
           reportError(error);
         }
@@ -359,7 +389,7 @@ export function createEmailComposeContext(
           inboxId: result.message.link_id,
         };
       },
-      async unschedule({ draftId, inboxId }) {
+      async unschedule({ draftId, threadId, inboxId }) {
         await unschedule.mutateAsync({
           draftID: draftId,
           linkId: headerId(inboxId),
@@ -367,11 +397,15 @@ export function createEmailComposeContext(
         try {
           publishDraftLifecycleChange(draftId, inboxId);
           invalidateSoupEntity(draftId);
+          refreshThread(threadId);
         } catch (error) {
           reportError(error);
         }
       },
-      schedule: async ({ draftId, sendTime, includeSignature }, inboxId) => {
+      schedule: async (
+        { draftId, threadId, sendTime, includeSignature },
+        inboxId
+      ) => {
         await scheduleEmailMessage(
           {
             draftID: draftId,
@@ -382,6 +416,7 @@ export function createEmailComposeContext(
         );
         try {
           publishDraftLifecycleChange(draftId, inboxId);
+          refreshThread(threadId);
           void queryClient
             .invalidateQueries({
               queryKey: emailKeys.scheduledMessages._def,

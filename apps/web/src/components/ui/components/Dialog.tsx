@@ -165,15 +165,10 @@ function DesktopDialog(props: DialogProps) {
           <KobalteDialog.Content
             ref={props.contentRef}
             class={cn(
-              'portal-scope isolate rounded-xl bg-dialog',
-              // Floating dialogs (cmd+k, create, confirm) get the glass
-              // treatment; fullscreen fills the viewport, so translucency and
-              // a cast shadow would just bleed the page through the content.
-              // --color-dialog goes translucent inside so nested bg-dialog
-              // chrome (e.g. cmd+k's toolbar/footer) reads as the same pane.
+              'portal-scope isolate',
               props.fullscreen
-                ? 'size-full'
-                : 'w-200 max-w-[calc(100vw-16px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)] [&>[data-layer]>[data-surface]]:border-0!',
+                ? 'size-full bg-page'
+                : 'w-200 max-w-[calc(100vw-16px)] elevated-surface [&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:bg-transparent [&>[data-layer]>[data-surface]]:rounded-[24px]',
               animateOnOpen() &&
                 (props.fullscreen
                   ? 'dialog-fullscreen-open-animation'

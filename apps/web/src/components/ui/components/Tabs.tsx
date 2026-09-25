@@ -48,14 +48,15 @@ export const Tabs = (props: TabsProps) => {
         local.class
       )}
     >
-      <KSegmentedControl.Indicator class="pointer-events-none absolute top-0 left-0 z-0 rounded-xl border border-edge-muted bg-active transition-[transform,width,height] duration-50" />
+      <KSegmentedControl.Indicator class="pointer-events-none absolute top-0 left-0 z-0 rounded-full border border-edge-frame bg-active transition-[transform,width,height] duration-50 motion-reduce:transition-none" />
       <For each={local.list}>
         {(item) => (
           <KSegmentedControl.Item
             value={item.value}
             disabled={local.disabled}
             class={cn(
-              'relative z-1 rounded-full has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
+              'relative z-1 inline-flex h-full min-w-0 items-center rounded-full',
+              'has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus data-disabled:pointer-events-none data-disabled:opacity-50',
               local.fullWidth && 'flex-1',
               local.itemClass
             )}
@@ -63,8 +64,7 @@ export const Tabs = (props: TabsProps) => {
             <KSegmentedControl.ItemInput class="pointer-events-none absolute inset-0" />
             <KSegmentedControl.ItemLabel
               class={cn(
-                'flex h-8 items-center px-4 text-xs font-medium rounded-full select-none',
-                'text-ink-extra-muted hover:text-ink data-checked:text-ink',
+                'flex h-8 items-center px-4 text-xs font-medium rounded-full select-none text-ink-extra-muted hover:text-ink data-checked:text-ink transition-colors duration-120 motion-reduce:transition-none',
                 local.fullWidth && 'w-full justify-center',
                 local.labelClass
               )}

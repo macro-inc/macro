@@ -121,18 +121,22 @@ where
         self.inner.publish_opened(&session).await;
 
         if let Some(thread) = request.thread {
-            let announcement = SessionAnnouncement {
-                session_id: session.id,
-                bot_id: request.bot_id,
-                kind: AgentKind::for_session(session.bot_id, &session.harness),
-                origin_parent: thread.parent,
-                origin_thread_id: thread.thread_id,
-                origin_message_id: thread.message_id,
-                prompted_message_id: MessageId::first(AuthorKind::User),
-                prompted_content: thread.content,
-                triggered_by: owner_user,
+            let announce = async {
+                let persona = self.inner.reply_persona(&session).await?;
+                let announcement = SessionAnnouncement {
+                    session_id: session.id,
+                    bot_id: request.bot_id,
+                    is_coding: persona.is_coding,
+                    origin_parent: thread.parent,
+                    origin_thread_id: thread.thread_id,
+                    origin_message_id: thread.message_id,
+                    prompted_message_id: MessageId::first(AuthorKind::User),
+                    prompted_content: thread.content,
+                    triggered_by: owner_user,
+                };
+                self.inner.announcer.announce(announcement).await
             };
-            if let Err(error) = self.inner.announcer.announce(announcement).await {
+            if let Err(error) = announce.await {
                 tracing::warn!(
                     error = ?error,
                     session = %session.id,

@@ -83,6 +83,11 @@ export const listAgentsResponseItem = zod
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
       ),
+    is_coding: zod
+      .boolean()
+      .describe(
+        "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
+      ),
     mcp: zod
       .union([
         zod
@@ -160,6 +165,11 @@ export const createAgentBody = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    is_coding: zod
+      .boolean()
+      .describe(
+        'Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`).'
       ),
     mcp: zod
       .union([
@@ -247,6 +257,11 @@ export const updateAgentBody = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    is_coding: zod
+      .boolean()
+      .describe(
+        'Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`).'
       ),
     mcp: zod
       .union([
@@ -368,6 +383,11 @@ export const updateAgentResponse = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    is_coding: zod
+      .boolean()
+      .describe(
+        "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
       ),
     mcp: zod
       .union([

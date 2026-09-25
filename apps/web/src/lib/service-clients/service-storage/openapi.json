@@ -14778,7 +14778,8 @@
           "default_model",
           "channel_scope",
           "channel_ids",
-          "mcp"
+          "mcp",
+          "is_coding"
         ],
         "properties": {
           "auto_accept_permissions": {
@@ -14823,6 +14824,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "is_coding": {
+            "type": "boolean",
+            "description": "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
           },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
@@ -19242,7 +19247,8 @@
           "instructions",
           "harness",
           "default_model",
-          "channel_scope"
+          "channel_scope",
+          "is_coding"
         ],
         "properties": {
           "auto_accept_permissions": {
@@ -19295,6 +19301,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "is_coding": {
+            "type": "boolean",
+            "description": "Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`)."
           },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
@@ -30814,7 +30824,8 @@
           "instructions",
           "harness",
           "default_model",
-          "channel_scope"
+          "channel_scope",
+          "is_coding"
         ],
         "properties": {
           "auto_accept_permissions": {
@@ -30867,6 +30878,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "is_coding": {
+            "type": "boolean",
+            "description": "Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`)."
           },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",

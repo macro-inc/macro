@@ -1,16 +1,24 @@
+import { channelsSearch } from '@app/features/channels-view/channels-route';
+import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
+  type SerializedSearchParams,
   useNavigate,
-  useRouteParams,
+  useParams,
 } from '@app/lib/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
-import type { PreviewPanelSelection } from '@components/app/previewTarget';
+import {
+  type PreviewBlockTarget,
+  type PreviewSelection,
+  previewBlockTarget,
+} from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
+import deepEqual from 'fast-deep-equal';
 import {
   type Accessor,
   createEffect,
@@ -25,19 +33,25 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
-import { inboxPreviewNavigation } from './inbox-preview-navigation';
+import { useInboxCalendarPreview } from './inbox-calendar-preview';
 import {
-  INBOX_PREVIEW_SEARCH_NAMESPACE,
-  inboxPreviewSearch,
-  inboxPreviewSearchCodec,
-  inboxPreviewSelection,
-} from './inbox-route';
+  type InboxPreviewNavigation,
+  inboxDetailSearch,
+  inboxPreviewTargetNavigation,
+} from './inbox-preview-navigation';
+import { inboxDetailParamsFromRoute, inboxPreviewTarget } from './inbox-route';
+import { isInboxDocumentType } from './inbox-route-schema';
 import { inboxTabSearch, inboxTabSearchCodec } from './inbox-tab-search';
 import {
   createInboxViewPersistence,
   normalizeInboxFacets,
 } from './persistence';
-import { inboxPreviewRoute, inboxSplitRoute } from './route';
+import {
+  inboxChannelRoute,
+  inboxDocumentRoute,
+  inboxPreviewRoute,
+  inboxSplitRoute,
+} from './route';
 import type {
   InboxGroupBy,
   InboxTab,
@@ -52,10 +66,15 @@ type InboxViewProviderProps = ContextProviderProps & {
 export type InboxViewContext = {
   state: Store<InboxViewState>;
   setState: SetStoreFunction<InboxViewState>;
-  previewEntity: Accessor<PreviewPanelSelection | undefined>;
-  /** Counts re-opens of the selection already previewed, such as a re-click. */
+  /** The block the route currently opens inline, if any. */
+  previewTarget: Accessor<PreviewBlockTarget | undefined>;
+  /** Re-aim a target when the selected row is opened again at the same URL. */
   previewNavigationRequest: Accessor<number>;
-  openPreview: (entity: PreviewPanelSelection) => boolean;
+  /** Whether the route opens the Calendar view inline. */
+  calendarOpen: Accessor<boolean>;
+  /** Bumped when the open calendar event is requested again, to re-aim in place. */
+  calendarRefocus: Accessor<number>;
+  openPreview: (entity: PreviewSelection) => boolean;
   closePreview: () => void;
   setTab: (tab: InboxTab) => void;
   setFacets: (facets: FacetSelection) => void;
@@ -72,8 +91,10 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
   const navigate = useNavigate();
-  const routeParams = useRouteParams(inboxPreviewRoute);
-  const [previewSearch] = createSearchParams(inboxPreviewSearch);
+  const routeParams =
+    useParams<Parameters<typeof inboxDetailParamsFromRoute>[0]>();
+  const [channelSearch] = createSearchParams(channelsSearch);
+  const [documentSearch] = createSearchParams(driveSearch);
   const [tabSearch] = createSearchParams(inboxTabSearch);
   const selectPreview = createPreviewSelectionGuard();
   const initial = props.initialState ?? {};
@@ -108,77 +129,78 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
     )
   );
 
-  const previewEntity = createMemo<PreviewPanelSelection | undefined>(() => {
-    const blockType = routeParams.blockType;
-    const previewId = routeParams.previewId;
-    if (typeof blockType !== 'string' || typeof previewId !== 'string') return;
-    return inboxPreviewSelection({ blockType, previewId }, previewSearch);
+  const previewTarget = createMemo<PreviewBlockTarget | undefined>(() => {
+    const params = inboxDetailParamsFromRoute(routeParams);
+    if (!params) return;
+    return inboxPreviewTarget(params, {
+      channel: channelSearch,
+      document: documentSearch,
+    });
   });
-  const navigatePreview = (entity: PreviewPanelSelection, replace = false) => {
-    const preview = inboxPreviewNavigation(entity);
-    navigate(
-      { route: inboxPreviewRoute, params: preview.params },
-      {
-        replace,
-        search: {
-          [INBOX_PREVIEW_SEARCH_NAMESPACE]: inboxPreviewSearchCodec.serialize(
-            preview.search
-          ),
-          [inboxTabSearch.namespace]: inboxTabSearchCodec.serialize({
-            tab: state.tab,
-          }),
-        },
-      }
-    );
+  const withTab = (
+    search: Record<string, SerializedSearchParams | undefined>
+  ) => ({
+    ...search,
+    [inboxTabSearch.namespace]: inboxTabSearchCodec.serialize({
+      tab: state.tab,
+    }),
+  });
+  const { calendarOpen, calendarRefocus, openCalendarEvent } =
+    useInboxCalendarPreview(withTab);
+  const navigateDetail = (
+    { params, search }: InboxPreviewNavigation,
+    replace = false
+  ) => {
+    const { blockType, previewId } = params;
+    const target =
+      blockType === 'channel'
+        ? { route: inboxChannelRoute, params: { channelId: previewId } }
+        : isInboxDocumentType(blockType)
+          ? {
+              route: inboxDocumentRoute,
+              params: { documentType: blockType, documentId: previewId },
+            }
+          : { route: inboxPreviewRoute, params };
+    navigate(target, { replace, search: withTab(search) });
   };
+  const navigateTarget = (target: PreviewBlockTarget, replace = false) =>
+    navigateDetail(inboxPreviewTargetNavigation(target), replace);
   const closePreview = () =>
     navigate(
       { route: inboxSplitRoute, params: {} },
-      {
-        search: {
-          [inboxTabSearch.namespace]: inboxTabSearchCodec.serialize({
-            tab: state.tab,
-          }),
-        },
-      }
+      { search: withTab(inboxDetailSearch()) }
     );
   const [previewNavigationRequest, setPreviewNavigationRequest] =
     createSignal(0);
-  // Re-opening the previewed selection leaves the route unchanged, so the
-  // preview sees no new selection; the request asks it to navigate again.
-  const isPreviewed = (entity: PreviewPanelSelection) => {
-    const current = previewEntity();
-    return (
-      current !== undefined &&
-      JSON.stringify(inboxPreviewNavigation(current)) ===
-        JSON.stringify(inboxPreviewNavigation(entity))
-    );
-  };
-  const openPreview = (entity: PreviewPanelSelection) => {
-    if (!selectPreview.canSelect(entity)) return false;
-    if (isPreviewed(entity)) {
+  const openPreview = (entity: PreviewSelection) => {
+    if (entity.type === 'calendar_event') {
+      return openCalendarEvent(entity);
+    }
+    const target = previewBlockTarget(entity);
+    if (!selectPreview.canSelect(target)) return false;
+    const current = previewTarget();
+    if (
+      current &&
+      deepEqual(
+        inboxPreviewTargetNavigation(current),
+        inboxPreviewTargetNavigation(target)
+      )
+    ) {
       setPreviewNavigationRequest((count) => count + 1);
       return true;
     }
-    navigatePreview(entity);
+    navigateTarget(target);
     return true;
   };
 
   createEffect(
-    on(previewEntity, (entity, previous) => {
-      if (selectPreview(entity)) return;
-      if (previous) navigatePreview(previous, true);
+    on(previewTarget, (target, previous) => {
+      if (selectPreview(target)) return;
+      if (previous) navigateTarget(previous, true);
       else
         navigate(
           { route: inboxSplitRoute, params: {} },
-          {
-            replace: true,
-            search: {
-              [inboxTabSearch.namespace]: inboxTabSearchCodec.serialize({
-                tab: state.tab,
-              }),
-            },
-          }
+          { replace: true, search: withTab(inboxDetailSearch()) }
         );
     })
   );
@@ -201,8 +223,10 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
   return {
     state,
     setState,
-    previewEntity,
+    previewTarget,
     previewNavigationRequest,
+    calendarOpen,
+    calendarRefocus,
     openPreview,
     closePreview,
     setTab,

@@ -48,8 +48,15 @@ vi.mock('@queries/messages/timeline', () => ({
   useMessageTimelineQuery: mocks.timeline,
 }));
 vi.mock('./MessageThread', () => ({
-  MessageThread: (props: { data: MessageListItem }) => (
-    <article>
+  MessageThread: (props: {
+    data: MessageListItem;
+    targetId?: string | null;
+    onClearTarget?: () => void;
+  }) => (
+    <article
+      data-target={props.targetId ?? undefined}
+      onClick={() => props.onClearTarget?.()}
+    >
       {props.data.content}
       <For each={props.data.thread.preview}>
         {(reply) => <p>{reply.content}</p>}
@@ -225,5 +232,30 @@ describe('DocumentConversation placement', () => {
       'optimistic discussion',
       'remote discussion',
     ]);
+  });
+});
+
+describe('DocumentConversation linked message highlight', () => {
+  it('releases the highlight while keeping the linked view around its root', () => {
+    const [cleared, setCleared] = createSignal(false);
+    mocks.timeline.mockReturnValue({
+      isSuccess: true,
+      data: { pages: [{ items: [thread('root-of-reply', null)] }] },
+    });
+    const view = render(() => (
+      <DocumentConversation
+        parent={{ type: 'document', id: 'document' }}
+        canWrite={false}
+        targetId="reply"
+        targetCleared={cleared()}
+        onClearTarget={() => setCleared(true)}
+      />
+    ));
+    const article = view.getByRole('article');
+    expect(article.dataset.target).toBe('reply');
+    article.click();
+    expect(article.dataset.target).toBeUndefined();
+    const [, around] = mocks.timeline.mock.calls.at(-1)!;
+    expect(around()).toBe('root-of-reply');
   });
 });

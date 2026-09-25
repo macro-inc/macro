@@ -30,7 +30,9 @@ describe('Calendar view navigation', () => {
             },
           ],
         },
-        search: { calendar: { eventId: ['event-1'] } },
+        search: {
+          calendar: { eventId: ['event-1'], occurrenceKey: ['instance-1'] },
+        },
       },
     });
   });
