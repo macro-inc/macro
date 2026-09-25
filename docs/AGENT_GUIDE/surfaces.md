@@ -752,13 +752,21 @@ footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
 
-The calendar header has matching `New event` and `New Call` buttons. Both stay
-available in narrow splits and on phones, where compact icons have accessible
-labels. `New Call` opens call setup; it is no longer in the right side panel.
-Week view also has a `Choose calendar view` menu, prev/next week,
-`Search events`, `Calendar settings`, and a mini month picker in the right side panel.
-The mini calendar's month label opens a month picker; arrows also change months.
-The right side panel has a collapsible `Upcoming events` box.
+The standalone Calendar view has a left navigation sidebar with a mini calendar,
+collapsible `Upcoming events` and `Calendars` sections, and a feature-gated
+`Team out of office` section. The sidebar can be resized or collapsed on desktop;
+in narrow panes it opens over the grid. On phones, `Show calendar navigation`
+in the split header opens the same sidebar as a left drawer. Choose a date in
+the mini calendar to navigate and close the drawer. Inline Calendar previews
+retain their host's chrome rather than adding another sidebar.
+
+The in-view desktop topbar shows the month and year, `Search events`,
+`New event`, `New Call`, and `Calendar settings`. A row beneath it contains
+`Choose calendar view`, previous/next period, `Today` when needed, and
+`Copy availability`. The narrow layout keeps these actions available. On
+touch devices, the split header retains the compact controls and month picker.
+`New Call` opens call setup; it is no longer in a side panel. The mini calendar's
+month label opens a month picker; arrows also change months.
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
 The active area is hidden when no calls are active. Event rows show the name and
@@ -809,7 +817,7 @@ Selecting `Macro call` on an owned editable event without one adds a call on sav
 choosing another option removes its generated Macro link from the invitation.
 Removing the link or deleting the calendar event does not revoke the reusable call.
 
-The side panel's `Calendars` section folds each connected account into a collapsible
+The sidebar's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Accounts start collapsed. Subscribed system calendars
@@ -848,7 +856,7 @@ guest but you — in a split beside the calendar on desktop, as the full-screen 
 touch devices — and is hidden when you are the only guest.
 
 With the `enable-calendar-team-ooo` flag on, teammates' Google Calendar out-of-office events
-overlay the grid as read-only chips titled `<name>: <event title>`. The side panel's
+overlay the grid as read-only chips titled `<name>: <event title>`. The sidebar's
 `Team out of office` section (shown only when the user belongs to a team with other members)
 has a checkbox in its header row toggling the whole overlay on or off — all teammates or
 none — and lists the next 90 days of teammate absences; clicking a row navigates the grid to
