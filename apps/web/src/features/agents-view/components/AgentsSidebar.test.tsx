@@ -35,6 +35,13 @@ vi.mock('@entity/utils/filter', () => ({ unreadFilterFn: unreadFilter }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ mutedEntities: () => [] }),
 }));
+vi.mock('@core/component/ContextMenu', () => ({
+  MenuItem: (props: { text: string; onClick?: () => void }) => (
+    <button role="menuitem" onClick={props.onClick}>
+      {props.text}
+    </button>
+  ),
+}));
 vi.mock('@app/features/home/components/HomeEntityIcon', () => ({
   HomeEntityIcon: () => null,
 }));
@@ -69,6 +76,7 @@ vi.mock('@app/features/soup', () => ({
   SoupEntityContextMenu: (props: {
     children: JSX.Element;
     entity: { id: string };
+    extraItems?: JSX.Element;
   }) => {
     const [open, setOpen] = createSignal(false);
     return (
@@ -86,6 +94,7 @@ vi.mock('@app/features/soup', () => ({
             <div role="menuitem">Favorite</div>
             <div role="menuitem">Copy Link</div>
             <div role="menuitem">Delete</div>
+            {props.extraItems}
           </div>
         )}
       </div>
@@ -109,6 +118,7 @@ describe('mixed Agents sidebar', () => {
         id: 'code',
         name: 'Fix build',
         ownerId: 'me',
+        isArchived: false,
         botId: 'cursor',
         status: 'acp_ready',
       },
@@ -171,8 +181,18 @@ describe('mixed Agents sidebar', () => {
             id: 'code',
             name: 'Fix build',
             ownerId: 'me',
+            isArchived: false,
             botId: 'cursor',
             status: 'acp_ready',
+          },
+          {
+            type: 'agent_session',
+            id: 'archived',
+            name: 'Old session',
+            ownerId: 'me',
+            isArchived: true,
+            botId: 'cursor',
+            status: 'disconnected',
           },
           { type: 'chat', id: 'chat', name: 'Plan launch', ownerId: 'me' },
         ])}
@@ -206,6 +226,17 @@ describe('mixed Agents sidebar', () => {
     expect(
       sessionMenu.getByRole('menuitem', { name: 'Copy Link' })
     ).toBeTruthy();
+    expect(sessionMenu.getByRole('menuitem', { name: 'Archive' })).toBeTruthy();
+
+    expect(screen.getByText('Archived')).toBeTruthy();
+    const archived = screen.getByRole('button', { name: /Old session/ });
+    fireEvent.contextMenu(archived);
+    const archivedMenu = within(
+      archived.closest('[data-entity-context-menu]') as HTMLElement
+    );
+    expect(
+      archivedMenu.getByRole('menuitem', { name: 'Unarchive' })
+    ).toBeTruthy();
 
     const chat = screen.getByRole('button', { name: /Plan launch/ });
     fireEvent.contextMenu(chat);
@@ -223,6 +254,7 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     id: 'coding-session',
     name: 'Fix build',
     ownerId: 'me',
+    isArchived: false,
     botId: 'cursor',
     harness: 'cursor',
     status: 'acp_ready',

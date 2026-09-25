@@ -88,7 +88,7 @@ export function conversationMode(
       );
 }
 
-type ConversationGroupId = 'recent';
+type ConversationGroupId = 'recent' | 'archived';
 
 export type ConversationGroup = {
   id: ConversationGroupId;
@@ -97,13 +97,32 @@ export type ConversationGroup = {
   conversations: AgentConversationEntity[];
 };
 
-/** One mixed list, retaining the query's newest-first order. */
+/** Active conversations first, with archived agent sessions grouped last. */
 export function groupConversations(
   conversations: readonly AgentConversationEntity[]
 ): ConversationGroup[] {
-  return conversations.length
-    ? [{ id: 'recent', label: undefined, conversations: [...conversations] }]
-    : [];
+  const active = conversations.filter(
+    (conversation) =>
+      conversation.type !== 'agent_session' || !conversation.isArchived
+  );
+  const archived = conversations.filter(
+    (conversation) =>
+      conversation.type === 'agent_session' && conversation.isArchived
+  );
+  return [
+    ...(active.length
+      ? [{ id: 'recent' as const, label: undefined, conversations: active }]
+      : []),
+    ...(archived.length
+      ? [
+          {
+            id: 'archived' as const,
+            label: 'Archived',
+            conversations: archived,
+          },
+        ]
+      : []),
+  ];
 }
 
 export type BotUsage = {
