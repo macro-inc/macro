@@ -53,6 +53,8 @@ function setup(initial: NativeCallSnapshot | null = first) {
         roomName: 'room-1',
         token: 'token',
         serverUrl: 'ws://localhost',
+        participantId: 'macro|test@example.com',
+        shareToken: null,
       })),
       connect: vi.fn(async () => {}),
       disconnect: vi.fn<
@@ -424,6 +426,8 @@ describe('native snapshot events and call ownership', () => {
           roomName: 'room-1',
           token: 'token',
           serverUrl: 'ws://localhost',
+          participantId: 'macro|test@example.com',
+          shareToken: null,
         };
       });
       ports.connect.mockReturnValueOnce(connection.promise);
@@ -479,6 +483,8 @@ describe('native snapshot events and call ownership', () => {
       roomName: 'room-1',
       token: 'new-token',
       serverUrl: 'ws://localhost',
+      participantId: 'macro|test@example.com',
+      shareToken: null,
     });
     native.setSnapshot(first);
     cleanup.resolve();
@@ -552,6 +558,8 @@ describe('native snapshot events and call ownership', () => {
         roomName: 'room-1',
         token: 'new-token',
         serverUrl: 'ws://localhost',
+        participantId: 'macro|test@example.com',
+        shareToken: null,
       };
     });
     ports.disconnect.mockImplementationOnce(async (options) => {

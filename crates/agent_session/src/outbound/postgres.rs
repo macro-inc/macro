@@ -326,6 +326,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .await
         .map_err(
             |error| match error.as_database_error().and_then(|e| e.constraint()) {
+                Some("agent_session_pkey") => AgentSessionError::SessionIdTaken(id),
                 Some("agent_session_thread_bot_unique") => AgentSessionError::ThreadSessionExists,
                 Some("agent_session_owner_id_fkey") => AgentSessionError::UnknownOwner,
                 _ => AgentSessionError::Unknown(

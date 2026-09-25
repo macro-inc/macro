@@ -26,6 +26,7 @@ import {
   type PostMessage,
 } from '@service-storage/messages';
 import { useMutation } from '@tanstack/solid-query';
+import { v7 as uuidv7 } from 'uuid';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
 import { MessageNonceKeys } from './keys';
@@ -40,7 +41,6 @@ import {
   markTopLevelMessageDeletedInTargetCaches,
   patchTargetMessage,
   removeMessageFromTargetCaches,
-  replaceTargetMessageId,
   resolveMessageTarget,
   restoreMessageInTargetCaches,
   softInvalidateTargetCaches,
@@ -233,28 +233,6 @@ export function rollbackInsertChannelMessage(
 }
 
 /**
- * Replace an optimistic message ID with the real server-assigned ID.
- * Called in mutation onSuccess after server returns the real message.
- */
-function replaceOptimisticMessage(
-  vars: WithParent<{
-    optimisticId: string;
-    realId: string;
-    threadId?: string;
-  }>
-): void {
-  replaceTargetMessageId(
-    vars.parent,
-    resolveMessageTarget({
-      parent: vars.parent,
-      messageId: vars.optimisticId,
-      threadId: vars.threadId,
-    }),
-    vars.realId
-  );
-}
-
-/**
  * Optimistically delete a message from the channel cache.
  *
  * A channel root with thread replies is soft-deleted in place (we set
@@ -403,10 +381,19 @@ export function rollbackUpdateMessage(
   });
 }
 
+/**
+ * Mint the id of a message about to be sent. The server stores it as the
+ * message id, so it must be a UUIDv7 stamped with the current time.
+ */
+export function newMessageId(): string {
+  return uuidv7();
+}
+
 type SendMessageParams = {
   parent: MessageParent;
   message: PostMessage;
   optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
+  /** From `newMessageId`; the message's final id, not a placeholder. */
   optimisticId: string;
   senderId: string;
 };
@@ -432,9 +419,11 @@ export function useSendMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
-      // Use optimisticId as nonce - allows server to echo it back for correlation
+      // The server keeps optimisticId as the message id, so the optimistic
+      // message never changes id; it is also the nonce the server echoes.
       return entityMessagesClient.post(vars.parent, {
         ...vars.message,
+        id: vars.optimisticId,
         nonce: vars.optimisticId,
       });
     },
@@ -468,14 +457,22 @@ export function useSendMessageMutation(
 
           return { insert, updatedAt };
         },
-        onSuccess(data, variables) {
+        onSuccess(data, variables, context) {
           const threadId = variables.message.thread_id ?? undefined;
-          replaceOptimisticMessage({
-            parent: variables.parent,
-            optimisticId: variables.optimisticId,
-            realId: data.id,
-            threadId,
-          });
+          // A server predating client-minted ids ignores `id` and mints its
+          // own. Rebuild the optimistic row under the server id so it keeps
+          // its thread state (including the anchor) and never holds a dead id;
+          // `applyMessage` below then settles it on the server's fields.
+          if (data.id !== variables.optimisticId && context?.insert) {
+            rollbackInsertChannelMessage(variables.parent, context.insert);
+            optimisticInsertMessage({
+              parent: variables.parent,
+              optimisticId: data.id,
+              senderId: variables.senderId,
+              optimisticAttachments: variables.optimisticAttachments,
+              ...variables.message,
+            });
+          }
 
           // Sending is a `messaged` activity server-side; stamp the touch now
           // so the Recent order moves the channel up without waiting on the

@@ -751,5 +751,32 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
     {
         return Err(MessageError::Invalid("invalid PDF comment geometry"));
     }
+    if let Some(id) = input.id {
+        validate_client_id(id, chrono::Utc::now())?;
+    }
+    Ok(())
+}
+
+/// How far a client-minted id's timestamp may drift from the server clock.
+/// Ordering uses the server's `created_at`, so this only needs to catch forged
+/// ids; it is wide so a device with a wrong clock can still post.
+const CLIENT_ID_MAX_SKEW: chrono::TimeDelta = chrono::TimeDelta::days(1);
+
+/// A client-minted id must be a UUIDv7 stamped near now, so its embedded time
+/// stays roughly the message's creation time.
+fn validate_client_id(id: Uuid, now: chrono::DateTime<chrono::Utc>) -> Result<(), MessageError> {
+    let minted_at = id
+        .get_timestamp()
+        .filter(|_| id.get_version_num() == 7)
+        .and_then(|timestamp| {
+            let (seconds, nanos) = timestamp.to_unix();
+            chrono::DateTime::from_timestamp(i64::try_from(seconds).ok()?, nanos)
+        })
+        .ok_or(MessageError::Invalid("message id must be a UUIDv7"))?;
+    if (now - minted_at).abs() > CLIENT_ID_MAX_SKEW {
+        return Err(MessageError::Invalid(
+            "message id timestamp is too far from the server clock",
+        ));
+    }
     Ok(())
 }

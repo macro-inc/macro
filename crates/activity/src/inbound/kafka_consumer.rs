@@ -1,7 +1,8 @@
 //! Generic Kafka consumer that materializes activities from domain events.
 //!
 //! This machinery knows **zero domains**: it is generic over a declared
-//! event collection `C` and a host-supplied dispatcher `Fn(&C) -> Ingest`.
+//! event collection `C` and a host-supplied asynchronous dispatcher
+//! `Fn(C) -> impl Future<Output = Ingest>`.
 //! The composition root (the hosting service) declares the topics and maps
 //! each decoded event to the owning domain's ingest function.
 //!
@@ -45,11 +46,12 @@ pub struct ActivityConsumer<R, C, F, P> {
     _events: PhantomData<fn() -> C>,
 }
 
-impl<R, C, F, P> ActivityConsumer<R, C, F, P>
+impl<R, C, F, P, Fut> ActivityConsumer<R, C, F, P>
 where
     R: ActivityRepo,
     C: MacroEventCollection + 'static,
-    F: Fn(&C) -> Ingest + Send + Sync,
+    F: Fn(C) -> Fut + Send + Sync,
+    Fut: Future<Output = Ingest> + Send,
     P: ActivityRealtimePublisher,
 {
     /// Builds the consumer over an activity store, an event dispatcher, and
@@ -69,8 +71,8 @@ where
     /// offset replays the source event, the deterministic ids no-op the
     /// insert, and the announcement is published again; duplicates are
     /// idempotent for subscribers (records keyed by id).
-    async fn apply(&self, event: &C) -> Result<(), R::Err> {
-        self.materializer.apply((self.ingest)(event)).await
+    async fn apply(&self, event: C) -> Result<(), R::Err> {
+        self.materializer.apply((self.ingest)(event).await).await
     }
 
     /// Runs the consumer until `shutdown` resolves.
@@ -135,7 +137,7 @@ where
                     // the replay idempotent.
                     tokio::select! {
                         _ = &mut shutdown => break,
-                        result = self.apply(&event).instrument(span) => {
+                        result = self.apply(event).instrument(span) => {
                             result.context("failed to store activities")?;
                         }
                     }

@@ -4,7 +4,7 @@ use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::{AgentContextAnchor, AgentContextMessage};
 
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::ConversationContext;
+use crate::domain::model::{CommentAnchor, ConversationContext};
 use crate::domain::ports::AgentPromptComposer;
 
 /// Lexical-service-backed agent prompt composer.
@@ -36,14 +36,29 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
                 })
                 .collect::<Vec<_>>()
         });
-        let anchor = context
-            .and_then(|context| context.anchor.as_ref())
-            .map(|anchor| AgentContextAnchor {
-                mark_id: &anchor.mark_id,
-                marked_text: anchor.marked_text.as_deref(),
-                current_marked_text: anchor.current.as_ref().map(|c| c.marked_text.as_str()),
-                surrounding_text: anchor.current.as_ref().map(|c| c.surrounding_text.as_str()),
-            });
+        let anchor =
+            context
+                .and_then(|context| context.anchor.as_ref())
+                .map(|anchor| match anchor {
+                    CommentAnchor::Mark {
+                        mark_id,
+                        marked_text,
+                        current,
+                    } => AgentContextAnchor::Markdown {
+                        mark_id,
+                        marked_text: marked_text.as_deref(),
+                        current_marked_text: current.as_ref().map(|c| c.marked_text.as_str()),
+                        surrounding_text: current.as_ref().map(|c| c.surrounding_text.as_str()),
+                    },
+                    CommentAnchor::PdfHighlight {
+                        anchor_id,
+                        marked_text,
+                    } => AgentContextAnchor::PdfHighlight {
+                        anchor_id,
+                        marked_text: marked_text.as_deref(),
+                    },
+                    CommentAnchor::PdfPin { anchor_id } => AgentContextAnchor::PdfPin { anchor_id },
+                });
 
         self.lexical
             .compose_agent_context(

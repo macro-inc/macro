@@ -10,7 +10,9 @@ use crate::domain::models::{
     LocationQueryParams, TaskBranchName,
 };
 use crate::domain::permission_token::decode_permission_token;
-use crate::domain::ports::editing::{EditMode, EditResult, EditingWorkerService};
+use crate::domain::ports::editing::{
+    CommentMarkPlacement, EditMode, EditResult, EditingWorkerService,
+};
 use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
 };
@@ -410,6 +412,37 @@ pub(in crate::inbound::toolset) struct FakeEditingWorker {
     edit_calls: Arc<Mutex<Vec<String>>>,
     modes: Arc<Mutex<Vec<EditMode>>>,
     tokens: Arc<Mutex<Vec<DocumentPermissionToken>>>,
+    /// Answer every comment mark placement with this refusal.
+    comment_mark_refusal: Option<String>,
+    /// Fail every comment mark placement as a worker whose push was never acked.
+    comment_mark_fails: bool,
+    pub(in crate::inbound::toolset) added_comment_marks: Arc<Mutex<Vec<AddedCommentMark>>>,
+    pub(in crate::inbound::toolset) removed_comment_marks: Arc<Mutex<Vec<Uuid>>>,
+}
+
+impl FakeEditingWorker {
+    pub(in crate::inbound::toolset) fn failing_comment_marks() -> Self {
+        Self {
+            comment_mark_fails: true,
+            ..Self::default()
+        }
+    }
+
+    pub(in crate::inbound::toolset) fn refusing_comment_marks(reason: &str) -> Self {
+        Self {
+            comment_mark_refusal: Some(reason.to_owned()),
+            ..Self::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::inbound::toolset) struct AddedCommentMark {
+    pub document_id: String,
+    pub token: DocumentPermissionToken,
+    pub mark_id: Uuid,
+    pub text: String,
+    pub occurrence: Option<u32>,
 }
 
 impl EditingWorkerService for FakeEditingWorker {
@@ -420,6 +453,48 @@ impl EditingWorkerService for FakeEditingWorker {
         _request: &crate::domain::spreadsheet::SpreadsheetRequest,
     ) -> anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse> {
         panic!("unexpected spreadsheet call")
+    }
+
+    async fn add_comment_mark(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        mark_id: Uuid,
+        text: &str,
+        occurrence: Option<u32>,
+    ) -> anyhow::Result<CommentMarkPlacement> {
+        self.added_comment_marks
+            .lock()
+            .expect("comment marks lock poisoned")
+            .push(AddedCommentMark {
+                document_id: document_id.to_owned(),
+                token: document_token.clone(),
+                mark_id,
+                text: text.to_owned(),
+                occurrence,
+            });
+        if self.comment_mark_fails {
+            anyhow::bail!("sync service did not acknowledge 1 comment mark update(s)");
+        }
+        Ok(match &self.comment_mark_refusal {
+            Some(reason) => CommentMarkPlacement::Refused(reason.clone()),
+            None => CommentMarkPlacement::Placed {
+                marked_text: text.trim().to_owned(),
+            },
+        })
+    }
+
+    async fn remove_comment_mark(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        mark_id: Uuid,
+    ) -> anyhow::Result<()> {
+        self.removed_comment_marks
+            .lock()
+            .expect("comment marks lock poisoned")
+            .push(mark_id);
+        Ok(())
     }
 
     async fn edit(

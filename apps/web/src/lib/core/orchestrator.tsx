@@ -9,7 +9,7 @@ import {
   onMount,
   Suspense,
 } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, unwrap } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import {
   type BlockAlias,
@@ -346,6 +346,18 @@ export type BlockOrchestrator = {
    * already taken.
    */
   rekeyBlockInstance: (type: BlockName, fromId: string, toId: string) => void;
+  /**
+   * Registers a handle for block content mounted without a block container,
+   * such as an entity detail view, so openers that navigate through
+   * [getBlockHandle] reach it. The handle is removed when the calling owner
+   * is disposed.
+   *
+   * Returns undefined while another block holds the id.
+   */
+  registerBlockHandle: <T extends BlockName>(
+    type: T,
+    id: string
+  ) => OwnedBlockHandle<BlockMethodsFor<T>> | undefined;
 };
 
 export function createBlockOrchestrator(): BlockOrchestrator {
@@ -488,12 +500,22 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     setBlocks(toId, { ...existing, id: toId });
   }
 
+  function registerBlockHandle<T extends BlockName>(type: T, id: string) {
+    if (unwrap(blocks)[id]) return;
+    const handle = registerBlock(type, id);
+    onCleanup(() => {
+      if (unwrap(blocks)[id]?.handle === handle) setBlocks(id, undefined!);
+    });
+    return handle;
+  }
+
   return {
     isBlockMounted: (type, id) =>
       instances.get(keyOf(type, id))?.isMounted() ?? false,
     getBlockHandle,
     createBlockInstance: createManagedBlockInstance,
     rekeyBlockInstance,
+    registerBlockHandle,
   };
 }
 

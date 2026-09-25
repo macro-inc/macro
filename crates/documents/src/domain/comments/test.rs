@@ -264,13 +264,24 @@ async fn pdf_anchors_are_inline_threads() {
         Ok(page(
             vec![
                 item(
+                    message(3, None, "blank highlight"),
+                    Some(ThreadAnchor::PdfHighlight {
+                        anchor_id: id(11),
+                        marked_text: None,
+                    }),
+                    vec![],
+                ),
+                item(
                     message(2, None, "pin"),
                     Some(ThreadAnchor::PdfPlaceable { anchor_id: id(20) }),
                     vec![],
                 ),
                 item(
                     message(1, None, "highlight"),
-                    Some(ThreadAnchor::PdfHighlight { anchor_id: id(10) }),
+                    Some(ThreadAnchor::PdfHighlight {
+                        anchor_id: id(10),
+                        marked_text: Some("highlighted words".to_owned()),
+                    }),
                     vec![],
                 ),
             ],
@@ -291,11 +302,21 @@ async fn pdf_anchors_are_inline_threads() {
         vec![
             (
                 CommentThreadKind::Inline,
-                CommentAnchor::PdfHighlight { anchor_id: id(10) }
+                CommentAnchor::PdfHighlight {
+                    anchor_id: id(10),
+                    marked_text: Some("highlighted words".to_owned()),
+                }
             ),
             (
                 CommentThreadKind::Inline,
                 CommentAnchor::PdfPin { anchor_id: id(20) }
+            ),
+            (
+                CommentThreadKind::Inline,
+                CommentAnchor::PdfHighlight {
+                    anchor_id: id(11),
+                    marked_text: None,
+                }
             ),
         ]
     );
@@ -470,6 +491,30 @@ fn serializes_ids_kind_and_anchor_for_agents() {
                 }
             ]
         })
+    );
+}
+
+#[test]
+fn pdf_highlights_serialize_like_text_anchors() {
+    let anchor = |marked_text: Option<&str>| {
+        serde_json::to_value(CommentAnchor::PdfHighlight {
+            anchor_id: id(10),
+            marked_text: marked_text.map(str::to_owned),
+        })
+        .unwrap()
+    };
+
+    assert_eq!(
+        anchor(Some("highlighted words")),
+        serde_json::json!({
+            "type": "pdfHighlight",
+            "anchorId": id(10),
+            "markedText": "highlighted words"
+        })
+    );
+    assert_eq!(
+        anchor(None),
+        serde_json::json!({ "type": "pdfHighlight", "anchorId": id(10) })
     );
 }
 

@@ -65,6 +65,12 @@ export function createDriveDataSource(options: {
 
       return {
         enabled: Boolean(viewer) && facetsReady() && !current.search.trim(),
+        // Folder contents mix email with indexed project members. Seed the
+        // latter locally without narrowing the authoritative server request.
+        graphqlLocalReconciliation:
+          current.location.kind === 'folder' && current.location.id
+            ? 'without-email'
+            : undefined,
         meta: {
           // REST inserts omit attachment status. Let a scoped server refetch
           // admit them rather than inserting an unverifiable document.

@@ -3,10 +3,12 @@ import {
   agentsRouteSegments,
 } from '@app/features/agents-view/core/route';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
+import { isCalendarRange } from '@app/features/calendar-view/calendar-range';
 import {
   CALENDAR_ROUTE_ID,
   CALENDAR_SEARCH_NAMESPACE,
   calendarSearchCodec,
+  calendarTargetSearch,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import type { DriveLocation } from '@app/features/drive-view/core/types';
@@ -212,12 +214,22 @@ export function splitLocationFromContent(
     (content.type === 'component' && content.id === CALENDAR_VIEW_ID) ||
     (content.type === 'calendar' && content.id === CALENDAR_BLOCK_ID)
   ) {
-    const rawEventId = isRecord(content.params)
-      ? (content.params as Record<string, unknown>).eventId
-      : undefined;
-    const eventId =
-      typeof rawEventId === 'string' && rawEventId.length > 0 ? rawEventId : '';
-    const search = calendarSearchCodec.serialize({ eventId });
+    const params: Record<string, unknown> = isRecord(content.params)
+      ? content.params
+      : {};
+    const search = calendarSearchCodec.serialize(
+      calendarTargetSearch({
+        eventId:
+          typeof params.eventId === 'string' && params.eventId.length > 0
+            ? params.eventId
+            : undefined,
+        occurrenceKey:
+          typeof params.occurrenceKey === 'string'
+            ? params.occurrenceKey
+            : undefined,
+        range: isCalendarRange(params.range) ? params.range : undefined,
+      })
+    );
     return {
       route: {
         matches: [
@@ -268,9 +280,11 @@ export function resolveContentLocation(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
-  const metadata = isRecord(content.entryMetadata)
-    ? content.entryMetadata
-    : undefined;
+  let metadata: Record<string, unknown> | undefined;
+  if (isRecord(content.entryMetadata)) metadata = content.entryMetadata;
+
+  let metadataLocation = metadata;
+  if (isRecord(metadata?.location)) metadataLocation = metadata.location;
   const resolve = (route: unknown) => {
     assertRouteState(routes, route);
     // Go through the URL representation, not schema validation of schema outputs.
@@ -290,9 +304,9 @@ export function resolveContentLocation(
     return decoded.location.route;
   };
   let route: SplitLocation['route'] | undefined;
-  if (metadata?.route !== undefined) {
+  if (metadataLocation?.route !== undefined) {
     try {
-      route = resolve(metadata.route);
+      route = resolve(metadataLocation.route);
     } catch {
       // Old or malformed metadata falls back to the content's compatibility route.
     }
@@ -301,9 +315,11 @@ export function resolveContentLocation(
   const search = filterRouteSearch(
     routes,
     route,
-    parseSearchState(metadata?.search)
+    parseSearchState(metadataLocation?.search)
   );
-  return search ? { route, search } : { route };
+  const location: SplitLocation = { route };
+  if (search) location.search = search;
+  return location;
 }
 
 export function splitContentFromLocation(

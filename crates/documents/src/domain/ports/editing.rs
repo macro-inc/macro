@@ -36,6 +36,20 @@ pub enum EditMode {
     Fast,
 }
 
+/// What became of a request to place a comment mark.
+#[cfg(feature = "ai_tools")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommentMarkPlacement {
+    /// The mark now wraps the requested text.
+    Placed {
+        /// The text the mark covers, as the document reads.
+        marked_text: String,
+    },
+    /// The text could not be anchored exactly, so the document was left
+    /// untouched; the reason is written for the agent that asked.
+    Refused(String),
+}
+
 /// Port for applying AI-driven edits to a document via the editing worker.
 #[cfg_attr(test, mockall::automock)]
 pub trait EditingWorkerService: Send + Sync + 'static {
@@ -47,6 +61,27 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         document_token: &DocumentPermissionToken,
         request: &crate::domain::spreadsheet::SpreadsheetRequest,
     ) -> impl Future<Output = anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse>> + Send;
+
+    /// Wrap the `occurrence`th (1-based) appearance of `text` in `document_id`
+    /// in comment mark `mark_id`, merged into the live collaborative document.
+    #[cfg(feature = "ai_tools")]
+    fn add_comment_mark(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        mark_id: uuid::Uuid,
+        text: &str,
+        occurrence: Option<u32>,
+    ) -> impl Future<Output = anyhow::Result<CommentMarkPlacement>> + Send;
+
+    /// Take comment mark `mark_id` out of `document_id`, keeping its text.
+    #[cfg(feature = "ai_tools")]
+    fn remove_comment_mark(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        mark_id: uuid::Uuid,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Apply AI-driven edits to `document_id` using a pre-minted `document_token`.
     fn edit(

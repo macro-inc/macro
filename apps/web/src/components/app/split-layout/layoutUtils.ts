@@ -15,7 +15,10 @@ import type {
   SplitHandle,
   SplitManager,
 } from './layoutManager';
-import type { CollapsibleItemInput } from './utils/createPriorityCollapser';
+import type {
+  CollapsibleItemInput,
+  PriorityCollapser,
+} from './utils/createPriorityCollapser';
 
 const _isInSplit = createCallback(() => {
   return !!useContext(SplitPanelContext);
@@ -173,9 +176,14 @@ function _createIsActiveSplitContentMemo(
   });
 }
 
-function useRegisterCollapsibleItem(
-  input: CollapsibleItemInput,
-  region: 'header' | 'toolbar'
+/**
+ * Register a collapsible item with an explicit collapser for the lifetime of
+ * the calling owner. Rows outside the split header (a ViewShell top bar with
+ * its own overflow sensor) hand their controller's collapser in directly.
+ */
+export function useRegisterPriorityCollapseItem(
+  collapser: PriorityCollapser,
+  input: CollapsibleItemInput
 ): Accessor<boolean> {
   const [collapsed, setCollapsedInner] = createSignal(false);
   const setCollapsed = (value: boolean, opts?: { silent?: boolean }) => {
@@ -183,9 +191,6 @@ function useRegisterCollapsibleItem(
     if (!opts?.silent) input.onCollapsedChange?.(value);
   };
   input.onCollapsedChange?.(false);
-  const ctx = useSplitPanelOrThrow();
-  const collapser =
-    region === 'header' ? ctx.headerCollapser : ctx.toolbarCollapser;
   const cleanup = collapser.register({
     ...input,
     collapsed,
@@ -193,6 +198,16 @@ function useRegisterCollapsibleItem(
   });
   onCleanup(cleanup);
   return collapsed;
+}
+
+function useRegisterCollapsibleItem(
+  input: CollapsibleItemInput,
+  region: 'header' | 'toolbar'
+): Accessor<boolean> {
+  const ctx = useSplitPanelOrThrow();
+  const collapser =
+    region === 'header' ? ctx.headerCollapser : ctx.toolbarCollapser;
+  return useRegisterPriorityCollapseItem(collapser, input);
 }
 
 export function useRegisterCollapsibleHeaderItem(

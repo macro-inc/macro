@@ -142,14 +142,16 @@ export function CallControlsPanelSmallRow() {
               </span>
             </Dropdown.Item>
 
-            <Dropdown.Item
-              closeOnSelect={false}
-              disabled={!teamShare.canToggle() || teamShare.isPending()}
-              onSelect={() => void teamShare.toggle()}
-            >
-              <InlineCheckbox checked={callCtx.isSharedWithTeam()} />
-              <span class="flex-1 truncate">Share with team</span>
-            </Dropdown.Item>
+            <Show when={callCtx.activeChannelId() !== null}>
+              <Dropdown.Item
+                closeOnSelect={false}
+                disabled={!teamShare.canToggle() || teamShare.isPending()}
+                onSelect={() => void teamShare.toggle()}
+              >
+                <InlineCheckbox checked={callCtx.isSharedWithTeam()} />
+                <span class="flex-1 truncate">Share with team</span>
+              </Dropdown.Item>
+            </Show>
           </Dropdown.Group>
         </Dropdown.Content>
       </Dropdown>

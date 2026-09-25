@@ -188,7 +188,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Remove the scheduled send from a draft.
+     * Remove the scheduled send from a draft, including immediate-send undo.
      */
     public deleteScheduledDraft<ThrowOnError extends boolean = false>(options: Options<DeleteScheduledDraftData, ThrowOnError>): RequestResult<DeleteScheduledDraftResponses, DeleteScheduledDraftErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteScheduledDraftResponses, DeleteScheduledDraftErrors, ThrowOnError>({ url: '/email/drafts/scheduled/{message_id}', ...options });

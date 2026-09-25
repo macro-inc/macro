@@ -22,12 +22,14 @@ const channel = (
 describe('channel selection hydration', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('does not load history for a read channel or a legacy row', async () => {
+  it('returns synchronously for a read channel or a legacy row', () => {
     const legacy = channel(undefined);
-    expect(await hydrateChannelNotificationSelection(legacy)).toBe(legacy);
-    expect(
-      (await hydrateChannelNotificationSelection(channel([]))).notifications?.()
-    ).toEqual([]);
+    expect(hydrateChannelNotificationSelection(legacy)).toBe(legacy);
+    const read = hydrateChannelNotificationSelection(channel([]));
+    expect(read).not.toBeInstanceOf(Promise);
+    if (read instanceof Promise)
+      throw new Error('Unexpected notification fetch');
+    expect(read.notifications?.()).toEqual([]);
     expect(fetchNotifications).not.toHaveBeenCalled();
   });
 
@@ -43,6 +45,20 @@ describe('channel selection hydration', () => {
     expect(full.notifications?.()).toEqual(complete);
     expect(full.unreadNotifications).toBeUndefined();
     expect(full.target?.messageId).toBe('explicit-search-target');
+  });
+
+  it('keeps the pre-await channel id if the store proxy loses it mid-fetch', async () => {
+    const row = channel([
+      { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
+    ]);
+    fetchNotifications.mockImplementation(async () => {
+      (row as { id?: string }).id = undefined;
+      return [{ id: 'one' }];
+    });
+    const full = await hydrateChannelNotificationSelection(row);
+    expect(full.id).toBe('channel');
+    expect(full.type).toBe('channel');
+    expect(full.notifications?.()).toEqual([{ id: 'one' }]);
   });
 
   it('does not silently mark a partial selection on a failed full read', async () => {

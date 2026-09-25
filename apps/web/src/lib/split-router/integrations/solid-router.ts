@@ -1,4 +1,5 @@
 import { type Accessor, createEffect, createRoot, on } from 'solid-js';
+import { browserEntryKeySignature } from '../entry-state';
 import type {
   SplitRouterExternalLocation,
   SplitRouterExternalLocationValue,
@@ -9,7 +10,11 @@ export type SolidRouterLocationOptions = {
   pathname: Accessor<string>;
   search?: Accessor<string>;
   hash?: Accessor<string>;
-  navigate: (to: string, options: { replace: boolean }) => unknown;
+  state?: Accessor<unknown>;
+  navigate: (
+    to: string,
+    options: { replace: boolean; state?: unknown }
+  ) => unknown;
 };
 
 /**
@@ -19,11 +24,15 @@ export type SolidRouterLocationOptions = {
 export function createSolidRouterLocation(
   options: SolidRouterLocationOptions
 ): SplitRouterExternalLocation {
-  const read = (): SplitRouterExternalLocationValue => ({
-    pathname: options.pathname(),
-    search: options.search?.() ?? '',
-    hash: options.hash?.() ?? '',
-  });
+  const read = (): SplitRouterExternalLocationValue => {
+    const location: SplitRouterExternalLocationValue = {
+      pathname: options.pathname(),
+      search: options.search?.() ?? '',
+      hash: options.hash?.() ?? '',
+    };
+    if (options.state) location.state = options.state();
+    return location;
+  };
 
   return {
     read,
@@ -39,6 +48,7 @@ export function createSolidRouterLocation(
                 location.pathname,
                 location.search,
                 location.hash,
+                browserEntryKeySignature(location.state),
               ]);
             },
             () => listener(read()),
@@ -53,6 +63,7 @@ export function createSolidRouterLocation(
     commit(location, commitOptions) {
       options.navigate(externalLocationToString(location), {
         replace: commitOptions.history === 'replace',
+        state: location.state,
       });
     },
   };

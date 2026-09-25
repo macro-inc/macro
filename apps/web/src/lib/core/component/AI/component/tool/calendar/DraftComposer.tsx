@@ -164,6 +164,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
           </Show>
           <EventForm
             controller={controller}
+            macroCallsEnabled={false}
             class="min-w-0"
             disabled={
               finalized || !props.sink.canAct() || operation() === 'reject'

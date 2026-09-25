@@ -47,6 +47,26 @@ export type ActiveCallsResponse = {
 };
 
 /**
+ * Active quick-call metadata available to its authenticated owner or attendees.
+ */
+export type ActiveMeeting = Meeting & {
+    /**
+     * Creator identity for displaying the caller in the authenticated active list.
+     */
+    createdBy: string;
+};
+
+/**
+ * The authenticated actor's active quick calls, including their creators.
+ */
+export type ActiveMeetingsResponse = {
+    /**
+     * Persistent meeting invitations for currently active sessions.
+     */
+    meetings: Array<ActiveMeeting>;
+};
+
+/**
  * The kind of activity a user performs in a channel.
  */
 export type ActivityType = 'view' | 'interact';
@@ -120,6 +140,13 @@ export type Agent = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Whether the agent works in a repository, which decides how it answers
+     * a channel mention: a coding agent posts a magic chip into its live
+     * session, a chat agent replies in the thread. Chosen in the agent's
+     * settings; the persona's word, not the runtime's.
+     */
+    is_coding: boolean;
     /**
      * Which MCP servers sessions of this agent are handed.
      */
@@ -1740,13 +1767,19 @@ export type CalendarEventSourceContent = {
 
 /**
  * Meeting-level fields shown in a calendar event mention preview, taken from
- * the requester's own projection of the meeting.
+ * the requester's own projection of the meeting, or — when the requester has
+ * none — from the mentioned projection a channel they belong to was given.
  */
 export type CalendarMentionEvent = {
     /**
-     * Number of attendees on the requester's copy.
+     * Number of attendees on the previewed copy.
      */
     attendeeCount: number;
+    /**
+     * Provider description, plain text or HTML, truncated for the preview.
+     * Clients must sanitize it before rendering.
+     */
+    description?: string | null;
     /**
      * Whether the event repeats.
      */
@@ -1779,14 +1812,17 @@ export type CalendarMentionEvent = {
      */
     title: string;
     /**
-     * Entity update time of the requester's copy.
+     * Entity update time of the previewed copy.
      */
     updatedAt: string;
     /**
      * The requester's own event entity for the mentioned meeting. Differs
      * from the mentioned id when the mention came from another attendee.
+     * Absent when the meeting is on none of the requester's calendars and
+     * they see it only because it was shared with one of their channels:
+     * that preview is read-only and there is no event of theirs to open.
      */
-    viewerEventId: string;
+    viewerEventId?: string | null;
 };
 
 /**
@@ -1953,7 +1989,7 @@ export type CallRecord = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -1980,11 +2016,16 @@ export type CallRecord = {
      */
     endedAt?: string | null;
     /**
+     * Non-account guests (both active and historic). Guests only ever exist
+     * on standalone meeting calls, never on channel calls.
+     */
+    guests: Array<CallRecordGuest>;
+    /**
      * Whether the call is currently active (from `calls` table).
      */
     isActive: boolean;
     /**
-     * Participants (both active and historic).
+     * Macro-account participants (both active and historic).
      */
     participants: Array<CallRecordParticipant>;
     /**
@@ -2031,6 +2072,28 @@ export type CallRecord = {
 };
 
 /**
+ * A non-account guest as returned in a [`CallRecord`].
+ */
+export type CallRecordGuest = {
+    /**
+     * Guest-provided display name.
+     */
+    displayName: string;
+    /**
+     * Opaque guest identity; matches the guest's transcript `speaker_id`.
+     */
+    id: GuestId;
+    /**
+     * When the guest joined the call.
+     */
+    joinedAt: string;
+    /**
+     * When the guest left (None if still in an active call).
+     */
+    leftAt?: string | null;
+};
+
+/**
  * A participant as returned in a [`CallRecord`] (historic — includes `left_at`).
  */
 export type CallRecordParticipant = {
@@ -2043,7 +2106,7 @@ export type CallRecordParticipant = {
      */
     leftAt?: string | null;
     /**
-     * The user id.
+     * The Macro user id.
      */
     userId: string;
 };
@@ -2072,7 +2135,7 @@ export type CallRecordPreviewData = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -2149,7 +2212,11 @@ export type CallTokenResponse = {
     /**
      * The channel this call is associated with.
      */
-    channelId: string;
+    channelId?: string | null;
+    /**
+     * RTC participant identity.
+     */
+    participantId: string;
     /**
      * The RTC room name.
      */
@@ -2158,6 +2225,10 @@ export type CallTokenResponse = {
      * The RTC server URL for the frontend SDK to connect to.
      */
     serverUrl: string;
+    /**
+     * Meeting link capability, when joined using a link.
+     */
+    shareToken?: string | null;
     /**
      * The RTC token for connecting to the room.
      */
@@ -3201,6 +3272,11 @@ export type CreateAgentRequest = {
      */
     instructions: string;
     /**
+     * Whether the agent is a coding agent: a mention is answered with a magic
+     * chip into its live session (`true`) or a reply in the thread (`false`).
+     */
+    is_coding: boolean;
+    /**
      * Which MCP servers sessions of this agent are handed.
      */
     mcp?: AgentMcpServers;
@@ -3639,6 +3715,24 @@ export type CreateMarkdownDocumentResponse = {
      * A pre-generated permission token that you can use for SS
      */
     token: string;
+};
+
+/**
+ * Inputs for creating a meeting without starting its RTC room.
+ */
+export type CreateMeetingRequest = {
+    /**
+     * Optional scheduled end.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Optional scheduled start.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Optional display title.
+     */
+    title?: string | null;
 };
 
 /**
@@ -4959,8 +5053,7 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_descrip
  */
 export type DocumentSyncContentUpdatedMetadata = {
     /**
-     * Who mechanically changed the content. Absent on events published
-     * before attribution, and on human-only collab sessions.
+     * Legacy single-editor attribution; newer Sync callers send `editors`.
      */
     actor?: string | null;
     /**
@@ -4972,9 +5065,24 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
+     * Distinct editors since the preceding snapshot notification.
+     */
+    editors?: Array<DocumentSyncEditor>;
+    /**
      * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
+    on_behalf_of?: null | MacroUserIdStr;
+};
+
+/**
+ * An editor reported by Sync from an authenticated session.
+ */
+export type DocumentSyncEditor = {
+    /**
+     * User or bot that performed the edit.
+     */
+    actor: string;
     on_behalf_of?: null | MacroUserIdStr;
 };
 
@@ -6379,6 +6487,26 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
 
 /**
+ * A non-account guest of a single call session.
+ *
+ * The id doubles as the guest's RTC participant identity, so identities are
+ * opaque UUIDs and never share a namespace (or a column) with Macro user
+ * ids. Only the server mints them; Macro users keep `macro|…` identities,
+ * so an RTC identity classifies as exactly one of the two.
+ */
+export type GuestId = string;
+
+/**
+ * Public guest join inputs. The server generates the participant identity.
+ */
+export type GuestJoinRequest = {
+    /**
+     * Guest's name, displayed to everyone in the room.
+     */
+    displayName: string;
+};
+
+/**
  * A registered user-run harness.
  *
  * Clients deserialize this, so both derives are used.
@@ -6657,6 +6785,26 @@ export type InputReceivedMetadata = {
  */
 export type InteractionReason = 'edited' | 'first_join' | 'last_leave';
 
+/**
+ * A single email recipient for a call invitation.
+ */
+export type InviteMeetingRequest = {
+    /**
+     * Recipient email; no Macro account is required.
+     */
+    email: string;
+};
+
+/**
+ * Registered teammates selected for an incoming call invitation.
+ */
+export type InviteMeetingUsersRequest = {
+    /**
+     * Human user principals; bot principals and historical bare bot UUIDs are invalid.
+     */
+    userIds: Array<string>;
+};
+
 export type Item = ({
     type: 'document';
 } & BasicDocument) | ({
@@ -6761,6 +6909,65 @@ export type LocationResponseV3 = {
 };
 
 export type MacroUserIdStr = string;
+
+/**
+ * Persistent meeting metadata. No channel contents or archived media are exposed.
+ */
+export type Meeting = {
+    /**
+     * Currently active call session, if any.
+     */
+    callId?: string | null;
+    /**
+     * Associated channel, for links to existing channel calls only.
+     */
+    channelId?: string | null;
+    /**
+     * Persistent meeting identifier.
+     */
+    id: string;
+    /**
+     * Scheduled end, or none for an instant meeting.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Scheduled start, or none for an instant meeting.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Bearer capability embedded in the invitation URL.
+     */
+    shareToken: MeetingToken;
+    /**
+     * Human-readable meeting title.
+     */
+    title: string;
+};
+
+/**
+ * Whether the authenticated caller can invite teammates to this meeting.
+ */
+export type MeetingInvitePermissions = {
+    /**
+     * True for the owner of an uncancelled standalone meeting.
+     */
+    canInvite: boolean;
+};
+
+/**
+ * A bearer capability that grants access only to a meeting's RTC room.
+ */
+export type MeetingToken = string;
+
+/**
+ * Uncancelled standalone meetings visible in the requested meeting list.
+ */
+export type MeetingsResponse = {
+    /**
+     * Persistent meeting invitations, most recently created first.
+     */
+    meetings: Array<Meeting>;
+};
 
 export type Mentions = {
     mentionId: string;
@@ -7566,6 +7773,11 @@ export type PostMessage = {
      * Macro Markdown body.
      */
     content: string;
+    /**
+     * Client-minted UUIDv7 for the new message, so an optimistic message
+     * already carries its final id; the server mints one when absent.
+     */
+    id?: string | null;
     /**
      * Mentions tracked by the editor.
      */
@@ -8853,7 +9065,29 @@ export type SoupCalendarEventSoupPropertiesField = {
 };
 
 /**
- * A participant in a call record, as displayed in Soup.
+ * A non-account guest of a call record, as displayed in Soup.
+ */
+export type SoupCallRecordGuest = {
+    /**
+     * Guest-provided display name.
+     */
+    displayName: string;
+    /**
+     * Opaque guest identity; matches the guest's transcript speaker id.
+     */
+    id: string;
+    /**
+     * When the guest joined the call.
+     */
+    joinedAt: string;
+    /**
+     * When the guest left (None if still in an active call).
+     */
+    leftAt?: string | null;
+};
+
+/**
+ * A Macro-account participant in a call record, as displayed in Soup.
  */
 export type SoupCallRecordParticipant = {
     /**
@@ -8865,7 +9099,7 @@ export type SoupCallRecordParticipant = {
      */
     leftAt?: string | null;
     /**
-     * The user id.
+     * The Macro user id.
      */
     userId: string;
 };
@@ -8892,7 +9126,7 @@ export type SoupCallRecordSoupPropertiesField = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -8914,11 +9148,15 @@ export type SoupCallRecordSoupPropertiesField = {
      */
     endedAt?: string | null;
     /**
+     * Non-account guests in the call.
+     */
+    guests: Array<SoupCallRecordGuest>;
+    /**
      * Whether the call is currently active.
      */
     isActive: boolean;
     /**
-     * Participants in the call.
+     * Macro-account participants in the call.
      */
     participants: Array<SoupCallRecordParticipant>;
     /**
@@ -9982,6 +10220,13 @@ export type ThreadAnchor = {
      * Highlight annotation UUID.
      */
     anchor_id: string;
+    /**
+     * The text the highlight covers, trimmed and bounded like a markdown
+     * snapshot. The highlight owns it and it can be edited there, so it is
+     * read from the highlight whenever the thread is, never stored on the
+     * thread. Absent when the highlight carries no text.
+     */
+    marked_text?: string | null;
     type: 'pdf_highlight';
 } | {
     /**
@@ -10322,6 +10567,11 @@ export type UpdateAgentRequest = {
      */
     instructions: string;
     /**
+     * Whether the agent is a coding agent: a mention is answered with a magic
+     * chip into its live session (`true`) or a reply in the thread (`false`).
+     */
+    is_coding: boolean;
+    /**
      * Which MCP servers sessions of this agent are handed.
      */
     mcp?: AgentMcpServers;
@@ -10386,6 +10636,28 @@ export type UpdateInitiativeRequest = {
      */
     name?: string | null;
     sharePermission?: null | UpdateSharePermissionRequestV2;
+};
+
+/**
+ * Changes to a meeting's title or scheduled time; omitted values stay unchanged.
+ */
+export type UpdateMeetingRequest = {
+    /**
+     * Remove timed scheduling, for example when the calendar event becomes all-day.
+     */
+    clearSchedule?: boolean;
+    /**
+     * Replacement scheduled end; requires a matching start.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Replacement scheduled start; requires a matching end.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Replacement title, when supplied.
+     */
+    title?: string | null;
 };
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
@@ -11275,6 +11547,279 @@ export type GetActiveCallsResponses = {
 
 export type GetActiveCallsResponse = GetActiveCallsResponses[keyof GetActiveCallsResponses];
 
+export type MeetingLookupData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}';
+};
+
+export type MeetingLookupErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingLookupError = MeetingLookupErrors[keyof MeetingLookupErrors];
+
+export type MeetingLookupResponses = {
+    200: Meeting;
+};
+
+export type MeetingLookupResponse = MeetingLookupResponses[keyof MeetingLookupResponses];
+
+export type MeetingGuestJoinData = {
+    body: GuestJoinRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}';
+};
+
+export type MeetingGuestJoinErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingGuestJoinError = MeetingGuestJoinErrors[keyof MeetingGuestJoinErrors];
+
+export type MeetingGuestJoinResponses = {
+    200: CallTokenResponse;
+};
+
+export type MeetingGuestJoinResponse = MeetingGuestJoinResponses[keyof MeetingGuestJoinResponses];
+
+export type MeetingLeaveData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}/leave';
+};
+
+export type MeetingLeaveErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingLeaveError = MeetingLeaveErrors[keyof MeetingLeaveErrors];
+
+export type MeetingLeaveResponses = {
+    200: LeaveCallResponse;
+};
+
+export type MeetingLeaveResponse = MeetingLeaveResponses[keyof MeetingLeaveResponses];
+
+export type MeetingListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings';
+};
+
+export type MeetingListErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingListError = MeetingListErrors[keyof MeetingListErrors];
+
+export type MeetingListResponses = {
+    200: MeetingsResponse;
+};
+
+export type MeetingListResponse = MeetingListResponses[keyof MeetingListResponses];
+
+export type MeetingCreateData = {
+    body: CreateMeetingRequest;
+    path?: never;
+    query?: never;
+    url: '/call/meetings';
+};
+
+export type MeetingCreateErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingCreateError = MeetingCreateErrors[keyof MeetingCreateErrors];
+
+export type MeetingCreateResponses = {
+    200: Meeting;
+};
+
+export type MeetingCreateResponse = MeetingCreateResponses[keyof MeetingCreateResponses];
+
+export type MeetingListActiveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings/active';
+};
+
+export type MeetingListActiveErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingListActiveError = MeetingListActiveErrors[keyof MeetingListActiveErrors];
+
+export type MeetingListActiveResponses = {
+    200: ActiveMeetingsResponse;
+};
+
+export type MeetingListActiveResponse = MeetingListActiveResponses[keyof MeetingListActiveResponses];
+
+export type MeetingInvitePermissionsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}';
+};
+
+export type MeetingInvitePermissionsErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingInvitePermissionsError = MeetingInvitePermissionsErrors[keyof MeetingInvitePermissionsErrors];
+
+export type MeetingInvitePermissionsResponses = {
+    200: MeetingInvitePermissions;
+};
+
+export type MeetingInvitePermissionsResponse = MeetingInvitePermissionsResponses[keyof MeetingInvitePermissionsResponses];
+
+export type MeetingInviteData = {
+    body: InviteMeetingRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}';
+};
+
+export type MeetingInviteErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type MeetingInviteError = MeetingInviteErrors[keyof MeetingInviteErrors];
+
+export type MeetingInviteResponses = {
+    204: void;
+};
+
+export type MeetingInviteResponse = MeetingInviteResponses[keyof MeetingInviteResponses];
+
+export type MeetingInviteUsersData = {
+    body: InviteMeetingUsersRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}/users';
+};
+
+export type MeetingInviteUsersErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingInviteUsersError = MeetingInviteUsersErrors[keyof MeetingInviteUsersErrors];
+
+export type MeetingInviteUsersResponses = {
+    204: void;
+};
+
+export type MeetingInviteUsersResponse = MeetingInviteUsersResponses[keyof MeetingInviteUsersResponses];
+
+export type MeetingJoinData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/join/{token}';
+};
+
+export type MeetingJoinErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingJoinError = MeetingJoinErrors[keyof MeetingJoinErrors];
+
+export type MeetingJoinResponses = {
+    200: CallTokenResponse;
+};
+
+export type MeetingJoinResponse = MeetingJoinResponses[keyof MeetingJoinResponses];
+
+export type MeetingCancelData = {
+    body?: never;
+    path: {
+        meeting_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/{meeting_id}';
+};
+
+export type MeetingCancelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingCancelError = MeetingCancelErrors[keyof MeetingCancelErrors];
+
+export type MeetingCancelResponses = {
+    204: void;
+};
+
+export type MeetingCancelResponse = MeetingCancelResponses[keyof MeetingCancelResponses];
+
+export type MeetingUpdateData = {
+    body: UpdateMeetingRequest;
+    path: {
+        meeting_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/{meeting_id}';
+};
+
+export type MeetingUpdateErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type MeetingUpdateError = MeetingUpdateErrors[keyof MeetingUpdateErrors];
+
+export type MeetingUpdateResponses = {
+    200: Meeting;
+};
+
+export type MeetingUpdateResponse = MeetingUpdateResponses[keyof MeetingUpdateResponses];
+
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;
     path?: never;
@@ -11394,6 +11939,30 @@ export type EditCallRecordResponses = {
 };
 
 export type EditCallRecordResponse = EditCallRecordResponses[keyof EditCallRecordResponses];
+
+export type MeetingShareData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/link';
+};
+
+export type MeetingShareErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingShareError = MeetingShareErrors[keyof MeetingShareErrors];
+
+export type MeetingShareResponses = {
+    200: Meeting;
+};
+
+export type MeetingShareResponse = MeetingShareResponses[keyof MeetingShareResponses];
 
 export type ToggleShareWithTeamData = {
     body?: never;
@@ -11597,12 +12166,12 @@ export type IngestTranscriptData = {
     body: TranscriptSegmentRequest;
     path: {
         /**
-         * Channel ID
+         * RTC room name; the transcription agent passes its LiveKit room verbatim
          */
-        channel_id: string;
+        room_name: string;
     };
     query?: never;
-    url: '/call/{channel_id}/transcript';
+    url: '/call/{room_name}/transcript';
 };
 
 export type IngestTranscriptErrors = {

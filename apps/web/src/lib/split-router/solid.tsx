@@ -13,6 +13,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { createSplitRouter } from './router';
 import {
+  getRouteEntryState,
   resolveRouteBranch,
   routeParams,
   type SplitRoutesManifest,
@@ -20,6 +21,7 @@ import {
 import type {
   InferSplitRouteBranchParams,
   InferSplitRouteParams,
+  InferSplitRouteState,
   SplitNavigate,
   SplitNavigateOptions,
   SplitNavigateTo,
@@ -78,6 +80,11 @@ export function useSplitRouterState<TSplitId>() {
 
       return router.canGo(splitId, delta);
     },
+    entry(splitId: TSplitId) {
+      context.track(splitId);
+
+      return router.entry(splitId);
+    },
     history(splitId: TSplitId) {
       context.track(splitId);
 
@@ -132,6 +139,16 @@ export function useCanGo(delta: number): Accessor<boolean> {
   const splitId = useSplitRouterScope<unknown>();
 
   return () => router.canGo(splitId(), delta);
+}
+
+export function useRouteState<const TRoute extends { id: string }>(
+  route: TRoute
+): Accessor<InferSplitRouteState<TRoute> | undefined> {
+  const state = useSplitRouterState<unknown>();
+  const splitId = useSplitRouterScope<unknown>();
+
+  return () =>
+    getRouteEntryState(state.router.routes, state.entry(splitId()), route);
 }
 
 export function useSplitHistory() {

@@ -38,7 +38,7 @@ const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct CallRecordIndex {
     pub entity_id: uuid::Uuid,
-    pub channel_id: uuid::Uuid,
+    pub channel_id: Option<uuid::Uuid>,
     #[serde(default)]
     pub participant_ids: Vec<String>,
     #[serde(default)]

@@ -6,9 +6,39 @@ export type ClientOptions = {
 
 export type AbGroup = 'A' | 'B';
 
+/**
+ * Error response body.
+ */
+export type AiBillingErrorBody = {
+    /**
+     * Human-readable error description.
+     */
+    error: string;
+};
+
 export type AppleLoginRequest = {
     code: string;
     id_token: string;
+};
+
+/**
+ * Request body for switching plans
+ */
+export type ChangePlanRequest = {
+    /**
+     * The plan to move the active subscription to
+     */
+    plan: SeatPlan;
+};
+
+/**
+ * Response for a plan change
+ */
+export type ChangePlanResponse = {
+    /**
+     * The plan the subscription is now on
+     */
+    plan: SeatPlan;
 };
 
 /**
@@ -161,6 +191,7 @@ export type CreateCheckoutSessionV2Request = {
      * Tracking metadata for conversion attribution
      */
     metadata?: CheckoutSessionMetadata;
+    plan?: null | SeatPlan;
     /**
      * The URL to redirect to on successful checkout
      */
@@ -234,6 +265,35 @@ export type CreateUserRequest = {
 };
 
 /**
+ * Request body for [`create_credit_checkout_handler`].
+ */
+export type CreditCheckoutRequestBody = {
+    /**
+     * Pack size, cents; one of the catalog's `credit_packs_cents`.
+     */
+    amountCents: number;
+    /**
+     * Where Stripe returns the user on cancel. Same rules as `success_url`.
+     */
+    cancelUrl: string;
+    /**
+     * Where Stripe returns the user after paying. Must be an `https` URL
+     * on the origin the request came from.
+     */
+    successUrl: string;
+};
+
+/**
+ * Response for [`create_credit_checkout_handler`].
+ */
+export type CreditCheckoutResponse = {
+    /**
+     * The hosted Checkout URL to redirect to.
+     */
+    url: string;
+};
+
+/**
  * What settings needs to render the Cursor connection.
  *
  * Deliberately thin. `registered` drives the whole UI; `updatedAt` lets it say
@@ -294,6 +354,11 @@ export type CursorModelsResponse = {
      */
     models: Array<CursorModelOption>;
 };
+
+/**
+ * Why a request was refused.
+ */
+export type DenyReason = 'allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -907,6 +972,16 @@ export type PatchTeamCrmSettingsResponse = {
 };
 
 /**
+ * Request body for `PATCH /team/members/{member_user_id}/plan`.
+ */
+export type PatchTeamMemberPlanRequest = {
+    /**
+     * The plan to bill the member's seat at from now on.
+     */
+    plan: SeatPlan;
+};
+
+/**
  * Request to update a team
  */
 export type PatchTeamRequest = {
@@ -982,6 +1057,51 @@ export type Permission = {
      */
     id: string;
 };
+
+/**
+ * One plan in the catalog.
+ */
+export type PlanCatalogEntry = {
+    /**
+     * Included AI per seat per period, list-rate cents.
+     */
+    included_ai_cents_per_seat: number;
+    /**
+     * Monthly list price per seat, cents.
+     */
+    monthly_price_cents: number;
+    /**
+     * The tier.
+     */
+    tier: PlanTier;
+};
+
+/**
+ * The plan catalog and the knobs the billing UI offers.
+ */
+export type PlanCatalogResponse = {
+    /**
+     * Credit packs a payer may buy, cents.
+     */
+    credit_packs_cents: Array<number>;
+    /**
+     * Largest allowed overage cap, cents.
+     */
+    overage_limit_max_cents: number;
+    /**
+     * Smallest allowed overage cap, cents.
+     */
+    overage_limit_min_cents: number;
+    /**
+     * Every plan, cheapest first.
+     */
+    plans: Array<PlanCatalogEntry>;
+};
+
+/**
+ * The plans a user can be on, cheapest first.
+ */
+export type PlanTier = 'free' | 'premium' | 'max';
 
 export type PostGetNamesRequestBody = {
     user_ids: Array<string>;
@@ -1061,6 +1181,13 @@ export type ResendFusionauthVerifyUserEmailRequest = {
      */
     email: string;
 };
+
+/**
+ * The paid plan a seat is billed at. Every member of a paying team has one;
+ * a team may mix them, and its Stripe subscription carries one seat item per
+ * plan in use.
+ */
+export type SeatPlan = 'premium' | 'max';
 
 /**
  * The body which is used to describe the recipient email
@@ -1184,6 +1311,11 @@ export type TeamInvitesResponse = {
  */
 export type TeamMember = {
     /**
+     * The paid plan the member's seat is billed at. Meaningful on paying
+     * and enterprise teams; free-team members carry the default.
+     */
+    plan: SeatPlan;
+    /**
      * The role of the team member
      */
     role: TeamRole;
@@ -1241,6 +1373,98 @@ export type ToggleNonAdminInvitesResponse = {
      * toggle.
      */
     allow_non_admin_invites: boolean;
+};
+
+/**
+ * Request body for [`update_overage_handler`].
+ */
+export type UpdateOverageRequest = {
+    /**
+     * Bill usage past allowance and credits.
+     */
+    enabled: boolean;
+    /**
+     * Per-period cap on overage spend, cents. Required when enabling.
+     */
+    limitCents?: number;
+};
+
+/**
+ * The payer's current-period position, as shown in Billing settings and used
+ * by the gate.
+ */
+export type UsageSnapshot = {
+    blocked_reason?: null | DenyReason;
+    /**
+     * Whether the requesting user is the payer.
+     */
+    can_manage_billing: boolean;
+    /**
+     * Shared prepaid credit balance.
+     */
+    credit_balance_cents: number;
+    /**
+     * Shared payer credits already applied to this period.
+     */
+    credits_consumed_cents: number;
+    /**
+     * Included AI for this user's seat this period, in list-rate cents.
+     */
+    included_cents: number;
+    /**
+     * Shared overage charged so far this period.
+     */
+    overage_charged_cents: number;
+    /**
+     * Whether overage billing is on.
+     */
+    overage_enabled: boolean;
+    /**
+     * Per-period overage cap.
+     */
+    overage_limit_cents: number;
+    /**
+     * Whether overage is paused after a failed charge.
+     */
+    overage_suspended: boolean;
+    /**
+     * The payer for this user's AI.
+     */
+    payer: string;
+    /**
+     * Period end (exclusive).
+     */
+    period_end: string;
+    /**
+     * Period start.
+     */
+    period_start: string;
+    /**
+     * This seat's remaining allowance plus shared credit/overage headroom; 0
+     * when blocked.
+     */
+    remaining_cents: number;
+    /**
+     * Seats billed to the payer.
+     */
+    seats: number;
+    /**
+     * The plan.
+     */
+    tier: PlanTier;
+    /**
+     * Team-wide usage beyond per-seat allowances that is not yet covered by
+     * shared credits or charges (awaiting settlement).
+     */
+    uncovered_cents: number;
+    /**
+     * Enterprise: never metered.
+     */
+    unlimited: boolean;
+    /**
+     * AI used by this user this period, in list-rate cents.
+     */
+    used_cents: number;
 };
 
 export type UserLinkResponse = {
@@ -1309,6 +1533,133 @@ export type UserTokensResponse = {
      */
     refresh_token: string;
 };
+
+export type CreateAiCreditCheckoutData = {
+    body: CreditCheckoutRequestBody;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/credits/checkout';
+};
+
+export type CreateAiCreditCheckoutErrors = {
+    /**
+     * Invalid pack, untrusted return URL, or no payment account
+     */
+    400: AiBillingErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * A paid plan is required
+     */
+    402: AiBillingErrorBody;
+    /**
+     * Only the payer may buy credits
+     */
+    403: AiBillingErrorBody;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type CreateAiCreditCheckoutError = CreateAiCreditCheckoutErrors[keyof CreateAiCreditCheckoutErrors];
+
+export type CreateAiCreditCheckoutResponses = {
+    /**
+     * Checkout URL
+     */
+    200: CreditCheckoutResponse;
+};
+
+export type CreateAiCreditCheckoutResponse = CreateAiCreditCheckoutResponses[keyof CreateAiCreditCheckoutResponses];
+
+export type UpdateAiBillingOverageData = {
+    body: UpdateOverageRequest;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/overage';
+};
+
+export type UpdateAiBillingOverageErrors = {
+    /**
+     * Invalid limit
+     */
+    400: AiBillingErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * A paid plan is required
+     */
+    402: AiBillingErrorBody;
+    /**
+     * Only the payer may change billing
+     */
+    403: AiBillingErrorBody;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type UpdateAiBillingOverageError = UpdateAiBillingOverageErrors[keyof UpdateAiBillingOverageErrors];
+
+export type UpdateAiBillingOverageResponses = {
+    /**
+     * Updated position
+     */
+    200: UsageSnapshot;
+};
+
+export type UpdateAiBillingOverageResponse = UpdateAiBillingOverageResponses[keyof UpdateAiBillingOverageResponses];
+
+export type GetAiBillingPlansData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/plans';
+};
+
+export type GetAiBillingPlansResponses = {
+    /**
+     * Plan catalog
+     */
+    200: PlanCatalogResponse;
+};
+
+export type GetAiBillingPlansResponse = GetAiBillingPlansResponses[keyof GetAiBillingPlansResponses];
+
+export type GetAiBillingSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/summary';
+};
+
+export type GetAiBillingSummaryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type GetAiBillingSummaryError = GetAiBillingSummaryErrors[keyof GetAiBillingSummaryErrors];
+
+export type GetAiBillingSummaryResponses = {
+    /**
+     * Current-period position
+     */
+    200: UsageSnapshot;
+};
+
+export type GetAiBillingSummaryResponse = GetAiBillingSummaryResponses[keyof GetAiBillingSummaryResponses];
 
 export type DisconnectCodexData = {
     body?: never;
@@ -2636,6 +2987,37 @@ export type JoinTeamResponses = {
     200: unknown;
 };
 
+export type PatchTeamMemberPlanData = {
+    body: PatchTeamMemberPlanRequest;
+    path: {
+        /**
+         * The member whose seat plan changes
+         */
+        member_user_id: string;
+    };
+    query?: never;
+    url: '/team/members/{member_user_id}/plan';
+};
+
+export type PatchTeamMemberPlanErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * The team has no active subscription
+     */
+    402: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchTeamMemberPlanError = PatchTeamMemberPlanErrors[keyof PatchTeamMemberPlanErrors];
+
+export type PatchTeamMemberPlanResponses = {
+    200: TeamMember;
+};
+
+export type PatchTeamMemberPlanResponse = PatchTeamMemberPlanResponses[keyof PatchTeamMemberPlanResponses];
+
 export type ToggleTeamNonAdminInvitesData = {
     body?: never;
     path?: never;
@@ -3075,6 +3457,45 @@ export type CreateCheckoutSessionV2Responses = {
 };
 
 export type CreateCheckoutSessionV2Response = CreateCheckoutSessionV2Responses[keyof CreateCheckoutSessionV2Responses];
+
+export type ChangePlanData = {
+    body: ChangePlanRequest;
+    path?: never;
+    query?: never;
+    url: '/user/stripe/plan';
+};
+
+export type ChangePlanErrors = {
+    /**
+     * Plan not available
+     */
+    400: ErrorResponse;
+    /**
+     * The team has no active subscription
+     */
+    402: ErrorResponse;
+    /**
+     * Only team admins change plans on a team
+     */
+    403: ErrorResponse;
+    /**
+     * No active subscription
+     */
+    404: ErrorResponse;
+    /**
+     * Already on this plan, or more than one active subscription
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ChangePlanError = ChangePlanErrors[keyof ChangePlanErrors];
+
+export type ChangePlanResponses = {
+    200: ChangePlanResponse;
+};
+
+export type ChangePlanResponse2 = ChangePlanResponses[keyof ChangePlanResponses];
 
 export type CreatePortalSessionData = {
     body: CreatePortalSessionRequest;

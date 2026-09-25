@@ -260,6 +260,22 @@ fn classify_repository_rejection(
     None
 }
 
+/// Whether a 4xx body is Cursor refusing for want of budget.
+///
+/// Keyed on the envelope's `error.code` alone. The message names a dollar
+/// figure and a dashboard, both Cursor's to reword; the code is the contract.
+/// Reached for a create and for a follow-up run alike - a budget runs out
+/// mid-conversation as readily as before it.
+fn classify_usage_limit(body: &str) -> Option<crate::domain::error::UsageLimitExceeded> {
+    let envelope = serde_json::from_str::<crate::api::wire::ApiErrorEnvelope>(body).ok()?;
+    crate::domain::error::UsageLimitExceeded::CODES
+        .contains(&envelope.error.code.as_str())
+        .then(|| crate::domain::error::UsageLimitExceeded {
+            code: envelope.error.code,
+            detail: body.to_owned(),
+        })
+}
+
 /// The Cursor cloud API client.
 #[derive(Debug, Clone)]
 pub struct CursorClient {
@@ -417,6 +433,9 @@ impl CursorClient {
     {
         if !status.is_success() {
             if status.is_client_error() && status != reqwest::StatusCode::REQUEST_TIMEOUT {
+                if let Some(exceeded) = classify_usage_limit(text) {
+                    return Err(rootcause::report!(exceeded).into_dynamic());
+                }
                 return Err(
                     rootcause::report!(crate::domain::error::PromptRejected(format!(
                         "cursor POST {path} -> {status}: {text}"

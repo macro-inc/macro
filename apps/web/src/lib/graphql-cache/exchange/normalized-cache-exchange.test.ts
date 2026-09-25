@@ -24,7 +24,8 @@ import {
   type Source,
   subscribe,
 } from 'wonka';
-import type { CacheHost } from '../host/types';
+import { CacheNavigationError } from '../host/navigation-error';
+import type { CacheGenerationChange, CacheHost } from '../host/types';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type ClaimedMutation,
@@ -202,11 +203,15 @@ type FakeHost = CacheHost & {
     args: Parameters<CacheHost['enqueueOptimisticMutation']>[0]
   ) => void;
   pushAffected: (opKeys: number[]) => void;
+  pushGeneration: (change: CacheGenerationChange) => void;
 };
 
 function makeFakeHost(): FakeHost {
   let readResult: ReadResult = { kind: 'miss' };
   const subscribers = new Set<(opKeys: number[]) => void>();
+  const generationSubscribers = new Set<
+    (change: CacheGenerationChange) => void
+  >();
   const queue: Array<{
     transactionId: string;
     args: Parameters<CacheHost['enqueueOptimisticMutation']>[0];
@@ -265,6 +270,9 @@ function makeFakeHost(): FakeHost {
     },
     pushAffected: (opKeys) => {
       for (const cb of subscribers) cb(opKeys);
+    },
+    pushGeneration: (change) => {
+      for (const cb of generationSubscribers) cb(change);
     },
     async currentRevision() {
       return INITIAL_CACHE_REVISION;
@@ -416,8 +424,9 @@ function makeFakeHost(): FakeHost {
     onCacheChanged() {
       return () => undefined;
     },
-    onCacheGenerationChanged() {
-      return () => undefined;
+    onCacheGenerationChanged(cb) {
+      generationSubscribers.add(cb);
+      return () => generationSubscribers.delete(cb);
     },
     onMutationSettled() {
       return () => undefined;
@@ -834,6 +843,53 @@ describe('normalizedCacheExchange', () => {
       'GraphqlSoupDocument:document-1',
     ]);
     expect(cacheContainsDocument).toBe(false);
+  });
+
+  it('cancels queued subscription effects on teardown even when the same key resubscribes', async () => {
+    const firstWrite = deferred<WriteResult>();
+    const write = vi
+      .spyOn(host, 'writeQuery')
+      .mockImplementationOnce(() => firstWrite.promise);
+    const remove = vi.spyOn(host, 'deleteRecords');
+    const { ops, network } = controlledQueryHarness(host);
+    const operation = makeSubscriptionOp(24);
+    ops.next(operation);
+    network.next(
+      queryResult(operation, {
+        soupUpdates: [
+          {
+            __typename: 'SoupUpdated',
+            item: { __typename: 'GraphqlSoupDocument', id: 'one' },
+          },
+          {
+            __typename: 'GraphqlCacheDeletion',
+            graphqlTypeName: 'GraphqlSoupDocument',
+            entityId: 'one',
+          },
+        ],
+      })
+    );
+    network.next(
+      queryResult(operation, {
+        soupUpdates: [{ id: 'queued-before-navigation' }],
+      })
+    );
+    await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
+
+    ops.next(makeOperation('teardown', operation, operation.context));
+    ops.next(operation);
+    const fresh = { soupUpdates: [{ id: 'after-restore' }] };
+    network.next(queryResult(operation, fresh));
+    firstWrite.resolve({
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    });
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+    expect(write.mock.calls[1]?.[0].data).toBe(fresh);
+    expect(remove).not.toHaveBeenCalled();
   });
 
   it('reports cache failures without dropping subscription results or later patches', async () => {
@@ -2448,6 +2504,192 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
       expect(forwarded[0]?.context.fetch).toBeTypeOf('function');
       expect(host.commits[0]?.transactionId).toBe('restored-1');
+    });
+
+    describe('mutation drain after cache restoration', () => {
+      beforeEach(() => vi.useFakeTimers());
+      afterEach(() => {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+      });
+
+      it.each([
+        { wake: 'online', whileDeferring: false },
+        { wake: 'online', whileDeferring: true },
+        { wake: 'restore', whileDeferring: false },
+        { wake: 'restore', whileDeferring: true },
+      ])(
+        'preserves short retry deadlines after $wake (while deferring: $whileDeferring)',
+        async ({ wake, whileDeferring }) => {
+          // Isolate the online listener from other exchanges in this suite.
+          const events = new EventTarget();
+          vi.spyOn(globalThis, 'addEventListener').mockImplementation(
+            events.addEventListener.bind(events)
+          );
+          const deferring = deferred<void>();
+          const defer = host.deferOptimisticWrite.bind(host);
+          const deferSpy = vi.spyOn(host, 'deferOptimisticWrite');
+          if (whileDeferring) {
+            deferSpy.mockImplementationOnce(async (...args) => {
+              const result = await defer(...args);
+              await deferring.promise;
+              return result;
+            });
+          }
+          const error = new CombinedError({
+            networkError: new Error('offline'),
+          });
+          let attempts = 0;
+          const { ops, forwarded } = harness(
+            host,
+            () =>
+              ++attempts <= 5
+                ? { error, data: undefined }
+                : { data: optimistic },
+            { shouldRetryMutation: () => true }
+          );
+          ops.next(makeMutationOp(1, optimistic));
+          await vi.advanceTimersByTimeAsync(0);
+
+          for (const delay of [1_000, 2_000, 4_000, 8_000, 16_000]) {
+            const retryAt = deferSpy.mock.calls.at(-1)![2];
+            expect(retryAt - Date.now()).toBe(delay);
+            const sendsBeforeWake = forwarded.length;
+            await vi.advanceTimersByTimeAsync(100);
+            if (wake === 'online') events.dispatchEvent(new Event('online'));
+            else host.pushGeneration({ storage: 'reset' });
+            await vi.advanceTimersByTimeAsync(1);
+            deferring.resolve();
+            await vi.advanceTimersByTimeAsync(1);
+            expect(forwarded).toHaveLength(sendsBeforeWake);
+
+            await vi.advanceTimersByTimeAsync(retryAt - Date.now() - 1);
+            expect(forwarded).toHaveLength(sendsBeforeWake);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(forwarded).toHaveLength(sendsBeforeWake + 1);
+          }
+          expect(host.begins).toHaveLength(1);
+          expect(host.defers).toHaveLength(5);
+          expect(host.commits).toHaveLength(1);
+          expect(host.rollbacks).toHaveLength(0);
+        }
+      );
+
+      it('retires an expired retry hint if another runner owns the head', async () => {
+        const error = new CombinedError({ networkError: new Error('offline') });
+        const { ops, forwarded } = harness(
+          host,
+          () => ({ error, data: undefined }),
+          { shouldRetryMutation: () => true }
+        );
+        ops.next(makeMutationOp(1, optimistic));
+        await vi.advanceTimersByTimeAsync(0);
+        const claim = vi
+          .spyOn(host, 'claimNextMutation')
+          .mockResolvedValue(undefined);
+        await vi.advanceTimersByTimeAsync(100);
+        host.pushGeneration({ storage: 'reset' });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(claim).toHaveBeenCalledOnce();
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(claim).toHaveBeenCalledTimes(2);
+        expect(forwarded).toHaveLength(1);
+      });
+
+      it.each([false, true])(
+        'resumes an interrupted claim without waiting for the poll (restore while pending: %s)',
+        async (restoreWhilePending) => {
+          const pendingClaim = deferred<ClaimedMutation | undefined>();
+          const claim = vi.spyOn(host, 'claimNextMutation');
+          claim.mockImplementationOnce(() => pendingClaim.promise);
+          host.seedQueued({
+            uuid: crypto.randomUUID(),
+            query: stringifyDocument(MUTATION),
+            data: optimistic,
+          });
+          const { forwarded } = harness(host);
+          await vi.advanceTimersByTimeAsync(0);
+          expect(claim).toHaveBeenCalledOnce();
+
+          if (restoreWhilePending) {
+            host.pushGeneration({ storage: 'reset' });
+            await vi.advanceTimersByTimeAsync(1);
+            expect(claim).toHaveBeenCalledOnce();
+          }
+          pendingClaim.reject(new CacheNavigationError());
+          await vi.advanceTimersByTimeAsync(1);
+          if (!restoreWhilePending) {
+            expect(forwarded).toHaveLength(0);
+            host.pushGeneration({ storage: 'reset' });
+            await vi.advanceTimersByTimeAsync(1);
+          }
+
+          expect(host.claims).toEqual(['restored-1']);
+          expect(host.commits).toHaveLength(1);
+          expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
+        }
+      );
+
+      it.each([
+        { restoreWhilePending: false, committed: false },
+        { restoreWhilePending: false, committed: true },
+        { restoreWhilePending: true, committed: false },
+        { restoreWhilePending: true, committed: true },
+      ])(
+        'rechecks an uncertain commit without bypassing leases ($restoreWhilePending, $committed)',
+        async ({ restoreWhilePending, committed }) => {
+          const pendingCommit = deferred<CommitOptimisticWriteResult>();
+          const commit = host.commitOptimisticWrite.bind(host);
+          vi.spyOn(host, 'commitOptimisticWrite').mockImplementationOnce(
+            async (...args) => {
+              // The worker may have committed even though its reply was lost.
+              if (committed) await commit(...args);
+              return await pendingCommit.promise;
+            }
+          );
+          const claim = vi.spyOn(host, 'claimNextMutation');
+          const { ops, forwarded, results } = harness(host);
+          await vi.advanceTimersByTimeAsync(0);
+          ops.next(makeMutationOp(1, optimistic));
+          await vi.advanceTimersByTimeAsync(1);
+          host.seedQueued({
+            uuid: crypto.randomUUID(),
+            query: stringifyDocument(MUTATION),
+            data: optimistic,
+          });
+          const claimsBeforeRestore = claim.mock.calls.length;
+
+          if (restoreWhilePending) {
+            host.pushGeneration({ storage: 'reset' });
+            await vi.advanceTimersByTimeAsync(1);
+            expect(claim).toHaveBeenCalledTimes(claimsBeforeRestore);
+          }
+          pendingCommit.reject(new CacheNavigationError());
+          await vi.advanceTimersByTimeAsync(1);
+          if (!restoreWhilePending) {
+            host.pushGeneration({ storage: 'reset' });
+            await vi.advanceTimersByTimeAsync(1);
+          }
+
+          expect(claim.mock.calls.length).toBeGreaterThan(claimsBeforeRestore);
+          expect(
+            optimisticMutationDispositionOf(
+              results.find((result) => result.operation.key === 1)!
+            )
+          ).toEqual({ kind: 'queued', transactionId: 'txn-1' });
+          // A runnable successor is sent immediately, but an unsettled head's
+          // existing lease must never be stolen or its network call duplicated.
+          expect(forwarded).toHaveLength(committed ? 2 : 1);
+          expect(host.commits).toHaveLength(committed ? 2 : 0);
+          const claimsAfterRestore = claim.mock.calls.length;
+          await vi.advanceTimersByTimeAsync(30_000);
+          // Forget the stale five-minute local backoff even if no head could
+          // be claimed on restore; the durable queue still controls eligibility.
+          expect(claim.mock.calls.length).toBeGreaterThan(claimsAfterRestore);
+          expect(forwarded).toHaveLength(committed ? 2 : 1);
+        }
+      );
     });
 
     it('rolls back when a persisted replay resolves with an urql error', async () => {

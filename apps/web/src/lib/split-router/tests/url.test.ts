@@ -6,6 +6,7 @@ import {
   decodeRouteLayout,
   decodeSplitRouterLocation,
   encodeRouteLayout,
+  encodeSplitRouterLocation,
   formatRoutePathname,
   parseRoutePathname,
   serializeSplitRouterLocation,
@@ -17,6 +18,7 @@ const routeDefinitions: SplitRoutes = {
       id: 'drive',
       path: 'drive',
       search: ['drive'],
+      state: z.record(z.string(), z.unknown()),
       children: [{ id: 'folder', path: 'folder/:folderId' }],
     },
     { id: 'legacy', path: 'legacy/:id' },
@@ -145,6 +147,64 @@ describe('split layout URLs', () => {
     expect(
       parseRoutePathname(basedRoutes, '/app/drive/%E0%A4%A')
     ).toBeUndefined();
+  });
+
+  it('round trips route entry state outside the serialized URL', () => {
+    const entry = {
+      ...decodeRoute(routes, ['drive', 'folder', 'one'])!,
+      key: 'entry-1',
+      state: { feature: { root: 'document-1' } },
+    };
+    const external = encodeSplitRouterLocation({
+      routes,
+      entries: [entry],
+      previous: {
+        pathname: '/drive',
+        search: '',
+        hash: '',
+        state: { unrelated: 'preserved' },
+      },
+    });
+
+    expect(external.state).toMatchObject({
+      unrelated: 'preserved',
+      __macroSplitRouter: {
+        entries: [
+          {
+            key: 'entry-1',
+            state: { feature: { root: 'document-1' } },
+          },
+        ],
+      },
+    });
+    expect(
+      serializeSplitRouterLocation({
+        routes,
+        entries: [entry],
+        previous: external,
+      })
+    ).toBe('/drive/folder/one');
+    expect(
+      decodeSplitRouterLocation({ routes, location: external }).entries[0]
+    ).toEqual(entry);
+  });
+
+  it('ignores malformed browser entry state', () => {
+    const decoded = decodeSplitRouterLocation({
+      routes,
+      location: {
+        pathname: '/drive',
+        search: '',
+        hash: '',
+        state: {
+          __macroSplitRouter: {
+            entries: [{ key: 42, state: { ignored: true } }],
+          },
+        },
+      },
+    });
+
+    expect(decoded.entries).toEqual([decodeRoute(routes, ['drive'])!]);
   });
 
   it('preserves owned query values and hashes without keeping unrelated search', () => {

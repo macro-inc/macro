@@ -57,7 +57,7 @@ export function AgentSidePanelSections() {
             )}
           </Show>
           <Show when={showsSessionHarness(session() ?? {})}>
-            <SidePanel.Row label="Harness">
+            <SidePanel.Row label="Runtime">
               <SidePanel.Pill>
                 <span class="truncate">
                   {sessionHarnessTitle(session() ?? {})}

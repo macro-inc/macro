@@ -1,4 +1,3 @@
-import { fitToWidthZoom } from '../core/fit-to-width-zoom';
 import type { PreparedEmailBody } from '../core/html';
 import { processEmailColors, type ThemeColorParams } from './colors';
 import { EMAIL_BODY_CONTAINMENT_CSS } from './email-body-containment-css';
@@ -87,17 +86,14 @@ export function mountEmailBody(
         if (settings.adaptColors) processEmailColors(shadow, settings.theme);
         colorsPrepared = true;
       }
-      content.style.zoom = '';
       content.style.overflowX = '';
       content.style.overflow = expanded ? '' : 'hidden';
       if (!expanded) return;
-      const fit = fitToWidthZoom({
-        containerWidth: host.clientWidth,
-        contentWidth: content.scrollWidth,
-      });
-      if (!fit) return;
-      content.style.zoom = `${fit.zoom}`;
-      if (fit.overflowsAfterZoom) content.style.overflowX = 'auto';
+      // Keep designed email at its native size. Constrained content wraps;
+      // any remaining wide canvas scrolls instead of shrinking the letter.
+      if (content.scrollWidth - host.clientWidth > 1) {
+        content.style.overflowX = 'auto';
+      }
     };
     applyExpanded = (value) => {
       expanded = value;

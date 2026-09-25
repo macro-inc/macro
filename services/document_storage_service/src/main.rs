@@ -444,11 +444,6 @@ async fn run() -> anyhow::Result<()> {
     );
 
     // Create the channel list service used by soup.
-    let channel_service_for_soup = ChannelListServiceImpl::new(
-        PgChannelsRepo::new(readonly_db.clone()),
-        PgChannelsRepo::new(readonly_db.clone()),
-        frecency_storage.clone(),
-    );
     // Create the legacy channel list router state for routes mounted under /comms.
     let channel_list_state = ChannelListRouterState::new(
         ChannelListServiceImpl::new(
@@ -729,12 +724,30 @@ async fn run() -> anyhow::Result<()> {
             .with_event_broker(macro_event_broker.clone()),
     );
 
+    consumer_tracker.spawn({
+        let service = call_service.clone();
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            cancellation_token
+                .run_until_cancelled(call::inbound::stale_call_sweeper::run_stale_call_sweeper(
+                    service,
+                    call::inbound::stale_call_sweeper::SWEEP_INTERVAL,
+                ))
+                .await;
+        }
+    });
+
     let call_state = CallRouterState::new(
         call_service.clone(),
         entity_access_service.clone(),
         authorization_state.clone(),
     );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
+    let call_public_rate_limiter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        },
+    };
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
     let webhook_endpoint_scheme_policy = if matches!(env, Environment::Local) {
@@ -876,6 +889,11 @@ async fn run() -> anyhow::Result<()> {
     });
 
     let activity_consumer_brokers = config.kafka_brokers.as_ref().to_string();
+    let editing_activity = Arc::new(
+        documents_hex::outbound::editing_activity::RedisEditingActivityStore::new(
+            redis_client.clone(),
+        ),
+    );
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
         let activity_repo = activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone());
@@ -893,7 +911,12 @@ async fn run() -> anyhow::Result<()> {
                 _,
             >::new(
                 activity_repo,
-                crate::service::activity::ingest,
+                move |event| {
+                    let editing_activity = editing_activity.clone();
+                    async move {
+                        crate::service::activity::ingest(event, editing_activity.as_ref()).await
+                    }
+                },
                 activity_realtime,
             );
             loop {
@@ -936,12 +959,6 @@ async fn run() -> anyhow::Result<()> {
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );
-
-    let call_record_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
-        PgCallRepo::new(readonly_db.clone()),
-    );
-    let foreign_entity_service_for_soup =
-        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone()));
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
@@ -1211,15 +1228,25 @@ async fn run() -> anyhow::Result<()> {
         config.document_permission_jwt.as_ref().to_string(),
     );
 
+    // Keep the replica-backed Soup reader alongside the primary-backed email
+    // writer in SoupRouterState. REST, GraphQL lists, and realtime hydration
+    // share this reader; only email mutations and their reply loader use the
+    // writer service, so normal list traffic never switches to the primary.
     let soup_service = Arc::new(
         SoupImpl::new(
             PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
             frecency_service,
             readonly_email_service,
-            channel_service_for_soup,
-            call_record_query_service,
+            ChannelListServiceImpl::new(
+                PgChannelsRepo::new(readonly_db.clone()),
+                PgChannelsRepo::new(readonly_db.clone()),
+                frecency_storage.clone(),
+            ),
+            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                readonly_db.clone(),
+            )),
             crm_service.clone(),
-            foreign_entity_service_for_soup,
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
             reminders_service.clone(),
         )
         .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
@@ -1613,6 +1640,7 @@ async fn run() -> anyhow::Result<()> {
         channel_bot_webhook_state,
         call_state,
         call_webhook_state,
+        call_public_rate_limiter,
         webhook_state,
         sse_stream_state,
         call_internal_state,

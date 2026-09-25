@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for the browser's slow SQL execution telemetry callback.
-version = "0.6.18"
+# Rebuild schema metadata for the archive/unarchive GraphQL mutation.
+version = "0.6.19"
 
 [features]
 default = []

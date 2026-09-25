@@ -197,6 +197,7 @@ struct FakeCursorState {
     model_gate: Option<tokio::sync::oneshot::Receiver<()>>,
     reject_create: bool,
     reject_create_for_repository: bool,
+    reject_create_for_usage_limit: bool,
     /// Answers for `list_artifacts`, consumed in order; the last one sticks.
     artifact_listings: Vec<Result<Vec<ArtifactListing>, String>>,
     /// Bodies `fetch_artifact` answers with, by artifact path.
@@ -320,6 +321,12 @@ impl FakeCursor {
     /// account has never connected.
     pub fn script_repository_rejection(&self) {
         self.inner.lock().unwrap().reject_create_for_repository = true;
+    }
+
+    /// Reject the next create (agent or run) the way Cursor does when the
+    /// account's background-agent budget is spent.
+    pub fn script_usage_limit_rejection(&self) {
+        self.inner.lock().unwrap().reject_create_for_usage_limit = true;
     }
 
     /// Set the models `list_models` answers with.
@@ -449,6 +456,16 @@ impl FakeCursor {
     }
 }
 
+/// The refusal Cursor answered a production create with once the account's
+/// budget was spent, as [`crate::api`] types it.
+fn usage_limit_exceeded() -> rootcause::Report {
+    rootcause::report!(crate::domain::error::UsageLimitExceeded {
+        code: "usage_limit_exceeded".to_owned(),
+        detail: r#"{"error":{"code":"usage_limit_exceeded","message":"You need to increase your hard limit. Background Agent requires at least $2 remaining until your hard limit. Manage it at https://www.cursor.com/dashboard?tab=settings."}}"#.to_owned(),
+    })
+    .into_dynamic()
+}
+
 impl CursorAgents for FakeCursor {
     async fn create_agent(
         &self,
@@ -486,6 +503,9 @@ impl CursorAgents for FakeCursor {
             ))
             .into_dynamic());
         }
+        if std::mem::take(&mut state.reject_create_for_usage_limit) {
+            return Err(usage_limit_exceeded());
+        }
         state.next_run += 1;
         Ok((
             CursorAgentId::new("bc-fake"),
@@ -515,6 +535,9 @@ impl CursorAgents for FakeCursor {
                 "rejected".into()
             ))
             .into_dynamic());
+        }
+        if std::mem::take(&mut state.reject_create_for_usage_limit) {
+            return Err(usage_limit_exceeded());
         }
         state.next_run += 1;
         Ok(CursorRunId::new(format!("run-fake-{}", state.next_run)))

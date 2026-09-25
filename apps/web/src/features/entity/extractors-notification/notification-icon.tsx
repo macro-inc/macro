@@ -6,6 +6,7 @@ import AtIcon from '@phosphor/at.svg';
 import BellIcon from '@phosphor/bell-simple.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import ChatIcon from '@phosphor/chat.svg';
+import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import CheckIcon from '@phosphor/check.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FilesIcon from '@phosphor/files.svg';
@@ -34,9 +35,14 @@ function getNotificationIcon(
   return match(type)
     .with('channel_mention', () => AtIcon)
     .with('document_mention', () => FilesIcon)
-    .with('mentioned_in_document_comment', () => AtIcon)
-    .with('replied_to_document_comment_thread', () => ArrowBendUpLeftIcon)
-    .with('commented_on_document', () => ChatIcon)
+    .with(
+      P.union(
+        'mentioned_in_document_comment',
+        'replied_to_document_comment_thread',
+        'commented_on_document'
+      ),
+      () => ChatTeardropIcon
+    )
     .with('channel_message_reply', () => ArrowBendUpLeftIcon)
     .with('channel_message_send', () => ChatIcon)
     .with('new_email', () => EnvelopeIcon)

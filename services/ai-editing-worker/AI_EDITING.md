@@ -145,3 +145,15 @@ it so that AI commits use a small reserved range in
 (`999999999999999000`–`999999999999999999`). This makes AI authorship easy to
 detect (`isAiPeer`) which history will be able to use to group together all AI
 edits.
+
+## Comment marks
+
+`POST /comment-mark` places or removes the comment mark an inline comment is
+anchored to (`src/comment-mark`). No model runs: the caller quotes the text and
+an optional 1-based occurrence, and the worker joins the document as a peer,
+wraps that exact span in a committed `CommentNode`, and pushes it like any other
+edit. Text that is missing, crosses from one block into another, or appears
+more than once with no occurrence chosen is refused with a 422 and the
+document is left untouched, so a mark is never guessed into place. The
+backend `CommentOnDocumentText` tool places the mark first and then posts the
+thread anchored to it, removing the mark again if the post fails.

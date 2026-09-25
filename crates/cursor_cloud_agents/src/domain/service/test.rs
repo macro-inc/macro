@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::error::SessionError;
+use crate::domain::error::{PromptRefusal, SessionError};
 use crate::domain::event::{CursorEvent, InteractionUpdate, ToolCallEvent, Truncation};
 use crate::domain::journal::NativeRecord;
 use crate::domain::model::{
@@ -2577,6 +2577,7 @@ async fn actual_load_frames_restore_terminal_outcomes_and_leave_partial_tail_ope
             Some(RunStatus::Error),
             Some(FoldStop::Failed {
                 message: "Agent run ended in Error".into(),
+                notice: None,
             }),
         ),
         (None, None),
@@ -2689,6 +2690,58 @@ async fn an_unconnected_repository_reaches_the_client_as_an_instruction() {
             .iter()
             .any(|entry| matches!(entry.input, JournalInput::PromptAborted(_))),
         "a rejected prompt is journalled as aborted"
+    );
+}
+
+/// A Cursor account out of budget is the person's to fix on Cursor's
+/// dashboard, so it reaches the client as a refusal with a notice - title,
+/// plain body, the dashboard link - and never as the report, whose source
+/// locations and span dump are for the logs.
+#[tokio::test]
+async fn an_exhausted_cursor_budget_reaches_the_client_as_a_notice() {
+    let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("an https remote");
+    let (service, cursor, _output) = service(Some(repo));
+    let id = service.new_session(Path::new(""), vec![]);
+    cursor.script_usage_limit_rejection();
+
+    let error = service
+        .prompt(&id, "do the thing")
+        .await
+        .expect_err("an exhausted budget fails the prompt");
+
+    let SessionError::Rejected(refusal) = &error else {
+        panic!("a spent budget is a refusal, not a Cursor failure: {error:?}");
+    };
+    let notice = refusal
+        .notice
+        .as_ref()
+        .expect("a spent budget carries a notice");
+    assert_eq!(notice.title, "Cursor usage limit reached");
+    assert_eq!(
+        notice.link.as_ref().map(|link| link.url.as_str()),
+        Some("https://www.cursor.com/dashboard?tab=settings")
+    );
+    for text in [&refusal.message, &notice.body] {
+        assert!(
+            !text.contains("usage_limit_exceeded") && !text.contains("$2"),
+            "cursor's own body stays in the logs: {text}"
+        );
+        assert!(
+            !text.contains(".rs:") && !text.contains("├"),
+            "no report decoration reaches the person: {text}"
+        );
+    }
+    assert!(
+        service
+            .session(&id)
+            .expect("session exists")
+            .state
+            .lock()
+            .expect("state poisoned")
+            .journal_entries
+            .iter()
+            .any(|entry| matches!(entry.input, JournalInput::PromptAborted(_))),
+        "a refused prompt is journalled as aborted"
     );
 }
 
@@ -2971,7 +3024,7 @@ async fn a_run_that_never_ends_is_reported_in_words_the_prompter_can_act_on() {
         .prompt(&session, "do the thing")
         .await
         .expect_err("the turn cannot close on a run that never ends");
-    let SessionError::Rejected(message) = &error else {
+    let SessionError::Rejected(PromptRefusal { message, .. }) = &error else {
         panic!("a run still going is not a Cursor failure: {error:?}");
     };
     // The decorations a report carries would be read as part of the sentence.

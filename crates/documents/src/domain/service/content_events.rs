@@ -45,8 +45,7 @@ impl<
     async fn publish_sync_content_updated(
         &self,
         document_id: &str,
-        actor: Option<String>,
-        on_behalf_of: Option<String>,
+        editors: Vec<crate::domain::events::DocumentSyncEditor>,
     ) -> Result<(), DocumentError> {
         let document = self
             .repo
@@ -59,16 +58,18 @@ impl<
             .and_then(|value| FileType::from_str(value).ok())
             .ok_or_else(|| DocumentError::BadRequest("Unknown document file type".to_string()))?;
 
+        let mut metadata = DocumentSyncContentUpdatedMetadata::from_extract(
+            document_id.to_string(),
+            file_type,
+            None,
+            None,
+            None,
+        );
+        metadata.editors = editors;
         self.macro_event_broker
             .send_event(&DocumentMacroEvent::sync_content_updated(
                 document_id,
-                DocumentSyncContentUpdatedMetadata::from_extract(
-                    document_id.to_string(),
-                    file_type,
-                    None,
-                    actor,
-                    on_behalf_of,
-                ),
+                metadata,
             ))
             .map(|_| ())
             .map_err(|error| DocumentError::Internal(error.into()))

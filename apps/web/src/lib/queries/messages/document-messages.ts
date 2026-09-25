@@ -9,6 +9,7 @@ import {
 import { useQuery } from '@tanstack/solid-query';
 import { type Accessor, createEffect } from 'solid-js';
 import {
+  newMessageId,
   useDeleteMessageMutation,
   useDeleteThreadMutation,
   usePatchThreadMutation,
@@ -82,7 +83,7 @@ export function useMessageActions(parent: Accessor<MessageParent>) {
         parent: parent(),
         message,
         senderId,
-        optimisticId: crypto.randomUUID(),
+        optimisticId: newMessageId(),
       });
     },
     delete: (id: string) =>

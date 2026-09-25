@@ -29,7 +29,7 @@ impl FoldedMessage {
         for part in self.parts.iter() {
             text.part(part);
         }
-        if let Some(StopReason::Failed { message }) = &self.stop {
+        if let Some(StopReason::Failed { message, .. }) = &self.stop {
             text.push(message);
         }
         text.finish()

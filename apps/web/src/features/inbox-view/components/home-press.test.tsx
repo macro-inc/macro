@@ -1,4 +1,3 @@
-import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -29,32 +28,22 @@ vi.mock('@ui', async () => ({
 
 afterEach(cleanup);
 
-describe.each(['recent', 'new chat'] as const)('Home %s press', (kind) => {
+describe('Home recent press', () => {
   function setup() {
     const activate = vi.fn();
-    const view = render(() =>
-      kind === 'new chat' ? (
-        <SidebarCreateHeader
-          title="Home"
-          label="New chat"
-          onCreate={activate}
-        />
-      ) : (
-        <HomeListEntity
-          entity={{
-            type: 'chat',
-            id: 'recent-chat',
-            name: 'Recent chat',
-            ownerId: 'test-user',
-          }}
-          occurrenceKey="recent-chat"
-          onClick={activate}
-        />
-      )
-    );
-    const item = view.container.querySelector<HTMLElement>(
-      kind === 'new chat' ? 'button' : '[data-home-item]'
-    )!;
+    const view = render(() => (
+      <HomeListEntity
+        entity={{
+          type: 'chat',
+          id: 'recent-chat',
+          name: 'Recent chat',
+          ownerId: 'test-user',
+        }}
+        occurrenceKey="recent-chat"
+        onClick={activate}
+      />
+    ));
+    const item = view.container.querySelector<HTMLElement>('[data-home-item]')!;
     return { activate, item };
   }
 
@@ -62,9 +51,7 @@ describe.each(['recent', 'new chat'] as const)('Home %s press', (kind) => {
     const { activate, item } = setup();
     fireEvent.mouseDown(item, { button: 0, detail: 1, ctrlKey: true });
     expect(activate).toHaveBeenCalledTimes(1);
-    if (kind === 'recent') {
-      expect(activate.mock.calls[0][0].ctrlKey).toBe(true);
-    }
+    expect(activate.mock.calls[0][0].ctrlKey).toBe(true);
     fireEvent.mouseUp(item, { button: 0, detail: 1 });
     fireEvent.click(item, { button: 0, detail: 1 });
     expect(activate).toHaveBeenCalledTimes(1);
@@ -82,5 +69,84 @@ describe.each(['recent', 'new chat'] as const)('Home %s press', (kind) => {
     fireEvent.mouseDown(item, { button: 2 });
     fireEvent.click(item, { button: 2 });
     expect(activate).not.toHaveBeenCalled();
+  });
+});
+
+describe('Home document comment row', () => {
+  const commentNotification = (state: 'unseen' | 'seen' | 'done') => ({
+    id: 'n1',
+    entity_id: 'doc-1',
+    entity_type: 'document',
+    sender_id: 'macro|peter@macro.com',
+    state,
+    created_at: '2026-09-23T00:00:00Z',
+    notification_metadata: {
+      tag: 'mentioned_in_document_comment',
+      content: { commentId: 'comment-1', documentName: 'Plan' },
+    },
+  });
+
+  const renderRow = (state: 'unseen' | 'seen' | 'done') =>
+    render(() => (
+      <HomeListEntity
+        entity={
+          {
+            type: 'document',
+            id: 'doc-1',
+            name: 'Plan',
+            ownerId: 'test-user',
+            fileType: 'md',
+            notifications: () => [commentNotification(state)],
+          } as never
+        }
+        occurrenceKey="doc-1"
+      />
+    )).container.querySelector<HTMLElement>('[data-home-item]')!;
+
+  it.each(['unseen', 'seen'] as const)(
+    'announces the comment mention while %s',
+    (state) => {
+      expect(renderRow(state).textContent).toContain(
+        'Peter mentioned you on Recent chat'
+      );
+    }
+  );
+
+  it('reads as the plain document once the notification is done', () => {
+    expect(renderRow('done').textContent).not.toContain('mentioned you');
+  });
+
+  it('names the agent that replied instead of someone', () => {
+    const row = render(() => (
+      <HomeListEntity
+        entity={
+          {
+            type: 'document',
+            id: 'doc-1',
+            name: 'Plan',
+            ownerId: 'test-user',
+            fileType: 'md',
+            notifications: () => [
+              {
+                ...commentNotification('unseen'),
+                sender_id: null,
+                notification_metadata: {
+                  tag: 'replied_to_document_comment_thread',
+                  content: {
+                    commentId: 'comment-1',
+                    documentName: 'Plan',
+                    senderDisplayName: 'Macro',
+                  },
+                },
+              },
+            ],
+          } as never
+        }
+        occurrenceKey="doc-1"
+      />
+    )).container.querySelector<HTMLElement>('[data-home-item]')!;
+
+    expect(row.textContent).toContain('Macro replied on Recent chat');
+    expect(row.textContent).not.toContain('Someone');
   });
 });

@@ -43,7 +43,10 @@ import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
-import { useSendMessageMutation } from '@queries/messages/mutations';
+import {
+  newMessageId,
+  useSendMessageMutation,
+} from '@queries/messages/mutations';
 import { staticFileClient } from '@service-static-files/client';
 import { isIOS } from '@solid-primitives/platform';
 import { Button } from '@ui';
@@ -316,7 +319,7 @@ function IosShareSheetComposer(props: {
       parent: { type: 'channel', id: channelId },
       message,
       senderId,
-      optimisticId: crypto.randomUUID(),
+      optimisticId: newMessageId(),
     });
 
     invalidateListChannels();

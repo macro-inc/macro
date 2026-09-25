@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO ai_overage_charge (id, user_id, period_start, amount_cents, status)\n                VALUES ($1, $2, $3, $4, 'pending')\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cde3129e76f0a471008db6e006b9d099e2acc19622f668f486c69aa26c93c5a9"
+}

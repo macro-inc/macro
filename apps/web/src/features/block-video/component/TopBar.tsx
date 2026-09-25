@@ -19,8 +19,8 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
+import IconShared from '@icon/share.svg';
 import Download from '@phosphor/download.svg';
-import IconShared from '@phosphor/share.svg';
 import Spinner from '@phosphor/spinner.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { createSignal } from 'solid-js';

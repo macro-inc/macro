@@ -4,7 +4,10 @@ import { useAdditionalInstructions } from '@core/component/AI/constant/prompts';
 import type { Attachment, Model, ToolSet } from '@core/component/AI/types';
 import { isPaymentError } from '@core/util/handlePaymentError';
 
-import { cognitionApiServiceClient } from '@service-cognition/client';
+import {
+  AI_USAGE_LIMIT_ERROR,
+  cognitionApiServiceClient,
+} from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
 
@@ -18,7 +21,12 @@ export type ChatSendInput = {
 
 type SendChatMessageResult =
   | { stream: ChatMessageStream; chat_id: string }
-  | { error: true; paymentError?: boolean };
+  | {
+      error: true;
+      paymentError?: boolean;
+      /** The billing gate refused the send; carries the backend reason code. */
+      usageLimit?: string;
+    };
 
 export function useSendChatMessage() {
   const additionalInstructions = useAdditionalInstructions();
@@ -39,6 +47,14 @@ export function useSendChatMessage() {
       additional_instructions: additionalInstructions(chatId),
     });
 
+    if (response.isErr()) {
+      const usageLimit = response.error.find(
+        (e) => e.code === AI_USAGE_LIMIT_ERROR
+      );
+      if (usageLimit) {
+        return { error: true, usageLimit: usageLimit.message };
+      }
+    }
     if (isPaymentError(response)) {
       return { error: true, paymentError: true };
     }

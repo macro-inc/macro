@@ -32,16 +32,27 @@ mod source {
 }
 pub(crate) use source::ActivitySourceEvent;
 
-/// Dispatches one decoded event to its domain's [`ActivitySource`] impl —
-/// every arm is the identical expression; all semantics live with the
-/// domains.
-pub(crate) fn ingest(event: &ActivitySourceEvent) -> Ingest {
+/// Dispatches each event to its owning domain. Document editing sessions use
+/// the shared inactivity store; all classification and debounce policy stays
+/// in the documents domain.
+pub(crate) async fn ingest(
+    event: ActivitySourceEvent,
+    editing_activity: &impl documents_hex::domain::ports::EditingActivityStore,
+) -> Ingest {
     fn arm<E: activity::ActivitySource>(envelope: &macro_event_broker::Event<E>) -> Ingest {
         envelope.event.ingest(envelope.event_id)
     }
 
     match event {
-        ActivitySourceEvent::DocumentMacroEvent(e) => arm(e.event()),
+        ActivitySourceEvent::DocumentMacroEvent(e) => {
+            let envelope = e.event();
+            documents_hex::domain::activity::ingest_with_editing_sessions(
+                &envelope.event,
+                envelope.event_id,
+                editing_activity,
+            )
+            .await
+        }
         ActivitySourceEvent::ChannelMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::ChatMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::ProjectMacroEvent(e) => arm(e.event()),

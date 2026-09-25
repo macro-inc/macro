@@ -39,7 +39,7 @@
 mod test;
 
 use crate::domain::artifact::{ArtifactListing, CollectedArtifact, inline_text, mime_type};
-use crate::domain::error::SessionError;
+use crate::domain::error::{PromptRefusal, SessionError};
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMachine};
 use crate::domain::model::{
@@ -259,30 +259,41 @@ fn captured_content(
         .collect()
 }
 
-/// Restate a repository rejection as something the person who prompted can
-/// act on, leaving every other failure exactly as it arrived.
+/// Restate a rejection the person who prompted can act on - a repository
+/// Cursor cannot reach, a Cursor account out of budget - in their terms,
+/// leaving every other failure exactly as it arrived.
 ///
 /// The result is a [`SessionError::Rejected`], so it takes the same path a
 /// [`PromptRejected`](crate::domain::error::PromptRejected) already takes:
-/// the prompt is journalled as aborted and the message travels to the client
+/// the prompt is journalled as aborted and the refusal travels to the client
 /// as the `session/prompt` error. Cursor's own body stays in the tracing event —
 /// it names codes and ids that mean nothing to a reader of the chip.
-fn explain_repository_rejection(error: SessionError) -> SessionError {
+fn explain_rejection(error: SessionError) -> SessionError {
     let SessionError::Cursor(report) = &error else {
         return error;
     };
-    let Some(unavailable) =
+    if let Some(unavailable) =
         report.downcast_current_context::<crate::domain::error::RepositoryUnavailable>()
-    else {
-        return error;
-    };
-    tracing::warn!(
-        repo = %unavailable.repo,
-        reason = %unavailable.reason,
-        detail = %unavailable.detail,
-        "cursor rejected the prompt: it could not use the session's repository"
-    );
-    SessionError::Rejected(unavailable.user_message())
+    {
+        tracing::warn!(
+            repo = %unavailable.repo,
+            reason = %unavailable.reason,
+            detail = %unavailable.detail,
+            "cursor rejected the prompt: it could not use the session's repository"
+        );
+        return SessionError::Rejected(PromptRefusal::plain(unavailable.user_message()));
+    }
+    if let Some(exceeded) =
+        report.downcast_current_context::<crate::domain::error::UsageLimitExceeded>()
+    {
+        tracing::warn!(
+            code = %exceeded.code,
+            detail = %exceeded.detail,
+            "cursor rejected the prompt: the account's usage limit is exhausted"
+        );
+        return SessionError::Rejected(exceeded.refusal());
+    }
+    error
 }
 
 /// Whether a failed create is a definite refusal — the prompt never ran, so
@@ -925,15 +936,14 @@ where
                     // request there, which no later correction undoes.
                     Err(error) => {
                         tracing::warn!(error = ?error, "could not choose a repository for this session");
-                        Err(SessionError::Rejected(
-                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection."
-                                .to_owned(),
-                        ))
+                        Err(SessionError::Rejected(PromptRefusal::plain(
+                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection.",
+                        )))
                     }
                 }
             }
         };
-        let (agent, run) = match created.map_err(explain_repository_rejection) {
+        let (agent, run) = match created.map_err(explain_rejection) {
             Ok(created) => created,
             Err(error) => {
                 if is_prompt_rejection(&error) {
@@ -953,7 +963,7 @@ where
                     // the agent can see.
                     if creating_agent {
                         let reason = match &error {
-                            SessionError::Rejected(message) => Some(message.clone()),
+                            SessionError::Rejected(refusal) => Some(refusal.message.clone()),
                             _ => None,
                         };
                         session
@@ -1029,7 +1039,7 @@ where
         // up on a run still going, not a prompt refused before it ran.
         let interrupted = match &outcome {
             Err(SessionError::Cursor(error)) => Some(error.to_string()),
-            Err(SessionError::Rejected(message)) => Some(message.clone()),
+            Err(SessionError::Rejected(refusal)) => Some(refusal.message.clone()),
             _ => None,
         };
         if let Some(interrupted) = interrupted {
@@ -1691,13 +1701,12 @@ where
                 attempts = POLL_ATTEMPTS,
                 "gave up waiting; Cursor still reports a non-terminal status"
             );
-            return Err(SessionError::Rejected(
+            return Err(SessionError::Rejected(PromptRefusal::plain(
                 "Cursor has been working on this for over two hours and Macro stopped \
                  waiting. Send another message to continue: if Cursor has finished by \
                  then, that message picks up what it did, and if not, the run is \
-                 cancelled and the conversation starts fresh from there."
-                    .into(),
-            ));
+                 cancelled and the conversation starts fresh from there.",
+            )));
         };
         if strict
             && !session

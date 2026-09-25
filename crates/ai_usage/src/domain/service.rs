@@ -49,14 +49,16 @@ where
         usage.priced = tracing::field::Empty,
     ))]
     async fn record_event(repo: &Repo, event: UsageEvent) -> Result<()> {
+        // Store and price by the bare api id; chat hands us `provider/model`.
+        let model = normalize_model_id(&event.model).to_string();
         let mut cost = Usage {
             amount: event.amount,
-            model: event.model.clone(),
+            model: model.clone(),
             price: None,
             created_at: Utc::now(),
         };
 
-        if let Some(pricing) = repo.get_pricing(&event.model).await? {
+        if let Some(pricing) = repo.get_pricing(&model).await? {
             cost.price = Price::compute(pricing, cost.amount);
         }
         let span = tracing::Span::current();
@@ -73,6 +75,14 @@ where
         };
 
         repo.insert_usage(&row).await
+    }
+
+    /// Resolve pricing and persist `event`, returning once the row is written.
+    ///
+    /// [`UsageRecorder::record`] is the fire-and-forget form. Callers that
+    /// need to act after the row exists (billing settlement) await this one.
+    pub async fn record_now(&self, event: UsageEvent) -> Result<()> {
+        Self::record_event(&self.repo, event).await
     }
 }
 

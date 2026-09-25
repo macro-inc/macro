@@ -82,14 +82,18 @@ async fn ensure_referenced_item_visible_to_channel(
             .context("failed to insert thread share permissions")?;
     }
 
-    // Session channel grants are canonical entity-access rows. A reference must
-    // preserve explicit sharing and the originating channel's control grant.
-    if item.entity_type() == ReferencedShareItemType::AgentSession {
+    // Session and calendar event channel grants are canonical entity-access
+    // rows. A reference must preserve explicit sharing and the originating
+    // channel's control grant. Calendar events carry no SharePermission row.
+    if matches!(
+        item.entity_type(),
+        ReferencedShareItemType::AgentSession | ReferencedShareItemType::CalendarEvent
+    ) {
         let mut transaction = db.begin().await?;
         entity_access_db_utils::channel_share::insert_if_absent(
             &mut transaction,
             &entity_id,
-            entity_access_db_utils::EntityType::AgentSession,
+            entity_access_db_type_for(item.entity_type()),
             &channel_id,
             level,
         )
@@ -145,6 +149,7 @@ fn entity_access_type_for(item_type: ReferencedShareItemType) -> EntityType {
         ReferencedShareItemType::Project => EntityType::Project,
         ReferencedShareItemType::EmailThread => EntityType::EmailThread,
         ReferencedShareItemType::Call => EntityType::Call,
+        ReferencedShareItemType::CalendarEvent => EntityType::CalendarEvent,
     }
 }
 
@@ -158,5 +163,6 @@ fn entity_access_db_type_for(
         ReferencedShareItemType::Project => entity_access_db_utils::EntityType::Project,
         ReferencedShareItemType::EmailThread => entity_access_db_utils::EntityType::EmailThread,
         ReferencedShareItemType::Call => entity_access_db_utils::EntityType::Call,
+        ReferencedShareItemType::CalendarEvent => entity_access_db_utils::EntityType::CalendarEvent,
     }
 }

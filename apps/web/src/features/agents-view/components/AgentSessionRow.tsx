@@ -1,5 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import { cn, pressHandlers, Tooltip } from '@ui';
+import { cn, pressHandlers } from '@ui';
 import { children, type JSX, Show } from 'solid-js';
 import {
   type ConversationState,
@@ -15,7 +15,6 @@ export function AgentSessionRow(props: {
   leading: JSX.Element;
   trailing?: JSX.Element;
   timestamp: string;
-  detailsLabel?: string;
   unread?: boolean;
   active?: boolean;
   children?: JSX.Element;
@@ -35,32 +34,19 @@ export function AgentSessionRow(props: {
       data-kind={props.kind}
       data-session-state={props.state}
     >
-      <Tooltip
-        label={[
-          props.title,
+      <button
+        type="button"
+        class="absolute inset-0 rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-accent"
+        aria-label={props.title}
+        aria-description={[
           conversationStateLabel(props.state),
           props.unread ? 'Unread' : undefined,
-          props.detailsLabel,
         ]
           .filter(Boolean)
           .join(' · ')}
-        class="absolute inset-0"
-        placement="right"
-      >
-        <button
-          type="button"
-          class="absolute inset-0 rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-accent"
-          aria-label={props.title}
-          aria-description={[
-            conversationStateLabel(props.state),
-            props.unread ? 'Unread' : undefined,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-          aria-current={props.active ? 'page' : undefined}
-          {...pressHandlers((event) => props.onOpen?.(event))}
-        />
-      </Tooltip>
+        aria-current={props.active ? 'page' : undefined}
+        {...pressHandlers((event) => props.onOpen?.(event))}
+      />
       <ViewSidebar.Icon class="pointer-events-none relative text-ink-muted">
         {props.leading}
       </ViewSidebar.Icon>

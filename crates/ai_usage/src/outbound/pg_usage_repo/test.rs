@@ -138,6 +138,32 @@ async fn query_filters_by_user(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pricing_resolves_provider_qualified_ids(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+    assert_eq!(
+        repo.get_pricing("anthropic/claude-opus-5").await.unwrap(),
+        Some(ModelPricing::Tokens {
+            input: 5.0,
+            output: 25.0
+        })
+    );
+    assert_eq!(
+        repo.get_pricing("claude-sonnet-5").await.unwrap(),
+        Some(ModelPricing::Tokens {
+            input: 2.0,
+            output: 10.0
+        })
+    );
+    assert_eq!(
+        repo.get_pricing("openai/gpt-6-astra").await.unwrap(),
+        Some(ModelPricing::Tokens {
+            input: 10.0,
+            output: 50.0
+        })
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn duration_usage_roundtrips_and_reprices_without_affecting_tokens(pool: PgPool) {
     let repo = PgUsageRepo::new(pool);
     let mut audio = completion(AiFeature::Dictation, "whisper-1", 0, 0);

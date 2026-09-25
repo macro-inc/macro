@@ -170,6 +170,6 @@ export function RowIndicator(props: {
 
 export function InboxDivider() {
   return (
-    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-muted" />
+    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-divider" />
   );
 }

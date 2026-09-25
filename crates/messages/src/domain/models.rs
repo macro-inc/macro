@@ -109,8 +109,15 @@ pub enum ThreadAnchor {
     PdfHighlight {
         /// Highlight annotation UUID.
         anchor_id: Uuid,
+        /// The text the highlight covers, trimmed and bounded like a markdown
+        /// snapshot. The highlight owns it and it can be edited there, so it is
+        /// read from the highlight whenever the thread is, never stored on the
+        /// thread. Absent when the highlight carries no text.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        marked_text: Option<String>,
     },
-    /// A comment-only placeable PDF annotation.
+    /// A comment-only placeable PDF annotation. It marks a point on a page,
+    /// not a span of text, so it has no marked text.
     PdfPlaceable {
         /// Placeable annotation UUID.
         anchor_id: Uuid,
@@ -189,6 +196,7 @@ impl NewThreadAnchor {
             },
             Self::PdfHighlight { anchor_id } => ThreadAnchor::PdfHighlight {
                 anchor_id: *anchor_id,
+                marked_text: None,
             },
             Self::PdfPlaceable { anchor_id, .. } => ThreadAnchor::PdfPlaceable {
                 anchor_id: *anchor_id,
@@ -433,6 +441,10 @@ pub struct PostMessage {
     #[serde(skip)]
     #[cfg_attr(feature = "schema", schema(ignore))]
     pub notification_policy: PostMessageNotificationPolicy,
+    /// Client-minted UUIDv7 for the new message, so an optimistic message
+    /// already carries its final id; the server mints one when absent.
+    #[serde(default)]
+    pub id: Option<Uuid>,
     /// Macro Markdown body.
     pub content: String,
     /// Root to reply to, if this is a reply.

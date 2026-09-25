@@ -73,6 +73,33 @@ describe('agent announcements', () => {
       ...replyTarget,
     });
   });
+  it('composes a chat reply as the session link over its body', async () => {
+    const link =
+      '<m-agent-session-mention>{"id":"session","label":"Agent session"}</m-agent-session-mention>';
+    const pending = await request({
+      chatReply: { sessionId: 'session', body: { kind: 'pending' } },
+    });
+    expect(pending.status).toBe(200);
+    const { markdown: spinner } = await pending.json<{ markdown: string }>();
+    expect(spinner.startsWith(`${link}\n\n<m-await>`)).toBe(true);
+    expect(spinner.endsWith('</m-await>')).toBe(true);
+    const answered = await request({
+      chatReply: {
+        sessionId: 'session',
+        body: { kind: 'markdown', markdown: 'Sure.\n\n- done' },
+      },
+    });
+    expect(await answered.json<{ markdown: string }>()).toEqual({
+      markdown: `${link}\n\nSure.\n\n- done`,
+    });
+  });
+  it('rejects a chat reply body it does not know', async () => {
+    const response = await request({
+      chatReply: { sessionId: 'session', body: { kind: 'spinner' } },
+    });
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+  });
   it('rejects an unknown connection destination', async () => {
     const response = await request({
       connectionPrompt: {

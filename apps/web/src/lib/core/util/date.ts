@@ -42,6 +42,20 @@ export const formatTime = (
 };
 
 /**
+ * The short timezone name in effect at `date`, e.g. 'EDT' in summer and 'EST'
+ * in winter for New York. Zones without an English abbreviation get an
+ * offset such as 'GMT+1'.
+ * @param timeZone - IANA timezone string. Defaults to system timezone.
+ */
+export const formatTimeZoneAbbreviation = (
+  date: Date,
+  timeZone?: string
+): string | undefined =>
+  new Intl.DateTimeFormat('en-US', { timeZoneName: 'short', timeZone })
+    .formatToParts(date)
+    .find((part) => part.type === 'timeZoneName')?.value;
+
+/**
  * Formats a date to a human readable string.
  * @param date - Date object or Unix timestamp in seconds
  * @param options - Optional formatting options.

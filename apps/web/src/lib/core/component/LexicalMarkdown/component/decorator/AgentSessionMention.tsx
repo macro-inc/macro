@@ -2,7 +2,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { HoverCard } from '@core/component/HoverCard';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   $isAgentSessionMentionNode,
   type AgentSessionMentionDecoratorProps,
@@ -66,10 +66,12 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
         COMMAND_PRIORITY_NORMAL
       )
     );
-  const navigation = useSplitNavigationHandler<HTMLSpanElement>((event) => {
-    event.stopPropagation();
-    open(event);
-  });
+  const navigation = useNativeSplitNavigationHandler<HTMLSpanElement>(
+    (event) => {
+      event.stopPropagation();
+      open(event);
+    }
+  );
   const canExpand = () => Boolean(session() && wrapper?.isInteractable());
   const setExpanded = (expanded: boolean) => {
     if (!canExpand()) return;

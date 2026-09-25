@@ -340,7 +340,7 @@ function SoupNavigationButtons() {
     <Show when={shouldShow()}>
       <div class="flex items-center gap-0.5">
         <Button
-          class="p-1 rounded-lg"
+          size="icon-md"
           label="Previous item"
           hotkey={TOKENS.entity.step.start}
           disabled={!canNavigateUp()}
@@ -349,7 +349,7 @@ function SoupNavigationButtons() {
           <CaretUp class="size-4" />
         </Button>
         <Button
-          class="p-1 rounded-lg"
+          size="icon-md"
           label="Next item"
           hotkey={TOKENS.entity.step.end}
           disabled={!canNavigateDown()}
@@ -642,7 +642,7 @@ export function SplitHeader(props: {
             }}
           />
 
-          <div class="h-full grow shrink flex items-center justify-end gap-0.5 px-2 touch:px-0 touch:gap-2">
+          <div class="header-actions h-full grow shrink flex items-center justify-end gap-0.5 px-2 touch:px-0 touch:gap-2">
             <div
               class="contents"
               ref={(ref) => {

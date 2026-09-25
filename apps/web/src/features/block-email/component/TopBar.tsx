@@ -31,13 +31,13 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildEntityData } from '@entity';
+import IconShared from '@icon/share.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
 import EnvelopeSimpleOpenIcon from '@phosphor/envelope-simple-open.svg';
 import TaskIcon from '@phosphor/list-checks.svg';
 import ProhibitIcon from '@phosphor/prohibit.svg';
-import IconShared from '@phosphor/share.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import NoiseIcon from '@phosphor/waveform.svg';
 import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
@@ -306,7 +306,7 @@ export function TopBar(props: {
               accent closed envelope that re-marks the thread read. */}
           <Show when={isOwnThread()}>
             <Button
-              class="p-1 rounded-lg"
+              size="icon-md"
               label={
                 emailCtx.isThreadMarkedUnread()
                   ? 'Mark as read'
@@ -332,7 +332,7 @@ export function TopBar(props: {
           </Show>
           <Show when={isOwnThread() && showMarkDoneToggle()}>
             <Button
-              class="p-1 rounded-lg"
+              size="icon-md"
               label={isDone() ? 'Mark as not done' : 'Mark done'}
               hotkey={
                 isDone()

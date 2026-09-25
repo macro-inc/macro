@@ -12,18 +12,26 @@ afterEach(() => {
 });
 
 describe('new app views rollout', () => {
-  it('allows PostHog to disable and enable the production flag', async () => {
+  it('enables production without waiting for PostHog', async () => {
     vi.stubEnv('MODE', 'production');
     vi.stubEnv('VITE_ENABLE_NEW_APP_VIEWS', '');
     vi.resetModules();
     const { enableNewAppViews, isFeatureEnabled } = await import(
       '../constant/featureFlags'
     );
-    expect(enableNewAppViews.override).toBeUndefined();
-    remoteFlag.mockReturnValue(false);
-    expect(isFeatureEnabled(enableNewAppViews)).toBe(false);
-    remoteFlag.mockReturnValue(true);
+    remoteFlag.mockReturnValue(undefined);
     expect(isFeatureEnabled(enableNewAppViews)).toBe(true);
+    expect(remoteFlag).not.toHaveBeenCalled();
+  });
+
+  it('lets the env override disable the flag', async () => {
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('VITE_ENABLE_NEW_APP_VIEWS', 'false');
+    vi.resetModules();
+    const { enableNewAppViews, isFeatureEnabled } = await import(
+      '../constant/featureFlags'
+    );
+    expect(isFeatureEnabled(enableNewAppViews)).toBe(false);
   });
 
   it('enables local development by default', async () => {

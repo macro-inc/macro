@@ -242,6 +242,54 @@ async fn a_failed_live_lookup_falls_back_to_the_snapshot() {
     assert!(prompt.contains("the document may have changed since"));
 }
 
+async fn prompt_on(anchor: ThreadAnchor) -> String {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut history = thread(trigger.clone(), vec![]);
+    history.state.anchor = Some(anchor);
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, history);
+    handler(api, Arc::new(Access::default()), responder("reply"))
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn a_pdf_highlight_discussion_names_the_words_it_covers() {
+    let prompt = prompt_on(ThreadAnchor::PdfHighlight {
+        anchor_id: Uuid::from_u128(0xbb),
+        marked_text: Some("indemnifies the lessor".to_owned()),
+    })
+    .await;
+    assert!(prompt.contains(&format!(
+        "<anchor highlight=\"{}\">\n{HIGHLIGHT_ANCHOR_INSTRUCTION}\n\nindemnifies the lessor\n</anchor>",
+        Uuid::from_u128(0xbb)
+    )));
+}
+
+#[tokio::test]
+async fn a_highlight_without_text_says_its_words_are_unknown() {
+    let prompt = prompt_on(ThreadAnchor::PdfHighlight {
+        anchor_id: Uuid::from_u128(0xbb),
+        marked_text: None,
+    })
+    .await;
+    assert!(prompt.contains(BLANK_HIGHLIGHT_INSTRUCTION));
+    assert!(!prompt.contains(HIGHLIGHT_ANCHOR_INSTRUCTION));
+}
+
+#[tokio::test]
+async fn a_pdf_pin_discussion_says_it_covers_no_words() {
+    let prompt = prompt_on(ThreadAnchor::PdfPlaceable {
+        anchor_id: Uuid::from_u128(0xcc),
+    })
+    .await;
+    assert!(prompt.contains(&format!(
+        "<anchor pin=\"{}\">\n{PIN_ANCHOR_INSTRUCTION}\n</anchor>",
+        Uuid::from_u128(0xcc)
+    )));
+}
+
 #[tokio::test]
 async fn revoked_document_access_prevents_context_reads_and_agent_work() {
     let trigger = message(1, None, "@macro help");

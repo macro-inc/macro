@@ -5,7 +5,6 @@ import BuildingsIcon from '@phosphor/buildings.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
@@ -58,6 +57,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       { tab: 'Notifications', label: 'Notifications', icon: BellIcon },
       { tab: 'Billing', label: 'Billing', icon: CreditCardIcon },
       { tab: 'Appearance', label: 'Appearance', icon: SwatchesIcon },
+      { tab: 'Agents', label: 'Agents', icon: AgentIcon },
       { tab: 'Mobile App', label: 'Mobile App', icon: DeviceMobileIcon },
       { tab: 'Shortcuts', label: 'Shortcuts', icon: KeyboardIcon },
     ],
@@ -75,13 +75,6 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       },
       { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
       { tab: 'Bots', label: 'Bots', icon: BotIcon },
-    ],
-  },
-  {
-    label: 'Agents',
-    items: [
-      { tab: 'Agents', label: 'Agents', icon: AgentIcon },
-      { tab: 'Harness', label: 'Harness', icon: HardDrivesIcon },
     ],
   },
   {
@@ -114,7 +107,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   'Mobile App': 'mobile-app',
   Agent: 'mcp-server',
   Agents: 'agents',
-  Harness: 'harness',
+  Harness: 'runtimes',
   Bots: 'bots',
   Team: 'team',
   Tags: 'tags',
@@ -130,6 +123,9 @@ const SETTINGS_SLUG_TO_TAB = new Map<string, SettingsTab>(
     ([tab, slug]) => [slug, tab]
   )
 );
+
+// Preserve daemon pairing links and bookmarks from before the rename.
+SETTINGS_SLUG_TO_TAB.set('harness', 'Harness');
 
 /** The URL slug for a settings tab (e.g. `Connected` → `connections`). */
 export const settingsTabToSlug = (tab: SettingsTab): string =>
@@ -149,7 +145,9 @@ export const settingsSlugToTab = (
 export const getSettingsTabItem = (
   tab: SettingsTab
 ): SettingsTabItem | undefined =>
-  SETTINGS_TAB_ITEMS.find((item) => item.tab === tab);
+  tab === 'Harness'
+    ? { tab: 'Harness', label: 'Agents', icon: AgentIcon }
+    : SETTINGS_TAB_ITEMS.find((item) => item.tab === tab);
 
 /**
  * Returns a predicate gating which settings tabs are available given feature

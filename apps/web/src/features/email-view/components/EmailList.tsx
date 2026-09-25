@@ -375,7 +375,7 @@ export function EmailList(props: EmailListProps) {
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
+        class="soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none [--color-list-highlighted:var(--color-active)]"
       >
         <PullToRefresh
           scrollContainer={pullScrollContainer}

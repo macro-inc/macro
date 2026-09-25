@@ -76,7 +76,15 @@ pub struct InFlightTurn {
     pub turn: TurnId,
     /// The user who prompted it, absent when a bot acted on nobody's behalf.
     pub actor: Option<MacroUserIdStr<'static>>,
-    /// The chip message posted for this turn, when one was.
+    /// Where the prompt came from, when it came from somewhere the session
+    /// answers back into. Kept so the turn's end can speak into the same
+    /// thread the announcement did.
+    pub announce: Option<AnnounceOrigin>,
+    /// The message posted when this turn was announced, when one was. For a
+    /// coding agent that is the chip the turn renders into; for a chat agent
+    /// it is the pending reply the turn's end resolves (see
+    /// [`SessionAnnouncer::resolve`](super::ports::SessionAnnouncer::resolve)).
+    /// Downstream events carry it under this name for both.
     pub announcement_message_id: Option<Uuid>,
 }
 

@@ -51,7 +51,9 @@ export async function resolveTargetRequestFromPreview(
     params.eventId,
     occurrenceKey
   ).catch(() => null);
-  if (!event) return undefined;
+  // A channel-shared meeting is on none of the viewer's calendars, so there
+  // is no event of theirs for the block to focus.
+  if (!event?.viewerEventId) return undefined;
 
   const time: CalendarEventTime =
     event.time.kind === 'timed'

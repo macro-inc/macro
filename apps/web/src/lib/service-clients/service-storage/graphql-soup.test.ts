@@ -645,7 +645,7 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.host.dispose).not.toHaveBeenCalled();
   });
 
-  it.each(['query', 'mutation'] as const)(
+  it.each(['query', 'mutation', 'subscription'] as const)(
     'reports handled cache-disposed failures for %s without exporting operation payloads',
     async (kind) => {
       const soup = await import('./graphql-soup');
@@ -661,10 +661,10 @@ describe('GraphQL Soup browser cache session gate', () => {
       const report =
         mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.onCacheError;
 
-      report?.(
-        new Error('cache worker host was disposed for page navigation'),
-        operation
+      const { CacheNavigationError } = await import(
+        '@graphql-cache/host/navigation-error'
       );
+      report?.(new CacheNavigationError(), operation);
       expect(mocks.telemetryError).not.toHaveBeenCalled();
       report?.(error, operation);
 

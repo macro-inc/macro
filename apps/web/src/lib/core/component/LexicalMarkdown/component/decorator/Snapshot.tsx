@@ -8,7 +8,7 @@ import { HoverCard } from '@core/component/HoverCard';
 import { verifyBlockName } from '@core/constant/allBlocks';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   $isSnapshotNode,
   type SnapshotDecoratorProps,
@@ -112,7 +112,7 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
     removeNodeAndRestoreSelection(editor, props.key, $isSnapshotNode);
   };
 
-  const navHandlers = useSplitNavigationHandler<HTMLSpanElement>((e) => {
+  const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
     e.stopPropagation();
     if (matches(item(), (i) => !i.loading && i.access === 'access')) {
       open(e);

@@ -172,3 +172,29 @@ fn receive_webhook_skips_configured_transcription_agent_name() {
 
     assert_eq!(event.participant_identity, None);
 }
+
+#[tokio::test]
+async fn guest_tokens_preserve_names_and_only_grant_the_room() {
+    let client = client();
+    let guest_id = crate::domain::meetings::GuestId::generate();
+    let token = client
+        .generate_guest_token("meeting-room", guest_id, "Ada")
+        .await
+        .unwrap();
+    let verified = client.verify_access_token(&token).unwrap();
+    assert_eq!(verified.identity, guest_id.to_string());
+    assert_eq!(verified.room.as_deref(), Some("meeting-room"));
+    let payload = token.split('.').nth(1).unwrap();
+    let claims: serde_json::Value = serde_json::from_slice(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(payload)
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(claims["name"], "Ada");
+    assert_eq!(claims["video"]["roomJoin"], true);
+    assert_ne!(claims["video"]["roomAdmin"], true);
+    let event = receive_participant_joined(&client, &guest_id.to_string()).unwrap();
+    assert_eq!(event.guest_identity, Some(guest_id));
+    assert_eq!(event.participant_identity, None);
+}

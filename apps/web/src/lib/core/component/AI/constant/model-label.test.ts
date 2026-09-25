@@ -7,6 +7,14 @@ describe('modelLabel', () => {
     expect(modelLabel('openai/gpt-5.6-mini')).toBe('GPT-5.6 mini');
     // Runtimes that drop the provider segment still get the house name.
     expect(modelLabel('claude-haiku-4-5')).toBe('Haiku 4.5');
+    expect(modelLabel('fireworks/kimi-k3')).toBe('Kimi K3');
+    expect(modelLabel('kimi-k3')).toBe('Kimi K3');
+    expect(modelLabel('fireworks/deepseek-v4-pro-0813')).toBe(
+      'DeepSeek V4 Pro'
+    );
+    expect(modelLabel('fireworks/muse-glimmer-30b')).toBe('Muse Glimmer');
+    expect(modelLabel('google/gemini-3.8-flash')).toBe('Gemini 3.8 Flash');
+    expect(modelLabel('gemini-3.8-flash')).toBe('Gemini 3.8 Flash');
   });
 
   it('reads an unknown slug as a name rather than showing it raw', () => {

@@ -9,7 +9,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let testQueryClient: QueryClient;
-const mocks = vi.hoisted(() => ({ delete: vi.fn(), patchThread: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  delete: vi.fn(),
+  patchThread: vi.fn(),
+  post: vi.fn(),
+}));
 vi.mock('../../client', () => ({
   get queryClient() {
     return testQueryClient;
@@ -20,9 +24,17 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@service-storage/messages', () => ({ entityMessagesClient: mocks }));
 vi.mock('../subscription', () => ({ useMessageSubscription: () => {} }));
+vi.mock('@app/lib/analytics/analytics-context', () => ({
+  useAnalytics: () => ({ track: vi.fn() }),
+}));
 
 import { messageKeys } from '../keys';
-import { useDeleteMessageMutation, usePatchThreadMutation } from '../mutations';
+import {
+  newMessageId,
+  useDeleteMessageMutation,
+  usePatchThreadMutation,
+  useSendMessageMutation,
+} from '../mutations';
 import { handleMessageEvent, onThreadStateUpdated } from '../sync';
 import { getThreadRepliesQueryKey } from '../thread-replies';
 import {
@@ -53,6 +65,7 @@ function message(
 beforeEach(() => {
   mocks.delete.mockReset();
   mocks.patchThread.mockReset();
+  mocks.post.mockReset();
   testQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -365,5 +378,93 @@ describe('thread resolution', () => {
       })
     ).rejects.toThrow('offline');
     expect(cachedResolved()).toEqual({ timeline: false, thread: false });
+  });
+});
+
+describe('sending', () => {
+  it('posts the optimistic id as the message id, so it never changes', async () => {
+    const parent: MessageParent = { type: 'document', id: 'doc' };
+    const timelineKey = getMessageTimelineQueryKey(parent);
+    testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
+      pageParams: [null],
+      pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+    });
+    const rootIds = () =>
+      testQueryClient
+        .getQueryData<MessageTimelineData>(timelineKey)!
+        .pages[0].items.map((item) => [item.id, item.state.root_id]);
+    let respond!: () => void;
+    mocks.post.mockImplementation(
+      (_parent, input) =>
+        new Promise((resolve) => {
+          respond = () => resolve(message(parent, input.id));
+        })
+    );
+    let mutation!: ReturnType<typeof useSendMessageMutation>;
+    function Harness() {
+      mutation = useSendMessageMutation();
+      return null;
+    }
+    render(() => (
+      <QueryClientProvider client={testQueryClient}>
+        <Harness />
+      </QueryClientProvider>
+    ));
+
+    const id = newMessageId();
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7/);
+    const pending = mutation.mutateAsync({
+      parent,
+      message: { content: '2+2=?' },
+      senderId: 'macro|a@example.com',
+      optimisticId: id,
+    });
+    await vi.waitFor(() => expect(rootIds()).toEqual([[id, id]]));
+    expect(mocks.post).toHaveBeenCalledWith(
+      parent,
+      expect.objectContaining({ id, nonce: id })
+    );
+    respond();
+    await pending;
+    expect(rootIds()).toEqual([[id, id]]);
+  });
+
+  it('adopts the server id when the server ignores the client id', async () => {
+    const parent: MessageParent = { type: 'document', id: 'doc' };
+    const timelineKey = getMessageTimelineQueryKey(parent);
+    testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
+      pageParams: [null],
+      pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+    });
+    mocks.post.mockResolvedValue(message(parent, 'server-id'));
+    let mutation!: ReturnType<typeof useSendMessageMutation>;
+    function Harness() {
+      mutation = useSendMessageMutation();
+      return null;
+    }
+    render(() => (
+      <QueryClientProvider client={testQueryClient}>
+        <Harness />
+      </QueryClientProvider>
+    ));
+
+    await mutation.mutateAsync({
+      parent,
+      message: { content: '2+2=?' },
+      senderId: 'macro|a@example.com',
+      optimisticId: newMessageId(),
+    });
+    // The row keeps its thread state, so a document discussion (which shows
+    // roots with a null anchor) still renders it.
+    expect(
+      testQueryClient
+        .getQueryData<MessageTimelineData>(timelineKey)!
+        .pages[0].items.map((item) => [item.id, item.state])
+    ).toEqual([
+      [
+        'server-id',
+        expect.objectContaining({ root_id: 'server-id', anchor: null }),
+      ],
+    ]);
   });
 });

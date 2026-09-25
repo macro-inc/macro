@@ -236,7 +236,6 @@ export function MarkdownEditor(props: {
     findAndReplace: findAndReplaceStore,
     setFindAndReplace: setFindAndReplaceStore,
   } = documentState.editor;
-  const { revisions, setRevisions } = documentState.rewrite;
   const saveBlocked = () => documentState.comments.activeCommentThread === -1;
 
   const IS_SYNC = () => documentSource().type === 'sync';
@@ -682,12 +681,7 @@ export function MarkdownEditor(props: {
   }
 
   if (ENABLE_MARKDOWN_DIFF) {
-    plugins.use(
-      diffPlugin({
-        revisionsSignal: [revisions, setRevisions],
-        nodeIdMap: lexicalWrapper.mapping!,
-      })
-    );
+    plugins.use(diffPlugin());
   }
 
   const [accessoryStore, setAccessoryStore] = createAccessoryStore();

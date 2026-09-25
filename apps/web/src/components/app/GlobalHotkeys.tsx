@@ -5,9 +5,9 @@ import {
 } from '@app/constants/hotkeys';
 import { type CategoryFilter, CommandState } from '@app/features/command';
 import {
-  CREATABLE_BLOCKS,
   createMenuOpen,
   setCreateMenuOpen,
+  useCreateCommands,
 } from '@app/features/command/Launcher';
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -184,7 +184,8 @@ export default function GlobalShortcuts() {
     icon: Plus,
   });
 
-  CREATABLE_BLOCKS.forEach((item) => {
+  const createCommands = useCreateCommands();
+  createCommands.forEach((item) => {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
@@ -205,15 +206,32 @@ export default function GlobalShortcuts() {
       hide: () =>
         !(item.enabled?.() ?? true) ||
         (item.blockName === 'snippet' && !snippetsFlag().enabled),
-      runWithInputFocused: true,
+      runWithInputFocused: item.runWithInputFocused ?? true,
     });
   });
 
   registerHotkey({
-    hotkey: ['c', 'escape'],
+    hotkey: 'escape',
     scopeId: CREATE_MENU_COMMAND_SCOPE,
     description: 'Close Create',
     condition: createMenuOpen,
+    keyDownHandler: () => {
+      setCreateMenuOpen(false);
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    hotkey: 'c',
+    scopeId: CREATE_MENU_COMMAND_SCOPE,
+    description: 'Close Create',
+    condition: () =>
+      createMenuOpen() &&
+      !createCommands.some(
+        (item) => item.hotkey === 'c' && (item.enabled?.() ?? true)
+      ),
+    registrationType: 'add',
     keyDownHandler: () => {
       setCreateMenuOpen(false);
       return true;

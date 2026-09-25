@@ -33,9 +33,9 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import IconShared from '@icon/share.svg';
 import DownloadIcon from '@phosphor/download-simple.svg';
 import Printer from '@phosphor/printer.svg';
-import IconShared from '@phosphor/share.svg';
 import { blockNameToItemType } from '@service-storage/itemType';
 import { createCallback } from '@solid-primitives/rootless';
 import { usePdfDocument } from '../context/pdf-document-context';

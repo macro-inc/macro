@@ -1,7 +1,15 @@
+import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
+import {
+  previewBlockTarget,
+  previewCalendarTarget,
+} from '@components/app/previewTarget';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { inboxPreviewNavigation } from '../inbox-view/inbox-preview-navigation';
-import { inboxPreviewSelection } from '../inbox-view/inbox-route';
+import {
+  inboxCalendarNavigation,
+  inboxPreviewNavigation,
+} from '../inbox-view/inbox-preview-navigation';
+import { inboxPreviewTarget } from '../inbox-view/inbox-route';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -30,6 +38,7 @@ const operationMocks = vi.hoisted(() => {
     },
   });
   return {
+    archive: vi.fn(async (): Promise<'committed' | 'queued'> => 'committed'),
     bulkMarkNotificationsAsDone: vi.fn(async () => {}),
     bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
     cancelQueries: vi.fn(async () => {}),
@@ -37,7 +46,9 @@ const operationMocks = vi.hoisted(() => {
       isErr: () => false,
       value: undefined,
     })),
-    invalidateQueries: vi.fn(async () => {}),
+    invalidateQueries: vi.fn(
+      async (_options: { queryKey?: readonly unknown[] }) => {}
+    ),
     invalidateRemindersById: vi.fn(),
     invalidateSoupEntity: vi.fn(async () => {}),
     setReminderCompleted: vi.fn(async () => {}),
@@ -58,6 +69,10 @@ vi.mock('@service-connection/websocket', () => ({
   state: () => 'closed',
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),
+}));
+vi.mock('@queries/email/integration', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/email/integration')>()),
+  archiveEmailThread: operationMocks.archive,
 }));
 vi.mock('@queries/client', () => ({
   queryClient: {
@@ -106,11 +121,17 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
 
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
-import type { ChannelEntityTarget, EntityData } from '@entity';
+import { type ChannelEntityTarget, type EntityData, queryKeys } from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
 import {
+  type CalendarPreviewSelection,
+  type ChannelPreviewSelection,
+  channelIdForPreviewNavigation,
+  channelPreviewSelection,
   executeMarkEntitiesDone,
+  executeMarkEntitiesUndone,
   getChannelEntityTarget,
+  getDocumentCommentTarget,
   getRowClickFallbackLocation,
   markChannelNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
@@ -302,6 +323,169 @@ const channelThreadRow = (opts?: {
     ...(opts?.notifications ? { notifications: () => opts.notifications } : {}),
   }) as unknown as EntityData;
 
+describe('channel unread clicks', () => {
+  const newer = {
+    ...replyNotification('reply', 'newer', 'thread'),
+    created_at: '2026-09-24T12:00:00Z',
+  };
+  const older = {
+    ...sendNotification('send', 'older'),
+    created_at: '2026-09-23T12:00:00Z',
+  };
+
+  it('builds a route selection with a plain id and ChannelEntityTarget', () => {
+    expect(
+      channelPreviewSelection('channel-1', {
+        target: {
+          kind: 'message',
+          messageId: 'newer',
+          threadId: 'thread',
+        },
+      })
+    ).toEqual({
+      type: 'channel',
+      id: 'channel-1',
+      target: { messageId: 'newer', threadId: 'thread' },
+    });
+    expect(
+      channelPreviewSelection('channel-1', { target: { kind: 'latest' } })
+    ).toEqual({ type: 'channel', id: 'channel-1' });
+    expect(() => channelPreviewSelection('')).toThrow(/Missing channel id/);
+  });
+
+  it('resolves a path channelId and rejects empty selections', () => {
+    expect(
+      channelIdForPreviewNavigation({ type: 'channel', id: 'channel-1' })
+    ).toBe('channel-1');
+    expect(
+      channelIdForPreviewNavigation({
+        type: 'channel_message',
+        id: 'msg',
+        channelId: 'channel-1',
+        messageId: 'msg',
+      })
+    ).toBe('channel-1');
+    expect(() =>
+      channelIdForPreviewNavigation({
+        type: 'channel',
+        id: undefined as unknown as string,
+      })
+    ).toThrow(/Missing channel id for channel preview navigation/);
+    expect(() =>
+      channelIdForPreviewNavigation({
+        type: 'channel_thread',
+        id: 'root',
+        channelId: undefined as unknown as string,
+        messageId: 'root',
+        threadId: 'root',
+      })
+    ).toThrow(/Missing channel id for channel preview navigation/);
+  });
+
+  it('keeps a captured id when the entity proxy later loses its id', () => {
+    const entity = {
+      type: 'channel' as const,
+      id: undefined as unknown as string,
+      notifications: () => [newer],
+    };
+    const selection = channelPreviewSelection('channel-1', {
+      target: getChannelEntityTarget(entity, { scopeChannelThreads: false }),
+      notifications: entity.notifications,
+    });
+    expect(selection).toMatchObject({
+      type: 'channel',
+      id: 'channel-1',
+      target: { messageId: 'newer', threadId: 'thread' },
+    });
+    expect(selection).not.toHaveProperty('kind');
+    expect(selection.target).not.toHaveProperty('kind');
+  });
+
+  it('reads current unread state on every click without revisiting read targets', () => {
+    let notifications = [older, newer, { ...newer, id: 'mention' }];
+    const row: ChannelPreviewSelection = {
+      type: 'channel',
+      id: 'channel-1',
+      notifications: () => notifications,
+    };
+    const click = () =>
+      getChannelEntityTarget(row, { scopeChannelThreads: false });
+    expect(click()).toEqual({
+      kind: 'message',
+      messageId: 'newer',
+      threadId: 'thread',
+    });
+
+    notifications = [older, asRead(newer), asRead({ ...newer, id: 'mention' })];
+    expect(click()).toEqual({
+      kind: 'message',
+      messageId: 'older',
+      threadId: undefined,
+    });
+
+    notifications = notifications.map(asRead);
+    expect(click()).toEqual({ kind: 'latest' });
+    expect(click()).toEqual({ kind: 'latest' });
+
+    notifications.push({
+      ...older,
+      id: 'incoming',
+      created_at: '2026-09-25T12:00:00Z',
+      notification_metadata: {
+        ...older.notification_metadata,
+        content: {
+          ...older.notification_metadata.content,
+          messageId: 'incoming',
+        },
+      },
+    } as UnifiedNotification);
+    expect(click()).toMatchObject({ kind: 'message', messageId: 'incoming' });
+  });
+
+  it('uses new arrivals immediately while older notifications remain unread', () => {
+    let notifications = [older];
+    const row: ChannelPreviewSelection = {
+      type: 'channel',
+      id: 'channel-1',
+      notifications: () => notifications,
+    };
+    expect(
+      getChannelEntityTarget(row, { scopeChannelThreads: false })
+    ).toMatchObject({ messageId: 'older' });
+    notifications = [older, newer];
+    expect(
+      getChannelEntityTarget(row, { scopeChannelThreads: false })
+    ).toMatchObject({ messageId: 'newer' });
+  });
+
+  it('preserves Home row targets, including an already-read thread reply', () => {
+    const notifications = [
+      asRead({
+        ...replyNotification('read-reply', 'read-newest', 'thread'),
+        created_at: '2026-09-25T12:00:00Z',
+      }),
+      newer,
+      older,
+    ];
+    expect(getChannelEntityTarget(channelRow({ notifications }))).toMatchObject(
+      { messageId: 'older' }
+    );
+    const thread: ChannelPreviewSelection = {
+      type: 'channel_thread',
+      id: 'thread',
+      channelId: 'channel-1',
+      messageId: 'thread',
+      threadId: 'thread',
+      notifications: () => notifications,
+    };
+    expect(getChannelEntityTarget(thread)).toEqual({
+      kind: 'message',
+      messageId: 'read-newest',
+      threadId: 'thread',
+    });
+  });
+});
+
 describe('resolveMarkEntitiesDoneVariables', () => {
   it('uses notifications attached to a GraphQL Soup entity', () => {
     const notification = sendNotification('notification-1', 'message-1');
@@ -323,6 +507,45 @@ describe('resolveMarkEntitiesDoneVariables', () => {
 });
 
 describe('mark-done orchestration', () => {
+  const invalidatedEmailList = () =>
+    operationMocks.invalidateQueries.mock.calls.some(
+      ([options]) =>
+        JSON.stringify(options.queryKey) === JSON.stringify(queryKeys.all.email)
+    );
+
+  for (const [label, execute] of [
+    ['Done', executeMarkEntitiesDone],
+    ['Undo', executeMarkEntitiesUndone],
+  ] as const) {
+    it(`${label} does not invalidate REST email caches while the archive is queued`, async () => {
+      operationMocks.archive.mockResolvedValueOnce('queued');
+      await execute({ emailIds: ['queued'], notificationIds: [] });
+      expect(invalidatedEmailList()).toBe(false);
+      expect(operationMocks.invalidateSoupEntity).not.toHaveBeenCalled();
+    });
+    it(`${label} still reconciles committed and rejected archive writes`, async () => {
+      await execute({ emailIds: ['committed'], notificationIds: [] });
+      expect(invalidatedEmailList()).toBe(true);
+      operationMocks.invalidateQueries.mockClear();
+      operationMocks.archive.mockRejectedValueOnce(new Error('archive failed'));
+      await expect(
+        execute({ emailIds: ['failed'], notificationIds: [] })
+      ).rejects.toThrow('archive failed');
+      expect(invalidatedEmailList()).toBe(true);
+      expect(operationMocks.invalidateSoupEntity).toHaveBeenCalledWith(
+        'failed'
+      );
+    });
+    it(`${label} defers shared-list refresh for mixed committed/queued writes`, async () => {
+      operationMocks.archive
+        .mockResolvedValueOnce('committed')
+        .mockResolvedValueOnce('queued');
+      await execute({ emailIds: ['committed', 'queued'], notificationIds: [] });
+      expect(invalidatedEmailList()).toBe(false);
+      expect(operationMocks.invalidateSoupEntity).not.toHaveBeenCalled();
+    });
+  }
+
   it('executes entity notification writes directly and returns exact ids', async () => {
     operationMocks.updateNotificationsForEntities.mockResolvedValueOnce([
       { id: 'entity-notification' },
@@ -393,11 +616,61 @@ describe('calendar view navigation', () => {
               }),
             ],
           },
-          search: { calendar: { eventId: ['event-1'] } },
+          search: {
+            calendar: expect.objectContaining({
+              eventId: ['event-1'],
+              occurrenceKey: ['instance-1'],
+              startDate: ['2026-01-27'],
+              endDate: ['2026-01-28'],
+            }),
+          },
         }),
       }),
       expect.any(Object)
     );
+  });
+
+  it('keeps a recurring reminder on its instance through the Calendar route', () => {
+    const selection = {
+      type: 'calendar_event',
+      id: 'event-1',
+      time: {
+        kind: 'timed',
+        startsAt: '2026-05-18T22:00:00Z',
+        endsAt: '2026-05-18T22:30:00Z',
+      },
+      notifications: () => [
+        {
+          notification_metadata: {
+            tag: 'calendar_event_reminder',
+            content: {
+              eventId: 'event-1',
+              occurrenceKey: '2026-09-23T22:00:00+00:00',
+              startsAt: '2026-09-23T22:00:00Z',
+              endsAt: '2026-09-23T22:30:00Z',
+            },
+          },
+        } as UnifiedNotification,
+      ],
+    } satisfies CalendarPreviewSelection;
+    const target = previewCalendarTarget(selection);
+    expect(target).toEqual({
+      eventId: 'event-1',
+      occurrenceKey: '2026-09-23T22:00:00+00:00',
+      range: createCalendarRange({
+        kind: 'timed',
+        startsAt: '2026-09-23T22:00:00Z',
+        endsAt: '2026-09-23T22:30:00Z',
+      }),
+    });
+    expect(
+      inboxCalendarNavigation(target, 'timeGridWeek')?.search.calendar
+    ).toEqual({
+      eventId: ['event-1'],
+      occurrenceKey: ['2026-09-23T22:00:00+00:00'],
+      startDate: [target.range!.startDate],
+      endDate: [target.range!.endDate],
+    });
   });
 });
 
@@ -502,25 +775,31 @@ describe('Drive document routing', () => {
 });
 
 describe('Inbox calendar preview navigation', () => {
-  it.each([
-    { kind: 'allDay' as const, startDate: '2025-01-01', endDate: '2025-01-03' },
-    {
-      kind: 'timed' as const,
-      startsAt: '2025-01-01T12:00:00.000Z',
-      endsAt: '2025-01-01T13:00:00.000Z',
-    },
-  ])('round-trips $kind event times', (time) => {
-    const result = inboxPreviewNavigation({
-      type: 'calendar_event',
-      id: 'event-1',
-      time,
+  it('targets the Calendar period path with the event and locator in search', () => {
+    const range = {
+      start: '2025-01-01T00:00:00.000Z',
+      end: '2025-01-02T00:00:00.000Z',
+      startDate: '2025-01-01',
+      endDate: '2025-01-02',
+    };
+    expect(
+      inboxCalendarNavigation(
+        { eventId: 'event-1', occurrenceKey: 'occurrence-1', range },
+        'timeGridWeek'
+      )
+    ).toEqual({
+      params: { period: 'timeGridWeek' },
+      search: {
+        channels: undefined,
+        calendar: {
+          eventId: ['event-1'],
+          occurrenceKey: ['occurrence-1'],
+          startDate: [range.startDate],
+          endDate: [range.endDate],
+        },
+      },
     });
-    expect(result.search.calendarTimeKind).toBe(time.kind);
-    expect(inboxPreviewSelection(result.params, result.search)).toMatchObject({
-      type: 'calendar_event',
-      id: 'event-1',
-      time,
-    });
+    expect(inboxCalendarNavigation({}, 'timeGridWeek')).toBeUndefined();
   });
 });
 
@@ -535,18 +814,24 @@ describe('Inbox channel preview navigation', () => {
       blockType: 'channel',
       previewId: 'channel-1',
     });
-    expect(result.search).toMatchObject({
-      targetMessageId: 'message-1',
-      targetThreadId: 'thread-1',
+    expect(result.search).toEqual({
+      channels: { messageId: ['message-1'], threadId: ['thread-1'] },
     });
   });
   it('keeps untargeted channels at latest', () => {
     expect(
       inboxPreviewNavigation({ type: 'channel', id: 'channel-1' }).search
-    ).toMatchObject({
-      targetMessageId: '',
-      targetThreadId: '',
-    });
+    ).toEqual({ channels: undefined });
+  });
+  it('names markdown subtypes in the path', () => {
+    expect(
+      inboxPreviewNavigation({
+        type: 'document',
+        id: 'task-1',
+        fileType: 'md',
+        subType: { type: 'task', is_completed: false },
+      }).params
+    ).toEqual({ blockType: 'task', previewId: 'task-1' });
   });
 });
 
@@ -862,6 +1147,126 @@ describe('getChannelEntityTarget', () => {
   it('returns undefined for non-channel entities', () => {
     const entity = { type: 'email', id: 'e1' } as unknown as EntityData;
     expect(getChannelEntityTarget(entity)).toBeUndefined();
+  });
+});
+
+const commentNotification = (
+  id: string,
+  commentId: string,
+  overrides: Partial<UnifiedNotification> = {}
+) =>
+  ({
+    id,
+    entity_id: 'doc-1',
+    entity_type: 'document',
+    state: 'unseen',
+    notification_metadata: {
+      tag: 'mentioned_in_document_comment',
+      content: {
+        documentName: 'Plan',
+        fileType: 'md',
+        commentId,
+        threadId: 'thread-1',
+        text: 'hey @you',
+      },
+    },
+    ...overrides,
+  }) as unknown as UnifiedNotification;
+
+const documentRow = (notifications: UnifiedNotification[]) =>
+  ({
+    type: 'document',
+    id: 'doc-1',
+    fileType: 'md',
+    notifications: () => notifications,
+  }) as unknown as EntityData;
+
+describe('getDocumentCommentTarget', () => {
+  it('targets the newest comment notification that is not done, read or not', () => {
+    expect(
+      getDocumentCommentTarget(
+        documentRow([
+          commentNotification('older', 'comment-older', {
+            created_at: '2026-09-20T00:00:00Z',
+          }),
+          commentNotification('read', 'comment-read', {
+            state: 'seen',
+            created_at: '2026-09-23T00:00:00Z',
+          }),
+          commentNotification('done', 'comment-done', {
+            state: 'done',
+            created_at: '2026-09-23T00:00:00Z',
+          }),
+          commentNotification('newest', 'comment-newest', {
+            created_at: '2026-09-22T00:00:00Z',
+          }),
+        ])
+      )?.params
+    ).toEqual({ comment_id: 'comment-read' });
+  });
+
+  it('opens a document normally once its comment notifications are done', () => {
+    expect(
+      getDocumentCommentTarget(
+        documentRow([commentNotification('n1', 'comment-1', { state: 'done' })])
+      )
+    ).toBeUndefined();
+  });
+
+  it('ignores documents without notifications', () => {
+    expect(
+      getDocumentCommentTarget({ type: 'document', fileType: 'md' })
+    ).toBeUndefined();
+  });
+
+  it('opens the row at its comment like a comment link', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    const goToLocationFromParams = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      documentRow([commentNotification('n1', 'comment-1')]),
+      {}
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'md', id: 'doc-1', params: { comment_id: 'comment-1' } },
+      expect.objectContaining({ activate: true })
+    );
+    expect(getBlockHandle).toHaveBeenCalledWith('doc-1', 'md');
+    expect(goToLocationFromParams).toHaveBeenCalledWith({
+      comment_id: 'comment-1',
+    });
+  });
+
+  it('carries the comment through the Inbox preview route', () => {
+    const result = inboxPreviewNavigation(
+      documentRow([commentNotification('n1', 'comment-1')]) as never
+    );
+    expect(result.params).toEqual({ blockType: 'md', previewId: 'doc-1' });
+    expect(result.search.drive).toEqual({
+      commentId: ['comment-1'],
+    });
+    const target = inboxPreviewTarget(result.params, {
+      channel: { messageId: '', threadId: '' },
+      document: { commentId: 'comment-1' },
+    });
+    expect(target).toMatchObject({ blockType: 'md', blockId: 'doc-1' });
+    expect(target.params).toEqual({ comment_id: 'comment-1' });
+  });
+
+  it('passes the comment to a document preview', () => {
+    expect(
+      previewBlockTarget(
+        documentRow([commentNotification('n1', 'comment-1')]) as never
+      ).params
+    ).toEqual({ comment_id: 'comment-1' });
   });
 });
 

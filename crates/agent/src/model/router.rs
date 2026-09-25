@@ -12,7 +12,7 @@
 //!   (e.g. `agent_loop`) hold one type and never fan out.
 //!
 //! Ids are addressed as `provider/model` (e.g. `anthropic/claude-opus-4-8`,
-//! `groq/llama-3.3-70b`); routing picks the provider from the segment, never by
+//! `fireworks/kimi-k3`); routing picks the provider from the segment, never by
 //! sniffing the id. Unroutable ids fall back to the default model.
 
 use std::collections::HashMap;
@@ -45,7 +45,10 @@ env_var! {
     struct ApiKeys {
         AnthropicApiKey,
         OpenaiApiKey,
-        CerebrasApiKey
+        CerebrasApiKey,
+        /// Doppler name is `FIREWORK_API_KEY` (singular), from `shared_ai`.
+        FireworkApiKey,
+        GoogleGenerativeAiApiKey
     }
 }
 
@@ -58,6 +61,17 @@ const OPENAI_PROVIDER: &str = "openai";
 const CEREBRAS_PROVIDER: &str = "cerebras";
 /// Cerebras inference endpoint (OpenAI-compatible Chat Completions API).
 const CEREBRAS_BASE_URL: &str = "https://api.cerebras.ai/v1";
+/// Provider segment Fireworks is registered under (OpenAI-compatible Chat
+/// Completions). Open-weight models on the in-memory Macro agent route here.
+const FIREWORKS_PROVIDER: &str = "fireworks";
+/// Fireworks inference endpoint (OpenAI-compatible Chat Completions API).
+const FIREWORKS_BASE_URL: &str = "https://api.fireworks.ai/inference/v1";
+/// Provider segment Google Gemini is registered under (OpenAI-compatible Chat
+/// Completions).
+const GOOGLE_PROVIDER: &str = "google";
+/// Gemini's OpenAI-compatible Chat Completions endpoint. The native
+/// `generativelanguage` API is a different wire format and is not used here.
+const GOOGLE_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/openai";
 
 /// A routed model id bound to the provider client that serves it.
 pub(crate) enum RoutedModel<'a> {
@@ -266,8 +280,9 @@ impl ModelRouter {
 
     /// Build a router with the built-in providers from the environment.
     ///
-    /// Requires `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `CEREBRAS_API_KEY`.
-    /// Chain [`with_openai_provider`](Self::with_openai_provider) to add more.
+    /// Requires `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CEREBRAS_API_KEY`,
+    /// `FIREWORK_API_KEY`, and `GOOGLE_GENERATIVE_AI_API_KEY`. Chain
+    /// [`with_openai_provider`](Self::with_openai_provider) to add more.
     pub fn try_from_env() -> Result<Self, AgentError> {
         let env = ApiKeys::new()?;
         let anthropic = anthropic::Client::builder()
@@ -278,13 +293,21 @@ impl ModelRouter {
         let openai = openai::Client::builder()
             .api_key(env.openai_api_key.to_string())
             .build()?;
-        // Cerebras speaks the OpenAI Chat Completions API, so it rides the
-        // compatible-provider registry: `cerebras/<model>` ids route to it.
-        Self::new(anthropic, openai).with_openai_provider(
-            CEREBRAS_PROVIDER,
-            CEREBRAS_BASE_URL,
-            &env.cerebras_api_key,
-        )
+        // Cerebras, Fireworks, and Gemini all speak the OpenAI Chat Completions
+        // API, so they ride the compatible-provider registry: a `<provider>/`
+        // segment routes to the client registered under that name.
+        Self::new(anthropic, openai)
+            .with_openai_provider(CEREBRAS_PROVIDER, CEREBRAS_BASE_URL, &env.cerebras_api_key)?
+            .with_openai_provider(
+                FIREWORKS_PROVIDER,
+                FIREWORKS_BASE_URL,
+                &env.firework_api_key,
+            )?
+            .with_openai_provider(
+                GOOGLE_PROVIDER,
+                GOOGLE_BASE_URL,
+                &env.google_generative_ai_api_key,
+            )
     }
 
     /// The process-wide full router, built from the environment on first use.

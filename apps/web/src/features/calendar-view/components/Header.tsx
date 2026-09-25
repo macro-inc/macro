@@ -9,7 +9,7 @@ import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
-import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useSidePanel } from '@components/app/side-panel/SidePanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -22,11 +22,14 @@ import { isMobile } from '@core/mobile/isMobile';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
+import PhoneIcon from '@phosphor/phone.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { usePager } from '@ui/components/Pager';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { CalendarSearch } from './CalendarSearch';
+import { useOpenEventComposer } from './use-open-event-composer';
 
 const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
   month: 'long',
@@ -68,6 +71,8 @@ export function Header() {
   const pager = usePager<CalendarPageId>();
   const calendarView = useCalendarView();
   const openEventComposer = useOpenEventComposer();
+  const navigate = useNavigate();
+  const quickCalls = useQuickCallsFlag();
   const initialDate = new Date();
   const today = createLocalToday();
 
@@ -156,16 +161,32 @@ export function Header() {
                 </span>
               </Button>
             </Show>
-            <Show when={!isMobile()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="rounded-lg px-2 @max-[520px]/split-header:size-6 @max-[520px]/split-header:p-1 touch:rounded-full"
+              label="New event"
+              onClick={() => openEventComposer()}
+            >
+              <PlusIcon class="size-3.5" />
+              <span class="@max-[520px]/split-header:hidden">New event</span>
+            </Button>
+            <Show when={quickCalls().enabled}>
               <Button
                 variant="ghost"
                 size="sm"
-                class="rounded-lg px-2"
-                onClick={() => openEventComposer()}
+                class="rounded-lg px-2 @max-[520px]/split-header:size-6 @max-[520px]/split-header:p-1 touch:rounded-full"
+                label="New Call"
+                hotkey={TOKENS.create.call}
+                onClick={() => {
+                  if (quickCalls().enabled) navigate('/meet/new');
+                }}
               >
-                <PlusIcon class="size-3.5" />
-                New event
+                <PhoneIcon class="size-3.5" />
+                <span class="@max-[520px]/split-header:hidden">New Call</span>
               </Button>
+            </Show>
+            <Show when={!isMobile()}>
               <PeriodSelector isNarrow={sidePanel?.isNarrow()} />
               <div class="flex shrink-0 items-center gap-1">
                 <Button

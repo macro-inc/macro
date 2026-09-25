@@ -96,10 +96,8 @@ export function DocumentAiEditBar(props: { documentId: string }) {
             onMouseLeave={() => setHovering(false)}
             tooltip={editing() ? 'Stop AI edit' : 'Ask AI to edit'}
             hotkey={editing() ? undefined : TOKENS.chat.input.focus}
-            variant="ghost"
             size="sm"
-            depth={2}
-            class="gap-1.5 rounded-full border border-edge-muted px-2.5"
+            class="gap-1.5 px-2.5"
           >
             <span
               class="flex size-4 shrink-0 items-center justify-center"

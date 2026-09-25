@@ -21,9 +21,9 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
+import ShareIcon from '@icon/share.svg';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
-import ShareIcon from '@phosphor/share.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';

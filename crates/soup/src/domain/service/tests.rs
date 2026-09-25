@@ -48,6 +48,7 @@ use uuid::Uuid;
 use super::*;
 
 mod agent_metadata;
+mod exclusions;
 
 struct NoopEmailPreviewService;
 
@@ -219,7 +220,7 @@ fn call_record(
 ) -> call::domain::models::CallRecord {
     call::domain::models::CallRecord {
         call_id,
-        channel_id,
+        channel_id: Some(channel_id),
         room_name: String::new(),
         created_by: created_by.to_string(),
         started_at,
@@ -240,6 +241,7 @@ fn call_record(
         status: None,
         user_access_level: None,
         participants: Vec::new(),
+        guests: Vec::new(),
         transcript: Vec::new(),
     }
 }
@@ -722,7 +724,7 @@ async fn simple_soup_includes_call_records() {
         &page.items[0],
         SoupItem::Call(call) => {
             assert_eq!(call.call_id, call_id);
-            assert_eq!(call.channel_id, channel_id);
+            assert_eq!(call.channel_id, Some(channel_id));
         }
     );
 }

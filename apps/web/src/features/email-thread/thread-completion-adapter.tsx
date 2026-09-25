@@ -69,7 +69,7 @@ export function createThreadCompletionAdapter(
   // Only the direct unarchive fallback goes through this mutation
   // (the mark-done / mark-not-done action paths toast on their own).
   const archiveMutation = useUndoableArchiveThreadMutation({
-    onPushed: (handle, params) => {
+    onPushed: (handle, params, disposition) => {
       params.onUndoHandle?.(handle);
       const message = params.archive ? 'Marked as done' : 'Marked as not done';
       let toastId: number | undefined;
@@ -108,10 +108,12 @@ export function createThreadCompletionAdapter(
               : bulkMarkNotificationsAsUndone(ids)
           ).catch(() => setDoneOverride(ids, undefined));
         }
-        if (!nowArchived) {
-          void refetchSoupEntity(params.threadId, 'emailThread');
+        if (disposition() !== 'queued') {
+          if (!nowArchived) {
+            void refetchSoupEntity(params.threadId, 'emailThread');
+          }
+          invalidateAllSoup();
         }
-        invalidateAllSoup();
       };
 
       return {
@@ -207,7 +209,7 @@ export function createThreadCompletionAdapter(
           linkId: toHeaderLinkId(thread.link_id),
         },
         {
-          onSuccess: async () => {
+          onSuccess: async (disposition) => {
             // The live notification stream only carries not-done
             // notifications, so the thread's done ids may have aged out of
             // the local cache — merge the server's view (best effort: the
@@ -230,8 +232,10 @@ export function createThreadCompletionAdapter(
                 toast.failure('Failed to mark as not done');
               }
             }
-            void refetchSoupEntity(threadId, 'emailThread');
-            invalidateAllSoup();
+            if (disposition !== 'queued') {
+              void refetchSoupEntity(threadId, 'emailThread');
+              invalidateAllSoup();
+            }
           },
         }
       );

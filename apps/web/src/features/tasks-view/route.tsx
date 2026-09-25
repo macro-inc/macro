@@ -8,15 +8,11 @@ import { useUserContext } from '@core/context/user';
 import { lazy, Show } from 'solid-js';
 import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
+import { TasksDetailRouteView } from './components/TasksDetailView';
+import { TasksView } from './tasks-view';
 
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-const TasksView = lazy(async () => ({
-  default: (await import('./tasks-view')).TasksView,
-}));
-const TasksDetailRouteView = lazy(async () => ({
-  default: (await import('./components/TasksDetailView')).TasksDetailRouteView,
 }));
 
 function LegacyTasksView() {

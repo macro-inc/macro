@@ -112,23 +112,6 @@ export function removeThreadReply(
   return nextReplies.length === data.length ? data : nextReplies;
 }
 
-export function replaceThreadReplyId(
-  data: Array<EntityMessage> | undefined,
-  optimisticId: string,
-  realId: string
-): Array<EntityMessage> | undefined {
-  if (!data) return data;
-
-  let didChange = false;
-  const nextReplies = data.map((reply) => {
-    if (reply.id !== optimisticId) return reply;
-    didChange = true;
-    return { ...reply, id: realId };
-  });
-
-  return didChange ? nextReplies : data;
-}
-
 export function getThreadReplySnapshot(
   data: Array<EntityMessage> | undefined,
   replyId: string

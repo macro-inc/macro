@@ -189,6 +189,8 @@ export function ChannelThread(props: ThreadProps) {
   // Replying to this thread — inline input open, or the unified input bound.
   const isReplyingToThread = () =>
     props.isReplying() || unifiedReplyBinding() !== undefined;
+  const hasInlineReplyInput = () =>
+    props.isReplying() && props.inputMode !== 'unified';
   const shouldShowCollapsedIndicator = () =>
     !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
@@ -300,7 +302,7 @@ export function ChannelThread(props: ThreadProps) {
               messages carry no rail. */}
           <div class="relative">
             <Thread.RootRail
-              visible={hasReplies() || isReplyingToThread()}
+              visible={hasReplies() || hasInlineReplyInput()}
               grouped={props.listMeta?.isGroupedWithPrevious}
             />
             <MarkMessageNotifications
@@ -326,12 +328,7 @@ export function ChannelThread(props: ThreadProps) {
               </DebugSuspense>
             </MarkMessageNotifications>
           </div>
-          <Show
-            when={
-              hasReplies() ||
-              (props.isReplying() && props.inputMode !== 'unified')
-            }
-          >
+          <Show when={hasReplies() || hasInlineReplyInput()}>
             <div class="relative w-full">
               <Thread.RepliesBridgeRail />
               {/* Terminal branch: the spine's final curve into the footer
@@ -366,12 +363,15 @@ export function ChannelThread(props: ThreadProps) {
                       isThreadFocused={isThreadFocused}
                       onSelectReply={selectReply}
                       monorail={props.monorail}
+                      railContinues={
+                        hasInlineReplyInput() ||
+                        shouldShowCollapsedIndicator() ||
+                        shouldShowReplyButton()
+                      }
                     />
                   </DebugSuspense>
 
-                  <Show
-                    when={props.isReplying() && props.inputMode !== 'unified'}
-                  >
+                  <Show when={hasInlineReplyInput()}>
                     <div
                       ref={(el) => {
                         attachReplyInputRef(el);

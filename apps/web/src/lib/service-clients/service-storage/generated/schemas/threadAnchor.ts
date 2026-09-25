@@ -6,7 +6,7 @@
  */
 import type { ThreadAnchorOneOf } from './threadAnchorOneOf';
 import type { ThreadAnchorOneOfFour } from './threadAnchorOneOfFour';
-import type { ThreadAnchorOneOfSix } from './threadAnchorOneOfSix';
+import type { ThreadAnchorOneOfSeven } from './threadAnchorOneOfSeven';
 
 /**
  * A thread's location within its document. Geometry remains annotation-owned.
@@ -14,4 +14,4 @@ import type { ThreadAnchorOneOfSix } from './threadAnchorOneOfSix';
 export type ThreadAnchor =
   | ThreadAnchorOneOf
   | ThreadAnchorOneOfFour
-  | ThreadAnchorOneOfSix;
+  | ThreadAnchorOneOfSeven;

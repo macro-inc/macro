@@ -9,6 +9,7 @@ export type EmailTab =
   | 'important'
   | 'noise'
   | 'sent'
+  | 'scheduled'
   | 'calendar'
   | 'drafts'
   | 'shared'

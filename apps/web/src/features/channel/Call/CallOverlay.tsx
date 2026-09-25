@@ -1,7 +1,6 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
-import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { cn, InlineCheckbox, Tooltip } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
@@ -146,8 +145,9 @@ function LocalParticipantTile(props: {
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
-  const displayName = () => getDisplayName(macroId());
-  const [profilePicUrl] = useProfilePictureUrl(macroId());
+  const displayName = () =>
+    props.participant.name?.trim() ||
+    (macroId() ? getDisplayName(macroId()) : 'Guest');
 
   const cameraTrack = () => {
     callCtx.trackVersion();
@@ -170,21 +170,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
       <Show
         when={cameraTrack()}
         fallback={
-          <Show
-            when={profilePicUrl()}
-            fallback={
-              <div class="flex items-center justify-center size-full p-4">
-                <div class="size-12 rounded-full bg-hover flex items-center justify-center text-ink-muted text-lg font-medium">
-                  {displayName().charAt(0).toUpperCase()}
-                </div>
-              </div>
-            }
-          >
-            <ParticipantAvatar
-              userId={macroId()}
-              fallbackName={displayName()}
-            />
-          </Show>
+          <ParticipantAvatar userId={macroId()} fallbackName={displayName()} />
         }
       >
         <TrackView track={cameraTrack()} />
@@ -203,7 +189,9 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
 function ScreenShareTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
-  const displayName = () => getDisplayName(macroId());
+  const displayName = () =>
+    props.participant.name?.trim() ||
+    (macroId() ? getDisplayName(macroId()) : 'Guest');
   const screenTrack = () => {
     callCtx.trackVersion();
     return props.participant.getTrackPublication(LK_TRACK_SOURCE.ScreenShare)
@@ -219,12 +207,19 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
   );
 }
 
-export function CallOverlay(props: { onLeave: () => void }) {
+export function CallOverlay(props: {
+  onLeave: () => void;
+  showTeamSharing?: boolean;
+  sharedWithTeam?: boolean;
+  localName?: string;
+}) {
   const callCtx = useCallContext();
   const currentUserId = useUserId();
   const currentUserName = useAuthor();
   const isConnecting = () => callCtx.isConnecting();
   const teamShare = useActiveCallTeamShare();
+  const sharedWithTeam = () =>
+    props.sharedWithTeam ?? callCtx.isSharedWithTeam();
   const teamShareLocked = () =>
     isConnecting() || !teamShare.canToggle() || teamShare.isPending();
 
@@ -245,7 +240,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
     const identity = callCtx.room()?.localParticipant.identity?.trim();
     const macroIdentity = identity ? tryMacroId(identity) : undefined;
     const userId = currentUserId()?.trim();
-    return macroIdentity ?? userId ?? identity;
+    return macroIdentity ?? (userId ? tryMacroId(userId) : undefined);
   };
 
   const localVideoTrack = () => {
@@ -317,7 +312,11 @@ export function CallOverlay(props: { onLeave: () => void }) {
               isVideoMuted={callCtx.isVideoMuted()}
               track={localVideoTrack()}
               userId={localUserId()}
-              fallbackName={currentUserName()}
+              fallbackName={
+                props.localName ||
+                callCtx.room()?.localParticipant.name ||
+                currentUserName()
+              }
             />
           }
         >
@@ -340,7 +339,11 @@ export function CallOverlay(props: { onLeave: () => void }) {
               isVideoMuted={callCtx.isVideoMuted()}
               track={localVideoTrack()}
               userId={localUserId()}
-              fallbackName={currentUserName()}
+              fallbackName={
+                props.localName ||
+                callCtx.room()?.localParticipant.name ||
+                currentUserName()
+              }
               avatarSize="sm"
             />
           </div>
@@ -351,11 +354,17 @@ export function CallOverlay(props: { onLeave: () => void }) {
           icon button (with optional inline label), active state = subtle
           accent tint. No chunky toggle switch. */}
       <div class="flex items-center py-2 relative justify-center">
-        <Show when={!isVeryNarrow()}>
+        <Show
+          when={
+            callCtx.activeChannelId() !== null &&
+            props.showTeamSharing !== false &&
+            !isVeryNarrow()
+          }
+        >
           <Tooltip
             placement="top"
             label={
-              callCtx.isSharedWithTeam()
+              sharedWithTeam()
                 ? "The creator's team can view the transcript and AI summary once the call ends"
                 : "Let the creator's team view the transcript and AI summary once the call ends"
             }
@@ -365,16 +374,16 @@ export function CallOverlay(props: { onLeave: () => void }) {
               onClick={() => void teamShare.toggle()}
               disabled={teamShareLocked()}
               role="checkbox"
-              aria-checked={callCtx.isSharedWithTeam()}
+              aria-checked={sharedWithTeam()}
               class={cn(
                 'absolute left-0 inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
                 'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
                 'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
-                callCtx.isSharedWithTeam() && 'text-ink',
+                sharedWithTeam() && 'text-ink',
                 teamShareLocked() && 'pointer-events-none opacity-50'
               )}
             >
-              <InlineCheckbox checked={callCtx.isSharedWithTeam()} />
+              <InlineCheckbox checked={sharedWithTeam()} />
               <Show when={!isMediumNarrow()}>
                 <span class="whitespace-nowrap">Share with team</span>
               </Show>

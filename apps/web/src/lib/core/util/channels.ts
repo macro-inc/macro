@@ -9,7 +9,10 @@ import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
-import { useSendMessageMutation } from '@queries/messages/mutations';
+import {
+  newMessageId,
+  useSendMessageMutation,
+} from '@queries/messages/mutations';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { createCallback } from '@solid-primitives/rootless';
@@ -58,7 +61,7 @@ export function useSendMessageToPeople() {
         parent: { type: 'channel', id: channelId },
         message: { content, attachments, mentions },
         senderId,
-        optimisticId: crypto.randomUUID(),
+        optimisticId: newMessageId(),
       })
       .catch(() => null);
     if (!messageResponse) return;

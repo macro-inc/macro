@@ -133,6 +133,11 @@ impl PgMessageRepository {
             }
         }
         let mut states: HashMap<_, _> = states.into_iter().map(|s| (s.root_id, s)).collect();
+        Self::resolve_highlight_text(
+            &self.pool,
+            states.values_mut().map(|state| &mut state.state.0),
+        )
+        .await?;
         let items = roots
             .into_iter()
             .filter_map(|id| {

@@ -156,6 +156,33 @@ describe('filterSoupItemByRequestBody', () => {
       })
     ).toBe(false);
   });
+
+  it('only accepts agent sessions when the body opts into them', () => {
+    const session = {
+      tag: 'agentSession',
+      data: { id: 'session-1', ownerId: 'macro|a@macro.com' },
+    } as unknown as SoupApiItem;
+
+    expect(filterSoupItemByRequestBody(session, {})).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(session, { ...QUERY_FILTERS_BASE })
+    ).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(session, {
+        agent_session_filters: { include: true },
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(session, {
+        agent_session_filters: { owners: ['macro|a@macro.com'] },
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(session, {
+        agent_session_filters: { include: true, owners: ['macro|b@macro.com'] },
+      })
+    ).toBe(false);
+  });
 });
 
 describe('soupItemMatchesProjectMembership', () => {

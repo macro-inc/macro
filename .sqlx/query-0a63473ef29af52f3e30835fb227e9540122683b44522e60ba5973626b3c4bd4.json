@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n           SELECT c.id, 'call', p.user_id, 'user', 'view'\n           FROM calls c JOIN call_participants p ON p.call_id = c.id\n           WHERE c.id = $1 AND c.channel_id IS NULL AND p.user_id = $2 AND p.left_at IS NULL\n           ON CONFLICT (entity_id, entity_type, source_id, source_type)\n           WHERE granted_from_project_id IS NULL\n           DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a63473ef29af52f3e30835fb227e9540122683b44522e60ba5973626b3c4bd4"
+}

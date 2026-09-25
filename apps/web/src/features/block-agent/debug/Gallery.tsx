@@ -7,6 +7,8 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
+import { MarkdownImage } from '@core/component/LexicalMarkdown/component/decorator/MarkdownImage';
+import { MediaLoadingPlaceholder } from '@core/component/LexicalMarkdown/component/decorator/MediaLoadingPlaceholder';
 import { useUserId } from '@core/context/user';
 import FileText from '@phosphor/file-text.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
@@ -34,6 +36,7 @@ import {
   CountSummary,
   DiffChanges,
   ElicitationForm,
+  FailureNoticeCard,
   PierreDiff,
   QuestionAnswers,
   type QuoteInsert,
@@ -42,9 +45,9 @@ import {
   TodoList,
   ToolCard,
   ToolErrorCard,
-  ToolGroup,
   ToolStatusTitle,
 } from '../ui';
+import { LiveToolGroup } from '../views/LiveToolGroup';
 
 /**
  * A Cursor-shaped catalog: long enough to scroll, with one grouped tail. Auto
@@ -923,7 +926,7 @@ function MagicChipStateDemo(props: { presentation: MagicChipPresentation }) {
   );
 }
 
-/** The chip asking, one per request kind; answers land in the console. */
+/** The chip asking: the question on its line, answered in the session. */
 function MagicChipAskingDemo(props: {
   request: PendingElicitation['request'];
 }) {
@@ -948,12 +951,6 @@ function MagicChipAskingDemo(props: {
       agentSessionId="gallery"
       presentation={presentation}
       header={GALLERY_CHIP_HEADER}
-      answer={{
-        respond: async (answer) => {
-          console.log('[gallery] elicitation answer', answer);
-          return true;
-        },
-      }}
       onOpen={() => console.log('[gallery] open session')}
     />
   );
@@ -1079,6 +1076,21 @@ export default function AgentUiGallery() {
             />
           </Item>
 
+          <Item label="FailureNoticeCard">
+            <FailureNoticeCard
+              notice={{
+                kind: 'provider_usage_limit',
+                title: 'Cursor usage limit reached',
+                body: "Your Cursor account has no background-agent budget left, so this message wasn't sent. Raise the spending limit in your Cursor dashboard, then send it again.",
+                link: {
+                  label: 'Manage Cursor usage',
+                  url: 'https://www.cursor.com/dashboard?tab=settings',
+                },
+              }}
+              onOpenLink={(url) => window.open(url, '_blank', 'noopener')}
+            />
+          </Item>
+
           <Item label="ToolCard">
             <ToolCard
               title="Shell"
@@ -1105,7 +1117,7 @@ export default function AgentUiGallery() {
           </Item>
 
           <Item label="ToolGroup (active / settled)">
-            <ToolGroup count={3} active={pulse()}>
+            <LiveToolGroup count={3} active={pulse()}>
               <ToolCard
                 title="Read"
                 icon={<FileText />}
@@ -1124,8 +1136,8 @@ export default function AgentUiGallery() {
                 subtitle="cargo test -p agent_fold"
                 status={pulse() ? 'running' : 'completed'}
               />
-            </ToolGroup>
-            <ToolGroup count={2} active={false} defaultOpen>
+            </LiveToolGroup>
+            <LiveToolGroup count={2} active={false} defaultOpen>
               <ToolCard
                 title="Search"
                 icon={<MagnifyingGlass />}
@@ -1134,7 +1146,7 @@ export default function AgentUiGallery() {
                 trailing="3 results"
               />
               <ToolCard title="Read" icon={<FileText />} status="completed" />
-            </ToolGroup>
+            </LiveToolGroup>
           </Item>
 
           <Item label="Thought (active / settled)">
@@ -1256,6 +1268,38 @@ export default function AgentUiGallery() {
 
           <Item label="AgentMessage (end-to-end)">
             <Message message={FIXTURE_MESSAGE} inFlight={false} />
+          </Item>
+
+          <Item label="AgentMessage (multi-artifact loading)">
+            <p class="text-xs text-ink-muted">
+              Walkthrough files without a known size reserve a 16:9 card each,
+              named from the file, instead of a stack of floating spinners.
+            </p>
+            <div class="max-w-xl text-base">
+              <p class="mb-1 text-sm text-ink-muted">Thoughted</p>
+              <p class="mb-2">Done and looking good.</p>
+              <MarkdownImage
+                key="artifact-image-1"
+                srcType="url"
+                id=""
+                url=""
+                alt="walkthrough.png"
+                width={0}
+                height={0}
+                scale={1}
+              />
+              <MarkdownImage
+                key="artifact-image-2"
+                srcType="url"
+                id=""
+                url=""
+                alt="agents_list.png"
+                width={0}
+                height={0}
+                scale={1}
+              />
+              <MediaLoadingPlaceholder kind="video" label="demo.mp4" />
+            </div>
           </Item>
 
           <Item label="AgentMessage (Cursor turn in flight)">

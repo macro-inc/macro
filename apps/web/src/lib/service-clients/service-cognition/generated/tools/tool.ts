@@ -20,6 +20,10 @@ type ToolParserMap = {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
   };
+  CommentOnDocumentText: {
+    call: types.CommentOnDocumentText;
+    response: types.CommentOnDocumentTextResponse;
+  };
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
@@ -216,6 +220,10 @@ type ToolParserMap = {
     call: types.SendChannelMessage;
     response: types.SendChannelMessageResponse;
   };
+  SendConfirmedEmail: {
+    call: types.SendConfirmedEmail;
+    response: types.SendEmailResponse;
+  };
   SendEmail: {
     call: types.SendEmail;
     response: types.UserToolResponseForSendEmailResponse;
@@ -259,6 +267,10 @@ const toolParserMap = {
   CalculateSpreadsheet: {
     call: schemas.CalculateSpreadsheet,
     response: schemas.SpreadsheetResponse,
+  },
+  CommentOnDocumentText: {
+    call: schemas.CommentOnDocumentText,
+    response: schemas.CommentOnDocumentTextResponse,
   },
   ConfigureBot: {
     call: schemas.ConfigureBot,
@@ -483,6 +495,10 @@ const toolParserMap = {
     call: schemas.SendChannelMessage,
     response: schemas.SendChannelMessageResponse,
   },
+  SendConfirmedEmail: {
+    call: schemas.SendConfirmedEmail,
+    response: schemas.SendEmailResponse,
+  },
   SendEmail: {
     call: schemas.SendEmail,
     response: schemas.UserToolResponseForSendEmailResponse,
@@ -540,6 +556,10 @@ type ToolDataMap = {
   CalculateSpreadsheet: {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
+  };
+  CommentOnDocumentText: {
+    call: types.CommentOnDocumentText;
+    response: types.CommentOnDocumentTextResponse;
   };
   ConfigureBot: {
     call: types.ConfigureBot;
@@ -736,6 +756,10 @@ type ToolDataMap = {
   SendChannelMessage: {
     call: types.SendChannelMessage;
     response: types.SendChannelMessageResponse;
+  };
+  SendConfirmedEmail: {
+    call: types.SendConfirmedEmail;
+    response: types.SendEmailResponse;
   };
   SendEmail: {
     call: types.SendEmail;

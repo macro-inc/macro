@@ -26,16 +26,31 @@ import {
   VideoDetail,
   type VideoDetailContext,
 } from '@app/features/drive-view/views/VideoDetail';
+import { getChannelEntityTarget } from '@app/features/next-soup/utils';
 import type { MarkdownDocumentKind } from '@block-md/types';
+import {
+  ChannelDetail,
+  type ChannelDetailContext,
+  ChannelDetailTopBar,
+} from '@channel/Channel/ChannelDetail';
+import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import { previewBlockTarget } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { type JSX, Match, Switch } from 'solid-js';
-import type { EntityDetailTarget } from './EntityDetailNavigationStack';
+import {
+  children,
+  createMemo,
+  type JSX,
+  Match,
+  Switch,
+  untrack,
+} from 'solid-js';
+import type { EntityDetailTarget } from './entity-detail-target';
 
-export type EntityDetailContext =
+type DocumentDetailContext =
   | MarkdownDetailContext
   | CodeDetailContext
   | CanvasDetailContext
@@ -44,13 +59,30 @@ export type EntityDetailContext =
   | PdfDetailContext
   | UnknownDetailContext;
 
+export type EntityDetailContext =
+  | ({ type: 'document' } & DocumentDetailContext)
+  | ({ type: 'channel' } & ChannelDetailContext);
+
 export type EntityDetailProps = {
   target: EntityDetailTarget;
   shareOpen?: boolean;
   onShareOpenChange?: (open: boolean) => void;
   previewHeaderLeading?: JSX.Element;
+  navigationRequest?: number;
   children?: (context: EntityDetailContext) => JSX.Element;
 };
+
+function ResolvedEntityDetailChildren(props: {
+  render?: EntityDetailProps['children'];
+  context: EntityDetailContext;
+  fallback?: JSX.Element;
+}) {
+  const resolved = children(() => {
+    if (props.render) return props.render(props.context);
+    return props.fallback;
+  });
+  return <>{resolved()}</>;
+}
 
 function PreviewPanelEntityDetail(props: EntityDetailProps) {
   const orchestrator = useGlobalBlockOrchestrator();
@@ -58,7 +90,7 @@ function PreviewPanelEntityDetail(props: EntityDetailProps) {
 
   return (
     <PreviewPanel
-      selectedEntity={props.target}
+      target={previewBlockTarget(props.target)}
       orchestrator={orchestrator}
       splitPanelContext={panel}
       headerLeading={props.previewHeaderLeading}
@@ -100,12 +132,54 @@ export function entityDetailBlockType(
   }
 }
 
+type ChannelDetailTarget = {
+  channelId: string;
+  target: ChannelTargetRequest | undefined;
+  fallbackName?: string;
+};
+
+function channelDetailTarget(
+  target: EntityDetailTarget
+): ChannelDetailTarget | undefined {
+  if (
+    target.type !== 'channel' &&
+    target.type !== 'channel_message' &&
+    target.type !== 'channel_thread'
+  ) {
+    return undefined;
+  }
+  const clickTarget = getChannelEntityTarget(target);
+  return {
+    channelId: target.type === 'channel' ? target.id : target.channelId,
+    target:
+      clickTarget?.kind === 'message'
+        ? {
+            kind: 'message',
+            messageId: clickTarget.messageId,
+            threadId: clickTarget.threadId,
+          }
+        : clickTarget,
+    fallbackName: target.fallbackName,
+  };
+}
+
 export function EntityDetail(props: EntityDetailProps) {
   const documentTarget = () =>
     props.target.type === 'document' ? props.target : undefined;
   const blockType = () => entityDetailBlockType(props.target);
-  const renderChildren = (context: EntityDetailContext) =>
-    props.children?.(context);
+  // Resolved once per entry (untracked): a channel row's aim must not shift
+  // and re-scroll when its notifications reconcile to read — PreviewPanel
+  // applied the same rule by keying navigation on the explicit target only.
+  const channelTarget = createMemo(() => {
+    const target = props.target;
+    return untrack(() => channelDetailTarget(target));
+  });
+  const renderChildren = (context: DocumentDetailContext) => (
+    <ResolvedEntityDetailChildren
+      render={props.children}
+      context={{ type: 'document', ...context }}
+    />
+  );
 
   return (
     <Switch>
@@ -184,6 +258,29 @@ export function EntityDetail(props: EntityDetailProps) {
         >
           {(context) => <>{renderChildren(context)}</>}
         </UnknownDetail>
+      </Match>
+      <Match when={channelTarget()}>
+        {(channel) => (
+          <ChannelDetail
+            channelId={channel().channelId}
+            target={channel().target}
+            navigationRequest={props.navigationRequest}
+            fallbackName={channel().fallbackName}
+          >
+            {(context) => (
+              <ResolvedEntityDetailChildren
+                render={props.children}
+                context={{ type: 'channel', ...context }}
+                fallback={
+                  <ChannelDetailTopBar
+                    channelId={context.channelId}
+                    fallbackName={channel().fallbackName}
+                  />
+                }
+              />
+            )}
+          </ChannelDetail>
+        )}
       </Match>
       <Match when={true}>
         <PreviewPanelEntityDetail

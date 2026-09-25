@@ -640,6 +640,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai_billing"
+version = "0.1.0"
+dependencies = [
+ "ai_usage",
+ "anyhow",
+ "async-stripe",
+ "authentication_service_client",
+ "axum",
+ "chrono",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_env",
+ "macro_user_id",
+ "macro_uuid",
+ "roles_and_permissions",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "teams",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "ai_projections"
 version = "0.1.0"
 dependencies = [
@@ -1655,6 +1684,7 @@ name = "authentication_service"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
+ "ai_billing",
  "analytics_client",
  "anyhow",
  "async-stripe",
@@ -3121,7 +3151,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.18"
+version = "0.6.19"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3302,6 +3332,8 @@ dependencies = [
  "entity_mutation",
  "filter_ast",
  "futures",
+ "invite_email",
+ "ip_extractor",
  "item_filters",
  "livekit-api",
  "livekit-protocol",
@@ -3319,6 +3351,7 @@ dependencies = [
  "models_permissions",
  "notification",
  "pgvector",
+ "rate_limit",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -3329,6 +3362,7 @@ dependencies = [
  "subtle",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "urlencoding",
  "utoipa",
@@ -3915,6 +3949,7 @@ dependencies = [
  "ratatui",
  "reqwest 0.13.4",
  "rootcause",
+ "rustix 1.1.4",
  "rustls 0.23.45",
  "serde",
  "serde_json",
@@ -5440,6 +5475,7 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "aho-corasick",
+ "ai_billing",
  "ai_projections",
  "ai_tools",
  "ai_toolset",
@@ -5449,6 +5485,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "attachment",
+ "authentication_service_client",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -5532,6 +5569,7 @@ dependencies = [
  "stream",
  "strum 0.27.2",
  "sync_service_client",
+ "teams",
  "thiserror 2.0.18",
  "time",
  "tokio",
@@ -5841,6 +5879,7 @@ dependencies = [
  "models_properties",
  "non_empty",
  "rdkafka",
+ "redis",
  "reqwest 0.13.4",
  "rootcause",
  "s3_key",
@@ -6115,6 +6154,7 @@ dependencies = [
  "crm",
  "doppleganger",
  "either",
+ "email_db_client",
  "email_utils",
  "entity_access",
  "entity_access_management",
@@ -11779,6 +11819,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 

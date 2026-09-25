@@ -1,8 +1,40 @@
+import { createSignal } from 'solid-js';
 import { vi } from 'vitest';
-import type { EmailComposeContext } from '../context/compose-capabilities';
+import type {
+  EmailComposeContext,
+  EmailDraftLifecycleState,
+} from '../context/compose-capabilities';
 /** Fake capabilities: no production modules or app providers are needed by a controller. */
-export function createComposeContext(): EmailComposeContext {
+export function createComposeContext(): EmailComposeContext & {
+  setDraftLifecycle(state: EmailDraftLifecycleState | undefined): void;
+} {
+  const [lifecycleState, setLifecycleState] =
+    createSignal<EmailDraftLifecycleState>();
   return {
+    setDraftLifecycle: setLifecycleState,
+    draftLifecycle: {
+      observe: vi.fn(() => ({
+        state: lifecycleState,
+        refresh: vi.fn(async () => {
+          const state = lifecycleState();
+          if (state) setLifecycleState({ ...state, observedAt: Date.now() });
+          return state;
+        }),
+        refreshIdentity: vi.fn(async (identity) => {
+          const state = lifecycleState();
+          if (
+            !state ||
+            state.draftId !== identity.draftId ||
+            state.threadId !== identity.threadId ||
+            (identity.inboxId !== undefined &&
+              state.inboxId !== identity.inboxId)
+          ) {
+            return undefined;
+          }
+          return state;
+        }),
+      })),
+    },
     recipientName: (id) => id,
     recordMention: vi.fn(),
     accounts: {

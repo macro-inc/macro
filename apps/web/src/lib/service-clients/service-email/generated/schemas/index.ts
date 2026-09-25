@@ -357,6 +357,7 @@ export * from './upsertEmailFilterRequestEmailAddress';
 export * from './upsertEmailFilterRequestEmailDomain';
 export * from './upsertEmailFilterResponse';
 export * from './upsertScheduledRequest';
+export * from './upsertScheduledRequestIncludeSignature';
 export * from './upsertScheduledResponse';
 export * from './userProvider';
 export * from './value';

@@ -1,5 +1,6 @@
 //! Toolset inbound adapter for Documents.
 
+mod comment_on_document_text;
 mod create_document;
 mod edit_document;
 mod read_content;
@@ -23,6 +24,7 @@ use crate::{
     domain::ports::editing::EditingWorkerService,
     domain::ports::mentions::NoOpDocumentMentionTracker,
     inbound::toolset::{
+        comment_on_document_text::CommentOnDocumentText,
         create_document::CreateDocument,
         edit_document::EditDocument,
         read_content::ReadContent,
@@ -235,6 +237,7 @@ where
         .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReplyToDocumentComment, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CommentOnDocumentText, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ResolveDocumentComment, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CalculateSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
@@ -266,6 +269,7 @@ fn comment_error(description: &'static str) -> impl FnOnce(MessageError) -> Tool
                 "you need comment access to the document to comment on it".to_string()
             }
             MessageError::Invalid(reason) => format!("{description}: {reason}"),
+            MessageError::Conflict => format!("{description}: message id already exists"),
             MessageError::Repository(_) => description.to_string(),
         };
         ToolCallError {

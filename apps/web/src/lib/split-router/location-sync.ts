@@ -1,3 +1,4 @@
+import { browserEntryKeySignature } from './entry-state';
 import type { SplitRoutesManifest } from './routes';
 import type {
   BrowserHistoryIntent,
@@ -11,17 +12,22 @@ function externalLocationSignature(
   location: SplitRouterExternalLocationValue
 ): string {
   const query = [...new URLSearchParams(location.search)].sort(
-    ([leftKey, leftValue], [rightKey, rightValue]) =>
-      leftKey === rightKey
-        ? leftValue.localeCompare(rightValue)
-        : leftKey.localeCompare(rightKey)
+    ([leftKey, leftValue], [rightKey, rightValue]) => {
+      if (leftKey === rightKey) return leftValue.localeCompare(rightValue);
+      return leftKey.localeCompare(rightKey);
+    }
   );
-  const pathname =
-    location.pathname.length > 1
-      ? location.pathname.replace(/\/+$/g, '')
-      : location.pathname || '/';
+  let pathname = location.pathname || '/';
+  if (location.pathname.length > 1) {
+    pathname = location.pathname.replace(/\/+$/g, '');
+  }
 
-  return JSON.stringify([pathname, query, location.hash]);
+  return JSON.stringify([
+    pathname,
+    query,
+    location.hash,
+    browserEntryKeySignature(location.state),
+  ]);
 }
 
 export type LocationSync = {

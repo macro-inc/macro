@@ -42,6 +42,8 @@ type ThreadOptions = {
   canWrite: boolean;
   buildLink?: (message: MessageData) => string;
   targetId?: string | null;
+  /** Releases the highlight on `targetId`; called when the linked message is clicked. */
+  onClearTarget?: () => void;
   expanded?: boolean;
   hideReplyInput?: boolean;
   onEditingChange?: (id: string, editing: boolean) => void;
@@ -138,7 +140,12 @@ export function MessageThread(
             },
             onTargetMessageScrolled: () => {},
             onTargetReplyScrolled: () => {},
-            onClearTarget: () => {},
+            onClearTarget: () => {
+              // The link expanded the thread; releasing its highlight keeps
+              // the thread open rather than collapsing the replies in view.
+              setExpanded(true);
+              props.onClearTarget?.();
+            },
           }}
         />
       </div>

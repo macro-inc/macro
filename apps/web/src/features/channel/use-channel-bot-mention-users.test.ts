@@ -57,6 +57,7 @@ function agent(
     default_model: 'model',
     harness,
     instructions: '',
+    is_coding: harness !== 'in-memory',
     mcp: { scope: 'owner_connections' },
   };
 }

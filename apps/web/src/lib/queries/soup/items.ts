@@ -70,6 +70,8 @@ interface SoupItemsQueryOptions {
   staleTime?: StaleTime;
   /** Channel navigation reads bounded unread evidence, not notification history. */
   graphqlProjection?: 'channel-list';
+  /** Seed mixed lists from indexed non-email members; keep the full server query. */
+  graphqlLocalReconciliation?: 'without-email';
   meta?: {
     groupBy?: GroupByField;
     groupKey?: string;
@@ -383,6 +385,7 @@ export function useSoupAstItemsQuery(
       enabled:
         graphqlRequested() && queryEnabled() && args().groupBy === undefined,
       projection: options?.().graphqlProjection,
+      localReconciliation: options?.().graphqlLocalReconciliation,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
     })
   );

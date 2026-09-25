@@ -82,6 +82,126 @@ describe('Quick Access local projection', () => {
     expect(search).toHaveBeenCalledTimes(2);
   });
 
+  it.each(['search', 'materialize'] as const)(
+    'publishes a slow %s during continuous revisions and coalesces a follow-up',
+    async (stage) => {
+      const [revision, setRevision] = createSignal(0);
+      const first = deferred<SearchCachePage>();
+      const firstMaterialization = deferred<{ id: string }[]>();
+      const followUp = deferred<SearchCachePage>();
+      const search = vi
+        .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+        .mockReturnValueOnce(
+          stage === 'search' ? first.promise : Promise.resolve(page(['first']))
+        )
+        .mockReturnValueOnce(followUp.promise);
+      const project = vi.fn(materialize);
+      if (stage === 'materialize')
+        project.mockReturnValueOnce(firstMaterialization.promise);
+      const list = root(() =>
+        createProjectedList({
+          host: { search },
+          buckets: ['note'],
+          revision,
+          materialize: project,
+        })
+      );
+      if (stage === 'materialize')
+        await vi.waitFor(() => expect(project).toHaveBeenCalledOnce());
+      for (let i = 1; i <= 8; i++) setRevision(i);
+      expect(search).toHaveBeenCalledOnce();
+      first.resolve(page(['first']));
+      firstMaterialization.resolve([{ id: 'GraphqlSoupDocument:first' }]);
+      await vi.waitFor(() =>
+        expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:first' }])
+      );
+      expect(search).toHaveBeenCalledTimes(2);
+      expect(list.isLoading()).toBe(true);
+      followUp.resolve(page(['latest']));
+      await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+      expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:latest' }]);
+      expect(search).toHaveBeenCalledTimes(2);
+    }
+  );
+
+  it('commits a load-more page before replaying the enlarged window after hydration', async () => {
+    const [revision, setRevision] = createSignal(0);
+    const next = deferred<SearchCachePage>();
+    const replay = deferred<SearchCachePage>();
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockResolvedValueOnce(page(['one'], true))
+      .mockReturnValueOnce(next.promise)
+      .mockReturnValueOnce(replay.promise)
+      .mockResolvedValueOnce(page(['two', 'new']));
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.hasMore()).toBe(true));
+    const append = list.loadMore();
+    setRevision(1);
+    setRevision(2);
+    expect(search).toHaveBeenCalledTimes(2);
+    next.resolve(page(['two'], true));
+    await append;
+    expect(list.items()).toHaveLength(2);
+    expect(search).toHaveBeenCalledTimes(3);
+    expect(search.mock.calls[2][0].cursor).toBeUndefined();
+    replay.resolve(page(['one'], true));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toHaveLength(3);
+    expect(search).toHaveBeenCalledTimes(4);
+  });
+
+  it.each(['query', 'buckets', 'disable', 'dispose'] as const)(
+    'drops a queued refresh and late results on %s changes',
+    async (change) => {
+      const [revision, setRevision] = createSignal(0);
+      const [query, setQuery] = createSignal('old');
+      const [buckets, setBuckets] = createSignal<Bucket[]>(['note']);
+      const [enabled, setEnabled] = createSignal(true);
+      const obsolete = deferred<SearchCachePage>();
+      const search = vi
+        .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+        .mockReturnValueOnce(obsolete.promise)
+        .mockResolvedValue(page(['new']));
+      const list = root(() =>
+        createProjectedList({
+          host: { search },
+          get buckets() {
+            return buckets();
+          },
+          revision,
+          searchTerm: query,
+          enabled,
+          materialize,
+        })
+      );
+      setRevision(1);
+      expect(search).toHaveBeenCalledOnce();
+      if (change === 'query') setQuery('new');
+      if (change === 'buckets') setBuckets(['task']);
+      if (change === 'disable') setEnabled(false);
+      if (change === 'dispose')
+        cleanups.splice(0).forEach((cleanup) => cleanup());
+      obsolete.resolve(page(['old']));
+      const replaced = change === 'query' || change === 'buckets';
+      await vi.waitFor(() =>
+        expect(list.items()).toEqual(
+          replaced ? [{ id: 'GraphqlSoupDocument:new' }] : []
+        )
+      );
+      await obsolete.promise;
+      await Promise.resolve();
+      expect(search).toHaveBeenCalledTimes(replaced ? 2 : 1);
+    }
+  );
+
   it('resets the loaded window and cursor when reactive buckets change', async () => {
     const [buckets, setBuckets] = createSignal<Bucket[]>([
       'note',

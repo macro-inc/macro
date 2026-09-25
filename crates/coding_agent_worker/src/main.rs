@@ -27,8 +27,6 @@ mod tui;
 use clap::Parser;
 use std::process::ExitCode;
 
-use crate::daemon::absolute_config_path;
-
 /// Serve a harness's agent sessions inside the control panel: registration,
 /// bound agents, live sessions, config editing, pairing, removal, and logs -
 /// one process.
@@ -57,13 +55,11 @@ async fn main() -> ExitCode {
             }
         };
     }
-    // The daemon chdirs into the workspace, so the config path must stop
-    // being relative before anything re-reads or rewrites it.
-    let config_path = absolute_config_path(std::path::Path::new("macrod.toml"));
+    let config_path = std::path::Path::new("macrod.toml");
 
     // The TUI owns the terminal, so its logs go to a ring buffer it renders.
     let logs = tui::LogBuffer::install();
-    match tui::run(&config_path, logs).await {
+    match tui::run(config_path, logs).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             // The ring buffer dies with the process and the terminal is

@@ -1,5 +1,10 @@
 # AI Chat (Agents)
 
+User-sent messages in chat and agent transcripts use an ink-colored bubble with
+`InvertUtil` in light themes. Dark themes use `Layer depth={3}` for the slightly
+lighter bubble with the normal text palette. Preview Markdown and controls at
+`/app/debug/ui?ui=invert-util` under **User-sent AI message**.
+
 ## Uploading files with AI
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
@@ -61,10 +66,14 @@ permission failures should display a failed tool call without a successful resul
 - The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
   grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
   Macro’s available models with readable names (for example, **Sonnet 5**) and
-  provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
-  Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
+  provider or model icons aligned with the agent icons. The in-memory catalog
+  offers the closed Anthropic and OpenAI chat models, Fireworks-hosted
+  **Kimi K3**, **DeepSeek V4 Pro**, and **Muse Glimmer**, and Google's
+  **Gemini 3.8 Flash**; older Sonnet and Opus versions are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
+  A model chosen from that **Models** list is remembered in local storage as the
+  default for Macro's in-memory agent until another Models entry is picked.
   The built-in Macro agent is the only agent excluded from these sections; its models remain available.
   Unavailable paired agents stay visible with a reason. Model discovery uses the
   selected runtime, including Claude Cloud. Every coding agent opens the repository
@@ -77,7 +86,7 @@ permission failures should display a failed tool call without a successful resul
   Clicking an agent directly uses its default; choosing a submenu model selects
   both the agent and that model. A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
-  Disconnected Cursor offers **Connect Cursor**, opening Settings → Harness.
+  Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
   The built-in sandbox and paired macrod runtimes are not offered here.
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
@@ -137,11 +146,25 @@ permission failures should display a failed tool call without a successful resul
   its mode and conversation. Newly created sessions replace their temporary
   URL with the real id without remounting the composer or adding a temporary
   history step.
-- **Agents page** (inside the workspace; Settings → Agents is unchanged):
-  **Close** returns to the composer. **Agents / Coding agents** tabs split
-  the roster into Team and Private, with Edit / Delete actions. The coding
-  tab includes runtime setup. The create/edit dialog has sharing, name,
-  `@tag`, runtime, default model, connections, channels, and instructions.
+- **Agents page** uses the same **Agents** management screen as Settings.
+  **Agents** lists Team and Private agents with Edit / Delete actions; **Runtimes**
+  configures built-in providers and paired machines. **New agent** and **New runtime**
+  replace the list with full-page forms, not dialogs. Back/Cancel returns to the list;
+  use **New conversation** in the sidebar to return to the composer. The animated
+  **Bring your own agent** card appears only in **Runtimes**, below the tabs and
+  above the runtime lists. It links directly to runtime pairing and its setup guide.
+  The **Paired runtimes** section appears once you have a paired runtime; an empty
+  list does not repeat the pairing action from **Bring your own agent**.
+  **New runtime** shows three steps: install macrod from the linked release,
+  run `./macrod` and configure your agent in Quickstart, then enter your pairing
+  code and click **Look up**. Review the request and click **Approve** to connect.
+  The setup guide contains configuration and pairing screenshots in that order.
+  Enter the code from your own terminal, not the example screenshot.
+  The agent form retains sharing, name, `@tag`, runtime, default model, connections,
+  channels, instructions, and permission policy.
+  Runtime and short model lists use styled dropdown buttons: open the field and
+  choose an option (or use arrow keys and Enter). Escape dismisses the menu.
+  Large model lists retain the searchable model picker.
 - **Session**: the header has the sidebar reopen control, a linked PR status chip,
   favorite, Share, and Side panel. The top-left title uses the same provider icon,
   saved-title precedence, and title menu as `/app/agent/<id>`; click the caret
@@ -260,6 +283,29 @@ documents:
   change it; someone with inherited owner access gets a "Failed to change team
   access" toast.
 
+## AI usage limits
+
+AI usage billing is enabled only in the dev environment (`dev.macro.com/app`,
+including a local frontend pointed at the dev backend). The backend enforces
+allowances and settles usage only in `Environment::Develop`. In production and
+local-backend environments, requests are not blocked by credits, spending caps,
+or failed-overage-payment state, and usage is recorded without settlement.
+Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
+are hidden outside frontend development mode. Normal paid-model access rules
+still apply everywhere.
+
+In dev, paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
+usage rates). When it is used up and no credits or usage billing cover the
+request, sending a message answers HTTP 402 and the app opens the
+**AI usage limit** dialog (title `You've used this month's included AI`, or the
+spending-limit / failed-charge variants). It shows the same meter and controls
+as Settings → Billing: credit-pack buttons, the `Usage billing` toggle, an
+`Open billing settings` button, and `Upgrade to Max` for Premium payers (on a
+team this moves only the payer's own seat). Team members who are not the payer
+see a note to ask the team owner, or a team admin to move their seat to Max.
+Each team seat has its own allowance; unused allowance never moves between
+members. The team owner's prepaid credits and usage-billing cap are shared.
+
 ## Start a doc-scoped chat
 
 Open a doc → side panel `Actions` → `Ask Macro`. Opens a chat pane with the document already
@@ -312,7 +358,11 @@ Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
-- Model picker button showing the current model (e.g. `Haiku 4.5`).
+- Model picker button showing the current model (e.g. `Haiku 4.5`). Paid plans list
+  `Sonnet 5`, `Opus 5`, `Fable 5.1`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
+  in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
+  On the free plan everything but `Haiku 4.5` is
+  dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
 
 On desktop, production AI, new agent, and channel composers use 28px circular
@@ -356,7 +406,12 @@ stream over the app's websocket, not the HTTP response.
 When asked, the agent also answers document comments in place. A reply row reads
 **Replied to a comment on** (or **Commented on** for a new Discussion comment) followed
 by the document, and expands to the posted text; a resolve row reads **Resolved** or
-**Reopened a comment on** the document. The comment is posted as the agent with a
+**Reopened a comment on** the document. Asked to comment on part of a markdown
+document, the agent starts an inline comment on the quoted passage: the row reads
+**Commented on text in** the document and expands to the quoted text and the comment,
+and the passage is highlighted in the document with the comment floating beside it.
+A passage that is missing, spans blocks, or repeats with no occurrence chosen is
+refused with no highlight left behind. The comment is posted as the agent with a
 **from <user>** pill, and needs the user's comment access to the document.
 
 ## Agent sessions asking a question
@@ -384,9 +439,12 @@ marked done.
 
 ## In channels
 
-Mention `@Macro` in any channel message for the classic in-channel reply. Mention
-`@macro-new` (or `@coder` / `@cursor`) to open an **agent session** — a dedicated
-transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
+Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
+the classic in-channel reply; with it, the same mention opens an **agent session** — a
+dedicated transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
+`@coder` / `@cursor` always open a session. There is only ever one Macro entry in the
+mention menu; which of the two answers is the rollout's decision, not a second choice in
+the menu.
 
 ## Agent sessions
 
@@ -400,6 +458,9 @@ used in chat and channels; they serialize as mention-chip tags in the prompt
 the agent sees (`<m-document-mention>` for docs/channels/chats/tasks/emails/calendar
 events/skills, `<m-date-mention>` for a day or time, `<m-agent-session-mention>`
 for an agent session, `<m-user-mention>` for a person, and the other chip tags).
+Clicking a chip while it still sits in the composer (Home, the Agents page, or
+an agent session) opens the mentioned item in a new split and leaves the draft
+and caret untouched; it does not send anything.
 Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread). An agent-session chip with
 `"expanded":true` renders as the Magic Chip card that follows the session's
@@ -462,15 +523,24 @@ Only tools with a supported result view can expand. Unknown tools, unsupported
 drafts, and payloads that do not fit their renderer stay as summary rows with
 no caret. Tool arguments and results never fall back to raw JSON.
 
-Consecutive calls collect under an expanded **Calling N tools** group while
-running. Rows appear as calls arrive; after the calls finish, the group briefly
-settles and collapses to **Called N tools**. Group growth and collapse happen
-immediately, without animation, including fast batches. Completed groups in
-history start collapsed and can be reopened. The group caret sits immediately
-after its label and appears on hover or keyboard focus. Expand an edit row to
-view its diffs. Result bodies load only when their row opens; syntax highlighting
-may appear after the diff text. Opening a session or expanding a group should
-leave the app responsive, even when the session contains many file edits.
+Tool runs keep one group from their first call. Historical runs start collapsed;
+live calls get a 150 ms buffer, so fast parallel bursts can finish as **Called N
+tools** without flashing a list. Ongoing work opens a scrollable window of at
+most five compact rows. The window follows unfinished calls first, keeping slow
+work visible even when later calls finish, until you scroll or interact with it;
+scrolling back to the bottom resumes following. An automatically opened window
+stays visible for at least 600 ms and waits for 150 ms without an active call
+before collapsing smoothly. These delays are shared by the group, never queued
+per call, and do not delay answer text or tool execution. Manually opening,
+closing, or interacting with a group overrides automatic collapse. Subagents
+and tools requiring user input remain outside these groups so they stay visible
+during other tool bursts. Nested agent activity has its own scrollable window.
+
+The group caret sits immediately after its label and appears on hover or keyboard
+focus. Expand an edit row to view its diffs. Result bodies load only when their
+row opens; syntax highlighting may appear after the diff text. Opening a session
+or expanding a group should leave the app responsive, even when the session
+contains many file edits.
 
 `DisplayResults` renders its dynamic view directly in the reply and stays visible
 without opening a tool row. It breaks tool groups before and after itself,
@@ -485,8 +555,9 @@ server do not currently receive this tool.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
-rows accumulate, completed calls stop shimmering, the group collapses after
-completion without height animation, and its carets still expand the results.
+ongoing rows accumulate in the five-row window, completed calls stop shimmering,
+fast batches stay compact, and the group collapses smoothly after completion.
+Its carets should still expand the results, and reduced motion disables animation.
 Check that rich result controls still work and `DisplayResults` stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat
@@ -511,7 +582,7 @@ There is no breadcrumb because Agents has no subspaces. Unknown model providers
 fall back to the chat icon. The toggle (or `]`) opens the session's Details, Plan,
 Changes, Activity, and References sections when available, beside the transcript in wide
 layouts or over it in narrow layouts; it does not open another split.
-Details lists Status, Agent, Model, and dates for every session; the Harness
+Details lists Status, Agent, Model, and dates for every session; the Runtime
 row appears only for coding runtimes, never for in-memory chat agents.
 `References` is the same section documents show: one row per channel message that
 `@`-mentioned or shared the session (sender, channel chip, time, and a two-line
@@ -714,13 +785,13 @@ must stay hidden; subsequent live messages must still appear.
   Several permissions may be pending alongside one question; answering one leaves
   the others available. Controls disappear when their turn ends, is stopped, or
   disconnects, and old transcript requests cannot answer a later turn's request.
-- **Harness bypass consent.** Settings → Harnesses → Connect a harness offers
+- **Runtime bypass consent.** Settings → Agents → Runtimes → New runtime offers
   `Allow bypassing permission requests`, off by default. Enabling it warns that
   agents may run commands and edit files on the machine without approval.
   Macrod Quickstart and Config also offer `Full Access`, off by
   default. The choice applies at the next pairing: off disables bypass in the
-  approval dialog; on preselects bypass with a warning, and the approving user
-  can turn it off. Older daemons leave this choice to the approval dialog.
+  pairing page; on preselects bypass with a warning, and the approving user
+  can turn it off. Older daemons leave this choice to the pairing page.
 - **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
   and `Always bypass` only for local macrod harnesses. Macrod defaults to prompts;
   bypass requires both harness consent and the agent's explicit choice. Built-in

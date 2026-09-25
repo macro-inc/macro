@@ -35,6 +35,31 @@ impl ReqwestEditingWorkerClient {
     }
 }
 
+impl ReqwestEditingWorkerClient {
+    #[cfg(feature = "ai_tools")]
+    async fn comment_mark(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        change: serde_json::Value,
+    ) -> anyhow::Result<reqwest::Response> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        Ok(self
+            .client
+            .post(format!("{}/comment-mark", self.worker_url))
+            .headers(headers)
+            .timeout(std::time::Duration::from_secs(30))
+            .json(&serde_json::json!({
+                "documentId": document_id,
+                "documentToken": document_token.as_str(),
+                "change": change,
+            }))
+            .send()
+            .await?)
+    }
+}
+
 impl EditingWorkerService for ReqwestEditingWorkerClient {
     #[cfg(feature = "ai_tools")]
     #[tracing::instrument(skip_all, fields(document_id), err)]
@@ -69,6 +94,70 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             anyhow::bail!("{message} (HTTP {status})");
         }
         Ok(response.json().await?)
+    }
+
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(skip_all, fields(document_id, %mark_id), err)]
+    async fn add_comment_mark(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        mark_id: uuid::Uuid,
+        text: &str,
+        occurrence: Option<u32>,
+    ) -> anyhow::Result<crate::domain::ports::editing::CommentMarkPlacement> {
+        use crate::domain::ports::editing::CommentMarkPlacement;
+
+        let mut change = serde_json::json!({
+            "action": "add",
+            "markId": mark_id,
+            "text": text,
+        });
+        if let Some(occurrence) = occurrence {
+            change["occurrence"] = occurrence.into();
+        }
+        let response = self
+            .comment_mark(document_id, document_token, change)
+            .await?;
+        let status = response.status();
+        let body = response
+            .json::<serde_json::Value>()
+            .await
+            .unwrap_or_default();
+        if status == reqwest::StatusCode::UNPROCESSABLE_ENTITY
+            && let Some(reason) = body.get("error").and_then(serde_json::Value::as_str)
+        {
+            return Ok(CommentMarkPlacement::Refused(reason.to_owned()));
+        }
+        if !status.is_success() {
+            anyhow::bail!("editing worker returned {status}: {body}");
+        }
+        Ok(CommentMarkPlacement::Placed {
+            marked_text: body["markedText"].as_str().unwrap_or_default().to_owned(),
+        })
+    }
+
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(skip_all, fields(document_id, %mark_id), err)]
+    async fn remove_comment_mark(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        mark_id: uuid::Uuid,
+    ) -> anyhow::Result<()> {
+        let response = self
+            .comment_mark(
+                document_id,
+                document_token,
+                serde_json::json!({ "action": "remove", "markId": mark_id }),
+            )
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            anyhow::bail!("editing worker returned {status}: {body}");
+        }
+        Ok(())
     }
 
     #[tracing::instrument(skip_all, fields(document_id), err)]

@@ -158,9 +158,11 @@ impl<Access: ContextAuthorizer, Marks: MarkReader> MessagePromptContext
 }
 
 /// Where a document discussion sits, read from the thread the prompt was posted
-/// in, and what that mark covers in the document now. Only documents anchor
-/// discussions, so a channel prompt never pays for the lookup. A failed live
-/// lookup leaves the stored snapshot to stand in rather than failing the prompt.
+/// in, and what that anchor covers now. Only documents anchor discussions, so a
+/// channel prompt never pays for the lookup. A PDF highlight's text arrives with
+/// the thread; a markdown mark is resolved against the live document, and a
+/// failed lookup leaves the stored snapshot to stand in rather than failing the
+/// prompt.
 async fn anchor(
     messages: &dyn MessageReader,
     marks: &impl MarkReader,
@@ -174,16 +176,27 @@ async fn anchor(
         .get_thread(access, origin.thread_id)
         .await
         .map_err(|error| HarnessError::PromptContext(rootcause::report!(error).into()))?;
-    // PDF anchors name an annotation the agent cannot read either, but their
-    // text is owned by the annotation rather than the thread.
-    let Some(ThreadAnchor::Markdown {
-        mark_id,
-        marked_text,
-    }) = thread.state.anchor
-    else {
-        return Ok(None);
+    let (mark_id, marked_text) = match thread.state.anchor {
+        None => return Ok(None),
+        Some(ThreadAnchor::PdfHighlight {
+            anchor_id,
+            marked_text,
+        }) => {
+            return Ok(Some(CommentAnchor::PdfHighlight {
+                anchor_id: anchor_id.to_string(),
+                marked_text,
+            }));
+        }
+        Some(ThreadAnchor::PdfPlaceable { anchor_id }) => {
+            return Ok(Some(CommentAnchor::PdfPin {
+                anchor_id: anchor_id.to_string(),
+            }));
+        }
+        Some(ThreadAnchor::Markdown {
+            mark_id,
+            marked_text,
+        }) => (mark_id.to_string(), marked_text),
     };
-    let mark_id = mark_id.to_string();
     let current = marks
         .resolve(&origin.parent.entity_id(), &mark_id)
         .await
@@ -197,7 +210,7 @@ async fn anchor(
         })
         .ok()
         .flatten();
-    Ok(Some(CommentAnchor {
+    Ok(Some(CommentAnchor::Mark {
         mark_id,
         marked_text,
         current,

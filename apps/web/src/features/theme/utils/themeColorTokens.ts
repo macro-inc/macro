@@ -102,6 +102,7 @@ export function getDefaultSemanticColorTokens(
     input: 'transparent',
     'input-focus': tokenReference('surface-1'),
     message: tokenReference('surface-1'),
+    'inline-code': alphaToken('ink', 0.05),
     hover: alphaToken('content-0', 0.03),
     active: alphaToken('content-0', 0.06),
     selected: alphaToken('accent', 0.08),

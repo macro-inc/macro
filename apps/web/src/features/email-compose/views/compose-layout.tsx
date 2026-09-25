@@ -163,8 +163,8 @@ export function ComposeLayout(props: {
     scopeId: composeHotkeyScope,
     description: 'Send email',
     keyDownHandler: () => {
-      if (ctx.disabled()) return false;
-      if (ctx.sendTime()) return false;
+      // Pointer and keyboard submission always enter the same controller. It
+      // snapshots whether this is Send, Schedule send, or Update schedule.
       ctx.onSend();
       return true;
     },

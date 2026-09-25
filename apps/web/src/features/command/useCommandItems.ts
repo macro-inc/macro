@@ -2,11 +2,14 @@ import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import {
   type Bucket,
   type EntityItem,
-  exclude,
   type QuickAccessItem,
   type UserItem,
   useQuickAccess,
 } from '@core/context/quickAccess';
+// Imported from the module rather than the barrel: the barrel pulls in
+// QuickAccessProvider, which cycles back here, and `exclude` runs at module
+// evaluation time below.
+import { exclude } from '@core/context/quickAccess/types';
 import { HotkeyTags } from '@core/hotkey/constants';
 import {
   type CommandWithInfo,
@@ -379,6 +382,10 @@ function useQuickAccessCategory(
 
   return {
     items,
+    isLoadingEntities: () => {
+      const list = activeList();
+      return !!list?.isLoading() && list.items().length === 0;
+    },
     pagination: {
       hasMore: () => activeList()?.hasMore() ?? false,
       isLoadingMore: () => activeList()?.isLoadingMore() ?? false,
@@ -508,6 +515,7 @@ export function useCommandItems(
 
   return {
     items: filteredItems,
+    isLoadingEntities: category.isLoadingEntities,
     pagination: category.pagination,
   };
 }

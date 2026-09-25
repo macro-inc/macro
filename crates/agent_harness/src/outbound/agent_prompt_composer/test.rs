@@ -54,7 +54,7 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
             "Raw prompt",
             None,
             Some(&ConversationContext {
-                anchor: Some(CommentAnchor {
+                anchor: Some(CommentAnchor::Mark {
                     mark_id: "mark-1".to_owned(),
                     marked_text: Some("the marked phrase".to_owned()),
                     current: Some(MarkedPassage {
@@ -71,6 +71,7 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
         .await
         .unwrap();
     let body = received.lock().unwrap().clone().unwrap();
+    assert_eq!(body["anchor"]["type"], "markdown");
     assert_eq!(body["anchor"]["markId"], "mark-1");
     assert_eq!(body["anchor"]["markedText"], "the marked phrase");
     assert_eq!(body["anchor"]["currentMarkedText"], "the edited phrase");
@@ -86,7 +87,7 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
             "Raw prompt",
             None,
             Some(&ConversationContext {
-                anchor: Some(CommentAnchor {
+                anchor: Some(CommentAnchor::Mark {
                     mark_id: "mark-2".to_owned(),
                     marked_text: None,
                     current: None,
@@ -100,5 +101,51 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
     assert_eq!(body["anchor"]["markId"], "mark-2");
     assert!(body["anchor"].get("markedText").is_none());
     assert!(body["anchor"].get("currentMarkedText").is_none());
+
+    let sent = |anchor: CommentAnchor| {
+        let composer = &composer;
+        let received = received.clone();
+        async move {
+            composer
+                .compose(
+                    "Raw prompt",
+                    None,
+                    Some(&ConversationContext {
+                        anchor: Some(anchor),
+                        messages: vec![],
+                    }),
+                )
+                .await
+                .unwrap();
+            received.lock().unwrap().clone().unwrap()["anchor"].clone()
+        }
+    };
+    assert_eq!(
+        sent(CommentAnchor::PdfHighlight {
+            anchor_id: "highlight-1".to_owned(),
+            marked_text: Some("the highlighted words".to_owned()),
+        })
+        .await,
+        serde_json::json!({
+            "type": "pdfHighlight",
+            "anchorId": "highlight-1",
+            "markedText": "the highlighted words"
+        })
+    );
+    assert_eq!(
+        sent(CommentAnchor::PdfHighlight {
+            anchor_id: "highlight-2".to_owned(),
+            marked_text: None,
+        })
+        .await,
+        serde_json::json!({ "type": "pdfHighlight", "anchorId": "highlight-2" })
+    );
+    assert_eq!(
+        sent(CommentAnchor::PdfPin {
+            anchor_id: "pin-1".to_owned(),
+        })
+        .await,
+        serde_json::json!({ "type": "pdfPin", "anchorId": "pin-1" })
+    );
     server.abort();
 }

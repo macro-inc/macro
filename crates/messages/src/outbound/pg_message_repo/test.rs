@@ -33,6 +33,7 @@ fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
         actor: USER.to_owned().try_into().unwrap(),
         triggered_by: None,
         input: PostMessage {
+            id: None,
             attribution: Default::default(),
             notification_policy: Default::default(),
             content: content.into(),
@@ -1124,4 +1125,127 @@ async fn legacy_ids_resolve_through_the_import_mapping_tables(pool: PgPool) {
         dangling.as_database_error().unwrap().code().as_deref(),
         Some("23503")
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn client_supplied_ids_are_kept_and_never_reused(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool);
+    let id = macro_uuid::generate_uuid_v7();
+    let mut first = command("message-doc-a", None, "first");
+    first.input.id = Some(id);
+    assert_eq!(repo.create(first).await.unwrap().id, id);
+
+    // A reused id conflicts even on another parent, and never overwrites.
+    let mut second = command("message-doc-b", None, "second");
+    second.input.id = Some(id);
+    assert!(matches!(
+        repo.create(second).await,
+        Err(MessageError::Conflict)
+    ));
+    let parent = MessageParent::parse("document", "message-doc-a").unwrap();
+    assert_eq!(
+        repo.get(&parent, id).await.unwrap().unwrap().content,
+        "first"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn highlight_threads_read_the_text_the_highlight_covers(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let parent = MessageParent::parse("document", "message-doc-a").unwrap();
+    let highlight = |text: &'static str| {
+        let pool = pool.clone();
+        async move {
+            let anchor_id = macro_uuid::generate_uuid_v7();
+            sqlx::query!(r#"INSERT INTO "PdfHighlightAnchor"
+                (uuid, "documentId", owner, page, red, green, blue, alpha, type, text, "pageViewportWidth", "pageViewportHeight")
+                VALUES ($1, 'message-doc-a', $2, 1, 255, 255, 0, 0.5, 1, $3, 600, 800)"#, anchor_id, USER, text)
+                .execute(&pool).await.unwrap();
+            anchor_id
+        }
+    };
+    let thread_on = |anchor_id: Uuid, content: &str| {
+        let mut create = command("message-doc-a", None, content);
+        create.input.anchor = Some(NewThreadAnchor::PdfHighlight { anchor_id });
+        create
+    };
+    let covered = highlight("  the highlighted words \n").await;
+    let blank = highlight("   ").await;
+    let root = repo.create(thread_on(covered, "on words")).await.unwrap();
+    let blank_root = repo.create(thread_on(blank, "on nothing")).await.unwrap();
+    let anchor = |anchor_id, text: Option<&str>| {
+        Some(ThreadAnchor::PdfHighlight {
+            anchor_id,
+            marked_text: text.map(str::to_owned),
+        })
+    };
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT anchor AS "anchor!" FROM comms_message_threads WHERE root_id = $1"#,
+        root.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        stored,
+        serde_json::json!({ "type": "pdf_highlight", "anchor_id": covered })
+    );
+    assert_eq!(
+        repo.thread(&parent, root.id).await.unwrap().unwrap().anchor,
+        anchor(covered, Some("the highlighted words"))
+    );
+    assert_eq!(
+        repo.thread(&parent, blank_root.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .anchor,
+        anchor(blank, None)
+    );
+
+    sqlx::query!(
+        r#"UPDATE "PdfHighlightAnchor" SET text = 'edited words' WHERE uuid = $1"#,
+        covered
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let timeline = repo
+        .timeline(
+            &parent,
+            MessageTimelineQuery {
+                limit: Some(10),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let mut anchors: Vec<_> = timeline
+        .items
+        .into_iter()
+        .map(|item| (item.message.id, item.state.anchor))
+        .collect();
+    anchors.sort_by_key(|(id, _)| *id);
+    assert_eq!(
+        anchors,
+        vec![
+            (root.id, anchor(covered, Some("edited words"))),
+            (blank_root.id, anchor(blank, None)),
+        ]
+    );
+    let patched = repo
+        .patch_thread(
+            &parent,
+            root.id,
+            ThreadPatch {
+                resolved: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(patched.anchor, anchor(covered, Some("edited words")));
 }

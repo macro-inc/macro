@@ -707,6 +707,14 @@ impl BootStubEnv {
         env.insert("LIVEKIT_API_KEY".into(), "local-livekit-key".into());
         env.insert("LIVEKIT_API_SECRET".into(), "local-livekit-secret".into());
         env.insert("OPENAI_API_KEY".into(), "local-openai-key".into());
+        // Required by the agent router. Present so it builds on a stack with no
+        // Doppler; real provider calls still fail on the dummy keys.
+        // Doppler's shared_ai name is singular: FIREWORK_API_KEY.
+        env.insert("FIREWORK_API_KEY".into(), "local-firework-key".into());
+        env.insert(
+            "GOOGLE_GENERATIVE_AI_API_KEY".into(),
+            "local-google-generative-ai-key".into(),
+        );
         env.insert("COHERE_API_KEY".into(), "local-cohere-key".into());
         env.insert(
             "CAL_WEBHOOK_SECRET_KEY".into(),

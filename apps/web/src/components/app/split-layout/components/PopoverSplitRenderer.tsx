@@ -178,7 +178,10 @@ function PopoverSplitModal(props: {
           onOpenChange={onOpenChange}
           contentRef={attachPanel}
         >
-          <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
+          <Panel
+            hideBorder
+            class="bg-transparent rounded-[inherit] *:max-h-[75vh]"
+          >
             <Content />
           </Panel>
         </Dialog>

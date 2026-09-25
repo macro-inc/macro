@@ -19,6 +19,10 @@ const mocks = vi.hoisted(() => ({
   attachments: [] as InputAttachmentData[],
   recentIds: [] as string[],
   recentUrls: [] as string[],
+  preferredInmemModel: undefined as string | undefined,
+  rememberInmemModel: vi.fn((id: string) => {
+    mocks.preferredInmemModel = id;
+  }),
   repositories: [] as { url: string; defaultBranch?: string }[],
 }));
 vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
@@ -40,6 +44,12 @@ vi.mock('../primitives/recent-repositories', () => ({
   createRecentRepositories: () => ({
     urls: () => mocks.recentUrls,
     remember: vi.fn(),
+  }),
+}));
+vi.mock('../primitives/preferred-inmem-model', () => ({
+  createPreferredInmemModel: () => ({
+    model: () => mocks.preferredInmemModel,
+    remember: mocks.rememberInmemModel,
   }),
 }));
 vi.mock('../queries/reachable-repositories', () => ({
@@ -177,10 +187,14 @@ describe('agent-led new conversation', () => {
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
     mocks.recentUrls = [];
+    mocks.preferredInmemModel = undefined;
     mocks.repositories = [
       { url: 'https://github.com/macro-inc/macro', defaultBranch: 'develop' },
     ];
     vi.clearAllMocks();
+    mocks.rememberInmemModel.mockImplementation((id: string) => {
+      mocks.preferredInmemModel = id;
+    });
     motionStyles = document.createElement('style');
     motionStyles.textContent =
       '[role="menu"] { animation-name: none; transition-duration: 0s; }';
@@ -471,6 +485,9 @@ describe('agent-led new conversation', () => {
     expect(screen.queryByText('anthropic/claude-sonnet-5')).toBeNull();
     fireEvent.keyDown(sonnet, { key: 'Enter' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(mocks.rememberInmemModel).toHaveBeenCalledWith(
+      'anthropic/claude-sonnet-5'
+    );
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
       'Sonnet 5'
     );
@@ -487,6 +504,21 @@ describe('agent-led new conversation', () => {
       repoUrl: undefined,
       modelOverride: 'anthropic/claude-sonnet-5',
     });
+    // Macro Models picks stick: a second send still uses the preferred model.
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Sonnet 5'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send.mock.calls[1][0]).toMatchObject({
+      modelOverride: 'anthropic/claude-sonnet-5',
+    });
+  });
+  it('restores a preferred Macro model on a fresh composer', () => {
+    mocks.preferredInmemModel = 'anthropic/claude-sonnet-5';
+    page();
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Sonnet 5'
+    );
   });
   it('restores the most recently used supported agent', async () => {
     mocks.recentIds = [CURSOR_BOT_ID];

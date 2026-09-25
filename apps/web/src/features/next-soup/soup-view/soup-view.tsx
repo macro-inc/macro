@@ -540,6 +540,7 @@ export const SoupView = (props: SoupViewProps) => {
                   <Show when={docsUrl()}>
                     {(url) => (
                       <Button
+                        size="icon-md"
                         variant="ghost"
                         class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
                         label="View documentation"
@@ -640,8 +641,9 @@ export const SoupView = (props: SoupViewProps) => {
                             hotkey={TOKENS.soup.openSearch}
                           >
                             <Button
+                              size="icon-md"
                               variant="outline"
-                              class="p-1 size-7 rounded-lg ml-2 bg-surface"
+                              class="p-1 size-7 rounded-lg ml-2"
                               onClick={() => setNarrowSearchExpanded(true)}
                               depth={2}
                             >

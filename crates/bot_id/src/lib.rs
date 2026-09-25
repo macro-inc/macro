@@ -50,7 +50,7 @@ fn bot_id_str(input: &str) -> IResult<&str, BotIdStorage<ArcCowStr<'_>>> {
     ))
 }
 
-/// Stable [`BotId`] for the first-party "Macro AI" system bot.
+/// Stable [`BotId`] for the classic first-party "Macro" system bot.
 ///
 /// Mentioning it answers with the classic in-channel chat reply (the
 /// `channel_bots` agent loop in `document_storage_service`). Agent sessions
@@ -58,27 +58,29 @@ fn bot_id_str(input: &str) -> IResult<&str, BotIdStorage<ArcCowStr<'_>>> {
 pub const MACRO_AI_BOT_ID: BotId =
     BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a1a1));
 
-/// Stable handle for the "Macro AI" system bot (used for `@` mentions).
+/// Stable handle for the classic "Macro" system bot (used for `@` mentions).
 pub const MACRO_AI_HANDLE: &str = "macro";
 
-/// Display name for the "Macro" system bot.
+/// Display name for Macro, shared by both of its bot ids.
 pub const MACRO_AI_NAME: &str = "Macro";
 
-/// Stable [`BotId`] for the "macro(new)" system bot.
+/// Stable [`BotId`] for the agent-session half of Macro.
 ///
-/// The next-generation Macro bot: mentioning it opens an agent session served
-/// by the in-process (in-memory) agent harness, which answers with the Macro
-/// product toolset. A separate bot from [`MACRO_AI_BOT_ID`] on purpose - the
-/// classic in-channel reply stays on `@macro` for everyone while this one
-/// rolls out, and one id cannot mean both.
+/// Mentioning it opens an agent session served by the in-process (in-memory)
+/// agent harness, which answers with the Macro product toolset. A separate bot
+/// from [`MACRO_AI_BOT_ID`] because one id cannot mean both a chat reply and a
+/// session - but the same persona to a reader: both are named "Macro", and the
+/// web client's chat-v3 rollout decides which of the two a single `@macro`
+/// mention targets.
 pub const MACRO_NEW_BOT_ID: BotId =
     BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a2a2));
 
-/// Stable handle for the "macro(new)" system bot (used for `@` mentions).
+/// Stable handle for the agent-session Macro bot.
+///
+/// Distinct from [`MACRO_AI_HANDLE`] only because handles identify a bot;
+/// nothing offers it as a second `@` entry. The display name is
+/// [`MACRO_AI_NAME`], the same as the classic bot's.
 pub const MACRO_NEW_HANDLE: &str = "macro-new";
-
-/// Display name for the "macro(new)" system bot.
-pub const MACRO_NEW_NAME: &str = "macro(new)";
 
 /// Stable [`BotId`] for autonomous Macro platform operations.
 pub const MACRO_SYSTEM_BOT_ID: BotId =
@@ -162,9 +164,11 @@ pub const SYSTEM_BOTS: &[SystemBot] = &[
         handle: MACRO_AI_HANDLE,
         has_agent: false,
     },
+    // The same persona as the bot above, under a second id because only this
+    // one opens sessions. It carries the same name for the same reason.
     SystemBot {
         id: MACRO_NEW_BOT_ID,
-        name: MACRO_NEW_NAME,
+        name: MACRO_AI_NAME,
         handle: MACRO_NEW_HANDLE,
         has_agent: true,
     },

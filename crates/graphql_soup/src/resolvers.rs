@@ -140,7 +140,17 @@ where
         thread_id: uuid::Uuid,
     ) -> Pin<Box<dyn Future<Output = async_graphql::Result<Option<Self::Thread>>> + Send + 'ctx>>
     {
-        Box::pin(resolve_soup_email_thread::<Edges>(ctx, user_id, thread_id))
+        Box::pin(async move {
+            let loader = ctx.data::<crate::EmailMutationThreadLoader>()?;
+            let Some(thread) = loader.read(user_id, thread_id).await? else {
+                return Ok(None);
+            };
+            match GraphqlSoupEntity::<Edges>::new(models_soup::item::SoupItem::EmailThread(thread))
+            {
+                GraphqlSoupEntity::EmailThread(thread) => Ok(Some(thread)),
+                _ => Err(async_graphql::Error::new("expected an email thread")),
+            }
+        })
     }
 }
 

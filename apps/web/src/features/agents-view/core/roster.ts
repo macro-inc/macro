@@ -158,10 +158,8 @@ function persistedAgent(
         ? 'Connect Cursor'
         : undefined,
     unavailableReason:
-      agent.harness === 'macrod'
-        ? connected
-          ? 'Runs on its own machine · start it from a channel mention'
-          : 'Its runtime is disconnected'
+      agent.harness === 'macrod' && !connected
+        ? 'Its runtime is disconnected'
         : agent.harness === 'cursor' && !connected
           ? 'Connect Cursor to start it'
           : undefined,

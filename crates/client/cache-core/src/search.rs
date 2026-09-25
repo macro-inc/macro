@@ -126,6 +126,8 @@ pub enum SearchError {
 pub const MAX_SEARCH_LIMIT: usize = 500;
 /// Maximum accepted query length in bytes.
 pub const MAX_SEARCH_QUERY_BYTES: usize = 512;
+/// Restores the Quick Access preference for matching direct messages.
+const DM_SEARCH_BOOST: f64 = 1.8;
 
 /// Validates and canonicalizes a request's buckets.
 pub fn validate_search_request(request: &SearchRequest) -> Result<Vec<String>, SearchError> {
@@ -328,8 +330,8 @@ pub fn compare_recent(left: &SearchDocument, right: &SearchDocument) -> Ordering
 }
 
 /// Returns a fuzzy+freshness score, or `None` when every query token fails to
-/// match as an ordered subsequence. The weighting mirrors the existing Quick
-/// Access preference for fuzzy relevance (70%) plus freshness (30%).
+/// match as an ordered subsequence. Fuzzy relevance contributes 70%, freshness
+/// contributes 30%, and matching direct messages receive the legacy 1.8x boost.
 pub fn fuzzy_freshness_score(document: &SearchDocument, query: &str, now_ms: i64) -> Option<f64> {
     let normalized = normalize_search_text(query);
     if normalized.is_empty() {
@@ -349,7 +351,12 @@ pub fn fuzzy_freshness_score(document: &SearchDocument, query: &str, now_ms: i64
     } else {
         (-0.5 * age / max_age).exp()
     };
-    Some(0.7 * fuzzy + 0.3 * freshness)
+    let score = 0.7 * fuzzy + 0.3 * freshness;
+    Some(if document.bucket == "dm" {
+        score * DM_SEARCH_BOOST
+    } else {
+        score
+    })
 }
 
 fn subsequence_score(haystack: &str, needle: &str) -> Option<f64> {

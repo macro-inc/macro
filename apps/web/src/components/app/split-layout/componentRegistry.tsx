@@ -28,7 +28,14 @@ import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeSkill } from '@block-md/component/ComposeSkill';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
+import {
+  DEV_MODE_ENV,
+  enableChatV3Agents,
+  enableNewAppViews,
+  isFeatureEnabled,
+  LOCAL_ONLY,
+} from '@core/constant/featureFlags';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
 import { type JSXElement, lazy, Show } from 'solid-js';
 import {
@@ -57,21 +64,33 @@ export type ComponentMetaMap = {
 
 type ComponentRegistration = {
   factory: ComponentFactory;
-  initialMeta?: ComponentMeta;
+  initialMeta?: ComponentMeta | (() => ComponentMeta | undefined);
 };
 
 const REGISTRY = new Map<string, ComponentRegistration>();
 
+/** Shell for views that draw their own top bar. New app views are on by default,
+ * so this is fixed when the mount is created instead of written after paint. */
+function composableLayout(onTouch = false): ComponentMeta | undefined {
+  if (!isFeatureEnabled(enableNewAppViews)) return;
+  if (isTouchDevice() && !onTouch) return;
+  return { splitPanelLayout: 'composable' };
+}
+
 function registerComponent(
   name: string,
   factory: ComponentFactory,
-  initialMeta?: ComponentMeta
+  initialMeta?: ComponentMeta | (() => ComponentMeta | undefined)
 ) {
-  const metaWithKind = initialMeta ? { kind: name, ...initialMeta } : undefined;
-  REGISTRY.set(name, {
-    factory,
-    initialMeta: metaWithKind,
-  });
+  REGISTRY.set(name, { factory, initialMeta });
+}
+
+function resolveInitialMeta(
+  name: string,
+  initialMeta: ComponentRegistration['initialMeta']
+): ComponentMeta | undefined {
+  const meta = typeof initialMeta === 'function' ? initialMeta() : initialMeta;
+  return meta ? { kind: name, ...meta } : undefined;
 }
 
 type ResolvedComponent = {
@@ -97,7 +116,7 @@ export function resolveComponent(
       if (base) {
         return {
           element: () => base.factory({ ...(params ?? {}), agentsRoute: name }),
-          initialMeta: base.initialMeta,
+          initialMeta: resolveInitialMeta('agents', base.initialMeta),
         };
       }
     }
@@ -107,7 +126,7 @@ export function resolveComponent(
         const reminderId = name.slice(REMINDER_VIEW_PREFIX.length);
         return {
           element: () => base.factory({ ...(params ?? {}), reminderId }),
-          initialMeta: base.initialMeta,
+          initialMeta: resolveInitialMeta('reminder-view', base.initialMeta),
         };
       }
     }
@@ -115,7 +134,7 @@ export function resolveComponent(
   }
   return {
     element: () => registration.factory(params ?? {}),
-    initialMeta: registration.initialMeta,
+    initialMeta: resolveInitialMeta(name, registration.initialMeta),
   };
 }
 
@@ -127,18 +146,49 @@ registerComponent('unified-list', () => (
 // App views themselves are composed by the application route layer.
 registerComponent('home', () => <HomeRouteView />);
 registerComponent('getting-started', () => <GettingStartedRouteView />);
-registerComponent('inbox', () => <InboxRouteView />);
+registerComponent(
+  'inbox',
+  () => <InboxRouteView />,
+  () => composableLayout(true)
+);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent('reminders', () => <RemindersRouteView />);
-registerComponent('agents', () => <AgentsRouteView />);
-registerComponent('mail', () => <MailRouteView />);
-registerComponent('documents', () => <DriveRouteView />);
-registerComponent('tasks', () => <TasksRouteView />);
+registerComponent(
+  'agents',
+  () => <AgentsRouteView />,
+  () =>
+    isFeatureEnabled(enableChatV3Agents) && !isTouchDevice()
+      ? { splitPanelLayout: 'composable' }
+      : undefined
+);
+registerComponent(
+  'mail',
+  () => <MailRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'documents',
+  () => <DriveRouteView />,
+  () => composableLayout(true)
+);
+registerComponent(
+  'tasks',
+  () => <TasksRouteView />,
+  () => composableLayout(true)
+);
 registerComponent('calendar', () => <CalendarRouteView />);
-registerComponent('channels', () => <ChannelsRouteView />);
+registerComponent(
+  'channels',
+  () => <ChannelsRouteView />,
+  () => composableLayout()
+);
 registerComponent('calls', () => <CallsRouteView />);
-registerComponent('companies', () => <CompaniesRouteView />);
+registerComponent(
+  'companies',
+  () => <CompaniesRouteView />,
+  () => (isTouchDevice() ? undefined : { splitPanelLayout: 'composable' })
+);
 registerComponent('folders', () => <FoldersRouteView />);
 registerComponent('search', () => <SearchRouteView />);
 registerComponent('firehose', () => (

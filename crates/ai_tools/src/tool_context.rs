@@ -622,6 +622,23 @@ impl ConnectionService for NoOpConnectionService {
 pub struct NoOpCallRtcClient;
 
 impl CallRtcClient for NoOpCallRtcClient {
+    async fn generate_guest_token(
+        &self,
+        _room_name: &str,
+        _guest_id: call::domain::meetings::GuestId,
+        _display_name: &str,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn remove_guest(
+        &self,
+        _room_name: &str,
+        _guest_id: call::domain::meetings::GuestId,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
     async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
     }
@@ -654,6 +671,13 @@ impl CallRtcClient for NoOpCallRtcClient {
         _participant_identity: MacroUserIdStr<'a>,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    async fn list_participant_identities(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        Ok(Some(Vec::new()))
     }
 
     async fn start_room_composite_egress(

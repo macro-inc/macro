@@ -135,6 +135,7 @@ impl IntoResponse for MessageHttpError {
             MessageError::NotFound => (StatusCode::NOT_FOUND, "message or parent not found"),
             MessageError::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
             MessageError::Invalid(message) => (StatusCode::BAD_REQUEST, message),
+            MessageError::Conflict => (StatusCode::CONFLICT, "message id already exists"),
             MessageError::Repository(error) => {
                 tracing::error!(error=?error, "message request failed");
                 (

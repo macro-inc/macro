@@ -214,7 +214,7 @@ async fn a_marked_discussion_names_its_mark_and_the_text_it_covers() {
         .unwrap();
     assert_eq!(
         context.anchor,
-        Some(CommentAnchor {
+        Some(CommentAnchor::Mark {
             mark_id: mark_id.to_string(),
             marked_text: Some("the marked phrase".to_owned()),
             current: None,
@@ -239,7 +239,7 @@ async fn a_discussion_anchored_before_snapshots_still_names_its_mark() {
         .unwrap();
     assert_eq!(
         context.anchor,
-        Some(CommentAnchor {
+        Some(CommentAnchor::Mark {
             mark_id: mark_id.to_string(),
             marked_text: None,
             current: None,
@@ -292,7 +292,7 @@ async fn a_marked_discussion_reads_the_mark_as_the_document_has_it_now() {
         .unwrap();
     assert_eq!(
         context.anchor,
-        Some(CommentAnchor {
+        Some(CommentAnchor::Mark {
             mark_id: mark_id.to_string(),
             marked_text: Some("the original phrase".to_owned()),
             current: Some(current),
@@ -317,10 +317,55 @@ async fn a_failed_live_lookup_falls_back_to_the_snapshot() {
         .unwrap();
     assert_eq!(
         context.anchor,
-        Some(CommentAnchor {
+        Some(CommentAnchor::Mark {
             mark_id: mark_id.to_string(),
             marked_text: Some("the original phrase".to_owned()),
             current: None,
+        })
+    );
+}
+
+#[tokio::test]
+async fn a_pdf_highlight_discussion_names_the_text_the_highlight_covers() {
+    let anchor_id = Uuid::from_u128(11);
+    let adapter = MessagePromptContextAdapter::new(
+        Arc::new(reader(Some(ThreadAnchor::PdfHighlight {
+            anchor_id,
+            marked_text: Some("indemnifies the lessor".to_owned()),
+        }))),
+        Arc::new(Authorizer { allowed: true }),
+        // The highlight's text arrives with the thread; no document lookup.
+        Arc::new(Marks(Err("never asked"))),
+    );
+    let context = adapter
+        .conversation_context(&actor(), &origin())
+        .await
+        .unwrap();
+    assert_eq!(
+        context.anchor,
+        Some(CommentAnchor::PdfHighlight {
+            anchor_id: anchor_id.to_string(),
+            marked_text: Some("indemnifies the lessor".to_owned()),
+        })
+    );
+}
+
+#[tokio::test]
+async fn a_pdf_pin_discussion_names_its_pin() {
+    let anchor_id = Uuid::from_u128(12);
+    let adapter = MessagePromptContextAdapter::new(
+        Arc::new(reader(Some(ThreadAnchor::PdfPlaceable { anchor_id }))),
+        Arc::new(Authorizer { allowed: true }),
+        Arc::new(Marks::none()),
+    );
+    let context = adapter
+        .conversation_context(&actor(), &origin())
+        .await
+        .unwrap();
+    assert_eq!(
+        context.anchor,
+        Some(CommentAnchor::PdfPin {
+            anchor_id: anchor_id.to_string(),
         })
     );
 }

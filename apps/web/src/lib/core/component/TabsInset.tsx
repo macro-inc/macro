@@ -58,7 +58,7 @@ export const TabsInset = (props: TabsInsetProps) => {
       <Layer depth={trackDepth()}>
         <div
           class={cn(
-            'relative flex items-center border border-edge-muted bg-surface rounded-lg p-0.5 has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
+            'relative flex items-center border border-edge-muted bg-surface rounded-full p-0.5 has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
             local.fullWidth && 'w-full',
             local.trackClass
           )}
@@ -74,7 +74,7 @@ export const TabsInset = (props: TabsInsetProps) => {
                   <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
                   <KSegmentedControl.ItemLabel
                     class={cn(
-                      'flex items-center px-2.5 py-1 text-xs font-medium data-checked:ring data-checked:ring-edge-muted ring-inset rounded-md text-ink-extra-muted hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
+                      'flex items-center px-3 py-1 text-xs font-medium data-checked:ring data-checked:ring-edge-muted ring-inset rounded-full text-ink-extra-muted hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
                       local.fullWidth && 'w-full justify-center',
                       local.labelClass
                     )}

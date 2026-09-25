@@ -1,8 +1,11 @@
+import { fetchCalendarMentionPreview } from '@queries/calendar/mention-preview';
+import type { CalendarMentionEvent } from '@service-storage/generated/schemas/calendarMentionEvent';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   type CalendarTargetAim,
   createCalendarTargetAim,
+  resolveTargetRequestFromPreview,
 } from './calendar-target-request';
 import type { CalendarFocusRequest, CalendarViewTarget } from './types';
 
@@ -19,6 +22,10 @@ const NEXT_WEEK_RANGE = {
   startDate: '2026-08-24',
   endDate: '2026-08-25',
 };
+
+vi.mock('@queries/calendar/mention-preview', () => ({
+  fetchCalendarMentionPreview: vi.fn(),
+}));
 
 const standup: CalendarViewTarget = {
   eventId: 'event-1',
@@ -142,5 +149,55 @@ describe('createCalendarTargetAim', () => {
     await vi.waitFor(() => expect(resolveFromPreview).toHaveBeenCalledTimes(1));
 
     expect(aim.target()?.eventId).toBe('newer-event');
+  });
+});
+
+describe('resolveTargetRequestFromPreview', () => {
+  const previewed = (viewerEventId: string | null): CalendarMentionEvent => ({
+    viewerEventId,
+    title: 'Pilates',
+    time: {
+      kind: 'timed',
+      startsAt: '2026-08-17T14:00:00Z',
+      endsAt: '2026-08-17T15:00:00Z',
+    },
+    occurrenceKey: '2026-08-17T14:00:00+00:00',
+    isRecurring: false,
+    attendeeCount: 2,
+    updatedAt: '2026-08-10T00:00:00Z',
+  });
+
+  it("aims at the viewer's own copy of the meeting", async () => {
+    vi.mocked(fetchCalendarMentionPreview).mockResolvedValueOnce(
+      previewed('viewer-copy')
+    );
+
+    const target = await resolveTargetRequestFromPreview(
+      { eventId: 'someone-elses-copy' },
+      1
+    );
+
+    expect(target?.eventId).toBe('viewer-copy');
+    expect(target?.occurrenceKey).toBe('2026-08-17T14:00:00+00:00');
+  });
+
+  // A meeting the viewer sees only through a channel share is on none of
+  // their calendars, so the block has no event of theirs to focus.
+  it('does not aim at a channel-shared meeting', async () => {
+    vi.mocked(fetchCalendarMentionPreview).mockResolvedValueOnce(
+      previewed(null)
+    );
+
+    await expect(
+      resolveTargetRequestFromPreview({ eventId: 'someone-elses-copy' }, 1)
+    ).resolves.toBeUndefined();
+  });
+
+  it('does not aim at a meeting the viewer cannot access', async () => {
+    vi.mocked(fetchCalendarMentionPreview).mockResolvedValueOnce(null);
+
+    await expect(
+      resolveTargetRequestFromPreview({ eventId: 'private-event' }, 1)
+    ).resolves.toBeUndefined();
   });
 });

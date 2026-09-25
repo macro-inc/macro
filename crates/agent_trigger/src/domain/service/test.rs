@@ -64,6 +64,7 @@ fn agent_with(bot_id: BotId, owner: BotOwner, channel_scope: AgentChannelScope) 
         channel_ids: vec![],
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: None,
+        is_coding: false,
     }
 }
 

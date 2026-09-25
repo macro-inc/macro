@@ -10,8 +10,10 @@
 mod agent_runtime_directory;
 mod api;
 mod bots_directory;
+mod coding_agent;
 mod config;
 mod containers;
+mod external_session_requests;
 mod harness_bindings;
 mod internal_mcp;
 mod model_providers;
@@ -97,6 +99,7 @@ use channels::outbound::contacts_dispatcher::ContactsChannelDispatcher;
 use channels::outbound::notification_sender::NotificationChannelSender;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
+use coding_agent::PgCodingAgentSource;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
@@ -739,7 +742,7 @@ async fn run() -> anyhow::Result<()> {
         messages::domain::service::MessageService::new(
             messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
             messages::domain::effects::MessageEffects::new(
-                messages::outbound::broker::BrokerMessagePublisher::new(broker),
+                messages::outbound::broker::BrokerMessagePublisher::new(broker.clone()),
                 messages::domain::ports::NoMessageEventPublisher,
                 message_delivery,
             ),
@@ -859,6 +862,7 @@ async fn run() -> anyhow::Result<()> {
             EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url),
             RedisCommandForwarder::new(redis.clone()),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
+            PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),
             defaults,
             Arc::clone(&lifecycle_publisher),
             pending_commands,
@@ -1004,6 +1008,12 @@ async fn run() -> anyhow::Result<()> {
     let create_state = CreateSessionState::new(
         harness.clone(),
         bots_directory.clone(),
+        Arc::new(
+            external_session_requests::BrokerExternalSessionRequests::new(
+                broker.clone(),
+                session_repo.clone(),
+            ),
+        ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let gateway_state = RuntimeGatewayState::new(

@@ -14,4 +14,8 @@ pub mod assembler;
 #[cfg(feature = "ports")]
 pub mod ports;
 #[cfg(feature = "ports")]
+pub mod scheduled;
+#[cfg(feature = "ports")]
+pub mod scheduled_delivery;
+#[cfg(feature = "ports")]
 pub mod service;

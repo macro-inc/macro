@@ -57,7 +57,11 @@ export function SearchBar(props: SearchBarProps) {
   return (
     <Surface
       depth={2}
-      class={cn('h-10 w-full min-w-0 rounded-2xl text-ink', local.class)}
+      hideBorder
+      class={cn(
+        'h-10 w-full min-w-0 rounded-full border border-edge-button bg-control text-ink has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-edge-muted',
+        local.class
+      )}
       data-search-bar=""
     >
       <TextField

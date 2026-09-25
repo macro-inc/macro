@@ -167,12 +167,20 @@ export function filterSoupItemByRequestBody(
       { tag: 'reminder' },
       ({ data }) => !isIdFilteredOut(body.reminder_filters?.ids, data.id)
     )
-    .with(
-      { tag: 'agentSession' },
-      ({ data }) =>
-        !isIdFilteredOut(body.agent_session_filters?.ids, data.id) &&
-        !isValueFilteredOut(body.agent_session_filters?.owners, data.ownerId)
-    )
+    .with({ tag: 'agentSession' }, ({ data }) => {
+      const filters = body.agent_session_filters;
+      // Agent sessions are opt-in on the server: a body that neither includes
+      // them nor names ids or owners returns none.
+      const optedIn =
+        filters?.include === true ||
+        Boolean(filters?.ids?.length) ||
+        Boolean(filters?.owners?.length);
+      return (
+        optedIn &&
+        !isIdFilteredOut(filters?.ids, data.id) &&
+        !isValueFilteredOut(filters?.owners, data.ownerId)
+      );
+    })
     .exhaustive();
 }
 

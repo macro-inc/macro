@@ -23,7 +23,7 @@ import { useCanEdit } from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@phosphor/share.svg';
+import IconShared from '@icon/share.svg';
 import { Show } from 'solid-js';
 import { spreadsheetChatContext } from './core/chat-context';
 import type { SpreadsheetData } from './definition';
