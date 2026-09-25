@@ -62,6 +62,17 @@ const NOTIFICATION_CONTENT_FIELD: Partial<
   agent_session_waiting_for_input: 'question',
 };
 
+/**
+ * The text of the message the notification itself announced. A channel row
+ * normally previews the channel's latest message instead, which is wrong once
+ * another row is already showing that message.
+ */
+export function notificationItemContent(
+  notification?: Notification
+): string | undefined {
+  return notification ? notificationContent(notification) : undefined;
+}
+
 function notificationContent(notification: Notification): string | undefined {
   const field =
     NOTIFICATION_CONTENT_FIELD[notification.notification_metadata.tag];

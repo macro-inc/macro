@@ -58,6 +58,7 @@ import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
+import { inboxChannelStacksByRowId } from '../../next-soup/soup-view/views/inbox/channel-stacks';
 import { InboxListEntity } from '../../next-soup/soup-view/views/inbox/InboxListEntity';
 import {
   markChannelNotificationsSeenOnOpen,
@@ -250,6 +251,10 @@ export function InboxList(props: InboxListProps) {
   );
 
   const rows = source.items;
+
+  // A channel's rows arrive adjacent (the data source clusters them), so the
+  // run they form is what nests them under the first one.
+  const stacksByRowId = createMemo(() => inboxChannelStacksByRowId(rows()));
 
   const swipeRowsById = createMemo(() => {
     const entities = new Map<string, InboxActionRow>();
@@ -646,6 +651,9 @@ export function InboxList(props: InboxListProps) {
                                         channelName={channelName(
                                           entityRow().entity
                                         )}
+                                        stack={stacksByRowId().get(
+                                          entityRow().id
+                                        )}
                                         timestamp={
                                           state.tab === 'signal'
                                             ? entityRow().entity.sortTs
@@ -676,6 +684,9 @@ export function InboxList(props: InboxListProps) {
                                     <InboxListEntity
                                       entity={entityRow().entity}
                                       occurrenceKey={entityRow().id}
+                                      stack={stacksByRowId().get(
+                                        entityRow().id
+                                      )}
                                       checked={list.selection.isSelected(
                                         entityRow().id
                                       )}
