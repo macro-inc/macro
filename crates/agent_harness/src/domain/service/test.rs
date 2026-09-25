@@ -44,10 +44,10 @@ use super::AgentHarnessService;
 use super::into_session_error;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, CommentAnchor,
-    ConversationContext, DeclinedMention, DeliverAction, HarnessCommand, HarnessDefaults,
-    MentionOrigin, OpenSession, PriorMessage, SessionBlocker, SessionDefaults, SessionRepository,
-    SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, CommentAnchor, ContextMessage,
+    ContextThread, ConversationContext, DeclinedMention, DeliverAction, HarnessCommand,
+    HarnessDefaults, MentionOrigin, OpenSession, SessionBlocker, SessionDefaults,
+    SessionRepository, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ContainerManager as _, MessagePromptContext, NoPeers,
@@ -131,13 +131,6 @@ struct PromptContextMock {
 }
 
 impl PromptContextMock {
-    fn with_messages(messages: Vec<PriorMessage>) -> Self {
-        Self::with_context(ConversationContext {
-            anchor: None,
-            messages,
-        })
-    }
-
     fn with_context(context: ConversationContext) -> Self {
         Self {
             context: Arc::new(Mutex::new(context)),
@@ -901,13 +894,23 @@ async fn composer_failure_stops_open_delivery_and_keeps_the_prompt_queued() {
 
 #[tokio::test]
 async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
-    let context = vec![PriorMessage {
-        sender: "previous@example.com".to_owned(),
-        content: "previous channel message".to_owned(),
-    }];
+    let context = ConversationContext {
+        channel: vec![ContextThread {
+            root_id: Uuid::from_u128(40),
+            messages: vec![ContextMessage {
+                id: Uuid::from_u128(40),
+                sender_id: "macro|previous@example.com".to_owned(),
+                author: "previous@example.com".to_owned(),
+                content: "previous channel message".to_owned(),
+                posted_at: chrono::DateTime::UNIX_EPOCH,
+            }],
+            messages_omitted: false,
+        }],
+        ..ConversationContext::default()
+    };
     let composer = PromptComposerMock::default();
     let (service, _repo, containers, announcer, _runtimes) = harness_with_edges(
-        PromptContextMock::with_messages(context.clone()),
+        PromptContextMock::with_context(context.clone()),
         composer.clone(),
     );
     let mut command = open_command();
@@ -931,16 +934,7 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
     result.unwrap();
 
     assert_eq!(announcer.announced()[0].prompted_content, raw);
-    assert_eq!(
-        composer.calls(),
-        [(
-            raw.clone(),
-            Some(ConversationContext {
-                anchor: None,
-                messages: context,
-            })
-        )]
-    );
+    assert_eq!(composer.calls(), [(raw.clone(), Some(context))]);
     assert_eq!(
         prompts(&container.agent()),
         [vec![ContentBlock::from(context_prompt(&raw))]]
@@ -958,7 +952,7 @@ async fn open_sends_the_comment_anchor_the_prompt_was_posted_on() {
             marked_text: Some("the marked phrase".to_owned()),
             current: None,
         }),
-        messages: vec![],
+        ..ConversationContext::default()
     };
     let composer = PromptComposerMock::default();
     let (service, _repo, containers, _announcer, _runtimes) = harness_with_edges(
