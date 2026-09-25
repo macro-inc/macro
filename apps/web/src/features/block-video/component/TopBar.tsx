@@ -12,8 +12,10 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
+import { blockMetadataSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -32,7 +34,15 @@ export function TopBar() {
   const downloadName = useBlockDocumentDownloadName();
   const getBlob = useGetFileBlob();
 
-  const shareCtx = useShareDialogContext();
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: blockId,
+    blockAlias: 'video',
+    itemType: 'document',
+    name: name() ?? '',
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
 
   const downloadDocument = createCallback(async () => {
     const fileName = downloadName();
@@ -78,8 +88,8 @@ export function TopBar() {
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
-      buttonComponent: () => <ShareTrigger />,
+      action: openShare,
+      buttonComponent: () => <ShareTrigger onClick={openShare} />,
       focusTarget: getShareDrawerRecipientInput,
     },
   ];

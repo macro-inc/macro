@@ -289,6 +289,11 @@ the task in a new split instead. While the list is visible, `J` and `K` move
 focus without opening a task until activation. In an open task detail, they
 replace it with the next or previous task in the same filtered order.
 
+When `enable-tasks-reviews` is enabled, `Reviews` appears above `My Tasks` as a
+shortcut to the separate Reviews view. It lists relevant open GitHub pull requests;
+selecting one opens `/app/reviews/pr/<foreignEntityId>` with a Reviews breadcrumb.
+See [Tasks](tasks.md#reviews-view) for verification.
+
 The desktop `Create` → `Task` modal uses the standard dialog panel, circular
 icon controls, and a pill-shaped `Create Task` button with 16px outer padding.
 The mobile task drawer retains its existing layout.
@@ -310,6 +315,12 @@ under the new heading. Active searches also hide retained results and show loadi
 while selected tag sets are pending. Background refreshes retain the current list. To check this,
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
+
+If a saved inbox selection references an unlinked account, successfully loading
+linked accounts resets the filter to All inboxes while preserving an open or
+restored thread. Check this with a stale saved scope and a thread route, including
+when no linked accounts remain. Explicitly choosing another inbox or All inboxes
+still closes the thread.
 
 The new views reuse the legacy filter option rows and searchable submenus.
 Their triggers are icon-only buttons matching the surrounding view controls;
@@ -576,9 +587,37 @@ glass bottom sheet for status, done, attachment, calendar and tag filters, plus 
 section when the user can pick one: `All inboxes` or a single address, never several.
 `Clear all` resets those filters and the inbox selection. Desktop keeps its sidebar,
 search field, filter menu and preview control. The sidebar lists the inboxes above the
-tabs as plain rows; clicking one shows only that inbox, and the `+` beside
-`All inboxes` (`Connect another account`) starts the add-inbox flow. Sidebar rows,
-`New`, and the panel's back, forward and close controls act on primary-button
+`New email` button and tabs as plain rows; clicking one shows only that inbox.
+`Connect another account` starts the add-inbox flow from its own row below the
+scrolling list. `New email` prefills From with the selected inbox, or the primary
+inbox when All inboxes is selected; reopening a draft keeps its saved sender.
+If an explicitly selected sending inbox is unavailable, Send reports
+`Unable to find linked email account. Select a sending inbox.` without delivering
+through another account. The From picker stays available as `Select sending inbox`,
+including when only one linked inbox remains. On mobile, expand `Cc/Bcc, From:`
+to choose the sender. Selecting an available inbox clears the error and allows
+sending; the picker never displays another inbox as selected before that choice.
+With no explicit selection, an unavailable primary still falls back to
+the first linked inbox.
+Sidebar rows, including `All inboxes`, replace their icon with an accent-colored checkmark when
+selected. With exactly one connected inbox, only its address appears as the selected
+row, followed by `Connect another account`; there is no `All inboxes` row, title
+inbox dropdown, or inbox section in the mobile filter drawer. The inbox section shows up to four rows (including `All inboxes`), then
+scrolls independently without overscroll so the email tabs stay in place. With many
+accounts, scroll to the last inbox and check that selecting it updates the header filter.
+Selecting one inbox also shows `from [email address]` beside the list title.
+The address is a borderless ghost dropdown with the title's font weight and a
+consistent 14px font size at all widths; `from` is 12px. Both align to the title's baseline, without
+a tooltip or a separate clear button.
+Its single-select menu includes `All inboxes`, which clears the account selection
+and removes the filter. Saved selections from the old multi-select picker restore
+the first saved inbox; an empty saved selection restores All inboxes. Once linked
+accounts load successfully, a selected inbox that no longer exists resets to All
+inboxes. This runs for the whole email view, including on touch devices before
+the filter drawer opens. New email uses the originating email-view split even if another split
+is active. Verify that
+sidebar and menu selection stay in sync and that clearing preserves the current tab and other filters.
+Sidebar rows, `New`, and the panel's back, forward and close controls act on primary-button
 mousedown, so the selection changes before the click completes; a normal click
 still works. The sidebar ends with a collapsible `Tags` section (every personal and
 team tag, plus a `New tag` button): clicking a tag opens the `All` tab filtered to
@@ -844,6 +883,17 @@ Every calendar mention's hover card shows the schedule, location, organizer and 
 count, plus the first lines of the event description (its links open), and no last-updated
 byline.
 
+## Pull requests — `/app/reviews/pr/<foreignEntityId>`
+
+Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
+breadcrumb, PR title/status, GitHub action, discussion timeline, and Details/Checks
+side panel below the top bar. PRs are not tasks and do not appear in the Tasks list.
+Copy Link from a PR in Quick Access copies `/app/reviews/pr/<foreignEntityId>`.
+Old `/app/pr/<foreignEntityId>` links redirect to Reviews. Check a copied link,
+a PR opened from a list or agent session, a second split, breadcrumb return,
+side-panel toggle, and phone layout. If no GitHub data loads, the detail shows
+an error banner with a Retry button; pressing it refetches the PR in place.
+
 ## Calls — `/app/component/calls`
 
 Tabs `All` / `Missed` / `Unattended`; `New call` offers `Call a channel or contact`
@@ -855,7 +905,16 @@ The channel/contact option opens the recipient picker.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
-On phones, recorded call headers omit the **Call Again** action.
+Opening a recording uses `/app/drive/call/<callId>` inside the Drive shell,
+with one breadcrumbed header (`My Files > <recording name>`) and a route back to
+Drive. The Drive file list does not include calls.
+Old copied `/app/call/<callId>` links redirect to the Drive detail without losing
+the transcript target. The detail shows a loading state, recording/transcript/summary,
+Share, and a call side panel below the breadcrumb header; a failed load shows Try again.
+`call_transcript_id=<segmentId>` seeks the matching video segment after loading.
+Check a direct link, an old copied link, a Calls-list click, a second split,
+the breadcrumb return, and clicking the same transcript search hit twice after
+playing elsewhere. On phones, recorded call headers omit **Call Again**.
 
 A channel's `Calls` tab lists that channel's recordings with the same rows, filtered
 by the channel id. Its search field matches call names and transcripts in that
@@ -1138,8 +1197,10 @@ On phones, **More views → Settings** opens an inset glass sheet over the curre
 page. The main page has a profile shortcut and grouped Account, Preferences,
 Workspace, and enabled agent/admin sections. Tap a row to open that settings
 page inside the sheet; **Back to settings** returns to the grouped list at its
-previous scroll position. **Close settings** at the top right, Escape, an
-outside tap, or a downward swipe dismisses the sheet. Opening Settings again
+previous scroll position. `API Keys` is desktop-only and has no row here.
+**Close settings** at the top right, Escape, an
+outside tap, or a downward swipe dismisses the sheet. A tap that dismisses a
+menu opened inside the sheet leaves the sheet itself open. Opening Settings again
 starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms

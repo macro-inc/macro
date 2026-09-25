@@ -21,6 +21,7 @@ import {
   createSignal,
   type JSXElement,
   onCleanup,
+  untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile, type Store } from 'solid-js/store';
 import {
@@ -1249,7 +1250,9 @@ export function createSplitLayout(
         return mount?.kind === 'component' ? mount.meta : undefined;
       },
       get updateMeta() {
-        const mount = findSplitById(currentSplit.id)?.mount;
+        // Untracked so a render effect that writes layout does not re-run when
+        // the split's mount changes and stamp the previous view onto the next.
+        const mount = untrack(() => findSplitById(currentSplit.id)?.mount);
         return mount?.kind === 'component' ? mount.updateMeta : undefined;
       },
       referredFrom: () => s()?.referredFrom ?? null,

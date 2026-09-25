@@ -218,7 +218,7 @@ export function ComposeLayout(props: {
                   </div>
                 }
               >
-                <Show when={ctx.fromAddress?.()}>
+                <Show when={ctx.fromInboxes?.().length}>
                   <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
                     <span class="w-14 shrink-0 text-sm text-ink-placeholder">
                       From
@@ -264,6 +264,14 @@ export function ComposeLayout(props: {
             </Show>
           </div>
         </div>
+
+        <Show when={ctx.validationError('no_link')}>
+          {(error) => (
+            <div role="alert" class="text-failure-ink text-sm mt-1">
+              {error().message}
+            </div>
+          )}
+        </Show>
 
         <Show when={props.notice}>
           <div class="mb-4">{props.notice}</div>

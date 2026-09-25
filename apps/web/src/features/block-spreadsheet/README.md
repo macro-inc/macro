@@ -36,7 +36,7 @@ frontend feature layers:
 | `views/SpreadsheetEditor.tsx` | Compose the editor and load the calculation engine. |
 
 The editor fills its split beneath the shared document title bar. Saved documents
-use `ShareTrigger` and `ShareBlockModal`, including existing document permissions,
+use `ShareTrigger` and `useShareModal`, including existing document permissions,
 copy links, and the Share keyboard shortcut. The local sample also has a Share
 action: it creates a native document, saves the sample's Loro operations, waits for
 the sync acknowledgement, then opens the saved document's sharing dialog. Failed

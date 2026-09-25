@@ -5,6 +5,7 @@ import {
   isChannelEntity,
   isChannelMessageEntity,
   isEmailEntity,
+  isGithubPrEntity,
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
@@ -14,10 +15,17 @@ import {
   ChannelMessageSingleLine,
 } from './channel';
 import { EmailInboxChip } from './email';
+import { GithubAuthorBadge } from './foreign';
 import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
 
 export function NarrowLayout(props: LayoutProps) {
+  const reviewWithAuthor = () => {
+    const entity = props.entity;
+    if (!isGithubPrEntity(entity)) return;
+    if (!entity.metadata.authorLogin && !entity.metadata.authorId) return;
+    return entity;
+  };
   return (
     <Entity.Layout
       class={cn(
@@ -52,6 +60,16 @@ export function NarrowLayout(props: LayoutProps) {
           fallback={<Entity.Title entity={props.entity} />}
         >
           {(entity) => <ChannelMessageSingleLine entity={entity()} />}
+        </Show>
+        <Show when={reviewWithAuthor()}>
+          {(review) => (
+            <span class="max-w-32 shrink-0 overflow-hidden text-xs font-normal text-ink-muted">
+              <GithubAuthorBadge
+                entity={review()}
+                displayName={props.authorDisplayName}
+              />
+            </span>
+          )}
         </Show>
         <Show when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => <EmailInboxChip entity={entity()} class="ml-auto" />}

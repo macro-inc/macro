@@ -88,11 +88,10 @@ vi.mock('@core/component/AI/component/ProviderIcon', () => ({
 }));
 vi.mock('@core/component/SharePermissions', () => ({ Permissions: {} }));
 vi.mock('@core/component/TopBar/ShareButton', () => ({
-  ShareDialogContext: {
-    Provider: (props: { children: JSX.Element }) => props.children,
-  },
-  ShareModal: () => null,
   ShareTrigger: () => null,
+}));
+vi.mock('@core/component/TopBar/shareModal', () => ({
+  useShareModal: () => () => {},
 }));
 vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
   FloatRegionOrInline: (props: { children: JSX.Element }) => props.children,

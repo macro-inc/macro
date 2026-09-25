@@ -45,6 +45,15 @@ pub async fn complete<M: ToString>(
             )
             .await?
         }
+        RoutedModel::Gemini(m) => {
+            prompt_once(
+                TracedModel::new(m.completion(), telemetry.clone()),
+                system_prompt,
+                user_message,
+                telemetry,
+            )
+            .await?
+        }
         RoutedModel::OpenAiChatCompletions(m) => {
             prompt_once(
                 TracedModel::new(m.completion(), telemetry.clone()),
@@ -85,6 +94,15 @@ pub async fn complete_with_history<M: ToString>(
     let telemetry = telemetry_for(&ctx, &routed);
     let response = match routed {
         RoutedModel::Anthropic(m) => {
+            prompt_with_history(
+                TracedModel::new(m.completion(), telemetry.clone()),
+                system_prompt,
+                messages,
+                telemetry,
+            )
+            .await?
+        }
+        RoutedModel::Gemini(m) => {
             prompt_with_history(
                 TracedModel::new(m.completion(), telemetry.clone()),
                 system_prompt,

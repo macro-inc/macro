@@ -243,7 +243,12 @@ export function WideLayout(props: LayoutProps) {
           <SharedBadge ownerId={props.entity.ownerId} />
         </Show>
         <Show when={isGithubPrEntity(props.entity) && props.entity}>
-          {(entity) => <GithubPullRequestPills entity={entity()} />}
+          {(entity) => (
+            <GithubPullRequestPills
+              entity={entity()}
+              authorDisplayName={props.authorDisplayName}
+            />
+          )}
         </Show>
         <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (

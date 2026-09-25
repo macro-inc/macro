@@ -40,12 +40,14 @@ import {
   URL_PARAMS as CHANNEL_URL_PARAMS,
   isJoinCallRequested,
   isOpenCallTabRequested,
+  toChannelTargetRequest,
 } from '@channel/Channel/link';
 import {
   canUseInlineCallTab,
   normalizeChannelTab,
   useChannelTabItems,
 } from '@channel/Channel/use-channel-tab-items';
+import { ChannelInviteButton } from '@channel/channel-invite-button';
 import { useChannelPictureActions } from '@channel/channel-picture';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
@@ -105,22 +107,6 @@ type ChannelEntryStateSnapshot = {
   activeTab?: ChannelTabId;
   messages?: MessageTimelineStateSnapshot;
 };
-
-/**
- * Decode channel target params into a surface request. A bare `thread` param
- * becomes a request whose message is the thread root itself, which the
- * surface collapses to a top-level target — same rule convertTargetMessage
- * applied when this decoding lived here.
- */
-function toTargetRequest(
-  params: ChannelTargetMessageParams
-): ChannelTargetRequest | undefined {
-  const messageId = params[URL_PARAMS.message];
-  const threadId = params[URL_PARAMS.thread];
-  const primary = messageId ?? threadId;
-  if (!primary) return undefined;
-  return { kind: 'message', messageId: primary, threadId };
-}
 
 const initialChannelTab = (options: {
   wantsJoinCall: boolean;
@@ -267,6 +253,13 @@ function NewTop(props: { channelId: string }) {
           ]}
         />
       </SplitTitleFileMenu>
+      <SplitHeaderRight>
+        <ChannelInviteButton
+          channelId={props.channelId}
+          channelName={channelName() ?? 'New Channel'}
+          channelType={channelType()}
+        />
+      </SplitHeaderRight>
       {/* Desktop only: on mobile the action lives in the title drawer above. */}
       <Show when={!isMobile() && askMacroEntity()}>
         {(entity) => (
@@ -391,7 +384,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // whenever a fresh request lands, whether or not it was mounted at the time.
   const [targetRequest, setTargetRequest] = createSignal<
     ChannelTargetRequest | undefined
-  >(toTargetRequest(initialTargetMessageParams()));
+  >(toChannelTargetRequest(initialTargetMessageParams()));
   let surfaceApi: ChannelSurfaceApi | undefined;
 
   const setActiveTab = (tab: ChannelTabId) => {
@@ -440,15 +433,17 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // inside `onChannelReady` (Messages tab), so open-call from Attachments/etc. was a no-op.
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: ChannelTargetMessageParams) => {
-      if (isOpenCallTabRequested(params[CHANNEL_URL_PARAMS.openCallTab])) {
-        setActiveTab(getCallJoinTab());
-        return;
-      }
-
-      const target = toTargetRequest(params);
+      // Store any message target first: a request that also opens the call tab
+      // leaves it waiting for whenever the user returns to Messages.
+      const target = toChannelTargetRequest(params);
       if (target) {
         setActiveTab(DEFAULT_CHANNEL_TAB);
         setTargetRequest(target);
+      }
+
+      if (isOpenCallTabRequested(params[CHANNEL_URL_PARAMS.openCallTab])) {
+        setActiveTab(getCallJoinTab());
+        return;
       }
 
       if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {

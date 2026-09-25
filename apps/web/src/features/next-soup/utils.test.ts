@@ -674,7 +674,44 @@ describe('calendar view navigation', () => {
   });
 });
 
-describe('Drive document routing', () => {
+describe('Hosted details and Drive document routing', () => {
+  it('opens GitHub pull requests as Reviews-hosted content', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      {
+        type: 'foreign',
+        id: 'pr-1',
+        foreignSource: 'github_pull_request',
+        metadata: { url: 'https://github.com/example/repo/pull/1' },
+      } as EntityData,
+      { openInNewSplit: true }
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'reviews',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'view-reviews', params: {} },
+              { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } },
+            ],
+          },
+        },
+      },
+      expect.objectContaining({
+        allowDuplicate: true,
+        preferNewSplit: true,
+      })
+    );
+  });
+
   it('keeps task documents as legacy task blocks on touch', async () => {
     vi.mocked(isTouchDevice).mockReturnValue(true);
     const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
@@ -1335,5 +1372,65 @@ describe('getRowClickFallbackLocation', () => {
   it('returns no location for non-snippet entities', () => {
     const entity = { type: 'document', id: 'd1' } as unknown as EntityData;
     expect(getRowClickFallbackLocation(entity)).toBeUndefined();
+  });
+});
+
+describe('call navigation', () => {
+  it('opens calls in Drive without mounting a call block', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      getOrchestrator: () => ({}),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(searchEntity('call', null), {});
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'documents',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'drive', params: {} },
+              { id: 'drive-call', params: { callId: 'call-1' } },
+            ],
+          },
+        },
+      },
+      expect.objectContaining({ allowDuplicate: true })
+    );
+  });
+
+  it('carries a transcript target into the Drive call route', async () => {
+    const openWithSplit = vi.fn((..._args: unknown[]) => ({
+      status: 'unavailable',
+    }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      getOrchestrator: () => ({}),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(searchEntity('call', null), {
+      location: {
+        type: 'call_record',
+        callId: 'call-1',
+        transcriptId: 'segment-1',
+      },
+    });
+    expect(openWithSplit.mock.calls[0]?.[0]).toMatchObject({
+      type: 'component',
+      id: 'documents',
+      entryMetadata: {
+        route: {
+          matches: [
+            { id: 'drive', params: {} },
+            { id: 'drive-call', params: { callId: 'call-1' } },
+          ],
+        },
+        search: { 'call-detail': { transcriptId: ['segment-1'] } },
+      },
+    });
   });
 });

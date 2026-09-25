@@ -25,10 +25,9 @@ import {
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
-import {
-  ShareDialogContext,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { getPermissions } from '@core/component/SharePermissions';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -109,7 +108,6 @@ export function EmailDetailView(props: {
   const notificationSource = useGlobalNotificationSource();
   const canAutofocus = useCanAutofocusSplitContent();
   const [controlsMount, setControlsMount] = createSignal<HTMLDivElement>();
-  const [shareOpen, setShareOpen] = createSignal(false);
   const threadId = () => props.thread.id;
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
@@ -130,6 +128,17 @@ export function EmailDetailView(props: {
       'Email'
     );
   };
+  const openShare = useShareModal(() => {
+    const thread = threadData()?.thread;
+    if (!thread) return;
+    return {
+      id: props.thread.id,
+      blockAlias: 'email',
+      itemType: 'email',
+      name: title(),
+      userPermissions: getPermissions(thread.access_level),
+    };
+  });
   const commandEntity = createMemo(() => {
     if (!threadQuery.isSuccess) return undefined;
     const thread = threadQuery.data?.thread;
@@ -198,77 +207,68 @@ export function EmailDetailView(props: {
   };
 
   return (
-    <ShareDialogContext.Provider
-      value={{
-        isOpen: shareOpen,
-        open: () => setShareOpen(true),
-        close: () => setShareOpen(false),
-      }}
-    >
-      <SidePanel.Root defaultOpen={false}>
-        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <ViewShell.TopBar class="touch:flex">
-            <ViewBreadcrumbs.Outlet
-              class="flex-1"
-              aria-label="Email location"
-              fallback={<EntityDetailBreadcrumbSkeleton />}
-            />
-            <div class="ml-auto flex shrink-0 items-center gap-2">
-              <div ref={setControlsMount} class="flex items-center gap-0.5" />
-              <div class="touch:hidden">
-                <ListNavigationButtons navigation={listNavigation} />
-              </div>
-              <Show when={ENABLE_EMAIL_SHARING}>
-                <ShareTrigger
-                  id={props.thread.id}
-                  blockType="email"
-                  hotkeyScope={panel.splitHotkeyScope}
-                />
-              </Show>
-              <SidePanel.Toggle />
+    <SidePanel.Root defaultOpen={false}>
+      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+        <ViewShell.TopBar class="touch:flex">
+          <ViewBreadcrumbs.Outlet
+            class="flex-1"
+            aria-label="Email location"
+            fallback={<EntityDetailBreadcrumbSkeleton />}
+          />
+          <div class="ml-auto flex shrink-0 items-center gap-2">
+            <div ref={setControlsMount} class="flex items-center gap-0.5" />
+            <div class="touch:hidden">
+              <ListNavigationButtons navigation={listNavigation} />
             </div>
-          </ViewShell.TopBar>
-          <div
-            ref={container}
-            class="relative min-h-0 min-w-0 flex-1"
-            tabIndex={-1}
-          >
-            <EmailThreadLoadGate
-              result={loadResult}
-              notificationSource={notificationSource}
-              threadId={props.thread.id}
-              linkId={threadData()?.thread?.link_id}
-              debounceTime={100}
-              onRetry={() => void threadQuery.refetch()}
-            >
-              <EmailThreadHostView
-                title={title()}
-                threadId={threadId}
-                source={source}
-                threadTransport={() => threadQuery.transport}
-                host={host}
-                topBar={({ createTask }) => (
-                  <EmailDetailHeader
-                    id={props.thread.id}
-                    title={title()}
-                    onCreateTask={createTask}
-                    onMarkedUnread={closeThread}
-                    onDeleted={closeThread}
-                    listNavigation={listNavigation}
-                    value={breadcrumbValue()}
-                    focusThread={focusContainer}
-                    controlsMount={controlsMount()}
-                  />
-                )}
-                sidePanelHeaderToggle={false}
-                shareOpen={shareOpen()}
-                onShareOpenChange={setShareOpen}
+            <Show when={ENABLE_EMAIL_SHARING}>
+              <ShareTrigger
+                onClick={openShare}
+                id={props.thread.id}
+                blockType="email"
+                hotkeyScope={panel.splitHotkeyScope}
               />
-            </EmailThreadLoadGate>
+            </Show>
+            <SidePanel.Toggle />
           </div>
+        </ViewShell.TopBar>
+        <div
+          ref={container}
+          class="relative min-h-0 min-w-0 flex-1"
+          tabIndex={-1}
+        >
+          <EmailThreadLoadGate
+            result={loadResult}
+            notificationSource={notificationSource}
+            threadId={props.thread.id}
+            linkId={threadData()?.thread?.link_id}
+            debounceTime={100}
+            onRetry={() => void threadQuery.refetch()}
+          >
+            <EmailThreadHostView
+              title={title()}
+              threadId={threadId}
+              source={source}
+              threadTransport={() => threadQuery.transport}
+              host={host}
+              topBar={({ createTask }) => (
+                <EmailDetailHeader
+                  id={props.thread.id}
+                  title={title()}
+                  onCreateTask={createTask}
+                  onMarkedUnread={closeThread}
+                  onDeleted={closeThread}
+                  listNavigation={listNavigation}
+                  value={breadcrumbValue()}
+                  focusThread={focusContainer}
+                  controlsMount={controlsMount()}
+                />
+              )}
+              sidePanelHeaderToggle={false}
+            />
+          </EmailThreadLoadGate>
         </div>
-      </SidePanel.Root>
-    </ShareDialogContext.Provider>
+      </div>
+    </SidePanel.Root>
   );
 }
 

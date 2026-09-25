@@ -48,8 +48,10 @@ permission failures should display a failed tool call without a successful resul
   **#<number>** beneath the title (icon colored by open / merged / closed; no
   status word). Clicking it opens the synced
   GitHub PR entity in a split (the same destination as the session header chip
-  and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
-  tab. Either click leaves the session unopened. Changing the composer mode does not filter the sidebar.
+  and Magic Chip). A synced PR opens at `/pr/<foreign-entity-id>`; existing
+  inline previews retain their legacy block host. Until GitHub has synced the
+  entity it opens GitHub in a new tab. Either click leaves the session unopened.
+  Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Delete, and the other session actions.
@@ -137,6 +139,8 @@ permission failures should display a failed tool call without a successful resul
   Its trigger, model options, and session metadata use the same readable model names
   as the new-conversation picker. The menu includes provider icons, search, a short
   **Recommended** list, and a scrollable **More models** submenu shared with Settings.
+  At phone width there is no room beside the menu, so **More models** replaces the
+  list in place and a **Recommended** row at the top goes back.
 - Chat agents' empty input cycles tips about connectors, skills, mentions, and
   agents; coding agents show **Describe what you want to build**. Type `@` for
   mentions and `/` for skills.
