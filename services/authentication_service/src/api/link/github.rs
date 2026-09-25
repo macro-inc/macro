@@ -22,10 +22,6 @@ pub const REAUTHENTICATION_REQUIRED_MESSAGE: &str = "ReauthenticationRequired";
 pub struct GithubLinkStatusResponse {
     /// Whether the user must reauthenticate their GitHub link.
     pub reauthentication_required: bool,
-    /// Login of the authenticated user's linked GitHub account.
-    pub github_username: String,
-    /// Stable ID of the authenticated user's linked GitHub account.
-    pub github_user_id: String,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
@@ -128,16 +124,12 @@ pub async fn check_github_link_status_handler(
     ip_context: ClientIp,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Json<GithubLinkStatusResponse>, GithubLinkStatusError> {
-    let user_id = &authorization.authorization.user.macro_user_id;
     ctx.github_link_service
-        .check_user_link_token(user_id)
+        .check_user_link_token(&authorization.authorization.user.macro_user_id)
         .await?;
-    let link = ctx.github_link_service.get_user_link(user_id).await?;
 
     Ok(Json(GithubLinkStatusResponse {
         reauthentication_required: false,
-        github_username: link.github_username,
-        github_user_id: link.github_user_id,
     }))
 }
 
