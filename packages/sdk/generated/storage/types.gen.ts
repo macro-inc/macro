@@ -3470,7 +3470,7 @@ export type CreateCommentResponse = CommentThread & {
  */
 export type CreateCrmCommentRequest = {
     /**
-     * Arbitrary client metadata for the comment.
+     * Ignored: messages keep no client metadata.
      */
     metadata?: unknown;
     /**
@@ -3483,8 +3483,7 @@ export type CreateCrmCommentRequest = {
      */
     threadId?: string | null;
     /**
-     * Metadata to set on a newly created thread (ignored when replying
-     * without a value).
+     * Ignored: discussions keep no thread metadata.
      */
     threadMetadata?: unknown;
 };
@@ -4483,8 +4482,8 @@ export type DeleteCommentResponse = {
 };
 
 /**
- * Outcome of soft-deleting a CRM comment: reports whether the parent thread
- * was soft-deleted too (it is when the deleted comment was its last live one).
+ * Outcome of deleting a CRM comment: reports whether its discussion went with
+ * it (it does when the deleted comment was the discussion's first).
  */
 export type DeleteCrmCommentResult = {
     /**
@@ -4492,8 +4491,8 @@ export type DeleteCrmCommentResult = {
      */
     commentId: string;
     /**
-     * Whether the thread itself was soft-deleted because no live comments
-     * remained.
+     * Whether the whole discussion was deleted because the comment was its
+     * first.
      */
     threadDeleted: boolean;
     /**

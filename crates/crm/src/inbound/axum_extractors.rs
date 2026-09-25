@@ -29,15 +29,15 @@ use entity_access::{
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
+use messages::domain::models::MessageParent;
 use uuid::Uuid;
 
 use crate::{
     domain::{
         auth::{CrmCommentReceipt, CrmCompanyReceipt, CrmContactReceipt},
-        comment::CrmCommentEntityType,
         service::CrmService,
     },
-    inbound::axum_router::CrmServiceRef,
+    inbound::axum_router::CrmMessagesRef,
 };
 
 /// Validates that the user satisfies the required permission for a CRM
@@ -198,14 +198,15 @@ where
 /// Validates that the user satisfies the required permission for the CRM
 /// entity (company or contact) a given comment belongs to and mints a
 /// [`CrmCommentReceipt`]. Reads `comment_id` from the path and resolves
-/// the owning entity via `CrmService::get_comment_entity`. The acting user
+/// the owning entity from the comment's message parent. The acting user
 /// is authenticated through the authorization service in router state for
 /// both direct credentials and internal service access. The same
 /// role-to-AccessLevel mapping as the company / contact extractors applies;
 /// hidden parents are invisible to plain members.
 ///
-/// Returns `NotFound` when the comment doesn't exist or is soft-deleted,
-/// so cross-team callers can't probe for comment existence.
+/// Returns `NotFound` when the comment doesn't exist or isn't on a CRM
+/// record, so cross-team callers can't probe for comment existence; the
+/// message store answers a deleted comment with the same 404.
 #[derive(Debug)]
 pub struct CrmCommentAccessLevelExtractor<T: RequiredPermission, C, Eas, Auth> {
     /// Capability token authorizing CRM comment service calls.
@@ -216,7 +217,7 @@ pub struct CrmCommentAccessLevelExtractor<T: RequiredPermission, C, Eas, Auth> {
 impl<T, S, C, Eas, Auth> FromRequestParts<S> for CrmCommentAccessLevelExtractor<T, C, Eas, Auth>
 where
     T: RequiredPermission,
-    CrmServiceRef<C>: FromRef<S>,
+    CrmMessagesRef: FromRef<S>,
     Arc<Eas>: FromRef<S>,
     MacroAuthorizationState<Auth>: FromRef<S>,
     C: CrmService,
@@ -228,7 +229,7 @@ where
 
     #[tracing::instrument(err, skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let CrmServiceRef(crm_service) = <CrmServiceRef<C>>::from_ref(state);
+        let CrmMessagesRef(messages) = CrmMessagesRef::from_ref(state);
         let access_service = <Arc<Eas>>::from_ref(state);
 
         let Path(path_params): Path<HashMap<String, String>> = parts
@@ -243,13 +244,15 @@ where
                 .map_err(ExtractorError::from)?;
         let macro_user_id = authorization.authorization.user.macro_user_id.clone();
 
-        let (crm_entity_type, entity_id) = crm_service
-            .get_comment_entity(&comment_id)
+        let (entity_type, entity_id) = match messages
+            .parent_of(comment_id)
             .await
             .map_err(|_| ExtractorError::Internal)?
-            .ok_or(ExtractorError::NotFound("CRM comment not found"))?;
-
-        let entity_type = entity_type_for(crm_entity_type);
+        {
+            Some(MessageParent::CrmCompany(id)) => (EntityType::CrmCompany, id),
+            Some(MessageParent::CrmContact(id)) => (EntityType::CrmContact, id),
+            _ => return Err(ExtractorError::NotFound("CRM comment not found")),
+        };
         let entity_id_str = entity_id.to_string();
 
         // Map an "access denied" outcome to NotFound so a cross-team caller
@@ -317,11 +320,4 @@ fn extract_comment_id(path_params: &HashMap<String, String>) -> Result<Uuid, Ext
             "missing comment_id path parameter",
         ))?;
     Uuid::parse_str(raw_id).map_err(|_| ExtractorError::BadRequest("invalid comment ID format"))
-}
-
-fn entity_type_for(t: CrmCommentEntityType) -> EntityType {
-    match t {
-        CrmCommentEntityType::CrmCompany => EntityType::CrmCompany,
-        CrmCommentEntityType::CrmContact => EntityType::CrmContact,
-    }
 }

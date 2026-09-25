@@ -41,6 +41,9 @@ pub trait MessageReader: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> Result<Message, MessageError>;
+    /// The parent a message belongs to, for adapters addressed only by message
+    /// id. Grants nothing: callers mint the parent's receipt before any read.
+    async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError>;
 }
 
 /// Conversation mutations under a verified actor and parent capability.
@@ -145,6 +148,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
     ) -> Result<Message, MessageError> {
         MessageService::resolve_legacy(self, access, id, is_thread).await
     }
+    async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+        MessageService::parent_of(self, id).await
+    }
 }
 
 #[async_trait::async_trait]
@@ -243,6 +249,8 @@ mockall::mock! {
     ) -> Result<Vec<Message>, MessageError>;
     /// Read an old link under current parent access.
     async fn resolve_legacy(&self, access: EntityAccessReceipt<MessageView>, id: i64, is_thread: bool) -> Result<Message, MessageError>;
+    /// The parent a message belongs to, for id-addressed adapters.
+    async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError>;
     }
     #[async_trait::async_trait]
     impl MessageCommands for MessageServiceApi {

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT parent_entity_type, parent_entity_id FROM comms_messages WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "parent_entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "parent_entity_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d62a7d3f7487685230ddef2396bd289663ced8c302156ee0babcb17a10188659"
+}
