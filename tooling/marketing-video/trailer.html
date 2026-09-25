@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Macro Trailer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* Type and color follow macro.com (solid-site/src/app/main/index.css):
+   display = Roboto Slab, app UI = Inter, --b0..--b4 surfaces, --c0..--c4 ink, --a0 accent. */
+@font-face { font-family: "Inter"; src: url("fonts/inter-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "display"; src: url("fonts/roboto-slab-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+
+:root {
+  --b0: #000000; --b1: #090909; --b2: #0d0d0d; --b3: #121212; --b4: #3d3d3d;
+  --c0: #ffffff; --c1: #dedede; --c2: #bebebe; --c3: #9e9e9e; --c4: #808080;
+  --a0: #61a3e6;                       /* oklch(0.7 0.12 250), the blue accent (dark-theme.css) */
+  --doc: #b590ff;                      /* --color-violet, the app's doc hue */
+  --card: #121213;                     /* homepage-email-surface: oklch(0.17 0.002 250) */
+  --bubble: #1c1c1d;                   /* --color-surface-3 (UserMessageBubble at Layer depth 3) */
+  --bubble-peer: #18181a;
+  --edge: rgba(255, 255, 255, 0.09);
+  --edge-muted: rgba(255, 255, 255, 0.06);
+  --hover: rgba(255, 255, 255, 0.05);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--b0); }
+body { display: flex; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+html.render body { display: block; min-height: 0; }
+
+#stage {
+  position: relative; width: 1440px; height: 1440px; overflow: hidden; flex: none;
+  background: var(--b0); color: var(--c1);
+  font-family: "Inter", system-ui, sans-serif; font-weight: 400; font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision;
+}
+/* The hero's concentric rings, with a faint bloom behind the center. */
+#rings { position: absolute; left: 720px; top: 720px; width: 2600px; height: 2600px; margin: -1300px 0 0 -1300px; transform-origin: 50% 50%;
+  background:
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 37px, rgba(255,255,255,.055) 37px 38px),
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.035), transparent 45%);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 12%, rgba(0,0,0,.55) 30%, transparent 52%);
+          mask-image: radial-gradient(circle at 50% 50%, #000 12%, rgba(0,0,0,.55) 30%, transparent 52%); }
+#world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+#shape { position: absolute; overflow: hidden; transform-origin: 50% 50%; }
+.layer { position: absolute; transform-origin: 50% 50%; }
+.a { position: absolute; }
+.flex { display: flex; align-items: center; }
+.nowrap { white-space: nowrap; }
+.ic { display: inline-block; flex: none; }
+
+.av { display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 600; flex: none;
+  background: #2a2a2a; color: var(--c1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+/* Inline @mention, as in the editor (UserMention): accent text on an 8% accent wash. */
+.pill { display: inline-block; color: var(--a0); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 30%, transparent); text-underline-offset: 3px; line-height: 1.35; white-space: nowrap; }
+/* Inline document reference (DocumentMention): violet file icon + underlined label. */
+.ref { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ref u { text-decoration-color: rgba(222,222,222,.28); text-decoration-thickness: 1px; text-underline-offset: 3px; color: var(--c1); }
+/* Key hint, as in CommandItem: bordered, rounded-md, tiny type. */
+.kc { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px;
+  border: 1px solid var(--edge); font-size: 12px; font-weight: 500; color: var(--c3); }
+.then { font-size: 12px; color: var(--c4); margin: 0 5px; }
+.caret { display: inline-block; width: 2px; height: 21px; background: var(--c0); border-radius: 1px; margin-left: 1px; }
+.hair { height: 1px; background: var(--edge-muted); }
+
+.rim::after, .glass::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+/* homepage-email-surface::after: a faint edge lit from the upper left */
+.rim::after { background: linear-gradient(135deg, #ffffff18, transparent 45%) border-box, #ffffff08; }
+/* the site's glass rim: specular at upper-left, soft at lower-right */
+.glass::after { background: linear-gradient(135deg, rgba(199,199,199,.135) 0%, transparent 24%, transparent 76%, rgba(199,199,199,.09) 100%); }
+
+/* Home list rows */
+.row { left: 12px; width: 576px; height: 56px; }
+.rowbg { inset: 4px 0; border-radius: 12px; background: var(--hover); opacity: 0; }
+.rlab { left: 54px; top: 16px; font-size: 18px; color: var(--c1); white-space: nowrap; letter-spacing: -0.005em; }
+.dot { right: 20px; top: 24px; width: 8px; height: 8px; border-radius: 50%; background: var(--c0); }
+
+/* Chat bubbles, as on the site's Email and chat section */
+.who { font-size: 14px; color: var(--c4); white-space: nowrap; }
+.bub { height: 52px; border-radius: 24px; background: var(--bubble); box-shadow: 0 2px 8px -4px rgba(0,0,0,.3); display: flex; align-items: center;
+  padding: 0 20px; font-size: 18px; color: var(--c0); white-space: nowrap; gap: 6px; }
+
+/* Mentions menu (MentionsMenu.tsx): w-96, glass, rounded-xl, pt-2 pb-1.5, rows p-1.5 mx-1.5 rounded-md */
+.menu { width: 384px; border-radius: 13px; background: rgb(28,28,30); box-shadow: 0 10px 28px -8px rgba(0,0,0,.35); overflow: hidden; }
+.mlab { left: 14px; font-size: 12px; font-weight: 500; color: var(--c4); white-space: nowrap; }
+.mitem { left: 6px; width: 372px; height: 34px; border-radius: 7px; display: flex; align-items: center; padding: 0 8px; gap: 9px; font-size: 15px; font-weight: 500; color: var(--c0); white-space: nowrap; }
+.badge { font-size: 10px; font-weight: 500; color: var(--c3); background: var(--hover); border-radius: 4px; padding: 3px 6px; line-height: 1; }
+
+/* Doc */
+.dl { font-size: 20px; line-height: 30px; white-space: nowrap; color: var(--c2); }
+.item { display: flex; align-items: center; gap: 10px; font-size: 20px; white-space: nowrap; height: 30px; color: var(--c1); }
+.box { width: 20px; height: 20px; border-radius: 6px; box-shadow: inset 0 0 0 1.5px var(--c4); flex: none; margin-right: 6px; }
+
+/* Task status segments */
+.segl { top: 0; height: 56px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 17px; font-weight: 500; white-space: nowrap; }
+
+/* Command menu (Launcher / CommandItem) */
+.prow { left: 0; width: 600px; height: 48px; }
+.pic { left: 22px; top: 14px; width: 20px; height: 20px; color: var(--c3); }
+.plab { left: 56px; top: 13px; font-size: 17px; color: var(--c1); white-space: nowrap; }
+.phint { right: 20px; top: 13px; display: flex; align-items: center; }
+
+#labels .lab { position: absolute; left: 0; width: 1440px; top: 112px; text-align: center; font-family: display; font-weight: 330;
+  font-size: 84px; line-height: 1; letter-spacing: -0.035em; color: var(--c0); white-space: nowrap; }
+#curPos { position: absolute; left: 0; top: 0; width: 160px; height: 160px; transform-origin: 80px 80px; pointer-events: none; }
+#curRot { position: absolute; left: 80px; top: 80px; width: 0; height: 0; transform-origin: 0 0; }
+#cursor { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+</style>
+<script src="icons.js"></script>
+</head>
+<body>
+<div id="stage">
+  <div id="rings"></div>
+  <div id="world">
+    <div id="shape"></div>
+  </div>
+  <div id="labels"></div>
+  <svg width="0" height="0" style="position:absolute"><filter id="mb" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB"><feGaussianBlur id="mbg" stdDeviation="0 0"/></filter></svg>
+  <div id="curPos"><div id="curRot">
+    <svg id="cursor" viewBox="-2 -2 18 26" width="18" height="26" overflow="visible">
+      <path d="M1 1 L1 18.2 L5.1 14.4 L8.2 21.2 L11.2 19.9 L8.2 13.3 L13.9 13.3 Z" fill="#fff" stroke="#000" stroke-width="1.3" stroke-linejoin="round"/>
+    </svg></div></div>
+</div>
+<script>
+"use strict";
+// =====================================================================
+// Macro trailer: one shape, never cut. Every style is a pure function
+// of time computed in seek(t). No transitions, no timers, no state.
+// =====================================================================
+
+// ---------- timing ----------
+// The story is 28 steps. Music alternates an ambient track (~78 BPM) and a funk
+// track (~110 BPM); each step lasts a whole number of that section's beats, and
+// every section is whole bars, so every change lands on a beat.
+const MUSIC = [ // [song, bpm, beats per step for each step in the section]
+  ["ambient", 78.01, [1, 1, 1, 1, 1, 1, 1, 1]],      // steps 0-7   Get Macro → Home
+  ["funk", 109.95, [1, 2, 2, 1, 1, 1]],             // steps 8-13  Team chat → agent
+  ["ambient", 78.01, [1, 2, 1, 1, 1, 2]],            // steps 14-19 Docs → split view
+  ["funk", 109.95, [1, 1, 1, 1, 2, 1, 2, 3]],       // steps 20-27 Tasks → ⌘K → Get Macro
+];
+const STEP_T = [0];
+for (const [, bpm, beats] of MUSIC) for (const n of beats) STEP_T.push(STEP_T[STEP_T.length - 1] + (n * 60) / bpm);
+const BEATS = STEP_T.length - 1, T = STEP_T[BEATS];
+// step (fractional) → seconds; periodic extension past the loop point
+function B(x) {
+  const k = Math.floor(x / BEATS), r = x - k * BEATS, i = Math.min(BEATS - 1, Math.floor(r));
+  return k * T + STEP_T[i] + (r - i) * (STEP_T[i + 1] - STEP_T[i]);
+}
+function stepAt(t) { let i = 0; while (i < BEATS - 1 && STEP_T[i + 1] <= t) i++; return i + (t - STEP_T[i]) / (STEP_T[i + 1] - STEP_T[i]); }
+
+// ---------- math ----------
+const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
+const lerp = (a, b, p) => a + (b - a) * p;
+const sm = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+const TAU = Math.PI * 2;
+
+// Closed-form unit step response of a damped spring.
+// resp = undamped period (s), damp = damping ratio (<1 gives a tiny overshoot).
+function spr(t, resp = 0.42, damp = 0.82) {
+  if (t <= 0) return 0;
+  const w = TAU / resp;
+  if (damp >= 1) { const e = Math.exp(-w * t); return 1 - e * (1 + w * t); }
+  const wd = w * Math.sqrt(1 - damp * damp), e = Math.exp(-damp * w * t);
+  return 1 - e * (Math.cos(wd * t) + (damp * w / wd) * Math.sin(wd * t));
+}
+// Free response from displacement x0 and velocity v0 (used after a drag release).
+function free(t, x0, v0, resp, damp) {
+  const w = TAU / resp, wd = w * Math.sqrt(1 - damp * damp), e = Math.exp(-damp * w * t);
+  return e * (x0 * Math.cos(wd * t) + ((v0 + damp * w * x0) / wd) * Math.sin(wd * t));
+}
+const mj = (x) => { x = clamp(x); return x * x * x * (10 + x * (-15 + 6 * x)); }; // minimum-jerk
+const bell = (x) => (x <= 0 || x >= 1 ? 0 : 16 * x * x * (1 - x) * (1 - x));
+
+// A value that changes target many times is the sum of one spring per change.
+// Periodic: every change also contributes from the previous loop (t + T), so the
+// last frame flows into the first with matching position and velocity.
+function Track(evs, resp = 0.42, damp = 0.82) {
+  const E = evs.map(([bt, v, r, d]) => ({ t: B(bt), v, r: r ?? resp, d: d ?? damp }));
+  const n = E.length;
+  E.forEach((e, i) => { e.dv = e.v - E[(i + n - 1) % n].v; });
+  const base = E[n - 1].v;
+  const f = (t) => {
+    let v = base;
+    for (const e of E) if (e.dv !== 0) v += e.dv * (spr(t - e.t, e.r, e.d) + spr(t + T - e.t, e.r, e.d));
+    return v;
+  };
+  f.target = (t) => {
+    let best = -Infinity, v = base;
+    for (const e of E) for (const tt of [e.t, e.t - T]) if (tt <= t && tt > best) { best = tt; v = e.v; }
+    return v;
+  };
+  return f;
+}
+
+// Cursor path: sum of minimum-jerk moves, each with a slight perpendicular arc.
+function Path(segs) {
+  const S = segs.map(([b0, b1, x, y, bow]) => ({ t0: B(b0), t1: B(b1), x, y, bow: bow ?? 0.07 }));
+  const n = S.length;
+  S.forEach((s, i) => { const p = S[(i + n - 1) % n]; s.dx = s.x - p.x; s.dy = s.y - p.y; });
+  const bx = S[n - 1].x, by = S[n - 1].y;
+  return (t) => {
+    let x = bx, y = by;
+    for (const s of S) for (const tt of [t, t + T]) {
+      const u = (tt - s.t0) / (s.t1 - s.t0);
+      if (u <= 0) continue;
+      const m = mj(u), bb = bell(u) * s.bow;
+      x += s.dx * m - s.dy * bb;
+      y += s.dy * m + s.dx * bb;
+    }
+    return [x, y];
+  };
+}
+
+// Content enter/exit: its own timing, so swapped text never overlaps.
+function visAmt(t, tin, tout, inResp = 0.3) {
+  const f = (tt) => {
+    if (tt < tin) return null;
+    const pin = spr(tt - tin, inResp, 1);
+    const pout = tout == null ? 0 : sm((tt - tout) / 0.11);
+    return { pin, pout, o: pin * (1 - pout) };
+  };
+  let r = f(t) || { pin: 0, pout: 0, o: 0 };
+  if (tout != null && tout > T) { // only windows that wrap past the loop point
+    const r2 = f(t + T);
+    if (r2 && r2.o > r.o) r = r2;
+  }
+  return r;
+}
+
+
+
+// ---------- color ----------
+const WHITE = [255, 255, 255], CARD = [18, 18, 19], INK = [10, 10, 10], ACC = [97, 163, 230], C4 = [128, 128, 128], C1 = [222, 222, 222];
+const mixc = (a, b, p) => `rgb(${Math.round(lerp(a[0], b[0], p))},${Math.round(lerp(a[1], b[1], p))},${Math.round(lerp(a[2], b[2], p))})`;
+const mix3 = (a, b, p) => [lerp(a[0], b[0], p), lerp(a[1], b[1], p), lerp(a[2], b[2], p)];
+
+// ---------- the app's own icons (icons.js, from solid-site/src/assets/icons) ----------
+window.ICONS["list-checks"] = '<svg style="display:block;width:100%;height:100%;overflow:visible" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5l1.8 1.8L8 5M3 12.5l1.8 1.8L8 11M3 18.5l1.8 1.8L8 17M11.5 7h9.5M11.5 13h9.5M11.5 19h9.5"/></svg>';
+const ic = (name, size, color = "currentColor", h) =>
+  `<span class="ic" style="width:${size}px;height:${h ?? size}px;color:${color}">${window.ICONS[name]}</span>`;
+const MARK = [
+  "M0 10.014v6.801a.75.75 0 0 0 .225.513l2.742 2.644 2.002-.8v-7.099l-2.97-2.859z",
+  "M4.078 4.8v5.786l1.36 1.309v1.313L12.481 20l2.002-.8-.001-7.1L6.078 4z",
+  "M13.594 4.8v5.786l1.36 1.311-.013 1.3L22 20 24 19.2V12.42a.75.75 0 0 0-.225-.533L15.595 4z",
+];
+const markSVG = (size, color, only) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" style="display:block">${(only == null ? MARK : [MARK[only]]).map((d) => `<path d="${d}"/>`).join("")}</svg>`;
+const avatar = (ch, size) => `<div class="av" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.4)}px">${ch}</div>`;
+const macroAv = (size) => `<div class="av" style="width:${size}px;height:${size}px;background:#000;border-radius:${Math.round(size * 0.3)}px">${markSVG(Math.round(size * 0.56), "#fff")}</div>`;
+const stack = (size) => `<div class="flex">${["J", "J", "D"].map((k, i) => `<div style="margin-left:${i ? -8 : 0}px;border-radius:50%;box-shadow:0 0 0 2px var(--card)">${avatar(k, size)}</div>`).join("")}</div>`;
+const docRef = (label, size = 18) => `<span class="ref">${ic("wide-file-md", size, "var(--doc)")}<u>${label}</u></span>`;
+
+// ---------- world geometry ----------
+const TC = { x: -40, y: 50 };
+const DOC = [-320, -340, 320, 340];
+const PMAX = 640;
+const CH = { y1: 240, h: 620 };                     // channel layer: bottom-anchored
+const LR = {
+  btn: [-126, -38, 252, 76],
+  loader: [-36, -36, 72, 72],
+  mark: [-66, -66, 132, 132],
+  home: [-300, -137, 600, 274],
+  chan: [-300, CH.y1 - CH.h, 600, CH.h],
+  doc: [-320, -340, 640, 680],
+  pane: [320, -340, 640, 680],
+  task: [TC.x - 280, TC.y - 136, 560, 272],
+  key: [TC.x - 58, TC.y - 58, 116, 116],
+  pal: [TC.x - 300, TC.y - 204, 600, 408],
+  toast: [-190, -34, 380, 68],
+};
+const TK = LR.task, PL = LR.pal;
+// [beat, x0, y0, x1, y1, radius, color: 0 white (CTA) .. 1 dark card]
+const KF = [
+  [0, -131, -40, 131, 40, 40, 0],                    // hover lift
+  [2, -36, -36, 36, 36, 36, 0],                      // loader
+  [3, -66, -66, 66, 66, 66, 1],                      // the hero's Macro disc
+  [4, -300, -137, 300, 25, 24, 1],                   // Home, 1 row
+  [5, -300, -137, 300, 81, 24, 1],
+  [6, -300, -137, 300, 137, 24, 1],
+  [7.3, -300, -137, 300, 81, 24, 1],                 // done, collapsed
+  [8, -300, CH.y1 - 266, 300, CH.y1, 40, 1],         // #launch
+  [11, -300, CH.y1 - 354, 300, CH.y1, 40, 1],        // sent
+  [12, -300, CH.y1 - 442, 300, CH.y1, 40, 1],        // Macro replies
+  [14, DOC[0], DOC[1], DOC[2], DOC[3], 40, 1],       // doc
+  [20, TK[0], TK[1], TK[0] + TK[2], TK[1] + TK[3], 24, 1],
+  [24, LR.key[0], LR.key[1], LR.key[0] + 116, LR.key[1] + 116, 28, 1],
+  [24.5, PL[0], PL[1], PL[0] + 600, PL[1] + 408, 20, 1],
+  [25, PL[0], PL[1], PL[0] + 600, PL[1] + 216, 20, 1],
+  [25.25, PL[0], PL[1], PL[0] + 600, PL[1] + 168, 20, 1],
+  [26, -190, -34, 190, 34, 34, 0],                   // toast
+  [27, -126, -38, 126, 38, 38, 0],                   // Get Macro (= frame 0)
+];
+const SH = [0.42, 0.82];
+const X0 = Track(KF.map((k) => [k[0], k[1]]), ...SH);
+const Y0 = Track(KF.map((k) => [k[0], k[2]]), ...SH);
+const X1 = Track(KF.map((k) => [k[0], k[3]]), ...SH);
+const Y1 = Track(KF.map((k) => [k[0], k[4]]), ...SH);
+const RAD = Track(KF.map((k) => [k[0], k[5]]), ...SH);
+const COL = Track(KF.map((k) => [k[0], k[6]]), 0.2, 1);
+function tap(t, at, depth, down = 0.14, up = 0.22) { return depth * (spr(t - at + 0.025, down, 1) - spr(t - at - 0.08, up, 0.8)); }
+const shapePress = (t) => tap(t, B(1), 0.045) + tap(t, B(24.25), 0.07);
+
+// ---------- cursor ----------
+const HOME_ROW_Y = (slot) => LR.home[1] + 92 + 28 + 56 * slot;
+const CUR = Path([
+  [1.25, 1.95, 84, 88],
+  [3.3, 4.6, 214, 206],
+  [6.0, 6.85, 222, HOME_ROW_Y(0) + 4],   // "Done E" on the first row
+  [7.35, 7.92, -150, HOME_ROW_Y(0) + 4], // #launch, now in slot 0
+  [8.2, 8.95, 270, 282],                 // clear of the composer
+  [13.2, 13.9, -40, 104],                // the Q3 launch plan reference
+  [14.3, 15.85, 322, 6],                 // doc's right edge
+  [16.06, 17.96, 1052, 16, 0.012],       // drag past max
+  [18.04, 18.7, 1080, 18, 0],
+  [19.06, 19.9, TC.x - 172, TC.y],
+  [20.2, 20.9, TC.x, TC.y + 12],
+  [21.2, 21.9, TC.x + 179, TC.y + 12],
+  [22.2, 22.95, 206, 236],
+  [24.1, 24.7, 330, 300],
+  [27.15, 27.95, 50, 17],
+]);
+const CLICKS = [1, 7, 8, 14, 20, 21, 22].map(B);
+const GRAB = B(16), REL = B(19), SPLIT_END = B(20);
+function cursorPress(t) {
+  let p = 0;
+  for (const c of CLICKS) p += spr(t - c + 0.035, 0.12, 1) - spr(t - c - 0.07, 0.16, 0.9);
+  p += spr(t - GRAB + 0.035, 0.12, 1) - spr(t - REL, 0.16, 0.9);
+  return clamp(p, 0, 1.1);
+}
+
+// ---------- split drag ----------
+function rubber(raw) { if (raw <= PMAX) return Math.max(0, raw); const L = 200, c = 0.55, o = raw - PMAX; return PMAX + L * (1 - 1 / (o * c / L + 1)); }
+const GRAB_X = CUR(GRAB)[0];
+const paneRaw = (t) => CUR(t)[0] - GRAB_X;
+const REL_X0 = rubber(paneRaw(REL)) - PMAX;
+const REL_V0 = (rubber(paneRaw(REL)) - rubber(paneRaw(REL - 0.002))) / 0.002;
+function paneW(t) {
+  if (t < GRAB) return 0;
+  if (t <= REL) return rubber(paneRaw(t));
+  if (t < SPLIT_END) return PMAX + free(t - REL, REL_X0, REL_V0, 0.36, 0.74);
+  return PMAX * (1 - spr(t - SPLIT_END, ...SH));
+}
+const dragDelta = (t) => (t < GRAB ? 0 : paneW(t));
+
+// ---------- camera ----------
+const CAMSPEC = [[0, { s: 2.8 }], [2, { s: 4.2 }], [3, { s: 3.3 }], [4, { fill: 0.84 }], [16, { fill: 0.9, cur: true }],
+  [20, { fill: 0.84 }], [24, { s: 3.5 }], [24.5, { fill: 0.84 }], [26, { s: 2.6 }], [27, { s: 2.8 }]];
+// Feature labels (Instagram viewers aren't reading the UI). None on the first/last step.
+const LABELS = [[4, 8, "Home"], [8, 12, "Team chat"], [12, 14, "AI agents"], [14, 16, "Docs"], [16, 20, "Split view"], [20, 24, "Tasks"], [24, 27, "Command menu"]];
+const labelOn = (bt) => LABELS.some(([a, b]) => bt >= a && bt < b);
+const LABEL_ROOM = 92; // screen px the content drops to clear the label
+function camTarget(t) {
+  const bt = stepAt(t);
+  let sp = CAMSPEC[0][1];
+  for (const [b0, s] of CAMSPEC) if (b0 <= bt) sp = s;
+  const x0 = X0.target(t), y0 = Y0.target(t), y1 = Y1.target(t);
+  const LEAD = 0.14, td = Math.min(t + LEAD, SPLIT_END - 1e-4);
+  let x1 = X1.target(t) + (t >= GRAB - LEAD && t < SPLIT_END ? paneW(td) : 0);
+  if (sp.cur && t >= GRAB && t < SPLIT_END) x1 = Math.max(x1, CUR(td)[0] + 40);
+  const lab = labelOn(bt);
+  const s = (sp.s ?? (sp.fill * 1440) / Math.max(x1 - x0, y1 - y0)) * (lab ? 0.88 : 1);
+  return [Math.log(s), (x0 + x1) / 2, (y0 + y1) / 2 + (sp.dy ?? 0) - (lab ? LABEL_ROOM / s : 0)];
+}
+const CAM_RATE = 240, CAM_N = Math.round(T * CAM_RATE), CR = 0.52, CD = 0.92;
+const camEv = [[], [], []];
+const camBase = camTarget((CAM_N - 1) / CAM_RATE);
+(() => { let prev = camBase; for (let i = 0; i < CAM_N; i++) { const tt = i / CAM_RATE, v = camTarget(tt); for (let k = 0; k < 3; k++) { const dv = v[k] - prev[k]; if (Math.abs(dv) > 1e-9) camEv[k].push([tt, dv]); } prev = v; } })();
+function camAt(t) {
+  const out = [0, 0, 0];
+  for (let k = 0; k < 3; k++) { let v = camBase[k]; for (const [te, dv] of camEv[k]) v += dv * (spr(t - te, CR, CD) + spr(t + T - te, CR, CD)); out[k] = v; }
+  return out;
+}
+
+// ---------- intra-state tracks (resets happen while hidden) ----------
+const SLOT1 = Track([[2, 1], [7.3, 0]], ...SH);
+const SLOT2 = Track([[2, 2], [7.3, 1]], ...SH);
+const H_JAC = Track([[2, 0], [11, 88]], ...SH);
+const H_MAC = Track([[2, 0], [12, 88]], ...SH);
+const PUSH = Track([[2, 0], [9, 246], [9.22, 144], [9.5, 68], [11, 0]], ...SH); // room for the mentions menu
+const MAC_BW = Track([[2, 86], [13, 264]], 0.36, 0.82);          // Macro's bubble: dots → the draft
+const IND_L = Track([[10, 6], [21, 142], [22, 360]], 0.46, 0.86);
+const IND_R = Track([[10, 142], [21, 360], [22, 498]], 0.26, 0.8);
+const IND_C = Track([[10, 0], [22.08, 1]], 0.16, 1);
+
+// Mentions menu: typing "@", "m", "a", "c" filters it; Enter inserts the pill.
+const MENU_BOTTOM = 544;                              // layer y, 8px above the composer
+const M_ROWS = [  // [kind, text, height, hidden-from beat]
+  ["lab", "People", 24, 9.5], ["item", "julia", 34, 9.22], ["item", "maya", 34, 9.5], ["div", "", 18, 9.5],
+  ["lab", "Documents, Agents, & Tasks", 24, null], ["item", "macro", 34, null], ["item", "q3", 34, 9.22], ["item", "check", 34, 9.22],
+];
+const menuLayout = (bt) => { let y = 8; return M_ROWS.map(([, , h, out]) => { const vis = out == null || bt < out; const r = y; if (vis) y += h; return [r, vis]; }).concat([[y + 6, true]]); };
+const M_PH = [9.0, 9.22, 9.5];
+const M_Y = M_ROWS.map((_, i) => Track(M_PH.map((b) => [b, menuLayout(b + 0.01)[i][0]]).concat([[2, menuLayout(9.01)[i][0]]]).sort((a, b) => a[0] - b[0]), 0.3, 0.86));
+const M_H = Track([[2, menuLayout(9.01)[8][0]], ...M_PH.map((b) => [b, menuLayout(b + 0.01)[8][0]])].sort((a, b) => a[0] - b[0]), 0.3, 0.86);
+const M_SEL = [[9.0, 1], [9.22, 2], [9.5, 5]];         // selected row index per phase
+
+const P_SLOT = [
+  Track([[10, 0]]), Track([[10, 1]]), Track([[10, 2]]), Track([[10, 3]]),
+  Track([[10, 4], [25, 0]], 0.3, 0.84), Track([[10, 5], [25, 1], [25.25, 0]], 0.3, 0.84),
+];
+const P_OUT = [25, 25, 25, 25, 25.25, null];
+
+const TYPE1 = "@mac", T1 = [9.0, 9.22, 9.36, 9.5];
+const TYPE2 = " draft the launch plan", T2 = [...TYPE2].map((_, i) => 10.08 + i * 0.04);
+const TYPE3 = "sh", T3 = [25.0, 25.25];
+const typed = (bt, times) => times.filter((x) => x <= bt).length;
+
+// ---------- sound cues ----------
+const CUES = [];
+const cue = (bt, type, gain = 1, extra = {}) => CUES.push({ t: B(bt), type, gain, ...extra });
+cue(0, "hover", 0.5); cue(1, "click"); cue(2, "swish", 0.55); cue(3, "pop");
+cue(4, "tick", 0.8, { pitch: 1 }); cue(5, "tick", 0.8, { pitch: 1.122 }); cue(6, "tick", 0.8, { pitch: 1.26 });
+cue(7, "click"); cue(7.3, "swish", 0.5); cue(8, "click");
+T1.forEach((x, i) => cue(x, "key", 0.55, { seed: i })); cue(9.02, "blip", 0.45); cue(10, "pop"); T2.forEach((x, i) => cue(x, "key", 0.34, { seed: 5 + i }));
+cue(11, "enter"); cue(11.02, "swish", 0.45); cue(12, "blip", 0.7); cue(13, "pop");
+cue(14, "click"); cue(14.03, "swoosh", 0.7);
+cue(16, "grab"); cue(18, "stretch", 0.6); cue(19, "release");
+cue(20, "click"); cue(20.03, "swoosh", 0.55); cue(21, "click"); cue(21.02, "tick", 0.55, { pitch: 1.26 });
+cue(22, "click"); cue(22.02, "chime"); cue(23, "pop", 0.7); cue(23.15, "pop", 0.6, { pitch: 1.2 });
+cue(24, "key", 0.8); cue(24.25, "key", 0.9); cue(24.5, "swoosh", 0.6);
+T3.forEach((x, i) => cue(x, "key", 0.5, { seed: 40 + i }));
+cue(26, "enter"); cue(26.03, "chime", 0.85); cue(27, "swish", 0.55);
+
+// =====================================================================
+// DOM
+// =====================================================================
+const $ = (id) => document.getElementById(id);
+const stage = $("stage"), world = $("world"), shape = $("shape"), rings = $("rings");
+const cursorEl = $("cursor"), curPos = $("curPos"), curRot = $("curRot"), mbg = $("mbg");
+const L = {};
+function layer(name, html) {
+  const [, , w, h] = LR[name];
+  const el = document.createElement("div");
+  el.className = "layer"; el.id = "L-" + name;
+  el.style.width = w + "px"; el.style.height = h + "px";
+  el.innerHTML = html; shape.appendChild(el); L[name] = el;
+}
+
+// The site's CTA: a white "Get Started" pill.
+layer("btn", `<div class="a flex" style="inset:0;justify-content:center;gap:12px;color:#0a0a0a;font-size:27px;font-weight:500;letter-spacing:-0.015em">${markSVG(28, "#0a0a0a")}<span>Get Macro</span></div>`);
+
+layer("loader", `<svg class="a" width="72" height="72" viewBox="0 0 72 72" style="left:0;top:0">
+  <circle cx="36" cy="36" r="19" fill="none" stroke="rgba(0,0,0,.12)" stroke-width="4.5"/>
+  <circle id="ringArc" cx="36" cy="36" r="19" fill="none" stroke="#0a0a0a" stroke-width="4.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1 1"/></svg>`);
+
+layer("mark", `<div class="a" style="inset:0;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1), inset 0 1px 0 rgba(255,255,255,.08)"></div>` +
+  [0, 1, 2].map((k) => `<div class="a" id="mk${k}" style="left:34px;top:34px;width:64px;height:64px">${markSVG(64, "#fff", k)}</div>`).join(""));
+
+// Home: the app's "Home" feed (HomeAppPreview on the site).
+const homeRow = (id, icon, label, extra = "") =>
+  `<div class="a row" id="${id}"><div class="a rowbg"></div><div class="a" style="left:16px;top:17px" id="${id}ic">${ic(icon, 22, "var(--c2)")}</div>` +
+  `<div class="a rlab">${label}</div>${extra}</div>`;
+layer("home", `
+  <div class="a nowrap" style="left:28px;top:18px;font-size:22px;font-weight:600;letter-spacing:-0.015em;color:var(--c0)">Home</div>
+  <div class="a" style="right:26px;top:21px;color:var(--c4)">${ic("square-sidebar", 20)}</div>
+  <div class="a" style="left:0;right:0;top:60px" ><div class="hair"></div></div>
+  <div class="a nowrap" style="left:28px;top:70px;font-size:14px;color:var(--c4)">Last few minutes</div>
+  ${homeRow("r0", "wide-email", "Thursday’s launch",
+    `<div class="a dot" id="r0dot"></div>
+     <div class="a" id="r0done" style="left:16px;top:17px;opacity:0">${ic("square-task-done-circle", 22, "var(--a0)")}</div>
+     <div class="a flex nowrap" id="r0hint" style="right:14px;top:13px;height:30px;padding:0 6px 0 12px;gap:8px;border-radius:9px;background:rgba(255,255,255,.07);font-size:15px;color:var(--c1);font-weight:500">Done<span class="kc">E</span></div>`)}
+  ${homeRow("r1", "wide-channel", "launch", `<div class="a dot"></div>`)}
+  ${homeRow("r2", "list-checks", "Prepare the launch checklist")}
+`);
+
+// #launch: the site's chat bubbles, the real mentions menu, and inline mentions.
+const hdr = (id, w) => `<div class="a" id="${id}" style="left:0;top:0;width:${w}px;height:64px">
+    <div class="a" style="left:26px;top:22px;color:var(--c2)">${ic("wide-channel", 22)}</div>
+    <div class="a nowrap" style="left:58px;top:19px;font-size:21px;font-weight:600;letter-spacing:-0.015em;color:var(--c0)">launch</div>
+    <div class="a" style="right:24px;top:18px">${stack(28)}</div>
+    <div class="a" style="left:0;width:${w + 400}px;bottom:0"><div class="hair"></div></div></div>`;
+const left = (id, av, who, body) => `<div class="a" id="${id}" style="left:0;width:600px;height:88px">
+    <div class="a who" style="left:78px;top:0">${who}</div>
+    <div class="a" style="left:24px;top:28px">${av}</div>
+    <div class="a bub glass" id="${id}b" style="left:72px;top:22px;background:var(--bubble-peer)">${body}</div></div>`;
+const right = (id, av, who, body) => `<div class="a" id="${id}" style="left:0;width:600px;height:88px">
+    <div class="a who" style="right:78px;top:0">${who}</div>
+    <div class="a" style="right:24px;top:28px">${av}</div>
+    <div class="a bub glass" style="right:72px;top:22px">${body}</div></div>`;
+const MENU_ITEMS = {
+  julia: `${avatar("J", 20)}<span>Julia Westphal</span>`,
+  maya: `${avatar("M", 20)}<span>Maya Chen</span>`,
+  macro: `${macroAv(20)}<span>Macro</span><span class="badge">Agent</span>`,
+  q3: `${ic("wide-file-md", 18, "var(--doc)")}<span>Q3 launch plan</span>`,
+  check: `${ic("list-checks", 18, "var(--c3)")}<span>Prepare the launch checklist</span>`,
+};
+layer("chan", `
+  ${hdr("chHdr", 600)}
+  ${left("mJul", avatar("J", 36), "Julia", "Still on for Thursday?")}
+  ${right("mJac", avatar("J", 36), "Jacob", `<span class="pill">@Macro</span><span>draft the launch plan</span>`)}
+  <div class="a" id="mMac" style="left:0;width:600px;height:88px">
+    <div class="a who" style="left:78px;top:0">Macro</div>
+    <div class="a" style="left:24px;top:28px">${macroAv(36)}</div>
+    <div class="a bub glass" id="macBub" style="left:72px;top:22px;padding:0;overflow:hidden;background:var(--bubble-peer)">
+      <div class="a flex" id="dots" style="left:22px;top:21px;gap:7px">${[0, 1, 2].map((k) => `<div id="dot${k}" style="width:9px;height:9px;border-radius:50%;background:var(--a0)"></div>`).join("")}</div>
+      <div class="a flex nowrap" id="macTxt" style="left:20px;top:0;height:52px;gap:6px">Drafted ${docRef("Q3 launch plan")}</div>
+    </div>
+  </div>
+  <div class="a glass" id="comp" style="left:12px;top:552px;width:576px;height:56px;border-radius:28px;background:var(--bubble);box-shadow:0 2px 8px -4px rgba(0,0,0,.3)">
+    <div class="a" style="left:18px;top:17px;width:21px;height:21px;color:var(--c3)">${window.ICONS["paperclip"]}</div>
+    <div class="a" style="right:58px;top:18px;color:var(--c3)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></div>
+    <div class="a flex nowrap" style="left:52px;top:13px;height:30px;font-size:18px;color:var(--c0)">
+      <span id="cph" style="color:var(--c4)">Message #launch</span><span id="cpre" style="color:var(--a0)"></span><span class="pill" id="cchip" style="margin-right:5px">@Macro</span><span id="crest"></span><span class="caret" id="ccar"></span>
+    </div>
+    <div class="a" id="csend" style="right:8px;top:8px;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center">
+      <div id="csendIc">${ic("arrow-up", 18)}</div></div>
+  </div>
+`);
+
+layer("doc", `
+  <div class="a flex nowrap" style="left:30px;top:24px;gap:8px;font-size:15px;color:var(--c4)">
+    ${ic("wide-files", 17)}<span>Docs</span><span style="opacity:.6">/</span><span style="color:var(--c3)">Q3 launch plan</span></div>
+  <div class="a nowrap" style="right:30px;top:24px;font-size:15px;color:var(--c4)">Edited just now</div>
+  <div class="a nowrap" id="dTitle" style="left:30px;top:82px;font-size:46px;font-weight:620;letter-spacing:-0.03em;color:var(--c0)">Q3 launch plan</div>
+  <div class="a flex nowrap" id="dMeta" style="left:32px;top:150px;gap:10px;font-size:16px;color:var(--c4)">${macroAv(24)}<span>Drafted by Macro · linked to #launch</span></div>
+  <div class="a dl" id="dl0" style="left:32px;top:204px">Ship Thursday. Email, messages, docs and tasks</div>
+  <div class="a dl" id="dl1" style="left:32px;top:236px">in one app, with agents that already know the work.</div>
+  <div class="a dl" id="dl2" style="left:32px;top:268px">Owners are tagged below. Macro keeps it current.</div>
+  <div class="a nowrap" id="dHead" style="left:32px;top:330px;font-size:23px;font-weight:600;letter-spacing:-0.015em;color:var(--c0)">Checklist</div>
+  <div class="a item" id="di0" style="left:32px;top:376px"><div class="box"></div>Press kit<span class="pill">@Julia</span></div>
+  <div class="a item" id="di1" style="left:32px;top:428px"><div class="box"></div>Changelog<span class="pill">@Jacob</span></div>
+  <div class="a item" id="di2" style="left:32px;top:480px"><div class="box"></div>Launch email<span class="pill">@Macro</span></div>
+  <div class="a flex nowrap" id="dFoot" style="left:32px;top:600px;gap:20px;font-size:15px;color:var(--c4)">
+    <span class="flex" style="gap:7px">${ic("wide-channel", 17)}launch</span><span class="flex" style="gap:7px">${ic("list-checks", 17)}3 tasks</span><span class="flex" style="gap:7px">${ic("wide-email", 17)}Thursday’s launch</span></div>
+`);
+
+layer("pane", `
+  <div class="a" id="pDiv" style="left:0;top:0;width:1px;height:680px;background:var(--edge)"></div>
+  ${hdr("pHdr", 640)}
+  <div class="a" style="left:0;top:84px">${left("pJul", avatar("J", 36), "Julia", "Still on for Thursday?")}</div>
+  <div class="a" style="left:40px;top:180px">${right("pJac", avatar("J", 36), "Jacob", `<span class="pill">@Macro</span><span>draft the launch plan</span>`)}</div>
+  <div class="a" style="left:0;top:276px">${left("pMac", macroAv(36), "Macro", `Drafted ${docRef("Q3 launch plan")}`)}</div>
+  <div class="a glass" style="left:12px;top:612px;width:616px;height:56px;border-radius:28px;background:var(--bubble)">
+    <div class="a" style="left:18px;top:17px;width:21px;height:21px;color:var(--c3)">${window.ICONS["paperclip"]}</div>
+    <div class="a" style="right:58px;top:18px;color:var(--c3)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></div>
+    <div class="a" style="right:8px;top:8px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center">${ic("arrow-up", 18, "#808080")}</div>
+    <div class="a nowrap" style="left:52px;top:16px;font-size:18px;color:var(--c4)">Message #launch</div></div>
+  <div class="a" id="pHandle" style="left:0;top:312px;width:6px;height:56px;border-radius:3px"></div>
+`);
+
+// Task: the app's status icons (square-task-*-circle) on a liquid segmented control.
+layer("task", `
+  <div class="a flex nowrap" style="left:28px;top:24px;gap:8px;font-size:15px;color:var(--c4)">${ic("wide-file-md", 17, "var(--doc)")}<span>Q3 launch plan</span><span style="opacity:.6">/</span><span>Checklist</span></div>
+  <div class="a" style="left:28px;top:65px;width:28px;height:28px">
+    <div class="a" id="tOpen" style="inset:0">${ic("square-task-created-circle", 28, "var(--c4)")}</div>
+    <div class="a" id="tDone" style="inset:0">${ic("square-task-done-circle", 28, "var(--a0)")}</div></div>
+  <div class="a nowrap" style="left:72px;top:58px;font-size:32px;font-weight:620;letter-spacing:-0.03em;color:var(--c0)">Press kit</div>
+  <div class="a" id="seg" style="left:28px;top:120px;width:504px;height:56px;border-radius:28px;background:#1d1d1d;box-shadow:inset 0 0 0 1px var(--edge-muted)">
+    <div class="a" id="segInd" style="top:6px;height:44px;border-radius:22px;background:#fff"></div>
+    <div class="a segl" id="segl0" style="left:6px;width:136px">${ic("square-task-created-circle", 15)}Todo</div>
+    <div class="a segl" id="segl1" style="left:142px;width:218px">${ic("square-task-in-progress-circle", 15)}In progress</div>
+    <div class="a segl" id="segl2" style="left:360px;width:138px">${ic("square-task-done-circle", 15)}Done</div>
+  </div>
+  <div class="a flex nowrap" id="tJul" style="left:28px;top:200px;gap:10px;font-size:17px;font-weight:500;color:var(--c1)">${avatar("J", 32)}<span>Julia</span></div>
+  <div class="a flex nowrap" id="tDue" style="left:136px;top:199px;height:34px;padding:0 14px;gap:8px;border-radius:17px;background:#1d1d1d;box-shadow:inset 0 0 0 1px var(--edge-muted);font-size:16px;font-weight:500;color:var(--c2)">${ic("wide-calendar", 17)}<span>Thursday</span></div>
+  <div class="a flex nowrap" id="tPri" style="left:290px;top:199px;height:34px;padding:0 14px;gap:8px;border-radius:17px;background:#1d1d1d;box-shadow:inset 0 0 0 1px var(--edge-muted);font-size:16px;font-weight:500;color:var(--c2)">${ic("wide-priority-high", 17, "var(--a0)")}<span>High</span></div>
+`);
+
+layer("key", `<div class="a flex" style="inset:0;justify-content:center;gap:4px;color:#fff;font-size:40px;font-weight:500">
+  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>K</div>
+  <div class="a" style="inset:0;border-radius:28px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12), inset 0 -3px 0 rgba(255,255,255,.05)"></div>`);
+
+const keys = (a, b) => `<span class="kc">${a}</span><span class="then">then</span><span class="kc">${b}</span>`;
+const PROWS = [["wide-email", "Email", keys("G", "E")], ["wide-chat", "Messages", keys("G", "M")], ["wide-files", "Docs", keys("G", "D")],
+  ["list-checks", "Tasks", keys("G", "T")], ["magnifying-glass", "Search everything", `<span class="kc">/</span>`], ["wide-share", "Share Q3 launch plan to #launch", `<span class="kc" id="penter">↵</span>`]];
+layer("pal", `
+  <div class="a" style="left:22px;top:22px;width:20px;height:20px;color:var(--c3)">${window.ICONS["magnifying-glass"]}</div>
+  <div class="a flex nowrap" style="left:56px;top:17px;height:30px;font-size:20px;color:var(--c0)"><span id="pph" style="color:var(--c4)">Search or run a command</span><span id="ptx"></span><span class="caret" id="pcar"></span></div>
+  <div class="a" style="left:0;right:0;top:64px"><div class="hair"></div></div>
+  <div class="a" id="phl" style="left:8px;top:74px;width:584px;height:44px;border-radius:12px;background:rgba(255,255,255,.07)"></div>
+  ${PROWS.map(([icn, lab, hint], i) => `<div class="a prow" id="pr${i}"><div class="a pic">${window.ICONS[icn]}</div><div class="a plab">${lab}</div><div class="a phint">${hint}</div></div>`).join("")}
+  <div class="a" id="pfoot" style="left:0;width:600px;height:40px">
+    <div class="hair"></div>
+    <div class="a flex nowrap" style="left:20px;top:11px;gap:16px;font-size:13px;color:var(--c4)"><span><span class="kc" style="height:18px;min-width:18px">↑↓</span> Navigate</span><span><span class="kc" style="height:18px;min-width:18px">↵</span> Run</span></div>
+  </div>
+`);
+
+layer("toast", `
+  <div class="a" id="toastChk" style="left:20px;top:17px;width:34px;height:34px">
+    <svg width="34" height="34" viewBox="0 0 34 34" style="display:block"><circle cx="17" cy="17" r="17" fill="#61A3E6"/>
+    <path id="toastPath" d="M10.8 17.4l4 4 8.2-8.6" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="1 1"/></svg></div>
+  <div class="a nowrap" style="left:66px;top:20px;font-size:21px;font-weight:500;letter-spacing:-0.01em;color:#0a0a0a">Shared to #launch</div>
+  <div class="a nowrap" style="right:26px;top:22px;font-size:18px;font-weight:500;color:#8a8a8a">Undo</div>
+`);
+
+const shapeRim = document.createElement("div");
+shapeRim.className = "a rim"; shapeRim.style.cssText = "inset:0;border-radius:inherit;z-index:5;pointer-events:none"; shape.appendChild(shapeRim);
+world.insertAdjacentHTML("beforeend", `<div class="a menu glass" id="menu" style="left:24px">
+    <div class="a" id="msel" style="left:6px;width:372px;height:34px;border-radius:7px;background:rgba(255,255,255,.07)"></div>
+    ${M_ROWS.map(([kind, key], i) => kind === "lab" ? `<div class="a mlab" id="mr${i}">${key}</div>`
+      : kind === "div" ? `<div class="a" id="mr${i}" style="left:0;width:384px"><div style="margin-top:9px" class="hair"></div></div>`
+      : `<div class="a mitem" id="mr${i}">${MENU_ITEMS[key]}</div>`).join("")}
+  </div>`);
+const labelsEl = $("labels");
+labelsEl.innerHTML = LABELS.map(([, , txt], i) => `<div class="lab" id="lab${i}">${txt}</div>`).join("");
+const E = {};
+document.querySelectorAll("#world [id]").forEach((el) => { E[el.id] = el; });
+E.r0bg = E.r0.querySelector(".rowbg"); E.r1bg = E.r1.querySelector(".rowbg");
+
+// =====================================================================
+// seek(t)
+// =====================================================================
+let BLUR = 3;
+const px = (v) => v.toFixed(3) + "px";
+function show(el, o) { if (o <= 0.002) { el.style.display = "none"; return false; } el.style.display = ""; el.style.opacity = Math.min(1, o).toFixed(4); return true; }
+function fx(el, o, blur, tr) { if (!show(el, o)) return false; el.style.filter = blur > 0.04 ? `blur(${blur.toFixed(3)}px)` : "none"; el.style.transform = tr || "none"; return true; }
+function swap(el, t, bin, bout, dyIn = 6, inResp) {
+  const r = visAmt(t, B(bin), bout == null ? null : B(bout), inResp);
+  const blur = ((1 - r.pin) * 1.0 + r.pout * 0.9) * BLUR, sc = (0.965 + 0.035 * r.pin) * (1 - 0.025 * r.pout);
+  fx(el, r.o, blur, `translate3d(0,${px((1 - r.pin) * dyIn)},0) scale(${sc.toFixed(4)})`);
+  return r.o;
+}
+function pop(el, t, bin, bout, from = 0.6) {
+  const tin = B(bin), p = spr(t - tin, 0.32, 0.78), pout = bout == null ? 0 : sm((t - B(bout)) / 0.11);
+  fx(el, t < tin ? 0 : clamp(p * 1.6) * (1 - pout), (1 - clamp(p)) * BLUR + pout * BLUR, `scale(${(from + (1 - from) * p).toFixed(4)})`);
+}
+function write(el, t, b0, b1) {
+  const p = sm((t - B(b0)) / (B(b1) - B(b0)));
+  if (!show(el, p > 0 ? 0.25 + 0.75 * p : 0)) return;
+  el.style.clipPath = p >= 1 ? "none" : `inset(-8px ${((1 - p) * 100).toFixed(2)}% -8px -8px)`;
+}
+const placeLayer = (name, x0, y0) => { const [x, y] = LR[name]; L[name].style.left = px(x - x0); L[name].style.top = px(y - y0); };
+function screenPos(tt) { tt = ((tt % T) + T) % T; const c = camAt(tt), u = CUR(tt), k = Math.exp(c[0]); return [720 + (u[0] - c[1]) * k, 720 + (u[1] - c[2]) * k]; }
+
+function seek(tIn) {
+  const t = ((tIn % T) + T) % T, bt = stepAt(t);
+
+  // camera + rings (rings drift with a softened zoom for depth)
+  const [ls, cx, cy] = camAt(t), s = Math.exp(ls);
+  BLUR = 9 / s;
+  world.style.transform = `translate(720px,720px) scale(${s.toFixed(5)}) translate(${px(-cx)},${px(-cy)})`;
+  const rs = Math.pow(s / 2.4, 0.35);
+  rings.style.transform = `translate(${px(-cx * s * 0.08)},${px(-cy * s * 0.08)}) scale(${rs.toFixed(4)})`;
+
+  // the one shape
+  const x0 = X0(t), y0 = Y0(t), x1 = X1(t) + dragDelta(t), y1 = Y1(t);
+  const col = clamp(COL(t)), w = x1 - x0, h = y1 - y0, r = Math.min(RAD(t), w / 2, h / 2);
+  const st = shape.style;
+  st.left = px(x0); st.top = px(y0); st.width = px(w); st.height = px(h); st.borderRadius = px(r);
+  st.background = mixc(WHITE, CARD, col);
+  st.transform = `scale(${(1 - shapePress(t)).toFixed(5)})`;
+  st.boxShadow = `0 10px 40px -8px rgba(0,0,0,.27), 0 30px 80px -10px rgba(0,0,0,.55)`;
+  shapeRim.style.opacity = col.toFixed(3);
+  for (const k in L) placeLayer(k, x0, y0);
+
+  // headline over the CTA (the site hero), gone on click
+
+  swap(L.btn, t, 27.06, 30.0);
+
+  if (swap(L.loader, t, 2.06, 3.0) > 0) {
+    const p = mj((bt - 2.08) / 0.8);
+    E.ringArc.style.strokeDashoffset = (1 - p).toFixed(4);
+    E.ringArc.style.transformOrigin = "36px 36px"; E.ringArc.style.transform = `rotate(${(-90 + 150 * p).toFixed(2)}deg)`;
+  }
+
+  if (swap(L.mark, t, 3.0, 4.0, 0) > 0) {
+    [0, 1, 2].forEach((k) => {
+      const t0 = B(3) + 0.02 + k * 0.055, p = spr(t - t0, 0.28, 0.8);
+      fx(E["mk" + k], t < t0 ? 0 : clamp(p * 1.5), (1 - clamp(p)) * BLUR, `translate3d(0,${px((1 - p) * 12)},0) scale(${(0.7 + 0.3 * p).toFixed(4)})`);
+    });
+  }
+
+  // ----- Home -----
+  if (swap(L.home, t, 4.02, 8.0, 0) > 0) {
+    const slots = [0, SLOT1(t), SLOT2(t)];
+    [0, 1, 2].forEach((i) => {
+      const el = E["r" + i];
+      el.style.top = px(92 + 56 * slots[i]);
+      const tin = B(4 + i), p = spr(t - tin, 0.36, 0.84), pout = i === 0 ? sm((t - B(7.22)) / 0.13) : 0;
+      fx(el, t < tin ? 0 : clamp(p * 1.3) * (1 - pout), ((1 - clamp(p)) + pout) * BLUR, `translate3d(0,${px((1 - p) * 16 - pout * 8)},0)`);
+    });
+    const hov = sm((t - B(6.62)) / 0.09);
+    E.r0bg.style.opacity = hov.toFixed(3);
+    E.r0dot.style.opacity = (1 - hov).toFixed(3);
+    E.r0hint.style.opacity = hov.toFixed(3);
+    E.r0hint.style.transform = `translate3d(${px((1 - hov) * 6)},0,0) scale(${(1 - tap(t, B(7), 0.06)).toFixed(4)})`;
+    const d = spr(t - B(7), 0.22, 1);
+    E.r0ic.style.opacity = (1 - d).toFixed(3);
+    E.r0done.style.opacity = d.toFixed(3); E.r0done.style.transform = `scale(${(0.6 + 0.4 * d).toFixed(4)})`;
+    E.r1bg.style.opacity = (sm((t - B(7.82)) / 0.08) * (1 + tap(t, B(8), 0.8))).toFixed(3);
+  }
+
+  // ----- #launch -----
+  E.menu.style.display = "none"; // lives outside the card; hidden unless the thread sets it
+  if (swap(L.chan, t, 8.06, 14.0, 0) > 0) {
+    E.chHdr.style.top = px(y0 - LR.chan[1]);
+    const hJ = H_JAC(t), hM = H_MAC(t), bottom = 536;
+    const macTop = bottom - hM, jacTop = macTop - hJ, julTop = jacTop - 88;
+    E.mJul.style.top = px(julTop); E.mJac.style.top = px(jacTop); E.mMac.style.top = px(macTop);
+    swap(E.mJul, t, 8.12, null, 10); swap(E.mJac, t, 11.0, null, 16); swap(E.mMac, t, 12.0, null, 16);
+    E.macBub.style.width = px(MAC_BW(t));
+    const dv = visAmt(t, B(12.05), B(13));
+    if (fx(E.dots, dv.o, dv.pout * BLUR)) {
+      [0, 1, 2].forEach((k) => {
+        const ph = ((bt - 12) * 2 - k * 0.22) % 1, pulse = Math.pow(Math.max(0, Math.sin(Math.PI * ((ph + 1) % 1))), 3);
+        E["dot" + k].style.opacity = (0.35 + 0.65 * pulse).toFixed(3); E["dot" + k].style.transform = `translate3d(0,${px(-4 * pulse)},0)`;
+      });
+    }
+    swap(E.macTxt, t, 13.06, null, 6);
+    // the doc reference under the cursor
+    E.macTxt.style.transform += ` scale(${(1 - tap(t, B(14), 0.03)).toFixed(4)})`;
+
+    // mentions menu
+    const mv = visAmt(t, B(9.02), B(10.0), 0.26);
+    if (fx(E.menu, mv.o, (1 - mv.pin + mv.pout) * BLUR, `translate3d(0,${px((1 - mv.pin) * 10)},0) scale(${(0.97 + 0.03 * mv.pin).toFixed(4)})`)) {
+      const mh = M_H(t);
+      E.menu.style.height = px(mh); E.menu.style.top = px(LR.chan[1] + MENU_BOTTOM - mh); E.menu.style.left = px(LR.chan[0] + 12); E.menu.style.zIndex = 10;
+      M_ROWS.forEach(([kind, , , out], i) => {
+        const el = E["mr" + i], y = M_Y[i](t);
+        el.style.top = px(y + (kind === "lab" ? 4 : 0));
+        const po = out == null ? 0 : sm((t - B(out)) / 0.09);
+        fx(el, 1 - po, po * BLUR);
+      });
+      let sel = 1; for (const [b0, k] of M_SEL) if (bt >= b0) sel = k;
+      E.msel.style.top = px(M_Y[sel](t));
+    }
+    // composer
+    const n1 = typed(bt, T1), n2 = typed(bt, T2), chip = bt >= 10, sent = bt >= 11;
+    E.cph.style.display = n1 === 0 || sent ? "" : "none";
+    E.cpre.style.display = !chip && n1 > 0 && !sent ? "" : "none"; E.cpre.textContent = TYPE1.slice(0, n1);
+    const cp = spr(t - B(10), 0.3, 0.72);
+    E.cchip.style.display = chip && !sent ? "" : "none";
+    E.cchip.style.transform = `scale(${(0.8 + 0.2 * cp).toFixed(4)})`; E.cchip.style.opacity = clamp(cp * 1.4).toFixed(3);
+    E.crest.style.display = chip && !sent ? "" : "none"; E.crest.textContent = TYPE2.slice(0, n2).replace(/^ /, "");
+    const typing = (bt >= 8.9 && bt < 9.6) || (bt >= 10 && bt < 11);
+    E.ccar.style.opacity = bt > 8.45 && !sent && (typing || (bt % 1) < 0.5) ? "1" : "0";
+    const hasText = n1 > 0 && !sent;
+    E.csend.style.background = hasText ? "#fff" : "rgba(255,255,255,.06)";
+    E.csendIc.style.color = hasText ? "#0a0a0a" : "#808080";
+    E.csend.style.transform = `scale(${(1 - tap(t, B(11), 0.08)).toFixed(4)})`;
+  }
+
+  // ----- doc -----
+  if (swap(L.doc, t, 14.08, 20.0, 0) > 0) {
+    write(E.dTitle, t, 14.22, 14.62); write(E.dMeta, t, 14.5, 14.8);
+    write(E.dl0, t, 15.0, 15.3); write(E.dl1, t, 15.18, 15.48); write(E.dl2, t, 15.36, 15.62);
+    swap(E.dHead, t, 15.5, null, 8); swap(E.di0, t, 15.62, null, 8); swap(E.di1, t, 15.72, null, 8); swap(E.di2, t, 15.82, null, 8);
+    swap(E.dFoot, t, 15.9, null, 6);
+  }
+
+  // ----- split pane -----
+  const pw = dragDelta(t);
+  if (t >= GRAB - 0.3 && bt < 20.5) {
+    const pout = sm((t - B(20)) / 0.11);
+    fx(L.pane, 1 - pout, pout * BLUR);
+    E.pDiv.style.opacity = clamp(pw / 30).toFixed(3);
+    const hovH = sm((t - B(15.7)) / 0.1) * (1 - sm((t - REL - 0.15) / 0.2));
+    const held = t >= GRAB && t <= REL ? 1 : 0;
+    const over = Math.max(0, rubber(paneRaw(t)) - PMAX) * held + Math.max(0, pw - PMAX) * (1 - held);
+    const hh = 56 + over * 0.9, hw = 6 - Math.min(2, over * 0.03), hx = (x1 - LR.pane[0]) - 16;
+    const H = E.pHandle.style;
+    H.left = px(hx - hw / 2); H.width = px(hw); H.top = px(340 - hh / 2); H.height = px(hh); H.borderRadius = px(hw / 2);
+    H.background = mixc([90, 90, 90], [255, 255, 255], clamp(held));
+    H.opacity = hovH.toFixed(3);
+  } else L.pane.style.display = "none";
+
+  // ----- task -----
+  if (swap(L.task, t, 20.08, 24.0, 0) > 0) {
+    const iL = IND_L(t), iR = IND_R(t), acc = clamp(IND_C(t));
+    const nat = IND_R.target(t) - IND_L.target(t), stretch = Math.max(0, (iR - iL) - nat), ih = 44 - Math.min(7, stretch * 0.05);
+    const I = E.segInd.style;
+    I.left = px(iL); I.width = px(iR - iL); I.top = px(28 - ih / 2); I.height = px(ih); I.borderRadius = px(ih / 2);
+    I.background = mixc(WHITE, ACC, acc);
+    [[6, 142], [142, 360], [360, 498]].forEach(([a, b], k) => {
+      const cov = clamp((Math.min(iR, b) - Math.max(iL, a)) / (b - a));
+      E["segl" + k].style.color = mixc(C4, mix3(INK, WHITE, acc), cov);
+    });
+    const done = spr(t - B(22), 0.22, 1);
+    E.tOpen.style.opacity = (1 - done).toFixed(3);
+    E.tDone.style.opacity = done.toFixed(3); E.tDone.style.transform = `scale(${(0.5 + 0.5 * done).toFixed(4)})`;
+    pop(E.tJul, t, 23.0, null, 0.7); pop(E.tDue, t, 23.12, null, 0.7); pop(E.tPri, t, 23.24, null, 0.7);
+  }
+
+  swap(L.key, t, 24.03, 24.5, 0);
+
+  // ----- command menu -----
+  if (swap(L.pal, t, 24.54, 26.0, 0) > 0) {
+    const n3 = typed(bt, T3);
+    E.pph.style.display = n3 ? "none" : ""; E.ptx.textContent = TYPE3.slice(0, n3);
+    E.pcar.style.opacity = n3 > 0 || (bt % 1) < 0.5 ? "1" : "0";
+    PROWS.forEach((_, i) => {
+      const el = E["pr" + i]; el.style.top = px(72 + 48 * P_SLOT[i](t));
+      const tin = B(24.56) + i * 0.028, p = spr(t - tin, 0.32, 1), pout = P_OUT[i] == null ? 0 : sm((t - B(P_OUT[i])) / 0.1);
+      fx(el, t < tin ? 0 : p * (1 - pout), ((1 - p) + pout) * BLUR, `translate3d(0,${px((1 - p) * 10)},0)`);
+    });
+    E.pfoot.style.top = px(y1 - y0 - 40 - (LR.pal[1] - y0));
+    E.penter.style.color = bt >= 25.25 ? "var(--c0)" : "";
+    E.phl.style.background = `rgba(255,255,255,${(0.07 + 0.06 * clamp(tap(t, B(26), 1))).toFixed(3)})`;
+  }
+
+  if (swap(L.toast, t, 26.05, 27.0, 0) > 0) {
+    pop(E.toastChk, t, 26.06, null, 0.5);
+    E.toastPath.style.strokeDashoffset = (1 - sm((t - B(26.1)) / 0.16)).toFixed(4);
+  }
+
+  // ----- feature labels -----
+  LABELS.forEach(([a, b], i) => {
+    const r = visAmt(t, B(a) + 0.08, B(b) - 0.02, 0.34), el = $("lab" + i);
+    fx(el, r.o, ((1 - r.pin) * 12 + r.pout * 10), `translate3d(0,${px((1 - r.pin) * 14)},0)`);
+  });
+
+  // ----- cursor -----
+  const [wx, wy] = CUR(t), sx = 720 + (wx - cx) * s, sy = 720 + (wy - cy) * s;
+  const cs = ((36 * Math.sqrt(s)) / 26) * (1 - 0.12 * cursorPress(t));
+  const dt = 1 / 960, pa = screenPos(t - dt), pb = screenPos(t + dt);
+  const vx = (pb[0] - pa[0]) / (2 * dt), vy = (pb[1] - pa[1]) / (2 * dt);
+  const sigma = (Math.hypot(vx, vy) / 480) * 0.45, ang = (Math.atan2(vy, vx) * 180) / Math.PI;
+  curPos.style.transform = `translate(${px(sx - 80)},${px(sy - 80)}) rotate(${ang.toFixed(3)}deg)`;
+  curRot.style.transform = `rotate(${(-ang).toFixed(3)}deg)`;
+  if (sigma > 0.25) { mbg.setAttribute("stdDeviation", `${sigma.toFixed(3)} 0`); curPos.style.filter = "url(#mb)"; } else curPos.style.filter = "none";
+  cursorEl.style.transform = `scale(${cs.toFixed(4)}) translate(-3px,-3px)`;
+  cursorEl.style.filter = `drop-shadow(0 ${px(1.2)} ${px(2)} rgba(0,0,0,.5))`;
+}
+
+// ---------- boot ----------
+window.seek = seek; window.DURATION = T; window.CUES = CUES; window.B = B; window.MUSIC = MUSIC;
+window.probe = (t) => { t = ((t % T) + T) % T; const c = camAt(t), cu = CUR(t);
+  return [X0(t), Y0(t), X1(t) + dragDelta(t), Y1(t), RAD(t), COL(t), Math.exp(c[0]), c[1], c[2], cu[0], cu[1], IND_L(t), IND_R(t)]; };
+window.ready = Promise.all(['400 20px "Inter"', '500 20px "Inter"', '600 20px "Inter"', '380 40px "display"'].map((f) => document.fonts.load(f)))
+  .then(() => document.fonts.ready).then(() => { seek(0); return true; });
+
+const params = new URLSearchParams(location.search);
+if (params.has("render")) {
+  document.documentElement.classList.add("render");
+} else {
+  const fit = () => { const k = Math.min(innerWidth, innerHeight) / 1440;
+    Object.assign(stage.style, { position: "fixed", left: "50%", top: "50%", transformOrigin: "50% 50%", transform: `translate(-50%,-50%) scale(${k})` }); };
+  addEventListener("resize", fit); fit();
+  const audio = new Audio("macro-trailer-audio.m4a"); audio.loop = true;
+  let t0 = performance.now(), useAudio = false;
+  addEventListener("pointerdown", () => { audio.currentTime = 0; audio.play().then(() => { useAudio = true; }).catch(() => {}); t0 = performance.now(); });
+  const at = params.has("t") ? parseFloat(params.get("t")) : null;
+  window.ready.then(() => {
+    if (at != null) { seek(at); return; }
+    const loop = () => { seek(useAudio ? audio.currentTime : (performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
+  });
+}
+</script>
+</body>
+</html>

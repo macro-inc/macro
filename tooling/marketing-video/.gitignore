@@ -1,0 +1,5 @@
+audio/*.mp3
+audio/*.wav
+audio/cues.json
+stills/
+/macro-trailer*.mp4
