@@ -341,6 +341,11 @@
 
       deployServiceBinaryDefinitions = [
         {
+          serviceName = "preview-gateway";
+          packageName = "preview_gateway";
+          binaries = [ "preview_gateway" ];
+        }
+        {
           serviceName = "agent-harness-service";
           packageName = "agent_harness_service";
           binaries = [ "agent_harness_service" ];
@@ -522,6 +527,7 @@
       );
 
       localStackDeployServiceNames = [
+        "preview-gateway"
         "agent-harness-service"
         "agent-schedule-service"
         "calendar-service"

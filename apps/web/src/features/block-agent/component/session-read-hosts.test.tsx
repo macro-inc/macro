@@ -82,6 +82,9 @@ vi.mock('@core/component/EntityLoadGate', () => ({
   LoadErrorPanel: () => <div>Unable to load</div>,
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
+// Chrome, and query-backed: both hosts render it, and this file mounts them
+// without a QueryClientProvider.
+vi.mock('./AgentPreviewBanner', () => ({ AgentPreviewBanner: () => null }));
 vi.mock('@core/component/AI/component/ProviderIcon', () => ({
   modelProvider: () => undefined,
   ProviderIcon: () => null,

@@ -7,6 +7,7 @@ import {
 } from '@app/features/agent-changes/agent-changes';
 import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
+import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { AgentSessionReadMarker } from '@app/features/block-agent/component/AgentSessionReadMarker';
 import {
@@ -269,6 +270,7 @@ function SessionContent(props: {
                   </Show>
                 }
               >
+                <AgentPreviewBanner />
                 <div class="transcript-host">
                   <Transcript />
                 </div>

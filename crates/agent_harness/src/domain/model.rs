@@ -850,6 +850,10 @@ impl SandboxEgress {
                 INTERNAL_MCP_NAME.to_owned(),
                 format!("{}/mcp/internal", self.base_url),
             ),
+            (
+                "macro-preview".to_owned(),
+                format!("{}/mcp-preview", self.base_url),
+            ),
         ]
         .into_iter()
         .chain(
@@ -867,6 +871,18 @@ impl SandboxEgress {
                     "Authorization",
                     self.authorization_header(),
                 )]),
+        )
+    }
+
+    /// Preview-only MCP endpoint, authenticated by the same session credential.
+    pub fn preview_mcp_server(&self) -> AcpMcpServer {
+        AcpMcpServer::Http(
+            McpServerHttp::new("macro-preview", format!("{}/mcp-preview", self.base_url)).headers(
+                vec![HttpHeader::new(
+                    "Authorization",
+                    self.authorization_header(),
+                )],
+            ),
         )
     }
 

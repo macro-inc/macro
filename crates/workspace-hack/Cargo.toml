@@ -40,12 +40,17 @@ byteorder = { version = "1" }
 bytes = { version = "1", features = ["serde"] }
 bzip2 = { version = "0.5", features = ["libbz2-rs-sys"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["__disabled"] }
+chacha20 = { version = "0.10", default-features = false, features = ["legacy", "rng", "zeroize"] }
 chrono = { version = "0.4", features = ["serde"] }
+cipher = { version = "0.5", default-features = false, features = ["block-padding", "rand_core", "stream-wrapper"] }
 crossbeam-utils = { version = "0.8" }
 crypto-bigint = { version = "0.5", features = ["generic-array", "zeroize"] }
-crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "std"] }
+crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
+crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
+ctutils = { version = "0.4", default-features = false, features = ["subtle"] }
 derive_more = { version = "2", features = ["add", "add_assign", "display", "from"] }
-digest = { version = "0.10", features = ["mac", "oid", "std"] }
+digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
+digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid", "rand_core"] }
 doppleganger = { version = "0.5", default-features = false, features = ["chrono", "uuid"] }
 doppleganger-core = { version = "0.5", default-features = false, features = ["chrono", "uuid"] }
 either = { version = "1", features = ["serde", "use_std"] }
@@ -65,16 +70,19 @@ futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std", "wasm_js"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
+getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng", "wasm_js"] }
 hashbrown-582f2526e08bb6a0 = { package = "hashbrown", version = "0.14", features = ["raw"] }
 hashbrown-9067fe90e8c1f593 = { package = "hashbrown", version = "0.17" }
 hashbrown-986da7b5efc2b80e = { package = "hashbrown", version = "0.16" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
+hybrid-array = { version = "0.4", default-features = false, features = ["alloc", "ctutils", "extra-sizes", "subtle", "zeroize"] }
 hyper-582f2526e08bb6a0 = { package = "hyper", version = "0.14", default-features = false, features = ["client", "http1", "http2", "runtime", "server", "stream"] }
 hyper-dff4ba8e3ae991db = { package = "hyper", version = "1", features = ["full"] }
 hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false, features = ["acceptor", "http1", "http2", "logging", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
+inout = { version = "0.2", default-features = false, features = ["block-padding"] }
 insta = { version = "1", features = ["glob", "json"] }
 itertools = { version = "0.13" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
@@ -127,7 +135,7 @@ spin = { version = "0.9", default-features = false, features = ["once", "spin_mu
 sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki", "any", "chrono", "json", "migrate", "offline", "uuid"] }
 sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
 stable_deref_trait = { version = "1" }
-subtle = { version = "2" }
+subtle = { version = "2", features = ["const-generics"] }
 sync_wrapper = { version = "1", default-features = false, features = ["futures"] }
 thiserror = { version = "2" }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
@@ -176,13 +184,18 @@ bytes = { version = "1", features = ["serde"] }
 bzip2 = { version = "0.5", features = ["libbz2-rs-sys"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["__disabled"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
+chacha20 = { version = "0.10", default-features = false, features = ["legacy", "rng", "zeroize"] }
 chrono = { version = "0.4", features = ["serde"] }
+cipher = { version = "0.5", default-features = false, features = ["block-padding", "rand_core", "stream-wrapper"] }
 crossbeam-utils = { version = "0.8" }
 crypto-bigint = { version = "0.5", features = ["generic-array", "zeroize"] }
-crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "std"] }
+crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
+crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
+ctutils = { version = "0.4", default-features = false, features = ["subtle"] }
 derive_more = { version = "2", features = ["add", "add_assign", "display", "from"] }
 derive_more-impl = { version = "2", features = ["add", "add_assign", "display", "from"] }
-digest = { version = "0.10", features = ["mac", "oid", "std"] }
+digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
+digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid", "rand_core"] }
 doppleganger = { version = "0.5", default-features = false, features = ["chrono", "uuid"] }
 doppleganger-core = { version = "0.5", default-features = false, features = ["chrono", "uuid"] }
 either = { version = "1", features = ["serde", "use_std"] }
@@ -202,16 +215,19 @@ futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std", "wasm_js"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
+getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng", "wasm_js"] }
 hashbrown-582f2526e08bb6a0 = { package = "hashbrown", version = "0.14", features = ["raw"] }
 hashbrown-9067fe90e8c1f593 = { package = "hashbrown", version = "0.17" }
 hashbrown-986da7b5efc2b80e = { package = "hashbrown", version = "0.16" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
+hybrid-array = { version = "0.4", default-features = false, features = ["alloc", "ctutils", "extra-sizes", "subtle", "zeroize"] }
 hyper-582f2526e08bb6a0 = { package = "hyper", version = "0.14", default-features = false, features = ["client", "http1", "http2", "runtime", "server", "stream"] }
 hyper-dff4ba8e3ae991db = { package = "hyper", version = "1", features = ["full"] }
 hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false, features = ["acceptor", "http1", "http2", "logging", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
+inout = { version = "0.2", default-features = false, features = ["block-padding"] }
 insta = { version = "1", features = ["glob", "json"] }
 itertools = { version = "0.13" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
@@ -268,7 +284,7 @@ spin = { version = "0.9", default-features = false, features = ["once", "spin_mu
 sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki", "any", "chrono", "json", "migrate", "offline", "uuid"] }
 sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
 stable_deref_trait = { version = "1" }
-subtle = { version = "2" }
+subtle = { version = "2", features = ["const-generics"] }
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "full", "visit-mut"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
@@ -298,12 +314,12 @@ bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 futures-lite = { version = "2" }
-getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
 mio = { version = "1", features = ["net", "os-ext"] }
+nix = { version = "0.31", features = ["feature", "mman"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
@@ -320,12 +336,12 @@ bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 futures-lite = { version = "2" }
-getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
 mio = { version = "1", features = ["net", "os-ext"] }
+nix = { version = "0.31", features = ["feature", "mman"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
@@ -343,11 +359,11 @@ crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 errno = { version = "0.3" }
 futures-lite = { version = "2" }
-getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 mio = { version = "1", features = ["net", "os-ext"] }
+nix = { version = "0.31", features = ["feature", "mman"] }
 objc2 = { version = "0.6" }
 objc2-foundation = { version = "0.3" }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
@@ -366,11 +382,11 @@ crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 errno = { version = "0.3" }
 futures-lite = { version = "2" }
-getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 mio = { version = "1", features = ["net", "os-ext"] }
+nix = { version = "0.31", features = ["feature", "mman"] }
 objc2 = { version = "0.6" }
 objc2-foundation = { version = "0.3" }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }

@@ -148,6 +148,7 @@ impl McpCredentials for SpyCredentials {
     ) -> Result<McpResolution, EgressError> {
         let slug = match destination {
             McpDestination::Connected(slug) => slug.clone(),
+            McpDestination::Preview => unreachable!("preview must never resolve owner credentials"),
             McpDestination::Macro => McpServerSlug::parse("macro").expect("slug"),
         };
         self.asked
@@ -1017,4 +1018,88 @@ async fn a_session_without_a_repository_can_use_mcp_but_cannot_mint_git_credenti
         EgressError::Unauthenticated("the session has no repository for git access")
     ));
     assert!(service.tokens.asked.lock().expect("lock").is_empty());
+}
+
+#[tokio::test]
+async fn preview_uses_only_the_authenticated_session_token_at_a_fixed_destination() {
+    let service = EgressServiceImpl::new(
+        StubSessions::granting(),
+        SpyCredentials::knowing(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    )
+    .with_preview_mcp(
+        "https://preview-control.example/mcp".parse().unwrap(),
+        false,
+    )
+    .unwrap();
+    service
+        .proxy(
+            &SessionToken::new("session-token"),
+            EgressTarget::McpServer(McpDestination::Preview),
+            request(Method::POST, &[("authorization", "Bearer attacker-token")]),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        service.forward.forwarded(|parts| parts.uri.to_string()),
+        "https://preview-control.example/mcp"
+    );
+    assert_eq!(
+        service
+            .forward
+            .forwarded(|parts| parts.headers[AUTHORIZATION].to_str().unwrap().to_owned()),
+        "Bearer session-token"
+    );
+    assert!(service.credentials.asked.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn non_staff_session_owners_can_share_previews_without_workspace_or_git_access() {
+    let service = EgressServiceImpl::new(
+        StubSessions(Ok(SessionGrant {
+            session: AgentSessionId::new(),
+            owner: MacroUserIdStr::try_from_email("viewer@example.com").unwrap(),
+            repo: None,
+            mcp_servers: Vec::new(),
+        })),
+        SpyCredentials::knowing(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    )
+    .with_preview_mcp(
+        "https://preview-control.example/mcp".parse().unwrap(),
+        false,
+    )
+    .unwrap();
+    service
+        .proxy(
+            &SessionToken::new("session-token"),
+            EgressTarget::McpServer(McpDestination::Preview),
+            request(Method::POST, &[]),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        service
+            .proxy(
+                &SessionToken::new("session-token"),
+                EgressTarget::McpServer(McpDestination::Macro),
+                request(Method::POST, &[])
+            )
+            .await,
+        Err(EgressError::Unauthenticated(_))
+    ));
+    assert!(matches!(
+        service
+            .proxy(
+                &SessionToken::new("session-token"),
+                git(GitEndpoint::UploadPack),
+                request(Method::POST, &[])
+            )
+            .await,
+        Err(EgressError::Unauthenticated(_))
+    ));
+    assert!(service.credentials.asked.lock().unwrap().is_empty());
+    assert!(service.tokens.asked.lock().unwrap().is_empty());
 }

@@ -402,19 +402,28 @@ async fn run() -> anyhow::Result<()> {
     // The egress proxy: one binary today, its own listener from the start.
     // Shared with the in-memory runtime, which calls it directly rather than
     // through that listener.
-    let egress = Arc::new(EgressServiceImpl::new(
-        StoredTokenSessionAuthority::new(PgAgentSessionRepo::new(pool.clone())),
-        mcp_credentials,
-        GithubAppTokens::new(InstallationTokenService::new(
-            InstallationTokenConfig {
-                client_id: config.github_sync_app_client_id.clone(),
-                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
-            },
-            PgGithubSyncRepo::new(pool.clone()),
-            GithubSyncClientImpl::default(),
-        )),
-        ReqwestForwarder::new()?,
-    ));
+    let egress = Arc::new(
+        EgressServiceImpl::new(
+            StoredTokenSessionAuthority::new(PgAgentSessionRepo::new(pool.clone())),
+            mcp_credentials,
+            GithubAppTokens::new(InstallationTokenService::new(
+                InstallationTokenConfig {
+                    client_id: config.github_sync_app_client_id.clone(),
+                    private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
+                },
+                PgGithubSyncRepo::new(pool.clone()),
+                GithubSyncClientImpl::default(),
+            )),
+            ReqwestForwarder::new()?,
+        )
+        .with_preview_mcp(
+            url::Url::parse(&format!(
+                "{}/mcp",
+                macro_service_urls::PreviewGatewayUrl::new()?
+            ))?,
+            matches!(config.environment, Environment::Local),
+        )?,
+    );
 
     // The proxy's public address, read once: the provisioner builds the
     // advertised server URLs from it and the in-memory client reads them back
@@ -859,7 +868,8 @@ async fn run() -> anyhow::Result<()> {
             ),
             prompt_context,
             prompt_composer,
-            EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url),
+            EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url)
+                .with_external_base_url(config.external_egress_base_url.clone()),
             RedisCommandForwarder::new(redis.clone()),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
             PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),

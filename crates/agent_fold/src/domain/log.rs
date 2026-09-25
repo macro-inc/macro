@@ -47,6 +47,22 @@ impl AgentSessionId {
     }
 }
 
+/// A string that does not name an agent session.
+#[derive(Debug, thiserror::Error)]
+#[error("invalid agent session id")]
+pub struct InvalidAgentSessionId;
+
+impl std::str::FromStr for AgentSessionId {
+    type Err = InvalidAgentSessionId;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        value
+            .parse::<Uuid>()
+            .map(Self)
+            .map_err(|_| InvalidAgentSessionId)
+    }
+}
+
 impl std::fmt::Display for AgentSessionId {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(formatter)

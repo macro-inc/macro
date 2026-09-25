@@ -2673,7 +2673,12 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     let ClientRequest::NewSessionRequest(open) = &requests[1] else {
         panic!("expected session/new")
     };
-    assert_eq!(open.mcp_servers.len(), 1);
+    assert_eq!(open.mcp_servers.len(), 2);
+    let agent_client_protocol::schema::v1::McpServer::Http(preview) = &open.mcp_servers[1] else {
+        panic!("expected preview HTTP MCP");
+    };
+    assert_eq!(preview.name, "macro-preview");
+    assert!(preview.url.ends_with("/mcp-preview"));
     let agent_client_protocol::schema::v1::McpServer::Http(server) = &open.mcp_servers[0] else {
         panic!("expected HTTP MCP")
     };

@@ -25,6 +25,7 @@ import { useAgentSession } from '../context/AgentSessionContext';
 import { forgetPendingSession } from '../context/pending-session';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { AgentComposer } from './AgentComposer';
+import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { AgentSplitHeader } from './AgentSplitHeader';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
@@ -119,6 +120,7 @@ function AgentBlockContent(props: {
               session={session()}
               title={metadata()?.title ?? undefined}
             />
+            <AgentPreviewBanner />
             {/* The Changes pane opens beside the transcript; closed, the
                 transcript keeps the whole width. */}
             <AgentChangesSplit>
