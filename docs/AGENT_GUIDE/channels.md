@@ -553,10 +553,12 @@ that requests them.
 
 ## Call lifecycle
 
-The channel's call tab and floating call controls share one session. Repeated
-Join clicks while connecting should produce one connection; leaving from either
-control ends the same call. Navigate away and return while connected to check
-that the call and its controls remain usable.
+The active-call panel above the composer, the channel's call tab, and floating
+call controls share one session. Joining from the panel switches the current
+channel surface to the live call. Repeated Join clicks while connecting should
+produce one connection; leaving from either control ends the same call. Navigate
+away and return while connected to check that the call and its controls remain
+usable.
 
 For recovery checks, keep another participant connected and briefly interrupt
 the first participant's network. Recovery may rejoin that same live call. It

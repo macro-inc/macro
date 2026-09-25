@@ -10,28 +10,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { ActiveCallMessage } from '../ActiveCallMessage';
 import { ChannelTabProvider } from '../ChannelTabContext';
 
-const mocks = vi.hoisted(() => ({
-  joinThroughNavigation: vi.fn(),
-}));
-
-vi.mock('@channel/Call/CallContext', () => ({
-  useCallContextOptional: () => ({
-    isInCall: () => false,
-    activeChannelId: () => undefined,
-  }),
-}));
-
-vi.mock('@channel/Call/join-channel-call', () => ({
-  joinChannelCall: mocks.joinThroughNavigation,
-}));
-
 vi.mock('@channel/Call/use-call', () => ({
   useCall: (
     _channelId: () => string,
     options?: { onJoin?: () => void }
   ) => ({
     isInThisChannel: () => false,
-    isJoining: () => false,
     joinCall: async () => options?.onJoin?.(),
   }),
 }));
