@@ -1,5 +1,0 @@
-mutation UpdateEntityPropertyOptions($input: UpdateEntityPropertyOptionsInput!) {
-  updateEntityPropertyOptions(input: $input) {
-    ...SoupPropertyFields
-  }
-}

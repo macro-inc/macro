@@ -128,23 +128,35 @@ export function buildOptimisticSetEntityProperty(
 }
 
 /**
- * Optimistic payload for a multi-select property reaching `optionIds`, or
- * `undefined` when the entity has no assignment for the definition yet (the
- * first tag from a set): that record's id is only known once the server
- * responds, so the write waits for the commit instead of inventing one.
+ * Optimistic record for a multi-select property reaching `optionIds` under
+ * `assignmentId`: the entity's cached assignment, or a temporary id for its
+ * first tag from a set. The server never writes a temporary record, so once
+ * the commit settles only the response's real assignment stays linked.
  */
 export function buildOptimisticEntityPropertyOptions(
   property: Property | PropertyDefinitionDomain,
+  assignmentId: string,
   optionIds: readonly string[]
-): SoupPropertyFieldsFragment | undefined {
-  if (!isInstantiatedProperty(property)) return undefined;
-  return optimisticPropertyRecord(
-    property,
+): SoupPropertyFieldsFragment {
+  const value: GraphqlPropertyValue | null =
     optionIds.length > 0
       ? {
           __typename: 'GraphqlSelectOptionPropertyValue',
           optionIds: [...optionIds],
         }
-      : null
-  );
+      : null;
+  if (isInstantiatedProperty(property)) {
+    return { ...optimisticPropertyRecord(property, value), id: assignmentId };
+  }
+  return {
+    id: assignmentId,
+    propertyDefinitionId: property.id,
+    displayName: property.displayName,
+    dataType: property.valueType,
+    isMultiSelect: property.isMultiSelect,
+    specificEntityType: property.specificEntityType ?? null,
+    isSystem: property.isSystem,
+    isMetadata: property.isMetadata,
+    value,
+  };
 }
