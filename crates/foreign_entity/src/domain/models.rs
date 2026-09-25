@@ -100,6 +100,47 @@ pub struct PatchForeignEntity {
     pub stored_for_auth_entity: Option<String>,
 }
 
+/// Foreign entity source of GitHub pull request records.
+pub const GITHUB_PULL_REQUEST_SOURCE: &str = "github_pull_request";
+
+/// Repositories and authors among the GitHub pull requests a caller can see, each with the
+/// number of distinct pull requests it covers.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestFacets {
+    /// Repositories, most pull requests first.
+    pub repositories: Vec<GithubRepositoryFacet>,
+    /// Authors, most pull requests first.
+    pub authors: Vec<GithubAuthorFacet>,
+}
+
+/// A repository among the visible GitHub pull requests.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubRepositoryFacet {
+    /// The numeric GitHub repository id, which survives renames and transfers.
+    pub repository_id: String,
+    /// The repository's most recently synced name, as `owner/repo`.
+    pub repository: String,
+    /// Number of visible pull requests in the repository.
+    pub count: i64,
+}
+
+/// An author among the visible GitHub pull requests.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubAuthorFacet {
+    /// The author's numeric GitHub user id.
+    pub github_user_id: String,
+    /// The author's most recently synced GitHub login, when known.
+    pub login: Option<String>,
+    /// Number of visible pull requests the author opened.
+    pub count: i64,
+}
+
 /// The identity a by-source foreign entity lookup runs as.
 ///
 /// Inbound adapters resolve the transport credential into one of these

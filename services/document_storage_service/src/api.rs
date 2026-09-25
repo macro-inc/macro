@@ -269,6 +269,11 @@ fn api_router(state: ApiContext) -> Router {
             "/foreign_entity",
             foreign_entity::inbound::axum_router::foreign_entity_router(
                 state.foreign_entity_state.clone(),
+            )
+            .merge(
+                foreign_entity::inbound::axum_router::github_pull_request_facets_router(
+                    state.foreign_entity_state.clone(),
+                ),
             ),
         )
         .nest(

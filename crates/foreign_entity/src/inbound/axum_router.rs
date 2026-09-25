@@ -13,18 +13,25 @@ use axum::{
     routing::get,
 };
 use entity_access::{
-    domain::{models::ViewAccessLevel, ports::EntityAccessService},
-    inbound::axum_extractors::ForeignEntityAccessLevelExtractor,
+    domain::{
+        models::{MemberTeamRole, ViewAccessLevel},
+        ports::EntityAccessService,
+    },
+    inbound::axum_extractors::{
+        ForeignEntityAccessLevelExtractor, OptionalMacroUserTeamExtractorV2,
+    },
 };
 use macro_authorization::{
-    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
-    OptionalMacroAuthorizationExtractor,
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, OptionalMacroAuthorizationExtractor, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
-    models::{ForeignEntity, ForeignEntityError, ForeignEntityLookupCaller},
-    ports::ForeignEntityService,
+    models::{
+        ForeignEntity, ForeignEntityError, ForeignEntityLookupCaller, GithubPullRequestFacets,
+    },
+    ports::{ForeignEntityService, GithubPullRequestFacetService},
     service::get_visible_foreign_entity_by_source,
 };
 
@@ -103,6 +110,29 @@ where
         .route(
             "/by_source/{source}/{*foreign_entity_id}",
             get(get_foreign_entity_by_source_handler::<S, AccessSvc, Auth>),
+        )
+        .with_state(state)
+}
+
+/// Build the router for aggregate views over GitHub pull request foreign entities.
+///
+/// Routes:
+/// - `GET /github_pull_request/facets` — repositories and authors among the pull requests
+///   visible to the caller, scoped like the Soup listing: the caller's own records plus the
+///   records of the team in the request's team context, if any.
+pub fn github_pull_request_facets_router<S, AccessSvc, Auth, T>(
+    state: ForeignEntityRouterState<S, AccessSvc, Auth>,
+) -> Router<T>
+where
+    S: GithubPullRequestFacetService,
+    AccessSvc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    T: Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            "/github_pull_request/facets",
+            get(get_github_pull_request_facets_handler::<S, AccessSvc, Auth>),
         )
         .with_state(state)
 }
@@ -196,6 +226,41 @@ where
     .await?;
 
     Ok(Json(foreign_entity))
+}
+
+/// List the repositories and authors among the GitHub pull requests visible to the caller.
+#[utoipa::path(
+    get,
+    tag = "foreign_entity",
+    operation_id = "get_github_pull_request_facets",
+    path = "/foreign_entity/github_pull_request/facets",
+    responses(
+        (status = 200, body = GithubPullRequestFacets),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_github_pull_request_facets_handler<S, AccessSvc, Auth>(
+    State(state): State<ForeignEntityRouterState<S, AccessSvc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    team: OptionalMacroUserTeamExtractorV2<MemberTeamRole, AccessSvc, Auth>,
+) -> Result<Json<GithubPullRequestFacets>, ForeignEntityError>
+where
+    S: GithubPullRequestFacetService,
+    AccessSvc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let facets = state
+        .service
+        .get_github_pull_request_facets(
+            authorization.authorization.user.macro_user_id,
+            team.entity_access_receipt,
+        )
+        .await?;
+
+    Ok(Json(facets))
 }
 
 /// Resolve the transport credential into the identity the lookup runs as.

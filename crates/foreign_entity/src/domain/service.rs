@@ -4,26 +4,27 @@
 mod tests;
 
 use entity_access::domain::{
-    models::{AccessError, EntityAccessReceipt, EntityType, ViewAccessLevel},
+    models::{AccessError, EntityAccessReceipt, EntityType, MemberTeamRole, ViewAccessLevel},
     ports::EntityAccessService,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
     CreateForeignEntity, ForeignEntity, ForeignEntityError, ForeignEntityLookupCaller,
-    PatchForeignEntity, SourceId, validate_foreign_entity_lookup,
+    GithubPullRequestFacets, PatchForeignEntity, SourceId, validate_foreign_entity_lookup,
 };
-use super::ports::{ForeignEntityListQuery, ForeignEntityRepository, ForeignEntityService};
+use super::ports::{
+    ForeignEntityListQuery, ForeignEntityRepository, ForeignEntityService,
+    GithubPullRequestFacetRepository, GithubPullRequestFacetService,
+};
 
 /// Concrete foreign entity service implementation.
 pub struct ForeignEntityServiceImpl<R> {
     repo: R,
 }
 
-impl<R> ForeignEntityServiceImpl<R>
-where
-    R: ForeignEntityRepository,
-{
+impl<R> ForeignEntityServiceImpl<R> {
     /// Create a foreign entity service backed by the provided repository.
     pub fn new(repo: R) -> Self {
         Self { repo }
@@ -145,6 +146,35 @@ where
             .await
             .map_err(|error| ForeignEntityError::Internal(error.into()))?
             .ok_or(ForeignEntityError::NotFound(id))
+    }
+}
+
+impl<R> GithubPullRequestFacetService for ForeignEntityServiceImpl<R>
+where
+    R: GithubPullRequestFacetRepository,
+{
+    #[tracing::instrument(err, skip(self, team))]
+    async fn get_github_pull_request_facets(
+        &self,
+        user: MacroUserIdStr<'static>,
+        team: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<GithubPullRequestFacets, ForeignEntityError> {
+        let mut source_ids = vec![SourceId::user(user.as_ref())];
+        if let Some(team) = team {
+            let entity = team.entity();
+            if entity.entity_type != EntityType::Team {
+                return Err(ForeignEntityError::BadRequest(format!(
+                    "expected Team receipt, got {:?}",
+                    entity.entity_type
+                )));
+            }
+            source_ids.push(SourceId::new(entity.entity_id.clone(), "team"));
+        }
+
+        self.repo
+            .get_github_pull_request_facets(source_ids)
+            .await
+            .map_err(|error| ForeignEntityError::Internal(error.into()))
     }
 }
 

@@ -18,6 +18,8 @@ use crate::domain::ports::ForeignEntityListQuery;
 
 use super::*;
 
+mod github_pull_request_facets;
+
 type CreateForeignEntityEdit = fn(&mut CreateForeignEntity);
 
 #[derive(Debug, Clone)]

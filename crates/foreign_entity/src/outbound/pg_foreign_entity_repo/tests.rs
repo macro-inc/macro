@@ -1,3 +1,4 @@
+mod github_pull_request_facets;
 mod notification_state;
 mod pull_request_filters;
 

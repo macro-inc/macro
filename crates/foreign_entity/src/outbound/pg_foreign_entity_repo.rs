@@ -10,8 +10,13 @@ use models_pagination::SimpleSortMethod;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::{CreateForeignEntity, ForeignEntity, PatchForeignEntity, SourceId};
-use crate::domain::ports::{ForeignEntityListQuery, ForeignEntityRepository};
+use crate::domain::models::{
+    CreateForeignEntity, ForeignEntity, GITHUB_PULL_REQUEST_SOURCE, GithubAuthorFacet,
+    GithubPullRequestFacets, GithubRepositoryFacet, PatchForeignEntity, SourceId,
+};
+use crate::domain::ports::{
+    ForeignEntityListQuery, ForeignEntityRepository, GithubPullRequestFacetRepository,
+};
 
 struct ForeignEntityBatchQuery<'a> {
     source_ids: &'a [String],
@@ -583,5 +588,116 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
         )
         .fetch_optional(&self.pool)
         .await
+    }
+}
+
+impl GithubPullRequestFacetRepository for PgForeignEntityRepo {
+    type Err = sqlx::Error;
+
+    #[tracing::instrument(err, skip(self, source_ids))]
+    async fn get_github_pull_request_facets(
+        &self,
+        source_ids: Vec<SourceId>,
+    ) -> Result<GithubPullRequestFacets, Self::Err> {
+        if source_ids.is_empty() {
+            return Ok(GithubPullRequestFacets::default());
+        }
+
+        let (source_ids, source_auth_entities) = source_id_parts(&source_ids);
+
+        // Both queries count one row per pull request, choosing the same most recently updated
+        // record as the list query when a pull request is stored for several sources.
+        let repositories = sqlx::query!(
+            r#"
+            WITH source_ids AS (
+                SELECT DISTINCT stored_for_id, stored_for_auth_entity
+                FROM UNNEST($1::text[], $2::text[])
+                    AS source_rows(stored_for_id, stored_for_auth_entity)
+            ),
+            pull_requests AS (
+                SELECT DISTINCT ON (fe.foreign_entity_id) fe.metadata, fe.updated_at
+                FROM foreign_entity fe
+                WHERE fe.foreign_entity_source = $3
+                  AND EXISTS (
+                    SELECT 1
+                    FROM source_ids s
+                    WHERE s.stored_for_id = fe.stored_for_id
+                      AND s.stored_for_auth_entity = fe.stored_for_auth_entity
+                  )
+                ORDER BY fe.foreign_entity_id, fe.updated_at DESC, fe.id DESC
+            )
+            SELECT
+                metadata ->> 'repositoryId' AS "repository_id!",
+                (ARRAY_AGG((metadata ->> 'owner') || '/' || (metadata ->> 'repo')
+                    ORDER BY updated_at DESC))[1] AS "repository!",
+                COUNT(*) AS "count!"
+            FROM pull_requests
+            WHERE metadata ->> 'repositoryId' IS NOT NULL
+              AND metadata ->> 'owner' IS NOT NULL
+              AND metadata ->> 'repo' IS NOT NULL
+            GROUP BY 1
+            ORDER BY 3 DESC, 2, 1
+            "#,
+            &source_ids,
+            &source_auth_entities,
+            GITHUB_PULL_REQUEST_SOURCE,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let authors = sqlx::query!(
+            r#"
+            WITH source_ids AS (
+                SELECT DISTINCT stored_for_id, stored_for_auth_entity
+                FROM UNNEST($1::text[], $2::text[])
+                    AS source_rows(stored_for_id, stored_for_auth_entity)
+            ),
+            pull_requests AS (
+                SELECT DISTINCT ON (fe.foreign_entity_id) fe.metadata, fe.updated_at
+                FROM foreign_entity fe
+                WHERE fe.foreign_entity_source = $3
+                  AND EXISTS (
+                    SELECT 1
+                    FROM source_ids s
+                    WHERE s.stored_for_id = fe.stored_for_id
+                      AND s.stored_for_auth_entity = fe.stored_for_auth_entity
+                  )
+                ORDER BY fe.foreign_entity_id, fe.updated_at DESC, fe.id DESC
+            )
+            SELECT
+                metadata ->> 'authorId' AS "github_user_id!",
+                (ARRAY_AGG(metadata ->> 'authorLogin' ORDER BY updated_at DESC)
+                    FILTER (WHERE metadata ->> 'authorLogin' IS NOT NULL))[1] AS "login?",
+                COUNT(*) AS "count!"
+            FROM pull_requests
+            WHERE metadata ->> 'authorId' IS NOT NULL
+            GROUP BY 1
+            ORDER BY 3 DESC, 2, 1
+            "#,
+            &source_ids,
+            &source_auth_entities,
+            GITHUB_PULL_REQUEST_SOURCE,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(GithubPullRequestFacets {
+            repositories: repositories
+                .into_iter()
+                .map(|row| GithubRepositoryFacet {
+                    repository_id: row.repository_id,
+                    repository: row.repository,
+                    count: row.count,
+                })
+                .collect(),
+            authors: authors
+                .into_iter()
+                .map(|row| GithubAuthorFacet {
+                    github_user_id: row.github_user_id,
+                    login: row.login,
+                    count: row.count,
+                })
+                .collect(),
+        })
     }
 }

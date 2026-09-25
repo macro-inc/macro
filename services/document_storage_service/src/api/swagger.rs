@@ -86,7 +86,9 @@ use favorites::domain::models::{Favorite, FavoritesList};
 use favorites::inbound::axum_router::{
     AddFavoriteRequest, FavoriteEntityRef, ReorderFavoritesRequest,
 };
-use foreign_entity::domain::models::ForeignEntity;
+use foreign_entity::domain::models::{
+    ForeignEntity, GithubAuthorFacet, GithubPullRequestFacets, GithubRepositoryFacet,
+};
 use initiative::domain::models::{
     AssignTaskStatus, AssignTasksRequest, AssignTasksResponse, AssignTasksResult,
     CreateInitiativeRequest, InitiativeDetail, InitiativeId, InitiativeList, InitiativeSummary,
@@ -404,6 +406,7 @@ use utoipa::OpenApi;
         // foreign_entity
         foreign_entity::inbound::axum_router::get_foreign_entity_handler,
         foreign_entity::inbound::axum_router::get_foreign_entity_by_source_handler,
+        foreign_entity::inbound::axum_router::get_github_pull_request_facets_handler,
 
         // threads
         threads::edit_thread::edit_thread_handler,
@@ -538,6 +541,9 @@ use utoipa::OpenApi;
             SoupPropertiesField,
             SoupForeignEntity,
             ForeignEntity,
+            GithubPullRequestFacets,
+            GithubRepositoryFacet,
+            GithubAuthorFacet,
             Favorite,
             FavoritesList,
             CreatedUserApiKey,

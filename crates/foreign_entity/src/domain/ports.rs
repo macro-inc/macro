@@ -4,13 +4,15 @@
 
 use std::future::Future;
 
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole, ViewAccessLevel};
 use item_filters::ast::{LiteralTree, foreign_entity::ForeignEntityLiteral};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
 use uuid::Uuid;
 
 use super::models::{
-    CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
+    CreateForeignEntity, ForeignEntity, ForeignEntityError, GithubPullRequestFacets,
+    PatchForeignEntity, SourceId,
 };
 
 /// Query type used when listing foreign entities for source ids.
@@ -134,4 +136,28 @@ pub trait ForeignEntityService: Send + Sync + 'static {
         id: Uuid,
         patch: PatchForeignEntity,
     ) -> impl Future<Output = Result<ForeignEntity, ForeignEntityError>> + Send;
+}
+
+/// Repository for aggregate views over GitHub pull request foreign entities.
+pub trait GithubPullRequestFacetRepository: Send + Sync + 'static {
+    /// Error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+
+    /// Count distinct pull requests per repository and per author among the GitHub pull
+    /// request records stored for any of the supplied sources.
+    fn get_github_pull_request_facets(
+        &self,
+        source_ids: Vec<SourceId>,
+    ) -> impl Future<Output = Result<GithubPullRequestFacets, Self::Err>> + Send;
+}
+
+/// Service for aggregate views over GitHub pull request foreign entities.
+pub trait GithubPullRequestFacetService: Send + Sync + 'static {
+    /// Repositories and authors among the GitHub pull requests stored for `user`, plus those
+    /// stored for `team` when the caller is acting within one.
+    fn get_github_pull_request_facets(
+        &self,
+        user: MacroUserIdStr<'static>,
+        team: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<Output = Result<GithubPullRequestFacets, ForeignEntityError>> + Send;
 }
