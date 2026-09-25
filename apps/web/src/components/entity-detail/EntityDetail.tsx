@@ -48,7 +48,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
-import type { EntityDetailTarget } from './EntityDetailNavigationStack';
+import type { EntityDetailTarget } from './entity-detail-target';
 
 type DocumentDetailContext =
   | MarkdownDetailContext

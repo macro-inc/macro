@@ -276,6 +276,27 @@ describe('settings entry points', () => {
     );
   });
 
+  it('cancels pending panel focus when the settings owner unmounts', () => {
+    vi.useFakeTimers();
+    try {
+      mocks.mobile = false;
+      mocks.hasSettingsSplit = true;
+      const { state } = mountSettings();
+      state.openSettingsInSplit('Appearance');
+      cleanup();
+
+      const querySelector = vi.spyOn(document, 'querySelector');
+      try {
+        vi.advanceTimersByTime(20);
+        expect(querySelector).not.toHaveBeenCalled();
+      } finally {
+        querySelector.mockRestore();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('restores the previous split URL when closing fullscreen settings', () => {
     mocks.mobile = false;
     const { state } = mountSettings();

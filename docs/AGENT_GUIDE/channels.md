@@ -538,7 +538,21 @@ Retry rather than marking just the one unread witness. Repeated mobile taps must
 open the last selected conversation, not a slower earlier request.
 
 Check cached Home → Chat navigation, All/Recent/search, and unread state after a
-read, a new notification, deletion, and reconnect. Cache reads remain asynchronous:
+read, a new notification, deletion, and reconnect, without reloading the page.
+With the mark-read response delayed, channel/DM dots, section counts, and new-activity
+targets should clear as soon as the local read is applied. A failed read restores
+them; a stale unread response for that same notification must not relight them.
+A different unread notification must still light the dot. With the normalized
+cache enabled, a new channel message notification writes its unread relationship
+and adds the channel to the cached Chat badge page locally. Delay the following
+HTTP refresh: the channel dot and Chat badge must appear before that response,
+without a reload. Also test an initially empty badge page, duplicate deliveries,
+multiple channels, and a notification arriving during a read. The local write
+must not replay other channels' read states. Invites, calls, and already-read
+notifications must not light message dots. Background refreshes still reconcile
+the bounded edges and recover missed updates on reconnect; an unavailable/cold
+cache falls back to the network path. These updates must not activate
+an otherwise-unused full notification feed. Cache reads remain asynchronous:
 a brief spinner can still appear, but cached rows must not wait for a background
 network refresh. Conversely, `cache-and-network` refreshes must start without
 waiting for a busy cache worker. Successful foreground query results display
@@ -598,6 +612,19 @@ during cancellation cleanup. If a server leave was already sent, the retry
 shows Connecting and waits for that request before registering again.
 
 ## Channel tabs
+
+Private and team channels show an `Invite` button on the right of both the
+split header and the inline conversation header for current participants.
+Click it to open `Invite people to <channel>` using the standard dialog at the
+top of the viewport, matching the create menu and create-channel dialog (a
+drawer on mobile). Choose `Add all members of <team>` to add current teammates
+once, or `Add specific people` to search teammates and enter external email
+addresses using the same recipient picker as channel creation. Existing channel
+members are excluded. `Add` submits; Cancel, Close, or Escape dismisses without
+sending. Failed additions preserve the selection for retry. The team option is
+disabled when no team is available. This action does not enable team auto-join.
+Check opening and reopening, switching options, keyboard recipient selection,
+external email chips, cancellation, and focus restoration before sending invites.
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Calls` / `Participants`,
 plus `Ask Macro` and `Call` buttons. The `Calls` tab lists recordings for that channel

@@ -43,6 +43,7 @@ export type UseTasksDataSourceOptions = {
   tagSets: Accessor<readonly TagSetResponse[]>;
   tagSetsReady: Accessor<boolean>;
   isGroupExpanded: (groupId: string) => boolean;
+  enabled?: Accessor<boolean>;
 };
 
 export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
@@ -70,8 +71,8 @@ export function useTasksDataSource(
   const facetContext = createMemo(
     (): TaskFacetContext => createTagFacetContext(options.tagSets())
   );
-
   const facetOptionsReady = () =>
+    (options.enabled?.() ?? true) &&
     tagFacetReady(state.facets, options.tagSetsReady());
 
   const queryArgs = () =>

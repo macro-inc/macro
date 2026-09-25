@@ -4,14 +4,11 @@ import {
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import type { CallRecord } from '@service-call/client';
-import type { Accessor } from 'solid-js';
 import { createMemo, Show } from 'solid-js';
 
-export function CallRecordingSummarySection(props: {
-  record: Accessor<CallRecord>;
-}) {
+export function CallRecordingSummarySection(props: { record: CallRecord }) {
   const summary = createMemo(() => {
-    const value = props.record().summary;
+    const value = props.record.summary;
     if (!value) return null;
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
@@ -19,9 +16,7 @@ export function CallRecordingSummarySection(props: {
 
   const isPending = createMemo(
     () =>
-      !summary() &&
-      !props.record().isActive &&
-      props.record().transcript.length > 0
+      !summary() && !props.record.isActive && props.record.transcript.length > 0
   );
 
   const shouldShow = createMemo(() => summary() || isPending());

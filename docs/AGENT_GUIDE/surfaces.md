@@ -289,6 +289,11 @@ the task in a new split instead. While the list is visible, `J` and `K` move
 focus without opening a task until activation. In an open task detail, they
 replace it with the next or previous task in the same filtered order.
 
+When `enable-tasks-reviews` is enabled, `Reviews` appears above `My Tasks` as a
+shortcut to the separate Reviews view. It lists relevant open GitHub pull requests;
+selecting one opens `/app/reviews/pr/<foreignEntityId>` with a Reviews breadcrumb.
+See [Tasks](tasks.md#reviews-view) for verification.
+
 The desktop `Create` → `Task` modal uses the standard dialog panel, circular
 icon controls, and a pill-shaped `Create Task` button with 16px outer padding.
 The mobile task drawer retains its existing layout.
@@ -830,6 +835,17 @@ Every calendar mention's hover card shows the schedule, location, organizer and 
 count, plus the first lines of the event description (its links open), and no last-updated
 byline.
 
+## Pull requests — `/app/reviews/pr/<foreignEntityId>`
+
+Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
+breadcrumb, PR title/status, GitHub action, discussion timeline, and Details/Checks
+side panel below the top bar. PRs are not tasks and do not appear in the Tasks list.
+Copy Link from a PR in Quick Access copies `/app/reviews/pr/<foreignEntityId>`.
+Old `/app/pr/<foreignEntityId>` links redirect to Reviews. Check a copied link,
+a PR opened from a list or agent session, a second split, breadcrumb return,
+side-panel toggle, and phone layout. If no GitHub data loads, the detail shows
+an error banner with a Retry button; pressing it refetches the PR in place.
+
 ## Calls — `/app/component/calls`
 
 Tabs `All` / `Missed` / `Unattended`; `New call` offers `Call a channel or contact`
@@ -841,7 +857,16 @@ The channel/contact option opens the recipient picker.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
-On phones, recorded call headers omit the **Call Again** action.
+Opening a recording uses `/app/drive/call/<callId>` inside the Drive shell,
+with one breadcrumbed header (`My Files > <recording name>`) and a route back to
+Drive. The Drive file list does not include calls.
+Old copied `/app/call/<callId>` links redirect to the Drive detail without losing
+the transcript target. The detail shows a loading state, recording/transcript/summary,
+Share, and a call side panel below the breadcrumb header; a failed load shows Try again.
+`call_transcript_id=<segmentId>` seeks the matching video segment after loading.
+Check a direct link, an old copied link, a Calls-list click, a second split,
+the breadcrumb return, and clicking the same transcript search hit twice after
+playing elsewhere. On phones, recorded call headers omit **Call Again**.
 
 A channel's `Calls` tab lists that channel's recordings with the same rows, filtered
 by the channel id. Its search field matches call names and transcripts in that

@@ -48,8 +48,10 @@ permission failures should display a failed tool call without a successful resul
   **#<number>** beneath the title (icon colored by open / merged / closed; no
   status word). Clicking it opens the synced
   GitHub PR entity in a split (the same destination as the session header chip
-  and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
-  tab. Either click leaves the session unopened. Changing the composer mode does not filter the sidebar.
+  and Magic Chip). A synced PR opens at `/pr/<foreign-entity-id>`; existing
+  inline previews retain their legacy block host. Until GitHub has synced the
+  entity it opens GitHub in a new tab. Either click leaves the session unopened.
+  Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Delete, and the other session actions.

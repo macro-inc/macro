@@ -1,5 +1,9 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { URL_PARAMS } from '@block-call/constants';
+import {
+  type CallBlockProps,
+  type CallTranscriptTarget,
+  URL_PARAMS,
+} from '@block-call/constants';
 import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
@@ -9,13 +13,8 @@ import { useCallRecordQuery } from '@queries/call/call';
 import { useSearchParams } from '@solidjs/router';
 import { createSignal, Show } from 'solid-js';
 import { CallRecordingBody } from './CallRecording/CallRecordingBody';
+import { CallRecordingSplitHeader } from './CallRecording/CallRecordingSplitHeader';
 import { CallSidePanelSections } from './sidepanel/CallSidePanelSections';
-
-export type CallBlockProps = {
-  [URL_PARAMS.transcriptId]?: string;
-};
-
-export type CallTranscriptTarget = { transcriptId: string; gen: number };
 
 export function CallBlockAdapter(props: CallBlockProps) {
   const callId = useBlockId();
@@ -57,14 +56,17 @@ export function CallBlockAdapter(props: CallBlockProps) {
   return (
     <DocumentBlockContainer>
       <div class="h-full flex flex-col @container">
-        <Show when={callRecord.data}>
+        <Show when={callRecord.isPending ? undefined : callRecord.data}>
           {(data) => (
             <SidePanel.Layout>
-              <CallSidePanelSections record={data} />
+              <CallSidePanelSections record={data()} callId={callId} />
               <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+                <CallRecordingSplitHeader record={data()} />
                 <CallRecordingBody
-                  data={data}
-                  transcriptTarget={transcriptTarget}
+                  record={data()}
+                  callId={callId}
+                  transcriptTarget={transcriptTarget()}
+                  showOverlayHeaderGap
                 />
               </div>
             </SidePanel.Layout>

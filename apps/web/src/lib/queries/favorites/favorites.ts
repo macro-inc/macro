@@ -60,6 +60,8 @@ export function favoriteEntityType(
       return 'crm_company';
     case 'crm_contact':
       return 'crm_contact';
+    case 'foreign':
+      return 'foreign_entity';
     default:
       return undefined;
   }
