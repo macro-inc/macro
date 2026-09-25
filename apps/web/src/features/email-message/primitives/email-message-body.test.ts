@@ -25,6 +25,77 @@ const bodyOptions: Omit<EmailMessageBodyProps, 'message'> = {
 };
 describe('independent email body', () => {
   afterEach(() => vi.unstubAllGlobals());
+  it('preserves the body and image resources across unchanged thread snapshots', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const releaseImages = vi.fn();
+    const resolveImages = vi.fn(
+      async (_root, _attachments, lifetime: ResourceLifetime) => {
+        lifetime.onDispose(releaseImages);
+      }
+    );
+    const original = message('one', {
+      body_html_sanitized: '<p>Hello</p><img src="cid:photo">',
+      attachments: [{ db_id: 'photo', content_id: 'photo', sfs_id: 'file' }],
+    });
+    const root = createRoot((dispose) => {
+      const [value, setValue] = createSignal(original);
+      const body = createEmailMessageBody(
+        {
+          get message() {
+            return value();
+          },
+          ...bodyOptions,
+          // Production passes derived getters which also read the message.
+          get isPersonal() {
+            return value().from?.email === 'sender@example.com';
+          },
+          get showFullContent() {
+            return value().db_id === 'one';
+          },
+        },
+        { theme: () => theme, resolveImages }
+      );
+      return { dispose, body, setValue };
+    });
+    try {
+      await Promise.resolve();
+      const host = root.body.host();
+      const image = host?.shadowRoot?.querySelector('img');
+      for (let i = 0; i < 3; i++) {
+        root.setValue({
+          ...structuredClone(original),
+          updated_at: `2026-09-0${i + 1}T00:00:00Z`,
+          labels: [{ provider_label_id: 'UNREAD' }],
+        });
+        expect(root.body.host()).toBe(host);
+        expect(root.body.host()?.shadowRoot?.querySelector('img')).toBe(image);
+      }
+      expect(resolveImages).toHaveBeenCalledTimes(1);
+      expect(releaseImages).not.toHaveBeenCalled();
+
+      root.setValue({
+        ...original,
+        attachments: [{ ...original.attachments[0], sfs_id: 'new-file' }],
+      });
+      await Promise.resolve();
+      expect(root.body.host()).not.toBe(host);
+      expect(releaseImages).toHaveBeenCalledTimes(1);
+      expect(resolveImages).toHaveBeenCalledTimes(2);
+
+      const updatedHost = root.body.host();
+      root.setValue({ ...original, body_html_sanitized: '<p>Edited</p>' });
+      expect(root.body.host()).not.toBe(updatedHost);
+      expect(root.body.host()?.shadowRoot?.textContent).toContain('Edited');
+    } finally {
+      root.dispose();
+    }
+  });
   it('renders one message, rewires its DOM on source changes, and cleans image/resize resources on disposal', async () => {
     const disconnect = vi.fn();
     vi.stubGlobal(

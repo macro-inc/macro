@@ -10,6 +10,7 @@ import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
+import { ChannelInviteButton } from '@channel/channel-invite-button';
 import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
@@ -37,6 +38,7 @@ import {
   on,
   onCleanup,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 import {
@@ -159,6 +161,13 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   return (
     <div class="header-actions ml-auto flex shrink-0 items-center gap-2">
       <ChannelLiveIndicators channelId={props.channelId} />
+      <Suspense>
+        <ChannelInviteButton
+          channelId={props.channelId}
+          channelName={channelName() ?? 'New Channel'}
+          channelType={channelType()}
+        />
+      </Suspense>
       <Show when={ENABLE_CALLS && !call.isInThisChannel()}>
         <ChannelCallButton channelId={props.channelId} />
       </Show>
