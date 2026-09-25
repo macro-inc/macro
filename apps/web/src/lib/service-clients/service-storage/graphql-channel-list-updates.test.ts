@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerGraphqlSoupRevalidations } from '../../queries/soup/graphql/active-queries';
 import {
   ChannelListSoupDocument,
+  ChannelUnreadPresenceDocument,
   SoupDocument,
 } from './graphql/generated/graphql';
 import { createChannelListUpdatesHandler } from './graphql-channel-list-updates';
@@ -53,7 +54,94 @@ const deleted: GraphqlNotificationPatch = {
   entityId: 'one',
 };
 
+const newNotification: GraphqlNotificationPatch = {
+  __typename: 'GraphqlNewNotification',
+  notification: {
+    __typename: 'GraphqlNotification',
+    id: 'new',
+    entityType: 'CHANNEL',
+    entityId: 'channel',
+    eventType: 'channel_message_send',
+    state: 'UNSEEN',
+    sent: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    viewedAt: null,
+    senderId: 'sender',
+    metadata: {
+      __typename: 'GraphqlChannelMessageSendMetadata',
+      channelMessageSendSender: 'sender',
+      channelMessageSendMessageId: 'message',
+      channelMessageSendChannelType: 'PRIVATE',
+      channelMessageSendMessageContent: 'Hello',
+      channelMessageSendHasAttachments: false,
+      channelMessageSendSenderDisplayName: null,
+      channelMessageSendChannelName: 'Channel',
+      channelMessageSendSenderProfilePictureUrl: null,
+    },
+  },
+};
+
 describe('channel unread edge revalidation', () => {
+  it('refreshes channel dots and the Chat badge immediately on a new notification', async () => {
+    const { handler, query } = setup();
+    cleanup.push(
+      registerGraphqlSoupRevalidations(() => [
+        { document: ChannelUnreadPresenceDocument, variables: { input: {} } },
+      ])
+    );
+    handler.onPatch(newNotification);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls.map(([document]) => document)).toEqual([
+      ChannelListSoupDocument,
+      ChannelUnreadPresenceDocument,
+    ]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it('replaces a pending debounce with an immediate new-notification refresh', async () => {
+    const { handler, query } = setup();
+    handler.onPatch(deleted);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(query).not.toHaveBeenCalled();
+    handler.onPatch(newNotification);
+    expect(query).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('coalesces a burst during the leading refresh into one trailing refresh', async () => {
+    const { handler, query } = setup();
+    let finish: (() => void) | undefined;
+    const pending = new Promise<{ data: object }>((resolve) => {
+      finish = () => resolve({ data: {} });
+    });
+    query.mockImplementationOnce(() => ({ toPromise: () => pending }));
+    handler.onPatch(newNotification);
+    handler.onPatch(newNotification);
+    handler.onPatch(deleted);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(query).toHaveBeenCalledOnce();
+    finish?.();
+    await vi.advanceTimersByTimeAsync(299);
+    expect(query).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps new-notification refreshes deferred while hidden', async () => {
+    const { handler, query } = setup();
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    handler.onPatch(newNotification);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(query).not.toHaveBeenCalled();
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(301);
+    expect(query).toHaveBeenCalledOnce();
+  });
+
   it('persists bounded revalidations with queued notification writes', async () => {
     const { query } = setup();
     const mutation = vi.fn((_document, _variables, context) => ({

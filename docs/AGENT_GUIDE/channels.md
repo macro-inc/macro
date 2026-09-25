@@ -538,7 +538,14 @@ Retry rather than marking just the one unread witness. Repeated mobile taps must
 open the last selected conversation, not a slower earlier request.
 
 Check cached Home → Chat navigation, All/Recent/search, and unread state after a
-read, a new notification, deletion, and reconnect. Cache reads remain asynchronous:
+read, a new notification, deletion, and reconnect, without reloading the page.
+With the mark-read response delayed, channel/DM dots, section counts, and new-activity
+targets should clear as soon as the local read is applied. A failed read restores
+them; a stale unread response for that same notification must not relight them.
+A different unread notification must still light the dot. New channel notifications
+start the bounded list and Chat badge refresh immediately; arrivals during an
+in-flight refresh coalesce into a trailing refresh. These updates must not activate
+an otherwise-unused full notification feed. Cache reads remain asynchronous:
 a brief spinner can still appear, but cached rows must not wait for a background
 network refresh. Conversely, `cache-and-network` refreshes must start without
 waiting for a busy cache worker. Successful foreground query results display

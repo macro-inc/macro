@@ -21,11 +21,19 @@ export function createChannelListUpdatesHandler(client: Pick<Client, 'query'>) {
       if (dirty) schedule();
     }
   };
-  const schedule = () => {
+  const schedule = (immediate = false) => {
     if (disposed) return;
     dirty = true;
-    if (timer !== undefined || running || document.hidden) return;
-    timer = setTimeout(flush, 300);
+    if (running || document.hidden) return;
+    if (timer !== undefined) {
+      if (!immediate) return;
+      clearTimeout(timer);
+      timer = undefined;
+    }
+    // A new notification should light the dot without the debounce delay.
+    // Deliveries during this refresh still coalesce into one trailing refresh.
+    if (immediate) void flush();
+    else timer = setTimeout(flush, 300);
   };
   const visible = () => {
     if (dirty && !document.hidden) schedule();
@@ -38,9 +46,9 @@ export function createChannelListUpdatesHandler(client: Pick<Client, 'query'>) {
         patch.__typename === 'GraphqlCacheDeletion' ||
         patch.notification.entityType === 'CHANNEL'
       )
-        schedule();
+        schedule(patch.__typename === 'GraphqlNewNotification');
     },
-    reconnect: schedule,
+    reconnect: () => schedule(),
     dispose() {
       disposed = true;
       if (timer !== undefined) clearTimeout(timer);
