@@ -18,7 +18,8 @@ export function ChangesToggleButton(props: {
       size="sm"
       aria-pressed={props.open}
       tooltip={props.open ? 'Hide the changes pane' : 'Show the changes pane'}
-      class={cn('gap-1.5', props.open && 'bg-active text-ink')}
+      // Sits beside the `h-7` pull request chip; the `sm` frame is 4px shorter.
+      class={cn('h-7 gap-1.5', props.open && 'bg-active text-ink')}
       onClick={() => props.onToggle()}
     >
       <SquareSplitHorizontalIcon class="size-3.5" />
