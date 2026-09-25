@@ -1,5 +1,5 @@
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
-import type { EntityDetailTarget } from '@app/components/entity-detail/EntityDetailNavigationStack';
+import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list-navigation-hotkeys';
 import { useListDetailNavigation } from '@app/components/list';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
