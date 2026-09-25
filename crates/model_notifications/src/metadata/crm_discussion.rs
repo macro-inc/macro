@@ -66,7 +66,9 @@ impl NotificationExtIos for CrmDiscussionMetadata {
     type NotifData = ::notification::domain::models::apple::PushNotificationData;
 
     fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
-        NotifCollapseKey::new("crm").append(&entity.entity_id)
+        NotifCollapseKey::new("crm")
+            .append(&entity.entity_id)
+            .append(&self.thread_id.to_string())
     }
 
     fn as_apns<'a>(

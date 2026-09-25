@@ -30,3 +30,25 @@ fn crm_notifications_keep_canonical_message_targets_and_record_wording() {
         ));
     }
 }
+
+#[test]
+fn each_discussion_on_a_record_collapses_separately() {
+    let company_id = Uuid::from_u128(9).to_string();
+    let company = EntityType::CrmCompany.with_entity_str(&company_id);
+    let key = |thread_id| {
+        CrmDiscussionMetadata {
+            record_name: "Acme".into(),
+            reason: CrmDiscussionReason::Owner,
+            message_id: Uuid::from_u128(1),
+            thread_id,
+            text: "Renewal is on track".into(),
+            sender_display_name: None,
+            sender_profile_picture_url: None,
+        }
+        .collapse_key(&company)
+        .into_hashed()
+        .into_inner()
+    };
+    assert_eq!(key(Uuid::from_u128(2)), key(Uuid::from_u128(2)));
+    assert_ne!(key(Uuid::from_u128(2)), key(Uuid::from_u128(3)));
+}
