@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM agent_session_queue\n                WHERE agent_session_id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "17973bb78d8247cf21ac13fbbde7faa2d777f5619aa2ecda22d8da96ba8fc713"
+}

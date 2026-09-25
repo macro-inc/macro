@@ -60,8 +60,8 @@ use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview, AgentSessionRenamed,
     AuthorKind, ClaimOutcome, CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS,
     MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId, SandboxSize, SessionClaim, SessionLog,
-    SessionManagement, SessionPreviewCandidate, StoredAgentSessionLog, ThreadSession,
-    cursor_run_checkpoint,
+    SessionManagement, SessionPreviewCandidate, StoredAgentSessionLog, StoredQueuedAction,
+    ThreadSession, cursor_run_checkpoint,
 };
 use super::ports::{
     AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
@@ -269,6 +269,19 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn publish_queue_changed(
         &self,
         event: AgentSessionQueueChanged,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The session's waiting actions, oldest first. Missing row is empty.
+    fn list_queued_actions(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<StoredQueuedAction>>> + Send;
+
+    /// Replace the session's waiting actions. An empty slice deletes the row.
+    fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Persist the sandbox size this session is running at.
@@ -925,6 +938,18 @@ where
 
     async fn publish_queue_changed(&self, event: AgentSessionQueueChanged) -> Result<()> {
         Ok(self.realtime.publish_queue_changed(event).await?)
+    }
+
+    async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {
+        self.repo.list_queued_actions(id).await
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
+    ) -> Result<()> {
+        self.repo.replace_queued_actions(id, entries).await
     }
 
     async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
@@ -1597,6 +1622,18 @@ where
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         self.repo.delete(id).await
+    }
+
+    async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {
+        self.repo.list_queued_actions(id).await
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
+    ) -> Result<()> {
+        self.repo.replace_queued_actions(id, entries).await
     }
 }
 

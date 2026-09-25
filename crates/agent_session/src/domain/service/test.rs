@@ -592,6 +592,21 @@ impl AgentSessionRepo for BlockingPromptLogs {
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         self.repo.delete(id).await
     }
+
+    async fn list_queued_actions(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<Vec<crate::domain::model::StoredQueuedAction>> {
+        self.repo.list_queued_actions(id).await
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[crate::domain::model::StoredQueuedAction],
+    ) -> Result<()> {
+        self.repo.replace_queued_actions(id, entries).await
+    }
 }
 
 /// Pure delegation: the lease semantics under test live in the shared

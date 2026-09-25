@@ -27,6 +27,7 @@ use agent_session::PROTOCOL_VERSION;
 use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_session::domain::model::{
     AgentMcpServers, AgentSessionId, CreateAgentSessionParams, Message, SandboxSize,
+    StoredQueuedAction,
 };
 use agent_session::domain::ports::{
     AgentSessionLogRepo as _, AgentSessionNotificationRecipient as _, AgentSessionRepo as _,
@@ -530,6 +531,45 @@ fn harness_with_context(prompt_context: PromptContextMock) -> TestBench {
 
 fn harness() -> TestBench {
     harness_with_context(PromptContextMock::default())
+}
+
+/// A second replica on the same durable store — a process restart.
+fn harness_sharing_repo(repo: InMemoryAgentSessionRepo) -> TestHarness {
+    let turn_observer = Arc::new(agent_session::domain::ports::LateBoundTurnObserver::new());
+    let lifecycle = RecordingLifecyclePublisher::new();
+    let runtimes = RuntimeRegistry::new();
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo),
+            NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            turn_observer.clone(),
+            Arc::new(lifecycle),
+            ReplicaId::mint(),
+        ),
+        MockContainerManager::new(),
+        AnnouncerMock::new(),
+        TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
+        NoPeers,
+        KindDefaultPolicies,
+        HarnessDefaultCodingAgents,
+        HarnessDefaults::new(SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
+        }),
+        RecordingLifecyclePublisher::new(),
+        crate::domain::pending::PendingCommands::new(),
+        PromptMentionsMock::new(),
+        NotifierMock::new(),
+    );
+    turn_observer.bind(NoOpTurnObserver);
+    service
 }
 
 fn context_prompt(original: &str) -> String {
@@ -1934,6 +1974,102 @@ async fn a_prompt_during_a_running_turn_queues_and_dispatches_when_it_ends() {
             .expect("queue lists")
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn a_queued_prompt_survives_a_replica_restart() {
+    let ((service, repo, containers, _announcer, _runtimes), _turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let _container = session_with_a_running_turn(&service, &containers, id).await;
+
+    let accepted = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("remember me after restart"),
+                action_id: None,
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("a mid-turn prompt is accepted");
+    assert_eq!(
+        accepted.disposition,
+        agent_session::domain::ports::ControlDisposition::Queued
+    );
+
+    // The first replica's in-memory copy is gone; the store is not.
+    drop(service);
+    let restarted = harness_sharing_repo(repo);
+    let queued = restarted
+        .queued_controls(id)
+        .await
+        .expect("the durable queue is readable");
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].action_id, accepted.action_id);
+    assert_eq!(
+        queued[0].action,
+        AgentAction::prompt("remember me after restart")
+    );
+}
+
+#[tokio::test]
+async fn a_resume_restores_the_persisted_queue() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+    let waiting_id = AgentActionId::mint();
+    repo.replace_queued_actions(
+        id,
+        &[StoredQueuedAction {
+            action_id: waiting_id,
+            action: AgentAction::prompt("remember me"),
+            actor: Some(staff_sender()),
+            created_at: chrono::Utc::now(),
+            announce: None,
+            announced_message_id: None,
+        }],
+    )
+    .await
+    .expect("persist a waiting prompt");
+
+    let prompted = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::prompt("wake up"),
+            action_id: None,
+            actor: Some(staff_sender()),
+        },
+    );
+    let drive_resume = async {
+        loop {
+            if containers.resumed() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let resumed = containers
+            .container(id)
+            .expect("the resumed container is findable");
+        complete_resume(&resumed).await;
+        resumed.agent().wait_for_requests(3).await;
+        resumed
+    };
+    let (result, resumed) = tokio::join!(prompted, drive_resume);
+    result.expect("resume should deliver the restored prompt");
+
+    assert_eq!(
+        prompts(&resumed.agent()),
+        [vec![ContentBlock::from("remember me")]],
+        "the prompt persisted before disconnect dispatches first"
+    );
+    let queued = service
+        .queued_controls(id)
+        .await
+        .expect("the follow-up stays queued");
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].action, AgentAction::prompt("wake up"));
+    assert_ne!(queued[0].action_id, waiting_id);
 }
 
 #[tokio::test]

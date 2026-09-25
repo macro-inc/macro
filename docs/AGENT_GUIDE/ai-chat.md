@@ -720,7 +720,9 @@ must stay hidden; subsequent live messages must still appear.
 - Sending is never blocked by a running turn. A prompt sent mid-turn is queued
   **server-side** and dispatches automatically when the current turn ends, one per turn.
   The queue holds at most 50 entries; past that a send is refused with an error rather
-  than queued.
+  than queued. Waiting prompts are written through to the session store as they are
+  accepted, edited, or removed, and are restored when the session resumes after a
+  harness restart — they must not disappear if the managing replica drains.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.
   Each row shows a `Queued` label (with `by {user}` when someone else queued it —
