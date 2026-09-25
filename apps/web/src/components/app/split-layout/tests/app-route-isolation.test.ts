@@ -1,4 +1,4 @@
-import '../../../../../scripts/vitest-hang-setup';
+import { stopTimerTrace } from '../../../../../scripts/vitest-hang-setup';
 import {
   createRoutesManifest,
   decodeRoute,
@@ -6,6 +6,8 @@ import {
 } from '@app/lib/split-router/routes';
 import { describe, expect, it, vi } from 'vitest';
 import { appSplitRoutes } from '../split-router/app-routes';
+
+stopTimerTrace();
 
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
