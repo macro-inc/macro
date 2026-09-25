@@ -27,7 +27,11 @@ afterEach(() => {
 });
 
 function setup() {
-  const query = vi.fn(() => ({ toPromise: async () => ({ data: {} }) }));
+  const query = vi.fn(
+    (_document: unknown, _variables: unknown, _context: unknown) => ({
+      toPromise: async () => ({ data: {} }),
+    })
+  );
   cleanup.push(
     registerGraphqlSoupRevalidations(() => [
       {
@@ -57,7 +61,6 @@ const deleted: GraphqlNotificationPatch = {
 const newNotification: GraphqlNotificationPatch = {
   __typename: 'GraphqlNewNotification',
   notification: {
-    __typename: 'GraphqlNotification',
     id: 'new',
     entityType: 'CHANNEL',
     entityId: 'channel',

@@ -35,7 +35,9 @@ const calls = {
 };
 let dispose: (() => void) | undefined;
 beforeEach(() => {
-  source.withLocalState.mockImplementation((notification) => notification.state);
+  source.withLocalState.mockImplementation(
+    (notification) => notification.state
+  );
 });
 afterEach(() => {
   dispose?.();
@@ -53,7 +55,9 @@ describe('bounded channel unread indicators', () => {
       const channels = () => [
         row('one', [{ id: 'n1', state: 'unseen', createdAt: '2026-01-01' }]),
         {
-          ...row('dm', [{ id: 'n2', state: 'unseen', createdAt: '2026-01-01' }]),
+          ...row('dm', [
+            { id: 'n2', state: 'unseen', createdAt: '2026-01-01' },
+          ]),
           channelType: 'direct_message' as const,
         },
       ];
@@ -86,7 +90,11 @@ describe('bounded channel unread indicators', () => {
     source.withLocalState.mockImplementation((notification) =>
       readIds().has(notification.id) ? 'seen' : notification.state
     );
-    const witness = { id: 'n1', state: 'unseen' as const, createdAt: '2026-01-01' };
+    const witness = {
+      id: 'n1',
+      state: 'unseen' as const,
+      createdAt: '2026-01-01',
+    };
     const [channels, setChannels] = createSignal([row('one', [witness])]);
     const activity = createRoot((cleanup) => {
       dispose = cleanup;
