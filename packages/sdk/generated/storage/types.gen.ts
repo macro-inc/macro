@@ -4534,6 +4534,10 @@ export type DocumentContentUploadedMetadata = {
  */
 export type DocumentCopiedMetadata = {
     /**
+     * Who mechanically created the copy.
+     */
+    actor?: string | null;
+    /**
      * The id of the newly created copy.
      */
     document_id: string;
@@ -4542,6 +4546,7 @@ export type DocumentCopiedMetadata = {
      */
     document_name: string;
     file_type?: null | FileType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * The principal who owns the new copy.
      */

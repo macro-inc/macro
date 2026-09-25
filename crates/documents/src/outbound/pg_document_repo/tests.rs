@@ -403,7 +403,7 @@ async fn creation_team_consent_is_explicit_and_uses_owner_membership(pool: Pool<
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn team_bot_task_consent_preserves_the_sponsor_owner_grant(pool: Pool<Postgres>) {
+async fn team_bot_task_does_not_manage_the_sponsor_owner_grant_as_a_share(pool: Pool<Postgres>) {
     sqlx::query!(
         r#"
         INSERT INTO bots (id, kind, team_id, name, handle)
@@ -428,13 +428,8 @@ async fn team_bot_task_consent_preserves_the_sponsor_owner_grant(pool: Pool<Post
         .get_team_share_facts(&document.document_id)
         .await
         .unwrap();
-    assert_eq!(
-        facts.current,
-        Some(TeamShareGrant {
-            team_id: TEST_TEAM_ID,
-            level: TeamShareLevel::Comment,
-        })
-    );
+    assert_eq!(facts.current, None);
+    assert_eq!(facts.revision, 0);
     assert_eq!(
         sqlx::query_scalar!(
             r#"

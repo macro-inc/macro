@@ -388,10 +388,6 @@ pub async fn initialize(
         .context(TeamShareError::Infrastructure)?
             == Some(AccessLevel::Owner)
     {
-        let permission_id = state
-            .permission_id
-            .ok_or_else(|| report!(TeamShareError::InvalidState))?;
-        update_permission_state(transaction.as_mut(), permission_id, Some(target), 1).await?;
         return Ok(());
     }
     reject_untracked(transaction.as_mut(), &state.facts, target).await?;
@@ -436,7 +432,18 @@ async fn write_state(
     let permission_id = state
         .permission_id
         .ok_or_else(|| report!(TeamShareError::InvalidState))?;
-    update_permission_state(transaction.as_mut(), permission_id, target, revision).await?;
+    sqlx::query!(
+        r#"UPDATE "SharePermission" SET team_share_access_level = $2,
+            team_share_team_id = $3, team_share_revision = $4, "updatedAt" = NOW()
+        WHERE id = $1"#,
+        permission_id,
+        target.map(|g| AccessLevel::from(g.level)) as Option<AccessLevel>,
+        target.map(|g| g.team_id),
+        revision,
+    )
+    .execute(transaction.as_mut())
+    .await
+    .context(TeamShareError::Infrastructure)?;
 
     if let Some(previous) = state.facts.current
         && target.map(|g| g.team_id) != Some(previous.team_id)
@@ -471,26 +478,5 @@ async fn write_state(
         .await
         .context(TeamShareError::Infrastructure)?;
     }
-    Ok(())
-}
-
-async fn update_permission_state(
-    connection: &mut PgConnection,
-    permission_id: String,
-    target: Option<TeamShareGrant>,
-    revision: i64,
-) -> TeamShareResult<()> {
-    sqlx::query!(
-        r#"UPDATE "SharePermission" SET team_share_access_level = $2,
-            team_share_team_id = $3, team_share_revision = $4, "updatedAt" = NOW()
-        WHERE id = $1"#,
-        permission_id,
-        target.map(|grant| AccessLevel::from(grant.level)) as Option<AccessLevel>,
-        target.map(|grant| grant.team_id),
-        revision,
-    )
-    .execute(connection)
-    .await
-    .context(TeamShareError::Infrastructure)?;
     Ok(())
 }
