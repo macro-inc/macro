@@ -90,7 +90,9 @@ An admitted parent does not pre-authorize those later operations. A rejected
 optional helper need not fail an already-running parent.
 
 Harness dispatch denial clears waiting quota-rejected work and emits
-`CommandRejected` with action id, public code and message. Dispatch billing outage
+`CommandRejected` with action id, public code and message, resolving any already
+announced chat replies as failed first. If this empties the queue at turn end,
+the preceding turn still emits `Settled`. Dispatch billing outage
 retains the queue head for a later explicit attempt without spinning. A forwarded
 HTTP acknowledgement is acceptance, not proof of execution: owning-replica
 rechecks can reject it later. Forwarded quota denial emits a lifecycle rejection;
@@ -98,6 +100,10 @@ forwarded unavailability is a processing failure, not a retroactive HTTP 503.
 Retries of the same already-running/queued action are acknowledgements, not new
 spending. No automatic replay of rejected actions or scheduled occurrences after
 a purchase is promised; submit a new request or wait for a future occurrence.
+Scheduled billing outages likewise record `ai_billing_unavailable`, release the
+fenced claim, and advance to the next occurrence; they do not automatically retry
+the missed occurrence. Bounded retry of preparation-only failures is a separate
+scheduler recovery policy, not part of admission enforcement.
 
 Reading history, ordinary search/read tools, human messages, document editing,
 dictation, deterministic imports, import state/discard/dismissal, and action

@@ -199,6 +199,14 @@ where
         };
         let mut rejected = Some(entry);
         while let Some(entry) = rejected {
+            self.resolve_announced_reply(
+                session_id,
+                entry.announced,
+                entry.announce.as_ref(),
+                entry.actor.as_ref(),
+                ReplyOutcome::Failed,
+            )
+            .await;
             self.publish_rejection(session_id, entry.action_id, reason)
                 .await;
             rejected = self.queues.claim_next(session_id);
@@ -239,7 +247,7 @@ where
     }
 }
 
-fn denial(error: &HarnessError) -> Option<DenyReason> {
+pub(super) fn denial(error: &HarnessError) -> Option<DenyReason> {
     match error {
         HarnessError::Admission(AiAdmissionError::Denied(reason))
         | HarnessError::Session(AgentSessionError::Admission(AiAdmissionError::Denied(reason))) => {

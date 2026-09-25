@@ -611,8 +611,7 @@ async fn response_admission_denials_never_post_thinking_or_call_the_responder() 
                     .with_ai_admission(admission.clone());
                 let mut event = invocation(&trigger);
                 event.trigger = trigger_kind;
-                let error = handler.handle(&event).await.unwrap_err();
-                assert!(error.downcast_ref::<AiAdmissionError>().is_some());
+                handler.handle(&event).await.unwrap();
                 assert_eq!(
                     *admission.calls.lock().unwrap(),
                     vec![(user().to_string(), AiFeature::ChannelBot)]
@@ -620,6 +619,29 @@ async fn response_admission_denials_never_post_thinking_or_call_the_responder() 
                 assert!(responder.prompts.lock().unwrap().is_empty());
             }
         }
+    }
+}
+
+#[tokio::test]
+async fn a_failed_refusal_reply_still_handles_the_event_without_starting_ai() {
+    for error in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Unavailable(rootcause::report!("private billing failure")),
+    ] {
+        let trigger = message(1, None, "@macro help");
+        let mut api = MockMessageServiceApi::new();
+        configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+        api.expect_preceding().returning(|_, _, _| Ok(vec![]));
+        api.expect_post()
+            .once()
+            .returning(|_, _| Err(MessageError::NotFound));
+        let responder = responder("must not run");
+        let handler = handler(api, Arc::new(Access::default()), responder.clone())
+            .with_ai_admission(Admission::new(Err(error)));
+
+        handler.handle(&invocation(&trigger)).await.unwrap();
+
+        assert!(responder.prompts.lock().unwrap().is_empty());
     }
 }
 
@@ -663,14 +685,7 @@ async fn unconfigured_response_admission_fails_closed() {
     );
     let mut event = invocation(&trigger);
     event.trigger = BotTrigger::Inferred;
-    assert!(matches!(
-        handler
-            .handle(&event)
-            .await
-            .unwrap_err()
-            .downcast_ref::<AiAdmissionError>(),
-        Some(AiAdmissionError::Unavailable(_))
-    ));
+    handler.handle(&event).await.unwrap();
     assert!(responder.prompts.lock().unwrap().is_empty());
 }
 

@@ -260,11 +260,28 @@ where
         let Some(turn) = turn else {
             return;
         };
-        let (Some(message_id), Some(origin), Some(triggered_by)) = (
+        self.resolve_announced_reply(
+            session_id,
             turn.announcement_message_id,
             turn.announce.as_ref(),
             turn.actor.as_ref(),
-        ) else {
+            outcome,
+        )
+        .await;
+    }
+
+    /// Resolve an announced reply even when admission refused its queued turn.
+    pub(super) async fn resolve_announced_reply(
+        &self,
+        session_id: AgentSessionId,
+        message_id: Option<macro_uuid::Uuid>,
+        origin: Option<&AnnounceOrigin>,
+        triggered_by: Option<&MacroUserIdStr<'static>>,
+        outcome: ReplyOutcome,
+    ) {
+        let (Some(message_id), Some(origin), Some(triggered_by)) =
+            (message_id, origin, triggered_by)
+        else {
             return;
         };
         let session = match self.sessions.get_session(session_id).await {

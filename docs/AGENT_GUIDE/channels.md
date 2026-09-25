@@ -257,7 +257,11 @@ inferred classification and its later response are separate billable operations.
 An explicit classic-bot rejection posts a public reason/code in the existing
 reply mechanism without leaving a thinking placeholder. An inferred rejection
 skips the AI invocation, not the human message. Session-backed mentions instead
-follow the agent-session admission and asynchronous failure contract.
+follow the agent-session admission and asynchronous failure contract. If a
+session follow-up is already announced when quota is exhausted, its pending
+chat reply must resolve as failed when dispatch rejects it, rather than keep
+spinning. The preceding completed turn must still publish its settled event
+when quota rejection empties the queue.
 
 For a rollout check, use a disposable exhausted paid account: send an ordinary
 message and then an explicit `@Macro` mention, and test an inferred follow-up in

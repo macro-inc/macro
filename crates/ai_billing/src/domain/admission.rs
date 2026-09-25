@@ -35,6 +35,16 @@ pub enum AiAdmissionError {
     Unavailable(rootcause::Report),
 }
 
+impl AiAdmissionError {
+    /// Stable public code shared by transports and background-operation replies.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Denied(reason) => reason.code(),
+            Self::Unavailable(_) => "ai_billing_unavailable",
+        }
+    }
+}
+
 /// Narrow, object-safe port for admitting a new AI operation.
 ///
 /// Callers must supply the authenticated actor (or a persisted job/session owner)

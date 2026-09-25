@@ -26,11 +26,11 @@ impl From<&AiAdmissionError> for AiAdmissionErrorBody {
         match error {
             AiAdmissionError::Denied(reason) => Self {
                 error: reason.message(),
-                code: reason.code(),
+                code: error.code(),
             },
             AiAdmissionError::Unavailable(_) => Self {
                 error: "AI billing is unavailable. Please try again.",
-                code: "ai_billing_unavailable",
+                code: error.code(),
             },
         }
     }

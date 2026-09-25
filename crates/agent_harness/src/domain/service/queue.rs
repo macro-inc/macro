@@ -371,7 +371,15 @@ where
                 // failure, and an emptied queue are all changes a viewer is
                 // watching for.
                 self.publish_queue(session_id).await;
-                let dispatched = dispatched?;
+                let dispatched = match dispatched {
+                    // Quota denial drained and rejected all waiting work, so
+                    // the completed turn still settles. Outages retain the head
+                    // and keep propagating their retryable failure instead.
+                    Err(error) if super::admission::denial(&error).is_some() => {
+                        Dispatch::QueueEmpty
+                    }
+                    other => other?,
+                };
                 // Settled: the turn ended and nothing followed it. Emitted
                 // only with the turn's record, because "settled" without
                 // knowing what settled is a fact nobody can act on. The

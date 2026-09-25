@@ -334,6 +334,7 @@ async fn queued_exhaustion_is_terminal_observable_and_does_not_start_work() {
         );
     }
     let announcements = announcer.announced().len();
+    let running_id = service.inner.busy.turn(id).unwrap().action_id;
     *gate.decision.lock().unwrap() = Decision::Deny;
     container.agent().completes_prompt().await;
     turns.settled(id).await;
@@ -352,6 +353,11 @@ async fn queued_exhaustion_is_terminal_observable_and_does_not_start_work() {
     assert!(!service.inner.busy.is_pending(id));
     assert_eq!(prompts(&container.agent()).len(), 1);
     assert_eq!(announcer.announced().len(), announcements);
+    assert!(matches!(
+        turns.lifecycle().last(),
+        Some(AgentSessionLifecycleEvent::Settled(settled))
+            if settled.last_turn.as_ref().unwrap().action_id == running_id
+    ));
     let rejected: Vec<_> = turns
         .lifecycle()
         .into_iter()
@@ -382,6 +388,59 @@ async fn queued_exhaustion_is_terminal_observable_and_does_not_start_work() {
         .await
         .unwrap();
     assert_eq!(prompts(&container.agent()).len(), 2);
+}
+
+#[tokio::test]
+async fn queued_exhaustion_resolves_every_already_announced_reply() {
+    let ((service, _, containers, announcer, _), mut turns, gate) = bench(Decision::Allow);
+    let id = AgentSessionId::new();
+    let container = session_with_a_running_turn(&service, &containers, id).await;
+    for text in ["first follow-up", "second follow-up"] {
+        assert_eq!(
+            service
+                .execute(id, HarnessCommand::Deliver(forward_message(text)))
+                .await
+                .unwrap(),
+            CommandOutcome::Queued
+        );
+    }
+    let messages = announcer.announced_messages();
+    assert_eq!(messages.len(), 3);
+    assert!(announcer.resolved().is_empty());
+
+    *gate.decision.lock().unwrap() = Decision::Deny;
+    container.agent().completes_prompt().await;
+    turns.settled(id).await;
+    // Serialize behind the turn-end command, including all reply resolutions.
+    service
+        .execute(
+            id,
+            HarnessCommand::RemoveQueued {
+                action_id: AgentActionId::mint(),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .unwrap_err();
+
+    let resolved = announcer.resolved();
+    assert_eq!(resolved.len(), 3);
+    for message in &messages[1..] {
+        let reply = resolved
+            .iter()
+            .find(|reply| reply.message_id == message.message_id)
+            .unwrap();
+        assert_eq!(reply.outcome, crate::domain::model::ReplyOutcome::Failed);
+        assert_eq!(reply.triggered_by, staff_sender());
+        assert_eq!(reply.session_id, id);
+    }
+    assert!(service.queued_controls(id).await.unwrap().is_empty());
+    assert!(!service.inner.busy.is_pending(id));
+    assert_eq!(prompts(&container.agent()).len(), 1);
+    assert!(matches!(
+        turns.lifecycle().last(),
+        Some(AgentSessionLifecycleEvent::Settled(_))
+    ));
 }
 
 #[tokio::test]
@@ -441,6 +500,10 @@ async fn unavailable_billing_does_not_start_or_spin_queued_work() {
         .unwrap_err();
     assert!(!service.inner.busy.is_pending(id));
     assert_eq!(service.queued_controls(id).await.unwrap().len(), 1);
+    assert!(!turns.lifecycle().iter().any(|event| matches!(
+        event,
+        AgentSessionLifecycleEvent::Settled(_) | AgentSessionLifecycleEvent::CommandRejected(_)
+    )));
     assert_eq!(prompts(&container.agent()).len(), 1);
     let calls = gate.calls.lock().unwrap().len();
     tokio::task::yield_now().await;

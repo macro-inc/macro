@@ -505,10 +505,7 @@ where
         event: &BotEvent,
         error: &AiAdmissionError,
     ) -> anyhow::Result<()> {
-        let code = match error {
-            AiAdmissionError::Denied(reason) => reason.code(),
-            AiAdmissionError::Unavailable(_) => "ai_billing_unavailable",
-        };
+        let code = error.code();
         let access = self
             .access
             .bot_write(&event.requesting_user, &event.message.parent)
@@ -550,10 +547,16 @@ where
             .admit(&event.requesting_user, AiFeature::ChannelBot)
             .await
         {
+            tracing::warn!(error = ?error, code = error.code(), "channel bot response not admitted");
             if event.trigger == BotTrigger::Mention {
-                self.post_admission_error(event, &error).await?;
+                let _ = self
+                    .post_admission_error(event, &error)
+                    .await
+                    .inspect_err(|post_error| {
+                        tracing::warn!(error = ?post_error, code = error.code(), "failed to post admission error reply");
+                    });
             }
-            return Err(error.into());
+            return Ok(());
         }
 
         // 2. Post the immediate "thinking" message in the thread. The capability

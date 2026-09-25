@@ -9,7 +9,7 @@ mod test;
 use agent_session::domain::error::Result;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ThreadSession};
 use agent_session::domain::ports::AgentSessionRepo;
-use ai_billing::domain::{AiAdmissionError, AiAdmissionService, UnconfiguredAiAdmissionService};
+use ai_billing::domain::{AiAdmissionService, UnconfiguredAiAdmissionService};
 use ai_usage::domain::AiFeature;
 use bot_id::BotId;
 use bots::domain::models::{Agent, AgentChannelScope, Bot, BotKind, BotOwner};
@@ -482,13 +482,9 @@ where
             .admit(user, AiFeature::Automation)
             .await
             .inspect_err(|error| {
-                let code = match error {
-                    AiAdmissionError::Denied(reason) => reason.code(),
-                    AiAdmissionError::Unavailable(_) => "ai_billing_unavailable",
-                };
                 tracing::warn!(
                     error = ?error,
-                    code,
+                    code = error.code(),
                     message_id = %posted.message_id,
                     "implicit trigger admission refused; skipping classification"
                 );

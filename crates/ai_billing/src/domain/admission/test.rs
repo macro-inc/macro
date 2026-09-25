@@ -192,6 +192,24 @@ async fn only_the_reserved_system_identity_skips_billing() {
     assert_eq!(*billing.calls.lock().unwrap(), vec![other]);
 }
 
+#[test]
+fn public_codes_cover_every_admission_failure() {
+    for (reason, code) in [
+        (DenyReason::AllowanceExhausted, "ai_allowance_exhausted"),
+        (DenyReason::OverageLimitReached, "ai_overage_limit_reached"),
+        (
+            DenyReason::OveragePaymentFailed,
+            "ai_overage_payment_failed",
+        ),
+    ] {
+        assert_eq!(AiAdmissionError::Denied(reason).code(), code);
+    }
+    assert_eq!(
+        AiAdmissionError::Unavailable(rootcause::report!("private failure")).code(),
+        "ai_billing_unavailable"
+    );
+}
+
 #[tokio::test]
 async fn unconfigured_service_always_fails_closed() {
     let admission: Arc<dyn AiAdmissionService> = Arc::new(UnconfiguredAiAdmissionService);
