@@ -107,14 +107,14 @@ export function isFeatureEnabled(flag: Flag): boolean {
 
 /**
  * Switches Inbox, Tasks, and Channels from the current SoupView implementations
- * to the new composable view implementations. Enabled by default in local
- * development; production follows PostHog. Override locally with
- * VITE_ENABLE_NEW_APP_VIEWS=false.
+ * to the new composable view implementations. On everywhere without waiting
+ * for PostHog: a late PostHog answer swaps the app shell after first paint.
+ * Override locally with VITE_ENABLE_NEW_APP_VIEWS=false.
  */
 export const enableNewAppViews = defineFlag({
   key: 'enable-new-app-views',
   env: 'ENABLE_NEW_APP_VIEWS',
-  default: DEV_MODE_ENV || undefined,
+  default: true,
 });
 
 /**
@@ -628,6 +628,13 @@ export const enableTagTeamSharing = defineFlag({
   default: onInDev,
 });
 
+// Manual and smart channel labels, including their queries and drag/drop UI.
+// Off until PostHog enables them; override with VITE_ENABLE_CHANNEL_TAGS.
+export const enableChannelTags = defineFlag({
+  key: 'enable-channel-tags',
+  env: 'ENABLE_CHANNEL_TAGS',
+});
+
 // The "Activity" section in the entity side panel: the entity's recent
 // activity timeline from the GraphQL activity log (who did what, when).
 // Purely additive — when off, the section never mounts and no activity
@@ -650,26 +657,27 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
-// AI agents: the Macro Coder mention entry and the folded agent-session view
-// in channels. Override with VITE_ENABLE_CHAT_V3_AGENTS.
+// AI agents: the Macro Coder mention entry, the folded agent-session view in
+// channels, and which bot the single `@macro` mention targets — the agent
+// session when on, the classic in-channel reply when off.
+// Override with VITE_ENABLE_CHAT_V3_AGENTS.
 export const enableChatV3Agents = defineFlag({
   key: 'enable-chat-v3-agents',
   env: 'ENABLE_CHAT_V3_AGENTS',
   default: onInDev,
 });
 
-// The `@cursor` mention entry: agent sessions served by Cursor cloud agents
-// on Macro's Cursor account. PostHog-gated per user; the backend additionally
-// restricts these sessions to @macro.com senders. Override with
-// VITE_ENABLE_CURSOR_AGENTS.
+// The built-in @cursor mention, using the mentioning user's own Cursor account.
+// Account setup is checked after the mention; this flag controls discovery.
+// Override with VITE_ENABLE_CURSOR_AGENTS.
 export const enableCursorAgents = defineFlag({
   key: 'enable-cursor-agents',
   env: 'ENABLE_CURSOR_AGENTS',
   default: onInDev,
 });
 
-// Codex cloud agent mentions, composer choices, and harness settings also
-// require enableChatV3Agents. Override with VITE_ENABLE_CODEX_AGENTS.
+// Codex composer choices also require enableChatV3Agents.
+// Override with VITE_ENABLE_CODEX_AGENTS.
 export const enableCodexAgents = defineFlag({
   key: 'enable-codex-agents',
   env: 'ENABLE_CODEX_AGENTS',
@@ -699,4 +707,31 @@ export const enableNotificationSettings = defineFlag({
 export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',
   env: 'ENABLE_SPREADSHEETS',
+});
+
+/**
+ * Speech-to-text in the channel, agent, and AI chat composers. Recordings go
+ * to OpenAI Whisper through DSS and are billed per audio minute, so this
+ * carries a remote kill switch rather than an env-only one. Off hides the
+ * microphone everywhere and never opens the recorder, so no audio is captured
+ * and no request is made. On in dev; production follows PostHog.
+ */
+export const enableDictation = defineFlag({
+  key: 'enable-dictation',
+  env: 'ENABLE_DICTATION',
+  default: onInDev,
+});
+
+/**
+ * Document comments read and write through the shared message API and render
+ * with the channel message components; the legacy annotation comment stores
+ * stay in place while this is off. Channels are not gated. On in dev, where the
+ * legacy comments have already been imported into the message store; production
+ * follows PostHog and stays off until its own import has run. Override locally
+ * with VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS.
+ */
+export const enableUnifiedDocumentDiscussions = defineFlag({
+  key: 'enable-unified-document-discussions',
+  env: 'ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS',
+  default: onInDev,
 });

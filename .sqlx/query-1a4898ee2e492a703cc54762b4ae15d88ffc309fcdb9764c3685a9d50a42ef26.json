@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages SET body_html_sanitized = '<p>Hello</p>', body_text = 'Hello' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1a4898ee2e492a703cc54762b4ae15d88ffc309fcdb9764c3685a9d50a42ef26"
+}

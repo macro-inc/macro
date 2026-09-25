@@ -84,6 +84,8 @@ export type SplitPanelContextType = {
   isInlinePreview?: boolean;
   isPanelActive: Accessor<boolean>;
   panelRef: Accessor<HTMLElement | null>;
+  /** The element last pressed in the panel, kept in view when it opens a split. */
+  pointerTarget?: () => Element | undefined;
   panelSize: NullableSize;
   contentOffsetTop: Accessor<number>;
   setContentOffsetTop: Setter<number>;

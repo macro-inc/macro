@@ -77,7 +77,7 @@ impl LocalEnv {
                 "http://localhost:{}/static-file",
                 instance.port(Port::Proxy)
             ),
-            infra: InfraEnv::local(),
+            infra: InfraEnv::local(instance),
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
@@ -143,16 +143,18 @@ struct InfraEnv {
     redis_uri: String,
     opensearch_url: String,
     local_aws_url: String,
+    local_aws_public_url: String,
     kafka_brokers: String,
 }
 
 impl InfraEnv {
-    fn local() -> Self {
+    fn local(instance: &Instance) -> Self {
         InfraEnv {
             database_url: "postgres://user:password@postgres:5432/macrodb".into(),
             redis_uri: "redis://redis:6379".into(),
             opensearch_url: "http://search:9200".into(),
             local_aws_url: "http://localstack:4566".into(),
+            local_aws_public_url: format!("http://localhost:{}", instance.port(Port::LocalStack)),
             // The broker's in-network listener (see docker/docker-compose-databases.yml);
             // host processes use localhost:9092 instead.
             kafka_brokers: "kafka:29092".into(),
@@ -170,6 +172,10 @@ impl InfraEnv {
         env.insert("LAST_ONLINE_REDIS_URI".into(), self.redis_uri.clone());
         env.insert("OPENSEARCH_URL".into(), self.opensearch_url.clone());
         env.insert("LOCAL_AWS_URL".into(), self.local_aws_url.clone());
+        env.insert(
+            "LOCAL_AWS_PUBLIC_URL".into(),
+            self.local_aws_public_url.clone(),
+        );
         env.insert("KAFKA_BROKERS".into(), self.kafka_brokers.clone());
         // In-network services resolve the gateway through the OVERRIDE_ var;
         // without it the resolver's Environment::Local default
@@ -188,6 +194,15 @@ impl InfraEnv {
         env.insert(
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
+        );
+        // Account deletion awaits both owning services from the auth container.
+        env.insert(
+            "OVERRIDE_AGENT_HARNESS_SERVICE_URL".into(),
+            "http://agent-harness-service:8101".into(),
+        );
+        env.insert(
+            "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL".into(),
+            "http://scheduled-action-service:8080".into(),
         );
         // Lexical has the same host-vs-container split. The plain
         // `LEXICAL_SERVICE_URL` value does not affect `LexicalServiceUrl`,
@@ -209,6 +224,14 @@ impl InfraEnv {
         env.insert(
             "OVERRIDE_EMAIL_SERVICE_URL".into(),
             "http://email-service:8080".into(),
+        );
+        // Same host-vs-container split for calendar: `CalendarServiceUrl`'s
+        // Local default is http://localhost:8088, which inside a container is
+        // the caller itself. In-network callers (the agent calendar tools point
+        // at calendar_service) reach it through this override instead.
+        env.insert(
+            "OVERRIDE_CALENDAR_SERVICE_URL".into(),
+            "http://calendar-service:8080".into(),
         );
         env.insert(
             "OVERRIDE_AUTH_SERVICE_URL".into(),
@@ -684,6 +707,14 @@ impl BootStubEnv {
         env.insert("LIVEKIT_API_KEY".into(), "local-livekit-key".into());
         env.insert("LIVEKIT_API_SECRET".into(), "local-livekit-secret".into());
         env.insert("OPENAI_API_KEY".into(), "local-openai-key".into());
+        // Required by the agent router. Present so it builds on a stack with no
+        // Doppler; real provider calls still fail on the dummy keys.
+        // Doppler's shared_ai name is singular: FIREWORK_API_KEY.
+        env.insert("FIREWORK_API_KEY".into(), "local-firework-key".into());
+        env.insert(
+            "GOOGLE_GENERATIVE_AI_API_KEY".into(),
+            "local-google-generative-ai-key".into(),
+        );
         env.insert("COHERE_API_KEY".into(), "local-cohere-key".into());
         env.insert(
             "CAL_WEBHOOK_SECRET_KEY".into(),

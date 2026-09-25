@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use super::DocumentToolContext;
 
 #[cfg(test)]
-mod test;
+pub(super) mod test;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(

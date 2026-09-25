@@ -20,6 +20,10 @@ type ToolParserMap = {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
   };
+  CommentOnDocumentText: {
+    call: types.CommentOnDocumentText;
+    response: types.CommentOnDocumentTextResponse;
+  };
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
@@ -195,6 +199,14 @@ type ToolParserMap = {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
   };
+  ReplyToDocumentComment: {
+    call: types.ReplyToDocumentComment;
+    response: types.ReplyToDocumentCommentResponse;
+  };
+  ResolveDocumentComment: {
+    call: types.ResolveDocumentComment;
+    response: types.ResolveDocumentCommentResponse;
+  };
   SearchSkills: {
     call: types.SearchSkills;
     response: types.SearchSkillsResponse;
@@ -207,6 +219,10 @@ type ToolParserMap = {
   SendChannelMessage: {
     call: types.SendChannelMessage;
     response: types.SendChannelMessageResponse;
+  };
+  SendConfirmedEmail: {
+    call: types.SendConfirmedEmail;
+    response: types.SendEmailResponse;
   };
   SendEmail: {
     call: types.SendEmail;
@@ -234,6 +250,7 @@ type ToolParserMap = {
     call: types.UpdateThreadLabels;
     response: types.UpdateThreadLabelsResponse;
   };
+  UploadFile: { call: types.UploadFile; response: types.UploadFileResponse };
   WebFetch: { call: types.WebFetch; response: types.WebFetchResponse };
   WebSearch: { call: types.WebSearch; response: types.WebSearchResponse };
 };
@@ -250,6 +267,10 @@ const toolParserMap = {
   CalculateSpreadsheet: {
     call: schemas.CalculateSpreadsheet,
     response: schemas.SpreadsheetResponse,
+  },
+  CommentOnDocumentText: {
+    call: schemas.CommentOnDocumentText,
+    response: schemas.CommentOnDocumentTextResponse,
   },
   ConfigureBot: {
     call: schemas.ConfigureBot,
@@ -450,6 +471,14 @@ const toolParserMap = {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
   },
+  ReplyToDocumentComment: {
+    call: schemas.ReplyToDocumentComment,
+    response: schemas.ReplyToDocumentCommentResponse,
+  },
+  ResolveDocumentComment: {
+    call: schemas.ResolveDocumentComment,
+    response: schemas.ResolveDocumentCommentResponse,
+  },
   SearchSkills: {
     call: schemas.SearchSkills,
     response: schemas.SearchSkillsResponse,
@@ -465,6 +494,10 @@ const toolParserMap = {
   SendChannelMessage: {
     call: schemas.SendChannelMessage,
     response: schemas.SendChannelMessageResponse,
+  },
+  SendConfirmedEmail: {
+    call: schemas.SendConfirmedEmail,
+    response: schemas.SendEmailResponse,
   },
   SendEmail: {
     call: schemas.SendEmail,
@@ -495,6 +528,10 @@ const toolParserMap = {
     call: schemas.UpdateThreadLabels,
     response: schemas.UpdateThreadLabelsResponse,
   },
+  UploadFile: {
+    call: schemas.UploadFile,
+    response: schemas.UploadFileResponse,
+  },
   WebFetch: { call: schemas.WebFetch, response: schemas.WebFetchResponse },
   WebSearch: { call: schemas.WebSearch, response: schemas.WebSearchResponse },
 };
@@ -519,6 +556,10 @@ type ToolDataMap = {
   CalculateSpreadsheet: {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
+  };
+  CommentOnDocumentText: {
+    call: types.CommentOnDocumentText;
+    response: types.CommentOnDocumentTextResponse;
   };
   ConfigureBot: {
     call: types.ConfigureBot;
@@ -695,6 +736,14 @@ type ToolDataMap = {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
   };
+  ReplyToDocumentComment: {
+    call: types.ReplyToDocumentComment;
+    response: types.ReplyToDocumentCommentResponse;
+  };
+  ResolveDocumentComment: {
+    call: types.ResolveDocumentComment;
+    response: types.ResolveDocumentCommentResponse;
+  };
   SearchSkills: {
     call: types.SearchSkills;
     response: types.SearchSkillsResponse;
@@ -707,6 +756,10 @@ type ToolDataMap = {
   SendChannelMessage: {
     call: types.SendChannelMessage;
     response: types.SendChannelMessageResponse;
+  };
+  SendConfirmedEmail: {
+    call: types.SendConfirmedEmail;
+    response: types.SendEmailResponse;
   };
   SendEmail: {
     call: types.SendEmail;
@@ -734,6 +787,7 @@ type ToolDataMap = {
     call: types.UpdateThreadLabels;
     response: types.UpdateThreadLabelsResponse;
   };
+  UploadFile: { call: types.UploadFile; response: types.UploadFileResponse };
   WebFetch: { call: types.WebFetch; response: types.WebFetchResponse };
   WebSearch: { call: types.WebSearch; response: types.WebSearchResponse };
 };

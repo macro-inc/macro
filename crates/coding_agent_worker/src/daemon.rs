@@ -4,10 +4,9 @@
 //! credential changes (a re-pair) and stopping it when the harness is
 //! removed - which is what makes the TUI and the daemon one process.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
-use rootcause::prelude::ResultExt as _;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::{Config, HarnessCredentials};
@@ -33,7 +32,7 @@ pub struct Daemon {
 }
 
 impl Daemon {
-    /// Start listening for agent triggers in a background task.
+    /// Connect the runtime and listen for agent triggers in background tasks.
     ///
     /// Returns once the client is built; the serving itself runs until
     /// [`Daemon::stop`] or the task fails.
@@ -42,18 +41,10 @@ impl Daemon {
         credentials: HarnessCredentials,
         _config_path: &Path,
     ) -> rootcause::Result<Self> {
-        // The ACP launch config carries command, args, and env but no working
-        // directory, and every session this daemon serves runs in the one
-        // configured workspace - so the daemon's own cwd is the harness's cwd.
-        std::env::set_current_dir(&config.workspace.path).context(format!(
-            "failed to enter the workspace directory {}",
-            config.workspace.path.display()
-        ))?;
-
         let cancel = CancellationToken::new();
         let client = EventStreamClient::new(&config.macro_api, &credentials);
         let api = HarnessApi::new(&config.macro_api, &credentials);
-        let runtime = Runtime::new(
+        let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
             config.harness.clone(),
@@ -105,21 +96,14 @@ impl Daemon {
 
     /// Stop serving without waiting for an in-flight network request or trigger.
     ///
-    /// A live harness bridge (the WebSocket + spawned harness process) is not
-    /// torn down here; it dies with the process, and a restarted daemon's
-    /// fresh dial displaces it at the gateway.
+    /// Dropping the dispatcher also stops its runtime supervisor, WebSocket,
+    /// and harness process, including when the daemon is restarted to re-pair.
     pub async fn stop(self) {
         self.cancel.cancel();
         self.task.abort();
         let _ = self.task.await;
         tracing::info!("daemon stopped");
     }
-}
-
-/// Absolute form of the config path, so a `chdir` into the workspace never
-/// re-points relative reads and writes of the config.
-pub fn absolute_config_path(config_path: &Path) -> PathBuf {
-    std::path::absolute(config_path).unwrap_or_else(|_| config_path.to_owned())
 }
 
 fn reconnect_delay(failures: u32) -> Duration {

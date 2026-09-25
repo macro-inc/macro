@@ -135,6 +135,7 @@ async fn delete_draft_message_recomputes_thread_metadata(
     repo.delete_draft_message(
         Uuid::parse_str(DRAFT_MSG)?,
         Uuid::parse_str(THREAD_DRAFT_SIGNAL)?,
+        &[Uuid::parse_str(LINK_ID)?],
     )
     .await?;
 
@@ -167,6 +168,7 @@ async fn delete_draft_message_returns_sent_thread_out_of_inbox(
     repo.delete_draft_message(
         Uuid::parse_str(SENT_THREAD_DRAFT_MSG)?,
         Uuid::parse_str(THREAD_SENT_DONE)?,
+        &[Uuid::parse_str(LINK_ID)?],
     )
     .await?;
 

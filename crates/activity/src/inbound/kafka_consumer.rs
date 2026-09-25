@@ -1,7 +1,8 @@
 //! Generic Kafka consumer that materializes activities from domain events.
 //!
 //! This machinery knows **zero domains**: it is generic over a declared
-//! event collection `C` and a host-supplied dispatcher `Fn(&C) -> Ingest`.
+//! event collection `C` and a host-supplied asynchronous dispatcher
+//! `Fn(C) -> impl Future<Output = Ingest>`.
 //! The composition root (the hosting service) declares the topics and maps
 //! each decoded event to the owning domain's ingest function.
 //!
@@ -22,7 +23,10 @@ use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
 use tracing::Instrument as _;
 
-use crate::domain::{models::Ingest, ports::ActivityRepo};
+use crate::domain::{
+    models::Ingest,
+    ports::{ActivityRealtimePublisher, ActivityRepo},
+};
 
 /// Consumer group for activity materialization offsets.
 struct ActivityConsumerGroup;
@@ -36,34 +40,39 @@ impl GroupName for ActivityConsumerGroup {
 /// `C` is the host's declared event collection (`declare_topics!`); `ingest`
 /// is the host's dispatch from a decoded event to the owning domain's
 /// mapping.
-pub struct ActivityConsumer<R, C, F> {
-    repo: R,
+pub struct ActivityConsumer<R, C, F, P> {
+    materializer: crate::domain::materializer::ActivityMaterializer<R, P>,
     ingest: F,
     _events: PhantomData<fn() -> C>,
 }
 
-impl<R, C, F> ActivityConsumer<R, C, F>
+impl<R, C, F, P, Fut> ActivityConsumer<R, C, F, P>
 where
     R: ActivityRepo,
     C: MacroEventCollection + 'static,
-    F: Fn(&C) -> Ingest + Send + Sync,
+    F: Fn(C) -> Fut + Send + Sync,
+    Fut: Future<Output = Ingest> + Send,
+    P: ActivityRealtimePublisher,
 {
-    /// Builds the consumer over an activity store and an event dispatcher.
-    pub fn new(repo: R, ingest: F) -> Self {
+    /// Builds the consumer over an activity store, an event dispatcher, and
+    /// a realtime announcer for durably inserted rows.
+    pub fn new(repo: R, ingest: F, realtime: P) -> Self {
         Self {
-            repo,
+            materializer: crate::domain::materializer::ActivityMaterializer::new(repo, realtime),
             ingest,
             _events: PhantomData,
         }
     }
 
-    /// Applies one decoded event to storage.
-    async fn apply(&self, event: &C) -> Result<(), R::Err> {
-        match (self.ingest)(event) {
-            Ingest::Insert(activities) => self.repo.insert_activities(&activities).await,
-            Ingest::Purge(entities) => self.repo.purge_entities(&entities).await,
-            Ingest::Ignore => Ok(()),
-        }
+    /// Applies one decoded event to storage, announcing inserted rows.
+    ///
+    /// The announcement is deliberately not transactional with the insert:
+    /// if it is lost (crash between insert and publish), the uncommitted
+    /// offset replays the source event, the deterministic ids no-op the
+    /// insert, and the announcement is published again; duplicates are
+    /// idempotent for subscribers (records keyed by id).
+    async fn apply(&self, event: C) -> Result<(), R::Err> {
+        self.materializer.apply((self.ingest)(event).await).await
     }
 
     /// Runs the consumer until `shutdown` resolves.
@@ -126,10 +135,12 @@ where
                     // forever. Returning Err restarts the consumer from the
                     // last committed offset; deterministic activity ids make
                     // the replay idempotent.
-                    self.apply(&event)
-                        .instrument(span)
-                        .await
-                        .context("failed to store activities")?;
+                    tokio::select! {
+                        _ = &mut shutdown => break,
+                        result = self.apply(event).instrument(span) => {
+                            result.context("failed to store activities")?;
+                        }
+                    }
                     commit_logged(&consumer, kafka_message);
                 }
             }

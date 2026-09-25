@@ -66,10 +66,9 @@ local-email: ensure-cache-wasm
 # without it the cache worker's dynamic import 404s at runtime and the
 # normalized cache silently degrades to network-only.
 #
-# The vite build's chunk-rendering peaks right at node's default ~4GB heap
-# cap, so CI builds flap with "Ineffective mark-compacts near heap limit".
-# Lift the ceiling; peak usage stays the same, it just stops aborting.
-node_heap := "--max-old-space-size=6144"
+# Vite's chunk-rendering can exceed 6GB as the app grows. Leave headroom
+# above that peak; CI builds use the same mid-size runner as preview deploys.
+node_heap := "--max-old-space-size=8192"
 
 build-dev: build-cache-wasm build-agent-fold-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build

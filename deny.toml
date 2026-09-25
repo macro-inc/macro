@@ -207,6 +207,7 @@ deny = [
     "channels",                  # Dev logging only
     "coding_agent_worker",       # Standalone daemon logging setup
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
+    "dictation",                 # Metadata tracing and content-redaction tests only
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
     "genai_telemetry",           # GenAI span tests

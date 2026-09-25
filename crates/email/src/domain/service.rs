@@ -1,7 +1,7 @@
 mod draft;
 mod previews;
 mod send;
-mod signature;
+pub(crate) mod signature;
 mod thread;
 mod thread_labels;
 mod user;
@@ -278,6 +278,24 @@ where
             .await
     }
 
+    async fn save_draft_for_user(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        link_id: Option<uuid::Uuid>,
+        input: CreateDraftInput,
+    ) -> Result<crate::domain::models::SavedUserDraft, EmailErr> {
+        self.save_draft_for_user_impl(macro_id, link_id, input)
+            .await
+    }
+
+    async fn delete_draft_for_user(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        draft_id: uuid::Uuid,
+    ) -> Result<crate::domain::models::DeletedUserDraft, EmailErr> {
+        self.delete_draft_for_user_impl(macro_id, draft_id).await
+    }
+
     async fn send_message(
         &self,
         link: &Link,
@@ -312,6 +330,16 @@ where
         thread_id: Uuid,
     ) -> Result<(), EmailErr> {
         self.mark_thread_seen_impl(macro_id, thread_id).await
+    }
+
+    async fn set_thread_archived(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        archived: bool,
+    ) -> Result<(), EmailErr> {
+        self.set_thread_archived_impl(macro_id, thread_id, archived)
+            .await
     }
 
     async fn mark_thread_unread(

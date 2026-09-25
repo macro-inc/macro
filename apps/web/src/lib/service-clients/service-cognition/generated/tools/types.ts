@@ -913,6 +913,14 @@ export type Content =
     }
   | {
       markdown: MarkdownNode[];
+    }
+  | {
+      download: {
+        /**
+         * Short-lived URL the raw file can be downloaded from.
+         */
+        url: string;
+      };
     };
 /**
  * A single node of a markdown document as seen by the AI.
@@ -948,6 +956,55 @@ export type MarkdownNode =
       type: 'dssImage';
     };
 /**
+ * Whether a thread is on part of a document or on the document as a whole.
+ */
+export type CommentThreadKind = 'inline' | 'discussion';
+/**
+ * Where a discussion sits in its document.
+ */
+export type CommentAnchor =
+  | {
+      type: 'document';
+    }
+  | {
+      /**
+       * The comment mark in the document.
+       */
+      markId: string;
+      /**
+       * The text the comment is on, as the document reads now; the text
+       * when the comment was written if the document could not be read.
+       */
+      markedText?: string | null;
+      /**
+       * The text when the comment was written, when it differs from now.
+       */
+      originalMarkedText?: string | null;
+      /**
+       * The commented text has since been removed from the document.
+       */
+      removed?: boolean;
+      type: 'text';
+    }
+  | {
+      /**
+       * The highlight annotation.
+       */
+      anchorId: string;
+      /**
+       * The text the highlight covers; absent when the highlight carries none.
+       */
+      markedText?: string | null;
+      type: 'pdfHighlight';
+    }
+  | {
+      /**
+       * The pin annotation.
+       */
+      anchorId: string;
+      type: 'pdfPin';
+    };
+/**
  * API-visible content lifecycle state derived from current document metadata.
  */
 export type DocumentContentState = 'unknown' | 'pending' | 'ready';
@@ -973,15 +1030,6 @@ export type ProjectItemType = 'document' | 'chat' | 'project';
  */
 export type SearchSkillsMatchType = 'partial' | 'exact';
 /**
- * User tools are pending until a user executes them
- */
-export type UserToolResponseForSendEmailResponse =
-  | 'PendingUserExecution'
-  | 'Rejected'
-  | {
-      UserAction: SendEmailResponse;
-    };
-/**
  * Response from the SendEmail tool.
  */
 export type SendEmailResponse =
@@ -1002,6 +1050,15 @@ export type SendEmailResponse =
       convertedToDraft: {
         draft_id: string;
       };
+    };
+/**
+ * User tools are pending until a user executes them
+ */
+export type UserToolResponseForSendEmailResponse =
+  | 'PendingUserExecution'
+  | 'Rejected'
+  | {
+      UserAction: SendEmailResponse;
     };
 export type ToolEntityType =
   | 'document'
@@ -1562,6 +1619,48 @@ export interface SpreadsheetChange {
    * Affected range, when applicable.
    */
   range?: string | null;
+}
+/**
+ * Start a new inline comment on a passage of a Macro markdown document, on behalf of the user: the passage is highlighted in the document and the comment floats beside it, as when a person selects text and comments. Only use this when explicitly asked to comment on part of a document. Quote the passage exactly as the document reads, within a single paragraph, heading, list item or table cell. If the passage appears more than once the tool refuses and lists each occurrence so you can choose one; if the text is not found, read the document again rather than guessing. Use ReplyToDocumentComment to reply in an existing thread or to comment on the document as a whole.
+ */
+export interface CommentOnDocumentText {
+  /**
+   * The id of the markdown document to comment on.
+   */
+  documentId: string;
+  /**
+   * The passage to comment on, quoted exactly as the document reads: plain text without markdown syntax such as ** or link brackets. Keep it to the words the comment is about; a longer quote is more likely to be unique.
+   */
+  text: string;
+  /**
+   * Which appearance of the passage to comment on, counting from 1 in document order. Only needed when the passage appears more than once.
+   */
+  occurrence?: number | null;
+  /**
+   * Comment content in macro markdown format. This uses the same syntax as markdown documents.
+   */
+  content: string;
+}
+/**
+ * The inline comment that was started.
+ */
+export interface CommentOnDocumentTextResponse {
+  /**
+   * The document the comment was posted on.
+   */
+  documentId: string;
+  /**
+   * The new thread; replies and resolution address it by this id.
+   */
+  threadId: string;
+  /**
+   * The posted comment.
+   */
+  commentId: string;
+  /**
+   * The text the comment is anchored to, as the document reads.
+   */
+  markedText: string;
 }
 /**
  * Configure a manageable bot's profile. Provide only fields that should change. Use avatarUrl to set a profile picture from an image already uploaded to Macro static files or another reachable image URL; pass an empty string to clear the current picture. Passing an empty string for description clears it. Confirm handle changes because integrations and mentions may rely on the stable handle.
@@ -5206,7 +5305,7 @@ export interface ChatMessagePreview {
   attachmentIds: string[];
 }
 /**
- * Retrieve a documents content
+ * Retrieve a document's content and its comment threads, including inline comments with the text they are on, Discussion comments, replies and resolved state.
  */
 export interface ReadContent {
   /**
@@ -5217,105 +5316,60 @@ export interface ReadContent {
 export interface ReadContentResponse {
   content: Content;
   /**
-   * Any comments on the document
+   * The comment threads on the document, oldest first: inline comments
+   * with the text they are on, and Discussion comments on the whole
+   * document. Each thread lists its first comment followed by the replies.
    */
-  comments: CommentThread[];
+  comments: DocumentDiscussion[];
 }
 /**
- * A thread bundled together with its ordered comments.
+ * A comment thread on a document: its first comment followed by the replies.
  */
-export interface CommentThread {
-  thread: Thread;
+export interface DocumentDiscussion {
   /**
-   * The comments in the thread, ordered by `createdAt` ASC.
+   * The thread id, which is the id of its first comment. Replies and
+   * resolution address the thread by this id.
    */
-  comments: Comment[];
-}
-/**
- * A comment thread attached to a document.
- */
-export interface Thread {
-  /**
-   * The unique id of the thread.
-   */
-  threadId: number;
-  /**
-   * The user id of the thread owner.
-   */
-  owner: string;
+  id: string;
+  kind: CommentThreadKind;
   /**
    * Whether the thread has been resolved.
    */
   resolved: boolean;
+  anchor: CommentAnchor;
   /**
-   * The document the thread is attached to.
+   * The comments in order, first comment first.
    */
-  documentId: string;
-  /**
-   * When the thread was created.
-   */
-  createdAt?: string | null;
-  /**
-   * When the thread was last updated.
-   */
-  updatedAt?: string | null;
-  /**
-   * When the thread was deleted, if ever.
-   */
-  deletedAt?: string | null;
-  /**
-   * Arbitrary thread metadata.
-   */
-  metadata?: {
-    [k: string]: unknown;
-  };
+  comments: DocumentComment[];
 }
 /**
- * A single comment in a thread.
+ * A single comment in a discussion.
  */
-export interface Comment {
+export interface DocumentComment {
   /**
-   * The unique id of the comment.
+   * The comment id.
    */
-  commentId: number;
+  id: string;
   /**
-   * The thread this comment belongs to.
+   * The user or bot id of the author.
    */
-  threadId: number;
+  author: string;
   /**
-   * Ordering position within the thread.
+   * The author's display name, for bots and comments imported from other documents.
    */
-  order?: number | null;
+  authorName?: string | null;
   /**
-   * The user id of the comment owner.
+   * The comment body in markdown; absent when the comment was deleted.
    */
-  owner: string;
+  content?: string | null;
   /**
-   * Sender display string.
+   * When the comment was written.
    */
-  sender?: string | null;
+  createdAt: string;
   /**
-   * Comment body.
+   * When the comment was last edited.
    */
-  text: string;
-  /**
-   * Arbitrary comment metadata.
-   */
-  metadata?: {
-    [k: string]: unknown;
-  };
-  /**
-   * When the comment was created.
-   */
-  createdAt?: string | null;
-  /**
-   * When the comment was last updated.
-   */
-  updatedAt?: string | null;
-  /**
-   * When the comment was deleted, if ever.
-   */
-  deletedAt?: string | null;
+  editedAt?: string | null;
 }
 /**
  * Retrieve a documents metadata
@@ -5574,6 +5628,74 @@ export interface RenameDocumentResponse {
   message: string;
 }
 /**
+ * Reply in a comment thread on a document, or post a new comment in the document's Discussion panel, on behalf of the user. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. To start a new inline comment on a passage of the document, use CommentOnDocumentText.
+ */
+export interface ReplyToDocumentComment {
+  /**
+   * The id of the document the comment is on.
+   */
+  documentId: string;
+  /**
+   * Comment content in macro markdown format. This uses the same syntax as markdown documents.
+   */
+  content: string;
+  /**
+   * The id of the inline or Discussion thread to reply in, from ReadContent. Omit to post a new Discussion comment on the document as a whole.
+   */
+  threadId?: string | null;
+}
+/**
+ * The posted comment.
+ */
+export interface ReplyToDocumentCommentResponse {
+  /**
+   * The document the comment was posted on.
+   */
+  documentId: string;
+  /**
+   * The thread the comment is in; a new Discussion comment starts its own.
+   */
+  threadId: string;
+  /**
+   * The posted comment.
+   */
+  commentId: string;
+}
+/**
+ * Resolve or reopen a comment thread on a document on behalf of the user. Only use this when explicitly asked to resolve or reopen a comment. Thread ids come from the comments ReadContent returns.
+ */
+export interface ResolveDocumentComment {
+  /**
+   * The id of the document the comment is on.
+   */
+  documentId: string;
+  /**
+   * The id of the inline or Discussion thread, from ReadContent.
+   */
+  threadId: string;
+  /**
+   * True to resolve the thread, false to reopen a resolved thread. Defaults to true.
+   */
+  resolved?: boolean;
+}
+/**
+ * The thread's state after the change.
+ */
+export interface ResolveDocumentCommentResponse {
+  /**
+   * The document the thread is on.
+   */
+  documentId: string;
+  /**
+   * The thread that was changed.
+   */
+  threadId: string;
+  /**
+   * Whether the thread is now resolved.
+   */
+  resolved: boolean;
+}
+/**
  * Search the user's skills by name. Skills are markdown documents containing instructions for AI to read and follow; when the user references a skill (or a request matches one), find it with this tool and then read its instructions with ReadContent using the returned document id. This is keyword search against skill names: pass 1-3 targeted keywords that would literally appear in the skill's name, not a natural-language description. Matching defaults to prefix; set matchType to 'exact' for whole-token matching. Only skills the user can access are returned, most recently updated first.
  */
 export interface SearchSkills {
@@ -5653,7 +5775,64 @@ export interface SendChannelMessageResponse {
   message_id: string;
 }
 /**
- * Draft, compose, and send an email. ALWAYS use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) — never write the email as plain text in the chat. This tool opens the email draft in the composer for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
+ * Send an email immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The email is always shown before it is sent, even when the user's request already spelled the whole thing out: in one turn write it into the thread - recipients, subject, body - ask whether to send it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific email, quoting that reply verbatim in userConfirmation. Being asked to send an email is a request to draft one, never approval to send it, so a userConfirmation quoting the request that asked you to write the email - rather than the reply approving the one you wrote - is wrong. Never call it in the agent session view or in chat: use SendEmail there, whose review card or composer is the confirmation. Takes the same fields as SendEmail; write the body in Markdown, which is rendered to HTML on send.
+ */
+export interface SendConfirmedEmail {
+  /**
+   * The subject line of the email.
+   */
+  subject: string;
+  /**
+   * The body of the email, written as Markdown. A host with a composer
+   * (chat) replaces this with the base64url-encoded HTML the composer
+   * exported before the tool runs; a host without one (an agent session)
+   * leaves the Markdown, and this tool renders it the same way.
+   */
+  body: string;
+  /**
+   * The primary recipients (To field).
+   */
+  to: EmailRecipient[];
+  /**
+   * Carbon copy recipients (optional).
+   */
+  cc?: EmailRecipient[];
+  /**
+   * Blind carbon copy recipients (optional).
+   */
+  bcc?: EmailRecipient[];
+  /**
+   * The ID of a message to reply to (optional). When set, the email is
+   * sent as a reply within the same thread.
+   */
+  replyingToId?: string | null;
+  /**
+   * Per-message signature override, set by the composer's signature preview —
+   * not normally by you. Omit to use the inbox's default policy (always on a
+   * new email; on replies/forwards only when the user enabled it). `false`
+   * excludes the signature for this one email.
+   */
+  includeSignature?: boolean | null;
+  /**
+   * The user's own message approving this specific email, quoted verbatim - for example their "yes, send it" in reply to the email you wrote out for them. It is a reply to your draft, never the earlier request that asked you to write one: if the user has not yet seen this email, there is nothing to quote here and the tool must not be called. Required: do not paraphrase it, and never supply it yourself.
+   */
+  userConfirmation: string;
+}
+/**
+ * A recipient for an email.
+ */
+export interface EmailRecipient {
+  /**
+   * The recipient's email address.
+   */
+  email: string;
+  /**
+   * The recipient's display name (optional).
+   */
+  name?: string | null;
+}
+/**
+ * Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
  */
 export interface SendEmail {
   /**
@@ -5691,19 +5870,6 @@ export interface SendEmail {
    * excludes the signature for this one email.
    */
   includeSignature?: boolean | null;
-}
-/**
- * A recipient for an email.
- */
-export interface EmailRecipient {
-  /**
-   * The recipient's email address.
-   */
-  email: string;
-  /**
-   * The recipient's display name (optional).
-   */
-  name?: string | null;
 }
 /**
  * Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.
@@ -6080,6 +6246,40 @@ export interface UpdateThreadLabelsResponse {
    * A human-readable summary of the operation.
    */
   summary: string;
+}
+/**
+ * Upload an existing file to Macro from base64-encoded bytes, up to 25 MiB decoded. Use for PDFs, images, Office files, and other files; use CreateDocument for generated text or native Macro spreadsheets. Encode actual file bytes programmatically; never invent or transcribe binary content. Returns a document ID after the bytes are uploaded; preview and indexing may finish asynchronously. Does not read local paths or fetch URLs.
+ */
+export interface UploadFile {
+  /**
+   * Filename including its extension, for example report.pdf. Do not include a directory path.
+   */
+  fileName: string;
+  /**
+   * Standard padded base64 of the exact file bytes (maximum 25 MiB decoded). No data URL prefix or whitespace. Prefer constructing this argument programmatically from the file.
+   */
+  contentBase64: string;
+  /**
+   * Optional destination project (folder) ID. Requires edit access. Omit to upload to the user's top-level files.
+   */
+  projectId?: string | null;
+}
+/**
+ * Metadata for an uploaded file. Does not echo the file contents.
+ */
+export interface UploadFileResponse {
+  /**
+   * ID of the new Macro document.
+   */
+  documentId: string;
+  /**
+   * Uploaded filename, including its extension.
+   */
+  fileName: string;
+  /**
+   * Number of uploaded bytes.
+   */
+  sizeBytes: number;
 }
 /**
  * Fetch the contents of a web page using Claude's built-in web fetch tool.

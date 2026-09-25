@@ -97,9 +97,9 @@ export default function HomepageEmailCompose() {
     scheduleEnabled: false,
     attachmentFailure: setAttachmentError,
     bodyActions: {
+      insertFiles: () => {},
       recipientAdded: () => {},
       readDroppedFiles: () => {},
-      pasteFiles: () => {},
     },
   };
 

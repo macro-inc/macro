@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  defaultBranchFor,
+  filterBranches,
+  filterRepositories,
+  orderBranches,
+  orderRepositories,
   parseRepositoryInput,
+  type ReachableRepository,
   repositoryLabel,
   repositoryShortName,
 } from './repository';
@@ -49,5 +55,98 @@ describe('repository names', () => {
     expect(repositoryLabel('https://gitlab.com/group/project.git')).toBe(
       'group/project'
     );
+  });
+});
+
+const macro: ReachableRepository = {
+  url: 'https://github.com/macro-inc/macro',
+  defaultBranch: 'main',
+};
+const infra: ReachableRepository = {
+  url: 'https://github.com/macro-inc/infra',
+  defaultBranch: 'develop',
+};
+const scratch: ReachableRepository = {
+  url: 'https://github.com/macro-inc/scratch',
+};
+
+describe('orderRepositories', () => {
+  it('puts recents first, in their order, then the rest as listed', () => {
+    expect(orderRepositories([infra, macro, scratch], [scratch.url])).toEqual([
+      scratch,
+      infra,
+      macro,
+    ]);
+  });
+
+  it('omits a recent the listing no longer carries, and dedupes by spelling', () => {
+    expect(
+      orderRepositories(
+        [macro],
+        [
+          'https://github.com/macro-inc/gone',
+          'https://github.com/Macro-Inc/MACRO',
+        ]
+      )
+    ).toEqual([macro]);
+  });
+});
+
+describe('filterRepositories', () => {
+  it('matches the owner/repo label and the url, ignoring case', () => {
+    const all = [macro, infra, scratch];
+    expect(filterRepositories(all, '')).toEqual(all);
+    expect(filterRepositories(all, 'INFRA')).toEqual([infra]);
+    expect(filterRepositories(all, 'macro-inc/s')).toEqual([scratch]);
+    expect(filterRepositories(all, 'github.com/macro-inc/macro')).toEqual([
+      macro,
+    ]);
+    expect(filterRepositories(all, 'nothing')).toEqual([]);
+  });
+});
+
+describe('defaultBranchFor', () => {
+  it("starts on the repository's default branch, or main without one", () => {
+    const all = [macro, infra, scratch];
+    expect(defaultBranchFor(all, infra.url)).toBe('develop');
+    expect(defaultBranchFor(all, 'https://github.com/Macro-Inc/Infra')).toBe(
+      'develop'
+    );
+    expect(defaultBranchFor(all, scratch.url)).toBe('main');
+    expect(defaultBranchFor(all, 'https://github.com/macro-inc/unlisted')).toBe(
+      'main'
+    );
+    expect(defaultBranchFor(all, undefined)).toBe('main');
+  });
+});
+
+describe('orderBranches', () => {
+  it("puts the repository's default first when it is listed", () => {
+    expect(orderBranches(['feature/a', 'main', 'develop'], 'main')).toEqual([
+      'main',
+      'feature/a',
+      'develop',
+    ]);
+  });
+
+  it('leaves GitHub order alone when the default is unknown or absent', () => {
+    expect(orderBranches(['feature/a', 'develop'], 'main')).toEqual([
+      'feature/a',
+      'develop',
+    ]);
+    expect(orderBranches(['feature/a', 'develop'])).toEqual([
+      'feature/a',
+      'develop',
+    ]);
+  });
+});
+
+describe('filterBranches', () => {
+  it('matches a branch name, ignoring case', () => {
+    const all = ['main', 'develop', 'feature/Home'];
+    expect(filterBranches(all, '')).toEqual(all);
+    expect(filterBranches(all, 'DEV')).toEqual(['develop']);
+    expect(filterBranches(all, 'home')).toEqual(['feature/Home']);
+    expect(filterBranches(all, 'nothing')).toEqual([]);
   });
 });

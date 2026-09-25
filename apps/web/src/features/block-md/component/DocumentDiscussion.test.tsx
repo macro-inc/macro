@@ -12,6 +12,16 @@ vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
 }));
+vi.mock('@core/messages/DocumentConversation', () => ({
+  DocumentConversation: () => null,
+}));
+vi.mock('@core/signal/permissions', () => ({
+  useCanComment: () => () => true,
+  useIsDocumentOwner: () => () => false,
+}));
+vi.mock('@core/component/ParamsProvider', () => ({
+  useUrlParams: () => ({ commentId: () => null }),
+}));
 vi.mock('../comments/documentDiscussionSource', () => ({
   createDocumentDiscussionSource: () => ({
     canEdit: () => true,

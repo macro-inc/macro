@@ -7,7 +7,7 @@ import {
   useNavigationStack,
 } from '@app/components/navigation-stack/NavigationStack';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
-import type { PreviewPanelSelection } from '@components/app/PreviewPanel';
+import type { PreviewPanelSelection } from '@components/app/previewTarget';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export type EntityDetailTarget = PreviewPanelSelection & {
@@ -106,8 +106,9 @@ function Root(props: EntityDetailNavigationStackRootProps) {
   return (
     <NavigationStack.Root<EntityDetailTarget, EntityDetailNavigationOptions>
       {...props}
-      beforeChange={(target) =>
-        props.beforeChange?.(target) !== false && selectPreview(target)
+      beforeChange={(target, reason) =>
+        props.beforeChange?.(target, reason) !== false &&
+        selectPreview(target, reason)
       }
       shouldNavigate={(target, options) =>
         props.shouldNavigate

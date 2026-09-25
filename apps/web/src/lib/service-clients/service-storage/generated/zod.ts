@@ -11,6 +11,12 @@ import * as zod from 'zod';
  */
 export const listAgentsResponseItem = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+      ),
     bot: zod
       .object({
         avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
@@ -77,6 +83,11 @@ export const listAgentsResponseItem = zod
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
       ),
+    is_coding: zod
+      .boolean()
+      .describe(
+        "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
+      ),
     mcp: zod
       .union([
         zod
@@ -122,6 +133,12 @@ export const listAgentsResponse = zod.array(listAgentsResponseItem);
  */
 export const createAgentBody = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+      ),
     avatar_url: zod
       .string()
       .nullish()
@@ -148,6 +165,11 @@ export const createAgentBody = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    is_coding: zod
+      .boolean()
+      .describe(
+        'Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`).'
       ),
     mcp: zod
       .union([
@@ -203,6 +225,12 @@ export const updateAgentParams = zod.object({
 
 export const updateAgentBody = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+      ),
     avatar_url: zod
       .string()
       .nullish()
@@ -229,6 +257,11 @@ export const updateAgentBody = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    is_coding: zod
+      .boolean()
+      .describe(
+        'Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`).'
       ),
     mcp: zod
       .union([
@@ -279,6 +312,12 @@ export const updateAgentBody = zod
 
 export const updateAgentResponse = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+      ),
     bot: zod
       .object({
         avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
@@ -344,6 +383,11 @@ export const updateAgentResponse = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    is_coding: zod
+      .boolean()
+      .describe(
+        "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
       ),
     mcp: zod
       .union([
@@ -1578,7 +1622,13 @@ export const mentionPreviewsResponse = zod
                   attendeeCount: zod
                     .number()
                     .min(mentionPreviewsResponseItemsItemEventAttendeeCountMin)
-                    .describe("Number of attendees on the requester's copy."),
+                    .describe('Number of attendees on the previewed copy.'),
+                  description: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering.'
+                    ),
                   isRecurring: zod
                     .boolean()
                     .describe('Whether the event repeats.'),
@@ -1639,15 +1689,16 @@ export const mentionPreviewsResponse = zod
                   title: zod.string().describe('Display title.'),
                   updatedAt: zod.iso
                     .datetime({})
-                    .describe("Entity update time of the requester's copy."),
+                    .describe('Entity update time of the previewed copy.'),
                   viewerEventId: zod
                     .uuid()
+                    .nullish()
                     .describe(
-                      "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee."
+                      "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee.\nAbsent when the meeting is on none of the requester's calendars and\nthey see it only because it was shared with one of their channels:\nthat preview is read-only and there is no event of theirs to open."
                     ),
                 })
                 .describe(
-                  "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting."
+                  "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting, or — when the requester has\nnone — from the mentioned projection a channel they belong to was given."
                 ),
             ])
             .optional(),
@@ -2286,6 +2337,305 @@ export const ingestTranscriptBody = zod
       ),
   })
   .describe('A transcript segment from LiveKit Inference STT.');
+
+/**
+ * @summary List the caller's shared or private labels.
+ */
+export const listChannelLabelsResponse = zod
+  .object({
+    labels: zod
+      .array(
+        zod
+          .object({
+            channelCount: zod
+              .number()
+              .describe(
+                'All assignments for a manual label; visible matches for a smart tag.'
+              ),
+            channelIds: zod
+              .array(zod.uuid())
+              .describe(
+                'Channels in this label that the requesting user participates in.'
+              ),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the label was created.'),
+            id: zod.uuid().describe('Stable label id.'),
+            name: zod
+              .string()
+              .describe(
+                'Display name, unique within the scope (case-insensitive).'
+              ),
+            rule: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    attribute: zod.enum(['name']),
+                    contains: zod
+                      .string()
+                      .describe('The substring to find anywhere in the name.'),
+                  })
+                  .describe(
+                    'Case-insensitive, literal substring matching on the channel name.'
+                  )
+                  .describe(
+                    'An attribute rule that automatically groups matching channels.'
+                  ),
+              ])
+              .optional(),
+            sortOrder: zod
+              .number()
+              .describe(
+                'Manual ordering value within the scope; lower sorts first.'
+              ),
+            teamId: zod
+              .uuid()
+              .nullish()
+              .describe('Owning team, or `None` for account-private labels.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the label was last renamed or reordered.'),
+          })
+          .describe(
+            'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+          )
+      )
+      .describe(
+        'Every label of the scope, whether or not the caller sees channels in it.'
+      ),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team scope, or `None` for private labels.'),
+  })
+  .describe("The authorized scope's labels in manual order.");
+
+/**
+ * @summary Create a label for the caller's authorized scope.
+ */
+export const createChannelLabelBody = zod
+  .object({
+    channelIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Channels to move into the new label.'),
+    name: zod
+      .string()
+      .describe('Display name; unique within the scope, case-insensitively.'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Request body for creating a label.');
+
+export const createChannelLabelResponse = zod
+  .object({
+    channelCount: zod
+      .number()
+      .describe(
+        'All assignments for a manual label; visible matches for a smart tag.'
+      ),
+    channelIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Channels in this label that the requesting user participates in.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    id: zod.uuid().describe('Stable label id.'),
+    name: zod
+      .string()
+      .describe('Display name, unique within the scope (case-insensitive).'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+    sortOrder: zod
+      .number()
+      .describe('Manual ordering value within the scope; lower sorts first.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team, or `None` for account-private labels.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the label was last renamed or reordered.'),
+  })
+  .describe(
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+  );
+
+/**
+ * @summary Move a channel into a label of the caller's authorized scope, or out of any label.
+ */
+export const setChannelLabelParams = zod.object({
+  channel_id: zod.uuid().describe('The channel id.'),
+});
+
+export const setChannelLabelBody = zod
+  .object({
+    labelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The label to put the channel in, or `null` to remove it from its label.'
+      ),
+  })
+  .describe('Request body for moving a channel between labels.');
+
+/**
+ * @summary Preview visible channels matched by a smart tag, without creating it.
+ */
+export const previewSmartTagBody = zod
+  .object({
+    attribute: zod.enum(['name']),
+    contains: zod
+      .string()
+      .describe('The substring to find anywhere in the name.'),
+  })
+  .describe('Case-insensitive, literal substring matching on the channel name.')
+  .describe('An attribute rule that automatically groups matching channels.');
+
+export const previewSmartTagResponse = zod
+  .object({
+    channels: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('Channel id.'),
+            name: zod.string().describe('Channel display name.'),
+          })
+          .describe(
+            'A channel visible to the caller that matches a smart tag rule.'
+          )
+      )
+      .describe('First matches, in alphabetical order.'),
+    totalCount: zod
+      .number()
+      .describe(
+        'Number of matching channels the caller participates in, including overflow.'
+      ),
+  })
+  .describe(
+    'A bounded preview and the total number of visible channels matching a rule.'
+  );
+
+/**
+ * @summary Delete a label of the caller's authorized scope. Its channels return to the plain list.
+ */
+export const deleteChannelLabelParams = zod.object({
+  label_id: zod.uuid().describe('The label id.'),
+});
+
+/**
+ * @summary Rename a label of the caller's authorized scope.
+ */
+export const renameChannelLabelParams = zod.object({
+  label_id: zod.uuid().describe('The label id.'),
+});
+
+export const renameChannelLabelBody = zod
+  .object({
+    name: zod.string().describe('New display name.'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Request body for renaming a label.');
+
+export const renameChannelLabelResponse = zod
+  .object({
+    channelCount: zod
+      .number()
+      .describe(
+        'All assignments for a manual label; visible matches for a smart tag.'
+      ),
+    channelIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Channels in this label that the requesting user participates in.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    id: zod.uuid().describe('Stable label id.'),
+    name: zod
+      .string()
+      .describe('Display name, unique within the scope (case-insensitive).'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+    sortOrder: zod
+      .number()
+      .describe('Manual ordering value within the scope; lower sorts first.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team, or `None` for account-private labels.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the label was last renamed or reordered.'),
+  })
+  .describe(
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+  );
 
 /**
  * @summary Handler for `POST /channels`.
@@ -5448,6 +5798,21 @@ export const putCrmTeamStagesResponse = zod
       .describe('Stages in pipeline order.'),
   })
   .describe("The team's custom stage set.");
+
+/**
+ * Available to every signed-in user on every plan; does not consume chat
+credits. Audio and transcripts are never persisted.
+ * @summary Transcribe a transient recording with OpenAI Whisper.
+ */
+export const transcribeDictationQueryParams = zod.object({
+  language: zod.string().optional().describe('ISO 639-1 language hint'),
+});
+
+export const transcribeDictationResponse = zod
+  .object({
+    text: zod.string().describe('Recognized text.'),
+  })
+  .describe('Transcription result.');
 
 /**
  * @summary Gets the users documents to populate their recent document list
@@ -8981,6 +9346,12 @@ it, and creation is throttled in the domain service.
  */
 export const createHarnessPairingBody = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Daemon operator consent ceiling. Omitted by older clients; web approval decides.'
+      ),
     host: zod
       .string()
       .nullish()
@@ -9023,6 +9394,12 @@ export const getHarnessPairingResponse = zod
       .string()
       .nullish()
       .describe('Display-only description of the machine.'),
+    requested_allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Daemon operator consent ceiling; false forbids bypass at approval.'
+      ),
     requested_name: zod
       .string()
       .describe('Harness display name the daemon asked for.'),
@@ -9048,6 +9425,12 @@ export const approveHarnessPairingParams = zod.object({
 
 export const approveHarnessPairingBody = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     name: zod
       .string()
       .nullish()
@@ -9063,6 +9446,12 @@ export const approveHarnessPairingBody = zod
 
 export const approveHarnessPairingResponse = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -9123,6 +9512,12 @@ export const claimHarnessPairingResponse = zod
   .object({
     harness: zod
       .object({
+        allow_permission_bypass: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Whether agents may bypass ACP permission requests on this harness.'
+          ),
         connected: zod
           .boolean()
           .describe('Whether the daemon currently holds a runtime connection.'),
@@ -9171,6 +9566,12 @@ export const claimHarnessPairingResponse = zod
  */
 export const listHarnessesResponseItem = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -9213,6 +9614,12 @@ export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
  */
 export const getSelfHarnessResponse = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -10806,9 +11213,7 @@ export const getItemsSoupResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -13154,6 +13559,11 @@ export const getItemsSoupResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('The time the session was created'),
+                    harness: zod
+                      .string()
+                      .describe(
+                        'The runtime snapshotted when the session was created.'
+                      ),
                     id: zod.uuid().describe('The agent session uuid'),
                     name: zod
                       .string()
@@ -13161,6 +13571,40 @@ export const getItemsSoupResponse = zod
                     ownerId: zod
                       .string()
                       .describe('Who the session belongs to'),
+                    pullRequestId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "The linked pull request's Macro entity, when visible to the viewer."
+                      ),
+                    pullRequestState: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['open', 'draft', 'closed', 'merged'])
+                          .describe(
+                            "Last synchronized state of a session's linked GitHub pull request."
+                          ),
+                      ])
+                      .optional(),
+                    pullRequestUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The persisted pull request associated with the session.'
+                      ),
+                    repoBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The starting branch selected for this session, not its current branch.'
+                      ),
+                    repoUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The repository the session works with, when one was selected.'
+                      ),
                     status: zod
                       .string()
                       .describe(
@@ -13172,6 +13616,12 @@ export const getItemsSoupResponse = zod
                       .describe(
                         'The channel thread the session was opened from, when any'
                       ),
+                    turnState: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last persisted fold turn state. Absent until an older session next runs.'
+                      ),
                     updatedAt: zod.iso
                       .datetime({})
                       .describe('The time the session was last modified'),
@@ -13181,10 +13631,16 @@ export const getItemsSoupResponse = zod
                       .describe(
                         'The time the session was last viewed by the requesting user'
                       ),
+                    workingBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last captured working branch, when the runtime has reported one.'
+                      ),
                   })
                 )
                 .describe(
-                  "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                  'An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately.'
                 ),
               tag: zod.enum(['agentSession']),
             })
@@ -13250,7 +13706,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+            "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           ),
       })
       .optional()
@@ -13467,7 +13923,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -13552,7 +14008,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -13777,7 +14233,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -14782,9 +15238,7 @@ export const postItemsSoupResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -17130,6 +17584,11 @@ export const postItemsSoupResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('The time the session was created'),
+                    harness: zod
+                      .string()
+                      .describe(
+                        'The runtime snapshotted when the session was created.'
+                      ),
                     id: zod.uuid().describe('The agent session uuid'),
                     name: zod
                       .string()
@@ -17137,6 +17596,40 @@ export const postItemsSoupResponse = zod
                     ownerId: zod
                       .string()
                       .describe('Who the session belongs to'),
+                    pullRequestId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "The linked pull request's Macro entity, when visible to the viewer."
+                      ),
+                    pullRequestState: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['open', 'draft', 'closed', 'merged'])
+                          .describe(
+                            "Last synchronized state of a session's linked GitHub pull request."
+                          ),
+                      ])
+                      .optional(),
+                    pullRequestUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The persisted pull request associated with the session.'
+                      ),
+                    repoBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The starting branch selected for this session, not its current branch.'
+                      ),
+                    repoUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The repository the session works with, when one was selected.'
+                      ),
                     status: zod
                       .string()
                       .describe(
@@ -17148,6 +17641,12 @@ export const postItemsSoupResponse = zod
                       .describe(
                         'The channel thread the session was opened from, when any'
                       ),
+                    turnState: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last persisted fold turn state. Absent until an older session next runs.'
+                      ),
                     updatedAt: zod.iso
                       .datetime({})
                       .describe('The time the session was last modified'),
@@ -17157,10 +17656,16 @@ export const postItemsSoupResponse = zod
                       .describe(
                         'The time the session was last viewed by the requesting user'
                       ),
+                    workingBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last captured working branch, when the runtime has reported one.'
+                      ),
                   })
                 )
                 .describe(
-                  "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                  'An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately.'
                 ),
               tag: zod.enum(['agentSession']),
             })
@@ -18199,9 +18704,7 @@ export const postItemsSoupAstResponse = zod
                       .describe('The time the project was deleted'),
                     id: zod.uuid().describe('The id of the project'),
                     name: zod.string().describe('The name of the project'),
-                    ownerId: zod
-                      .string()
-                      .describe('The user id of who created the project'),
+                    ownerId: zod.string().describe('The owner of the project'),
                     parentId: zod
                       .uuid()
                       .nullish()
@@ -20549,6 +21052,11 @@ export const postItemsSoupAstResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('The time the session was created'),
+                    harness: zod
+                      .string()
+                      .describe(
+                        'The runtime snapshotted when the session was created.'
+                      ),
                     id: zod.uuid().describe('The agent session uuid'),
                     name: zod
                       .string()
@@ -20556,6 +21064,40 @@ export const postItemsSoupAstResponse = zod
                     ownerId: zod
                       .string()
                       .describe('Who the session belongs to'),
+                    pullRequestId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "The linked pull request's Macro entity, when visible to the viewer."
+                      ),
+                    pullRequestState: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['open', 'draft', 'closed', 'merged'])
+                          .describe(
+                            "Last synchronized state of a session's linked GitHub pull request."
+                          ),
+                      ])
+                      .optional(),
+                    pullRequestUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The persisted pull request associated with the session.'
+                      ),
+                    repoBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The starting branch selected for this session, not its current branch.'
+                      ),
+                    repoUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The repository the session works with, when one was selected.'
+                      ),
                     status: zod
                       .string()
                       .describe(
@@ -20567,6 +21109,12 @@ export const postItemsSoupAstResponse = zod
                       .describe(
                         'The channel thread the session was opened from, when any'
                       ),
+                    turnState: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last persisted fold turn state. Absent until an older session next runs.'
+                      ),
                     updatedAt: zod.iso
                       .datetime({})
                       .describe('The time the session was last modified'),
@@ -20576,10 +21124,16 @@ export const postItemsSoupAstResponse = zod
                       .describe(
                         'The time the session was last viewed by the requesting user'
                       ),
+                    workingBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Last captured working branch, when the runtime has reported one.'
+                      ),
                   })
                 )
                 .describe(
-                  "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                  'An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately.'
                 ),
               tag: zod.enum(['agentSession']),
             })
@@ -21886,7 +22440,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe('The name of the project'),
                           ownerId: zod
                             .string()
-                            .describe('The user id of who created the project'),
+                            .describe('The owner of the project'),
                           parentId: zod
                             .uuid()
                             .nullish()
@@ -24328,6 +24882,11 @@ export const postItemsSoupAstGroupedResponse = zod
                           createdAt: zod.iso
                             .datetime({})
                             .describe('The time the session was created'),
+                          harness: zod
+                            .string()
+                            .describe(
+                              'The runtime snapshotted when the session was created.'
+                            ),
                           id: zod.uuid().describe('The agent session uuid'),
                           name: zod
                             .string()
@@ -24335,6 +24894,40 @@ export const postItemsSoupAstGroupedResponse = zod
                           ownerId: zod
                             .string()
                             .describe('Who the session belongs to'),
+                          pullRequestId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The linked pull request's Macro entity, when visible to the viewer."
+                            ),
+                          pullRequestState: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum(['open', 'draft', 'closed', 'merged'])
+                                .describe(
+                                  "Last synchronized state of a session's linked GitHub pull request."
+                                ),
+                            ])
+                            .optional(),
+                          pullRequestUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The persisted pull request associated with the session.'
+                            ),
+                          repoBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The starting branch selected for this session, not its current branch.'
+                            ),
+                          repoUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The repository the session works with, when one was selected.'
+                            ),
                           status: zod
                             .string()
                             .describe(
@@ -24346,6 +24939,12 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'The channel thread the session was opened from, when any'
                             ),
+                          turnState: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Last persisted fold turn state. Absent until an older session next runs.'
+                            ),
                           updatedAt: zod.iso
                             .datetime({})
                             .describe('The time the session was last modified'),
@@ -24355,10 +24954,16 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'The time the session was last viewed by the requesting user'
                             ),
+                          workingBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Last captured working branch, when the runtime has reported one.'
+                            ),
                         })
                       )
                       .describe(
-                        "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                        'An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately.'
                       ),
                     tag: zod.enum(['agentSession']),
                   })
@@ -25303,7 +25908,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe('The name of the project'),
                           ownerId: zod
                             .string()
-                            .describe('The user id of who created the project'),
+                            .describe('The owner of the project'),
                           parentId: zod
                             .uuid()
                             .nullish()
@@ -27745,6 +28350,11 @@ export const postItemsSoupAstGroupedResponse = zod
                           createdAt: zod.iso
                             .datetime({})
                             .describe('The time the session was created'),
+                          harness: zod
+                            .string()
+                            .describe(
+                              'The runtime snapshotted when the session was created.'
+                            ),
                           id: zod.uuid().describe('The agent session uuid'),
                           name: zod
                             .string()
@@ -27752,6 +28362,40 @@ export const postItemsSoupAstGroupedResponse = zod
                           ownerId: zod
                             .string()
                             .describe('Who the session belongs to'),
+                          pullRequestId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The linked pull request's Macro entity, when visible to the viewer."
+                            ),
+                          pullRequestState: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum(['open', 'draft', 'closed', 'merged'])
+                                .describe(
+                                  "Last synchronized state of a session's linked GitHub pull request."
+                                ),
+                            ])
+                            .optional(),
+                          pullRequestUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The persisted pull request associated with the session.'
+                            ),
+                          repoBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The starting branch selected for this session, not its current branch.'
+                            ),
+                          repoUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The repository the session works with, when one was selected.'
+                            ),
                           status: zod
                             .string()
                             .describe(
@@ -27763,6 +28407,12 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'The channel thread the session was opened from, when any'
                             ),
+                          turnState: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Last persisted fold turn state. Absent until an older session next runs.'
+                            ),
                           updatedAt: zod.iso
                             .datetime({})
                             .describe('The time the session was last modified'),
@@ -27772,10 +28422,16 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'The time the session was last viewed by the requesting user'
                             ),
+                          workingBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Last captured working branch, when the runtime has reported one.'
+                            ),
                         })
                       )
                       .describe(
-                        "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+                        'An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately.'
                       ),
                     tag: zod.enum(['agentSession']),
                   })
@@ -27996,6 +28652,12 @@ export const messageTimelineResponse = zod
                                 .describe(
                                   'Mark UUID serialized in the document.'
                                 ),
+                              marked_text: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                                ),
                               type: zod.enum(['markdown']),
                             })
                             .describe(
@@ -28006,6 +28668,12 @@ export const messageTimelineResponse = zod
                               anchor_id: zod
                                 .uuid()
                                 .describe('Highlight annotation UUID.'),
+                              marked_text: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                                ),
                               type: zod.enum(['pdf_highlight']),
                             })
                             .describe(
@@ -28019,7 +28687,7 @@ export const messageTimelineResponse = zod
                               type: zod.enum(['pdf_placeable']),
                             })
                             .describe(
-                              'A comment-only placeable PDF annotation.'
+                              'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
                             ),
                         ])
                         .describe(
@@ -28296,6 +28964,12 @@ export const entityMessageCreateBody = zod
             zod
               .object({
                 mark_id: zod.uuid().describe('Serialized mark identifier.'),
+                marked_text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'The document text the mark covers, captured by the editor as the\ncomment is written. Trimmed and bounded before it is stored, so an\noversized or whitespace-only claim cannot reach the thread row.'
+                  ),
                 type: zod.enum(['markdown']),
               })
               .describe('Attach a discussion to a stable Markdown mark.'),
@@ -28356,6 +29030,12 @@ export const entityMessageCreateBody = zod
       .optional()
       .describe('Initial attachments.'),
     content: zod.string().describe('Macro Markdown body.'),
+    id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Client-minted UUIDv7 for the new message, so an optimistic message\nalready carries its final id; the server mints one when absent.'
+      ),
     mentions: zod
       .array(
         zod
@@ -28620,7 +29300,7 @@ export const entityMessageGetMessageResponse = zod
   );
 
 /**
- * @summary Tombstone one message while preserving replies.
+ * @summary Tombstone one message; deleting a discussion's root deletes the discussion.
  */
 export const entityMessageDeleteMessageParams = zod.object({
   parent_type: zod.string(),
@@ -29235,99 +29915,6 @@ export const entityMessageLegacyResponse = zod
   );
 
 /**
- * @summary Read source channel threads mentioning this document under both parents' permissions.
- */
-export const entityMessageReferencesParams = zod.object({
-  parent_type: zod.string(),
-  parent_id: zod.string(),
-});
-
-export const entityMessageReferencesQueryLimitMin = 0;
-
-export const entityMessageReferencesQueryParams = zod.object({
-  limit: zod
-    .number()
-    .min(entityMessageReferencesQueryLimitMin)
-    .nullish()
-    .describe('Maximum number of roots.'),
-  created_at: zod.iso
-    .datetime({})
-    .nullish()
-    .describe("Last root's creation timestamp."),
-  cursor_id: zod.uuid().nullish().describe("Last root's UUID."),
-});
-
-export const entityMessageReferencesResponse = zod
-  .object({
-    next_cursor: zod
-      .union([
-        zod.null(),
-        zod
-          .object({
-            created_at: zod.iso
-              .datetime({})
-              .describe('Last root creation time.'),
-            id: zod
-              .uuid()
-              .describe('Last root UUID, used to break timestamp ties.'),
-          })
-          .describe('Cursor for a chronological parent timeline.'),
-      ])
-      .optional(),
-    threads: zod
-      .array(
-        zod
-          .object({
-            can_reply: zod
-              .boolean()
-              .describe(
-                'Whether this viewer currently has permission to reply in the source channel.'
-              ),
-            channel_name: zod
-              .string()
-              .nullish()
-              .describe(
-                "Source channel's current display name, returned only after access checks."
-              ),
-            parent: zod
-              .union([
-                zod
-                  .object({
-                    id: zod
-                      .uuid()
-                      .describe('A channel, including direct messages.'),
-                    type: zod.enum(['channel']),
-                  })
-                  .describe('A channel, including direct messages.'),
-                zod
-                  .object({
-                    id: zod
-                      .string()
-                      .describe(
-                        'A validated document identifier. Historical document ids need not be UUIDs.'
-                      ),
-                    type: zod.enum(['document']),
-                  })
-                  .describe('A document, including tasks and PDFs.'),
-              ])
-              .describe(
-                'The entity whose permissions and lifecycle govern a message.'
-              ),
-            root_id: zod
-              .uuid()
-              .describe(
-                'Source root identity; discovery does not copy its message content.'
-              ),
-          })
-          .describe(
-            'A source channel thread that mentions the requested document.'
-          )
-      )
-      .describe('Accessible channel discussions mentioning the document.'),
-  })
-  .describe('Authorized source threads, deduplicated by root.');
-
-/**
  * @summary Open a specific discussion from a link or annotation.
  */
 export const entityMessageGetThreadParams = zod.object({
@@ -29616,6 +30203,12 @@ export const entityMessageGetThreadResponse = zod
                     mark_id: zod
                       .uuid()
                       .describe('Mark UUID serialized in the document.'),
+                    marked_text: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                      ),
                     type: zod.enum(['markdown']),
                   })
                   .describe(
@@ -29626,6 +30219,12 @@ export const entityMessageGetThreadResponse = zod
                     anchor_id: zod
                       .uuid()
                       .describe('Highlight annotation UUID.'),
+                    marked_text: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                      ),
                     type: zod.enum(['pdf_highlight']),
                   })
                   .describe('An independently existing PDF highlight.'),
@@ -29636,7 +30235,9 @@ export const entityMessageGetThreadResponse = zod
                       .describe('Placeable annotation UUID.'),
                     type: zod.enum(['pdf_placeable']),
                   })
-                  .describe('A comment-only placeable PDF annotation.'),
+                  .describe(
+                    'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
+                  ),
               ])
               .describe(
                 "A thread's location within its document. Geometry remains annotation-owned."
@@ -29698,6 +30299,12 @@ export const entityMessageDeleteThreadResponse = zod
                 mark_id: zod
                   .uuid()
                   .describe('Mark UUID serialized in the document.'),
+                marked_text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                  ),
                 type: zod.enum(['markdown']),
               })
               .describe(
@@ -29706,6 +30313,12 @@ export const entityMessageDeleteThreadResponse = zod
             zod
               .object({
                 anchor_id: zod.uuid().describe('Highlight annotation UUID.'),
+                marked_text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                  ),
                 type: zod.enum(['pdf_highlight']),
               })
               .describe('An independently existing PDF highlight.'),
@@ -29714,7 +30327,9 @@ export const entityMessageDeleteThreadResponse = zod
                 anchor_id: zod.uuid().describe('Placeable annotation UUID.'),
                 type: zod.enum(['pdf_placeable']),
               })
-              .describe('A comment-only placeable PDF annotation.'),
+              .describe(
+                'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
+              ),
           ])
           .describe(
             "A thread's location within its document. Geometry remains annotation-owned."
@@ -29789,6 +30404,12 @@ export const entityMessagePatchThreadResponse = zod
                 mark_id: zod
                   .uuid()
                   .describe('Mark UUID serialized in the document.'),
+                marked_text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                  ),
                 type: zod.enum(['markdown']),
               })
               .describe(
@@ -29797,6 +30418,12 @@ export const entityMessagePatchThreadResponse = zod
             zod
               .object({
                 anchor_id: zod.uuid().describe('Highlight annotation UUID.'),
+                marked_text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                  ),
                 type: zod.enum(['pdf_highlight']),
               })
               .describe('An independently existing PDF highlight.'),
@@ -29805,7 +30432,9 @@ export const entityMessagePatchThreadResponse = zod
                 anchor_id: zod.uuid().describe('Placeable annotation UUID.'),
                 type: zod.enum(['pdf_placeable']),
               })
-              .describe('A comment-only placeable PDF annotation.'),
+              .describe(
+                'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
+              ),
           ])
           .describe(
             "A thread's location within its document. Geometry remains annotation-owned."

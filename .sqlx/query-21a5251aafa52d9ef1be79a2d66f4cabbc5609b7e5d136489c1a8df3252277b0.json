@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH labels AS (\n                SELECT l.*, ARRAY(\n                    SELECT c.id\n                    FROM comms_channels c\n                    JOIN comms_channel_participants p\n                        ON p.channel_id = c.id AND p.user_id = $3 AND p.left_at IS NULL\n                    WHERE c.channel_type = 'team'\n                    AND (l.team_id IS NULL OR c.team_id = l.team_id)\n                    AND ((\n                        l.name_contains IS NULL AND EXISTS (\n                            SELECT 1 FROM channel_label_channel lc\n                            WHERE lc.label_id = l.id AND lc.channel_id = c.id\n                        )\n                    ) OR (\n                        l.name_contains IS NOT NULL\n                        AND strpos(lower(c.name), lower(l.name_contains)) > 0\n                    ))\n                    ORDER BY lower(c.name), c.id\n                ) AS visible_ids\n                FROM channel_label l\n                WHERE l.scope_key = $1 AND ($2::uuid IS NULL OR l.id = $2)\n            )\n            SELECT\n                l.id as \"id!\",\n                l.team_id as \"team_id?\",\n                l.name as \"name!\",\n                l.name_contains as \"name_contains?\",\n                l.sort_order as \"sort_order!\",\n                l.created_at as \"created_at!\",\n                l.updated_at as \"updated_at!\",\n                l.visible_ids as \"channel_ids!: Vec<Uuid>\",\n                CASE WHEN l.name_contains IS NULL THEN\n                    (SELECT COUNT(*) FROM channel_label_channel lc\n                     JOIN comms_channels c ON c.id = lc.channel_id\n                     WHERE lc.label_id = l.id AND c.channel_type = 'team'\n                         AND (l.team_id IS NULL OR c.team_id = l.team_id))\n                    ELSE cardinality(l.visible_ids)::bigint END as \"channel_count!\"\n            FROM labels l\n            ORDER BY l.sort_order, l.created_at, l.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name_contains?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sort_order!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "channel_ids!: Vec<Uuid>",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 8,
+        "name": "channel_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "21a5251aafa52d9ef1be79a2d66f4cabbc5609b7e5d136489c1a8df3252277b0"
+}

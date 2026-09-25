@@ -65,6 +65,49 @@ function dcsFetch<T extends ObjectLike = never>(
 }
 type Success = { success: boolean };
 
+/**
+ * Error code for a chat send refused by the AI billing gate (HTTP 402). The
+ * error's `message` carries the backend's reason code
+ * (`ai_allowance_exhausted`, `ai_overage_limit_reached`,
+ * `ai_overage_payment_failed`) so the UI can explain and offer the fix.
+ */
+export const AI_USAGE_LIMIT_ERROR = 'AI_USAGE_LIMIT' as const;
+
+async function chatSendErrorHandler(
+  response: Response
+): Promise<ResultError<FetchWithTokenErrorCode | typeof AI_USAGE_LIMIT_ERROR>> {
+  switch (response.status) {
+    case 402: {
+      let body: { error?: string; code?: string } | null = null;
+      try {
+        body = (await response.json()) as { error?: string; code?: string };
+      } catch {
+        body = null;
+      }
+      return {
+        code: AI_USAGE_LIMIT_ERROR,
+        message: body?.code ?? 'ai_allowance_exhausted',
+        description: body?.error,
+      };
+    }
+    case 401:
+      return { code: 'UNAUTHORIZED', message: 'Unauthorized access' };
+    case 403:
+      return { code: 'FORBIDDEN', message: 'Forbidden' };
+    case 404:
+      return { code: 'NOT_FOUND', message: 'Resource not found' };
+    case 409:
+      return { code: 'CONFLICT', message: 'Resource conflict' };
+    case 500:
+      return { code: 'SERVER_ERROR', message: 'Internal server error' };
+    default:
+      return {
+        code: 'HTTP_ERROR',
+        message: `HTTP error! status: ${response.status}`,
+      };
+  }
+}
+
 type IdMappingResponse = { target_id: string | null };
 
 // Hand-written mirrors of the DCS OpenAPI types for the Pipedream MCP
@@ -339,9 +382,13 @@ export const cognitionApiServiceClient = {
   /** Send a chat message via HTTP stream API. Response chunks arrive via connection_gateway. */
   async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
     return (
-      await dcsFetch<SendChatMessageResponse>(`/stream/chat/message`, {
+      await fetchWithToken<
+        SendChatMessageResponse,
+        typeof AI_USAGE_LIMIT_ERROR
+      >(`${dcsHost}/stream/chat/message`, {
         method: 'POST',
         body: JSON.stringify(args),
+        errorResponseHandler: chatSendErrorHandler,
       })
     ).map((result) => result);
   },

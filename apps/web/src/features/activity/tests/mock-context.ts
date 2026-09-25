@@ -1,4 +1,4 @@
-import { firstPartyBotName } from '@queries/channel/message-sender';
+import { firstPartyBotName } from '@queries/messages/message-sender';
 import type { Client } from '@urql/core';
 import type { ActivityContext } from '../context/activity-context';
 import { createMockGraphql, type MockGraphql } from './mock-graphql';

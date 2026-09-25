@@ -21,6 +21,7 @@ x-local-e2e-env: &local-e2e-env
   DOCX_DOCUMENT_UPLOAD_BUCKET: docx-upload
   STATIC_STORAGE_BUCKET: static-file-storage
   UPLOAD_STAGING_BUCKET: bulk-upload-staging
+  AGENT_SESSION_CHANGES_BUCKET: agent-session-changes
 
   BULK_UPLOAD_REQUESTS_TABLE: bulk-upload
   CONNECTION_GATEWAY_TABLE: connection-gateway-table

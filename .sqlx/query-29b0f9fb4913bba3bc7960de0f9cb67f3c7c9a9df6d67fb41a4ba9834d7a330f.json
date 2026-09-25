@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace)\n        VALUES ($1, $2, $3, 'default', 'in-memory', '/workspace')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "29b0f9fb4913bba3bc7960de0f9cb67f3c7c9a9df6d67fb41a4ba9834d7a330f"
+}

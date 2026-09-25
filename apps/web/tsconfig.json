@@ -125,6 +125,9 @@
       "@service-scheduled-action/*": [
         "./src/lib/service-clients/service-scheduled-action/*"
       ],
+      "@service-calendar/*": [
+        "./src/lib/service-clients/service-calendar/*"
+      ],
       "@service-email/*": [
         "./src/lib/service-clients/service-email/*"
       ],

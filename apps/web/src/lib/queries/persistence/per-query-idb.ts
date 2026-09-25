@@ -16,6 +16,11 @@ export type PerQueryPersistence = {
   flush: () => Promise<void>;
 };
 
+export type ClearablePerQueryPersistence = PerQueryPersistence & {
+  /** Clear durable entries and fence pending/in-flight writes. */
+  clear: () => Promise<void>;
+};
+
 type PerQueryPersistenceOptions = Readonly<{
   dbName: string;
   debounceMs?: number;
@@ -65,15 +70,36 @@ async function withStore<T>(
 
 export function createPerQueryIDBStore(
   options: PerQueryPersistenceOptions
-): PerQueryPersistence {
+): ClearablePerQueryPersistence {
   const { dbName } = options;
   const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
 
   const pendingPuts = new Map<string, PersistedQueryEntry>();
   const pendingDeletes = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let generation = 0;
+  let writes: Promise<void> = Promise.resolve();
+
+  async function settle(operation: Promise<unknown>): Promise<void> {
+    try {
+      await operation;
+    } catch {
+      // The caller handles failures; later transactions must still run.
+    }
+  }
+
+  function enqueueWrite(operation: () => Promise<void>): Promise<void> {
+    const previous = writes;
+    const next = (async () => {
+      await previous;
+      await operation();
+    })();
+    writes = settle(next);
+    return next;
+  }
 
   const flush = async () => {
+    const currentGeneration = generation;
     const puts = new Map(pendingPuts);
     const deletes = new Set(pendingDeletes);
     pendingPuts.clear();
@@ -82,23 +108,27 @@ export function createPerQueryIDBStore(
     if (puts.size === 0 && deletes.size === 0) return;
 
     try {
-      const db = await openDB(dbName);
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
+      await enqueueWrite(async () => {
+        const db = await openDB(dbName);
+        if (generation !== currentGeneration) return;
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
 
-      for (const [hash, entry] of puts) {
-        store.put(entry, hash);
-      }
-      for (const hash of deletes) {
-        store.delete(hash);
-      }
+        for (const [hash, entry] of puts) {
+          store.put(entry, hash);
+        }
+        for (const hash of deletes) {
+          store.delete(hash);
+        }
 
-      await new Promise<void>((resolve, reject) => {
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-        tx.onabort = () => reject(tx.error);
+        await new Promise<void>((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error);
+        });
       });
     } catch (err) {
+      if (generation !== currentGeneration) return;
       for (const [hash, entry] of puts) {
         if (!pendingPuts.has(hash)) pendingPuts.set(hash, entry);
       }
@@ -118,10 +148,14 @@ export function createPerQueryIDBStore(
   };
 
   return {
-    get: (queryHash) =>
-      withStore<PersistedQueryEntry | undefined>(dbName, 'readonly', (store) =>
-        store.get(queryHash)
-      ),
+    get: async (queryHash) => {
+      await writes;
+      return withStore<PersistedQueryEntry | undefined>(
+        dbName,
+        'readonly',
+        (store) => store.get(queryHash)
+      );
+    },
 
     set: (entry) => {
       pendingDeletes.delete(entry.queryHash);
@@ -141,6 +175,25 @@ export function createPerQueryIDBStore(
         timer = null;
       }
       await flush();
+      await writes;
+    },
+
+    clear: async () => {
+      generation += 1;
+      if (timer) clearTimeout(timer);
+      timer = null;
+      pendingPuts.clear();
+      pendingDeletes.clear();
+      await enqueueWrite(async () => {
+        const db = await openDB(dbName);
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).clear();
+        await new Promise<void>((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error);
+        });
+      });
     },
   };
 }

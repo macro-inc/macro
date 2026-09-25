@@ -1,8 +1,12 @@
+import { CONNECT_APP_TARGETS } from '@macro-inc/lexical-core/nodes/ConnectAppNode';
 import {
   MAGIC_CHIP_AUTHORS,
   MAGIC_CHIP_STATUSES,
 } from '@macro-inc/lexical-core/nodes/MagicChipNode';
+import type { ReplyTargetParent } from '@macro-inc/lexical-core/nodes/ReplyTargetNode';
 import { composeAgentSessionAnnouncement } from '@macro-inc/lexical-core/utils/agent-announcement';
+import { composeAgentChatReply } from '@macro-inc/lexical-core/utils/agent-chat-reply';
+import { composeAgentConnectionPrompt } from '@macro-inc/lexical-core/utils/agent-connection-prompt';
 import { OpenAPIRoute } from 'chanfana';
 import type { Context } from 'hono';
 import { z } from 'zod';
@@ -30,7 +34,7 @@ const replyTargetRequest = z
     }
   );
 
-const agentAnnouncementRequest = z.object({
+const sessionAnnouncementRequest = z.object({
   replyTarget: replyTargetRequest,
   chip: z.object({
     agentSessionId: z.string(),
@@ -43,6 +47,37 @@ const agentAnnouncementRequest = z.object({
   }),
 });
 
+/**
+ * A chat agent's thread message in one of its states: the spinner while its
+ * turn runs, or prose the harness patches in - the answer, a fallback for a
+ * turn that said nothing, a question only the session view can answer.
+ */
+const chatReplyRequest = z.object({
+  chatReply: z.object({
+    sessionId: z.string().min(1),
+    body: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('pending') }),
+      z.object({ kind: z.literal('markdown'), markdown: z.string() }),
+    ]),
+  }),
+});
+
+const agentAnnouncementRequest = z.union([
+  sessionAnnouncementRequest,
+  chatReplyRequest,
+  z.object({
+    connectionPrompt: z.object({
+      agentTag: z.string().min(1),
+      message: z.string().min(1),
+      chip: z.object({
+        appSlug: z.string().regex(/^[a-z0-9_-]+$/),
+        name: z.string().min(1),
+        target: z.enum(CONNECT_APP_TARGETS),
+      }),
+    }),
+  }),
+]);
+
 const agentAnnouncementResponse = z.object({
   markdown: z.string(),
 });
@@ -51,7 +86,7 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
   schema = {
     summary: 'Compose an agent-harness bot response',
     description:
-      'Builds an agent-harness announcement from a structured reply target and magic chip.',
+      'Builds an agent announcement, a chat agent reply, or a connection prompt from structured Lexical nodes.',
     request: {
       body: {
         content: {
@@ -75,16 +110,35 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
   };
 
   async handle(c: Context) {
+    const { body } = await this.getValidatedData<typeof this.schema>();
     try {
-      const { body } = await this.getValidatedData<typeof this.schema>();
+      if ('connectionPrompt' in body) {
+        return c.json({
+          markdown: composeAgentConnectionPrompt(body.connectionPrompt),
+        });
+      }
+      if ('chatReply' in body) {
+        const { sessionId, body: replyBody } = body.chatReply;
+        // The schema requires a body, but the discriminated union does not
+        // survive chanfana's OpenAPI round-trip as required, so it arrives
+        // typed as optional. Refuse rather than invent a state: a reply with
+        // no body is a caller bug, and guessing one would post it to a thread.
+        if (!replyBody) {
+          throw new Error('chatReply needs a body');
+        }
+        return c.json({
+          markdown: composeAgentChatReply({ sessionId, body: replyBody }),
+        });
+      }
       const { parent, channelId, ...target } = body.replyTarget;
-      // The reply-target node still references channels only; a document
-      // discussion announces with the chip alone until the node learns
-      // message parents.
-      const channel =
-        channelId ?? (parent?.type === 'channel' ? parent.id : undefined);
+      // Callers that predate message parents send only `channelId`; the
+      // node itself references any parent the reply lives under.
+      const replyParent: ReplyTargetParent | undefined =
+        parent ?? (channelId ? { type: 'channel', id: channelId } : undefined);
       const markdown = composeAgentSessionAnnouncement({
-        replyTarget: channel ? { ...target, channelId: channel } : undefined,
+        replyTarget: replyParent
+          ? { ...target, parent: replyParent }
+          : undefined,
         chip: body.chip,
       });
       return c.json({ markdown });

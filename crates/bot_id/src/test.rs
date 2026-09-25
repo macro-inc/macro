@@ -56,11 +56,31 @@ fn macro_new_id_is_stable_and_distinct_from_macro() {
     // The classic bot answers in channel; only its replacement opens sessions.
     assert!(!system_bot(MACRO_AI_BOT_ID).unwrap().has_agent);
     assert!(system_bot(MACRO_NEW_BOT_ID).unwrap().has_agent);
+    // Two ids, one persona: both present as "Macro" wherever a person reads a
+    // sender, a mention, or an agent list.
+    assert_eq!(
+        system_bot(MACRO_NEW_BOT_ID).unwrap().name,
+        system_bot(MACRO_AI_BOT_ID).unwrap().name
+    );
 }
 
 #[test]
 fn rejects_non_bot_storage_string() {
     assert!(BotIdStr::parse_from_str("macro|teo@macro.com").is_err());
+}
+
+#[test]
+fn claude_is_a_global_system_agent_with_a_distinct_identity() {
+    let claude = system_bot(CLAUDE_BOT_ID).unwrap();
+    assert_eq!(claude.handle, "claude");
+    assert_eq!(claude.name, "Claude");
+    assert!(claude.has_agent);
+    assert_eq!(
+        CLAUDE_BOT_ID.to_string(),
+        "00000000-0000-0000-0000-00000000c1a0"
+    );
+    let ids: std::collections::HashSet<_> = SYSTEM_BOTS.iter().map(|bot| bot.id).collect();
+    assert_eq!(ids.len(), SYSTEM_BOTS.len());
 }
 
 #[test]

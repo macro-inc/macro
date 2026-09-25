@@ -20,8 +20,7 @@ export default function HomepagePullRequest() {
       (document.activeElement instanceof HTMLElement &&
       host.contains(document.activeElement)
         ? document.activeElement
-        : (host.querySelector<HTMLElement>('[data-magic-chip-answer]') ??
-          undefined));
+        : (host.querySelector<HTMLElement>('[data-magic-chip]') ?? undefined));
     setView(next);
   };
   const prLink = () => (
@@ -83,7 +82,6 @@ export default function HomepagePullRequest() {
                       </Button>
                     }
                     onOpen={() => open('trace')}
-                    onExpand={() => open('trace')}
                   />
                 </div>
                 <span class="homepage-agent-trace-hint">

@@ -1,4 +1,3 @@
-import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
@@ -27,7 +26,6 @@ import { InboxDivider, type LayoutProps } from './shared';
 import { TaskNarrowBody } from './task';
 
 export function NarrowInboxLayout(props: LayoutProps) {
-  const soupView = useMaybeSoupView();
   const isDirectMessage = () =>
     isChannelEntity(props.entity) &&
     props.entity.channelType === 'direct_message';
@@ -43,7 +41,11 @@ export function NarrowInboxLayout(props: LayoutProps) {
     <Entity.Layout
       class="w-full text-sm grid"
       style={{
-        'grid-template-columns': 'auto 1fr 8ch',
+        // A scheduled send's badge is wider than a date, so it sizes its column.
+        'grid-template-columns':
+          isEmailEntity(props.entity) && props.entity.scheduledSendTime
+            ? 'auto 1fr auto'
+            : 'auto 1fr 8ch',
         'grid-template-rows': 'auto auto auto',
         'grid-template-areas':
           '"icon title timestamp" "icon body body" "icon body body"',
@@ -158,7 +160,7 @@ export function NarrowInboxLayout(props: LayoutProps) {
           {(entity) => (
             <CallNarrowBody
               entity={entity()}
-              showAttendanceBadge={(soupView?.activeTab() ?? 'all') === 'all'}
+              showAttendanceBadge={props.showCalendarAttendance !== false}
               setContainerRef={props.setSnippetContainerRef}
               chars={props.chars}
             />

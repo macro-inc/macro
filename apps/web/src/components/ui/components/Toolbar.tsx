@@ -32,7 +32,7 @@ export type ToolbarProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
 
 /**
  * An opinionated floating bar of controls. Owns its surface chrome
- * (`rounded-xl`, padding, border, background, shadow) and sets the default
+ * (`rounded-xl`, padding, border, background) and sets the default
  * size/variant for its `Toolbar.Button` children, so callers compose controls
  * without restyling them. Pair with a positioning wrapper (e.g.
  * `PopupPositioner`) when it needs to float against an anchor.
@@ -74,7 +74,7 @@ export function Toolbar(props: ToolbarProps) {
           role="toolbar"
           aria-orientation={ctx.orientation}
           class={cn(
-            'inline-flex items-center gap-1 rounded-xl border border-edge bg-surface p-1.5 shadow-lg',
+            'inline-flex items-center gap-1 rounded-xl border border-edge-frame bg-control p-1.5',
             'data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch',
             local.class
           )}
@@ -146,7 +146,7 @@ function ToolbarDivider(props: ToolbarDividerProps) {
       }
       data-orientation={orientation()}
       class={cn(
-        'shrink-0 self-stretch bg-edge-muted',
+        'shrink-0 self-stretch bg-edge-divider',
         'data-[orientation=horizontal]:mx-0.5 data-[orientation=horizontal]:my-1 data-[orientation=horizontal]:w-px',
         'data-[orientation=vertical]:my-0.5 data-[orientation=vertical]:mx-1 data-[orientation=vertical]:h-px',
         props.class

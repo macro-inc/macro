@@ -1,7 +1,8 @@
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
+import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { ContentLoading } from '@components/app/ContentLoading';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
@@ -20,6 +21,7 @@ export default function BlockEmail() {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
+  const source = createEmailThreadSource(threadId, threadQuery);
 
   // Email threads are absent from quick access, so the entity the block-level
   // commands act on has to come from here. Gated on isSuccess so the
@@ -59,9 +61,6 @@ export default function BlockEmail() {
   };
 
   const notificationSource = useGlobalNotificationSource();
-  // A Preview Pair Viewer shows the thread passively — wait longer before
-  // marking it seen so scanning/previewing doesn't clear unread state.
-  const isPreview = !!useSplitPanel()?.handle.isViewerSplit();
 
   const title = () => {
     const data = threadData();
@@ -72,7 +71,7 @@ export default function BlockEmail() {
   };
 
   return (
-    <Suspense>
+    <Suspense fallback={<ContentLoading />}>
       <DocumentBlockContainer title={title() ?? 'Email'}>
         <div class="size-full" tabIndex={-1}>
           <EmailThreadLoadGate
@@ -80,13 +79,18 @@ export default function BlockEmail() {
             notificationSource={notificationSource}
             threadId={threadId()}
             linkId={threadData()?.thread?.link_id}
-            debounceTime={isPreview ? 1_500 : 100}
+            debounceTime={100}
             onRetry={() => void threadQuery.refetch()}
           >
             <Show when={threadId()}>
               {(id) => (
-                <Suspense>
-                  <EmailBlockAdapter title={title()} threadId={id} />
+                <Suspense fallback={<ContentLoading />}>
+                  <EmailBlockAdapter
+                    title={title()}
+                    threadId={id}
+                    source={source}
+                    threadTransport={() => threadQuery.transport}
+                  />
                 </Suspense>
               )}
             </Show>

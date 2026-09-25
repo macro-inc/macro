@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createParamsState,
   ParamsProvider,
+  useParamNavigationCount,
   useUrlParams,
 } from './ParamsProvider';
 
@@ -202,5 +203,33 @@ describe('ParamsProvider', () => {
       location: 'loc-1',
       commentId: 'comment-1',
     });
+  });
+
+  it('counts navigations that name a param, not URL fallbacks', async () => {
+    mocks.searchParams = createStore<MockSearchParams>({
+      comment_id: 'from-url',
+    })[0];
+    const paramsState = createParamsState();
+    let count = () => -1;
+    let comment = () => undefined as string | undefined;
+    function Reader() {
+      count = useParamNavigationCount('comment_id');
+      comment = useUrlParams(URL_PARAMS).commentId;
+      return null;
+    }
+    render(() => (
+      <ParamsProvider state={paramsState}>
+        <Reader />
+      </ParamsProvider>
+    ));
+    expect(count()).toBe(0);
+
+    paramsState.navigate({ comment_id: 'from-link' });
+    paramsState.navigate({ comment_id: 'from-link' });
+    expect(count()).toBe(2);
+
+    paramsState.navigate({ node_id: 'node-1' });
+    expect(comment()).toBe('from-url');
+    expect(count()).toBe(2);
   });
 });

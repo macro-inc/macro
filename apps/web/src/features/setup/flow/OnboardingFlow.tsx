@@ -1,3 +1,4 @@
+import type { PlanTier } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useIsAuthenticated } from '@core/context/user';
@@ -100,7 +101,7 @@ function FlowContent() {
   const [activeKey, setActiveKey] = createSignal('welcome');
   const [restored, setRestored] = createSignal(false);
   const [planChoice, setPlanChoice] = createSignal<{
-    plan: 'free' | 'premium';
+    plan: PlanTier;
     skipped: boolean;
   }>({ plan: 'free', skipped: false });
   const keys = () => onboardingStepKeys(selected().map((item) => item.id));
@@ -142,7 +143,8 @@ function FlowContent() {
             setActiveKey(saved.step);
             if (
               (saved.planChoice?.plan === 'free' ||
-                saved.planChoice?.plan === 'premium') &&
+                saved.planChoice?.plan === 'premium' ||
+                saved.planChoice?.plan === 'max') &&
               typeof saved.planChoice.skipped === 'boolean'
             )
               setPlanChoice(saved.planChoice);
@@ -267,7 +269,7 @@ function FlowContent() {
     disposeHandoff?.();
     disposeHandoff = transitionOnboardingStep(content, () => advance(state));
   };
-  const choosePlan = (plan: 'free' | 'premium', skipped = false) => {
+  const choosePlan = (plan: PlanTier, skipped = false) => {
     setPlanChoice({ plan, skipped });
     advanceAccount(skipped ? 'skipped' : 'completed');
   };
@@ -280,10 +282,11 @@ function FlowContent() {
     });
     const choice = planChoice();
     const paid =
-      choice.plan === 'premium' ||
+      choice.plan !== 'free' ||
       info()?.licenseStatus === 'active' ||
       info()?.licenseStatus === 'trialing';
-    if (paid) void finish.finishPremium();
+    if (paid)
+      void finish.finishPremium(choice.plan === 'max' ? 'max' : 'premium');
     else void finish.finishFree(choice.skipped);
   };
   const advanceStory = (features?: string[]) => {
@@ -440,7 +443,7 @@ function FlowContent() {
                   <p class="text-base leading-7 text-ink-muted">
                     {inviteOffer()
                       ? 'Your invite includes Macro Premium free for the first month. You can change plans anytime.'
-                      : 'Start free, or choose Premium. You can change your plan anytime.'}
+                      : 'Start free, or choose a paid plan. You can change your plan anytime.'}
                   </p>
                 </header>
                 <PlanStep
@@ -450,7 +453,7 @@ function FlowContent() {
                   onStartCheckout={(tier) =>
                     void finish.startPremiumCheckout(tier)
                   }
-                  onPremiumPaid={() => choosePlan('premium')}
+                  onPremiumPaid={(tier) => choosePlan(tier)}
                 />
               </Match>
             </Switch>

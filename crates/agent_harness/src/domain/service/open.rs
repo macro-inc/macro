@@ -3,6 +3,8 @@
 //! where there is a sandbox to give it to, and attaches the runtime.
 
 use agent_session::domain::ports::SelectedManagedPersona;
+use agent_session::domain::repository_branch::RepositoryBranch;
+use model_owner::Owner;
 
 use super::*;
 use crate::domain::model::SessionRepository;
@@ -54,13 +56,22 @@ where
         &self,
         request: agent_session::domain::ports::OpenExternalAgentSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
+        // An external session is opened as a person: the thread it claims is
+        // checked against what they may post in, and the announcement is
+        // made in their name. Any other kind of owner is refused before a
+        // row exists for it.
+        let owner_user = request
+            .owner
+            .as_user()
+            .cloned()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
         // The thread linkage is the caller's claim: it is honoured only when
         // the owner can write to that parent and the message sits in it.
         if let Some(thread) = &request.thread {
             self.inner
                 .prompt_context
                 .authorize_origin(
-                    &request.owner,
+                    &owner_user,
                     &AnnounceOrigin {
                         parent: thread.parent.clone(),
                         thread_id: thread.thread_id,
@@ -78,18 +89,22 @@ where
                 })?;
         }
         let defaults = self.inner.defaults.for_bot(request.bot_id);
+        let (model, harness) = match request.profile {
+            Some(profile) => (profile.model, profile.harness),
+            None => (defaults.model.clone(), defaults.harness.clone()),
+        };
         let session = self
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
                 repo_branch: None,
-                id: AgentSessionId::new(),
-                owner_id: request.owner.clone(),
+                id: request.id.unwrap_or_else(AgentSessionId::new),
+                owner_id: request.owner,
                 bot_id: request.bot_id,
                 thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
                 originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
-                model: defaults.model.clone(),
-                harness: defaults.harness.clone(),
+                model,
+                harness,
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
@@ -106,17 +121,22 @@ where
         self.inner.publish_opened(&session).await;
 
         if let Some(thread) = request.thread {
-            let announcement = SessionAnnouncement {
-                session_id: session.id,
-                bot_id: request.bot_id,
-                origin_parent: thread.parent,
-                origin_thread_id: thread.thread_id,
-                origin_message_id: thread.message_id,
-                prompted_message_id: MessageId::first(AuthorKind::User),
-                prompted_content: thread.content,
-                triggered_by: request.owner,
+            let announce = async {
+                let persona = self.inner.reply_persona(&session).await?;
+                let announcement = SessionAnnouncement {
+                    session_id: session.id,
+                    bot_id: request.bot_id,
+                    is_coding: persona.is_coding,
+                    origin_parent: thread.parent,
+                    origin_thread_id: thread.thread_id,
+                    origin_message_id: thread.message_id,
+                    prompted_message_id: MessageId::first(AuthorKind::User),
+                    prompted_content: thread.content,
+                    triggered_by: owner_user,
+                };
+                self.inner.announcer.announce(announcement).await
             };
-            if let Err(error) = self.inner.announcer.announce(announcement).await {
+            if let Err(error) = announce.await {
                 tracing::warn!(
                     error = ?error,
                     session = %session.id,
@@ -175,12 +195,26 @@ where
                 AgentMcpServers::OwnerConnections,
             ),
         };
+        // A caller's pick outranks the persona's: choosing a model on the way
+        // in is choosing what this session runs on, for its whole life.
+        let model = request.model.unwrap_or(model);
         let kind = AgentKind::for_session(bot_id, &harness);
+        let harness = kind.harness_slug().map_or(harness, str::to_owned);
         if kind == AgentKind::CodexCloud {
             mcp_servers = AgentMcpServers::Selected {
                 servers: Vec::new(),
             };
         }
+        // A managed session runs as its owner: its egress spends their
+        // connected apps, the repositories it may pick are the ones they
+        // reach, and its sandbox size is their preference. Only a person has
+        // those, so any other kind of owner is refused before anything is
+        // provisioned.
+        let owner_user = request
+            .owner
+            .as_user()
+            .cloned()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
         // Explicit source choices are a domain decision, before any session or egress grant exists.
         let selected_repo = if let Some(url) = request.repo_url.as_deref() {
             if kind != AgentKind::Cursor {
@@ -200,16 +234,19 @@ where
                 .as_ref()
                 .ok_or(agent_session::domain::error::AgentSessionError::Forbidden)?;
             let reachable = repositories
-                .for_user(&request.owner)
+                .for_user(&owner_user)
                 .await
                 .map_err(into_session_error)?;
-            if !reachable
+            let listed = reachable
                 .iter()
-                .any(|allowed| allowed.eq_ignore_ascii_case(repo.as_str()))
-            {
-                return Err(agent_session::domain::error::AgentSessionError::Forbidden);
-            }
-            Some(repo)
+                .find(|allowed| allowed.url.eq_ignore_ascii_case(repo.as_str()))
+                .ok_or(agent_session::domain::error::AgentSessionError::Forbidden)?;
+            // The caller's branch, or the one the repository's own clones start on.
+            let branch = request
+                .repo_branch
+                .clone()
+                .unwrap_or_else(|| starting_branch(listed.default_branch.as_deref()));
+            Some((repo, branch))
         } else {
             if request.repo_branch.is_some() {
                 return Err(
@@ -221,35 +258,24 @@ where
             None
         };
         let defaults = self.inner.defaults.for_bot(bot_id);
-        let sandbox_size = self
-            .inner
-            .sessions
-            .user_sandbox_size(&request.owner)
-            .await?;
-        let session_id = AgentSessionId::new();
+        let sandbox_size = self.inner.sessions.user_sandbox_size(&owner_user).await?;
+        let session_id = request.id.unwrap_or_else(AgentSessionId::new);
         // Same ordering as the trigger path's open: the token has to be minted
         // before the row, because the row is what carries the hash that makes
         // it mean anything.
         let egress = self
             .inner
             .egress
-            .provision(session_id, &request.owner, &mcp_servers)
+            .provision(session_id, &owner_user, &mcp_servers)
             .await
             .map_err(into_session_error)?;
         let session = self
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
-                repo_branch: selected_repo.as_ref().map(|_| {
-                    request.repo_branch.unwrap_or_else(|| {
-                        agent_session::domain::repository_branch::RepositoryBranch::parse(
-                            "main".to_owned(),
-                        )
-                        .expect("main is a valid branch")
-                    })
-                }),
+                repo_branch: selected_repo.as_ref().map(|(_, branch)| branch.clone()),
                 id: session_id,
-                owner_id: request.owner.clone(),
+                owner_id: request.owner,
                 bot_id,
                 thread_id: None,
                 originating_message_id: None,
@@ -260,6 +286,7 @@ where
                 // somewhere this deployment does not name.
                 repo_url: selected_repo
                     .as_ref()
+                    .map(|(repo, _)| repo)
                     .or(defaults.repo_url.as_ref())
                     .map(|repo| repo.as_str().to_owned()),
                 // Managed sandboxes run in the path baked into their image.
@@ -308,9 +335,15 @@ where
                 return Err(into_session_error(error));
             }
         };
+        let permission_policy = self.inner.permission_policy_for(session.bot_id).await;
         self.inner
             .sessions
-            .attach_session(session.id, container.mcp_servers(mcp_servers))
+            .attach_session(
+                session.id,
+                container
+                    .mcp_servers(mcp_servers)
+                    .permission_policy(permission_policy),
+            )
             .await?;
 
         // Raw, through the session's own command worker: dispatch is where a
@@ -322,7 +355,7 @@ where
                 HarnessCommand::Deliver(DeliverAction {
                     id: AgentActionId::mint(),
                     action: AgentAction::prompt(raw_prompt),
-                    actor: Some(request.owner),
+                    actor: Some(owner_user),
                     announce: None,
                 }),
             )
@@ -420,6 +453,37 @@ where
                 },
             )
             .await?;
+
+        // Asked before anything exists for the session: a row whose spawn is
+        // bound to fail would be marked disconnected and leave the thread
+        // with a chip that never answers. Declining is the bot's reply
+        // instead - what the mentioner has to connect, where to do it.
+        if let Some(blocker) = self
+            .containers
+            .preflight(runtime.kind, &origin.sender)
+            .await?
+        {
+            tracing::info!(
+                bot_id = %bot_id,
+                sender = %origin.sender,
+                ?blocker,
+                "declining a mention its sender is not set up for"
+            );
+            self.announcer
+                .decline(DeclinedMention {
+                    bot_id,
+                    origin: AnnounceOrigin {
+                        parent: origin.parent,
+                        thread_id: origin.thread_id,
+                        message_id: origin.message_id,
+                    },
+                    triggered_by: origin.sender,
+                    blocker,
+                })
+                .await?;
+            return Ok(());
+        }
+
         let defaults = self.defaults.for_bot(bot_id);
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
 
@@ -438,12 +502,16 @@ where
             .create_session(CreateAgentSessionParams {
                 repo_branch: None,
                 id: session_id,
-                owner_id: origin.sender.clone(),
+                owner_id: Owner::User(origin.sender.clone()),
                 bot_id,
                 thread_id: Some(origin.thread_id),
                 originating_message_id: Some(origin.message_id),
                 model: runtime.model.clone(),
-                harness: runtime.harness.clone(),
+                harness: runtime
+                    .kind
+                    .harness_slug()
+                    .unwrap_or(&runtime.harness)
+                    .to_owned(),
                 repo_url: defaults
                     .repo_url
                     .as_ref()
@@ -495,8 +563,14 @@ where
                 return Err(error);
             }
         };
+        let permission_policy = self.permission_policy_for(bot_id).await;
         self.sessions
-            .attach_session(session_id, container.mcp_servers(mcp_servers))
+            .attach_session(
+                session_id,
+                container
+                    .mcp_servers(mcp_servers)
+                    .permission_policy(permission_policy),
+            )
             .await?;
         // The first prompt goes through the same door as every later one:
         // queued raw, then dispatched - which is where it is composed with
@@ -507,7 +581,7 @@ where
             session_id,
             DeliverAction {
                 id: AgentActionId::mint(),
-                action: AgentAction::prompt(origin.content),
+                action: AgentAction::prompt_with_attachments(origin.content, origin.attachments),
                 actor: Some(origin.sender),
                 announce: Some(AnnounceOrigin {
                     parent: origin.parent,
@@ -519,4 +593,17 @@ where
         .await?;
         Ok(())
     }
+}
+
+/// The branch a session starts on when its caller selected a repository but
+/// no branch: the repository's own default branch, or `main` for an empty
+/// repository. GitHub reports the default branch's name as git holds it, so
+/// one that fails to parse belongs to a repository nothing could check out
+/// anyway - `main` is as good a guess as any there.
+pub(super) fn starting_branch(default_branch: Option<&str>) -> RepositoryBranch {
+    default_branch
+        .and_then(|branch| RepositoryBranch::parse(branch.to_owned()).ok())
+        .unwrap_or_else(|| {
+            RepositoryBranch::parse("main".to_owned()).expect("main is a valid branch")
+        })
 }

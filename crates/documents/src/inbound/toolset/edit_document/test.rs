@@ -5,12 +5,14 @@ use std::sync::{Arc, Mutex};
 use crate::domain::content::DocumentContent;
 use crate::domain::events::InteractionReason;
 use crate::domain::models::{
-    CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
-    DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
-    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
+    CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, DocumentTeamShareResponse,
+    EditDocumentServiceArgs, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    LocationQueryParams, TaskBranchName,
 };
 use crate::domain::permission_token::decode_permission_token;
-use crate::domain::ports::editing::{EditMode, EditResult, EditingWorkerService};
+use crate::domain::ports::editing::{
+    CommentMarkPlacement, EditMode, EditResult, EditingWorkerService,
+};
 use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
 };
@@ -23,6 +25,7 @@ use macro_sync_service_jwt::DocumentPermissionToken;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model::{document::DocumentBasic, sync_service::SyncServiceVersionID};
 use model_entity::Entity;
+use model_owner::Owner;
 use sync_service_client::SyncServiceClient;
 use uuid::Uuid;
 
@@ -33,8 +36,7 @@ fn document_with_file_type(file_type: Option<&str>) -> DocumentBasic {
     DocumentBasic {
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: "Test document".to_string(),
-        owner: MacroUserIdStr::try_from(TEST_USER_ID.to_string())
-            .expect("test user id should be valid"),
+        owner: Owner::from_principal_str(TEST_USER_ID).expect("test user id should be valid"),
         file_type: file_type.map(str::to_string),
         sub_type: None,
         branched_from_id: None,
@@ -45,12 +47,12 @@ fn document_with_file_type(file_type: Option<&str>) -> DocumentBasic {
     }
 }
 
-struct FakeDocumentService {
+pub(in crate::inbound::toolset) struct FakeDocumentService {
     file_type: Option<String>,
 }
 
 impl FakeDocumentService {
-    fn new(file_type: &str) -> Self {
+    pub(in crate::inbound::toolset) fn new(file_type: &str) -> Self {
         Self {
             file_type: Some(file_type.to_string()),
         }
@@ -112,13 +114,6 @@ impl DocumentService for FakeDocumentService {
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
         panic!("unexpected get_document_text call")
-    }
-
-    async fn get_document_comments(
-        &self,
-        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<CommentThread>, DocumentError> {
-        panic!("unexpected get_document_comments call")
     }
 
     async fn create_document(
@@ -280,8 +275,19 @@ impl DocumentCreationService for FakeDocumentService {
     }
 }
 
-#[derive(Clone, Default)]
-struct FakeEntityAccessService;
+/// Grants the user, and bots acting for them, `access_level` on every entity.
+#[derive(Clone)]
+pub(in crate::inbound::toolset) struct FakeEntityAccessService {
+    pub(in crate::inbound::toolset) access_level: AccessLevel,
+}
+
+impl Default for FakeEntityAccessService {
+    fn default() -> Self {
+        Self {
+            access_level: AccessLevel::Owner,
+        }
+    }
+}
 
 impl EntityAccessService for FakeEntityAccessService {
     async fn generate_entity_access_receipt<T: RequiredPermission>(
@@ -299,19 +305,29 @@ impl EntityAccessService for FakeEntityAccessService {
                 entity_type,
             },
             EntityPermission::AccessLevel {
-                access_level: AccessLevel::Owner,
+                access_level: self.access_level,
             },
         )
     }
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _bot_id: BotId,
-        _scope: BotAccessScope,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        bot_id: BotId,
+        scope: BotAccessScope,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        panic!("unexpected generate_bot_entity_access_receipt call")
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            (&scope).into(),
+            entity_access::domain::models::Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            EntityPermission::AccessLevel {
+                access_level: self.access_level,
+            },
+        )
     }
 
     async fn get_access_level(
@@ -392,10 +408,41 @@ impl EntityAccessService for FakeEntityAccessService {
 }
 
 #[derive(Clone, Default)]
-struct FakeEditingWorker {
+pub(in crate::inbound::toolset) struct FakeEditingWorker {
     edit_calls: Arc<Mutex<Vec<String>>>,
     modes: Arc<Mutex<Vec<EditMode>>>,
     tokens: Arc<Mutex<Vec<DocumentPermissionToken>>>,
+    /// Answer every comment mark placement with this refusal.
+    comment_mark_refusal: Option<String>,
+    /// Fail every comment mark placement as a worker whose push was never acked.
+    comment_mark_fails: bool,
+    pub(in crate::inbound::toolset) added_comment_marks: Arc<Mutex<Vec<AddedCommentMark>>>,
+    pub(in crate::inbound::toolset) removed_comment_marks: Arc<Mutex<Vec<Uuid>>>,
+}
+
+impl FakeEditingWorker {
+    pub(in crate::inbound::toolset) fn failing_comment_marks() -> Self {
+        Self {
+            comment_mark_fails: true,
+            ..Self::default()
+        }
+    }
+
+    pub(in crate::inbound::toolset) fn refusing_comment_marks(reason: &str) -> Self {
+        Self {
+            comment_mark_refusal: Some(reason.to_owned()),
+            ..Self::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::inbound::toolset) struct AddedCommentMark {
+    pub document_id: String,
+    pub token: DocumentPermissionToken,
+    pub mark_id: Uuid,
+    pub text: String,
+    pub occurrence: Option<u32>,
 }
 
 impl EditingWorkerService for FakeEditingWorker {
@@ -406,6 +453,48 @@ impl EditingWorkerService for FakeEditingWorker {
         _request: &crate::domain::spreadsheet::SpreadsheetRequest,
     ) -> anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse> {
         panic!("unexpected spreadsheet call")
+    }
+
+    async fn add_comment_mark(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        mark_id: Uuid,
+        text: &str,
+        occurrence: Option<u32>,
+    ) -> anyhow::Result<CommentMarkPlacement> {
+        self.added_comment_marks
+            .lock()
+            .expect("comment marks lock poisoned")
+            .push(AddedCommentMark {
+                document_id: document_id.to_owned(),
+                token: document_token.clone(),
+                mark_id,
+                text: text.to_owned(),
+                occurrence,
+            });
+        if self.comment_mark_fails {
+            anyhow::bail!("sync service did not acknowledge 1 comment mark update(s)");
+        }
+        Ok(match &self.comment_mark_refusal {
+            Some(reason) => CommentMarkPlacement::Refused(reason.clone()),
+            None => CommentMarkPlacement::Placed {
+                marked_text: text.trim().to_owned(),
+            },
+        })
+    }
+
+    async fn remove_comment_mark(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        mark_id: Uuid,
+    ) -> anyhow::Result<()> {
+        self.removed_comment_marks
+            .lock()
+            .expect("comment marks lock poisoned")
+            .push(mark_id);
+        Ok(())
     }
 
     async fn edit(
@@ -449,7 +538,7 @@ fn tool_context(
 ) -> ServiceContext<TestToolContext> {
     ServiceContext(DocumentToolContext::new(
         service,
-        FakeEntityAccessService,
+        FakeEntityAccessService::default(),
         LexicalClient::new(
             "unused-internal-key".to_string(),
             "http://localhost/lexical".to_string(),
@@ -460,6 +549,7 @@ fn tool_context(
         ),
         editing,
         "unused-jwt-secret".to_string(),
+        std::sync::Arc::new(crate::inbound::toolset::comment_test::FakeMessages::default()),
     ))
 }
 

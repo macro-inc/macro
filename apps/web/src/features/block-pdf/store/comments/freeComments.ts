@@ -1,8 +1,7 @@
-import type {
-  PdfComment,
-  PdfReply,
-  PdfRoot,
-  ViewerCommentType,
+import {
+  createPdfDraftThreadId,
+  type PdfComment,
+  type PdfRoot,
 } from '@block-pdf/type/comments';
 import {
   type IThreadPlaceable,
@@ -11,7 +10,8 @@ import {
 import { useUserId } from '@core/context/user';
 import { createMemo } from 'solid-js';
 import { usePdfDocument } from '../../context/pdf-document-context';
-import { sortComments } from '../commentsResource';
+import { usePdfViewer } from '../../context/pdf-viewer-context';
+import { anchoredThread } from './anchoredThread';
 
 export { isThreadPlaceable };
 
@@ -20,76 +20,21 @@ const getThreadPlaceablePos = (
   scaledPageHeight: number
 ) => placeable.position.yPct * scaledPageHeight;
 
-const getFreeCommentThread = (
-  commentPlaceable: IThreadPlaceable
-): { root: PdfRoot; replies: PdfReply[] } | null => {
-  const commentType: ViewerCommentType = 'free';
-
-  const thread = commentPlaceable.payload;
-  if (!thread) return null;
-
-  const comments = [...thread.comments].sort(sortComments);
-
-  const rootComment = comments[0];
-
-  const commentBase = {
-    type: commentType,
-    isNew: false,
-    threadId: rootComment.threadId,
-    rootId: rootComment.commentId,
-    anchorId: commentPlaceable.internalId,
-  };
-
-  const replies: PdfReply[] = [];
-  for (let i = 1; i < comments.length; i++) {
-    const comment = comments[i];
-    replies.push({
-      ...commentBase,
-      id: comment.commentId,
-      createdAt: comment.createdAt,
-      owner: comment.owner,
-      author: comment.sender || comment.owner,
-      text: comment.text,
-    });
-  }
-
-  const root: PdfRoot = {
-    ...commentBase,
-    id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
-    owner: rootComment.owner,
-    author: rootComment.sender || rootComment.owner,
-    text: rootComment.text,
-    children: replies.map((r) => r.id),
-  };
-
-  return { root, replies };
-};
-
 const useServerCommentPlaceables = () => {
-  const { resources } = usePdfDocument().state;
-  const [anchors] = resources.anchors;
-  const [commentThreads] = resources.commentThreads;
+  const annotations = usePdfDocument().annotations;
 
   return createMemo<IThreadPlaceable[]>(() => {
-    const anchorsData = anchors();
+    const anchorsData = annotations.anchors();
     if (!anchorsData || anchorsData.length === 0) return [];
-
-    const commentThreadsData = commentThreads();
-    if (!commentThreadsData || commentThreadsData.length === 0) return [];
 
     const freeCommentAnchors = anchorsData.filter(
       (a) => a.anchorType === 'placeable'
     );
 
     return freeCommentAnchors.flatMap((a) => {
-      const commentThread = commentThreadsData.find(
-        (ct) => ct.thread.threadId === a.threadId
-      );
-      if (!commentThread) {
-        console.error('Comment thread not found for free comment anchor', a);
-        return [];
-      }
+      // A comment placeable exists for its discussion; render once that has loaded.
+      const thread = annotations.anchorThread(a);
+      if (!thread) return [];
 
       // TODO: deprecate unneeded fields
       const placeable: IThreadPlaceable = {
@@ -104,14 +49,7 @@ const useServerCommentPlaceables = () => {
           heightPct: a.heightPct,
           rotation: 0,
         },
-        payload: {
-          threadId: commentThread.thread.threadId,
-          rootId: commentThread.comments[0].commentId,
-          anchorId: a.uuid,
-          page: a.page,
-          comments: commentThread.comments,
-          isResolved: commentThread.thread.resolved,
-        },
+        payload: thread,
         allowableEdits: a.allowableEdits as any,
         wasEdited: a.wasEdited,
         wasDeleted: a.wasDeleted,
@@ -127,9 +65,9 @@ const useServerCommentPlaceables = () => {
 };
 
 export const useNewThreadPlaceable = () => {
-  const [newPlaceable] = usePdfDocument().state.signals.newPlaceable;
+  const draft = usePdfDocument().markup.draft;
   return createMemo<IThreadPlaceable | undefined>(() => {
-    const value = newPlaceable();
+    const value = draft();
     if (!value || !isThreadPlaceable(value)) return undefined;
     return value;
   });
@@ -141,21 +79,21 @@ export const useCommentPlaceables = () => {
 
   return createMemo<IThreadPlaceable[]>(() => {
     const serverArr = serverCommentPlaceables();
-    const newPlaceable = newThreadPlaceable();
-    if (!newPlaceable) return serverArr;
+    const draft = newThreadPlaceable();
+    if (!draft) return serverArr;
 
-    return [newPlaceable, ...serverArr];
+    return [draft, ...serverArr];
   });
 };
 
 export const useFreeComments = () => {
   const userId = useUserId();
-  const { stores, derived } = usePdfDocument().state;
-  const [pageHeights] = stores.pageHeight;
+  const pdfViewer = usePdfViewer();
+  const pageHeights = pdfViewer.root.pageHeights;
   const commentPlaceables = useCommentPlaceables();
 
   return createMemo(() => {
-    if (!derived.viewerReady()) return [];
+    if (!pdfViewer.root.isReady()) return [];
 
     const out: PdfComment[] = [];
     for (const commentPlaceable of commentPlaceables()) {
@@ -169,16 +107,20 @@ export const useFreeComments = () => {
         originalYPosition,
       };
 
-      const isNew = commentPlaceable.payload == null;
-      if (isNew) {
+      const thread = commentPlaceable.payload;
+      if (!thread) {
         const currentUserId = userId();
         if (!currentUserId) {
           console.error('User ID not found');
           continue;
         }
+        const draftThreadId = createPdfDraftThreadId(
+          'free',
+          commentPlaceable.internalId
+        );
         const rootComment: PdfRoot = {
-          id: -1,
-          rootId: -1,
+          id: draftThreadId,
+          rootId: draftThreadId,
           type: 'free',
           text: '',
           owner: currentUserId,
@@ -186,14 +128,14 @@ export const useFreeComments = () => {
           createdAt: new Date(),
           isNew: true,
           children: [],
-          threadId: -1,
+          threadId: draftThreadId,
           anchorId: commentPlaceable.internalId,
         };
         out.push({ ...rootComment, layout });
         continue;
       }
 
-      const freeCommentThread = getFreeCommentThread(commentPlaceable);
+      const freeCommentThread = anchoredThread('free', thread);
       if (!freeCommentThread) continue;
 
       const { root, replies } = freeCommentThread;
@@ -206,10 +148,10 @@ export const useFreeComments = () => {
 };
 
 export const useDeleteNewFreeComment = () => {
-  const { activePlaceableId, newPlaceable } = usePdfDocument().state.signals;
+  const markup = usePdfDocument().markup;
 
   return () => {
-    newPlaceable[1](undefined);
-    activePlaceableId[1](undefined);
+    markup.commands.clearDraft();
+    markup.commands.clearActive();
   };
 };

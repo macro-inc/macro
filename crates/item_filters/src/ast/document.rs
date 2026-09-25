@@ -5,11 +5,11 @@ use crate::{
 use document_sub_type::DocumentSubType;
 use either::Either;
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_file_type::{
     Archive, Audio, Canvas, Code, Data, Database, Document, Executable, FileAssociation, FileType,
     Font, Image, Md, Media, Pdf, ThreeD, ValueError, Vector, Video, Vm, Write,
 };
+use model_owner::Owner;
 use nom::{
     Finish, IResult, Parser, branch::alt, bytes::complete::tag, combinator::eof,
     sequence::separated_pair,
@@ -34,7 +34,7 @@ pub enum DocumentLiteral {
     ProjectId(Uuid),
     /// this node value filters by document owner
     #[serde(rename = "o")]
-    Owner(MacroUserIdStr<'static>),
+    Owner(Owner),
     /// this node value filters by document importance. false short-circuits to match nothing.
     #[serde(rename = "imp")]
     Importance(bool),
@@ -205,7 +205,7 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
 
         let owners = owners
             .iter()
-            .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
+            .map(|s| Owner::from_principal_str(s))
             .try_expand(|r| r.map(DocumentLiteral::Owner), Expr::or)?;
 
         let importance_node = importance.map(|imp| Expr::Literal(DocumentLiteral::Importance(imp)));

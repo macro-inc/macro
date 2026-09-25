@@ -68,6 +68,11 @@ export type setPricingHandlerResponse200 = {
   status: 200;
 };
 
+export type setPricingHandlerResponse400 = {
+  data: ErrorBody;
+  status: 400;
+};
+
 export type setPricingHandlerResponse403 = {
   data: ErrorBody;
   status: 403;
@@ -82,6 +87,7 @@ export type setPricingHandlerResponseSuccess = setPricingHandlerResponse200 & {
   headers: Headers;
 };
 export type setPricingHandlerResponseError = (
+  | setPricingHandlerResponse400
   | setPricingHandlerResponse403
   | setPricingHandlerResponse500
 ) & {
@@ -2416,12 +2422,12 @@ export type sendChatMessageResponse401 = {
 };
 
 export type sendChatMessageResponse402 = {
-  data: void;
+  data: ChatMessageError;
   status: 402;
 };
 
 export type sendChatMessageResponse403 = {
-  data: void;
+  data: ChatMessageError;
   status: 403;
 };
 

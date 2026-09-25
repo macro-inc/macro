@@ -52,7 +52,22 @@ fn handler(
     access: Arc<Access>,
     responder: Arc<Responder>,
 ) -> MacroAiHandler<Responder, FixedTimeZones> {
-    MacroAiHandler::new(Arc::new(api), access, responder, eastern_time_zones())
+    handler_with_marks(api, access, responder, Marks::none())
+}
+
+fn handler_with_marks(
+    api: MockMessageServiceApi,
+    access: Arc<Access>,
+    responder: Arc<Responder>,
+    marks: Arc<Marks>,
+) -> MacroAiHandler<Responder, FixedTimeZones> {
+    MacroAiHandler::new(
+        Arc::new(api),
+        access,
+        responder,
+        eastern_time_zones(),
+        marks,
+    )
 }
 
 fn invocation(trigger: &messages::domain::models::Message) -> BotEvent {
@@ -128,6 +143,151 @@ async fn root_comment_is_valid_agent_context_before_any_replies_exist() {
         .unwrap();
     assert_eq!(prompt.matches("@macro help with this document").count(), 1);
     assert!(prompt.contains("<thread>"));
+}
+
+#[tokio::test]
+async fn an_anchored_discussion_names_the_text_it_marks() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        marked_thread(
+            trigger.clone(),
+            Some("backfills the ledger from the archive"),
+        ),
+    );
+    let prompt = handler(api, Arc::new(Access::default()), responder("reply"))
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(prompt.contains("<anchor mark=\"00000000-0000-0000-0000-0000000000aa\">"));
+    assert!(prompt.contains("backfills the ledger from the archive"));
+    // The snapshot is dated, and the prompt says so rather than implying it is current.
+    assert!(prompt.contains("the document may have changed since"));
+}
+
+#[tokio::test]
+async fn a_discussion_with_no_marked_text_claims_no_anchor() {
+    let trigger = message(1, None, "@macro help with this document");
+    let mut api = MockMessageServiceApi::new();
+    // Anchored before snapshots existed, and the live lookup finds nothing.
+    configure_reads(&mut api, &trigger, marked_thread(trigger.clone(), None));
+    let prompt = handler(api, Arc::new(Access::default()), responder("reply"))
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(!prompt.contains("<anchor"));
+}
+
+#[tokio::test]
+async fn a_discussion_older_than_snapshots_reads_its_mark_from_the_document() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, marked_thread(trigger.clone(), None));
+    let marks = Arc::new(Marks(Ok(Some(MarkedPassage {
+        marked_text: "backfills the ledger".to_owned(),
+        surrounding_text: "The second stage backfills the ledger from the archive.".to_owned(),
+    }))));
+    let prompt = handler_with_marks(api, Arc::new(Access::default()), responder("reply"), marks)
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(prompt.contains("as the document reads now"));
+    assert!(prompt.contains("Marked text: backfills the ledger\n"));
+    assert!(prompt.contains("The second stage backfills the ledger from the archive."));
+    assert!(!prompt.contains("When the discussion was started"));
+}
+
+#[tokio::test]
+async fn an_edited_mark_shows_both_what_it_covers_now_and_what_it_covered() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        marked_thread(trigger.clone(), Some("backfills the ledger")),
+    );
+    let marks = Arc::new(Marks(Ok(Some(MarkedPassage {
+        marked_text: "rebuilds the ledger".to_owned(),
+        surrounding_text: "The second stage rebuilds the ledger.".to_owned(),
+    }))));
+    let prompt = handler_with_marks(api, Arc::new(Access::default()), responder("reply"), marks)
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(prompt.contains("Marked text: rebuilds the ledger\n"));
+    assert!(prompt.contains("When the discussion was started it read: backfills the ledger"));
+}
+
+#[tokio::test]
+async fn a_failed_live_lookup_falls_back_to_the_snapshot() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        marked_thread(trigger.clone(), Some("backfills the ledger")),
+    );
+    let prompt = handler_with_marks(
+        api,
+        Arc::new(Access::default()),
+        responder("reply"),
+        Arc::new(Marks(Err("lexical unavailable"))),
+    )
+    .build_prompt(&invocation(&trigger))
+    .await
+    .unwrap();
+    assert!(prompt.contains("backfills the ledger"));
+    assert!(prompt.contains("the document may have changed since"));
+}
+
+async fn prompt_on(anchor: ThreadAnchor) -> String {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut history = thread(trigger.clone(), vec![]);
+    history.state.anchor = Some(anchor);
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, history);
+    handler(api, Arc::new(Access::default()), responder("reply"))
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn a_pdf_highlight_discussion_names_the_words_it_covers() {
+    let prompt = prompt_on(ThreadAnchor::PdfHighlight {
+        anchor_id: Uuid::from_u128(0xbb),
+        marked_text: Some("indemnifies the lessor".to_owned()),
+    })
+    .await;
+    assert!(prompt.contains(&format!(
+        "<anchor highlight=\"{}\">\n{HIGHLIGHT_ANCHOR_INSTRUCTION}\n\nindemnifies the lessor\n</anchor>",
+        Uuid::from_u128(0xbb)
+    )));
+}
+
+#[tokio::test]
+async fn a_highlight_without_text_says_its_words_are_unknown() {
+    let prompt = prompt_on(ThreadAnchor::PdfHighlight {
+        anchor_id: Uuid::from_u128(0xbb),
+        marked_text: None,
+    })
+    .await;
+    assert!(prompt.contains(BLANK_HIGHLIGHT_INSTRUCTION));
+    assert!(!prompt.contains(HIGHLIGHT_ANCHOR_INSTRUCTION));
+}
+
+#[tokio::test]
+async fn a_pdf_pin_discussion_says_it_covers_no_words() {
+    let prompt = prompt_on(ThreadAnchor::PdfPlaceable {
+        anchor_id: Uuid::from_u128(0xcc),
+    })
+    .await;
+    assert!(prompt.contains(&format!(
+        "<anchor pin=\"{}\">\n{PIN_ANCHOR_INSTRUCTION}\n</anchor>",
+        Uuid::from_u128(0xcc)
+    )));
 }
 
 #[tokio::test]
@@ -335,6 +495,7 @@ async fn prompt_says_the_time_zone_is_unknown_without_a_calendar() {
         Arc::new(Access::default()),
         responder("reply"),
         Arc::new(FixedTimeZones(None)),
+        Marks::none(),
     )
     .build_prompt(&invocation(&trigger))
     .await

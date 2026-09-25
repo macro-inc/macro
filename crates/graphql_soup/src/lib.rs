@@ -10,6 +10,8 @@
 mod inputs;
 /// DataLoader-backed hydration for realtime Soup patches.
 mod loaders;
+/// Primary-backed email snapshots used only for mutation replies.
+mod mutation_thread;
 /// GraphQL objects representing Soup pages and entities.
 mod objects;
 /// Top-level Soup query resolver.
@@ -20,6 +22,9 @@ pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupInput};
 pub use loaders::{
     EmailServiceInboxReader, SoupInboxReader, SoupItemDataLoader, SoupItemLoader,
     SoupItemLoaderError, SoupItemLoaderKey, soup_item_loader,
+};
+pub use mutation_thread::{
+    EmailMutationThreadLoader, EmailMutationThreadReader, email_mutation_thread_loader,
 };
 pub use objects::{
     GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelMessage,

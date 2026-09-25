@@ -1,10 +1,23 @@
-//! Read-side ports.
+//! Registry read and owner-grant fact ports.
 
 use model_owner::Owner;
 use shared_entity_registry::{EntityRegistryResult, RegisteredEntityType};
 use uuid::Uuid;
 
 use super::models::{EntityRecord, EntityTypeCount};
+
+/// Facts needed to expand a recorded bot owner into its sponsor grant.
+///
+/// Implementations must include soft-deleted bots and use the bot's owner,
+/// never its creator. Only user and team sponsors are valid. Missing bots
+/// return `None`; lookup/decoding failures must not be treated as missing.
+pub trait BotFacts: Send + Sync {
+    /// Look up the sponsor of an owned bot, including historical rows.
+    fn sponsor(
+        &self,
+        bot: bot_id::BotId,
+    ) -> impl Future<Output = EntityRegistryResult<Option<Owner>>> + Send;
+}
 
 /// Persistence port for the registry.
 pub trait EntityRegistryRepository: Clone + Send + Sync + 'static {

@@ -34,10 +34,15 @@ function scheduledActionFetch<T extends ObjectLike = never>(
 }
 
 export const scheduledActionClient = {
+  // Include backend-managed routines so direct routes can identify them.
+  // Cron-only entity lists filter these out before rendering.
   listSchedules: async () =>
-    scheduledActionFetch<ScheduledAction[]>('/scheduled-actions', {
-      method: 'GET',
-    }),
+    scheduledActionFetch<ScheduledAction[]>(
+      '/scheduled-actions?include_events=true',
+      {
+        method: 'GET',
+      }
+    ),
 
   createSchedule: async (body: CreateScheduledAction) =>
     scheduledActionFetch<ScheduledAction>('/scheduled-actions', {

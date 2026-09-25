@@ -36,11 +36,10 @@ use model_entity::Entity;
 use activity::Attribution;
 
 use super::models::{
-    BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    CreateTaskRequest, DocumentError, DocumentTeamShare, DocumentTeamShareResponse,
-    EditDocumentRepoArgs, EditDocumentServiceArgs, EmailImportRepoOutcome,
-    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
-    TeamTaskMetadata,
+    BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
+    DocumentError, DocumentTeamShare, DocumentTeamShareResponse, EditDocumentRepoArgs,
+    EditDocumentServiceArgs, EmailImportRepoOutcome, GithubPullRequestsResponse,
+    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.
@@ -130,12 +129,6 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
-
-    /// Get all comment threads (with their comments) attached to a document.
-    fn get_document_comments(
-        &self,
-        document_id: &str,
-    ) -> impl Future<Output = Result<Vec<CommentThread>, Self::Err>> + Send;
 
     /// Create a new document with all associated records in a single transaction.
     ///
@@ -404,7 +397,7 @@ pub async fn task_property_edit_receipt<A: EntityAccessService>(
         .await
 }
 
-/// Use case for relaying document content-upload events.
+/// Use cases for relaying document content-change events.
 pub trait DocumentContentEventService: Send + Sync + 'static {
     /// Load the document owner and publish a content-uploaded event.
     fn publish_content_uploaded(
@@ -412,6 +405,14 @@ pub trait DocumentContentEventService: Send + Sync + 'static {
         document_id: &str,
         file_type: FileType,
         document_version_id: Option<String>,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Resolve the stored file type and publish a sync-content event. Sync callers
+    /// supply document identity and editors without interpreting the content.
+    fn publish_sync_content_updated(
+        &self,
+        document_id: &str,
+        editors: Vec<crate::domain::events::DocumentSyncEditor>,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }
 
@@ -458,12 +459,6 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<String, DocumentError>> + Send;
-
-    /// Get all comment threads (with their comments) for a document.
-    fn get_document_comments(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> impl Future<Output = Result<Vec<CommentThread>, DocumentError>> + Send;
 
     /// Create a new document, generate an S3 presigned upload URL, and
     /// optionally attach task properties and update project modified.
@@ -592,4 +587,19 @@ pub trait DocumentService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
         share: bool,
     ) -> impl Future<Output = Result<DocumentTeamShareResponse, DocumentError>> + Send;
+}
+
+/// Shared editing-session timestamps, independent of document synchronization.
+pub trait EditingActivityStore: Send + Sync {
+    /// Atomically refresh each actor's session for the supplied inactivity window.
+    ///
+    /// Returns one admission flag per activity, in input order. A new session or
+    /// replay of its admitted source event is allowed; subsequent edits refresh
+    /// the inactivity window without producing another activity.
+    fn refresh_editing_sessions(
+        &self,
+        activities: &[activity::Activity],
+        source_event_id: uuid::Uuid,
+        idle: std::time::Duration,
+    ) -> impl Future<Output = Result<Vec<bool>, rootcause::Report>> + Send;
 }

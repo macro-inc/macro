@@ -24,6 +24,8 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
+pub mod team;
+
 const USER_PRINCIPAL_PREFIX: &str = "macro|";
 const BOT_PRINCIPAL_PREFIX: &str = "bot|";
 const TEAM_UUID_HYPHENATED_LEN: usize = 36;
@@ -122,6 +124,41 @@ impl Owner {
         } else {
             Self::parse(OwnerType::Team, value)
         }
+    }
+
+    /// True when this owner is the given user.
+    #[must_use]
+    pub fn is_user(&self, user: &MacroUserIdStr<'_>) -> bool {
+        matches!(self, Self::User(owner) if owner == user)
+    }
+
+    /// The user this owner is, or `None` for a bot or team.
+    ///
+    /// For paths that act as a person - spending their credentials or
+    /// attributing work to them - so the kinds an owner can be are handled
+    /// where a user is needed rather than assumed.
+    #[must_use]
+    pub fn as_user(&self) -> Option<&MacroUserIdStr<'static>> {
+        match self {
+            Self::User(user) => Some(user),
+            Self::Bot(_) | Self::Team(_) => None,
+        }
+    }
+}
+
+impl Display for Owner {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            Self::User(user_id) => Display::fmt(user_id, f),
+            Self::Bot(bot_id) => Display::fmt(&bot_id.into_storage_id(), f),
+            Self::Team(team_id) => write!(f, "{}", team_id.hyphenated()),
+        }
+    }
+}
+
+impl From<MacroUserIdStr<'static>> for Owner {
+    fn from(user: MacroUserIdStr<'static>) -> Self {
+        Self::User(user)
     }
 }
 

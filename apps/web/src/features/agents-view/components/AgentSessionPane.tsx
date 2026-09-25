@@ -1,12 +1,21 @@
+import {
+  AgentChangesProvider,
+  AgentChangesSplit,
+  ChangesHandoff,
+  ChangesToggle,
+  ReviewNotesDock,
+} from '@app/features/agent-changes/agent-changes';
+import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
-import { agentSessionTitle } from '@app/features/block-agent/component/AgentSplitHeader';
+import { AgentSessionReadMarker } from '@app/features/block-agent/component/AgentSessionReadMarker';
+import {
+  agentSessionTitle,
+  sessionRepositoryUrl,
+} from '@app/features/block-agent/component/AgentSplitHeader';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
-import {
-  AgentSessionProvider,
-  useAgentSession,
-} from '@app/features/block-agent/context/AgentSessionContext';
+import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
 import {
   forgetPendingSession,
   pendingSession,
@@ -34,9 +43,11 @@ import {
 import { useUserId } from '@core/context/user';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
+import ShareIcon from '@icon/share.svg';
+import type { NotificationSource } from '@notifications/notification-source';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
-import ShareIcon from '@phosphor/share.svg';
+import { EmptyStatePanel } from '@ui';
 import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
@@ -56,9 +67,20 @@ function SessionCommands(props: {
   return null;
 }
 
-function SessionContent(props: { onDeleted: () => void }) {
-  const { loadFailed, loadRetryable, metadata, retryLoad, session, sessionId } =
-    useAgentSession();
+function SessionContent(props: {
+  onDeleted: () => void;
+  notificationSource: NotificationSource;
+}) {
+  const {
+    accessDenied,
+    loadFailed,
+    loadRetryable,
+    metadata,
+    retryLoad,
+    session,
+    sessionId,
+    startupError,
+  } = useAgentSession();
   const panel = useSplitPanelOrThrow();
   const [shareOpen, setShareOpen] = createSignal(false);
   const userId = useUserId();
@@ -94,6 +116,11 @@ function SessionContent(props: { onDeleted: () => void }) {
         close: () => setShareOpen(false),
       }}
     >
+      <AgentSessionReadMarker
+        sessionId={!loadFailed() && session() ? sessionId() : undefined}
+        active={panel.isPanelActive()}
+        notificationSource={props.notificationSource}
+      />
       <SidePanel.Root defaultOpen={false} persistKey="agent">
         <Topbar
           title={title()}
@@ -138,14 +165,18 @@ function SessionContent(props: { onDeleted: () => void }) {
                         ops={[
                           { op: 'rename' },
                           { op: 'delete' },
-                          {
-                            label: 'Open repository',
-                            icon: GitBranch,
-                            action: () => {
-                              const url = session()?.repoUrl;
-                              if (url) openExternalUrl(url);
-                            },
-                          },
+                          ...(sessionRepositoryUrl(session())
+                            ? [
+                                {
+                                  label: 'Open repository',
+                                  icon: GitBranch,
+                                  action: () => {
+                                    const url = sessionRepositoryUrl(session());
+                                    if (url) openExternalUrl(url);
+                                  },
+                                },
+                              ]
+                            : []),
                         ]}
                         tools={[
                           {
@@ -190,6 +221,7 @@ function SessionContent(props: { onDeleted: () => void }) {
               />
             )}
           </Show>
+          <ChangesToggle />
           <SidePanel.Toggle />
         </Topbar>
         <div class="relative min-h-0 min-w-0 flex-1">
@@ -203,17 +235,43 @@ function SessionContent(props: { onDeleted: () => void }) {
               <Show
                 when={!loadFailed()}
                 fallback={
-                  <LoadErrorPanel
-                    title="Unable to load this session"
-                    onRetry={loadRetryable() ? retryLoad : undefined}
-                  />
+                  <Show
+                    when={startupError()}
+                    fallback={
+                      <Show
+                        when={accessDenied()}
+                        fallback={
+                          <LoadErrorPanel
+                            title="Unable to load this session"
+                            onRetry={loadRetryable() ? retryLoad : undefined}
+                          />
+                        }
+                      >
+                        <EmptyStatePanel
+                          centered
+                          title="You don't have access to this session"
+                          description="Ask a participant to share it with you."
+                        />
+                      </Show>
+                    }
+                  >
+                    {(error) => (
+                      <EmptyStatePanel
+                        centered
+                        title="The agent could not be started"
+                        description={error()}
+                      />
+                    )}
+                  </Show>
                 }
               >
                 <div class="transcript-host">
                   <Transcript />
                 </div>
                 <div class="dock">
-                  <div class="composer-anchor">
+                  <div class="composer-anchor flex flex-col gap-2">
+                    <ChangesHandoff />
+                    <ReviewNotesDock />
                     <AgentComposer
                       autofocus
                       input={ChatSessionInput}
@@ -250,6 +308,7 @@ function SessionContent(props: { onDeleted: () => void }) {
 /** A conversation opened in the workspace: its title row, transcript, and composer. */
 export function AgentSessionPane(props: {
   id: string;
+  notificationSource: NotificationSource;
   onSessionId: (sessionId: string) => void;
   onDeleted: () => void;
 }) {
@@ -262,7 +321,14 @@ export function AgentSessionPane(props: {
 
   return (
     <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
-      <SessionContent onDeleted={props.onDeleted} />
+      <AgentChangesProvider>
+        <AgentChangesSplit>
+          <SessionContent
+            onDeleted={props.onDeleted}
+            notificationSource={props.notificationSource}
+          />
+        </AgentChangesSplit>
+      </AgentChangesProvider>
     </AgentSessionProvider>
   );
 }

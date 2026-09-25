@@ -11,6 +11,7 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import ListIcon from '@phosphor/list.svg';
 import SidebarIcon from '@phosphor/sidebar-simple.svg';
+import { createWritableMemo } from '@solid-primitives/memo';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import {
@@ -22,6 +23,7 @@ import {
   createUniqueId,
   type JSX,
   Match,
+  on,
   Show,
   Switch,
   splitProps,
@@ -155,13 +157,12 @@ function Root(props: ViewShellRootProps) {
     'onDetailOpenChange',
   ]);
 
-  const [asideCollapsed, setAsideCollapsed] = local.asidePreferenceKey
+  const [wideAsideCollapsed, setWideAsideCollapsed] = local.asidePreferenceKey
     ? usePreference(
         `macro:pref:view-sidebar:collapsed:${local.asidePreferenceKey}`,
         { default: false }
       )
     : createSignal(false);
-  const [narrowAsideOpen, setNarrowAsideOpen] = createSignal(false);
   const id = createUniqueId();
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const animateSidebar = createSidebarMotion(root);
@@ -217,13 +218,24 @@ function Root(props: ViewShellRootProps) {
     return match ? match() : false;
   };
 
+  // Each narrow layout starts closed, independently of the saved wide layout.
+  const [narrowAsideOpen, setNarrowAsideOpen] = createWritableMemo<boolean>(
+    on(atLayoutBreakpoint, () => false)
+  );
+
   const asideMode = (): AsideMode =>
     local.aside === false ||
-    asideCollapsed() ||
-    (atLayoutBreakpoint() && !narrowAsideOpen())
+    (atLayoutBreakpoint() ? !narrowAsideOpen() : wideAsideCollapsed())
       ? 'collapsed'
       : 'docked';
   const asideOverlay = () => atLayoutBreakpoint() && asideMode() === 'docked';
+
+  const setAsideOpen = (open: boolean) => {
+    animateSidebar(() => {
+      if (atLayoutBreakpoint()) setNarrowAsideOpen(open);
+      else setWideAsideCollapsed(!open);
+    });
+  };
 
   const canFitInlineDetail = () => {
     const currentWidth = width();
@@ -260,22 +272,8 @@ function Root(props: ViewShellRootProps) {
       canCollapse: () =>
         local.asidePreferenceKey !== undefined && local.aside !== false,
       isOverlay: asideOverlay,
-      collapse: () => {
-        animateSidebar(() =>
-          batch(() => {
-            setAsideCollapsed(true);
-            setNarrowAsideOpen(false);
-          })
-        );
-      },
-      expand: () => {
-        animateSidebar(() =>
-          batch(() => {
-            setAsideCollapsed(false);
-            setNarrowAsideOpen(true);
-          })
-        );
-      },
+      collapse: () => setAsideOpen(false),
+      expand: () => setAsideOpen(true),
       toggle: () => {
         if (value.aside.isCollapsed()) value.aside.expand();
         else value.aside.collapse();
@@ -606,7 +604,7 @@ function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex h-12 min-w-0 shrink-0 items-center gap-1 border-b border-edge-muted px-2 py-3 not-touch:pl-[13px] touch:hidden',
+        'flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:pl-[13px] touch:hidden',
         local.class
       )}
       data-view-shell-top-bar=""
@@ -687,7 +685,7 @@ function Detail(props: JSX.HTMLAttributes<HTMLDivElement>) {
         <div
           {...rest}
           class={cn(
-            'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge-muted bg-panel shadow-menu',
+            'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge-frame bg-panel shadow-menu',
             local.class
           )}
           style={{ width: `${layout().width}px`, 'max-width': '100%' }}

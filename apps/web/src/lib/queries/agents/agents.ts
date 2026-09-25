@@ -30,6 +30,18 @@ export type CreateAgentParams = {
   /** Which Pipedream MCP servers the agent's sessions are handed. */
   mcp: AgentMcpServers;
   teamId?: string;
+  /**
+   * Whether the agent's sessions approve permission requests without asking.
+   * Omit to defer to the runtime's default: built-in runtimes auto-accept,
+   * macrod prompts.
+   */
+  autoAcceptPermissions?: boolean;
+  /**
+   * Whether the agent is a coding agent, which decides how it answers a
+   * channel mention: a magic chip into its live session, or a reply in the
+   * thread.
+   */
+  isCoding: boolean;
 };
 
 export type UpdateAgentParams = CreateAgentParams & {
@@ -81,6 +93,8 @@ export function useCreateAgentMutation() {
           instructions: vars.instructions,
           mcp: vars.mcp,
           team_id: vars.teamId,
+          auto_accept_permissions: vars.autoAcceptPermissions ?? null,
+          is_coding: vars.isCoding,
         })
       ),
     onSuccess: async (agent) => {
@@ -113,6 +127,8 @@ export function useUpdateAgentMutation() {
           instructions: vars.instructions,
           mcp: vars.mcp,
           team_id: vars.teamId,
+          auto_accept_permissions: vars.autoAcceptPermissions ?? null,
+          is_coding: vars.isCoding,
         })
       ),
     onSuccess: async (updated) => {

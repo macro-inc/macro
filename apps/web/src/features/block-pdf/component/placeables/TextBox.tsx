@@ -26,8 +26,7 @@ interface TextBoxProps {
 export function TextBox(props: TextBoxProps) {
   let textAreaRef!: HTMLTextAreaElement;
   const [text, setText] = createSignal(props.payload.text);
-  const [, setActivePlaceable] =
-    usePdfDocument().state.signals.activePlaceableId;
+  const markup = usePdfDocument().markup;
 
   const modifyPayload = useModifyPayload();
   const deletePlaceable = useDeletePlaceable();
@@ -92,7 +91,7 @@ export function TextBox(props: TextBoxProps) {
       onInput={(e) => setText(e.currentTarget.value)}
       onBlur={() => {
         updatePlaceable();
-        setActivePlaceable(undefined);
+        markup.commands.clearActive();
       }}
     />
   );

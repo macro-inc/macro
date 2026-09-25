@@ -35,6 +35,9 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   hideCheckbox?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
   onMouseMove?: () => void;
+  showCalendarAttendance?: boolean;
+  /** Lets standalone collections own their tag-filter navigation. */
+  onFilterByTag?: (optionId: string) => void;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
@@ -63,6 +66,8 @@ export interface LayoutProps {
   streamState?: StreamEvent;
   setSnippetContainerRef: (el: HTMLElement) => void;
   chars: number;
+  showCalendarAttendance?: boolean;
+  onFilterByTag?: (optionId: string) => void;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
@@ -165,6 +170,6 @@ export function RowIndicator(props: {
 
 export function InboxDivider() {
   return (
-    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-muted" />
+    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-divider" />
   );
 }

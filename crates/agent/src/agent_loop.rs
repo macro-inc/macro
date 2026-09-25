@@ -396,6 +396,9 @@ impl Session {
         &mut self,
         messages: Vec<Message>,
     ) -> Result<ChatCompletionStream<'_>, AgentError> {
+        // `agent.stream.*` are recorded by the stream driver as the run ends;
+        // see `StreamLiveness` in `crate::model::router`. Declared on both
+        // shapes of the span because either one can be the run's.
         let span = if self.telemetry.enabled() {
             tracing::info_span!(
                 "invoke_agent",
@@ -404,9 +407,18 @@ impl Session {
                 gen_ai.conversation.id = self.telemetry.conversation_id(),
                 gen_ai.provider.name = self.telemetry.provider_name(),
                 gen_ai.request.model = self.telemetry.model_name(),
+                agent.stream.items = tracing::field::Empty,
+                agent.stream.first_item_ms = tracing::field::Empty,
+                agent.stream.trailing_silence_ms = tracing::field::Empty,
             )
         } else {
-            tracing::info_span!("agent.turn", agent.name = %self.telemetry.agent_name())
+            tracing::info_span!(
+                "agent.turn",
+                agent.name = %self.telemetry.agent_name(),
+                agent.stream.items = tracing::field::Empty,
+                agent.stream.first_item_ms = tracing::field::Empty,
+                agent.stream.trailing_silence_ms = tracing::field::Empty,
+            )
         };
         let telemetry = self.telemetry.clone();
         let result = self

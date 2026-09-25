@@ -1,17 +1,31 @@
+import { promptActionOf } from '@app/features/block-agent/component/prompt-action';
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
+import {
+  createInputAttachmentTracker,
+  type InputAttachmentData,
+  uploadInputAttachments,
+} from '@channel/Input';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
+import { uploadFile } from '@core/util/upload';
+import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { createMemo, createSignal } from 'solid-js';
 import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
+import { defaultBranchFor } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
+import { createPreferredInmemModel } from '../primitives/preferred-inmem-model';
 import { createRecentRepositories } from '../primitives/recent-repositories';
+import { createComposerModels } from '../queries/composer-models';
+import { createReachableRepositories } from '../queries/reachable-repositories';
+import { createRepositoryBranches } from '../queries/repository-branches';
 import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
 
 /** What the composer hands the workspace to start a session with. */
 export type StartConversation = {
   prompt: string;
+  attachments?: PromptAttachment[];
   /** Persisted or first-party bot to run; omitted for Macro's default. */
   botId?: string;
   repoUrl?: string;
@@ -35,17 +49,18 @@ export function NewChatPage(props: {
   const { openSettings } = useSettingsState();
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
+  const preferredInmem = createPreferredInmemModel(userId());
   const options = () => props.roster;
   const [agentId, setAgentId] = createSignal<string>();
+  /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
-  const [repoUrl, setRepoUrl] = createSignal<string | undefined>(
-    repositories.urls()[0]
-  );
+  // A new conversation starts on Automatic until the caller picks a repository.
+  const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
   const [localDraft, setLocalDraft] = createSignal('');
   const draft = () => props.draft ?? localDraft();
   const setDraft = (text: string) =>
     props.onDraftChange ? props.onDraftChange(text) : setLocalDraft(text);
-  const [repoBranch, setRepoBranch] = createSignal('main');
+  const [branchOverride, setBranchOverride] = createSignal<string>();
   const selected = createMemo(() => {
     const wanted =
       agentId() ??
@@ -57,6 +72,28 @@ export function NewChatPage(props: {
       MACRO_PERSONA_ID;
     return options().find((agent) => agent.id === wanted) ?? options()[0];
   });
+  const macro = () => options().find((agent) => agent.id === MACRO_PERSONA_ID);
+  const macroCatalog = createComposerModels(macro);
+  /** Preferred Macro model when it is still in the live in-memory catalog. */
+  const preferredInmemModel = () => {
+    const id = preferredInmem.model();
+    if (!id) return undefined;
+    const catalog = macroCatalog.models();
+    // Until discovery returns, keep the stored id so the trigger can label it.
+    if (catalog.length === 0) return id;
+    return catalog.some((option) => option.id === id) ? id : undefined;
+  };
+  /**
+   * Model shown on the agent control and sent with the next start. Coding
+   * agents use a one-shot override; Macro prefers an in-session pick, then
+   * the remembered Models choice.
+   */
+  const composerModelOverride = () => {
+    if (selected()?.id === MACRO_PERSONA_ID) {
+      return modelOverride() ?? preferredInmemModel();
+    }
+    return modelOverride();
+  };
   const coding = () => selected()?.kind === 'coder';
   // The create-session API accepts explicit repositories only for Cursor.
   const canSelectRepository = () => selected()?.harness === 'cursor';
@@ -64,24 +101,60 @@ export function NewChatPage(props: {
     const agent = selected();
     return agent ? agent.unavailableReason : 'Choose an agent to start';
   };
+  // Listed only while the drawer can show them: chat agents never ask.
+  const reachable = createReachableRepositories(coding);
+  // Listed only while a repository is chosen: listing costs a GitHub call.
+  const reachableBranches = createRepositoryBranches(() =>
+    coding() ? repoUrl() : undefined
+  );
+  // A chosen branch, or where the selected repository's own clones start.
+  const repoBranch = () =>
+    branchOverride() ?? defaultBranchFor(reachable.repositories(), repoUrl());
+  const selectRepository = (url: string | undefined) => {
+    // Another repository starts on its own default branch, not the last one's.
+    if (url !== repoUrl()) setBranchOverride(undefined);
+    setRepoUrl(url);
+    if (url) repositories.remember(url);
+  };
 
   const connect = (agent: RosterAgent) => {
     if (agent.harness === 'cursor') openSettings('Harness');
   };
 
-  const send = (prompt: string) => {
+  const attachmentTracker = createInputAttachmentTracker();
+  const attachFiles = (files: File[]) =>
+    void uploadInputAttachments({
+      files,
+      tracker: attachmentTracker,
+      uploadFile: (file) =>
+        uploadFile(file, 'static', { hideProgressIndicator: true }),
+    });
+
+  const send = (prompt: string, attachments: InputAttachmentData[]) => {
     const persona = selected();
-    if (!prompt.trim() || !persona || blocked()) return;
+    if (
+      (!prompt.trim() && attachments.length === 0) ||
+      !persona ||
+      blocked() ||
+      attachmentTracker.hasPending()
+    )
+      return;
     recentAgents.remember(persona.id);
     const repo = canSelectRepository() ? repoUrl() : undefined;
     if (repo) repositories.remember(repo);
+    const model = composerModelOverride();
     props.onStart({
       prompt,
+      ...(attachments.length > 0
+        ? { attachments: promptActionOf(prompt, attachments).attachments }
+        : {}),
       botId: persona.botId,
       repoUrl: repo,
       ...(repo ? { repoBranch: repoBranch() } : {}),
-      ...(modelOverride() ? { modelOverride: modelOverride() } : {}),
+      ...(model ? { modelOverride: model } : {}),
     });
+    attachmentTracker.clearAttachments();
+    // Macro's preferred model stays; coding-agent submenu picks are one-shot.
     setModelOverride(undefined);
   };
 
@@ -89,10 +162,17 @@ export function NewChatPage(props: {
     <AgentPicker
       agents={options()}
       selected={selected()}
-      modelOverride={modelOverride()}
+      modelOverride={composerModelOverride()}
       loading={props.rosterLoading}
       onSelect={(agent, model) => {
         setAgentId(agent.id);
+        if (agent.id === MACRO_PERSONA_ID) {
+          if (model) preferredInmem.remember(model);
+          // Still set the override so the trigger updates when Macro was
+          // already selected (agent id unchanged would otherwise skip a render).
+          setModelOverride(model);
+          return;
+        }
         setModelOverride(model);
       }}
       onConnect={connect}
@@ -119,17 +199,28 @@ export function NewChatPage(props: {
             <RepositoryPicker
               repoUrl={repoUrl()}
               branch={repoBranch()}
+              repositories={reachable.repositories()}
+              repositoriesLoading={reachable.loading()}
+              repositoriesError={reachable.error()}
               recentRepositories={repositories.urls()}
-              onSelect={(url, branch) => {
-                setRepoUrl(url);
-                setRepoBranch(branch);
-                if (url) repositories.remember(url);
-              }}
+              onRetryRepositories={reachable.retry}
+              branches={reachableBranches.branches()}
+              branchesLoading={reachableBranches.loading()}
+              branchesError={reachableBranches.error()}
+              onRetryBranches={reachableBranches.retry}
+              onConnectGitHub={() => openSettings('Connected')}
+              onSelectRepository={selectRepository}
+              onSelectBranch={setBranchOverride}
             />
           }
           drawerOpen={coding()}
           placeholder={coding() ? 'Describe what you want to build' : undefined}
           onSend={send}
+          attachments={attachmentTracker.attachments()}
+          onAttachFiles={attachFiles}
+          onRemoveAttachment={(attachment) =>
+            attachmentTracker.removeAttachment(attachment.id)
+          }
         />
       </div>
     </section>

@@ -8,6 +8,9 @@ use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::models::{DocumentError, DocumentTeamShare};
 
+#[cfg(test)]
+mod test;
+
 // Existing repository operations retain their SQLx error type; conditional edits
 // expose domain errors so authorization conflicts reach callers without becoming 500s.
 impl From<sqlx::Error> for DocumentError {

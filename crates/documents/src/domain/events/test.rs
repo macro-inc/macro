@@ -1,19 +1,20 @@
 use macro_event_broker::{Event, MacroEvent as _, TopicEvent};
-use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
+use model_owner::Owner;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{
-    DocumentContentUploadedMetadata, DocumentInteractionMetadata, DocumentMacroEvent,
-    DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata, DocumentTopicEvent,
+    DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
+    DocumentInteractionMetadata, DocumentMacroEvent, DocumentPurgedMetadata,
+    DocumentSyncContentUpdatedMetadata, DocumentTopicEvent, DocumentUpdatedMetadata,
     InteractionReason,
 };
 
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
 
-fn owner() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from("macro|owner@example.com".to_string()).expect("valid user id")
+fn owner() -> Owner {
+    Owner::from_principal_str("macro|owner@example.com").expect("valid owner")
 }
 
 fn assert_wire_round_trip(event: Event<DocumentTopicEvent>, expected: Value) {
@@ -25,6 +26,68 @@ fn assert_wire_round_trip(event: Event<DocumentTopicEvent>, expected: Value) {
     let decoded: Event<DocumentTopicEvent> =
         serde_json::from_value(expected).expect("event deserializes");
     assert_eq!(decoded, event);
+}
+
+#[test]
+fn owner_bearing_events_round_trip_all_owner_kinds_as_strings() {
+    for principal in [
+        "macro|owner@example.com",
+        "bot|00000000-0000-0000-0000-000000000001",
+        "01998a30-1a2b-7c3d-9e4f-5a6b7c8d9e0f",
+    ] {
+        let owner = Owner::from_principal_str(principal).unwrap();
+        let events = [
+            DocumentTopicEvent::Created(DocumentCreatedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                owner: owner.clone(),
+                actor: None,
+                on_behalf_of: None,
+                document_name: "notes".to_string(),
+                file_type: None,
+                project_id: None,
+                sub_type: None,
+                created_at: None,
+            }),
+            DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                owner: owner.clone(),
+                actor_user_id: None,
+                actor: None,
+                on_behalf_of: None,
+                document_name: None,
+                previous_project_id: None,
+                project_id: None,
+                file_type: None,
+                share_permission_updated: false,
+            }),
+            DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                owner: owner.clone(),
+                file_type: FileType::Pdf,
+                document_version_id: None,
+            }),
+            DocumentTopicEvent::Copied(DocumentCopiedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+                source_document_id: "source-document".to_string(),
+                source_version_id: None,
+                owner,
+                document_name: "copy".to_string(),
+                file_type: None,
+                project_id: None,
+                sub_type: None,
+            }),
+        ];
+        for event in events {
+            let envelope = Event::with_event_id(Uuid::from_u128(1), event);
+            let payload = serde_json::to_value(&envelope).unwrap();
+            assert_eq!(payload["schema_version"], 1);
+            assert_eq!(payload["metadata"]["owner"], principal);
+            let decoded =
+                DocumentMacroEvent::decode(DOCUMENT_ID, &serde_json::to_vec(&payload).unwrap())
+                    .expect("all owner kinds decode through the broker");
+            assert_eq!(decoded.event(), &envelope);
+        }
+    }
 }
 
 #[test]
@@ -60,6 +123,7 @@ fn sync_content_updated_serializes_to_the_exact_envelope() {
     let event = Event::with_event_id(
         Uuid::from_u128(2),
         DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            editors: Vec::new(),
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: None,
@@ -115,6 +179,7 @@ fn optional_document_versions_support_present_and_absent_values() {
             document_version_id: None,
         }),
         DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            editors: Vec::new(),
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: Some("snapshot-7".to_string()),
@@ -163,6 +228,7 @@ fn search_event_constructors_use_the_document_key_and_schema_v1() {
     );
 
     let sync_metadata = DocumentSyncContentUpdatedMetadata {
+        editors: Vec::new(),
         document_id: DOCUMENT_ID.to_string(),
         file_type: FileType::Md,
         document_version_id: None,
@@ -192,27 +258,20 @@ fn search_event_constructors_use_the_document_key_and_schema_v1() {
 
 #[test]
 fn created_events_without_attribution_still_decode() {
-    let payload = json!({
-        "event_id": "00000000-0000-0000-0000-000000000005",
-        "schema_version": 1,
-        "event_type": "document.created",
-        "metadata": {
-            "document_id": DOCUMENT_ID,
-            "owner": "macro|owner@example.com",
-            "document_name": "notes",
-            "file_type": null,
-            "project_id": null,
-            "sub_type": null,
-            "created_at": null,
-        },
-    });
+    // Frozen pre-attribution v1 payload, not generated by the current serializer.
+    let payload = include_bytes!("fixtures/document_created_v1.json");
+    let decoded = DocumentMacroEvent::decode(DOCUMENT_ID, payload)
+        .expect("pre-attribution created event decodes through the broker");
+    assert_eq!(decoded.event().schema_version, 1);
+    let expected: Value = serde_json::from_slice(payload).unwrap();
+    assert_eq!(serde_json::to_value(decoded.event()).unwrap(), expected);
 
-    let decoded: Event<DocumentTopicEvent> =
-        serde_json::from_value(payload).expect("pre-attribution created event decodes");
-
-    match decoded.event {
+    match &decoded.event().event {
         DocumentTopicEvent::Created(metadata) => {
-            assert_eq!(metadata.owner.as_ref(), "macro|owner@example.com");
+            assert_eq!(
+                metadata.owner,
+                Owner::from_principal_str("macro|owner@example.com").unwrap()
+            );
             assert_eq!(metadata.actor, None);
             assert_eq!(metadata.on_behalf_of, None);
         }

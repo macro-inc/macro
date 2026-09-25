@@ -1,5 +1,7 @@
 //! Document service implementation.
 
+mod content_events;
+
 #[cfg(test)]
 mod tests;
 
@@ -39,9 +41,10 @@ use model::document::{
     ContentType, DocumentBasic, DocumentMetadata, FileAssociation, FileType, FileTypeExt,
 };
 use model::response::PresignedUrl;
+use model_owner::Owner;
 use s3_key::{
     build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key,
-    build_docx_to_pdf_converted_document_key,
+    build_docx_to_pdf_converted_document_key, document_key_url_path,
 };
 use tracing;
 
@@ -53,16 +56,14 @@ use crate::domain::models::{
 use super::branch_name::{build_task_branch_name, user_branch_prefix};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::events::{
-    DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
-    DocumentDeletedMetadata, DocumentInteractionMetadata, DocumentMacroEvent,
-    DocumentUpdatedMetadata, InteractionReason,
+    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
+    DocumentInteractionMetadata, DocumentMacroEvent, DocumentUpdatedMetadata, InteractionReason,
 };
 use super::models::{
-    CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    CreateTaskRequest, DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs,
-    EditDocumentServiceArgs, EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest,
-    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
-    TeamTaskMetadata,
+    CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
+    DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs, EditDocumentServiceArgs,
+    EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse,
+    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -387,8 +388,18 @@ impl<
         }
     }
 
+    /// The CloudFront URL an object key is served from. The key is
+    /// percent-encoded per path segment here, not where it is built.
+    fn cloudfront_url_for_key(&self, key: &str) -> String {
+        format!(
+            "{}/{}",
+            self.cloudfront_config.distribution_url,
+            document_key_url_path(key)
+        )
+    }
+
     fn make_presigned_url(&self, key: &str) -> anyhow::Result<String> {
-        let constructed_url = format!("{}/{}", self.cloudfront_config.distribution_url, key);
+        let constructed_url = self.cloudfront_url_for_key(key);
         let options = self.get_signed_options();
 
         let signed_url = if !macro_aws_config::is_local_aws() {
@@ -402,12 +413,11 @@ impl<
 
     async fn get_editable_url(
         &self,
-        owner: &str,
+        owner: &Owner,
         document_id: &str,
         document_version_id: Option<i64>,
         _file_type: &str,
     ) -> anyhow::Result<LocationResponseData> {
-        let url_encoded_owner = urlencoding::encode(owner);
         let document_version_id = if let Some(id) = document_version_id {
             id
         } else {
@@ -418,11 +428,8 @@ impl<
                 .0
         };
 
-        let document_key = build_cloud_storage_bucket_document_key(
-            &url_encoded_owner,
-            document_id,
-            document_version_id,
-        );
+        let document_key =
+            build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -430,22 +437,18 @@ impl<
 
     async fn get_static_url(
         &self,
-        owner: &str,
+        owner: &Owner,
         document_id: &str,
         _file_type: &Option<FileType>,
     ) -> anyhow::Result<LocationResponseData> {
-        let url_encoded_owner = urlencoding::encode(owner);
         let (document_version_id, _) = self
             .repo
             .get_document_version_id(document_id)
             .await
             .map_err(Into::into)?;
 
-        let document_key = build_cloud_storage_bucket_document_key(
-            &url_encoded_owner,
-            document_id,
-            document_version_id,
-        );
+        let document_key =
+            build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -453,12 +456,10 @@ impl<
 
     async fn get_converted_docx_url(
         &self,
-        owner: &str,
+        owner: &Owner,
         document_id: &str,
     ) -> anyhow::Result<LocationResponseData> {
-        let url_encoded_owner = urlencoding::encode(owner);
-        let document_key =
-            build_docx_to_pdf_converted_document_key(&url_encoded_owner, document_id);
+        let document_key = build_docx_to_pdf_converted_document_key(owner, document_id);
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -510,7 +511,7 @@ impl<
 
     async fn get_presigned_url_by_type(
         &self,
-        owner: &str,
+        owner: &Owner,
         document_id: &str,
         file_type: Option<FileType>,
         document_version_id: Option<i64>,
@@ -729,7 +730,7 @@ impl<
             }
             Some(FileType::Docx) => {
                 let docx_key = build_docx_staging_bucket_document_key(
-                    document_metadata.owner.as_ref(),
+                    &document_metadata.owner,
                     &document_id,
                     document_metadata.document_version_id,
                 );
@@ -740,7 +741,7 @@ impl<
             }
             _ => {
                 let key = build_cloud_storage_bucket_document_key(
-                    document_metadata.owner.as_ref(),
+                    &document_metadata.owner,
                     &document_id,
                     document_metadata.document_version_id,
                 );
@@ -889,45 +890,6 @@ impl<
     F: ForeignEntityService,
     B: MacroEventBroker,
     S: DocumentSyncPort,
-> DocumentContentEventService for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
-{
-    #[tracing::instrument(err, skip(self))]
-    async fn publish_content_uploaded(
-        &self,
-        document_id: &str,
-        file_type: FileType,
-        document_version_id: Option<String>,
-    ) -> Result<(), DocumentError> {
-        let document = self
-            .repo
-            .get_basic_document(document_id)
-            .await
-            .map_err(|error| map_basic_document_error(document_id, error.into()))?;
-
-        self.macro_event_broker
-            .send_event(&DocumentMacroEvent::content_uploaded(
-                document_id,
-                DocumentContentUploadedMetadata {
-                    document_id: document_id.to_string(),
-                    owner: document.owner,
-                    file_type,
-                    document_version_id,
-                },
-            ))
-            .map(|_| ())
-            .map_err(|error| DocumentError::Internal(error.into()))
-    }
-}
-
-impl<
-    R: DocumentRepo,
-    U: PresignedUploadUrlPort,
-    T: TaskPropertiesPort,
-    C: ConnectionService,
-    Eam: EntityAccessManagementService,
-    F: ForeignEntityService,
-    B: MacroEventBroker,
-    S: DocumentSyncPort,
 > DocumentService for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 {
     #[tracing::instrument(err, skip(self, team_receipt))]
@@ -959,7 +921,7 @@ impl<
 
         let is_owner = matches!(
             team_receipt.auth(),
-            EntityAccessAuth::Authenticated(user_id) if document.owner == *user_id
+            EntityAccessAuth::Authenticated(user_id) if document.owner.is_user(user_id)
         );
         if document.deleted_at.is_some() && !is_owner {
             return Err(DocumentError::Unauthorized);
@@ -1052,11 +1014,10 @@ impl<
             return Ok(response);
         }
 
-        let owner = document_context.owner.as_ref();
         let get_converted_docx_url = params.get_converted_docx_url.unwrap_or(false);
         let response_data = self
             .get_presigned_url_by_type(
-                owner,
+                &document_context.owner,
                 &document_id,
                 file_type,
                 params.document_version_id,
@@ -1177,16 +1138,6 @@ impl<
     ) -> Result<String, DocumentError> {
         self.repo
             .get_document_text(&entity_access_receipt.entity().entity_id)
-            .await
-            .map_err(|e| DocumentError::Internal(e.into()))
-    }
-
-    async fn get_document_comments(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<CommentThread>, DocumentError> {
-        self.repo
-            .get_document_comments(&entity_access_receipt.entity().entity_id)
             .await
             .map_err(|e| DocumentError::Internal(e.into()))
     }
@@ -1718,18 +1669,18 @@ impl<
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
         let new_document_id = new_metadata.document_id.clone();
+        let new_owner = Owner::User(user_id.clone());
 
         // File-type-specific S3 operations
         let copy_result = match file_type {
             Some(FileType::Docx) => {
                 // Copy the converted PDF version
-                let url_encoded_owner = urlencoding::encode(original_metadata.owner.as_ref());
                 let source_key = build_docx_to_pdf_converted_document_key(
-                    &url_encoded_owner,
+                    &original_metadata.owner,
                     &original_metadata.document_id,
                 );
                 let dest_key =
-                    build_docx_to_pdf_converted_document_key(user_id.as_ref(), &new_document_id);
+                    build_docx_to_pdf_converted_document_key(&new_owner, &new_document_id);
                 self.upload_url_service
                     .copy_object(&source_key, &dest_key)
                     .await
@@ -1761,12 +1712,12 @@ impl<
                         .0;
 
                     let source_key = build_cloud_storage_bucket_document_key(
-                        original_metadata.owner.as_ref(),
+                        &original_metadata.owner,
                         &original_metadata.document_id,
                         source_version_id,
                     );
                     let dest_key = build_cloud_storage_bucket_document_key(
-                        user_id.as_ref(),
+                        &new_owner,
                         &new_document_id,
                         new_metadata.document_version_id,
                     );
@@ -1810,12 +1761,12 @@ impl<
                 };
 
                 let source_key = build_cloud_storage_bucket_document_key(
-                    original_metadata.owner.as_ref(),
+                    &original_metadata.owner,
                     &original_metadata.document_id,
                     source_version_id,
                 );
                 let dest_key = build_cloud_storage_bucket_document_key(
-                    user_id.as_ref(),
+                    &new_owner,
                     &new_document_id,
                     new_metadata.document_version_id,
                 );
@@ -1876,7 +1827,7 @@ impl<
                 document_id: new_document_id.clone(),
                 source_document_id: original_metadata.document_id.clone(),
                 source_version_id: query_version_id,
-                owner: user_id.clone(),
+                owner: Owner::User(user_id.clone()),
                 document_name: new_metadata.document_name.clone(),
                 file_type,
                 project_id: new_metadata.project_id.clone(),

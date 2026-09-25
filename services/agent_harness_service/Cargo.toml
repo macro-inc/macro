@@ -19,6 +19,7 @@ path = "src/doppler_config.rs"
 [dependencies]
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 codex_connection = { path = "../../crates/codex_connection" }
+agent_changes = { path = "../../crates/agent_changes" }
 agent_egress = { path = "../../crates/agent_egress" }
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
@@ -51,7 +52,7 @@ github = { path = "../../crates/github", default-features = false, features = [
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 url = { workspace = true }
 contacts = { path = "../../crates/contacts" }
-macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_queues = { path = "../../crates/macro_queues" }
 lexical_client = { path = "../../crates/lexical_client" }

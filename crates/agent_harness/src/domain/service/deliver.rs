@@ -67,15 +67,30 @@ where
             // Nothing is attached, so get this session onto a transport and
             // retry against it. Same id: the first attempt never reached the
             // wire.
+            Err(error @ AgentSessionError::Disconnected(_))
+                if matches!(action, AgentAction::RespondToPermission(_)) =>
+            {
+                return Err(error.into());
+            }
             Err(AgentSessionError::Disconnected(_)) => {
                 let session = self.sessions.get_session(session_id).await?;
+                let permission_policy = self.permission_policy_for(session.bot_id).await;
                 if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     let mcp_servers = self
-                        .resumed_mcp_servers(session_id, &session.owner_id, &session.mcp_servers)
+                        .resumed_mcp_servers(
+                            session_id,
+                            session.owner_user()?,
+                            &session.mcp_servers,
+                        )
                         .await?;
                     self.sessions
-                        .attach_session(session_id, container.mcp_servers(mcp_servers))
+                        .attach_session(
+                            session_id,
+                            container
+                                .mcp_servers(mcp_servers)
+                                .permission_policy(permission_policy),
+                        )
                         .await?;
                 } else {
                     // An external runtime is not ours to start - only its
@@ -84,7 +99,7 @@ where
                     // yet. That is the ordinary case: sessions bind when they
                     // are prompted, not when the runtime dials, so the first
                     // prompt after a reconnect is what restores the session.
-                    let Some(attachment) = self.runtimes.bind(session.bot_id, session_id).await
+                    let Some(mut attachment) = self.runtimes.bind(session.bot_id, session_id).await
                     else {
                         // Kept in the session vocabulary so transports report
                         // it as a disconnect, not an internal error.
@@ -92,11 +107,14 @@ where
                             session_id,
                         )));
                     };
+                    if session.harness == harness_id::MACROD_HARNESS_SLUG {
+                        attachment = attachment.initial_model(session.model.clone());
+                    }
                     let egress = self
                         .egress
                         .provision(
                             session_id,
-                            &session.owner_id,
+                            session.owner_user()?,
                             &AgentMcpServers::Selected {
                                 servers: Vec::new(),
                             },
@@ -108,7 +126,9 @@ where
                     self.sessions
                         .attach_session(
                             session_id,
-                            attachment.mcp_servers(vec![egress.sandbox.internal_mcp_server()]),
+                            attachment
+                                .permission_policy(permission_policy)
+                                .mcp_servers(vec![egress.sandbox.internal_mcp_server()]),
                         )
                         .await?;
                 }
@@ -137,7 +157,7 @@ where
             return Ok(());
         };
         let raw_prompt = prompt.prompt.clone();
-        let prior_messages = if let Some(origin) = announce {
+        let context = if let Some(origin) = announce {
             Some(self.load_prompt_context(origin, actor).await?)
         } else {
             None
@@ -147,21 +167,21 @@ where
             .compose(
                 &raw_prompt,
                 announce.map(|origin| &origin.parent),
-                prior_messages.as_deref(),
+                context.as_ref(),
             )
             .await?;
         prompt.set_name_source(raw_prompt);
         Ok(())
     }
 
-    /// Recheck the actor's access to the origin, then read the history before
-    /// it. Authorization is not optional: a prompt that names an origin was
-    /// posted by a user, and one who may no longer write there sends nothing.
+    /// Recheck the actor's access to the origin, then read the conversation
+    /// around it. Authorization is not optional: a prompt that names an origin
+    /// was posted by a user, and one who may no longer write there sends nothing.
     pub(super) async fn load_prompt_context(
         &self,
         origin: &AnnounceOrigin,
         actor: Option<&MacroUserIdStr<'static>>,
-    ) -> Result<Vec<crate::domain::model::PriorMessage>> {
+    ) -> Result<crate::domain::model::ConversationContext> {
         let actor = actor.ok_or_else(|| {
             HarnessError::PromptContext(rootcause::report!(
                 "message prompts require an acting user"
@@ -170,7 +190,7 @@ where
         self.prompt_context.authorize_origin(actor, origin).await?;
         Ok(self
             .prompt_context
-            .preceding_messages(actor, origin)
+            .conversation_context(actor, origin)
             .await
             .inspect_err(|error| {
                 // Trigger events are admitted at-most-once. Context is useful,
@@ -207,10 +227,12 @@ where
         // The announcement posts as the session's own bot, which only the
         // row remembers.
         let session = self.sessions.get_session(session_id).await?;
+        let persona = self.reply_persona(&session).await?;
 
         Ok(Some(SessionAnnouncement {
             session_id,
             bot_id: session.bot_id,
+            is_coding: persona.is_coding,
             origin_parent: origin.parent,
             origin_thread_id: origin.thread_id,
             origin_message_id: origin.message_id,
@@ -218,5 +240,76 @@ where
             prompted_content: prompt.prompt.clone(),
             triggered_by: triggered_by.clone(),
         }))
+    }
+
+    /// Tell the thread what an announced turn's reply should say now: how
+    /// the turn ended, or that it is waiting on the user.
+    ///
+    /// Best-effort, like every lifecycle publish: the turn is over or still
+    /// running regardless, and the queue behind it drains whether or not the
+    /// thread hears. The bot and its persona are re-read as they were when
+    /// the turn was announced. A turn nobody announced - no origin, no
+    /// actor, or no message posted - has nothing to resolve. Whether the
+    /// persona's message needs resolving at all is the announcer's call.
+    pub(super) async fn resolve_reply(
+        &self,
+        session_id: AgentSessionId,
+        turn: Option<&InFlightTurn>,
+        outcome: ReplyOutcome,
+    ) {
+        let Some(turn) = turn else {
+            return;
+        };
+        let (Some(message_id), Some(origin), Some(triggered_by)) = (
+            turn.announcement_message_id,
+            turn.announce.as_ref(),
+            turn.actor.as_ref(),
+        ) else {
+            return;
+        };
+        let session = match self.sessions.get_session(session_id).await {
+            Ok(session) => session,
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    %session_id,
+                    %message_id,
+                    "leaving a turn's reply unresolved: session row unavailable"
+                );
+                return;
+            }
+        };
+        let persona = match self.reply_persona(&session).await {
+            Ok(persona) => persona,
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    %session_id,
+                    %message_id,
+                    "leaving a turn's reply unresolved: the session's persona is unavailable"
+                );
+                return;
+            }
+        };
+        if let Err(error) = self
+            .announcer
+            .resolve(ResolvedReply {
+                session_id,
+                bot_id: session.bot_id,
+                is_coding: persona.is_coding,
+                message_id,
+                origin_parent: origin.parent.clone(),
+                triggered_by: triggered_by.clone(),
+                outcome,
+            })
+            .await
+        {
+            tracing::error!(
+                error = ?error,
+                %session_id,
+                %message_id,
+                "failed to resolve a turn's reply in its thread"
+            );
+        }
     }
 }

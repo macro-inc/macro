@@ -9,15 +9,15 @@ use messages::domain::{
     api::MessageServiceApi,
     models::{
         MessageAttribution, MessageParent, PatchMessageNotificationPolicy, PostMessage,
-        PostMessageNotificationPolicy,
+        PostMessageNotificationPolicy, ThreadAnchor,
     },
     ports::{MessageError, MessagePatch},
     service::MessageView,
 };
 use uuid::Uuid;
 
-use super::models::{BotEvent, BotTrigger};
-use super::ports::{AgentResponder, ConversationAccess, UserTimeZones};
+use super::models::{BotEvent, BotTrigger, MarkedPassage};
+use super::ports::{AgentResponder, CommentMarks, ConversationAccess, UserTimeZones};
 use super::sender_label;
 
 /// How many channel messages preceding the trigger to include as local context.
@@ -46,6 +46,52 @@ triggering message.";
 const CHANNEL_CONTEXT_INSTRUCTION: &str = "Recent messages in the channel around the mention \
 (oldest to newest).";
 
+const LIVE_ANCHOR_INSTRUCTION: &str = "The document text this discussion is attached to, as \
+the document reads now, with the passage around it.";
+
+const SNAPSHOT_ANCHOR_INSTRUCTION: &str = "The document text this discussion is attached to. It \
+is what the mark covered when the discussion was started, so the document may have changed since \
+— read the document itself if you need its current wording.";
+
+const HIGHLIGHT_ANCHOR_INSTRUCTION: &str = "The PDF text this discussion is attached to: the \
+words the highlight covers.";
+
+const BLANK_HIGHLIGHT_INSTRUCTION: &str = "This discussion is attached to a PDF highlight that \
+carries no text, so which words it covers is not known.";
+
+const PIN_ANCHOR_INSTRUCTION: &str = "This discussion is pinned to a point on a PDF page rather \
+than to a span of text, so it covers no words.";
+
+/// The thread a mention sits in, read once for everything the prompt needs.
+struct ThreadContext {
+    lines: Vec<PromptLine>,
+    ids: HashSet<Uuid>,
+    /// Present only for an inline document discussion.
+    anchor: Option<DiscussionAnchor>,
+}
+
+/// What an inline document discussion is attached to.
+enum DiscussionAnchor {
+    Mark(MarkAnchor),
+    /// A PDF highlight and the text it covers, read from the highlight.
+    PdfHighlight {
+        anchor_id: Uuid,
+        marked_text: Option<String>,
+    },
+    /// A point on a PDF page, which covers no text.
+    PdfPin {
+        anchor_id: Uuid,
+    },
+}
+
+/// The mark a markdown discussion is attached to — the same id the comment
+/// reads carry, so the two can be matched up — and what it covered when the
+/// discussion was started, when that was captured.
+struct MarkAnchor {
+    mark_id: Uuid,
+    snapshot: Option<String>,
+}
+
 /// A single message rendered into the prompt.
 struct PromptLine {
     sender: String,
@@ -67,6 +113,69 @@ fn trigger_line(event: &BotEvent) -> PromptLine {
         content: trimmed_content(&event.message.content).unwrap_or_default(),
         is_trigger: true,
     }
+}
+
+/// Write the block naming what a document discussion is anchored to, so a
+/// mention that says "this" can be resolved to words rather than to a mark id
+/// the agent has no way to look up. The live document is preferred; the
+/// snapshot stands in when the mark could not be resolved, and is kept beside
+/// the live text when an edit has changed what the mark covers.
+fn append_anchor(prompt: &mut String, anchor: &MarkAnchor, current: Option<&MarkedPassage>) {
+    let mark_id = anchor.mark_id;
+    match (current, anchor.snapshot.as_deref()) {
+        (Some(current), snapshot) => {
+            let _ = write!(
+                prompt,
+                "\n<anchor mark=\"{mark_id}\">\n{LIVE_ANCHOR_INSTRUCTION}\n\nMarked text: {}\n",
+                current.marked_text
+            );
+            if let Some(snapshot) = snapshot.filter(|s| *s != current.marked_text) {
+                let _ = writeln!(
+                    prompt,
+                    "When the discussion was started it read: {snapshot}"
+                );
+            }
+            let _ = write!(
+                prompt,
+                "\nSurrounding passage:\n{}\n</anchor>\n",
+                current.surrounding_text
+            );
+        }
+        (None, Some(snapshot)) => {
+            let _ = write!(
+                prompt,
+                "\n<anchor mark=\"{mark_id}\">\n{SNAPSHOT_ANCHOR_INSTRUCTION}\n\n{snapshot}\n</anchor>\n"
+            );
+        }
+        (None, None) => {}
+    }
+}
+
+/// Write the block naming what a PDF discussion is attached to. A highlight
+/// carries its own text; a pin or a highlight without text says so, so the
+/// agent is not left to infer the words from the page.
+fn append_pdf_anchor(prompt: &mut String, anchor: &DiscussionAnchor) {
+    let _ = match anchor {
+        DiscussionAnchor::Mark(_) => return,
+        DiscussionAnchor::PdfHighlight {
+            anchor_id,
+            marked_text: Some(text),
+        } => write!(
+            prompt,
+            "\n<anchor highlight=\"{anchor_id}\">\n{HIGHLIGHT_ANCHOR_INSTRUCTION}\n\n{text}\n</anchor>\n"
+        ),
+        DiscussionAnchor::PdfHighlight {
+            anchor_id,
+            marked_text: None,
+        } => write!(
+            prompt,
+            "\n<anchor highlight=\"{anchor_id}\">\n{BLANK_HIGHLIGHT_INSTRUCTION}\n</anchor>\n"
+        ),
+        DiscussionAnchor::PdfPin { anchor_id } => write!(
+            prompt,
+            "\n<anchor pin=\"{anchor_id}\">\n{PIN_ANCHOR_INSTRUCTION}\n</anchor>\n"
+        ),
+    };
 }
 
 /// Write a tagged context block: an instruction line followed by one message
@@ -139,6 +248,7 @@ pub struct MacroAiHandler<R, Z> {
     access: Arc<dyn ConversationAccess>,
     responder: Arc<R>,
     time_zones: Arc<Z>,
+    marks: Arc<dyn CommentMarks>,
 }
 
 impl<R, Z> MacroAiHandler<R, Z>
@@ -152,13 +262,32 @@ where
         access: Arc<dyn ConversationAccess>,
         responder: Arc<R>,
         time_zones: Arc<Z>,
+        marks: Arc<dyn CommentMarks>,
     ) -> Self {
         Self {
             messages,
             access,
             responder,
             time_zones,
+            marks,
         }
+    }
+
+    /// What a mark covers in the document now. Called only after the thread
+    /// was read under the invoking user's access; a failed lookup leaves the
+    /// stored snapshot to stand in rather than failing the reply.
+    async fn current_mark(&self, parent: &MessageParent, mark_id: Uuid) -> Option<MarkedPassage> {
+        let MessageParent::Document(_) = parent else {
+            return None;
+        };
+        self.marks
+            .resolve(&parent.entity_id(), mark_id)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error=?error, %mark_id, "prompting without the live marked text");
+            })
+            .ok()
+            .flatten()
     }
 
     /// Load the thread the mention belongs to as prompt lines: the root
@@ -170,8 +299,25 @@ where
         event: &BotEvent,
         access: EntityAccessReceipt<MessageView>,
         root_id: Uuid,
-    ) -> anyhow::Result<(Vec<PromptLine>, HashSet<Uuid>)> {
+    ) -> anyhow::Result<ThreadContext> {
         let thread = self.messages.get_thread(access, root_id).await?;
+        let anchor = thread.state.anchor.map(|anchor| match anchor {
+            ThreadAnchor::Markdown {
+                mark_id,
+                marked_text,
+            } => DiscussionAnchor::Mark(MarkAnchor {
+                mark_id,
+                snapshot: marked_text,
+            }),
+            ThreadAnchor::PdfHighlight {
+                anchor_id,
+                marked_text,
+            } => DiscussionAnchor::PdfHighlight {
+                anchor_id,
+                marked_text,
+            },
+            ThreadAnchor::PdfPlaceable { anchor_id } => DiscussionAnchor::PdfPin { anchor_id },
+        });
         let mut thread_ids = HashSet::new();
         let mut lines = Vec::new();
         for message in std::iter::once(thread.root).chain(thread.replies) {
@@ -191,7 +337,11 @@ where
         if !lines.iter().any(|line| line.is_trigger) {
             lines.push(trigger_line(event));
         }
-        Ok((lines, thread_ids))
+        Ok(ThreadContext {
+            lines,
+            ids: thread_ids,
+            anchor,
+        })
     }
 
     /// Build the prompt for a mention.
@@ -268,7 +418,19 @@ where
                 ),
             };
             let _ = writeln!(prompt, "{intro}");
-            let (thread, thread_ids) = self.thread_lines(event, view, root_id).await?;
+            let ThreadContext {
+                lines: thread,
+                ids: thread_ids,
+                anchor,
+            } = self.thread_lines(event, view, root_id).await?;
+            match &anchor {
+                Some(DiscussionAnchor::Mark(mark)) => {
+                    let current = self.current_mark(parent, mark.mark_id).await;
+                    append_anchor(&mut prompt, mark, current.as_ref());
+                }
+                Some(pdf) => append_pdf_anchor(&mut prompt, pdf),
+                None => {}
+            }
             append_block(&mut prompt, "thread", thread_instruction, marker, &thread);
 
             let background: Vec<PromptLine> = nearby
@@ -349,6 +511,7 @@ where
             .post(
                 access,
                 PostMessage {
+                    id: None,
                     attribution: MessageAttribution::ActingUser,
                     notification_policy: PostMessageNotificationPolicy::Silent,
                     content: THINKING_MESSAGE.to_string(),

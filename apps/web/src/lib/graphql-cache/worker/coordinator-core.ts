@@ -86,7 +86,11 @@ export type CoordinatorAction =
   | { kind: 'drop-tab'; tabId: string }
   | { kind: 'retire-tab'; tabId: string; ownerEpoch: OwnerEpoch }
   | { kind: 'schedule-reset-activation' }
-  | { kind: 'broadcast-engine-replaced'; ownerEpoch: OwnerEpoch }
+  | {
+      kind: 'broadcast-engine-replaced';
+      ownerEpoch: OwnerEpoch;
+      openOutcome: EngineOpenOutcome;
+    }
   | {
       kind: 'drop-stale-engine-message';
       ownerEpoch: OwnerEpoch;
@@ -239,6 +243,7 @@ export class CoordinatorCore {
       actions.push({
         kind: 'broadcast-engine-replaced',
         ownerEpoch: state.ownerEpoch,
+        openOutcome: ready.openOutcome,
       });
     }
     while (this.queuedRequests.length > 0) {

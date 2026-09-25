@@ -1,5 +1,31 @@
 # Other Surfaces
 
+## Top bars
+
+Right-aligned split-header actions (including Calendar's New event and Channel's
+Call and Ask Macro) are borderless with a rounded-xl background on hover. Channel
+header tabs use fully rounded tracks and selected pills.
+
+## User cards
+
+Avatar and user-mention cards open on hover on pointer devices and as a bottom
+sheet on touch devices. With a keyboard on a touch device, Tab to the trigger and
+press Enter or Space; verify focus enters the sheet and returns to the opener
+after dismissal or copying, including after reopening. DM, Open contact, and
+Assign task should leave focus in their destination when the sheet closes.
+On pointer devices, avatars should stay out of the Tab order while still opening
+their cards on hover. Copy email/name confirms only after the clipboard
+write succeeds: the hover card shows a checkmark, while the sheet closes. A failed
+write shows failure feedback and leaves the card open for retry.
+
+## Canvas colors
+
+To check the default canvas color, create a rectangle and a text box without
+changing the swatch. The rectangle should have a light neutral fill and a dark
+outline; the text should be dark and visible. Also check the neutral swatch after
+selecting another color. Neutral colors use an OKLCH `none` hue, which must render
+as gray rather than transparent.
+
 ## Live updates in flat Soup lists
 
 With browser or native Tauri GraphQL caching enabled, locally supported flat lists reconcile their
@@ -61,9 +87,32 @@ it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove r
 
 ## Home (desktop) / Notifications (mobile) — `/app/component/inbox`
 
-Touch devices render the legacy Notifications view without waiting for the new app
-views feature flag. Desktop waits for flag readiness before choosing the new Home
-view or its legacy fallback.
+Every form factor waits for new-app-views flag readiness before choosing the
+new view or its legacy fallback. With the flag enabled, touch devices render
+the new Inbox as **Notifications**: a floating Signal/Noise pill strip with a
+leading filter drawer (Status and Type), pull-to-refresh, and swipe-left to
+mark done. On touch, Signal is a pure notification feed — the viewer's own
+touched-by-me recents are not merged in; that merge is desktop Home's Signal
+only, so sent mail and AI chats without notifications appear only on desktop.
+
+On a cold launch, notification transport follows the GraphQL Soup flag reactively:
+if the flag arrives after REST starts, the GraphQL notification query must actually
+start too. Verify a reload with delayed flags retains non-email notifications once
+loading settles, including when the list itself uses REST (notified-at sorting).
+Email alone is not sufficient verification: its inbox membership does not require
+the global notification feed.
+
+Check live Home recency with two accounts: leave the recipient on Home without
+opening the conversation, then send a DM from the other account. The row should
+move into **Last few minutes** and show unread without reloading, including when
+notifications use GraphQL but Home's notified-at list uses REST. Read the DM,
+return to Home, and repeat; also check a row previously marked done and a thread
+reply. Delay the Home list response while allowing single-entity hydration to
+finish: hydration must not cancel the list refresh or leave an old notification
+timestamp. Older in-flight snapshots must not move the delivered row backward.
+Also test a stale response that entirely omits a just-restored, previously done
+row: the row must stay visible. Marking it done again must override that restore,
+and other filter scopes must not inherit the retained membership.
 
 GraphQL-attached notification rows share the global feed's local seen/done
 overrides: Mark Done and Undo reflect local intent without waiting for an older
@@ -75,7 +124,8 @@ notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
 action. On desktop, the funnel button to the right of **Home** opens **Filter Home**.
 The menu shares the legacy compact submenus: **Status** offers **Unread**, **Read**,
-and **All**, and **Type** contains the entity checkboxes. Status closes the menu
+and **All** as single-select radio items with a checkmark on the right of the selected
+option, and **Type** contains the entity checkboxes. Status closes the menu
 after selection; type selections leave it open. Press **f** to open the menu.
 Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
@@ -108,7 +158,16 @@ task/snippet/skill variants, hashes for channels, read/unread envelopes or
 calendar invites for email, sparkles for agents, folders for projects, and alarms
 for reminders. Pull requests retain open, merged, and closed status glyphs and
 colors; unknown foreign sources use the generic file icon.
-There are no title tooltips, and timestamps are
+New agent-session rows always use a sparkle in the left slot, including while
+working. A coding session adds a second line with repository, captured working
+branch (when available), and PR number/status. Non-coding sessions stay on one
+line. Their timestamps and unread dots stay visible. Missing repository metadata
+is omitted.
+The Agents workspace uses a single left dot for activity and unread state in
+place of the sparkle. Opening a loaded session from Home or Agents marks its
+notifications read after the viewing delay, including notifications arriving
+while that session remains active.
+Other Home items have no title tooltips, and their timestamps are
 visible only while hovering the row. An unread
 dot remains visible. Click a row to preview it; `j`/`k` navigate and update the
 preview; alternate activation and Shift-click open a split.
@@ -121,7 +180,17 @@ hover states use the same semantic colors as other app surfaces.
 Type in “Type @ to reference / for skills”, use the attachment button for
 attachments and the model menu to choose a model, then press Enter or Send to
 create and open an AI chat. If chat creation fails, the submitted text and attachments
-are restored, including before a chat-limit paywall opens. The input stays 32px above the vertical center as suggestions load. Up to three cached AI
+are restored, including before a chat-limit paywall opens. With agents disabled,
+the input stays 32px above the vertical center as suggestions load. With agents
+enabled, the composer uses the same topbar offset and 24/64 padding as the
+Agents new-conversation page so the two inputs share a baseline; suggestions
+still load below it without moving the input. Eligible newer accounts (all
+accounts in development) see “New to Macro? See the **Getting Started** page.” directly
+below the composer, above suggestions. The link opens
+`/app/component/getting-started`; **Dismiss Getting Started link** hides it and
+remembers the dismissal per user in this browser across reloads. Dismissals update
+all open Home panes immediately and stay isolated when switching accounts. This
+dismissal is independent of the Getting Started sidebar link. Up to three cached AI
 suggestions appear below the
 composer, using the existing fast/smart recommendation projections. Compact rows
 use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
@@ -170,8 +239,14 @@ insert older history above already displayed rows. Live actions and refreshes
 can still reorder rows. Short or fully filtered pages continue loading until the list
 fills or there are no more results. A failed
 source shows a retry notice while the other source stays usable. Document typing
-alone is not yet attributed by Activity; Home reflects the actions the existing
-Activity system records.
+starts an Edited activity for that editing session. Human edits
+are attributed to the signed-in editor; agent edits retain their agent attribution.
+
+Calendar reminder rows use the reminder delivery time for Home's date section,
+including on a cold GraphQL load with notification sorting disabled. Verify that
+an older reminder stays in its older section after the event's metadata syncs;
+opening its details should show the expected occurrence. A newer reminder or your
+own later activity can move the row forward, but a calendar sync alone should not.
 
 On mobile, this route always renders the original Notifications soup view,
 regardless of the new-app-views flag. The dock and search scope use the bell icon
@@ -229,6 +304,13 @@ Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
 
+When switching email tabs or inboxes, the list shows current-query cached results
+or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
+under the new heading. Active searches also hide retained results and show loading
+while selected tag sets are pending. Background refreshes retain the current list. To check this,
+rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
+network read must not leave the old rows visible or expose their Load more action.
+
 The new views reuse the legacy filter option rows and searchable submenus.
 Their triggers are icon-only buttons matching the surrounding view controls;
 Clear/Reset filters and the mobile Clear all action use destructive text styling.
@@ -239,6 +321,17 @@ stay open for multiple selections. Tags supports search, pins selected tags firs
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
 ### Read state and trash
+
+In the Email view, Status filters discovery on the server **before pagination**,
+for both the mailbox list and service-backed search. With Unread selected, opening
+or marking an admitted row read keeps its position across refreshes. Separate
+lookups, bounded to 100 already-admitted thread IDs each, omit only the read filter;
+they still enforce the tab, inbox, other facets, and (for search) the search text.
+A snapshot bridges a pending lookup, but a confirmed non-match removes the row,
+so archive/trash cannot be resurrected by retention. Changing the search text,
+filters, tab, inbox, or user resets admission. Check that unread mail is discovered
+even after 100 newer read threads, then verify focus through Mark Read and refresh
+in both list and search, including with more than one loaded page.
 
 With GraphQL Soup enabled, **Mark read/unread** updates the normalized email row
 optimistically. Permanent server errors roll it back; retryable transport failures
@@ -251,7 +344,29 @@ active flat and grouped lists, including loaded continuation pages. Once replay
 commits (even after a reload), those queries refresh from the server; they should
 not refetch over the optimistic state merely because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
-The GraphQL-disabled REST path is unchanged.
+The GraphQL-disabled REST path is unchanged. With GraphQL enabled, archive-based
+Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
+updates optimistically in the normalized cache, and each reversal is a distinct
+ordered queue entry. The server resolves the thread's owning/delegated inbox;
+no client INBOX-label lookup is needed. Confirmed writes revalidate mounted lists,
+including continuation pages; queued writes retain those descriptors for replay
+without refetching over optimism. Callers preserve the queued disposition and
+skip REST/TanStack email invalidations as well, including Done/Undo batches and
+thread archive replay. Committed writes and failed non-queued batches still
+reconcile. Permanent failures roll back the failed intent.
+Check Signal/Noise removal and All's done indicator, then Undo/Redo, including an
+offline action followed by reconnect. Sent-only threads cannot be unarchived.
+
+The service retains both replica-backed Soup reads and a primary-backed email
+writer. Email mutations and their uncached reply reloads use the primary; ordinary
+GraphQL/REST lists, direct Soup lookups, and realtime Soup hydration use the replica.
+A mutation reply is fresh, but subsequent list refetches are eventually consistent
+and can still return replica-stale read/archive state. Test that boundary separately
+from mutation reply correctness. A post-commit reply-load failure is retryable;
+it must not discard the queued intent. Deploy
+the backend schema containing `setEmailThreadArchived` before this client.
+Browser WASM and native cache builds must include the regenerated schema metadata;
+native offline archive support therefore requires a full app build, not just OTA.
 
 ### Cached Mail filtering
 
@@ -319,7 +434,17 @@ Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
 the destination for direct links and legacy surfaces. Click a message header to
 expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
 a longer conversation. A standalone link with
-`?email_message_id=<message-id>` reveals that message.
+`?email_message_id=<message-id>` loads older pages as needed, expands the target,
+scrolls it into view, and briefly highlights it. For navigation regressions,
+exercise both a recent message and one outside the first page. Open another
+target while loading or highlighting: the previous request must not scroll the
+new thread or clear its highlight. Closing the split cancels pending positioning.
+The load gate and message body share one live thread source in both hosts. Cached
+body rendering should not wait for a second thread fetch, optional References,
+or inbox metadata. Inbox-dependent actions stay gated while ownership is unknown;
+explicit inbox IDs must never silently route to primary while links are loading.
+Background refreshes and older-message loading still update the same thread.
+Verify with API traffic delayed and with previously opened bodies offline.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
@@ -343,6 +468,8 @@ send or discard, its sender and scheduling controls cannot change the operation.
 Attachments that can be opened are buttons named by their filename; Tab to one
 and press Enter or Space. Removal is a separate button named `Remove <filename>`.
 Removing a forwarded file keeps the received original.
+When checking draft autosave, edit the body of a draft with uploaded or forwarded
+attachments, wait for the save, and reopen it; the attachments should remain visible.
 AI email tool drafts persist body-only edits; changing recipients or the subject
 is not required to save the body.
 The three-dot button beneath a body reveals quoted content and a trimmed
@@ -361,12 +488,71 @@ A failure from an older, unmounted editor must not overwrite a newer edited repl
 A presentation or refresh error after successful delivery is not a reason to send
 again.
 
-While a schedule change is pending, immediate send and further schedule changes
-are disabled. Reply recipients cannot be edited or dragged during scheduling,
-sending, or discarding. A failed schedule or unschedule keeps the last confirmed time.
+Choosing or clearing a send time is local preparation only. The composer remains
+editable and autosaves normally, shows **Scheduled send: ...** (the time and the
+viewer's timezone, e.g. **Sep 25 at 8:00 AM EDT**) in a bar attached
+below the composer (a strip along the bottom of the message card for replies), and
+performs no schedule, unschedule, archive, or delivery request. The bar's **Cancel**,
+at its far right, clears the local choice; the clock's tooltip reads **Schedule send
+time**. The clock and
+primary arrow remain icon-sized; the clock turns accent-colored when a time is
+selected, while the primary action's accessible name and tooltip change from
+**Send email** to **Schedule send**. Clicking it or pressing `Ctrl`/`Cmd`+`Enter
+runs the same validation and is the only initial scheduling commitment. A selected
+time that has passed is rejected at submission rather than falling back to immediate
+send. Touch toolbars keep the summary inline beside their icons, with Cancel next to
+the time; when space is tight, that summary truncates or wraps separately from the
+fixed icon group. The
+former picker-auto-commit behavior was a defect and must not be restored.
+
+Only a successful scheduling response or authoritative lifecycle reconciliation
+shows **Scheduled for ...**. Confirmed scheduled composers are content-locked.
+Picking another time creates a local proposal while the original remains active;
+the bar continues to show the original time plus the proposed replacement and
+explains that the original remains active. **Update schedule** commits the proposal.
+Clearing that proposal does not cancel the original. **Cancel schedule** is a
+separate explicit action, and only its
+confirmed success returns the message to an editable draft. Failed schedule,
+update, or cancel requests retain the user's local intent and last authoritative
+time, and never fall through to immediate Send. At narrow split widths the bar's
+label truncates while Cancel stays at its far edge; the bar never covers discard,
+attachment, formatting, the clock, or the primary action. Reply recipients
+cannot be edited or dragged during a confirmed schedule or active delivery mutation.
+
+When verifying, use an intercepted or isolated delivery fixture: choose a time,
+confirm that the editable **Scheduled send** preview makes zero delivery calls, then use
+the primary button and `Ctrl`/`Cmd`+`Enter separately to confirm exactly one schedule
+call. Reopen a confirmed schedule to exercise proposal/update and explicit cancel.
+If a later lifecycle refresh fails, the confirmed result remains in place; stale
+observations must not undo it or create a recovery draft after a failed inbox move.
+Reconciliation resumes when a fresh poll or event-driven read succeeds.
 If scheduling succeeds but marking the thread done fails, the email remains
 scheduled and a notice explains the separate failure. Check the confirmed time
 before retrying; do not treat that notice as a failed schedule.
+Keep a scheduled composer open through its due time when verifying the flow. It
+reconciles on email events, tab focus/reconnect, cross-tab schedule changes, and a
+short due-time poll. Confirmed delivery closes or disables the old composer and
+stops autosave/delete against the sent ID. Text from an edit that raced delivery
+is preserved as a new unsent draft, never submitted with the sent message ID.
+Recovery re-uploads local attachment files and restores forwarded attachments.
+Remote-only draft attachments cannot be copied after the original draft is gone;
+their pills are removed and a notice asks you to attach those files again.
+
+A successful initial schedule shows an **Email scheduled** notice whose description
+gives the full send time, with **Undo** and **View message** on their own row below
+it; a rescheduled email
+shows **Email rescheduled** with **View message**. Undo cancels the captured draft in
+the captured inbox and restores its editable body, envelope, and attachments; it must
+not overwrite a newer reply. View message opens the scheduled thread, or scrolls an
+inline reply back into view.
+The Email view's **Scheduled** tab lists only server-confirmed scheduled drafts,
+soonest first across the selected inboxes, as ordinary email rows: the recipients,
+subject, and snippet, with a clock-and-time badge (for example **Tomorrow, 2:12
+PM**) in place of the row's date; hovering it gives the full date, time, and
+timezone.
+Opening a row previews its thread like any other email; cancel from the opened
+message's bar. Search and filters are hidden on this tab. Immediate-send undo-window
+queue rows are not scheduled drafts and must not appear.
 
 With the new app views enabled, mobile and tablet Email use a floating, horizontally
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the
@@ -413,11 +599,21 @@ just client-side row filtering. Cached inserts enforce the same rule before a
 refetch, including expanded groups and inactive cached Shared queries. Until
 viewer identity is available, document inserts into Shared are rejected.
 
-On touch devices (phones and tablets), Files keeps the original tabbed view and
-mobile navigation even when `enable-new-app-views` is enabled.
+With `enable-new-app-views` enabled, Files opens **Drive** using the
+same shell as Tasks, on desktop and touch devices alike.
 
-On desktop, with `enable-new-app-views` enabled, Files opens **Drive** using the
-same shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+On touch devices (phones and tablets), the Drive header is a scrollable pill
+strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
+leading filter-drawer button, like Tasks. Touch opens on **Recent** (the first
+pill). The drawer holds Sort (hidden on Recent, where the viewer's own
+edit order applies) and, on tab locations only, the same filter groups as the
+desktop **Filter** menu; active selections show a count badge on the trigger
+and a `Clear all` action in the drawer. The in-view `Search Drive` field, the
+Sort/Filter dropdowns, and the header New menu are desktop-only — search on
+touch uses the global search overlay and creation uses the dock's New button.
+The **Folders** pill opens the folder overview and stays highlighted inside
+any folder; tapping it from inside a folder returns to the overview, and
+selecting another pill leaves the folder tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
 `Shared with me`, collapsible Favorites, a searchable folder hierarchy, and a
 collapsible Tags section beneath the folders. Tags lists every tag you can apply,
 nested by `/` in the tag name, with a `New tag` action in its header. Choosing a
@@ -434,7 +630,18 @@ label's font weight matches the file title. The link
 restores the originating Drive view.
 The `Drive` folder row opens the folder overview. Click a folder name to browse
 its contents in the main pane; its separate expand/collapse button reveals child
-folders without navigating. The top bar keeps the full folder and file detail
+folders without navigating. With GraphQL caching enabled and membership metadata
+hydrated, a never-visited folder can immediately show cached documents, chats,
+and subfolders for supported created/modified sorts and filters. Email remains
+server-owned: the full mixed GraphQL query still refreshes in the background,
+keeps loaded email rows, and owns pagination. A non-email projection with no visible
+rows, including when pending deletions hide every cached row, must not show
+`This folder is empty` while that initial request is pending or failed. Verify that
+loading and transport errors remain visible in this case; releasing a failed deletion
+restores cached rows without a refetch.
+Verify with a folder-specific GraphQL response delayed, then navigate to another
+folder before it completes; neither cached rows nor late results may leak across
+folders. The top bar keeps the full folder and file detail
 path in one breadcrumb trail. Folder containment uses `/` separators, while the
 transition to a file detail and nested detail navigation use the default `>`
 separator. Choosing a folder breadcrumb returns to that folder and clears newer
@@ -446,32 +653,53 @@ descendants' ancestors and reveals their branches.
 is temporarily hidden, including its Cmd+F shortcut. The sidebar's folder-name
 search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
-**Open fullscreen** (when multiple splits are open). Folder menus also offer
-Favorite/Unfavorite, Move to folder, Copy Link, and owner-only Rename and Delete.
+**Open fullscreen** (when multiple splits are open). Opening a location in a new
+split clears search and filters in the destination, leaving the original split
+unchanged. Folder menus also offer Favorite/Unfavorite, Move to folder, Copy Link,
+and owner-only Rename and Delete.
 A folder's Share dialog, when the owner belongs to a team, has Team access
 (None, View, Comment, or Edit) without a Link sharing card or Link tab.
 Favorites use the same open actions and **Remove from favorites** menu as Tasks.
-The **Filter** menu reuses the
-legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**
-for Default, All files, and Email attachments. Created by is hidden while My Files
+The **Filter** menu uses the same controls as Tasks: **Type**, searchable **Tags**,
+and **Created by** submenus alongside **Files** for Default, All files, and Email
+attachments. Options within a group match any selected option; different groups
+combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,
 while Markdown, code/CSV, image, video, PDF/DOCX, canvas, and unrecognized file
-clicks and Enter replace the list with a breadcrumbed detail. Choose the current location
+clicks and Enter replace the list with a breadcrumbed detail. Those detail
+menus include Duplicate, Rename, Move to folder, and Delete. Code, CSV, image,
+video, canvas, PDF, DOCX, and unrecognized files also include Download. PDF
+details include Print, and DOCX files include Download DOCX. Markdown details
+use the document menu, which already includes Download. Spreadsheets keep the
+editor's Import and export menu for Excel and CSV downloads. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
-entries. Opening a list row or sidebar favorite starts a new detail path; only
-navigation originating inside a detail appends to that path. Modified clicks
-retain existing split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
-folders, and tags. Navigation state and expanded folders are restored when returning
-from an opened file.
+entries. Opening a list row or sidebar favorite pushes a new one-item detail path;
+sidebar favorites start from My Files instead of inheriting a previously selected
+folder. Only navigation originating inside a detail appends to that path. Browser
+Back and Forward restore the exact path saved with each entry, and renamed files
+update in mounted ancestor breadcrumbs without rewriting history. Cmd/Ctrl-clicking a
+row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Enter
+opens the focused row in a new split. Cmd/Ctrl-clicking a row's folder link or
+search hit opens a new tab. Short filtered pages load more results automatically;
+a failed page shows a retry action instead of silently stopping. On touch, tabs
+switch via the header pills; on narrow desktop layouts the header keeps a plain
+title and navigation goes through the hamburger overlay. Location, search,
+filters, expanded folders, list focus, and scroll position are restored when
+returning from an opened file.
 
-## Calendar — `/app/calendar/view`
+## Calendar — `/app/calendar/<month-or-week-or-day>`
 
-Calendars default to Day on phones and Week on desktop. The selected view is
-remembered locally on each device.
+Event composer dropdown triggers and date/time inputs use the theme control
+surface, so they blend with the dialog instead of using the darker page fill.
+
+The path selects the Month, Week, or Day period, and choosing another period updates
+that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
+recent choice is remembered locally for navigation that does not specify a period. An
+opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
@@ -535,12 +763,30 @@ none — and lists the next 90 days of teammate absences; clicking a row navigat
 that date. Coverage depends on each teammate having connected their own calendar and using
 Google's out-of-office event type.
 
+A calendar event mentioned in a channel message opens the calendar focused on the viewer's
+own copy of the meeting. When the sender holds the event on their own calendar, the mention
+also shares it read-only with the channel's current members: a member without a copy of their
+own sees the mention's title and time, and its hover card adds a `Shared with you · not on
+your calendar` line with no open action. Clicking such a mention shows that hover card
+instead of opening the calendar. Private and confidential events are never shared this way.
+Every calendar mention's hover card shows the schedule, location, organizer and attendee
+count, plus the first lines of the event description (its links open), and no last-updated
+byline.
+
 ## Calls — `/app/component/calls`
 
 Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
+
+A channel's `Calls` tab lists that channel's recordings with the same rows, filtered
+by the channel id. Its search field matches call names and transcripts in that
+channel.
+
+If a recording fails to play, reload the page to obtain a fresh recording link,
+or use **Open or download recording**. The playback warning does not assume
+that the failure is caused by an unsupported media format.
 
 ### Sharing a call
 
@@ -557,7 +803,7 @@ Team sharing is independent of channel access and of link sharing.
 
 ## Customers (CRM) — `/app/component/companies`
 
-The 216px local sidebar uses the same navigation primitives as Email and Tasks.
+On desktop, the local sidebar uses the same navigation primitives as Email and Tasks.
 Board and List share a horizontal segmented toggle at the top of the sidebar; the
 main header has no layout toggle. People is not available. Views include All companies, My companies
 (Owner = current user), Needs follow-up (has a stage other than Churned and last
@@ -573,7 +819,14 @@ View descriptions appear in sidebar tooltips, not above the main board or list.
 The `Search companies` field uses the shared Email/Tasks search bar. Command-F
 focuses it, `Clear search` resets it, and Escape leaves the field.
 
-Clicking a company in Board or List (or pressing Enter on a focused list row)
+On touch devices, Customers uses the same full-frame list layout as the other
+mobile views: floating CRM-navigation and filter buttons with Board/List pills,
+List as the fresh default, and the global **+ Company** action above the dock.
+The navigation button opens the CRM views and lists; the desktop toolbar and
+embedded detail stack stay out of the mobile flow, so selecting a row navigates
+in place.
+
+On desktop, clicking a company in Board or List (or pressing Enter on a focused list row)
 opens its details inside the CRM workspace, keeping the left navigation visible.
 The top breadcrumb reads `<current view or list> > <company>`; click the first
 segment to return with the same filters, layout, and list scroll position. Selecting
@@ -589,6 +842,12 @@ use the standalone contact page.
 Company and contact headers have `Copy link` beside the side-panel toggle.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
+
+Company selection actions **Set owner** and **Set revenue** remain available
+while team deal-stage definitions are loading. **Set stage** waits for the active
+team definition rather than opening an editor with system defaults. Check both
+the entity actions menu and command menu with stage requests delayed; cancel the
+editors without changing hosted data.
 
 `Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
 At narrow widths, `Show CRM navigation` opens the same navigation in a menu.
@@ -627,9 +886,29 @@ quoted fields, original date timestamps and spreadsheet formula escaping.
 
 ## Activity — `/app/component/activity`
 
+To verify document content activity, keep Activity open in one tab and edit an
+existing document's body in another, without renaming it. The editor's Edited
+entry should arrive for the first edit. Keep typing across multiple saves: the
+activity count must stay unchanged. After five minutes without editing, the next
+edit should add one new event. Reconnecting within that window and opening or
+closing a document without edits must not add an event.
+
 Requires authentication and the `enable-activity-feed` flag. Direct navigation and
 restored splits wait for flags to load; when disabled, they redirect to Home
 (`/app/component/inbox`) without loading the activity feed.
+
+When checking Activity, enable GraphQL Soup as well as the activity flag. Verify
+that an initial visit resolves entity names in both the feed and Most active,
+then reload and scroll through another page. Preview loading and live name
+updates should keep the page responsive without repeatedly fetching previews.
+
+Activity refreshes live after recorded actions. With two pages loaded, make an
+action in another tab and verify the feed retains its page-boundary rows while
+the action count and heatmap update. An open entity activity panel should also
+refresh for actions by another authorized user. After disconnecting and
+reconnecting the websocket, verify recovery without requiring another action.
+Hidden tabs defer refresh until visible; purges refresh all mounted activity
+queries through the normal access checks.
 
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)
@@ -659,10 +938,22 @@ week and with no visible scrollbar. Under ~672px the four stats read as a two-co
 value, and chips shorten. Rows stay on one line at every width. On touch devices the list rests
 below the floating page title and above the bottom toolbar.
 
+## Getting Started — `/app/component/getting-started`
+
+The buttons under **Put Macro's agent to work** create a chat and send their
+example prompt on first use. Later clicks reopen that button's saved chat without
+sending the prompt again, including after leaving the page or refreshing. Each
+button has its own chat, saved per account in this browser's local storage.
+Repeated clicks while the same button is creating its chat are ignored; a failed
+creation can be retried.
+
 ## Home — `/app/component/home`
 
 Greeting, getting-started checklist, example prompt buttons (`Draft a document`,
 `Draft an email`, `Search & research`), and the ubiquitous `Ask AI` composer.
+Eligible newer accounts (all accounts in development) also see the same
+dismissible **Getting Started** link below
+the composer, with its dismissal shared with the desktop Home starting pane.
 
 On phones, shared confirmations (including Remove Member and Cancel Invitation)
 use a glass sheet with a title, description, Close confirmation button, and
@@ -671,13 +962,42 @@ and prevent dismissal; canceling leaves the underlying data unchanged.
 
 ## Settings — `/app/settings/<section>`
 
+### Email signatures
+
+In Integrations, **Edit signature** beside an owned inbox expands its editor.
+The editor uses the app's background and text colors, including in dark mode;
+explicit colors in signature content are preserved. **Close signature editor**
+(the X) or Escape while focused in that inbox row collapses it and returns focus
+to **Edit signature**. Unsaved edits remain when reopened; closing does not save
+or remove the signature.
+The inbox row's trash icon removes the inbox through the existing confirmation;
+it is separate from the signature editor's close control.
+
+### Team membership
+
+Team membership has no size cap, including free teams. Invitations and domain
+auto-join must keep working beyond five members and the former stage-plan limits.
+Free-team joins do not create a paid subscription, bill a seat, or grant premium
+roles. Teams with an existing paid subscription retain their per-seat billing;
+enterprise teams retain their billing bypass.
+
+Under **Team**, owners/admins can turn **Auto-join on domain** off and can restrict
+invitations to admins with **Members can invite**. These controls still apply.
+To verify the membership flow, use a local free team with five members: invite
+and accept a sixth member, then sign up another user on its enabled auto-join
+domain. Both should appear in the team's member list and configured auto-join
+channels without an upgrade prompt. Repeat with auto-join disabled to verify a
+same-domain signup is not added automatically.
+
+### Navigation
+
 On phones, **More views → Settings** opens an inset glass sheet over the current
 page. The main page has a profile shortcut and grouped Account, Preferences,
 Workspace, and enabled agent/admin sections. Tap a row to open that settings
 page inside the sheet; **Back to settings** returns to the grouped list at its
 previous scroll position. **Close settings** at the top right, Escape, an
 outside tap, or a downward swipe dismisses the sheet. Opening Settings again
-starts at the main page; explicit links (for example Connections) open their
+starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms
 scroll, including with the keyboard open. Desktop settings retain their panel
@@ -685,35 +1005,78 @@ and split navigation.
 
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
-`x-macro-user-api-key`), `Notifications`, `Billing`,
-`Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
-Workspace → `Team`, `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
+`x-macro-user-api-key`), `Notifications`, `Billing` (current plan card with
+`Manage`; on paid plans an **AI usage** card with the period meter, credit
+balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
+Checkout, and a `Usage billing` toggle with per-period limit pills; an
+`Upgrade`/`Upgrade to Max` card, or a `Switch to Premium` link on Max; on a team
+the plan change moves only the viewer's own seat),
+`Appearance`, `Agents`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
+Workspace → `Team` (members list; on a paid team each row shows the seat's plan,
+and admins/owners change it with the `Seat plan` menu: `Premium` or `Max`,
+prorated at once), `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`),
-`Connections` (email/tool OAuth), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`, `Harness`;
+`Integrations` (personal Gmail/GitHub accounts), `MCP server`
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`;
 `Log out`.
-`Agents` lists team and private agents with `Create agent` / `Edit <name>` dialogs grouped
+`Agents` unifies agent definitions and runtime configuration in one page, also used by the Agents workspace. Its `Agents` section lists team and private agents. `New agent` / `Edit <name>` open full-page forms grouped
 Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio pair:
 `Use my connected apps` (default; the agent gets whatever the person running it has
 connected) or `Specific apps`, which reveals a `Search connectors` box over the whole
 Pipedream catalog (results are `option` rows; picking one adds it) and a row per picked app
 with a connected / not-connected dot for the *current viewer* plus an inline `Connect`
-that opens the Pipedream Connect flow inside the dialog. Unconnected picks never block
+that opens the Pipedream Connect flow inside the page. Unconnected picks never block
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
-`Connect <app>` chip that opens Settings → Connections for that app.
+`Connect <app>` chip that opens Agents → Connections for that app. MCP integrations
+are managed on that page, rather than in Settings.
+
+With `pipedream-mcp` enabled, Agents → Connections has `Connected` and `Discover`
+tabs. Connected groups GitHub, Linear, Notion, and Slack tool grants by provider,
+lists other catalog connections alongside them, and puts custom MCP servers in
+a separate section. Discover offers featured providers, a searchable catalog,
+and `Add custom MCP`. Slack discovery retains its development-only gate.
+Provider Back returns to the tab that opened it; navigation is local to each
+Agents workspace and starts at Connected on a fresh visit.
+Provider and custom-server More menus contain Disable, Reconnect, and Disconnect;
+custom servers also offer Rename. Disabled grants show Enable. Unauthenticated
+custom servers show Connect and Remove. Disconnect/Remove require confirmation.
+Adding a custom MCP saves its name and URL; Connect on its row starts OAuth.
+An agent reply's `Connect <app>` chip still starts that app's connection flow.
+Cursor stays in Agents → Runtimes with its API key and default model controls; it is not
+featured or offered in the Connections catalog. Personal Gmail and GitHub account
+links remain in Settings → Integrations. The native-only Connections page remains
+available when `pipedream-mcp` is disabled.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
-`Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
-The model list is loaded live and independently for In-memory, connected Cursor, and every
-registered macrod harness. A harness can show `Loading models…`, an unsupported message, or
+`Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
+`Instructions` field is a Lexical contenteditable textbox, not a textarea. It
+supports Markdown headings, lists, emphasis, code, links, and the normal `@`
+mention picker; select text to open the formatting menu. Saved instructions
+retain mention identities using the shared editor's Markdown format and reopen
+with their formatting intact. Enter adds a new paragraph; use `Create agent` or
+`Save changes` to submit. The form also includes runtime selectors.
+Under the runtime, `Answering a mention` chooses between `Coding agent` (a
+channel mention is answered with a magic chip that opens into the live session)
+and `Chat agent` (the agent replies in the thread, like `@macro`). It is the
+agent's own setting and always saved: a new form starts from the selected runtime
+- Macro's in-memory runtime as chat, every other runtime as coding - and picking a
+different runtime resets it to that default, but only the saved choice counts.
+The model list is loaded live and independently for Macro Agent, connected Cursor, and every
+registered macrod harness. The selected harness stays selected when the list refreshes.
+A paired macrod connects on startup, so models can load before any agents are bound.
+A harness can show `Loading models…`, an unsupported message, or
 a retryable error without hiding the other harnesses. Editing preserves a saved model that
 is no longer offered and labels it `saved, unavailable`. A macrod with no responding runtime
 can remain loading until the 10-second discovery timeout; use Retry after reconnecting it.
+New macrod sessions use the agent's saved model before sending the first prompt.
+Changing that default applies to new sessions; existing sessions keep their selected model.
+If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-`Harness` configures Cursor, Codex, and paired macrod runtimes. Cursor's default-model picker uses
+The `Runtimes` section shows built-in Macro, Cursor, Claude, and Codex configuration, followed by paired macrod runtimes. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
+Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 
 The Codex row uses the OpenAI logo and the same icon, button, and status styling
@@ -727,7 +1090,11 @@ picker or automatic repository selection. Changed selections display **Unsaved
 changes** until the server confirms them. The save button is disabled until an
 environment is selected, and when it matches the saved environment.
 These choices apply to new sessions. **Disconnect** in the Codex row (accessible
-name **Disconnect ChatGPT**) removes the connection. The UI never asks for an
+name **Disconnect ChatGPT**) asks for confirmation before removing the connection.
+Claude, Cursor, and Connections disconnect actions use the same shared confirmation
+dialog (a drawer on mobile); Cancel leaves the connection intact. Claude's row
+keeps its layout while status loads, and sign-in details appear only after Connect.
+The UI never asks for an
 OAuth token.
 
 The Codex section and its auth/config requests were exercised in Chromium with

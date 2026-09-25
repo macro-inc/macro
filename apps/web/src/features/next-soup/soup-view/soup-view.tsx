@@ -54,7 +54,6 @@ import {
   markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
-  preventDuplicatePreviewEntityOpen,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
 import {
@@ -134,7 +133,6 @@ import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SearchAskAiButton } from './search-ask-ai-button';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
-import { useSoupPreviewAvailability } from './use-soup-preview-availability';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
 export const DefaultGroupHeader = (
@@ -215,7 +213,6 @@ const MobileTabLoadingBar = () => (
 );
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
-const DEFAULT_PREVIEW_VIEWS = new Set(['inbox', 'channels']);
 /** The row components a soup view can render. */
 type SoupRowComponent =
   | typeof ListEntity
@@ -232,19 +229,6 @@ type SoupRowEntry = {
    */
   family: SoupRowFamily;
 };
-
-/**
- * Per-view row config. A view absent from the table gets DEFAULT_SOUP_ROW.
- * Adding a row component means adding it here — the entry can't omit its
- * geometry family, so the two can't drift apart.
- */
-const SOUP_ROW_BY_VIEW: Partial<Record<ListView, SoupRowEntry>> = {
-  inbox: { component: InboxListEntity, family: 'card' },
-  tasks: { component: TaskListEntity, family: 'row' },
-  companies: { component: CompanyListEntity, family: 'row' },
-};
-
-const DEFAULT_SOUP_ROW: SoupRowEntry = { component: ListEntity, family: 'row' };
 
 const CONDENSED_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
   'channels',
@@ -299,32 +283,8 @@ interface SoupViewProps {
 export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
-  const notificationSource = useGlobalNotificationSource();
   const soupView = useSoupView();
   const isInboxView = useIsInboxView();
-  const openFocusedEntityInPreview = () => {
-    const focusedRow = soup.focus.row();
-    if (
-      !focusedRow ||
-      focusedRow.getIsGrouped() ||
-      focusedRow.getIsLoadMore()
-    ) {
-      return;
-    }
-    void openEntityInSplitFromUnifiedList(focusedRow.original, {
-      splitHandle: panel.handle,
-      notificationSource,
-    });
-  };
-  const hasPreviewItems = useSoupPreviewAvailability({
-    rows: soupView.rows,
-    isLoading: soupView.source.isLoading,
-    isFetching: soupView.source.isFetching,
-    isPlaceholderData: soupView.source.isPlaceholderData,
-    splitHandle: panel.handle,
-    onPreviewRestored: openFocusedEntityInPreview,
-  });
-
   const entryState = panel.handle.currentEntryState();
   const contentId = panel.handle.content().id;
 
@@ -351,11 +311,6 @@ export const SoupView = (props: SoupViewProps) => {
     `macro:pref:soup:${contentId}:sort`,
     { default: [] }
   );
-  const [previewOpenPreference, setPreviewOpenPreference] =
-    usePreference<boolean>(`macro:pref:soup:${contentId}:preview-open`, {
-      default: true,
-    });
-
   // Shared CRM view opened via a `?crmView=` link — only honored on the
   // Customers view; its pieces win over persisted/preset values in init.
   const initialCrmView =
@@ -462,38 +417,6 @@ export const SoupView = (props: SoupViewProps) => {
     });
   });
 
-  // Preview-default views engage as soon as the layout can form a pair,
-  // without waiting for rows. useSoupPreviewAvailability owns disengagement: a
-  // settled result with no previewable rows only suspends the pair and
-  // re-engages once an entity arrives, so an initially empty view still lands
-  // in preview mode. Resolving here keeps a manual exit from being undone by
-  // later Soup updates.
-  //
-  // The preference alone decides engagement, independent of navigation cause:
-  // navigating the Controller away dissolves its Preview Pair, so an entry
-  // restored via history back/forward has no pair left to revive and must
-  // re-engage here like a fresh arrival. Manual toggles write the preference,
-  // which keeps an explicit exit from being resurrected by history navigation.
-  let initialPreviewResolved = false;
-  createEffect(() => {
-    if (initialPreviewResolved) return;
-    if (!DEFAULT_PREVIEW_VIEWS.has(contentId) || !previewOpenPreference()) {
-      initialPreviewResolved = true;
-      return;
-    }
-    if (panel.handle.isViewerSplit()) {
-      initialPreviewResolved = true;
-      return;
-    }
-
-    // Split redistribution may still be reconciling after a hotkey-driven
-    // replacement. Keep the effect live until engagement actually succeeds.
-    if (!panel.handle.canEngagePreview()) return;
-    soup.focus.clear();
-    panel.handle.engagePreview();
-    if (panel.handle.isControllerSplit()) initialPreviewResolved = true;
-  });
-
   onMount(() => {
     if (contentId !== 'documents') return;
 
@@ -584,12 +507,15 @@ export const SoupView = (props: SoupViewProps) => {
     },
   });
 
-  const content = (onOpenEntity?: (entity: EntityData) => boolean) => (
+  const content = (
+    onOpenEntity?: (entity: EntityData) => boolean,
+    mobileHeaderLeading?: JSX.Element
+  ) => (
     <div
       class="size-full flex flex-col @container"
       data-list-view={activeListView()}
     >
-      <Show when={!isComponentListView('companies')}>
+      <Show when={!isComponentListView('companies') || isTouchDevice()}>
         <div class="flex flex-col w-full">
           <SplitHeaderLeft>
             <div
@@ -606,7 +532,7 @@ export const SoupView = (props: SoupViewProps) => {
                 the view title (the bottom accessory region now belongs to the
                 global views row). */}
               <Show when={isTouchDevice()}>
-                <MobileSoupViewTabs />
+                <MobileSoupViewTabs leading={mobileHeaderLeading} />
               </Show>
               <Show when={!isTouchDevice() && !narrowSearchExpanded()}>
                 <div class="flex items-center gap-1">
@@ -614,6 +540,7 @@ export const SoupView = (props: SoupViewProps) => {
                   <Show when={docsUrl()}>
                     {(url) => (
                       <Button
+                        size="icon-md"
                         variant="ghost"
                         class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
                         label="View documentation"
@@ -714,8 +641,9 @@ export const SoupView = (props: SoupViewProps) => {
                             hotkey={TOKENS.soup.openSearch}
                           >
                             <Button
+                              size="icon-md"
                               variant="outline"
-                              class="p-1 size-7 rounded-lg ml-2 bg-surface"
+                              class="p-1 size-7 rounded-lg ml-2"
                               onClick={() => setNarrowSearchExpanded(true)}
                               depth={2}
                             >
@@ -740,15 +668,7 @@ export const SoupView = (props: SoupViewProps) => {
             </SplitHeaderRight>
           </Show>
         </div>
-        <SoupFiltersBar
-          variant={props.filterBarVariant}
-          hasPreviewItems={hasPreviewItems()}
-          onPreviewEngage={openFocusedEntityInPreview}
-          onPreviewOpenChange={(open) => {
-            if (DEFAULT_PREVIEW_VIEWS.has(contentId))
-              setPreviewOpenPreference(open);
-          }}
-        />
+        <SoupFiltersBar variant={props.filterBarVariant} />
       </Show>
       <Show when={soupView.source.cachedMail?.()}>
         <p role="status" class="px-4 py-1 text-xs text-ink-muted">
@@ -770,14 +690,13 @@ export const SoupView = (props: SoupViewProps) => {
         </Suspense>
       </div>
       <Suspense>
-        {/* The board and Preview Controller hide the AI bar: it floats over
+        {/* The board hides the AI bar: it floats over
             content that is already constrained in both layouts. */}
         <Show
           when={
             !isTouchDevice() &&
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isInboxView() &&
-            !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&
             !isComponentListView('search')
           }
@@ -797,7 +716,11 @@ export const SoupView = (props: SoupViewProps) => {
         <CrmDefaultViewLoader />
       </Show>
       <Show when={isComponentListView('companies')} fallback={content()}>
-        <CrmWorkspace>{(onOpenEntity) => content(onOpenEntity)}</CrmWorkspace>
+        <CrmWorkspace>
+          {(options) =>
+            content(options.onOpenEntity, options.mobileHeaderLeading)
+          }
+        </CrmWorkspace>
       </Show>
     </>
   );
@@ -913,8 +836,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       if (!focusEffectsEnabled() || !moveInitialFocus()) return;
       if (!initialLoad || source.isLoading()) return;
 
-      if (panel.handle.isControllerSplit()) return;
-
       focusFirstEntity();
       initialLoad = false;
     })
@@ -926,8 +847,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       () => [soup.predicates.activeIds(), searchText(), featuredIds()] as const,
       () => {
         if (!focusEffectsEnabled()) return;
-
-        if (panel.handle.isControllerSplit()) return;
 
         focusFirstEntity();
       },
@@ -999,11 +918,18 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   const { applyTabPreset } = useApplyPreset();
 
-  // The row component and its geometry family both come from one per-view
-  // lookup, so the list container can't disagree with the rows it renders.
+  // Resolve imported components at mount, not during module evaluation: the
+  // legacy block registry can import Soup while the entity barrel is loading.
+  // Keeping component and geometry together prevents mismatched row layouts.
+  const rowsByView: Partial<Record<ListView, SoupRowEntry>> = {
+    inbox: { component: InboxListEntity, family: 'card' },
+    tasks: { component: TaskListEntity, family: 'row' },
+    companies: { component: CompanyListEntity, family: 'row' },
+  };
+  const defaultRow: SoupRowEntry = { component: ListEntity, family: 'row' };
   const rowEntry = (): SoupRowEntry => {
     const view = currentView();
-    return (view && SOUP_ROW_BY_VIEW[view]) ?? DEFAULT_SOUP_ROW;
+    return (view && rowsByView[view]) ?? defaultRow;
   };
 
   const groupHeaderComponent = () => {
@@ -1089,40 +1015,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     }
 
     if (type === 'entity' && props.onOpenEntity?.(entity, event)) {
-      return;
-    }
-
-    // Plain click while engaged as a Controller previews into the Viewer;
-    // opt+click opens in place of the whole Preview Pair (the Viewer closes and
-    // the content replaces this list); shift+click falls through to open a
-    // fresh split instead. Non-member channels flow through to
-    // openEntityInSplitFromUnifiedList, which shows the Viewer's Join prompt
-    // when previewing and otherwise no-ops.
-    if (
-      panel.handle.isControllerSplit() &&
-      type === 'entity' &&
-      !event.shiftKey
-    ) {
-      if (
-        !event.altKey &&
-        preventDuplicatePreviewEntityOpen(entity, panel.handle)
-      ) {
-        return;
-      }
-
-      // Single click: focus the row AND open it in the Preview Pair's Viewer.
-      // The openWithSplit redirect keeps the Viewer unfocused so keyboard
-      // navigation stays in this list.
-      if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
-      else soup.focus.set(entity.id);
-
-      await openEntityInSplitFromUnifiedList(entity, {
-        location,
-        splitHandle: panel.handle,
-        replacePreview: event.altKey,
-        referredFrom: currentView(),
-        notificationSource,
-      });
       return;
     }
 
@@ -1329,8 +1221,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
     const cached = readListEntryState();
     if (cached) {
-      if (panel.handle.isControllerSplit()) soup.focus.clear();
-      else soup.focus.set(cached.focus);
+      soup.focus.set(cached.focus);
       const handle = virtualizerHandle();
       if (!handle) return;
 
@@ -1343,8 +1234,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     if (force) return;
 
     restored = true;
-    // Preview Controllers start without a focused row or Viewer content.
-    registerFocusEffects(!panel.handle.isControllerSplit());
+    registerFocusEffects(true);
   };
 
   createEffect(
@@ -1647,8 +1537,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                       highlighted={row.isFocused()}
                                       onMouseMove={() => {
                                         if (isKeypressActive()) return;
-                                        if (panel.handle.isControllerSplit())
-                                          return;
                                         soup.focus.setIndex(row.index);
                                       }}
                                       showUnrollNotifications={

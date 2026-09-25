@@ -1,8 +1,9 @@
+use std::collections::BTreeMap;
 use std::fs;
 
 use super::*;
 use crate::config::{HarnessCredentials, HarnessScope};
-use crate::tui::agent_catalog::{CommandLookup, discover};
+use crate::tui::agent_catalog::{CommandLookup, discover, name_for};
 use harness_id::HarnessId;
 
 struct HermesOnly;
@@ -10,6 +11,26 @@ struct HermesOnly;
 impl CommandLookup for HermesOnly {
     fn resolve(&self, command: &str) -> Option<&Path> {
         (command == "hermes").then_some(Path::new("/bin/hermes"))
+    }
+
+    fn adapter_root(&self) -> Option<&Path> {
+        None
+    }
+}
+
+struct CodexOnly;
+
+impl CommandLookup for CodexOnly {
+    fn resolve(&self, command: &str) -> Option<&Path> {
+        match command {
+            "codex" => Some(Path::new("/nix/store/x/bin/codex")),
+            "npm" => Some(Path::new("/bin/npm")),
+            _ => None,
+        }
+    }
+
+    fn adapter_root(&self) -> Option<&Path> {
+        Some(Path::new("/home/test/.macrod/adapters"))
     }
 }
 
@@ -159,6 +180,41 @@ fn quickstart_edits_preserve_existing_deployment_and_comments() {
 }
 
 #[test]
+fn agent_environment_round_trips_and_is_replaced_with_the_agent() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("macrod.toml");
+    let hermes = discover(&HermesOnly).remove(0);
+    ConfigForm::create_for_deployment(&path, &hermes, directory.path(), Deployment::Production)
+        .expect("create config");
+    let codex = discover(&CodexOnly).remove(0);
+
+    let mut form = ConfigForm::load(&path).expect("load form");
+    form.apply_agent(&codex);
+    form.save().expect("save codex");
+
+    let config = Config::load(&path).expect("load codex config");
+    assert_eq!(config.harness.command, codex.launch.command);
+    assert!(config.harness.args.is_empty());
+    assert_eq!(
+        config.harness.env,
+        BTreeMap::from([("CODEX_PATH".to_owned(), "/nix/store/x/bin/codex".to_owned())])
+    );
+    assert_eq!(name_for(&config.harness), Some("Codex CLI"));
+
+    form.apply_agent(&hermes);
+    form.save().expect("save hermes");
+
+    let config = Config::load(&path).expect("load hermes config");
+    assert_eq!(config.harness.command, "hermes");
+    assert!(config.harness.env.is_empty());
+    assert!(
+        !fs::read_to_string(&path)
+            .expect("read config")
+            .contains("env")
+    );
+}
+
+#[test]
 fn rejects_a_missing_workspace_edit() {
     let directory = tempfile::tempdir().expect("temp dir");
     let path = directory.path().join("macrod.toml");
@@ -200,3 +256,37 @@ fn assert_private_mode(path: &Path) {
 
 #[cfg(not(unix))]
 fn assert_private_mode(_path: &Path) {}
+
+#[test]
+fn permission_bypass_edits_preserve_credentials_and_comments() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("macrod.toml");
+    let agent = discover(&HermesOnly).remove(0);
+    ConfigForm::create_for_deployment(&path, &agent, directory.path(), Deployment::Production)
+        .unwrap();
+    let credentials = HarnessCredentials {
+        harness_id: HarnessId::TEST_A,
+        token: "mhns_secret".to_owned(),
+        scope: HarnessScope::User,
+    };
+    let mut form = ConfigForm::load(&path).unwrap();
+    form.persist_credentials(&credentials).unwrap();
+    assert!(
+        !Config::load(&path)
+            .unwrap()
+            .identity
+            .allow_permission_bypass
+    );
+    for allowed in [true, false] {
+        form.set_permission_bypass(allowed);
+        form.save().unwrap();
+        let config = Config::load(&path).unwrap();
+        assert_eq!(config.identity.allow_permission_bypass, allowed);
+        assert_eq!(config.credentials.as_ref(), Some(&credentials));
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("# macrod configuration")
+        );
+    }
+}

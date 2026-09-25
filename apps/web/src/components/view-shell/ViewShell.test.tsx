@@ -146,6 +146,7 @@ describe('ViewShell aside resize preference', () => {
     expect(view.asideWidth()).toBeCloseTo(276);
 
     view.setWidth(600);
+    fireEvent.click(view.getByRole('button', { name: 'Show navigation' }));
     expect(view.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
     const overlay = view.container.querySelector<HTMLElement>(
       '[data-view-shell-aside]'
@@ -155,8 +156,7 @@ describe('ViewShell aside resize preference', () => {
       view.getByRole('button', { name: 'Close navigation backdrop' })
     );
     view.setWidth(1200);
-    expect(view.getByRole('button', { name: 'Show navigation' })).toBeTruthy();
-    fireEvent.click(view.getByRole('button', { name: 'Show navigation' }));
+    expect(view.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
     expect(view.asideWidth()).toBeCloseTo(276);
     view.setWidth(1100);
     expect(view.asideWidth()).toBeCloseTo(276);
@@ -298,3 +298,124 @@ it('reopens automatic narrow collapse as a dismissible overlay', () => {
     screen.queryByRole('button', { name: 'Close navigation backdrop' })
   ).toBeNull();
 });
+
+describe.each(['inbox', 'channels', 'tasks', 'email'])(
+  '%s responsive sidebar',
+  (app) => {
+    it('restores automatic collapse but preserves an explicit desktop collapse', () => {
+      const [width, setWidth] = createSignal(1000);
+      measurement.width = width;
+      render(() => <Workspace app={app} />);
+
+      setWidth(600);
+      expect(
+        screen.getByRole('button', { name: 'Show navigation' })
+      ).toBeTruthy();
+      setWidth(1000);
+      expect(
+        screen.getByRole('button', { name: 'Hide navigation' })
+      ).toBeTruthy();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+      setWidth(600);
+      setWidth(1000);
+      expect(
+        screen.getByRole('button', { name: 'Show navigation' })
+      ).toBeTruthy();
+    });
+
+    it.each(['open', 'escape', 'backdrop', 'toggle'] as const)(
+      'restores navigation after using a narrow overlay (%s)',
+      (dismissal) => {
+        const [width, setWidth] = createSignal(1000);
+        measurement.width = width;
+        const view = render(() => <Workspace app={app} />);
+
+        setWidth(600);
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Show navigation' })
+        );
+        if (dismissal === 'escape') {
+          fireEvent.keyDown(
+            screen.getByRole('button', { name: 'Hide navigation' }),
+            {
+              key: 'Escape',
+            }
+          );
+        } else if (dismissal !== 'open') {
+          fireEvent.click(
+            screen.getByRole('button', {
+              name:
+                dismissal === 'backdrop'
+                  ? 'Close navigation backdrop'
+                  : 'Hide navigation',
+            })
+          );
+        }
+        if (dismissal !== 'open') {
+          expect(
+            screen.getByRole('button', { name: 'Show navigation' })
+          ).toBeTruthy();
+        }
+
+        setWidth(1000);
+        expect(
+          screen.getByRole('button', { name: 'Hide navigation' })
+        ).toBeTruthy();
+        expect(
+          screen.queryByRole('button', { name: 'Close navigation backdrop' })
+        ).toBeNull();
+        setWidth(600);
+        expect(
+          screen.queryByRole('button', { name: 'Hide navigation' })
+        ).toBeNull();
+        setWidth(1000);
+        view.unmount();
+        render(() => <Workspace app={app} />);
+        expect(
+          screen.getByRole('button', { name: 'Hide navigation' })
+        ).toBeTruthy();
+      }
+    );
+
+    it.each([false, true])(
+      'preserves a hidden wide sidebar after using a narrow overlay (dismiss=%s)',
+      (dismiss) => {
+        const [width, setWidth] = createSignal(1000);
+        measurement.width = width;
+        const view = render(() => <Workspace app={app} />);
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Hide navigation' })
+        );
+        const savePreference = vi.spyOn(localStorage, 'setItem');
+
+        setWidth(600);
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Show navigation' })
+        );
+        expect(
+          screen.getByRole('button', { name: 'Hide navigation' })
+        ).toBeTruthy();
+        if (dismiss) {
+          fireEvent.click(
+            screen.getByRole('button', { name: 'Hide navigation' })
+          );
+        }
+        expect(savePreference).not.toHaveBeenCalled();
+
+        setWidth(1000);
+        expect(
+          screen.queryByRole('button', { name: 'Hide navigation' })
+        ).toBeNull();
+        expect(
+          screen.getByRole('button', { name: 'Show navigation' })
+        ).toBeTruthy();
+        view.unmount();
+        render(() => <Workspace app={app} />);
+        expect(
+          screen.getByRole('button', { name: 'Show navigation' })
+        ).toBeTruthy();
+      }
+    );
+  }
+);

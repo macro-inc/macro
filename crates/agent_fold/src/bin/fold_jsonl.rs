@@ -236,6 +236,18 @@ fn render_part(part: &MessagePart) -> String {
             MessagePart::Text { text } => {
                 let _ = writeln!(out, "{}", text.trim_end());
             }
+            MessagePart::Attachment {
+                uri,
+                name,
+                mime_type,
+                ..
+            } => {
+                let _ = writeln!(
+                    out,
+                    "[attachment] {name} ({}) {uri}",
+                    mime_type.as_deref().unwrap_or("unknown type")
+                );
+            }
             MessagePart::Thought { text } => {
                 let _ = writeln!(out, "[thought]\n{}", indent(text.trim_end()));
             }
@@ -249,6 +261,7 @@ fn render_part(part: &MessagePart) -> String {
                 tool_call,
                 options,
                 outcome,
+                ..
             } => out.push_str(&render_permission(tool_call, options, outcome)),
             MessagePart::Control { control, outcome } => {
                 let label = match control {
@@ -608,7 +621,7 @@ fn render_stop(stop: &StopReason) -> String {
         StopReason::Refusal => "refused".to_owned(),
         StopReason::Cancelled => "cancelled".to_owned(),
         StopReason::Other { reason } => format!("stopped: {reason}"),
-        StopReason::Failed { message } => format!("failed: {message}"),
+        StopReason::Failed { message, .. } => format!("failed: {message}"),
     }
 }
 

@@ -775,7 +775,7 @@ fn provider_error(error: GoogleProviderError) -> CalendarMutationError {
         GoogleProviderErrorKind::Transient | GoogleProviderErrorKind::SyncTokenExpired => {
             CalendarMutationError::Retryable(error.to_string())
         }
-        GoogleProviderErrorKind::Permanent => {
+        GoogleProviderErrorKind::Permanent | GoogleProviderErrorKind::PushUnsupported => {
             CalendarMutationError::ProviderRejected(error.to_string())
         }
     }

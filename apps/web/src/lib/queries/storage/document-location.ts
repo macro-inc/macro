@@ -2,6 +2,7 @@ import {
   catchToResult,
   type ResultError,
   type ResultType,
+  ThrownResultError,
   throwOnErr,
 } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
@@ -23,6 +24,7 @@ type DocumentLocation = ResultType<GetDocumentLocationResult>['data'];
 
 type WaitForDocumentLocationOptions = {
   target: string;
+  fallbackOnRequestError: boolean;
   timeoutMs?: number;
   initialDelayMs?: number;
   maxDelayMs?: number;
@@ -137,7 +139,7 @@ async function waitForDocumentLocation(
     if (error instanceof DocumentLocationNotReadyError) {
       return error.location;
     }
-    if (lastLocation) return lastLocation;
+    if (options.fallbackOnRequestError && lastLocation) return lastLocation;
     throw error;
   }
 }
@@ -152,6 +154,7 @@ export function waitForDocumentContentReady(
   const { timeoutMs, initialDelayMs, maxDelayMs, ...locationArgs } = args;
   return waitForDocumentLocation(locationArgs, {
     target: 'content-ready',
+    fallbackOnRequestError: true,
     timeoutMs,
     initialDelayMs,
     maxDelayMs,
@@ -160,7 +163,7 @@ export function waitForDocumentContentReady(
   });
 }
 
-export function waitForDocumentSyncServiceReady(
+export async function waitForDocumentSyncServiceReady(
   args: DocumentLocationArgs & {
     timeoutMs?: number;
     initialDelayMs?: number;
@@ -168,8 +171,11 @@ export function waitForDocumentSyncServiceReady(
   }
 ): Promise<DocumentLocation> {
   const { timeoutMs, initialDelayMs, maxDelayMs, ...locationArgs } = args;
-  return waitForDocumentLocation(locationArgs, {
+  const location = await waitForDocumentLocation(locationArgs, {
     target: 'sync-service-ready',
+    // This result gates authorization. Do not hide a denial or network
+    // failure behind an earlier pending location.
+    fallbackOnRequestError: false,
     timeoutMs,
     initialDelayMs,
     maxDelayMs,
@@ -177,6 +183,15 @@ export function waitForDocumentSyncServiceReady(
       location.content.state === DocumentContentState.ready &&
       location.type === 'syncServiceContent',
   });
+  if (location.content.state !== DocumentContentState.ready) {
+    throw new ThrownResultError([
+      {
+        code: 'TIMEOUT',
+        message: 'Timed out waiting for sync-service document content',
+      },
+    ]);
+  }
+  return location;
 }
 
 export function waitForDocumentPresignedUrlReady(
@@ -189,6 +204,7 @@ export function waitForDocumentPresignedUrlReady(
   const { timeoutMs, initialDelayMs, maxDelayMs, ...locationArgs } = args;
   return waitForDocumentLocation(locationArgs, {
     target: 'presigned-url-ready',
+    fallbackOnRequestError: true,
     timeoutMs,
     initialDelayMs,
     maxDelayMs,

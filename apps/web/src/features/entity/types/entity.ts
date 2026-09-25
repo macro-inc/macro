@@ -93,6 +93,14 @@ export type ChannelEntityTarget = {
 };
 
 /**
+ * The comment a document row opens at when it is not derived from the row's
+ * notifications, e.g. a preview rebuilt from its route.
+ */
+export type DocumentCommentTarget = {
+  commentId: string;
+};
+
+/**
  * The resolved click intent for a channel-family row. Either a specific
  * message to jump to and highlight, or `latest` — open the channel at its
  * newest message with no highlight. A whole `channel` row with no unread
@@ -106,6 +114,13 @@ export type ChannelClickTarget =
 
 export type ChannelEntity = EntityBase & {
   type: 'channel';
+  /** Filtered, bounded edge for the unread dot. Undefined denotes a legacy/full
+   * row; an empty array denotes no unread messages. Never use for bulk reads. */
+  unreadNotifications?: {
+    id: string;
+    state: 'unseen' | 'seen' | 'done';
+    createdAt: DateValue;
+  }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   interactedAt?: DateValue | null;
   participantIds?: string[];
@@ -166,6 +181,15 @@ export type ChatEntity = EntityBase & {
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
   botId: string;
+  harness?: string;
+  repoUrl?: string | null;
+  /** Starting branch selected at creation, not the current working branch. */
+  repoBranch?: string | null;
+  pullRequestUrl?: string | null;
+  workingBranch?: string | null;
+  pullRequestState?: 'open' | 'draft' | 'closed' | 'merged' | null;
+  pullRequestId?: string | null;
+  turnState?: string | null;
   bot?: { id: string; name: string; avatarUrl?: string | null } | null;
   threadId?: string | null;
   status: string;
@@ -261,6 +285,8 @@ export type EmailEntity = EntityBase & {
   hasIcsAttachment?: boolean;
   attachments?: EmailAttachment[];
   properties?: SoupProperty[];
+  /** ISO 8601 time of the thread draft's confirmed scheduled send. */
+  scheduledSendTime?: string;
 };
 
 export type ProjectEntity = EntityBase & {

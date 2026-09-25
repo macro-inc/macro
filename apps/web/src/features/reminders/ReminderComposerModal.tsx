@@ -1,13 +1,13 @@
 import { toast } from '@core/component/Toast/Toast';
-import { type EntityData, InlineEntity } from '@entity';
-import BellIcon from '@phosphor/bell-simple.svg';
+import type { EntityData } from '@entity';
+import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import {
   reminderTarget,
   useCreateReminderMutation,
 } from '@queries/reminders/reminders';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
-import { Dialog, Panel } from '@ui';
+import { ActionDialogShell, Dialog } from '@ui';
 import { Show } from 'solid-js';
 import { ReminderForm } from './ReminderForm';
 import {
@@ -107,10 +107,11 @@ export function ReminderComposerModal() {
   }) => {
     const target = entity();
     if (target) {
-      submitCreate(values.schedule, target, values.description);
+      void submitCreate(values.schedule, target, values.description);
       return;
     }
-    if (standalone()) submitStandalone(values.schedule, values.description);
+    if (standalone())
+      void submitStandalone(values.schedule, values.description);
   };
 
   // Both targets are cleared on close, so this unmounts the form while the
@@ -124,49 +125,42 @@ export function ReminderComposerModal() {
       onOpenChange={(open) => {
         if (!open) closeReminderComposer();
       }}
-      // The form autofocuses its title; keep Kobalte from stealing focus onto
-      // the referenced-entity chip, which is the first tabbable otherwise.
-      onOpenAutoFocus={(event) => event.preventDefault()}
       position="center"
-      class="w-[28rem]"
+      class="w-110"
     >
-      <Panel depth={2} class="rounded-xl">
-        <Panel.Header class="px-4">
-          <Dialog.Title class="flex items-center gap-2 text-sm font-semibold text-ink">
-            <BellIcon class="size-3.5 text-ink-muted" />
-            New reminder
-          </Dialog.Title>
-        </Panel.Header>
+      <ActionDialogShell>
         <Show when={hasTarget()}>
-          <Panel.Body class="p-4 font-sans">
-            <ReminderForm
-              autofocus
-              placeholder={
-                // Not optional for a standalone reminder: there is no entity to
-                // name it after, so this is all it will ever say.
-                standalone()
-                  ? "What's the reminder?"
-                  : "What's the reminder? (optional)"
-              }
-              descriptionRequired={standalone()}
-              submitLabel="Set reminder"
-              reference={
-                <Show when={entity()}>
-                  {(target) => (
-                    <div class="flex">
-                      <div class="max-w-full truncate rounded border border-edge-muted bg-active px-2 py-1 text-xs">
-                        <InlineEntity entity={target()} />
-                      </div>
-                    </div>
-                  )}
-                </Show>
-              }
-              onCancel={closeReminderComposer}
-              onSubmit={handleSubmit}
-            />
-          </Panel.Body>
+          <ReminderForm
+            layout="dialog"
+            header={
+              <ActionDialogShell.Header>
+                <ActionDialogShell.Title>New reminder</ActionDialogShell.Title>
+                <ActionDialogShell.Description>
+                  Choose when you’d like to be reminded.
+                </ActionDialogShell.Description>
+              </ActionDialogShell.Header>
+            }
+            placeholder={
+              standalone()
+                ? "What's the reminder?"
+                : "What's the reminder? (optional)"
+            }
+            descriptionRequired={standalone()}
+            submitLabel="Set reminder"
+            reference={
+              <Show when={entity()}>
+                {(target) => (
+                  <div class="flex min-w-0">
+                    <EntitySelectionBadge entity={target()} />
+                  </div>
+                )}
+              </Show>
+            }
+            onCancel={closeReminderComposer}
+            onSubmit={(values) => void handleSubmit(values)}
+          />
         </Show>
-      </Panel>
+      </ActionDialogShell>
     </Dialog>
   );
 }

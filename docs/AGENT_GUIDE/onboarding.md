@@ -90,7 +90,7 @@ subtext between split horizontal rules, above its messages and graphic. The sect
 are Email and chat, Documents and tasks, Agents and pull requests, Sheets and databases,
 and Sales and marketing. There is no standalone Agents as teammates section. The coding-agent section
 puts the existing PR link in Teo’s source message. Cursor acknowledges the work,
-then an indented reply uses the app’s `MagicChipView`, with the same dark surface
+then an indented reply uses the app’s compact `MagicChipView` status and output rows, with the same dark surface
 and glass rim as the speech bubbles. The chip opens a sample session dialog using
 the production agent message renderer: thoughts, tool calls, terminal output,
 and code diffs expand locally. Its PR link opens a second tab using `PrDocument`.
@@ -272,7 +272,7 @@ or Continue on my own button. Create team works with no recipients. Suggested
 same-domain contacts are prefilled once; removed recipients stay removed on reload.
 Older drafts with invitations disabled keep their recipients excluded. Partial invitation
 failures retain the existing recovery path. Do not send real invitations for QA.
-Plan retains paid checkout, invite offers, and the original deep link across
+Plan retains Premium and Max checkout, invite offers, and the original deep link across
 redirects. Free, Decide later, and confirmed payment all continue to Team; choosing
 a plan does not complete setup. The decision survives a reload of Team. Creating,
 joining, or confirming an existing team completes setup and

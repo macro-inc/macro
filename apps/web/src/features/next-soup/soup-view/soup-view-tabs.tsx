@@ -31,11 +31,18 @@ import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { enableReminders } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import { batch, createMemo, For, Match, Show, Switch } from 'solid-js';
+import {
+  batch,
+  createMemo,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 
 const useCurrentListView = () => {
   const panel = useSplitPanelOrThrow();
-
   return createMemo<ListView | undefined>(() => {
     const content = panel.handle.content();
 
@@ -67,7 +74,6 @@ export const shouldPreserveFiltersOnTabChange = (view: ListView) =>
 
 export const useApplyPreset = () => {
   const soup = useSoup();
-  const panel = useSplitPanelOrThrow();
   const {
     queryFilters,
     restorePersistedQueryFilters,
@@ -188,16 +194,12 @@ export const useApplyPreset = () => {
     });
 
     // The new tab replaces the dataset wholesale, and row focus only follows
-    // a row that survives into it (see soup.setRows). When it doesn't,
-    // nothing is selected anymore, so the Preview Pair's Viewer returns to
-    // its placeholder instead of lingering on the previous tab's entity.
     const focusedRow = soup.focus.row();
     if (
       !focusedRow ||
       focusedRow.getIsGrouped() ||
       focusedRow.getIsLoadMore()
     ) {
-      panel.handle.resetPreview();
     }
     return true;
   };
@@ -314,7 +316,7 @@ export const CollapsedSoupViewTabs = () => {
  * the scroll content. The drawer button leads the strip and scrolls along
  * with the pills.
  */
-export const MobileSoupViewTabs = () => {
+export const MobileSoupViewTabs = (props: { leading?: JSX.Element } = {}) => {
   const listView = useCurrentListView();
 
   return (
@@ -326,7 +328,7 @@ export const MobileSoupViewTabs = () => {
         <MobileSearchFilterDrawer />
       </Match>
       <Match when={listView() === 'companies'}>
-        <MobileCompanyModeTabs />
+        <MobileCompanyModeTabs leading={props.leading} />
       </Match>
       <For
         each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
@@ -352,7 +354,7 @@ const MOBILE_TAB_STRIP_CLASS =
   '-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none';
 const MOBILE_TAB_CONTENT_CLASS = 'px-(--mobile-chrome-gutter)';
 
-const MobileCompanyModeTabs = () => {
+const MobileCompanyModeTabs = (props: { leading?: JSX.Element }) => {
   const { viewMode, setViewMode } = useSoupView();
 
   return (
@@ -360,7 +362,12 @@ const MobileCompanyModeTabs = () => {
       scrollable
       class={MOBILE_TAB_STRIP_CLASS}
       contentClass={MOBILE_TAB_CONTENT_CLASS}
-      leading={<MobileFilterDrawer />}
+      leading={
+        <>
+          {props.leading}
+          <MobileFilterDrawer />
+        </>
+      }
       items={COMPANY_MODE_TABS}
       value={viewMode()}
       onChange={(value) => setViewMode(value as SoupViewMode)}

@@ -12,8 +12,25 @@ use ::activity::{
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use super::events::DocumentTopicEvent;
+use super::events::{DocumentSyncEditor, DocumentTopicEvent};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
+
+// Display attribution only: teams cannot act. Prefer the initiating user when
+// known, otherwise represent an unattributed team creation as system activity.
+fn actor_from_owner(
+    owner: &Owner,
+    on_behalf_of: Option<&MacroUserIdStr<'static>>,
+) -> Actor<'static> {
+    match owner {
+        Owner::User(user) => Actor::new_from_user(user.clone()),
+        Owner::Bot(bot_id) => Actor::new_from_bot(*bot_id),
+        Owner::Team(_) => on_behalf_of
+            .cloned()
+            .map(Actor::new_from_user)
+            .unwrap_or_else(|| Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
+    }
+}
 
 /// Attribution for `updated` / `deleted` events. Bot receipts publish `actor`;
 /// user receipts (and events from before attribution) only `actor_user_id`.
@@ -52,10 +69,9 @@ impl ActivitySource for DocumentTopicEvent {
 
         match self {
             DocumentTopicEvent::Created(metadata) => {
-                let actor = metadata
-                    .actor
-                    .clone()
-                    .unwrap_or_else(|| Actor::new_from_user(metadata.owner.clone()));
+                let actor = metadata.actor.clone().unwrap_or_else(|| {
+                    actor_from_owner(&metadata.owner, metadata.on_behalf_of.as_ref())
+                });
                 single(
                     Attribution::new(actor, metadata.on_behalf_of.clone()),
                     CommonAction::Created,
@@ -95,7 +111,7 @@ impl ActivitySource for DocumentTopicEvent {
             }
             // The copy is a new document; its creation is the activity.
             DocumentTopicEvent::Copied(metadata) => single(
-                Attribution::direct(Actor::new_from_user(metadata.owner.clone())),
+                Attribution::direct(actor_from_owner(&metadata.owner, None)),
                 CommonAction::Created,
                 &metadata.document_id,
                 event_time(event_id),
@@ -105,19 +121,84 @@ impl ActivitySource for DocumentTopicEvent {
             }
             // Extraction-pipeline noise, not user activity.
             DocumentTopicEvent::ContentUploaded(_) => Ingest::Ignore,
-            // Only AI-attributed sessions carry an actor; human-only collab
-            // sessions stay unattributed.
-            DocumentTopicEvent::SyncContentUpdated(metadata) => match metadata.actor.clone() {
-                Some(actor) => single(
-                    Attribution::new(actor, metadata.on_behalf_of.clone()),
-                    CommonAction::Edited,
-                    &metadata.document_id,
-                    event_time(event_id),
-                ),
-                None => Ingest::Ignore,
-            },
+            DocumentTopicEvent::SyncContentUpdated(metadata) => {
+                let legacy = metadata.actor.clone().map(|actor| DocumentSyncEditor {
+                    actor,
+                    on_behalf_of: metadata.on_behalf_of.clone(),
+                });
+                let mut editors: Vec<_> = metadata.editors.iter().cloned().chain(legacy).collect();
+                // A stable order keeps ordinals, and so activity ids, identical on replay.
+                editors.sort_by(|a, b| editor_key(a).cmp(&editor_key(b)));
+                editors.dedup();
+                let activities: Vec<_> = editors
+                    .into_iter()
+                    .enumerate()
+                    .map(|(ordinal, editor)| {
+                        Activity::attributed(
+                            event_id,
+                            ordinal as u32,
+                            Attribution::new(editor.actor, editor.on_behalf_of),
+                            EntityType::Document,
+                            &metadata.document_id,
+                            CommonAction::Edited,
+                            event_time(event_id),
+                        )
+                    })
+                    .collect();
+                if activities.is_empty() {
+                    Ingest::Ignore
+                } else {
+                    Ingest::Insert(activities)
+                }
+            }
             // Session lifecycle (first join / last leave), no actor.
             DocumentTopicEvent::Interaction(_) => Ingest::Ignore,
         }
+    }
+}
+
+fn editor_key(editor: &DocumentSyncEditor) -> (&str, Option<&str>) {
+    (
+        editor.actor.as_ref(),
+        editor.on_behalf_of.as_ref().map(|user| user.as_ref()),
+    )
+}
+
+/// Classify document activity and debounce Sync edits in the Activity consumer.
+/// Search consumes the same source event independently and never waits on this work.
+#[cfg(feature = "ports")]
+pub async fn ingest_with_editing_sessions(
+    event: &DocumentTopicEvent,
+    event_id: Uuid,
+    store: &impl super::ports::EditingActivityStore,
+) -> Ingest {
+    const EDITING_IDLE: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+    const STORE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(100);
+
+    let rows = match (event, event.ingest(event_id)) {
+        (DocumentTopicEvent::SyncContentUpdated(_), Ingest::Insert(rows)) => rows,
+        (_, ingest) => return ingest,
+    };
+    // Redis may apply a refresh before its response times out. Losing that
+    // session's Activity is acceptable here: delivery is best effort, and
+    // emitting on uncertainty would turn cache failures into noisy edit feeds.
+    let refresh = store.refresh_editing_sessions(&rows, event_id, EDITING_IDLE);
+    let admitted = match tokio::time::timeout(STORE_TIMEOUT, refresh).await {
+        Ok(Ok(admitted)) => admitted,
+        result => {
+            tracing::warn!(?result, "skipping best-effort editing activity");
+            return Ingest::Ignore;
+        }
+    };
+    // Assign ordinals before filtering so retries keep the same activity ids.
+    let rows: Vec<_> = rows
+        .into_iter()
+        .zip(admitted)
+        .filter_map(|(row, admitted)| admitted.then_some(row))
+        .collect();
+    if rows.is_empty() {
+        Ingest::Ignore
+    } else {
+        Ingest::Insert(rows)
     }
 }

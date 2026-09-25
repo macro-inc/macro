@@ -4,13 +4,14 @@
  * same part components), and what it reported back.
  */
 
+import { modelLabel } from '@core/component/AI/constant/model-label';
+import AgentIcon from '@phosphor/sparkle.svg';
 import type {
   MessagePart,
   SubagentResult,
   ToolDetail,
 } from '@service-agent-fold/generated/types';
-import { For, type JSX, Show } from 'solid-js';
-import { match } from 'ts-pattern';
+import { Index, type JSX, Match, Show, Switch } from 'solid-js';
 import { thoughtIsStreaming } from '../../state/thought-streaming';
 import { FoldedOutput, Thought, ToolCard } from '../../ui';
 import type { ToolCallCommon, ToolCallContext } from './shared';
@@ -19,7 +20,7 @@ import { ToolCallPart } from './ToolCallPart';
 
 type SubagentDetail = Extract<ToolDetail, { kind: 'subagent' }>;
 
-/** `1 tool · 3.5s · 26k tokens`, from whatever the harness reported. */
+/** `1 tool · 3.5s`, from whatever the harness reported. */
 function resultSummary(result: SubagentResult): string | undefined {
   const facts: string[] = [];
   if (result.toolUses != null) {
@@ -30,13 +31,6 @@ function resultSummary(result: SubagentResult): string | undefined {
       result.durationMs >= 1000
         ? `${(result.durationMs / 1000).toFixed(1)}s`
         : `${result.durationMs}ms`
-    );
-  }
-  if (result.tokens != null) {
-    facts.push(
-      result.tokens >= 1000
-        ? `${Math.round(result.tokens / 1000)}k tokens`
-        : `${result.tokens} tokens`
     );
   }
   return facts.length > 0 ? facts.join(' · ') : undefined;
@@ -51,29 +45,37 @@ function ChildPart(props: {
 }) {
   const inFlight = () => props.context?.inFlight ?? false;
   return (
-    match(props.part)
-      .with({ kind: 'text' }, (part) => <TextPart text={part.text} />)
-      .with({ kind: 'thought' }, (part) => (
-        <Thought
-          text={part.text}
-          active={thoughtIsStreaming(inFlight(), props.index, props.childCount)}
-        />
-      ))
-      .with({ kind: 'tool_use' }, (part) => (
-        <ToolCallPart
-          part={part}
-          context={
-            props.context && {
-              ...props.context,
-              // A child's slot is its own; the parent's index is not it.
-              partIndex: props.index,
+    <Switch>
+      <Match when={props.part.kind === 'text' && props.part}>
+        {(part) => <TextPart text={part().text} />}
+      </Match>
+      <Match when={props.part.kind === 'thought' && props.part}>
+        {(part) => (
+          <Thought
+            text={part().text}
+            active={thoughtIsStreaming(
+              inFlight(),
+              props.index,
+              props.childCount
+            )}
+          />
+        )}
+      </Match>
+      <Match when={props.part.kind === 'tool_use' && props.part}>
+        {(part) => (
+          <ToolCallPart
+            part={part()}
+            context={
+              props.context && {
+                ...props.context,
+                // A child's slot is its own; the parent's index is not it.
+                partIndex: props.index,
+              }
             }
-          }
-        />
-      ))
-      // A subagent's permission, plan, or control has nowhere to nest today;
-      // the harnesses that attribute children only attribute tool calls.
-      .otherwise(() => null)
+          />
+        )}
+      </Match>
+    </Switch>
   );
 }
 
@@ -91,7 +93,10 @@ export function SubagentToolCall(props: {
       inFlight: working() && props.context.inFlight,
     };
   const subtitle = () =>
-    [props.detail.agentType, props.detail.background ? 'background' : undefined]
+    [
+      props.detail.agentType ?? 'subagent',
+      props.detail.background ? 'background' : undefined,
+    ]
       .filter(Boolean)
       .join(' · ') || undefined;
   const trailing = () =>
@@ -99,9 +104,7 @@ export function SubagentToolCall(props: {
     (props.detail.result?.error != null ? (
       <span class="text-ink">Failed</span>
     ) : props.detail.result ? (
-      <Show when={resultSummary(props.detail.result)}>
-        {(summary) => <span>{summary()}</span>}
-      </Show>
+      resultSummary(props.detail.result)
     ) : undefined);
   const hasBody = () =>
     props.detail.prompt != null ||
@@ -110,12 +113,12 @@ export function SubagentToolCall(props: {
 
   return (
     <ToolCard
+      icon={<AgentIcon class="size-4" />}
       title={props.detail.title}
       subtitle={subtitle()}
       status={props.common.status}
       muted={props.common.muted || props.detail.result?.error != null}
       trailing={trailing()}
-      defaultOpen={props.detail.children.length > 0}
       hasContent={hasBody()}
     >
       <Show when={hasBody()}>
@@ -129,16 +132,16 @@ export function SubagentToolCall(props: {
           </Show>
           <Show when={props.detail.children.length > 0}>
             <div class="flex flex-col gap-1 border-l-2 border-edge-muted pl-2">
-              <For each={props.detail.children}>
+              <Index each={props.detail.children}>
                 {(child, index) => (
                   <ChildPart
-                    part={child}
-                    index={index()}
+                    part={child()}
+                    index={index}
                     childCount={props.detail.children.length}
                     context={childContext()}
                   />
                 )}
-              </For>
+              </Index>
             </div>
           </Show>
           <Show when={props.detail.result}>
@@ -152,8 +155,15 @@ export function SubagentToolCall(props: {
                 </Show>
                 <Show when={result().model}>
                   {(model) => (
-                    <span class="text-xs text-ink-extra-muted">{model()}</span>
+                    <span class="text-xs text-ink-extra-muted">
+                      {modelLabel(model())}
+                    </span>
                   )}
+                </Show>
+                <Show when={result().tokens != null}>
+                  <span class="text-xs text-ink-extra-muted">
+                    {result().tokens?.toLocaleString()} tokens
+                  </span>
                 </Show>
               </div>
             )}

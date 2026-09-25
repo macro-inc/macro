@@ -10,7 +10,6 @@ import {
   ResponsivePermissionsBadge,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
-import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import {
   BlockSplitFileMenu,
   type FileOperation,
@@ -38,7 +37,7 @@ import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import IconShared from '@phosphor/share.svg';
+import IconShared from '@icon/share.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
 
@@ -149,7 +148,6 @@ export function TopBar() {
               </Show>
             )}
           </For>
-          <PreviewButton />
         </SplitToolbarRight>
       </Show>
       <CreateDialog />

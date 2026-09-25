@@ -11,6 +11,13 @@ use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
+/// Facts captured before a label write, used only if provider enqueue fails.
+struct ThreadLabelRollback<'a> {
+    all_ids: &'a [Uuid],
+    changed_ids: &'a [Uuid],
+    inbox_visible: Option<bool>,
+}
+
 impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B>
 where
     T: EmailRepo,
@@ -104,6 +111,42 @@ where
         Ok(())
     }
 
+    /// Resolve the owning inbox server-side, including delegated inboxes.
+    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, archived))]
+    pub(crate) async fn set_thread_archived_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        archived: bool,
+    ) -> Result<(), EmailErr> {
+        let link = self
+            .email_repo
+            .owned_link_for_thread(thread_id, macro_id.clone())
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .ok_or(EmailErr::ThreadNotFound)?;
+        let thread = self
+            .email_repo
+            .thread_by_id(thread_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .ok_or(EmailErr::ThreadNotFound)?;
+        if !archived && thread.latest_inbound_message_ts.is_none() {
+            return Err(EmailErr::ThreadHasNoInboundMessages);
+        }
+        let label = self
+            .email_repo
+            .list_labels_by_link_id(link.id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .into_iter()
+            .find(|label| label.provider_label_id == system_labels::INBOX)
+            .ok_or(EmailErr::LabelNotFound)?;
+        self.update_thread_labels_with_actor(&link, thread_id, label.id, !archived, Some(macro_id))
+            .await?;
+        Ok(())
+    }
+
     #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, %label_id, add))]
     pub(crate) async fn update_thread_labels_for_user_impl(
         &self,
@@ -130,6 +173,19 @@ where
         thread_id: Uuid,
         label_id: Uuid,
         add: bool,
+    ) -> Result<UpdateThreadLabelsResult, EmailErr> {
+        self.update_thread_labels_with_actor(link, thread_id, label_id, add, None)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, link))]
+    async fn update_thread_labels_with_actor(
+        &self,
+        link: &Link,
+        thread_id: Uuid,
+        label_id: Uuid,
+        add: bool,
+        actor: Option<macro_user_id::user_id::MacroUserIdStr<'static>>,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
         let label = self
             .email_repo
@@ -176,9 +232,25 @@ where
                 .collect(),
             Err(e) => {
                 let err = anyhow::Error::from(e);
+                if provider_label_id == system_labels::INBOX {
+                    return Err(EmailErr::RepoErr(err));
+                }
                 tracing::warn!(error=?err, "failed to snapshot message labels; revert would cover all messages");
                 all_ids.clone()
             }
+        };
+
+        let previous_inbox_visible = if provider_label_id == system_labels::INBOX {
+            Some(
+                self.email_repo
+                    .thread_by_id(thread_id)
+                    .await
+                    .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+                    .ok_or(EmailErr::ThreadNotFound)?
+                    .inbox_visible,
+            )
+        } else {
+            None
         };
 
         // Optimistic DB update: update all messages first
@@ -222,8 +294,11 @@ where
                 self.revert_label_db_changes(
                     link,
                     thread_id,
-                    &all_ids,
-                    &changed_ids,
+                    ThreadLabelRollback {
+                        all_ids: &all_ids,
+                        changed_ids: &changed_ids,
+                        inbox_visible: previous_inbox_visible,
+                    },
                     &provider_label_id,
                     add,
                 )
@@ -263,7 +338,7 @@ where
         // writes are committed and the provider sync is queued. The provider
         // echo of this change finds no label diff during inbox sync, so each
         // change publishes only once.
-        self.publish_thread_label_events(link, thread_id, &label, add, &cancelled_send_ids);
+        self.publish_thread_label_events(link, thread_id, &label, add, &cancelled_send_ids, actor);
 
         Ok(UpdateThreadLabelsResult {
             successful_ids: all_ids,
@@ -281,11 +356,26 @@ where
         &self,
         link: &Link,
         thread_id: Uuid,
-        all_ids: &[Uuid],
-        changed_ids: &[Uuid],
+        snapshot: ThreadLabelRollback<'_>,
         provider_label_id: &str,
         add: bool,
     ) {
+        let ThreadLabelRollback {
+            all_ids,
+            changed_ids,
+            inbox_visible,
+        } = snapshot;
+        if let Some(inbox_visible) = inbox_visible {
+            if let Err(e) = self
+                .email_repo
+                .set_thread_inbox_state(thread_id, link.id, changed_ids, !add, inbox_visible)
+                .await
+            {
+                let err = anyhow::Error::from(e);
+                tracing::error!(error=?err, "failed to revert thread inbox state after enqueue failure");
+            }
+            return;
+        }
         if !changed_ids.is_empty() {
             let db_result = if add {
                 self.email_repo
@@ -342,9 +432,9 @@ where
         }
     }
 
-    /// Apply a thread label change to the DB. UNREAD assignments and read
-    /// flags commit atomically; a failure propagates before provider sync or
-    /// events. Other labels retain their best-effort starred side effect.
+    /// Apply a thread label change to the DB. UNREAD/read flags and INBOX/
+    /// visibility commit atomically; a failure propagates before provider sync
+    /// or events. Other labels retain their best-effort starred side effect.
     async fn apply_label_db_changes(
         &self,
         link: &Link,
@@ -353,6 +443,13 @@ where
         provider_label_id: &str,
         add: bool,
     ) -> Result<(), EmailErr> {
+        if provider_label_id == system_labels::INBOX {
+            return self
+                .email_repo
+                .set_thread_inbox_state(thread_id, link.id, message_ids, add, add)
+                .await
+                .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)));
+        }
         if provider_label_id == system_labels::UNREAD {
             return self
                 .email_repo
@@ -402,11 +499,12 @@ where
         label: &LinkLabel,
         add: bool,
         cancelled_send_ids: &[Uuid],
+        actor: Option<macro_user_id::user_id::MacroUserIdStr<'static>>,
     ) {
         let event = EmailMacroEvent::thread_label_change(
             link.id,
             link.macro_id.clone(),
-            None,
+            actor.clone(),
             thread_id,
             LabelRef {
                 label_id: Some(label.id),
@@ -426,7 +524,7 @@ where
                 MessageSendCancelledMetadata {
                     link_id: link.id,
                     owner: link.macro_id.clone(),
-                    actor: None,
+                    actor: actor.clone(),
                     message_id: *message_id,
                     thread_id,
                     reason: SendCancelReason::ThreadTrashed,

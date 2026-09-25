@@ -59,11 +59,7 @@ export async function navigateToChannelMessage(
   options?: {
     splitManager?: SplitManager;
     preferNewSplit?: boolean;
-    /**
-     * The split this navigation originates from. When it is an engaged
-     * preview controller, the open is redirected into its viewer split and
-     * never steals the keyboard from the controller.
-     */
+    /** The split this navigation originates from. */
     sourceHandle?: SplitHandle;
   }
 ) {
@@ -72,12 +68,7 @@ export async function navigateToChannelMessage(
 
   const existing = splitManager.getSplitByContent('channel', channelId);
   if (existing) {
-    // The channel already showing in the source's own viewer is a plain
-    // retarget; activating it would pull focus out of the controller.
-    const isSourcesViewer =
-      options?.sourceHandle?.isControllerSplit() &&
-      options.sourceHandle.viewerId() === existing.id;
-    if (!isSourcesViewer) existing.activate();
+    existing.activate();
   } else {
     splitManager.openWithSplit(
       {

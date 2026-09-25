@@ -1,4 +1,3 @@
-import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { formatCallDuration } from '@block-call/utils';
 import { EntityRowTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -64,7 +63,6 @@ function RowTags(props: {
 }
 
 export function WideLayout(props: LayoutProps) {
-  const soupView = useMaybeSoupView();
   // When a thread resolves to one of the user's inboxes the inbox chip already
   // conveys ownership, so the generic "shared" badge would be redundant.
   const owningInbox = useOwningInboxForEntity(() => props.entity);
@@ -80,9 +78,14 @@ export function WideLayout(props: LayoutProps) {
         'gap-y-2 gap-x-(--soup-row-column-gap) grid grid-rows-[1fr]',
         // Drop the indicator column entirely when the checkbox is hidden so the
         // content isn't indented by an empty gutter.
-        props.hideCheckbox
-          ? 'grid-cols-[1fr_auto_8ch]'
-          : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_8ch]',
+        // A scheduled send's badge is wider than a date, so it sizes its column.
+        isEmailEntity(props.entity) && props.entity.scheduledSendTime
+          ? props.hideCheckbox
+            ? 'grid-cols-[1fr_auto_auto]'
+            : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_auto]'
+          : props.hideCheckbox
+            ? 'grid-cols-[1fr_auto_8ch]'
+            : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_8ch]',
         '[--title-width:10rem]'
       )}
       style={{
@@ -180,7 +183,7 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.PROJECT}
               properties={entity().properties}
-              onFilterByTag={soupView?.filterByTag}
+              onFilterByTag={props.onFilterByTag}
             />
           )}
         </Show>
@@ -197,7 +200,7 @@ export function WideLayout(props: LayoutProps) {
                   isTaskEntity(entity()) ? EntityType.TASK : EntityType.DOCUMENT
                 }
                 properties={properties()}
-                onFilterByTag={soupView?.filterByTag}
+                onFilterByTag={props.onFilterByTag}
               />
             );
           }}
@@ -208,7 +211,7 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.THREAD}
               properties={entity().properties}
-              onFilterByTag={soupView?.filterByTag}
+              onFilterByTag={props.onFilterByTag}
             />
           )}
         </Show>
@@ -218,7 +221,7 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.CHAT}
               properties={entity().properties}
-              onFilterByTag={soupView?.filterByTag}
+              onFilterByTag={props.onFilterByTag}
             />
           )}
         </Show>
@@ -228,7 +231,7 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.CALL_RECORD}
               properties={entity().properties}
-              onFilterByTag={soupView?.filterByTag}
+              onFilterByTag={props.onFilterByTag}
             />
           )}
         </Show>
@@ -245,7 +248,7 @@ export function WideLayout(props: LayoutProps) {
         <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (
             <>
-              <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
+              <Show when={props.showCalendarAttendance !== false}>
                 <CallStatusBadge status={entity().status} />
               </Show>
               <Show

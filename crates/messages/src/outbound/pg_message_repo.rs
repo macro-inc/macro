@@ -36,6 +36,9 @@ fn database_error(error: sqlx::Error) -> MessageError {
     if let sqlx::Error::Database(ref error) = error {
         match error.code().as_deref() {
             Some("23503") => return MessageError::NotFound,
+            Some("23505") if error.constraint() == Some("comms_messages_pkey") => {
+                return MessageError::Conflict;
+            }
             Some("23505") => {
                 return MessageError::Invalid("a live discussion already uses this anchor");
             }
@@ -68,6 +71,44 @@ impl PgMessageRepository {
     /// Create a repository using the shared MacroDB pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    /// Fill in what each PDF highlight anchor covers. The highlight owns its
+    /// text and can be edited or re-derived, so the thread only names it and
+    /// every read resolves it here; channel threads never carry one and cost
+    /// nothing.
+    async fn resolve_highlight_text<'s>(
+        executor: impl sqlx::PgExecutor<'_>,
+        states: impl IntoIterator<Item = &'s mut ThreadState>,
+    ) -> Result<(), MessageError> {
+        let mut anchors: Vec<(Uuid, &mut Option<String>)> = states
+            .into_iter()
+            .filter_map(|state| match &mut state.anchor {
+                Some(ThreadAnchor::PdfHighlight {
+                    anchor_id,
+                    marked_text,
+                }) => Some((*anchor_id, marked_text)),
+                _ => None,
+            })
+            .collect();
+        if anchors.is_empty() {
+            return Ok(());
+        }
+        let ids: Vec<Uuid> = anchors.iter().map(|(id, _)| *id).collect();
+        let texts: HashMap<Uuid, String> = sqlx::query!(
+            r#"SELECT uuid, text FROM "PdfHighlightAnchor" WHERE uuid = ANY($1)"#,
+            &ids,
+        )
+        .fetch_all(executor)
+        .await
+        .map_err(database_error)?
+        .into_iter()
+        .map(|row| (row.uuid, row.text))
+        .collect();
+        for (id, marked_text) in &mut anchors {
+            **marked_text = texts.get(id).and_then(|text| marked_text_snapshot(text));
+        }
+        Ok(())
     }
 
     async fn hydrate(&self, rows: Vec<Json<StoredMessage>>) -> Result<Vec<Message>, MessageError> {
@@ -442,50 +483,19 @@ impl PgMessageRepository {
                 .map_err(database_error)?;
             }
         }
-        let result = sqlx::query_scalar!(
+        let mut result = sqlx::query_scalar!(
             r#"UPDATE comms_message_threads t SET resolved = COALESCE($2, resolved), updated_at = now(),
                    deleted_at = CASE WHEN $3 THEN now() ELSE deleted_at END,
                    anchor = CASE WHEN $4 OR ($3 AND anchor->>'type' <> 'markdown') THEN NULL ELSE anchor END
                WHERE root_id = $1 RETURNING to_jsonb(t) AS "state!: Json<ThreadState>""#,
             root_id, patch.resolved, delete, patch.detach_anchor,
         ).fetch_one(&mut **tx).await.map_err(database_error)?;
+        Self::resolve_highlight_text(&mut **tx, [&mut result.0]).await?;
         Ok(result.0)
     }
 }
 
 impl MessageRepository for PgMessageRepository {
-    async fn referenced_threads(
-        &self,
-        document_id: &str,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<Vec<ReferencedThreadCandidate>, MessageError> {
-        let rows = sqlx::query!(r#"
-            SELECT DISTINCT c.id AS channel_id, c.name AS channel_name, root.id AS root_id, root.created_at
-            FROM comms_entity_mentions mention
-            JOIN comms_messages source ON source.id::text = mention.source_entity_id
-            JOIN comms_messages root ON root.id = COALESCE(source.thread_id, source.id)
-            JOIN comms_message_threads state ON state.root_id = root.id
-            JOIN comms_channels c ON c.id::text = root.parent_entity_id
-            WHERE mention.source_entity_type = 'message'
-                AND mention.entity_type IN ('doc', 'document') AND mention.entity_id = $1
-                AND source.parent_entity_type = 'channel' AND root.parent_entity_type = 'channel'
-                AND source.deleted_at IS NULL AND state.deleted_at IS NULL
-                AND ($2::timestamptz IS NULL OR (root.created_at, root.id) > ($2, $3::uuid))
-            ORDER BY root.created_at, root.id LIMIT $4
-        "#, document_id, cursor.as_ref().map(|c| c.created_at), cursor.as_ref().map(|c| c.id), i64::from(limit))
-        .fetch_all(&self.pool).await.map_err(database_error)?;
-        Ok(rows
-            .into_iter()
-            .map(|row| ReferencedThreadCandidate {
-                channel_id: row.channel_id,
-                root_id: row.root_id,
-                channel_name: row.channel_name,
-                created_at: row.created_at,
-            })
-            .collect())
-    }
-
     async fn replies(
         &self,
         parent: &MessageParent,
@@ -534,7 +544,7 @@ impl MessageRepository for PgMessageRepository {
         parent: &MessageParent,
         root: Uuid,
     ) -> Result<Option<ThreadState>, MessageError> {
-        Ok(sqlx::query_scalar!(
+        let mut state = sqlx::query_scalar!(
             r#"SELECT to_jsonb(t) AS "state!: Json<ThreadState>" FROM comms_message_threads t
                WHERE t.root_id = $1 AND t.parent_entity_type = $2 AND t.parent_entity_id = $3"#,
             root,
@@ -544,7 +554,9 @@ impl MessageRepository for PgMessageRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(database_error)?
-        .map(|state| state.0))
+        .map(|state| state.0);
+        Self::resolve_highlight_text(&self.pool, state.as_mut()).await?;
+        Ok(state)
     }
 
     async fn preceding(
@@ -583,7 +595,10 @@ impl MessageRepository for PgMessageRepository {
     }
 
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
-        let id = macro_uuid::generate_uuid_v7();
+        let id = command
+            .input
+            .id
+            .unwrap_or_else(macro_uuid::generate_uuid_v7);
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         if let Some(root_id) = command.input.thread_id {
             // Replies attach to a live root of the same parent. The composite FK

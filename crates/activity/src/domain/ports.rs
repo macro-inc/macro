@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use uuid::Uuid;
 
@@ -63,6 +64,47 @@ pub struct ActivityRange {
     pub records: Vec<ActivityRecord>,
     /// Whether more matching raw rows existed beyond the requested limit.
     pub truncated: bool,
+}
+
+/// Announces durably recorded activities to realtime subscribers.
+///
+/// Best-effort: implementations bound delivery time and log failures instead
+/// of failing the durable write. Clients refetch on reconnect to recover
+/// missed pushes. Uncommitted source offsets may also replay announcements.
+pub trait ActivityRealtimePublisher: Send + Sync {
+    /// Announces recorded activities to their subjects and current accessors.
+    fn publish_recorded(&self, activities: &[Activity]) -> impl Future<Output = ()> + Send;
+
+    /// Announces the durable removal of activity rows.
+    fn publish_invalidated(&self) -> impl Future<Output = ()> + Send;
+}
+
+/// Resolves who may currently see an entity's activity.
+///
+/// Used at publish time to widen realtime delivery beyond the acting
+/// subject: entity timelines are watched by everyone with access to the
+/// entity, not only whoever acted.
+pub trait ActivityAudienceExpander: Send + Sync {
+    /// The adapter's error type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Returns all users with current access to the entity.
+    fn entity_audience(
+        &self,
+        entity_type: EntityType,
+        entity_id: &str,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+}
+
+/// Publishes an already addressed activity announcement.
+pub trait ActivityEventPublisher: Send + Sync {
+    /// The transport's error type.
+    type Err: std::fmt::Debug + Send + Sync + 'static;
+    /// Delivers a domain event without deciding its recipients.
+    fn publish(
+        &self,
+        event: super::events::ActivityTopicEvent,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Persists activities.

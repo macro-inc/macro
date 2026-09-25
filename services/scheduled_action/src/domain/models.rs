@@ -4,10 +4,17 @@ use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::{Owner, OwnerType};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::str::FromStr;
 use utoipa::ToSchema;
+
+use super::event_runs::ConfigurationRevision;
+use super::event_trigger::ActionTrigger;
+
+#[cfg(test)]
+mod test;
 
 pub const MAX_ACTION_TIME: Duration = Duration::minutes(20);
 
@@ -49,7 +56,7 @@ impl<'de> Deserialize<'de> for Schedule {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, ToSchema)]
 pub enum ActionKind {
     Agent,
 }
@@ -61,11 +68,22 @@ pub struct AgentTask {
     pub user_prompt: String,
 }
 
-/// Client-supplied payload for creating a scheduled action. The server fills
-/// in `id`, `owner` (from the authenticated user), timestamps, `claimed`, and
-/// `next_run_at` (derived from the cron).
+/// Canonical client configuration. Ownership and execution state are server-owned.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct CreateScheduledAction {
+#[serde(deny_unknown_fields)]
+pub struct ActionConfiguration {
+    pub name: String,
+    pub trigger: ActionTrigger,
+    pub kind: ActionKind,
+    #[schema(value_type = Object)]
+    pub task: Value,
+    pub enabled: bool,
+}
+
+/// Deprecated cron-only input, accepted during the compatibility rollout.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LegacyActionConfiguration {
     pub name: String,
     pub schedule: Schedule,
     pub kind: ActionKind,
@@ -76,43 +94,110 @@ pub struct CreateScheduledAction {
     pub enabled: bool,
 }
 
-/// Client-supplied payload for updating a scheduled action. Mirrors the fields
-/// the repository actually writes — `id`/`owner`/timestamps/`claimed`/
-/// `next_run_at` are not client-mutable.
+impl From<LegacyActionConfiguration> for ActionConfiguration {
+    fn from(input: LegacyActionConfiguration) -> Self {
+        Self {
+            name: input.name,
+            trigger: ActionTrigger::Cron {
+                schedule: input.schedule,
+                timezone: input.timezone,
+            },
+            kind: input.kind,
+            task: input.task,
+            enabled: input.enabled,
+        }
+    }
+}
+
+/// Exactly one representation is accepted, even if mixed fields agree or are null.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct UpdateScheduledAction {
-    pub name: String,
-    pub schedule: Schedule,
-    pub kind: ActionKind,
-    #[schema(value_type = String)]
-    pub timezone: Tz,
-    #[schema(value_type = Object)]
-    pub task: Value,
-    pub enabled: bool,
+#[serde(untagged)]
+pub enum CreateScheduledAction {
+    Canonical(ActionConfiguration),
+    Legacy(LegacyActionConfiguration),
+}
+
+/// Full replacement of client configuration, not of server-owned action state.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(untagged)]
+pub enum UpdateScheduledAction {
+    Canonical(ActionConfiguration),
+    Legacy(LegacyActionConfiguration),
+}
+
+impl From<CreateScheduledAction> for ActionConfiguration {
+    fn from(input: CreateScheduledAction) -> Self {
+        match input {
+            CreateScheduledAction::Canonical(input) => input,
+            CreateScheduledAction::Legacy(input) => input.into(),
+        }
+    }
+}
+
+impl From<UpdateScheduledAction> for ActionConfiguration {
+    fn from(input: UpdateScheduledAction) -> Self {
+        match input {
+            UpdateScheduledAction::Canonical(input) => input,
+            UpdateScheduledAction::Legacy(input) => input.into(),
+        }
+    }
+}
+
+/// Expected management failures; adapters map these without exposing internals.
+#[derive(Debug, thiserror::Error)]
+pub enum ActionPolicyError {
+    #[error("scheduled action not found")]
+    NotFound,
+    #[error("schedule has no future firings")]
+    NoFutureFirings,
+    #[error("event-trigger management is not enabled")]
+    EventManagementDisabled,
+    #[error("scheduled action changed or is running; reload before updating")]
+    UpdateConflict,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct ScheduledAction {
     #[schema(value_type = Option<String>, format = Uuid)]
     pub id: Option<Uuid>,
+    /// Who the action belongs to. Every action is user-owned today, but the
+    /// type no longer says so: the principal string on the wire and in the
+    /// `owner` column is the same, and a bot- or team-owned row decodes
+    /// rather than failing to parse.
     #[schema(value_type = String)]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     pub name: String,
-    pub schedule: Schedule,
+    pub trigger: ActionTrigger,
     pub kind: ActionKind,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    #[schema(value_type = String)]
-    pub timezone: Tz,
+    /// Independent of execution bookkeeping in `updated_at`.
+    #[schema(value_type = i64)]
+    pub configuration_revision: ConfigurationRevision,
+    /// Event publication boundary; absent for cron actions.
+    pub event_activated_at: Option<DateTime<Utc>>,
     #[schema(value_type = Object)]
     pub task: Value,
     pub claimed: Option<DateTime<Utc>>,
-    /// Time of the next scheduled firing (derived from the cron on write). UI
-    /// uses this to render "next run" without having to parse the cron itself.
-    pub next_run_at: DateTime<Utc>,
-    /// When false, the cron dispatcher skips this schedule. `run_now` remains
+    /// Next cron firing, absent for event-triggered actions.
+    pub next_run_at: Option<DateTime<Utc>>,
+    /// When false, automatic dispatch skips this action. `run_now` remains
     /// available regardless.
     pub enabled: bool,
+}
+
+impl ScheduledAction {
+    /// The user this action runs as.
+    ///
+    /// For every path that acts as the owner rather than merely naming them:
+    /// creating a chat in their account, reading their memory, spending their
+    /// AI budget, notifying them. Asking here fails typed for a bot or team
+    /// instead of treating one as a person.
+    pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, OwnerNotUserError> {
+        self.owner.as_user().ok_or(OwnerNotUserError {
+            owner_type: self.owner.owner_type(),
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -202,3 +287,23 @@ impl std::fmt::Display for AlreadyRunningError {
 }
 
 impl std::error::Error for AlreadyRunningError {}
+
+/// Returned when a path that must run as a person meets an action owned by a
+/// bot or a team. Callers at the HTTP boundary map this to 400 Bad Request;
+/// the polling dispatcher logs it and leaves the action alone.
+#[derive(Debug)]
+pub struct OwnerNotUserError {
+    pub owner_type: OwnerType,
+}
+
+impl std::fmt::Display for OwnerNotUserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "this path needs a user-owned scheduled action, but the owner is a {}",
+            self.owner_type
+        )
+    }
+}
+
+impl std::error::Error for OwnerNotUserError {}

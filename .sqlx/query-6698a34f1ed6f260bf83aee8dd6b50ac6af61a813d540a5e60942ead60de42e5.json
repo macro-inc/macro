@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM scheduled_action\n            WHERE id = $1 AND owner = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6698a34f1ed6f260bf83aee8dd6b50ac6af61a813d540a5e60942ead60de42e5"
+}

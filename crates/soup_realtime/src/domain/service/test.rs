@@ -70,6 +70,133 @@ impl SoupRealtimePublisher for FakePublisher {
     }
 }
 
+struct GatedPublisher {
+    messages: Arc<Mutex<Vec<SoupRealtimeMessage>>>,
+    permits: Arc<tokio::sync::Semaphore>,
+}
+
+impl SoupRealtimePublisher for GatedPublisher {
+    async fn publish(&self, message: SoupRealtimeMessage) -> Result<(), Report> {
+        self.messages.lock().expect("messages lock").push(message);
+        self.permits
+            .acquire()
+            .await
+            .expect("gate remains open")
+            .forget();
+        Ok(())
+    }
+}
+
+struct GatedHarness {
+    service: Arc<SoupRealtimeServiceImpl>,
+    messages: Arc<Mutex<Vec<SoupRealtimeMessage>>>,
+    permits: Arc<tokio::sync::Semaphore>,
+}
+
+fn gated_service() -> GatedHarness {
+    let messages = Arc::new(Mutex::new(Vec::new()));
+    let permits = Arc::new(tokio::sync::Semaphore::new(0));
+    let service = SoupRealtimeServiceImpl::new(
+        FakeAccessExpander {
+            users: vec![user("one")],
+            fail: false,
+            calls: Arc::new(AtomicUsize::new(0)),
+            entities: Arc::new(Mutex::new(Vec::new())),
+        },
+        GatedPublisher {
+            messages: messages.clone(),
+            permits: permits.clone(),
+        },
+    );
+    GatedHarness {
+        service: Arc::new(service),
+        messages,
+        permits,
+    }
+}
+
+#[tokio::test]
+async fn full_queue_waits_for_capacity_and_acknowledges_only_completed_publications() {
+    let GatedHarness {
+        service,
+        messages,
+        permits,
+    } = gated_service();
+    let request_count = BACKGROUND_CHANNEL_SIZE + 2;
+    let mut tasks = tokio::task::JoinSet::new();
+    for _ in 0..request_count {
+        let service = Arc::clone(&service);
+        tasks.spawn(async move {
+            service
+                .notify_users(SoupRealtimePatch::for_entity(updated_document()))
+                .await
+        });
+    }
+
+    wait_until(|| {
+        service.sender.capacity() == 0 && !messages.lock().expect("messages lock").is_empty()
+    })
+    .await;
+    assert!(
+        tasks.try_join_next().is_none(),
+        "no enqueue is acknowledged as delivery"
+    );
+    assert_eq!(messages.lock().expect("messages lock").len(), 1);
+
+    permits.add_permits(request_count);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while let Some(result) = tasks.join_next().await {
+            result
+                .expect("notification task joins")
+                .expect("patch is published");
+        }
+    })
+    .await
+    .expect("burst drains without dropping patches");
+    assert_eq!(messages.lock().expect("messages lock").len(), request_count);
+}
+
+#[tokio::test]
+async fn worker_stopping_during_publication_returns_an_error() {
+    let GatedHarness {
+        service, messages, ..
+    } = gated_service();
+    let task = tokio::spawn({
+        let service = Arc::clone(&service);
+        async move {
+            service
+                .notify_users(SoupRealtimePatch::for_entity(updated_document()))
+                .await
+        }
+    });
+    wait_until(|| !messages.lock().expect("messages lock").is_empty()).await;
+    service._bg.abort();
+
+    let error = task
+        .await
+        .expect("notification task joins")
+        .expect_err("worker stopped");
+    assert!(
+        error
+            .to_string()
+            .contains("worker stopped before completing patch")
+    );
+}
+
+#[tokio::test]
+async fn closed_worker_queue_returns_an_error() {
+    let harness = harness(Vec::new(), false, HashSet::new());
+    harness.service._bg.abort();
+    wait_until(|| harness.service.sender.is_closed()).await;
+
+    let error = harness
+        .service
+        .notify_users(SoupRealtimePatch::for_entity(updated_document()))
+        .await
+        .expect_err("worker unavailable");
+    assert!(error.to_string().contains("worker unavailable"));
+}
+
 struct Harness {
     service: SoupRealtimeServiceImpl,
     access_calls: Arc<AtomicUsize>,
@@ -191,9 +318,10 @@ async fn zero_users_skips_publication() {
     harness
         .service
         .notify_users(SoupRealtimePatch::for_entity(updated_document()))
-        .expect("patch is queued");
+        .await
+        .expect("patch is processed");
 
-    wait_until(|| harness.access_calls.load(Ordering::SeqCst) == 1).await;
+    assert_eq!(harness.access_calls.load(Ordering::SeqCst), 1);
     assert!(harness.messages.lock().expect("messages lock").is_empty());
 }
 
@@ -206,17 +334,8 @@ async fn recipient_expansion_can_use_a_different_entity_from_the_patch() {
     harness
         .service
         .notify_users(SoupRealtimePatch::new(updated_document(), channel.clone()))
-        .expect("patch is queued");
-
-    wait_until(|| {
-        harness
-            .access_entities
-            .lock()
-            .expect("access entities lock")
-            .len()
-            == 1
-    })
-    .await;
+        .await
+        .expect("patch is published");
 
     assert_eq!(
         harness
@@ -240,9 +359,8 @@ async fn updated_and_deleted_patches_are_published_unchanged() {
         harness
             .service
             .notify_users(SoupRealtimePatch::for_entity(patch.clone()))
-            .expect("patch is queued");
-
-        wait_until(|| harness.messages.lock().expect("messages lock").len() == 1).await;
+            .await
+            .expect("patch is published");
         let messages = harness.messages.lock().expect("messages lock");
         assert_eq!(
             messages.as_slice(),
@@ -260,26 +378,33 @@ async fn duplicate_accessors_are_deduplicated() {
     harness
         .service
         .notify_users(SoupRealtimePatch::for_entity(updated_document()))
-        .expect("patch is queued");
+        .await
+        .expect("patch is published");
 
-    wait_until(|| harness.messages.lock().expect("messages lock").len() == 2).await;
+    assert_eq!(harness.messages.lock().expect("messages lock").len(), 2);
 }
 
 #[tokio::test]
-async fn access_failure_prevents_publication() {
+async fn access_failure_is_returned_and_prevents_publication() {
     let harness = harness(vec![user("one")], true, HashSet::new());
 
-    harness
+    let error = harness
         .service
         .notify_users(SoupRealtimePatch::for_entity(updated_document()))
-        .expect("patch is queued");
+        .await
+        .expect_err("access failure reaches the caller");
 
-    wait_until(|| harness.access_calls.load(Ordering::SeqCst) == 1).await;
+    assert!(
+        error
+            .to_string()
+            .contains("failed to expand current user access")
+    );
+    assert_eq!(harness.access_calls.load(Ordering::SeqCst), 1);
     assert!(harness.messages.lock().expect("messages lock").is_empty());
 }
 
 #[tokio::test]
-async fn publisher_failure_does_not_block_other_messages() {
+async fn publisher_failure_is_returned_after_attempting_all_recipients() {
     let users = [user("one"), user("two"), user("three")];
     let harness = harness(
         users.to_vec(),
@@ -287,10 +412,16 @@ async fn publisher_failure_does_not_block_other_messages() {
         HashSet::from([users[1].as_ref().to_string()]),
     );
 
-    harness
+    let error = harness
         .service
         .notify_users(SoupRealtimePatch::for_entity(updated_document()))
-        .expect("patch is queued");
+        .await
+        .expect_err("publication failure reaches the caller");
 
-    wait_until(|| harness.messages.lock().expect("messages lock").len() == 3).await;
+    assert!(
+        error
+            .to_string()
+            .contains("1 realtime Soup publication(s) failed")
+    );
+    assert_eq!(harness.messages.lock().expect("messages lock").len(), 3);
 }

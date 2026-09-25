@@ -1,21 +1,15 @@
-import { createCalendarBlockRange } from '@block-calendar/calendar-range';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
+import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
+import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import {
   getChannelParams,
   navigateToChannelMessage,
 } from '@block-channel/utils/link';
-import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
-import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import type {
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
 import type { BlockAlias, BlockName } from '@core/block';
-import {
-  type ItemLike,
-  itemToBlockName,
-  resolveBlockAlias,
-} from '@core/constant/allBlocks';
+import { resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
   enableReminders,
@@ -28,6 +22,10 @@ import { getNotificationById } from '@queries/notification/user-notifications';
 import { getReminderById } from '@queries/reminders/reminders';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
+import {
+  getDocumentCommentLocation,
+  type NotificationEntityOverride,
+} from './document-comment-location';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import { isChannelNotification } from './notification-helpers';
 import { DefaultNotificationBlockNameResolver } from './notification-resolvers';
@@ -54,12 +52,7 @@ async function goToLocationInSplit(
   await handle?.goToLocationFromParams(params);
 }
 
-/**
- * Opens a split if it is not already open. When `sourceHandle` names the
- * split the navigation originates from and that split is an engaged preview
- * controller, the open is redirected into its viewer split (via the
- * openWithSplit redirect) and never steals the keyboard from the controller.
- */
+/** Opens or activates the requested content from the source split. */
 function openSplitIfNotOpen(
   layoutManager: SplitManager,
   type: BlockName | BlockAlias | 'component',
@@ -72,10 +65,7 @@ function openSplitIfNotOpen(
 ) {
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
-    const isSourcesViewer =
-      options.sourceHandle?.isControllerSplit() &&
-      options.sourceHandle.viewerId() === existing.id;
-    if (!isSourcesViewer) existing.activate();
+    existing.activate();
   } else {
     layoutManager.openWithSplit(
       { type, id },
@@ -147,36 +137,6 @@ async function openChannelNotification(
     preferNewSplit: newSplit,
     sourceHandle,
   });
-}
-
-// Minimal entity shape — the live entity from the UI is authoritative when
-// available (notification metadata is a snapshot at notification time and may
-// lack `subType` for older events).
-type NotificationEntityOverride = {
-  fileType?: string | null;
-  subType?: { type: string } | null;
-};
-
-// Resolve the block type for a document notification, honoring `subType` so
-// that e.g. a markdown doc with `subType: { type: 'task' }` routes to the
-// 'task' block alias instead of raw 'md'. Prefers the live entity's fields
-// over the notification-metadata snapshot when provided.
-function safeDocumentContentToBlockName(
-  content: NotificationEntityOverride,
-  entity?: NotificationEntityOverride
-) {
-  return itemToBlockName({
-    type: 'document',
-    fileType: entity?.fileType ?? content.fileType ?? undefined,
-    subType: entity?.subType ?? content.subType ?? undefined,
-  } as ItemLike);
-}
-
-function resolveBlockCommentParamName(type: BlockName | BlockAlias) {
-  const resolved = resolveBlockAlias(type);
-  if (resolved === 'md' || resolved === 'spreadsheet')
-    return MD_URL_PARAMS.commentId;
-  if (resolved === 'pdf') return PDF_URL_PARAMS.annotationId;
 }
 
 type NotSupportedError = {
@@ -309,63 +269,24 @@ function getSupportedHandler(
           openExternalUrl(url);
         };
       })
-      .with('mentioned_in_document_comment', () => {
-        const meta = notification.notification_metadata;
-        if (meta.tag !== 'mentioned_in_document_comment') return null;
+      .with(
+        P.union(
+          'mentioned_in_document_comment',
+          'replied_to_document_comment_thread',
+          'commented_on_document'
+        ),
+        () => {
+          const location = getDocumentCommentLocation(notification, entity);
+          if (!location) return null;
 
-        const blockName = safeDocumentContentToBlockName(meta.content, entity);
-        const commentParamName = resolveBlockCommentParamName(blockName);
-        const params = commentParamName
-          ? {
-              [commentParamName]: meta.content.commentId.toString(),
-            }
-          : undefined;
-
-        return async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
-            newSplit,
-            params,
-            sourceHandle,
-          });
-      })
-      .with('replied_to_document_comment_thread', () => {
-        const meta = notification.notification_metadata;
-        if (meta.tag !== 'replied_to_document_comment_thread') return null;
-
-        const blockName = safeDocumentContentToBlockName(meta.content, entity);
-        const commentParamName = resolveBlockCommentParamName(blockName);
-        const params = commentParamName
-          ? {
-              [commentParamName]: meta.content.commentId.toString(),
-            }
-          : undefined;
-
-        return async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
-            newSplit,
-            params,
-            sourceHandle,
-          });
-      })
-      .with('commented_on_document', () => {
-        const meta = notification.notification_metadata;
-        if (meta.tag !== 'commented_on_document') return null;
-
-        const blockName = safeDocumentContentToBlockName(meta.content, entity);
-        const commentParamName = resolveBlockCommentParamName(blockName);
-        const params = commentParamName
-          ? {
-              [commentParamName]: meta.content.commentId.toString(),
-            }
-          : undefined;
-
-        return async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
-            newSplit,
-            params,
-            sourceHandle,
-          });
-      })
+          return async (lm: SplitManager, newSplit: boolean = false) =>
+            openSplitIfNotOpen(lm, location.blockName, notification.entity_id, {
+              newSplit,
+              params: location.params,
+              sourceHandle,
+            });
+        }
+      )
       .with('reminder', () => {
         // The notification points at the reminder itself, so there is nothing to
         // open until the reminder is fetched and its referenced entity read. A
@@ -411,16 +332,19 @@ function getSupportedHandler(
             : content.startDate
               ? { kind: 'allDay' as const, startDate: content.startDate }
               : undefined;
-          const range = time ? createCalendarBlockRange(time) : undefined;
-          openSplitIfNotOpen(lm, 'calendar', CALENDAR_BLOCK_ID, {
-            newSplit,
-            sourceHandle,
-            params: {
+          const range = time ? createCalendarRange(time) : undefined;
+          openCalendarView(
+            {
               eventId: content.eventId,
               occurrenceKey: content.occurrenceKey,
               range,
             },
-          });
+            {
+              manager: lm,
+              handle: sourceHandle,
+              openInNewSplit: newSplit,
+            }
+          );
         };
       })
       .with('inbox_reauth_required', () => null)
@@ -439,8 +363,7 @@ export function openNotification(
   entity?: NotificationEntityOverride,
   /**
    * The split this navigation originates from (e.g. the list whose row was
-   * clicked). Routes the open through that split's preview viewer when its
-   * preview mode is engaged.
+   * clicked).
    */
   sourceHandle?: SplitHandle
 ): ResultAsync<void, NotSupportedError> {

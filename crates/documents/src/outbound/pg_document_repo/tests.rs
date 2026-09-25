@@ -1,6 +1,7 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
@@ -28,7 +29,7 @@ async fn set_legacy_team_share(
 ) -> Result<crate::domain::models::DocumentTeamShare, crate::domain::models::DocumentError> {
     let facts = repo.get_team_share_facts(document_id).await?;
     let command = authorize_team_share(
-        Some(&facts.owner),
+        facts.owner.as_user(),
         &facts,
         TeamShareRequest {
             access_level: None,
@@ -44,7 +45,7 @@ async fn set_legacy_team_share(
 async fn set_comment_share(repo: &PgDocumentRepo) {
     let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
     let command = authorize_team_share(
-        Some(&facts.owner),
+        facts.owner.as_user(),
         &facts,
         TeamShareRequest {
             access_level: Some(Some(AccessLevel::Comment)),
@@ -60,7 +61,7 @@ async fn set_comment_share(repo: &PgDocumentRepo) {
 async fn team_edit_args(repo: &PgDocumentRepo, level: Option<AccessLevel>) -> EditDocumentRepoArgs {
     let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
     let command = authorize_team_share(
-        Some(&facts.owner),
+        facts.owner.as_user(),
         &facts,
         TeamShareRequest {
             access_level: Some(level),
@@ -730,7 +731,10 @@ async fn test_get_document_metadata(pool: Pool<Postgres>) {
         .unwrap();
     assert_eq!(metadata.document_id, "d0000000-0000-0000-0000-000000000001");
     assert_eq!(metadata.document_name, "test_document_name");
-    assert_eq!(metadata.owner.as_ref(), "macro|user@user.com");
+    assert_eq!(
+        metadata.owner,
+        Owner::from_principal_str("macro|user@user.com").unwrap()
+    );
     assert_eq!(metadata.document_version_id, 1);
     assert_eq!(metadata.file_type, Some("txt".to_string()));
 
@@ -752,12 +756,72 @@ async fn test_get_basic_document(pool: Pool<Postgres>) {
         .unwrap();
     assert_eq!(basic.document_id, "d0000000-0000-0000-0000-000000000001");
     assert_eq!(basic.document_name, "test_document_name");
-    assert_eq!(basic.owner.as_ref(), "macro|user@user.com");
+    assert_eq!(
+        basic.owner,
+        Owner::from_principal_str("macro|user@user.com").unwrap()
+    );
     assert_eq!(basic.file_type, Some("txt".to_string()));
 
     // Not found
     let result = repo.get_basic_document("nonexistent").await;
     assert!(result.is_err());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn get_document_metadata_and_basic_document_decode_bot_and_team_owners(pool: Pool<Postgres>) {
+    const BOT_OWNER: &str = "bot|00000000-0000-0000-0000-00000000a1a1";
+    const TEAM_OWNER: &str = "00000000-0000-0000-0000-00000000a2a2";
+
+    sqlx::query(
+        r#"
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ($1, $2, $3), ($4, $5, $6)
+        ON CONFLICT (id) DO NOTHING
+        "#,
+    )
+    .bind(BOT_OWNER)
+    .bind("bot-owner-fixture@example.com")
+    .bind(uuid::Uuid::parse_str("a1111111-1111-1111-1111-111111111111").unwrap())
+    .bind(TEAM_OWNER)
+    .bind("team-owner-fixture@example.com")
+    .bind(uuid::Uuid::parse_str("a2222222-2222-2222-2222-222222222222").unwrap())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(r#"UPDATE "Document" SET owner = $1 WHERE id = $2"#)
+        .bind(BOT_OWNER)
+        .bind(TEST_DOCUMENT_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let repo = PgDocumentRepo::new(pool.clone());
+    let metadata = repo.get_document_metadata(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(
+        metadata.owner,
+        Owner::from_principal_str(BOT_OWNER).unwrap()
+    );
+    let basic = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(basic.owner, Owner::from_principal_str(BOT_OWNER).unwrap());
+
+    sqlx::query(r#"UPDATE "Document" SET owner = $1 WHERE id = $2"#)
+        .bind(TEAM_OWNER)
+        .bind(TEST_DOCUMENT_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let metadata = repo.get_document_metadata(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(
+        metadata.owner,
+        Owner::from_principal_str(TEAM_OWNER).unwrap()
+    );
+    let basic = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(basic.owner, Owner::from_principal_str(TEAM_OWNER).unwrap());
 }
 
 #[sqlx::test(
@@ -2199,159 +2263,6 @@ async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
         "Should still have exactly 1 channel row after idempotent upsert"
     );
 }
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(
-        path = "../../../fixtures",
-        scripts("document_pdf_comments_and_highlights")
-    )
-)]
-async fn test_fetch_document_comments(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgDocumentRepo::new(pool);
-
-    // Test fetching comments for document-with-comments (which has 3 threads and 7 comments)
-    let comment_threads = repo.get_document_comments("document-with-comments").await?;
-
-    // Verify we got all threads
-    assert_eq!(comment_threads.len(), 4);
-
-    // Map threads by ID for easier testing
-    let thread_map: std::collections::HashMap<i64, &crate::domain::models::CommentThread> =
-        comment_threads
-            .iter()
-            .map(|t| (t.thread.thread_id, t))
-            .collect();
-
-    // Check thread 1001 (unresolved with 3 comments)
-    let thread_1001 = thread_map.get(&1001).expect("Thread 1001 should exist");
-    assert_eq!(thread_1001.comments.len(), 3);
-    assert!(!thread_1001.thread.resolved);
-
-    // Check thread 1002 (resolved with 3 comments)
-    let thread_1002 = thread_map.get(&1002).expect("Thread 1002 should exist");
-    assert_eq!(thread_1002.comments.len(), 3);
-    assert!(thread_1002.thread.resolved);
-
-    // Check thread 1003 (unresolved with 1 comment)
-    let thread_1003 = thread_map.get(&1003).expect("Thread 1003 should exist");
-    assert_eq!(thread_1003.comments.len(), 1);
-    assert!(!thread_1003.thread.resolved);
-
-    // Check specific comment content for thread 1001
-    let first_comment = &thread_1001.comments[0];
-    assert_eq!(first_comment.text, "Initial question on page 1");
-    assert_eq!(first_comment.sender, Some("user@user.com".to_string()));
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(
-        path = "../../../fixtures",
-        scripts("document_pdf_comments_and_highlights")
-    )
-)]
-async fn test_fetch_document_comments_empty(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgDocumentRepo::new(pool);
-
-    // This document ID doesn't exist in our fixture, so should return empty results
-    let comment_threads = repo.get_document_comments("non-existent-document").await?;
-
-    // Verify we got an empty list
-    assert_eq!(comment_threads.len(), 0);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(
-        path = "../../../fixtures",
-        scripts("document_pdf_comments_and_highlights")
-    )
-)]
-async fn test_thread_deletion(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgDocumentRepo::new(pool.clone());
-
-    // First verify we have 2 threads in document-delete-test
-    let threads_before = repo.get_document_comments("document-delete-test").await?;
-    assert_eq!(threads_before.len(), 2);
-
-    // Now mark one thread as deleted
-    sqlx::query!(
-        r#"
-        UPDATE "Thread"
-        SET "deletedAt" = NOW()
-        WHERE "id" = 3001
-        "#
-    )
-    .execute(&pool)
-    .await?;
-
-    // Fetch comments again - deleted threads should be filtered out
-    let threads_after = repo.get_document_comments("document-delete-test").await?;
-
-    // Verify only one thread remains and it's the correct one
-    assert_eq!(threads_after.len(), 1);
-    assert_eq!(threads_after[0].thread.thread_id, 3002);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(
-        path = "../../../fixtures",
-        scripts("document_pdf_comments_and_highlights")
-    )
-)]
-async fn test_comment_deletion(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgDocumentRepo::new(pool.clone());
-
-    // First verify thread 1001 has 3 comments
-    let threads_before = repo.get_document_comments("document-with-comments").await?;
-    let thread_1001_before = threads_before
-        .iter()
-        .find(|t| t.thread.thread_id == 1001)
-        .expect("Thread 1001 should exist");
-    assert_eq!(thread_1001_before.comments.len(), 3);
-
-    // Now mark one comment as deleted
-    sqlx::query!(
-        r#"
-        UPDATE "Comment"
-        SET "deletedAt" = NOW()
-        WHERE "id" = 10001
-        "#
-    )
-    .execute(&pool)
-    .await?;
-
-    // Fetch comments again - deleted comments should be filtered out
-    let threads_after = repo.get_document_comments("document-with-comments").await?;
-    let thread_1001_after = threads_after
-        .iter()
-        .find(|t| t.thread.thread_id == 1001)
-        .expect("Thread 1001 should exist");
-
-    // Verify one comment was filtered out
-    assert_eq!(thread_1001_after.comments.len(), 2);
-
-    // Verify the remaining comments are the ones we expect
-    let comment_ids: Vec<i64> = thread_1001_after
-        .comments
-        .iter()
-        .map(|c| c.comment_id)
-        .collect();
-    assert!(comment_ids.contains(&10002));
-    assert!(comment_ids.contains(&10003));
-    assert!(!comment_ids.contains(&10001));
-
-    Ok(())
-}
-
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))

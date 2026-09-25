@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses } from './types.gen';
+import type { CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -69,6 +69,28 @@ export class Sdk extends HeyApiClient {
                 'Content-Type': 'application/json',
                 ...options.headers
             }
+        });
+    }
+    
+    /**
+     * List the GitHub repositories the caller can select for a coding session.
+     */
+    public listAgentRepositories<ThrowOnError extends boolean = false>(options?: Options<ListAgentRepositoriesData, ThrowOnError>): RequestResult<ListAgentRepositoriesResponses, ListAgentRepositoriesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListAgentRepositoriesResponses, ListAgentRepositoriesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/agent-repositories',
+            ...options
+        });
+    }
+    
+    /**
+     * List the branches on one repository the caller can start a session from.
+     */
+    public listAgentRepositoryBranches<ThrowOnError extends boolean = false>(options: Options<ListAgentRepositoryBranchesData, ThrowOnError>): RequestResult<ListAgentRepositoryBranchesResponses, ListAgentRepositoryBranchesErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ListAgentRepositoryBranchesResponses, ListAgentRepositoryBranchesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/agent-repositories/branches',
+            ...options
         });
     }
     
@@ -147,6 +169,29 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * The latest captured changes of an agent session: the changed files with
+     * statuses and line counts, and how the latest capture attempt went.
+     */
+    public getAgentSessionChanges<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionChangesData, ThrowOnError>): RequestResult<GetAgentSessionChangesResponses, GetAgentSessionChangesErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetAgentSessionChangesResponses, GetAgentSessionChangesErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/changes', ...options });
+    }
+    
+    /**
+     * The unified diff behind the session's latest changeset.
+     */
+    public getAgentSessionChangesPatch<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionChangesPatchData, ThrowOnError>): RequestResult<GetAgentSessionChangesPatchResponses, GetAgentSessionChangesPatchErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetAgentSessionChangesPatchResponses, GetAgentSessionChangesPatchErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/changes/patch', ...options });
+    }
+    
+    /**
+     * Capture the session's changes again now. Answers at once with the state
+     * as it stands; the capture runs on and viewers are told when it lands.
+     */
+    public refreshAgentSessionChanges<ThrowOnError extends boolean = false>(options: Options<RefreshAgentSessionChangesData, ThrowOnError>): RequestResult<RefreshAgentSessionChangesResponses, RefreshAgentSessionChangesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RefreshAgentSessionChangesResponses, RefreshAgentSessionChangesErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/changes/refresh', ...options });
+    }
+    
+    /**
      * Perform a control operation on a live agent session.
      *
      * Edit access suffices: whoever can prompt the bot through its thread can
@@ -187,6 +232,27 @@ export class Sdk extends HeyApiClient {
     public renameAgentSession<ThrowOnError extends boolean = false>(options: Options<RenameAgentSessionData, ThrowOnError>): RequestResult<RenameAgentSessionResponses, RenameAgentSessionErrors, ThrowOnError> {
         return (options.client ?? this.client).put<RenameAgentSessionResponses, RenameAgentSessionErrors, ThrowOnError>({
             url: '/agent-sessions/{session_id}/name',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read sharing settings for a session the caller can view.
+     */
+    public getAgentSessionPermissions<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionPermissionsData, ThrowOnError>): RequestResult<GetAgentSessionPermissionsResponses, GetAgentSessionPermissionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetAgentSessionPermissionsResponses, GetAgentSessionPermissionsErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/permissions', ...options });
+    }
+    
+    /**
+     * Update link, channel, or team sharing after owner authorization.
+     */
+    public updateAgentSessionPermissions<ThrowOnError extends boolean = false>(options: Options<UpdateAgentSessionPermissionsData, ThrowOnError>): RequestResult<UpdateAgentSessionPermissionsResponses, UpdateAgentSessionPermissionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateAgentSessionPermissionsResponses, UpdateAgentSessionPermissionsErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}/permissions',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

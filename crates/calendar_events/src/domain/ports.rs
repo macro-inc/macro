@@ -31,6 +31,9 @@ pub enum GoogleProviderErrorKind {
     ReauthRequired,
     /// The provider continuation token expired and requires a full resync.
     SyncTokenExpired,
+    /// The provider will not open push channels for this resource; only
+    /// polling can keep it in sync.
+    PushUnsupported,
 }
 
 /// Typed Google Calendar failure returned across the provider port.
@@ -511,6 +514,16 @@ pub trait CalendarRepository: Send + Sync + 'static {
         channel: GoogleWatchChannel,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
+    /// Record that the provider refused a push channel for one calendar,
+    /// under the backfill's fencing token.
+    fn record_watch_unsupported(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_id: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
     /// Resolve a push notification to the inbox whose calendar it watches.
     fn find_watch_target(
         &self,
@@ -623,6 +636,21 @@ pub trait CalendarRefreshNotifier: Send + Sync + 'static {
         owner_id: &str,
         email_link_id: Uuid,
     ) -> impl Future<Output = ()> + Send;
+}
+
+/// Outbound port that announces one connected inbox's Google grant has gone
+/// dead and needs reconnection. The notification itself — reconnect-your-inbox
+/// email, `email.link_reauth_required` topic event, activity row — is owned by
+/// email_service's link-manager consumer; calendar_service backs this port by
+/// enqueuing onto the shared link-manager queue that consumer already drains.
+/// Best effort at the edge: the announcer logs and swallows a delivery failure,
+/// since the failure the notification describes is already durably recorded.
+pub trait CalendarReauthNotifier: Send + Sync + 'static {
+    /// Announce that `email_link_id`'s grant requires reauthorization.
+    fn notify_reauth_required(
+        &self,
+        email_link_id: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Inbound service port for user-initiated calendar event mutations.

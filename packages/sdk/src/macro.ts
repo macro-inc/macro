@@ -1,6 +1,7 @@
 import type { MacroOpts } from './config';
 import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { BotsNamespace } from './entities/bots/namespace';
+import { CalendarNamespace } from './entities/calendar/namespace';
 import { CallRecordNamespace } from './entities/calls/namespace';
 import { ChannelNamespace } from './entities/channels/namespace';
 import { ChatNamespace } from './entities/chats/namespace';
@@ -38,6 +39,7 @@ export {
 export class Macro<T extends MacroOpts = MacroOpts> {
   readonly agentSessions: AgentSessionNamespace;
   readonly bots: BotsNamespace;
+  readonly calendar: CalendarNamespace;
   readonly calls: CallRecordNamespace;
   readonly channels: ChannelNamespace;
   readonly chats: ChatNamespace;
@@ -67,6 +69,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this._client = client;
     this.agentSessions = new AgentSessionNamespace(client);
     this.bots = new BotsNamespace(client);
+    this.calendar = new CalendarNamespace(client);
     this.calls = new CallRecordNamespace(client);
     this.channels = new ChannelNamespace(client);
     this.chats = new ChatNamespace(client);

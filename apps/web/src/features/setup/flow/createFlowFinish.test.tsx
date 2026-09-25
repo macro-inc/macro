@@ -18,13 +18,16 @@ vi.mock('@app/constants/defaultRoute', () => ({
   DEFAULT_ROUTE: '/home',
 }));
 vi.mock('@app/features/onboarding/use-onboarding-checkout', () => ({
-  createOnboardingCheckoutSession: wiring.checkout,
+  onboardingCheckoutArgs: (tier: string) => ({ plan: tier }),
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: wiring.track }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: wiring.failure },
+}));
+vi.mock('@queries/auth', () => ({
+  useCreateCheckoutSessionMutation: () => ({ mutateAsync: wiring.checkout }),
 }));
 vi.mock('@queries/auth/keys', () => ({
   authKeys: { userInfo: { queryKey: ['user-info'] } },
@@ -80,7 +83,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('onboarding completion', () => {
-  it.each(['free', 'premium'] as const)(
+  it.each(['free', 'premium', 'max'] as const)(
     'keeps the OAuth-return deep link when finishing %s, then clears progress',
     async (plan) => {
       sessionStorage.setItem(
@@ -93,7 +96,7 @@ describe('onboarding completion', () => {
       );
       const flow = setup();
       if (plan === 'free') await flow.finishFree(true);
-      else await flow.finishPremium();
+      else await flow.finishPremium(plan);
       expect(wiring.completeOnboarding).toHaveBeenCalledWith({
         skipped: false,
       });

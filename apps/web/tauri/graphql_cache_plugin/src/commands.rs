@@ -27,6 +27,9 @@ use cache_turso::TursoFileDatabase;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};
 
+#[cfg(test)]
+mod test;
+
 type Variables = serde_json::Map<String, serde_json::Value>;
 
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
@@ -195,11 +198,17 @@ pub enum HydrationResultWire {
         data: serde_json::Value,
         /// Revision installed by the hydration write.
         revision: String,
+        /// Whether this hydration changed the effective cache view.
+        #[serde(rename = "revisionAdvanced")]
+        revision_advanced: bool,
     },
     /// Every response field was cache-only.
     Void {
         /// Revision installed by the hydration write.
         revision: String,
+        /// Whether this hydration changed the effective cache view.
+        #[serde(rename = "revisionAdvanced")]
+        revision_advanced: bool,
     },
 }
 
@@ -239,9 +248,11 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
         Some(data) => HydrationResultWire::Data {
             data,
             revision: result.write_result.revision,
+            revision_advanced: result.write_result.revision_advanced,
         },
         None => HydrationResultWire::Void {
             revision: result.write_result.revision,
+            revision_advanced: result.write_result.revision_advanced,
         },
     })
 }

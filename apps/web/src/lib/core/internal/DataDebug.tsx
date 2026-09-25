@@ -61,7 +61,7 @@ function SignalDebugCard(props: SignalDebugCardProps) {
                 <Copy class="size-4" />
               </button>
             </Layer>
-            <pre class="text-xs bg-message p-3 rounded overflow-auto max-h-80 border border-edge">
+            <pre class="text-xs p-3 rounded overflow-auto max-h-80 border border-edge">
               {formatJson(props.data)}
             </pre>
           </div>

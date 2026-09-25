@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ai_pricing (model, price_per_million_in, price_per_million_out, price_per_audio_minute)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (model) DO UPDATE\n            SET price_per_million_in = EXCLUDED.price_per_million_in,\n                price_per_million_out = EXCLUDED.price_per_million_out,\n                price_per_audio_minute = EXCLUDED.price_per_audio_minute,\n                updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float4",
+        "Float4",
+        "Float4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "16a038db0df182a666e0717ac7f9243efeeb51622f9bea833501850b099cc291"
+}

@@ -1861,6 +1861,458 @@
         }
       }
     },
+    "/channel-labels": {
+      "get": {
+        "tags": ["channel_labels"],
+        "summary": "List the caller's shared or private labels.",
+        "operationId": "list_channel_labels",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabelsList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["channel_labels"],
+        "summary": "Create a label for the caller's authorized scope.",
+        "operationId": "create_channel_label",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-labels/channels/{channel_id}": {
+      "put": {
+        "tags": ["channel_labels"],
+        "summary": "Move a channel into a label of the caller's authorized scope, or out of any label.",
+        "operationId": "set_channel_label",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "The channel id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-labels/preview": {
+      "post": {
+        "tags": ["channel_labels"],
+        "summary": "Preview visible channels matched by a smart tag, without creating it.",
+        "operationId": "preview_smart_tag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelLabelRule"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartTagPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-labels/{label_id}": {
+      "delete": {
+        "tags": ["channel_labels"],
+        "summary": "Delete a label of the caller's authorized scope. Its channels return to the plain list.",
+        "operationId": "delete_channel_label",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "description": "The label id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["channel_labels"],
+        "summary": "Rename a label of the caller's authorized scope.",
+        "operationId": "rename_channel_label",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "description": "The label id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels": {
       "post": {
         "tags": ["channels"],
@@ -6273,6 +6725,116 @@
           },
           "500": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dictation/transcribe": {
+      "post": {
+        "tags": ["dictation"],
+        "summary": "Transcribe a transient recording with OpenAI Whisper.",
+        "description": "Available to every signed-in user on every plan; does not consume chat\ncredits. Audio and transcripts are never persisted.",
+        "operationId": "transcribe_dictation",
+        "parameters": [
+          {
+            "name": "language",
+            "in": "query",
+            "description": "ISO 639-1 language hint",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Encoded WebM, MP4, Ogg, or WAV audio up to 8 MiB and five minutes",
+          "content": {
+            "audio/webm": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "description": "OpenAPI representation of the raw encoded audio body extracted as `Bytes`."
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscribeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty, oversized, or malformed request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only signed-in users may dictate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body exceeds 8 MiB"
+          },
+          "415": {
+            "description": "Unsupported audio container",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-user hourly rate limit exceeded"
+          },
+          "502": {
+            "description": "Provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transcription capacity exhausted; retry after the Retry-After delay",
             "content": {
               "application/json": {
                 "schema": {
@@ -11000,7 +11562,7 @@
       },
       "delete": {
         "tags": ["messages::inbound::axum_router"],
-        "summary": "Tombstone one message while preserving replies.",
+        "summary": "Tombstone one message; deleting a discussion's root deletes the discussion.",
         "operationId": "entity_message_delete_message",
         "parameters": [
           {
@@ -11210,74 +11772,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Message"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/messages/{parent_type}/{parent_id}/references": {
-      "get": {
-        "tags": ["messages::inbound::axum_router"],
-        "summary": "Read source channel threads mentioning this document under both parents' permissions.",
-        "operationId": "entity_message_references",
-        "parameters": [
-          {
-            "name": "parent_type",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "parent_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum number of roots.",
-            "required": false,
-            "schema": {
-              "type": ["integer", "null"],
-              "format": "int32",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "created_at",
-            "in": "query",
-            "description": "Last root's creation timestamp.",
-            "required": false,
-            "schema": {
-              "type": ["string", "null"],
-              "format": "date-time"
-            }
-          },
-          {
-            "name": "cursor_id",
-            "in": "query",
-            "description": "Last root's UUID.",
-            "required": false,
-            "schema": {
-              "type": ["string", "null"],
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReferencedThreadPage"
                 }
               }
             }
@@ -14284,9 +14778,14 @@
           "default_model",
           "channel_scope",
           "channel_ids",
-          "mcp"
+          "mcp",
+          "is_coding"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+          },
           "bot": {
             "$ref": "#/components/schemas/Bot",
             "description": "The bot identity used for mentions and channel participation."
@@ -14325,6 +14824,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "is_coding": {
+            "type": "boolean",
+            "description": "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
           },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
@@ -14391,6 +14894,11 @@
         ],
         "description": "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       },
+      "AgentPullRequestState": {
+        "type": "string",
+        "description": "Last synchronized state of a session's linked GitHub pull request.",
+        "enum": ["open", "draft", "closed", "merged"]
+      },
       "AgentSessionFilters": {
         "type": "object",
         "description": "Filters for agent sessions.",
@@ -14411,7 +14919,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+            "description": "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           }
         }
       },
@@ -15861,6 +16369,10 @@
         "type": "object",
         "description": "Request to approve a pairing and register the harness.",
         "properties": {
+          "allow_permission_bypass": {
+            "type": "boolean",
+            "description": "Whether agents may bypass ACP permission requests on this harness."
+          },
           "name": {
             "type": ["string", "null"],
             "description": "Display name override. Defaults to the daemon's requested name."
@@ -16691,9 +17203,8 @@
       },
       "CalendarMentionEvent": {
         "type": "object",
-        "description": "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting.",
+        "description": "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting, or — when the requester has\nnone — from the mentioned projection a channel they belong to was given.",
         "required": [
-          "viewerEventId",
           "title",
           "time",
           "isRecurring",
@@ -16703,8 +17214,12 @@
         "properties": {
           "attendeeCount": {
             "type": "integer",
-            "description": "Number of attendees on the requester's copy.",
+            "description": "Number of attendees on the previewed copy.",
             "minimum": 0
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering."
           },
           "isRecurring": {
             "type": "boolean",
@@ -16737,12 +17252,12 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time",
-            "description": "Entity update time of the requester's copy."
+            "description": "Entity update time of the previewed copy."
           },
           "viewerEventId": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
-            "description": "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee."
+            "description": "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee.\nAbsent when the meeting is on none of the requester's calendars and\nthey see it only because it was shared with one of their channels:\nthat preview is read-only and there is no event of theirs to open."
           }
         }
       },
@@ -16758,7 +17273,7 @@
               },
               {
                 "$ref": "#/components/schemas/CalendarMentionEvent",
-                "description": "Preview of the requester's own copy, present only with access."
+                "description": "Preview of the requester's own copy, or of the channel-shared copy,\npresent only with access."
               }
             ]
           },
@@ -17484,6 +17999,113 @@
             "type": "string",
             "format": "uuid",
             "description": "Reusable code for joining the channel."
+          }
+        }
+      },
+      "ChannelLabel": {
+        "type": "object",
+        "description": "A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.",
+        "required": [
+          "id",
+          "name",
+          "sortOrder",
+          "channelIds",
+          "channelCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "channelCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "All assignments for a manual label; visible matches for a smart tag."
+          },
+          "channelIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Channels in this label that the requesting user participates in."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the label was created."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable label id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, unique within the scope (case-insensitive)."
+          },
+          "rule": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelRule",
+                "description": "Automatic membership rule, or `None` for a manually managed label."
+              }
+            ]
+          },
+          "sortOrder": {
+            "type": "number",
+            "format": "double",
+            "description": "Manual ordering value within the scope; lower sorts first."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Owning team, or `None` for account-private labels."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the label was last renamed or reordered."
+          }
+        }
+      },
+      "ChannelLabelRule": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Case-insensitive, literal substring matching on the channel name.",
+            "required": ["contains", "attribute"],
+            "properties": {
+              "attribute": {
+                "type": "string",
+                "enum": ["name"]
+              },
+              "contains": {
+                "type": "string",
+                "description": "The substring to find anywhere in the name."
+              }
+            }
+          }
+        ],
+        "description": "An attribute rule that automatically groups matching channels."
+      },
+      "ChannelLabelsList": {
+        "type": "object",
+        "description": "The authorized scope's labels in manual order.",
+        "required": ["labels"],
+        "properties": {
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelLabel"
+            },
+            "description": "Every label of the scope, whether or not the caller sees channels in it."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team scope, or `None` for private labels."
           }
         }
       },
@@ -18381,7 +19003,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -18625,9 +19247,14 @@
           "instructions",
           "harness",
           "default_model",
-          "channel_scope"
+          "channel_scope",
+          "is_coding"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."
@@ -18674,6 +19301,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "is_coding": {
+            "type": "boolean",
+            "description": "Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`)."
           },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
@@ -18768,6 +19399,36 @@
           "success": {
             "type": "boolean",
             "description": "Indicates if the document was created successfully"
+          }
+        }
+      },
+      "CreateChannelLabelRequest": {
+        "type": "object",
+        "description": "Request body for creating a label.",
+        "required": ["name"],
+        "properties": {
+          "channelIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Channels to move into the new label."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name; unique within the scope, case-insensitively."
+          },
+          "rule": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelRule",
+                "description": "Automatic name-matching rule; omitted for manual labels or a name-only rename."
+              }
+            ]
           }
         }
       },
@@ -19235,6 +19896,10 @@
         "description": "Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.",
         "required": ["name"],
         "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling. Omitted by older clients; web approval decides."
+          },
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine, e.g. `eric@macbook / darwin`."
@@ -20446,7 +21111,7 @@
             "description": "File type of the uploaded object (may differ from the document's own\ntype, e.g. `pdf` for the converted rendition of a docx)."
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
+            "type": "string",
             "description": "The owner of the document (used by the extractor to resolve S3 keys)."
           }
         }
@@ -20481,8 +21146,8 @@
             ]
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
-            "description": "The owner of the new copy (the copier)."
+            "type": "string",
+            "description": "The principal who owns the new copy."
           },
           "project_id": {
             "type": ["string", "null"],
@@ -20517,7 +21182,7 @@
         "properties": {
           "actor": {
             "type": ["string", "null"],
-            "description": "Who mechanically created the document. Absent on events published\nbefore attribution: ingest then treats [`Self::owner`] as the actor."
+            "description": "Who mechanically created the document. Absent on events published\nbefore attribution: ingest derives a user/bot actor from [`Self::owner`].\nTeam owners fall back to [`Self::on_behalf_of`], then the system bot."
           },
           "created_at": {
             "type": ["string", "null"],
@@ -20555,8 +21220,8 @@
             ]
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
-            "description": "The owner (creator) of the document."
+            "type": "string",
+            "description": "The principal who owns the document."
           },
           "project_id": {
             "type": ["string", "null"],
@@ -20651,7 +21316,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -21167,7 +21832,7 @@
         "properties": {
           "actor": {
             "type": ["string", "null"],
-            "description": "Who mechanically changed the content. Absent on events published\nbefore attribution, and on human-only collab sessions."
+            "description": "Legacy single-editor attribution; newer Sync callers send `editors`."
           },
           "document_id": {
             "type": "string",
@@ -21177,9 +21842,16 @@
             "type": ["string", "null"],
             "description": "Version marker for the sync snapshot, when the caller supplies one."
           },
+          "editors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentSyncEditor"
+            },
+            "description": "Distinct editors since the preceding snapshot notification."
+          },
           "file_type": {
             "$ref": "#/components/schemas/FileType",
-            "description": "File type of the sync document (markdown today)."
+            "description": "File type of the sync document, resolved by the document backend."
           },
           "on_behalf_of": {
             "oneOf": [
@@ -21189,6 +21861,28 @@
               {
                 "$ref": "#/components/schemas/MacroUserIdStr",
                 "description": "The user whose feed this edit belongs on, when different from\n[`Self::actor`]."
+              }
+            ]
+          }
+        }
+      },
+      "DocumentSyncEditor": {
+        "type": "object",
+        "description": "An editor reported by Sync from an authenticated session.",
+        "required": ["actor"],
+        "properties": {
+          "actor": {
+            "type": "string",
+            "description": "User or bot that performed the edit."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User represented by an agent, if any."
               }
             ]
           }
@@ -21386,7 +22080,7 @@
             ]
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
+            "type": "string",
             "description": "The owner of the document."
           },
           "previous_project_id": {
@@ -23829,6 +24523,10 @@
           "connected"
         ],
         "properties": {
+          "allow_permission_bypass": {
+            "type": "boolean",
+            "description": "Whether agents may bypass ACP permission requests on this harness."
+          },
           "connected": {
             "type": "boolean",
             "description": "Whether the daemon currently holds a runtime connection."
@@ -25034,6 +25732,10 @@
                 "format": "uuid",
                 "description": "Serialized mark identifier."
               },
+              "marked_text": {
+                "type": ["string", "null"],
+                "description": "The document text the mark covers, captured by the editor as the\ncomment is written. Trimmed and bounded before it is stored, so an\noversized or whitespace-only claim cannot reach the thread row."
+              },
               "type": {
                 "type": "string",
                 "enum": ["markdown"]
@@ -25149,6 +25851,10 @@
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine."
+          },
+          "requested_allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling; false forbids bypass at approval."
           },
           "requested_name": {
             "type": "string",
@@ -26005,6 +26711,11 @@
             "type": "string",
             "description": "Macro Markdown body."
           },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Client-minted UUIDv7 for the new message, so an optimistic message\nalready carries its final id; the server mints one when absent."
+          },
           "mentions": {
             "type": "array",
             "items": {
@@ -26310,7 +27021,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -26708,55 +27419,6 @@
           }
         }
       },
-      "ReferencedThread": {
-        "type": "object",
-        "description": "A source channel thread that mentions the requested document.",
-        "required": ["parent", "root_id", "can_reply"],
-        "properties": {
-          "can_reply": {
-            "type": "boolean",
-            "description": "Whether this viewer currently has permission to reply in the source channel."
-          },
-          "channel_name": {
-            "type": ["string", "null"],
-            "description": "Source channel's current display name, returned only after access checks."
-          },
-          "parent": {
-            "$ref": "#/components/schemas/MessageParent",
-            "description": "Source parent used by the common message reader and mutations."
-          },
-          "root_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Source root identity; discovery does not copy its message content."
-          }
-        }
-      },
-      "ReferencedThreadPage": {
-        "type": "object",
-        "description": "Authorized source threads, deduplicated by root.",
-        "required": ["threads"],
-        "properties": {
-          "next_cursor": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/MessageCursor",
-                "description": "Last visible root; no private thread identifiers are exposed through cursors."
-              }
-            ]
-          },
-          "threads": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReferencedThread"
-            },
-            "description": "Accessible channel discussions mentioning the document."
-          }
-        }
-      },
       "Reminder": {
         "type": "object",
         "description": "A reminder belonging to a user.\n\n`user_id` is deliberately absent: a reminder is only ever read by its owner,\nso the field would be redundant on the wire.",
@@ -26947,6 +27609,28 @@
               "type": "string"
             },
             "description": "User ids to remove."
+          }
+        }
+      },
+      "RenameChannelLabelRequest": {
+        "type": "object",
+        "description": "Request body for renaming a label.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New display name."
+          },
+          "rule": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelRule",
+                "description": "Automatic name-matching rule; omitted for manual labels or a name-only rename."
+              }
+            ]
           }
         }
       },
@@ -27262,6 +27946,17 @@
                 "description": "The turn that was running when it stopped, if any."
               }
             ]
+          }
+        }
+      },
+      "SetChannelLabelRequest": {
+        "type": "object",
+        "description": "Request body for moving a channel between labels.",
+        "properties": {
+          "labelId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The label to put the channel in, or `null` to remove it from its label."
           }
         }
       },
@@ -27585,6 +28280,41 @@
           }
         }
       },
+      "SmartTagChannelMatch": {
+        "type": "object",
+        "description": "A channel visible to the caller that matches a smart tag rule.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Channel display name."
+          }
+        }
+      },
+      "SmartTagPreview": {
+        "type": "object",
+        "description": "A bounded preview and the total number of visible channels matching a rule.",
+        "required": ["channels", "totalCount"],
+        "properties": {
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SmartTagChannelMatch"
+            },
+            "description": "First matches, in alphabetical order."
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of matching channels the caller participates in, including overflow."
+          }
+        }
+      },
       "SoupAgentSession_SoupPropertiesField": {
         "allOf": [
           {
@@ -27608,6 +28338,7 @@
               "name",
               "ownerId",
               "botId",
+              "harness",
               "status",
               "createdAt",
               "updatedAt"
@@ -27623,6 +28354,10 @@
                 "format": "date-time",
                 "description": "The time the session was created"
               },
+              "harness": {
+                "type": "string",
+                "description": "The runtime snapshotted when the session was created."
+              },
               "id": {
                 "type": "string",
                 "format": "uuid",
@@ -27636,6 +28371,34 @@
                 "type": "string",
                 "description": "Who the session belongs to"
               },
+              "pullRequestId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The linked pull request's Macro entity, when visible to the viewer."
+              },
+              "pullRequestState": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AgentPullRequestState",
+                    "description": "Last synchronized state of the linked pull request, when visible."
+                  }
+                ]
+              },
+              "pullRequestUrl": {
+                "type": ["string", "null"],
+                "description": "The persisted pull request associated with the session."
+              },
+              "repoBranch": {
+                "type": ["string", "null"],
+                "description": "The starting branch selected for this session, not its current branch."
+              },
+              "repoUrl": {
+                "type": ["string", "null"],
+                "description": "The repository the session works with, when one was selected."
+              },
               "status": {
                 "type": "string",
                 "description": "The session's last known status.\n\n`no_messages` until the first system event arrives, `disconnected` if\nthe connection dropped without a clean close, otherwise the wire name\nof the most recent system event (for example `session/end`)."
@@ -27644,6 +28407,10 @@
                 "type": ["string", "null"],
                 "format": "uuid",
                 "description": "The channel thread the session was opened from, when any"
+              },
+              "turnState": {
+                "type": ["string", "null"],
+                "description": "Last persisted fold turn state. Absent until an older session next runs."
               },
               "updatedAt": {
                 "type": "string",
@@ -27654,11 +28421,15 @@
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "The time the session was last viewed by the requesting user"
+              },
+              "workingBranch": {
+                "type": ["string", "null"],
+                "description": "Last captured working branch, when the runtime has reported one."
               }
             }
           }
         ],
-        "description": "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+        "description": "An agent session as displayed in Soup.\n\nIncludes the persisted runtime and repository metadata needed to render\ncoding and non-coding sessions without fetching each session separately."
       },
       "SoupApiItem": {
         "allOf": [
@@ -29096,7 +29867,7 @@
               },
               "ownerId": {
                 "type": "string",
-                "description": "The user id of who created the project"
+                "description": "The owner of the project"
               },
               "parentId": {
                 "type": ["string", "null"],
@@ -29585,6 +30356,10 @@
                 "format": "uuid",
                 "description": "Mark UUID serialized in the document."
               },
+              "marked_text": {
+                "type": ["string", "null"],
+                "description": "The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone."
+              },
               "type": {
                 "type": "string",
                 "enum": ["markdown"]
@@ -29601,6 +30376,10 @@
                 "format": "uuid",
                 "description": "Highlight annotation UUID."
               },
+              "marked_text": {
+                "type": ["string", "null"],
+                "description": "The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text."
+              },
               "type": {
                 "type": "string",
                 "enum": ["pdf_highlight"]
@@ -29609,7 +30388,7 @@
           },
           {
             "type": "object",
-            "description": "A comment-only placeable PDF annotation.",
+            "description": "A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.",
             "required": ["anchor_id", "type"],
             "properties": {
               "anchor_id": {
@@ -29731,6 +30510,17 @@
           "user_id": {
             "type": "string",
             "description": "User who owns this discussion, including imported discussions."
+          }
+        }
+      },
+      "TranscribeResponse": {
+        "type": "object",
+        "description": "Transcription result.",
+        "required": ["text"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Recognized text."
           }
         }
       },
@@ -30034,9 +30824,14 @@
           "instructions",
           "harness",
           "default_model",
-          "channel_scope"
+          "channel_scope",
+          "is_coding"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."
@@ -30083,6 +30878,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "is_coding": {
+            "type": "boolean",
+            "description": "Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`)."
           },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",

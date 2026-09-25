@@ -165,20 +165,15 @@ const createBlock = async (spec: {
 
   setCreateMenuOpen(false, false);
 
-  // WORKAROUND: On mobile, the navigation interceptor in createMobileSwipeLayout
-  // consumes openWithSplit calls and returns undefined instead of a SplitHandle.
-  // This means we can't show a loading spinner then replace it via split.replace(),
-  // because we never get a handle back. Instead, on mobile we skip the loading state
-  // and navigate directly to the created block after the async creation completes.
-  // If the mobile navigation interceptor is refactored to return handles, this
-  // workaround can be removed and both paths can use the loading-then-replace flow.
+  // On mobile, navigate directly after creation instead of showing an
+  // intermediate loading pane during the swipe transition.
   const showLoadingFirst = loading && !isMobile();
 
   const split = showLoadingFirst
     ? openWithSplit(
         { type: 'component', id: 'loading' },
         { referredFrom: 'launcher', preferNewSplit: spec.shouldInsert }
-      )
+      ).split
     : undefined;
 
   const id = await createFn();
@@ -1003,7 +998,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   return (
     // The shared shell stopped painting its own pane (cmd+k gets one from the
     // app Dialog wrapper); this raw-Kobalte dialog carries it here.
-    <div class="create-menu-pane w-200 max-w-[calc(100vw-16px)] rounded-xl touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)]">
+    <div class="elevated-surface create-menu-pane w-200 max-w-[calc(100vw-16px)] touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)]">
       <div
         aria-hidden="true"
         class="hidden touch:flex h-5 shrink-0 items-center justify-center"
@@ -1017,7 +1012,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         ref={ref}
         tabindex={-1}
       >
-        <CommandMenuShell.Header class="gap-2 px-4 my-1 border-b-0">
+        <CommandMenuShell.Header class="border-b-0">
           <Show
             when={searchMode()}
             fallback={

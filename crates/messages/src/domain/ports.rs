@@ -16,6 +16,9 @@ pub enum MessageError {
     /// Invalid thread relation or anchor.
     #[error("{0}")]
     Invalid(&'static str),
+    /// A client-supplied message id is already taken.
+    #[error("message id already exists")]
+    Conflict,
     /// Persistence or delivery failed.
     #[error("message operation failed: {0}")]
     Repository(rootcause::Report),
@@ -82,43 +85,6 @@ pub struct MessagePage {
     pub next_cursor: Option<MessageCursor>,
     /// Continue to newer roots.
     pub previous_cursor: Option<MessageCursor>,
-}
-
-/// A source channel thread that mentions the requested document.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ReferencedThread {
-    /// Source parent used by the common message reader and mutations.
-    pub parent: MessageParent,
-    /// Source root identity; discovery does not copy its message content.
-    pub root_id: Uuid,
-    /// Source channel's current display name, returned only after access checks.
-    pub channel_name: Option<String>,
-    /// Whether this viewer currently has permission to reply in the source channel.
-    pub can_reply: bool,
-}
-
-/// Authorized source threads, deduplicated by root.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ReferencedThreadPage {
-    /// Accessible channel discussions mentioning the document.
-    pub threads: Vec<ReferencedThread>,
-    /// Last visible root; no private thread identifiers are exposed through cursors.
-    pub next_cursor: Option<MessageCursor>,
-}
-
-/// Repository fact used to authorize a source before loading its messages.
-#[derive(Debug, Clone)]
-pub struct ReferencedThreadCandidate {
-    /// Channel that owns the source discussion.
-    pub channel_id: Uuid,
-    /// Canonical thread root.
-    pub root_id: Uuid,
-    /// Source display name.
-    pub channel_name: Option<String>,
-    /// Root's stable ordering timestamp.
-    pub created_at: DateTime<Utc>,
 }
 
 /// Authenticated create command; attribution fields are never client controlled.
@@ -255,13 +221,6 @@ pub enum MessageChange {
 
 /// Persistence boundary. Implementations enforce parent/thread integrity atomically.
 pub trait MessageRepository: Send + Sync + 'static {
-    /// Discover source identities without treating a mention as a grant of access.
-    fn referenced_threads(
-        &self,
-        document_id: &str,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> impl Future<Output = Result<Vec<ReferencedThreadCandidate>, MessageError>> + Send;
     /// Whether the parent still exists and permits messaging lifecycle-wise.
     fn parent_exists(
         &self,
@@ -361,15 +320,6 @@ pub trait MessageEventPublisher: Send + Sync + 'static {
 /// Resolves access to referenced entities before a message transaction begins.
 /// Implementations must never grant access as a side effect of this check.
 pub trait MessageReferenceAccess: Send + Sync + 'static {
-    /// Whether this principal currently has write access to a referenced conversation.
-    fn can_write<'a>(
-        &'a self,
-        _auth: &'a entity_access::domain::models::EntityAccessAuth,
-        _entity_type: entity_access::domain::models::EntityType,
-        _entity_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<bool, MessageError>> + Send + 'a>> {
-        Box::pin(async { Ok(false) })
-    }
     /// Whether this principal can view the referenced entity now.
     fn can_view<'a>(
         &'a self,

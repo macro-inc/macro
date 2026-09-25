@@ -175,6 +175,11 @@ pub struct Config {
     pub macro_api_token_private_secret_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
     /// Issuer stamped into minted Macro API tokens.
     pub macro_api_token_issuer: MacroApiTokenIssuer,
+    /// S3 bucket the Changes pane's patches are stored in, one object per
+    /// capture under `agent-sessions/{session}/changes/`. Required: a
+    /// harness that cannot store a patch cannot show a session's changes,
+    /// and that is worth failing at boot rather than on the first capture.
+    pub agent_session_changes_bucket: String,
     /// Client id of the GitHub App installation tokens are minted for.
     pub github_sync_app_client_id: String,
     /// PEM private key of that App.

@@ -71,71 +71,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         self
     }
 
-    /// Join accessible source discussions without copying or reparenting their messages.
-    #[tracing::instrument(err, skip(self, access))]
-    pub async fn referenced_threads(
-        &self,
-        access: EntityAccessReceipt<MessageView>,
-        mut cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<ReferencedThreadPage, MessageError> {
-        let document = parent_from_receipt(&access)?;
-        if !matches!(document, MessageParent::Document(_)) {
-            return Err(MessageError::Invalid(
-                "channel references require a document",
-            ));
-        }
-        self.ensure_parent(&document).await?;
-        let limit = usize::from(limit.clamp(1, 100));
-        let mut threads = Vec::new();
-        let mut visible_cursor = None;
-        loop {
-            let candidates = self
-                .repo
-                .referenced_threads(&document.entity_id(), cursor.clone(), 100)
-                .await?;
-            let exhausted = candidates.len() < 100;
-            for candidate in candidates {
-                cursor = Some(MessageCursor {
-                    created_at: candidate.created_at,
-                    id: candidate.root_id,
-                });
-                let parent = MessageParent::Channel(candidate.channel_id);
-                let id = parent.entity_id();
-                if !self
-                    .references
-                    .can_view(access.auth(), EntityType::Channel, &id)
-                    .await?
-                {
-                    continue;
-                }
-                if threads.len() == limit {
-                    return Ok(ReferencedThreadPage {
-                        threads,
-                        next_cursor: visible_cursor,
-                    });
-                }
-                let can_reply = self
-                    .references
-                    .can_write(access.auth(), EntityType::Channel, &id)
-                    .await?;
-                threads.push(ReferencedThread {
-                    parent,
-                    root_id: candidate.root_id,
-                    channel_name: candidate.channel_name,
-                    can_reply,
-                });
-                visible_cursor = cursor.clone();
-            }
-            if exhausted {
-                return Ok(ReferencedThreadPage {
-                    threads,
-                    next_cursor: None,
-                });
-            }
-        }
-    }
-
     /// Read the same bounded message timeline for either parent.
     #[tracing::instrument(err, skip(self, access))]
     pub async fn timeline(
@@ -381,7 +316,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         Ok(message)
     }
 
-    /// Delete one message. Root deletion does not delete its discussion.
+    /// Delete one message. On a discussion, deleting the root deletes the discussion.
     #[tracing::instrument(err, skip(self, access))]
     pub async fn delete(
         &self,
@@ -393,6 +328,19 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
         let current = self.active_message(&parent, id, false).await?;
+        // A comment's replies and its place in the document belong to the comment,
+        // not to its first message, so the root carries the whole discussion with
+        // it. Channel roots are one message in a conversation that continues
+        // without them, and keep the tombstone the channel timeline renders.
+        if parent.is_discussion() && current.thread_id.is_none() {
+            self.delete_discussion(&access, &parent, &actor, id, nonce)
+                .await?;
+            return self
+                .repo
+                .get(&parent, id)
+                .await?
+                .ok_or(MessageError::NotFound);
+        }
         let channel_bot =
             matches!(parent, MessageParent::Channel(_)) && current.sender_id.as_bot().is_some();
         if current.sender_id != actor && !can_moderate(access.entity_permission()) && !channel_bot {
@@ -504,13 +452,28 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             ));
         }
         self.ensure_parent(&parent).await?;
-        let thread = self.active_thread(&parent, root_id).await?;
+        self.delete_discussion(&access, &parent, &actor, root_id, nonce)
+            .await
+    }
+
+    /// The one teardown policy: whoever may delete a discussion outright is
+    /// whoever may delete it by deleting its root, since both take replies
+    /// written by other people with them.
+    async fn delete_discussion(
+        &self,
+        access: &EntityAccessReceipt<MessageWrite>,
+        parent: &MessageParent,
+        actor: &ChannelSender<'static>,
+        root_id: Uuid,
+        nonce: Option<String>,
+    ) -> Result<ThreadState, MessageError> {
+        let thread = self.active_thread(parent, root_id).await?;
         if thread.user_id != actor.as_ref() && !can_moderate(access.entity_permission()) {
             return Err(MessageError::Forbidden);
         }
-        let state = self.repo.delete_thread(&parent, root_id).await?;
+        let state = self.repo.delete_thread(parent, root_id).await?;
         self.publish(MessageEvent {
-            parent,
+            parent: parent.clone(),
             actor: actor.as_ref().to_owned(),
             nonce,
             change: MessageChange::ThreadUpdated {
@@ -787,6 +750,33 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
             || height_pct <= 0.0)
     {
         return Err(MessageError::Invalid("invalid PDF comment geometry"));
+    }
+    if let Some(id) = input.id {
+        validate_client_id(id, chrono::Utc::now())?;
+    }
+    Ok(())
+}
+
+/// How far a client-minted id's timestamp may drift from the server clock.
+/// Ordering uses the server's `created_at`, so this only needs to catch forged
+/// ids; it is wide so a device with a wrong clock can still post.
+const CLIENT_ID_MAX_SKEW: chrono::TimeDelta = chrono::TimeDelta::days(1);
+
+/// A client-minted id must be a UUIDv7 stamped near now, so its embedded time
+/// stays roughly the message's creation time.
+fn validate_client_id(id: Uuid, now: chrono::DateTime<chrono::Utc>) -> Result<(), MessageError> {
+    let minted_at = id
+        .get_timestamp()
+        .filter(|_| id.get_version_num() == 7)
+        .and_then(|timestamp| {
+            let (seconds, nanos) = timestamp.to_unix();
+            chrono::DateTime::from_timestamp(i64::try_from(seconds).ok()?, nanos)
+        })
+        .ok_or(MessageError::Invalid("message id must be a UUIDv7"))?;
+    if (now - minted_at).abs() > CLIENT_ID_MAX_SKEW {
+        return Err(MessageError::Invalid(
+            "message id timestamp is too far from the server clock",
+        ));
     }
     Ok(())
 }

@@ -19,7 +19,7 @@
 //! every entry point resolves the owner's key and mints a client for that one
 //! session. The manager holds only what a client is built from.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession, ReplicaId};
@@ -41,11 +41,12 @@ use super::keys::CursorApiKeys;
 use super::pipe::PipeTransport;
 use super::repository_chooser::HaikuRepositoryChooser;
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::SpawnContainer;
+use crate::domain::model::{AgentKind, SessionBlocker, SpawnContainer};
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{ContainerManager, ReachableRepositories};
 use crate::domain::sandbox::SandboxResizeEffect;
 use agent_session::domain::model::SandboxSize;
+use macro_user_id::user_id::MacroUserIdStr;
 
 #[cfg(test)]
 mod test;
@@ -128,6 +129,8 @@ pub struct CursorContainerManager<Sessions, Keys, Repositories, Store> {
     repositories: Arc<Repositories>,
     usage: Arc<dyn ai_usage::UsageRecorder>,
     pull_requests: Option<Arc<dyn agent_session::domain::pull_request::SessionPullRequests>>,
+    working_branches:
+        Option<Arc<dyn agent_session::domain::working_branch::SessionWorkingBranches>>,
     journal_storage: JournalStorage,
     /// Sessions the harness has a command in flight for right now, shared
     /// with `AgentHarnessService` so the idle reaper below never closes a
@@ -167,8 +170,6 @@ struct RestoredCursorSession {
     acp_session: SessionId,
     /// The Cursor agent, when one was ever minted.
     agent: Option<CursorAgentId>,
-    /// The model id the session last reported, from the projected column.
-    model_id: Option<String>,
     /// The last Cursor run whose output reached Macro's session log.
     last_run: Option<CursorRunId>,
 }
@@ -201,6 +202,7 @@ where
             repositories,
             usage,
             pull_requests: None,
+            working_branches: None,
             journal_storage: JournalStorage::Postgres {
                 pool: journal.pool,
                 replica: journal.replica,
@@ -227,6 +229,7 @@ where
             repositories: self.repositories,
             usage: self.usage,
             pull_requests: self.pull_requests,
+            working_branches: self.working_branches,
             journal_storage: self.journal_storage,
             pending: self.pending,
         }
@@ -257,6 +260,7 @@ where
             repositories,
             usage: Arc::new(ai_usage::NoOpUsageRecorder),
             pull_requests: None,
+            working_branches: None,
             journal_storage: JournalStorage::Memory,
             pending: PendingCommands::new(),
         }
@@ -268,6 +272,15 @@ where
         service: Arc<dyn agent_session::domain::pull_request::SessionPullRequests>,
     ) -> Self {
         self.pull_requests = Some(service);
+        self
+    }
+
+    /// Persist Cursor's repository branch facts through the owning session service.
+    pub fn with_working_branches(
+        mut self,
+        service: Arc<dyn agent_session::domain::working_branch::SessionWorkingBranches>,
+    ) -> Self {
+        self.working_branches = Some(service);
         self
     }
 
@@ -283,7 +296,10 @@ where
         fields(agent.session.id = %session.id)
     )]
     async fn client_for(&self, session: &AgentSession) -> Result<(CursorClient, Option<String>)> {
-        let config = self.keys.resolve(&session.owner_id).await?;
+        // The key is a person's: a session owned by anything else has no
+        // Cursor account to run on, and is refused here rather than resolved
+        // as though it did.
+        let config = self.keys.resolve(session.owner_user()?).await?;
         let client = CursorClient::new(CursorConfig {
             api_key: ApiKey::new(config.key.expose()),
             base_url: self.base_url.clone(),
@@ -321,6 +337,7 @@ where
         restore: Option<RestoredCursorSession>,
     ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
         let session_id = session.id;
+        let owner = session.owner_user()?.clone();
         let owner_binding: Option<agent_session::domain::connection::AttachmentActivation>;
         let journal: Arc<dyn cursor_cloud_agents::domain::journal::CursorJournal> = match &self
             .journal_storage
@@ -352,6 +369,20 @@ where
                 Arc::new(cursor_cloud_agents::outbound::memory_journal::MemoryJournal::default())
             }
         };
+        let claim = Arc::new(OnceLock::new());
+        let activated_claim = claim.clone();
+        let owner_binding: agent_session::domain::connection::AttachmentActivation =
+            Box::new(move |ownership| {
+                if let Some(activate) = owner_binding {
+                    activate(ownership)?;
+                }
+                activated_claim.set(ownership).map_err(|_| {
+                    agent_runtime_protocol::domain::ports::TransportError::Client(
+                        "Cursor attachment already activated".into(),
+                    )
+                    .into()
+                })
+            });
         let (ours, theirs) = tokio::io::duplex(PIPE_CAPACITY);
         let (agent_reader, agent_writer) = tokio::io::split(theirs);
         let cursor = RecordingCursor {
@@ -366,18 +397,25 @@ where
                 super::pull_request::CursorPullRequestReporter {
                     service: service.clone(),
                     session: session_id,
-                    owner: session.owner_id.clone(),
+                    owner: owner.clone(),
                 },
             ));
         }
-        // The user's chosen model seeds the session as its default: a fresh
-        // session starts on it, and a resumed one still prefers whatever it
-        // was actually last using (carried in `restore.model_id`) over this.
+        if let Some(service) = &self.working_branches {
+            notifier = notifier.with_working_branches(Arc::new(
+                super::working_branch::CursorWorkingBranchReporter {
+                    service: service.clone(),
+                    session: session_id,
+                    owner: owner.clone(),
+                    claim,
+                },
+            ));
+        }
         let chooser = HaikuRepositoryChooser::new(
             Arc::clone(&self.repositories),
             self.sessions.clone(),
             Arc::clone(&self.usage),
-            session.owner_id.clone(),
+            owner,
             session_id,
         );
         let service = Arc::new(
@@ -388,7 +426,12 @@ where
                 journal,
                 self.artifacts.clone(),
             )
-            .with_default_model(default_model_id),
+            .with_default_model(default_model_id)
+            // The session's own model outranks the account default: what its
+            // owner picked for it when they opened it, what they switched it
+            // to since, or - for a session that never picked - the slug this
+            // harness seeded the record with, which resolves to no opinion.
+            .with_host_model(Some(session.model.clone())),
         );
         if let Some(restored) = restore {
             service.restore_session_with_watermark(
@@ -399,7 +442,6 @@ where
                 // deployment default to fall back on, and a restored session
                 // must land on the repository its agent was minted against.
                 session.repo_url.as_deref().and_then(CursorRepoUrl::parse),
-                restored.model_id,
                 restored.last_run,
             );
         }
@@ -504,12 +546,11 @@ where
             shutdown,
             Some(reload_rx),
         );
-        let mut attachment = agent_session::domain::connection::RuntimeAttachment::solo(transport)
-            .with_closed(attachment_closed);
-        if let Some(binding) = owner_binding {
-            attachment = attachment.on_activate(binding);
-        }
-        Ok(attachment)
+        Ok(
+            agent_session::domain::connection::RuntimeAttachment::solo(transport)
+                .with_closed(attachment_closed)
+                .on_activate(owner_binding),
+        )
     }
 }
 
@@ -523,14 +564,29 @@ where
 {
     type Transport = PipeTransport;
 
+    /// A `@cursor` session runs on its owner's key, so an owner without one
+    /// is told so before any session exists for them. The kind is not
+    /// consulted: the router only asks this manager about Cursor sessions.
+    async fn preflight(
+        &self,
+        _kind: AgentKind,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<Option<SessionBlocker>> {
+        match self.keys.resolve(owner).await {
+            Ok(_) => Ok(None),
+            Err(HarnessError::CursorNotConnected) => Ok(Some(SessionBlocker::CursorNotConnected)),
+            Err(error) => Err(error),
+        }
+    }
+
     async fn spawn(
         &self,
         command: SpawnContainer,
     ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
-        // The session row is read for its owner alone: spawning is the first
-        // moment we can tell whether the person who mentioned @cursor has
-        // connected an account, and refusing here is what turns "the bot
-        // ignored me" into a sentence they can act on.
+        // The session row is read for its owner alone. The mention path has
+        // already asked [`Self::preflight`] about the owner's key; sessions
+        // opened from the create menu and older rows still reach the refusal
+        // here, so "the bot ignored me" stays a sentence they can act on.
         let session = AgentSessionRepo::get(&self.sessions, command.session_id).await?;
         let (client, default_model_id) = self.client_for(&session).await?;
         // No MCP servers pass through here: they ride the ACP protocol
@@ -564,12 +620,6 @@ where
                 Some(RestoredCursorSession {
                     acp_session: acp.clone(),
                     agent,
-                    // The projected model column. It round-trips a picked
-                    // model back into the wrapper — and for a session that
-                    // never picked, it still holds the deployment slug the
-                    // harness seeded it with, which the wrapper resolves to
-                    // "no opinion" rather than trusting.
-                    model_id: Some(stored.model.clone()),
                     last_run: external
                         .and_then(|external| external.last_run_id)
                         .map(CursorRunId::new),

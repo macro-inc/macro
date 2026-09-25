@@ -29,6 +29,7 @@ import { formatCompactRelativeTimestamp } from '@entity/utils/timestamp';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import { formatCalendarReminderTime } from '@notifications';
+import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
 import FilesIcon from '@phosphor/files.svg';
 import GitMergeIcon from '@phosphor/git-merge.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
@@ -36,7 +37,7 @@ import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left
 import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
 import BellSimpleIcon from '@phosphor-icons/core/regular/bell-simple.svg?component-solid';
 import CalendarBlankIcon from '@phosphor-icons/core/regular/calendar-blank.svg?component-solid';
-import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?component-solid';
+import ChatTeardropIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-solid';
 import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
@@ -48,7 +49,7 @@ import {
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
 import type { PropertyApiValues, Property as PropertyT } from '@property/types';
-import { senderFromStorageId } from '@queries/channel/message-sender';
+import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { ItemEntity } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-storage/generated/schemas';
@@ -117,41 +118,6 @@ const getGithubSender = (entity: EntityData, notification?: Notification) => {
   }
 
   return { id: login, fallbackName: login, imageUrl };
-};
-
-const getNotificationSenderFallbackName = (
-  notification: Notification
-): string | undefined => {
-  const content = notification.notification_metadata.content as
-    | {
-        sender?: string;
-        senderGithubLogin?: string;
-        botName?: string;
-        mentionedBy?: string;
-      }
-    | undefined;
-
-  switch (notification.notification_metadata.tag) {
-    case 'new_email':
-      return content?.sender ?? undefined;
-    case 'ai_response':
-      return 'Macro agent';
-    case 'agent_session_settled':
-    case 'agent_session_waiting_for_input':
-      return content?.botName;
-    case 'agent_session_mentioned':
-      return content?.mentionedBy ?? content?.botName;
-    case 'channel_message_send':
-      return content?.sender ?? notification.sender_id ?? undefined;
-    case 'github_pr_status_changed':
-    case 'github_review_requested':
-    case 'github_pr_comment':
-    case 'github_pr_mention':
-    case 'github_pr_review':
-      return content?.senderGithubLogin ?? notification.sender_id ?? undefined;
-    default:
-      return undefined;
-  }
 };
 
 const getTimestamp = (entity: EntityData, notification?: Notification) => {
@@ -264,19 +230,18 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     .with('ai_response', () => () => (
       <EntityIcon class={AVATAR_GLYPH_CLASS} targetType="chat" size="fill" />
     ))
-    .with('channel_mention', 'mentioned_in_document_comment', () => () => (
-      <AtIcon class={AVATAR_GLYPH_CLASS} />
-    ))
+    .with('channel_mention', () => () => <AtIcon class={AVATAR_GLYPH_CLASS} />)
+    .with(
+      'mentioned_in_document_comment',
+      'replied_to_document_comment_thread',
+      'commented_on_document',
+      () => () => <ChatTeardropIcon class={AVATAR_GLYPH_CLASS} />
+    )
     .with('document_mention', () => () => (
       <FilesIcon class={AVATAR_GLYPH_CLASS} />
     ))
-    .with(
-      'channel_message_reply',
-      'replied_to_document_comment_thread',
-      () => () => <ArrowBendUpLeftIcon class={AVATAR_GLYPH_CLASS} />
-    )
-    .with('commented_on_document', () => () => (
-      <ChatCircleIcon class={AVATAR_GLYPH_CLASS} />
+    .with('channel_message_reply', () => () => (
+      <ArrowBendUpLeftIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('channel_message_send', () => () => (
       <ChatTextIcon class={AVATAR_GLYPH_CLASS} />
@@ -1014,7 +979,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
       return {
         action: buildActionLabel({
           sender: senderName(),
-          action: 'mentioned you',
+          action: 'mentioned you in a comment',
         }),
         content,
       };
@@ -1022,7 +987,10 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
 
     if (metadata?.tag === 'replied_to_document_comment_thread') {
       return {
-        action: buildActionLabel({ sender: senderName(), action: 'replied' }),
+        action: buildActionLabel({
+          sender: senderName(),
+          action: 'replied to a comment',
+        }),
         content,
       };
     }

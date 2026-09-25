@@ -11,7 +11,10 @@ pub fn model_config_options(current: &str, models: &[&str]) -> Vec<SessionConfig
     let options: Vec<_> = models
         .iter()
         .map(|model| {
-            SessionConfigSelectOption::new(SessionConfigValueId::new((*model).to_owned()), *model)
+            SessionConfigSelectOption::new(
+                SessionConfigValueId::new((*model).to_owned()),
+                super::models::display_name(model),
+            )
         })
         .collect();
     vec![SessionConfigOption::select(
@@ -21,3 +24,6 @@ pub fn model_config_options(current: &str, models: &[&str]) -> Vec<SessionConfig
         options,
     )]
 }
+
+#[cfg(test)]
+mod test;

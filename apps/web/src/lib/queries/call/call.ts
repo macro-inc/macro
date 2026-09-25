@@ -14,11 +14,20 @@ import { callKeys } from './keys';
 export function useActiveCallQuery(channelId: Accessor<string>) {
   return useQuery(() => ({
     queryKey: callKeys.active(channelId()).queryKey,
-    queryFn: async () =>
-      await throwOnErr(() => callServiceClient.checkActiveCall(channelId())),
+    queryFn: () => fetchActiveCall(channelId()),
     placeholderData: null,
     refetchInterval: 15_000,
   }));
+}
+
+/** Fresh lookups keep recovery from re-creating a call that already ended. */
+export function fetchActiveCall(channelId: string) {
+  return throwOnErr(() => callServiceClient.checkActiveCall(channelId));
+}
+
+/** Each join attempt owns its request, including retries after a timeout. */
+export function requestCallToken(channelId: string) {
+  return throwOnErr(() => callServiceClient.getOrCreateCall(channelId));
 }
 
 /**

@@ -128,13 +128,33 @@ type CompleteMutationRoot {
 	"""
 	markEmailThreadUnread(input: MarkEmailThreadUnreadInput!): GraphqlSoupEmailThread!
 	"""
+	Set archive-based Done and return the primary-backed canonical thread.
+	"""
+	setEmailThreadArchived(input: SetEmailThreadArchivedInput!): GraphqlSoupEmailThread!
+	"""
 	Add or remove one label from an accessible email thread and return its authoritative cache record.
 	"""
 	updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!
+	"""
+	Create or update an email draft and return its thread's authoritative
+	cache record. The client-generated handle resolves through a
+	caller-scoped mapping to a server-minted row, so a save replayed from
+	the offline mutation queue converges instead of duplicating.
+	"""
+	saveEmailDraft(input: SaveEmailDraftInput!): SaveEmailDraftPayload!
+	"""
+	Delete an email draft. Idempotent: deleting an ID that is already
+	gone succeeds with `deleted: false`, so a delete replayed from the
+	offline mutation queue lands cleanly however late it arrives.
+	Deleting a draft that has since been sent fails with
+	`DRAFT_ALREADY_SENT`.
+	"""
+	deleteEmailDraft(input: DeleteEmailDraftInput!): DeleteEmailDraftPayload!
 }
 
 """
-Root subscription object combining realtime Soup and notification adapters.
+Root subscription object combining realtime Soup, notification, and
+activity adapters.
 """
 type CompleteSubscriptionRoot {
 	"""
@@ -145,6 +165,44 @@ type CompleteSubscriptionRoot {
 	Subscribe to realtime notifications for the authenticated user.
 	"""
 	notificationUpdates: GraphqlNotificationPatch!
+	"""
+	Subscribe to realtime activity for the authenticated user.
+	"""
+	activityUpdates: GraphqlActivityPatch!
+}
+
+"""
+Input for deleting an email draft.
+"""
+input DeleteEmailDraftInput {
+	"""
+	Draft handle to delete: a client-generated ID or a server ID, resolved
+	like a save's. A handle that is already gone (or was never bound — a
+	discard can replay before its draft's first save ever committed)
+	deletes nothing and still succeeds, so a delete queued offline lands
+	cleanly however late it replays.
+	"""
+	draftId: ID!
+}
+
+"""
+Result of deleting an email draft.
+"""
+type DeleteEmailDraftPayload {
+	"""
+	The requested draft ID, echoed for client cache bookkeeping.
+	"""
+	draftId: ID!
+	"""
+	Whether a draft row was actually deleted. `false` means the ID was
+	already gone and the delete was an idempotent no-op.
+	"""
+	deleted: Boolean!
+	"""
+	Whether deleting the draft emptied its thread and removed the thread
+	too (a discarded compose draft that never gained other messages).
+	"""
+	threadDeleted: Boolean!
 }
 
 """
@@ -386,6 +444,16 @@ type GraphqlActivityEvent {
 }
 
 """
+A content-free signal to refresh activity through authorized queries.
+"""
+type GraphqlActivityInvalidation {
+	"""
+	True when mounted activity queries need a fresh read.
+	"""
+	refresh: Boolean!
+}
+
+"""
 A message was sent in the entity.
 """
 type GraphqlActivityMessaged {
@@ -473,6 +541,11 @@ type GraphqlActivityParticipantRemoved {
 }
 
 """
+Realtime activity patch: a recorded event or a purge invalidation.
+"""
+union GraphqlActivityPatch = GraphqlActivityEvent | GraphqlActivityInvalidation
+
+"""
 A property value changed on the entity.
 """
 type GraphqlActivityPropertyChanged {
@@ -513,6 +586,28 @@ type GraphqlActivityUnknownAction {
 	The stored action payload, verbatim.
 	"""
 	payload: JSON
+}
+
+"""
+Last synchronized state of a session's linked GitHub pull request.
+"""
+enum GraphqlAgentPullRequestState {
+	"""
+	The pull request accepts changes.
+	"""
+	OPEN
+	"""
+	The pull request is still a draft.
+	"""
+	DRAFT
+	"""
+	The pull request was closed without merging.
+	"""
+	CLOSED
+	"""
+	The pull request was merged.
+	"""
+	MERGED
 }
 
 """
@@ -567,7 +662,8 @@ input GraphqlAgentSessionLiteral @oneOf {
 	"""
 	id: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 }
@@ -1345,7 +1441,8 @@ input GraphqlChatLiteral @oneOf {
 	"""
 	chatId: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 	"""
@@ -1577,7 +1674,8 @@ input GraphqlDocumentLiteral @oneOf {
 	"""
 	projectId: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 	"""
@@ -2065,9 +2163,14 @@ Metadata shared by every canonical Soup entity.
 """
 type GraphqlEntityMetadata {
 	"""
-	Owning user, when applicable.
+	Owning principal, when applicable.
 	"""
 	ownerId: String
+	"""
+	The kind of principal `ownerId` names. Null exactly when `ownerId`
+	is, for the entities that have no owner of their own.
+	"""
+	ownerType: GraphqlOwnerType
 	"""
 	Parent project, channel, or team, when applicable.
 	"""
@@ -3284,6 +3387,21 @@ enum GraphqlNotificationDocumentSubType {
 }
 
 """
+Filters applied before the per-entity notification limit.
+"""
+input GraphqlNotificationFilter {
+	"""
+	Exact states to include; omitted means active (unseen and seen).
+	An empty list matches no notifications.
+	"""
+	states: [NotificationState!]
+	"""
+	Event names to include; omitted or empty means every event type.
+	"""
+	eventTypes: [String!]
+}
+
+"""
 Realtime notification patch represented as a new, updated, or deleted notification.
 """
 union GraphqlNotificationPatch = GraphqlNewNotification | GraphqlUpdatedNotification | GraphqlCacheDeletion
@@ -3296,6 +3414,26 @@ type GraphqlNumberPropertyValue {
 	The stored number.
 	"""
 	value: Float!
+}
+
+"""
+GraphQL representation of [`OwnerType`]: the kind of principal that owns an
+entity. Paired with an `ownerId` principal string, which is a user id, a
+bot id, or a team id depending on this discriminator.
+"""
+enum GraphqlOwnerType {
+	"""
+	A Macro user.
+	"""
+	USER
+	"""
+	A bot.
+	"""
+	BOT
+	"""
+	A team.
+	"""
+	TEAM
 }
 
 """
@@ -3347,7 +3485,8 @@ input GraphqlProjectLiteral @oneOf {
 	"""
 	projectIdSelf: ID
 	"""
-	The owner option.
+	The owner principal option — a user (`macro|<email>`), a bot
+	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
 	"""
@@ -3903,9 +4042,13 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The bot running this session.
 	"""
@@ -3914,6 +4057,38 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	The bot running this session, when its profile still exists.
 	"""
 	bot: GraphqlSessionBot
+	"""
+	The runtime snapshotted when the session was created.
+	"""
+	harness: String!
+	"""
+	The repository the session works with, when one was selected.
+	"""
+	repoUrl: String
+	"""
+	The starting branch selected for this session, not its current branch.
+	"""
+	repoBranch: String
+	"""
+	The persisted pull request associated with the session.
+	"""
+	pullRequestUrl: String
+	"""
+	Last captured working branch, when the runtime has reported one.
+	"""
+	workingBranch: String
+	"""
+	Last synchronized state of the linked pull request, when visible.
+	"""
+	pullRequestState: GraphqlAgentPullRequestState
+	"""
+	The linked pull request's Macro entity, when visible to the viewer.
+	"""
+	pullRequestId: ID
+	"""
+	Last persisted fold turn state. Absent until an older session next runs.
+	"""
+	turnState: String
 	"""
 	The channel thread the session was opened from, when any.
 	"""
@@ -3942,7 +4117,7 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4064,7 +4239,7 @@ type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4172,7 +4347,7 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4302,7 +4477,7 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4382,7 +4557,7 @@ type GraphqlSoupChannelMessage implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4504,9 +4679,13 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	model: String
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The identifier of the project.
 	"""
@@ -4538,7 +4717,7 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4626,7 +4805,7 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4676,9 +4855,13 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The file type.
 	"""
@@ -4714,7 +4897,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5224,7 +5407,7 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5304,7 +5487,7 @@ interface GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the current viewer.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the current viewer has favorited this entity.
 	"""
@@ -5436,7 +5619,7 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5486,9 +5669,13 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
-	The identifier of the owner.
+	The principal identifier of the owner.
 	"""
 	ownerId: String!
+	"""
+	The kind of principal `ownerId` names.
+	"""
+	ownerType: GraphqlOwnerType!
 	"""
 	The identifier of the parent.
 	"""
@@ -5516,7 +5703,7 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5619,7 +5806,7 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlNotification!]!
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5984,6 +6171,138 @@ input ReorderFavoritesInput {
 	Favorited entities in the desired order.
 	"""
 	favorites: [EntityRefInput!]!
+}
+
+"""
+One recipient of an email draft.
+"""
+input SaveEmailDraftContactInput {
+	"""
+	Recipient email address.
+	"""
+	email: String!
+	"""
+	Recipient display name, when known.
+	"""
+	name: String
+	"""
+	Recipient photo URL, when known.
+	"""
+	photoUrl: String
+}
+
+"""
+Input for creating or updating an email draft.
+
+The draft ID is a client-generated handle so a save queued offline stays
+an idempotent upsert when it replays later — possibly after an app
+restart, possibly more than once. Handles are untrusted input and never
+become primary keys: the server resolves them through a caller-scoped
+mapping to server-minted rows. Thread identifiers are hints: the server
+derives authoritative thread linkage from the reply target or the
+existing draft.
+"""
+input SaveEmailDraftInput {
+	"""
+	Draft handle: a client-generated ID, or a server ID from a fetched
+	draft. Resolved scoped to the caller's inboxes, and bound to the
+	server row the save settles on, so replays converge on one draft.
+	"""
+	draftId: ID!
+	"""
+	Sending inbox. Absent means the caller's primary inbox. Carried as a
+	variable (not a header) so queued offline saves replay with it.
+	"""
+	linkId: ID
+	"""
+	Message this draft replies to, when it is a reply.
+	"""
+	replyingToId: ID
+	"""
+	Provider-assigned draft ID, when the draft already exists upstream.
+	"""
+	providerId: String
+	"""
+	Provider-assigned thread ID hint.
+	"""
+	providerThreadId: String
+	"""
+	Thread handle. For replies this is a hint the server may override.
+	For compose drafts (no reply target) it is client-generated: an
+	unresolvable handle gets a fresh server-minted thread and is bound
+	to it, so saves queued offline replay against one thread.
+	"""
+	threadDbId: ID
+	"""
+	Draft subject line.
+	"""
+	subject: String!
+	"""
+	To recipients.
+	"""
+	to: [SaveEmailDraftContactInput!]
+	"""
+	Cc recipients.
+	"""
+	cc: [SaveEmailDraftContactInput!]
+	"""
+	Bcc recipients.
+	"""
+	bcc: [SaveEmailDraftContactInput!]
+	"""
+	Plain text body.
+	"""
+	bodyText: String
+	"""
+	HTML body, base64 URL-safe (no padding) encoded; the server decodes
+	and sanitizes it before storing.
+	"""
+	bodyHtml: String
+	"""
+	Macro body.
+	"""
+	bodyMacro: String
+	"""
+	Scheduled send time (RFC 3339), when the draft is scheduled.
+	"""
+	sendTime: String
+}
+
+"""
+Result of creating or updating an email draft.
+"""
+type SaveEmailDraftPayload {
+	"""
+	Server-confirmed draft ID: the server-minted row the input's handle
+	resolved (and is now bound) to. Use it for server-addressed calls;
+	the handle keeps working for queued saves and deletes.
+	"""
+	draftId: ID!
+	"""
+	The saved draft as a full message record — selected with the thread
+	page's message fragment so the client cache can hold the draft as a
+	complete entity (its optimistic layer must satisfy every field the
+	thread page reads, or the whole page read misses).
+	"""
+	draft: GraphqlSoupEmailMessage!
+	"""
+	The draft's thread, reloaded as its authoritative cache record.
+	"""
+	thread: GraphqlSoupEmailThread!
+}
+
+"""
+Input for archive-based Done and its inverse. No client label lookup is needed.
+"""
+input SetEmailThreadArchivedInput {
+	"""
+	Thread whose inbox membership should change.
+	"""
+	threadId: ID!
+	"""
+	True for Done; false for Mark Not Done or Undo.
+	"""
+	archived: Boolean!
 }
 
 """

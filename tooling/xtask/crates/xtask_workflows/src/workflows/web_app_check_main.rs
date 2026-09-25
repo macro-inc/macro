@@ -79,8 +79,11 @@ fn typescript() -> Job {
         ))
         .add_step(generate_api_types())
         .add_step(show_sccache_stats())
+        .add_step(check_dynamic_ui_schema())
         .add_step(check_types())
         .add_step(check_collaboration_types())
+        .add_step(check_lexical_service_types())
+        .add_step(test_lexical_service())
         .add_step(steps::teardown_nix())
 }
 
@@ -118,6 +121,8 @@ fn cycles() -> Job {
 
 fn build() -> Job {
     gated_web_job("Build")
+        // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
+        .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
@@ -183,7 +188,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - '.github/actions/setup-reqs-web/**'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-reqs-web/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-reqs-web/**'\n"
             ),
         ))
 }
@@ -211,10 +216,28 @@ fn check_types() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+fn check_dynamic_ui_schema() -> Step<Run> {
+    Step::new("Check Dynamic UI Schema")
+        .run("bun run check-dynamic-ui-schema")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
 fn check_collaboration_types() -> Step<Run> {
     Step::new("Check Collaboration Package Types")
         .run("bun run type-check")
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
+}
+
+fn check_lexical_service_types() -> Step<Run> {
+    Step::new("Check Lexical Service Types")
+        .run("bun run check")
+        .working_directory(xtask_paths::repo_dir!("services/lexical-service"))
+}
+
+fn test_lexical_service() -> Step<Run> {
+    Step::new("Test Lexical Service Endpoints")
+        .run("bun test src")
+        .working_directory(xtask_paths::repo_dir!("services/lexical-service"))
 }
 
 fn run_biome() -> Step<Run> {

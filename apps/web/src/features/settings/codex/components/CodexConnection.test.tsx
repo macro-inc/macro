@@ -1,9 +1,12 @@
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+import { chooseSelectOption } from '../../tests/select-helpers';
 import { CodexConnection } from './CodexConnection';
 
-vi.mock('@ui', () => ({
+vi.mock('@ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ui')>()),
+  confirmDialog: vi.fn(async () => true),
   Button: (
     props: import('solid-js').JSX.ButtonHTMLAttributes<HTMLButtonElement>
   ) => <button {...props} />,
@@ -58,9 +61,6 @@ describe('Codex connection', () => {
         environmentsError
       />
     ));
-    fireEvent.change(screen.getByLabelText('Cloud environment'), {
-      target: { value: '' },
-    });
     expect(screen.queryByLabelText('Branch')).toBeNull();
     expect(screen.getByRole('alert').textContent).toBe(
       'Could not load environments.'
@@ -88,9 +88,7 @@ describe('Codex connection', () => {
       'Loading environments…'
     );
     expect(screen.queryByLabelText('Branch')).toBeNull();
-    expect(
-      screen.getByRole('option', { name: 'Choose an environment' })
-    ).toBeTruthy();
+    expect(screen.getByText('Choose an environment')).toBeTruthy();
   });
 
   it('starts device sign-in without requesting a token', () => {
@@ -130,7 +128,7 @@ describe('Codex connection', () => {
       ).toBeNull();
     }
   );
-  it('saves only the selected environment and always describes the main branch', () => {
+  it('saves only the selected environment and always describes the main branch', async () => {
     const props = base();
     render(() => (
       <CodexConnection
@@ -161,9 +159,10 @@ describe('Codex connection', () => {
         .hasAttribute('disabled')
     ).toBe(true);
     expect(screen.queryByLabelText('Branch')).toBeNull();
-    fireEvent.change(screen.getByLabelText('Cloud environment'), {
-      target: { value: 'env-1' },
-    });
+    chooseSelectOption(
+      screen.getByLabelText('Cloud environment'),
+      'Example repo — example/repo'
+    );
     expect(screen.queryByLabelText('Branch')).toBeNull();
     expect(
       screen.getByText(/New sessions always start from the main branch/)
@@ -175,7 +174,7 @@ describe('Codex connection', () => {
       environmentId: 'env-1',
     });
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect ChatGPT' }));
-    expect(props.onDisconnect).toHaveBeenCalledOnce();
+    await waitFor(() => expect(props.onDisconnect).toHaveBeenCalledOnce());
   });
   it('keeps server errors visible and prevents duplicate pending actions', () => {
     render(() => (
@@ -219,18 +218,19 @@ describe('Codex connection', () => {
     ));
     const save = screen.getByRole('button', { name: 'Save Codex settings' });
     expect(save.hasAttribute('disabled')).toBe(true);
-    fireEvent.change(screen.getByLabelText('Cloud environment'), {
-      target: { value: 'env-1' },
-    });
+    chooseSelectOption(
+      screen.getByLabelText('Cloud environment'),
+      'env-1 — example/repo'
+    );
     expect(screen.getByRole('status').textContent).toContain('Unsaved changes');
     expect(save.hasAttribute('disabled')).toBe(false);
     fireEvent.click(save);
     setError('Could not save Codex settings.');
     expect(screen.getByRole('status').textContent).toContain('Unsaved changes');
     expect(save.hasAttribute('disabled')).toBe(false);
-    expect(
-      (screen.getByLabelText('Cloud environment') as HTMLSelectElement).value
-    ).toBe('env-1');
+    expect(screen.getByLabelText('Cloud environment').textContent).toBe(
+      'env-1 — example/repo'
+    );
     setError(undefined);
     setConnection({ connected: true, environmentId: 'env-1' });
     expect(screen.queryByRole('status')).toBeNull();

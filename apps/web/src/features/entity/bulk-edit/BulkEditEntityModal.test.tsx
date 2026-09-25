@@ -25,7 +25,7 @@ vi.mock('@ui', () => ({
       </div>
     </Show>
   ),
-  Surface: (props: ParentProps) => <div>{props.children}</div>,
+  ActionDialogShell: (props: ParentProps) => <div>{props.children}</div>,
 }));
 vi.mock('./BulkMoveToProjectView', () => ({
   BulkMoveToProjectView: () => null,

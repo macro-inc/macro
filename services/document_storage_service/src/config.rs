@@ -1,10 +1,13 @@
 use anyhow::Context;
+pub use dictation::outbound::OpenaiApiKey;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
 
 pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
+/// Allow long recordings to play and seek without the signed URL expiring mid-session.
+pub const CALL_RECORDING_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 6 * 60 * 60;
 pub const DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS: u64 = 840; // remember that this is just a suggestion to the client browser 
 
 env_vars! {
@@ -32,15 +35,11 @@ env_vars! {
     pub struct LivekitServerUrl;
     pub struct LivekitApiKey;
     pub struct LivekitApiSecret;
-    /// OpenAI API key used to generate task-dedup embeddings. Required —
-    /// injected as `OPENAI_API_KEY` from the `openai-key` secret by the
-    /// infra stack, the same way `document_cognition_service` consumes it.
-    pub struct OpenaiApiKey;
     /// Cohere API key used by the task-dedup reranker. Required — injected
     /// as `COHERE_API_KEY`, following the same pattern as `OPENAI_API_KEY`.
     pub struct CohereApiKey;
     pub struct DocumentLimit;
-    /// Shared signed URL lifetime for document content and call recordings.
+    /// Signed URL lifetime for document content.
     pub struct DocumentStorageServicePresignedUrlExpirySeconds;
     pub struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds;
     /// Shared CloudFront signer private key for document content and call recordings.
@@ -106,6 +105,7 @@ pub struct Config {
     pub livekit_server_url: LivekitServerUrl,
     pub livekit_api_key: LivekitApiKey,
     pub livekit_api_secret: LivekitApiSecret,
+    /// Shared server credential for task embeddings and Whisper, supplied by Doppler.
     pub openai_api_key: OpenaiApiKey,
     pub cohere_api_key: CohereApiKey,
     pub github_webhook_secret_key: LocalOrRemoteSecret<GithubWebhookSecretKey>,

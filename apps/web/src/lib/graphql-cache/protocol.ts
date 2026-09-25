@@ -595,6 +595,7 @@ export type CachePush =
       keys: string[];
     }
   | { kind: 'cache-changed'; revision: CacheRevision }
+  | { kind: 'cache-hydrated'; revision: CacheRevision }
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -669,6 +670,7 @@ export function isCachePush(value: unknown): value is CachePush {
         isWireStringArray(value.keys)
       );
     case 'cache-changed':
+    case 'cache-hydrated':
       return (
         hasOnlyWireKeys(value, ['kind', 'revision']) &&
         isCacheRevision(value.revision)

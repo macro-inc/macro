@@ -5,8 +5,10 @@ import {
 } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
-import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
+import type {
+  Message as EntityMessage,
+  MessageListItem,
+} from '@service-storage/messages';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { MessageSelection } from '../Channel/create-message-selection';
 import type { MessageActions, MessageData } from '../Message';
@@ -19,11 +21,11 @@ type CreateThreadHotkeysOptions = {
   replySelection: MessageSelection;
   isThreadFocused: Accessor<boolean>;
   isEditing: Accessor<boolean>;
-  activeReplies: Accessor<Array<ApiThreadReply>>;
+  activeReplies: Accessor<Array<EntityMessage>>;
   threadId: Accessor<string>;
   getMessageActions: (message: MessageData) => MessageActions | undefined;
   userId: Accessor<string | undefined>;
-  parentMessage: Accessor<ApiChannelMessage>;
+  parentMessage: Accessor<MessageListItem>;
   collapseThread: () => void;
   isSelected: Accessor<boolean>;
   hasReplies: Accessor<boolean>;
@@ -216,6 +218,22 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       actions?.onEdit?.({ message: reply });
       return true;
     },
+  }).withGroup(group);
+
+  registerHotkey({
+    scopeId: scope,
+    hotkey: 'e',
+    description: 'Keep edit shortcut on selected reply',
+    registrationType: 'add',
+    handlerPriority: HOTKEY_PRIORITY_HIGH,
+    hide: true,
+    condition: () =>
+      options.isThreadFocused() &&
+      !!options.replySelection.selectedId() &&
+      !options.isEditing(),
+    // Keep the reply's priority after its edit command: an uneditable reply
+    // must not fall through to editing the root or marking Home done.
+    keyDownHandler: () => true,
   }).withGroup(group);
 
   registerHotkey({

@@ -2,20 +2,25 @@
 //! with in-memory persistence, mock containers, a fake agent, and a
 //! recording announcer. Only the edges are doubles.
 
+mod chat_reply;
+mod user_cleanup;
+
 use messages::domain::models::MessageParent;
 use std::sync::{Arc, Mutex};
 
-use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, ClientNotification, ClientRequest, ContentBlock, InitializeResponse,
-    NewSessionResponse, ResumeSessionResponse, SessionCapabilities, SessionId,
-    SessionResumeCapabilities,
+    NewSessionResponse, PermissionOption, PermissionOptionKind, RequestId,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
+    ResumeSessionResponse, SelectedPermissionOutcome, SessionCapabilities, SessionId,
+    SessionResumeCapabilities, ToolCallUpdate, ToolCallUpdateFields,
 };
+use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_fold::domain::model::TurnSignal;
 use agent_fold::domain::model::{AuthorKind, MessageId};
 use agent_fold::domain::service::FoldedMessageService;
 use agent_runtime_protocol::domain::{
-    action::{AgentAction, AgentActionId},
+    action::{AgentAction, AgentActionId, AgentPermissionAction, PermissionAnswer},
     schema::v0::{AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage},
 };
 use agent_session::PROTOCOL_VERSION;
@@ -39,8 +44,9 @@ use super::AgentHarnessService;
 use super::into_session_error;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeliverAction, HarnessCommand,
-    HarnessDefaults, MentionOrigin, OpenSession, PriorMessage, SessionDefaults, SessionRepository,
+    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, CommentAnchor,
+    ConversationContext, DeclinedMention, DeliverAction, HarnessCommand, HarnessDefaults,
+    MentionOrigin, OpenSession, PriorMessage, SessionBlocker, SessionDefaults, SessionRepository,
     SpawnContainer,
 };
 use crate::domain::ports::{
@@ -95,6 +101,7 @@ fn open_command() -> OpenSession {
             message_id: thread_id,
             sender: sender(),
             content: "@claude fix the failing test".to_owned(),
+            attachments: vec![],
         },
     }
 }
@@ -105,7 +112,7 @@ fn forward_message(content: &str) -> DeliverAction {
     // Staff: `disconnected_session` is a Daytona coder bot, and the
     // execute() gate admits only macro.com actors onto those.
     DeliverAction::prompt(
-        content,
+        AgentAction::prompt(content),
         Some(staff_sender()),
         Some(AnnounceOrigin {
             parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xf0)),
@@ -117,7 +124,7 @@ fn forward_message(content: &str) -> DeliverAction {
 
 #[derive(Clone, Default)]
 struct PromptContextMock {
-    messages: Arc<Mutex<Vec<PriorMessage>>>,
+    context: Arc<Mutex<ConversationContext>>,
     failure: Arc<Mutex<Option<String>>>,
     unauthorized: Arc<Mutex<Option<String>>>,
     authorized: Arc<Mutex<Vec<(MacroUserIdStr<'static>, AnnounceOrigin)>>>,
@@ -125,8 +132,15 @@ struct PromptContextMock {
 
 impl PromptContextMock {
     fn with_messages(messages: Vec<PriorMessage>) -> Self {
+        Self::with_context(ConversationContext {
+            anchor: None,
+            messages,
+        })
+    }
+
+    fn with_context(context: ConversationContext) -> Self {
         Self {
-            messages: Arc::new(Mutex::new(messages)),
+            context: Arc::new(Mutex::new(context)),
             ..Self::default()
         }
     }
@@ -166,19 +180,19 @@ impl MessagePromptContext for PromptContextMock {
         Ok(())
     }
 
-    async fn preceding_messages(
+    async fn conversation_context(
         &self,
         _actor: &MacroUserIdStr<'static>,
         _origin: &AnnounceOrigin,
-    ) -> crate::domain::error::Result<Vec<PriorMessage>> {
+    ) -> crate::domain::error::Result<ConversationContext> {
         if let Some(message) = self.failure.lock().unwrap().clone() {
             return Err(HarnessError::PromptContext(rootcause::report!("{message}")));
         }
-        Ok(self.messages.lock().unwrap().clone())
+        Ok(self.context.lock().unwrap().clone())
     }
 }
 
-type PromptCompositionCall = (String, Option<Vec<PriorMessage>>);
+type PromptCompositionCall = (String, Option<ConversationContext>);
 
 #[derive(Clone, Default)]
 struct PromptComposerMock {
@@ -204,18 +218,18 @@ impl AgentPromptComposer for PromptComposerMock {
         &self,
         prompt_markdown: &str,
         _parent: Option<&MessageParent>,
-        messages: Option<&[PriorMessage]>,
+        context: Option<&ConversationContext>,
     ) -> crate::domain::error::Result<String> {
-        self.calls.lock().unwrap().push((
-            prompt_markdown.to_owned(),
-            messages.map(|messages| messages.to_vec()),
-        ));
+        self.calls
+            .lock()
+            .unwrap()
+            .push((prompt_markdown.to_owned(), context.cloned()));
         if let Some(message) = self.failure.lock().unwrap().clone() {
             return Err(HarnessError::PromptComposition(rootcause::report!(
                 "{message}"
             )));
         }
-        Ok(if messages.is_some() {
+        Ok(if context.is_some() {
             context_prompt(prompt_markdown)
         } else {
             prompt_markdown.to_owned()
@@ -249,6 +263,40 @@ struct MirrorBindings;
 impl crate::domain::ports::HarnessBindings for MirrorBindings {
     async fn harness_for(&self, bot: BotId) -> anyhow::Result<Option<harness_id::HarnessId>> {
         Ok(Some(harness_for_bot(bot)))
+    }
+}
+
+/// No agent has said anything about permissions: every bot runs under its
+/// kind's default.
+struct KindDefaultPolicies;
+
+impl crate::domain::ports::PermissionPolicySource for KindDefaultPolicies {
+    async fn permission_policy(
+        &self,
+        bot: BotId,
+    ) -> anyhow::Result<crate::domain::model::PermissionPolicyConfig> {
+        Ok(crate::domain::model::PermissionPolicyConfig::Fixed(
+            AgentKind::of(bot),
+        ))
+    }
+}
+
+/// No persona has chosen: every bot's turns are announced as its runtime's
+/// nature says.
+struct HarnessDefaultCodingAgents;
+
+impl crate::domain::ports::CodingAgentSource for HarnessDefaultCodingAgents {
+    async fn coding_agent_choice(&self, _: BotId) -> anyhow::Result<Option<bool>> {
+        Ok(None)
+    }
+}
+
+/// Every persona made the same choice, whatever its runtime.
+struct ChosenCodingAgents(bool);
+
+impl crate::domain::ports::CodingAgentSource for ChosenCodingAgents {
+    async fn coding_agent_choice(&self, _: BotId) -> anyhow::Result<Option<bool>> {
+        Ok(Some(self.0))
     }
 }
 
@@ -348,6 +396,59 @@ fn harness_with_mentions(
     prompt_composer: PromptComposerMock,
     mentions: PromptMentionsMock,
 ) -> (TestBench, TurnSignals) {
+    harness_with_policies_and_mentions(
+        prompt_context,
+        prompt_composer,
+        KindDefaultPolicies,
+        mentions,
+    )
+}
+
+fn harness_with_policy(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+) -> (TestBench, TurnSignals) {
+    harness_with_policies_and_mentions(
+        prompt_context,
+        prompt_composer,
+        permission_policies,
+        PromptMentionsMock::new(),
+    )
+}
+
+fn harness_with_policies_and_mentions(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+    mentions: PromptMentionsMock,
+) -> (TestBench, TurnSignals) {
+    harness_with_ports(
+        prompt_context,
+        prompt_composer,
+        permission_policies,
+        HarnessDefaultCodingAgents,
+        mentions,
+    )
+}
+
+fn harness_with_coding_choice(chosen: bool) -> (TestBench, TurnSignals) {
+    harness_with_ports(
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        KindDefaultPolicies,
+        ChosenCodingAgents(chosen),
+        PromptMentionsMock::new(),
+    )
+}
+
+fn harness_with_ports(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+    coding_agents: impl crate::domain::ports::CodingAgentSource,
+    mentions: PromptMentionsMock,
+) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
@@ -376,6 +477,8 @@ fn harness_with_mentions(
         prompt_composer,
         EgressProvisionerMock::new(),
         NoPeers,
+        permission_policies,
+        coding_agents,
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -486,6 +589,18 @@ async fn disconnected_session(
     containers: &MockContainerManager,
 ) -> AgentSessionId {
     let OpenSession { origin, .. } = open_command();
+    disconnected_session_owned_by(repo, containers, model_owner::Owner::User(origin.sender)).await
+}
+
+/// [`disconnected_session`] for an arbitrary owner: the in-memory repo stores
+/// whatever it is handed, so a bot-owned row exists to probe the paths that
+/// need a user.
+async fn disconnected_session_owned_by(
+    repo: &InMemoryAgentSessionRepo,
+    containers: &MockContainerManager,
+    owner: model_owner::Owner,
+) -> AgentSessionId {
+    let OpenSession { origin, .. } = open_command();
     // The coder bot: resume-on-disconnect only exists for managed sessions.
     let bot_id = bot_id::MACRO_CODER_BOT_ID;
     let id = AgentSessionId::new();
@@ -494,7 +609,7 @@ async fn disconnected_session(
         CreateAgentSessionParams {
             repo_branch: None,
             id,
-            owner_id: origin.sender,
+            owner_id: owner,
             bot_id,
             thread_id: Some(origin.thread_id),
             originating_message_id: Some(origin.message_id),
@@ -688,6 +803,29 @@ async fn revoked_origin_access_blocks_open_before_anything_is_provisioned() {
 }
 
 #[tokio::test]
+async fn revoked_origin_access_blocks_the_connect_cursor_reply() {
+    let (service, repo, containers, announcer, _runtimes) = harness_with_edges(
+        PromptContextMock::unauthorized("removed from the channel"),
+        PromptComposerMock::default(),
+    );
+    containers.block_with(SessionBlocker::CursorNotConnected);
+    let mut command = open_command();
+    command.bot_id = bot_id::CURSOR_BOT_ID;
+    command.runtime.kind = AgentKind::Cursor;
+    command.runtime.harness = "cursor".to_owned();
+    let id = AgentSessionId::new();
+
+    let result = service.execute(id, HarnessCommand::Open(command)).await;
+
+    assert!(matches!(result, Err(HarnessError::PromptContext(_))));
+    assert!(repo.get(id).await.is_err());
+    assert_eq!(containers.spawned(), 0);
+    assert!(service.inner.egress.provisioned().is_empty());
+    assert!(announcer.announced().is_empty());
+    assert!(announcer.declined().is_empty());
+}
+
+#[tokio::test]
 async fn context_failure_still_calls_composer_with_empty_messages_and_delivers() {
     let composer = PromptComposerMock::default();
     let context = PromptContextMock::failing("messages unavailable");
@@ -716,7 +854,10 @@ async fn context_failure_still_calls_composer_with_empty_messages_and_delivers()
     assert_eq!(announcer.announced().len(), 1);
     assert_eq!(
         composer.calls(),
-        [("@claude fix the failing test".to_owned(), Some(Vec::new()))]
+        [(
+            "@claude fix the failing test".to_owned(),
+            Some(ConversationContext::default())
+        )]
     );
     assert_eq!(
         prompts(&container.agent()),
@@ -790,11 +931,145 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
     result.unwrap();
 
     assert_eq!(announcer.announced()[0].prompted_content, raw);
-    assert_eq!(composer.calls(), [(raw.clone(), Some(context))]);
+    assert_eq!(
+        composer.calls(),
+        [(
+            raw.clone(),
+            Some(ConversationContext {
+                anchor: None,
+                messages: context,
+            })
+        )]
+    );
     assert_eq!(
         prompts(&container.agent()),
         [vec![ContentBlock::from(context_prompt(&raw))]]
     );
+}
+
+/// A mention in a document comment: the agent is told which mark the comment
+/// sits on and what that mark covered, so it can find the words the comment is
+/// about instead of guessing from the comment body.
+#[tokio::test]
+async fn open_sends_the_comment_anchor_the_prompt_was_posted_on() {
+    let context = ConversationContext {
+        anchor: Some(CommentAnchor::Mark {
+            mark_id: "0199f3d4-0000-7000-8000-00000000000a".to_owned(),
+            marked_text: Some("the marked phrase".to_owned()),
+            current: None,
+        }),
+        messages: vec![],
+    };
+    let composer = PromptComposerMock::default();
+    let (service, _repo, containers, _announcer, _runtimes) = harness_with_edges(
+        PromptContextMock::with_context(context.clone()),
+        composer.clone(),
+    );
+    let command = open_command();
+    let raw = command.origin.content.clone();
+    let id = AgentSessionId::new();
+
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(id).unwrap();
+        complete_handshake(&container).await;
+        container
+    };
+    let (result, _container) = tokio::join!(open, drive);
+    result.unwrap();
+
+    assert_eq!(composer.calls(), [(raw, Some(context))]);
+}
+
+/// A provider mention from someone missing account setup: the bot answers in
+/// the thread with what to connect, and nothing is created for a session
+/// that could never spawn - no row, no egress token, no chip.
+#[tokio::test]
+async fn a_mention_its_sender_is_not_set_up_for_is_declined_in_the_thread() {
+    for (bot_id, kind, harness_slug, blocker) in [
+        (
+            bot_id::CURSOR_BOT_ID,
+            AgentKind::Cursor,
+            "cursor",
+            SessionBlocker::CursorNotConnected,
+        ),
+        (
+            bot_id::CODEX_BOT_ID,
+            AgentKind::CodexCloud,
+            "codex-cloud",
+            SessionBlocker::CodexNotConnected,
+        ),
+        (
+            bot_id::CODEX_BOT_ID,
+            AgentKind::CodexCloud,
+            "codex-cloud",
+            SessionBlocker::CodexEnvironmentNotConfigured,
+        ),
+        (
+            bot_id::CLAUDE_BOT_ID,
+            AgentKind::ClaudeCloud,
+            "claude-cloud",
+            SessionBlocker::ClaudeNotConnected,
+        ),
+    ] {
+        let (service, repo, containers, announcer, _runtimes) = harness();
+        let id = AgentSessionId::new();
+        containers.block_with(blocker);
+        let mut command = open_command();
+        command.bot_id = bot_id;
+        command.runtime.kind = kind;
+        command.runtime.harness = harness_slug.to_owned();
+        let origin = command.origin.clone();
+
+        let outcome = service
+            .execute(id, HarnessCommand::Open(command))
+            .await
+            .expect("a declined mention is handled, not failed");
+
+        assert_eq!(outcome, CommandOutcome::Completed);
+        assert!(repo.get(id).await.is_err(), "no session row is created");
+        assert_eq!(containers.spawned(), 0);
+        assert!(service.inner.egress.provisioned().is_empty());
+        assert!(announcer.announced().is_empty());
+        assert_eq!(
+            announcer.declined(),
+            [DeclinedMention {
+                bot_id,
+                origin: AnnounceOrigin {
+                    parent: origin.parent,
+                    thread_id: origin.thread_id,
+                    message_id: origin.message_id,
+                },
+                triggered_by: origin.sender,
+                blocker,
+            }]
+        );
+    }
+}
+
+/// The decline is the whole answer, so failing to post it is the open's
+/// failure - the same way a session that cannot be announced is.
+#[tokio::test]
+async fn a_decline_that_cannot_be_posted_fails_the_open() {
+    let (service, repo, containers, announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    containers.block_with(SessionBlocker::CursorNotConnected);
+    announcer.fails("channel unavailable");
+
+    let error = service
+        .execute(id, HarnessCommand::Open(open_command()))
+        .await
+        .expect_err("the decline could not reach the thread");
+
+    assert!(matches!(error, HarnessError::Announce(_)));
+    assert!(repo.get(id).await.is_err(), "still no session row");
+    assert_eq!(containers.spawned(), 0);
 }
 
 #[tokio::test]
@@ -884,7 +1159,10 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     assert_eq!(containers.resumed(), 0, "no resume for a live session");
     assert_eq!(
         composer.calls().last(),
-        Some(&("and add a regression test".to_owned(), Some(Vec::new())))
+        Some(&(
+            "and add a regression test".to_owned(),
+            Some(ConversationContext::default())
+        ))
     );
     assert_eq!(
         prompts(&container.agent())[1],
@@ -936,7 +1214,10 @@ async fn composer_failure_stops_follow_up_announcement_and_delivery() {
     assert!(matches!(result, Err(HarnessError::PromptComposition(_))));
     assert_eq!(
         composer.calls().last(),
-        Some(&("do not deliver this".to_owned(), Some(Vec::new())))
+        Some(&(
+            "do not deliver this".to_owned(),
+            Some(ConversationContext::default())
+        ))
     );
     assert_eq!(prompts(&container.agent()).len(), prompts_before);
     assert_eq!(announcer.announced().len(), announcements_before);
@@ -1405,6 +1686,154 @@ async fn a_non_staff_control_event_cannot_drive_a_sandboxed_coder_session() {
 
     assert!(matches!(error, AgentSessionError::Forbidden));
     assert_eq!(prompts(&container.agent()).len(), 1);
+}
+
+/// The agent asking whether it may run a tool, as an ACP request frame.
+fn permission_request(id: &str) -> RawJsonRpcMessage {
+    let (method, params) = RequestPermissionRequest::new(
+        "acp-test",
+        ToolCallUpdate::new("call-1", ToolCallUpdateFields::new()),
+        vec![
+            PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
+            PermissionOption::new("always", "Always allow", PermissionOptionKind::AllowAlways),
+            PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+        ],
+    )
+    .to_untyped_message()
+    .expect("a permission request serializes")
+    .into_parts();
+    RawJsonRpcMessage::request(method, params, RequestId::Str(id.to_owned()))
+        .expect("a permission request is a valid frame")
+}
+
+fn permission_answer(id: &str, option_id: &str) -> AgentAction {
+    AgentAction::RespondToPermission(AgentPermissionAction {
+        request_id: RequestId::Str(id.to_owned()),
+        answer: PermissionAnswer::Selected {
+            option_id: option_id.to_owned(),
+        },
+    })
+}
+
+/// The outcome the harness answered `id` with, from what the agent received.
+fn permission_outcome(agent: &FakeAgent, id: &str) -> Option<RequestPermissionOutcome> {
+    agent
+        .received_responses()
+        .into_iter()
+        .find_map(|frame| match frame {
+            RawJsonRpcMessage::Response(Response::Result { id: got, result })
+                if got == RequestId::Str(id.to_owned()) =>
+            {
+                serde_json::from_value::<RequestPermissionResponse>(result)
+                    .ok()
+                    .map(|response| response.outcome)
+            }
+            _ => None,
+        })
+}
+
+#[tokio::test]
+async fn an_external_bots_permission_request_waits_for_a_users_answer() {
+    // The test bot is nobody's fixed system bot, so its kind is `External`
+    // and the policy source's default for it is to prompt.
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    let agent = container.agent();
+
+    agent.sends_raw(permission_request("perm-1"));
+    service
+        .control_event(
+            id,
+            ControlEvent {
+                action_id: None,
+                action: permission_answer("perm-1", "once"),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("a user's answer reaches the agent");
+
+    let responses = agent.received_responses();
+    assert_eq!(
+        responses.len(),
+        1,
+        "one answer, the user's; got {responses:?}"
+    );
+    assert_eq!(
+        permission_outcome(&agent, "perm-1"),
+        Some(RequestPermissionOutcome::Selected(
+            SelectedPermissionOutcome::new("once")
+        )),
+        "the user's choice is what goes out, not auto-accept's broadest allow"
+    );
+}
+
+#[tokio::test]
+async fn a_harness_principal_cannot_answer_a_permission_request() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    container.agent().sends_raw(permission_request("perm-1"));
+
+    let error = service
+        .control_event(
+            id,
+            ControlEvent {
+                action_id: None,
+                action: permission_answer("perm-1", "always"),
+                actor: None,
+            },
+        )
+        .await
+        .expect_err("a runtime must not approve its own tool call");
+
+    assert!(matches!(error, AgentSessionError::Forbidden));
+    assert!(container.agent().received_responses().is_empty());
+}
+
+#[tokio::test]
+async fn a_managed_bots_permission_request_is_accepted_on_arrival() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_sandboxed_coder_session(&service, &containers, id).await;
+    let agent = container.agent();
+
+    agent.sends_raw(permission_request("perm-1"));
+    agent.wait_for_responses(1).await;
+
+    assert_eq!(
+        permission_outcome(&agent, "perm-1"),
+        Some(RequestPermissionOutcome::Selected(
+            SelectedPermissionOutcome::new("always")
+        )),
+        "a sandboxed runtime keeps today's auto-accept"
+    );
+}
+
+#[tokio::test]
+async fn answering_a_disconnected_session_does_not_wake_its_sandbox() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+
+    let error = service
+        .control_event(
+            id,
+            ControlEvent {
+                action_id: None,
+                action: permission_answer("perm-1", "once"),
+                actor: Some(staff_sender()),
+            },
+        )
+        .await
+        .expect_err("nothing on a fresh connection could be waiting for this");
+
+    assert!(matches!(error, AgentSessionError::Disconnected(_)));
+    assert_eq!(
+        containers.resumed(),
+        0,
+        "a prompt would resume the sandbox; an answer has nothing to deliver to"
+    );
 }
 
 #[tokio::test]
@@ -1972,11 +2401,13 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
 
 fn open_external_request(workspace: &str) -> OpenExternalAgentSession {
     OpenExternalAgentSession {
+        id: None,
+        profile: None,
         instructions: None,
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         workspace: workspace.to_owned(),
         repo_url: None,
-        owner: sender(),
+        owner: model_owner::Owner::User(sender()),
         thread: None,
     }
 }
@@ -2056,7 +2487,11 @@ async fn prompt(
     service
         .execute(
             id,
-            HarnessCommand::Deliver(DeliverAction::prompt(content, Some(sender()), None)),
+            HarnessCommand::Deliver(DeliverAction::prompt(
+                AgentAction::prompt(content),
+                Some(sender()),
+                None,
+            )),
         )
         .await
 }
@@ -2129,6 +2564,92 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     // negotiated ACP session id has been persisted by now.
     let row = repo.get(session.id).await.expect("the session row exists");
     assert_eq!(row.acp_session_id, Some(SessionId::new("acp-test")));
+}
+
+#[tokio::test]
+async fn a_macrod_session_selects_its_saved_model_before_the_first_prompt() {
+    for accepted in [true, false] {
+        let (service, repo, _, _, runtimes) = harness();
+        let mut request = open_external_request("/home/operator/code");
+        request.profile = Some(agent_session::domain::ports::ManagedAgentProfile {
+            model: "gpt-5.6-luna".into(),
+            harness: harness_id::MACROD_HARNESS_SLUG.into(),
+            instructions: String::new(),
+            mcp_servers: AgentMcpServers::OwnerConnections,
+        });
+        let session = service.open_external_session(request).await.unwrap();
+        assert_eq!(session.model, "gpt-5.6-luna");
+        assert_eq!(session.harness, harness_id::MACROD_HARNESS_SLUG);
+        let runtime = ContainerMock::default();
+        runtimes.attach(harness_for_bot(session.bot_id), runtime.clone());
+
+        let drive = async {
+            let agent = runtime.agent();
+            while agent.received_requests().is_empty() {
+                runtime.sends_ready();
+                tokio::task::yield_now().await;
+            }
+            agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
+            agent.wait_for_requests(2).await;
+            let config = |model| {
+                serde_json::json!([{
+                    "id": "model", "name": "Model", "type": "select",
+                    "currentValue": model, "options": []
+                }])
+            };
+            agent.opens_session(
+                serde_json::from_value(serde_json::json!({
+                    "sessionId": "acp-test", "configOptions": config("gpt-6-astra")
+                }))
+                .unwrap(),
+            );
+            agent.wait_for_requests(3).await;
+            assert!(prompts(&agent).is_empty());
+            let row = repo.get(session.id).await.unwrap();
+            assert_eq!(
+                row.model, "gpt-5.6-luna",
+                "session/new must not overwrite the saved selection"
+            );
+            assert!(row.acp_session_id.is_none());
+            let frames = agent.received_frames();
+            let RawJsonRpcMessage::Request(change) = frames.last().unwrap() else {
+                panic!("expected model selection");
+            };
+            assert_eq!(change.method.as_ref(), "session/set_config_option");
+            assert_eq!(
+                serde_json::to_value(&change.params).unwrap()["value"],
+                "gpt-5.6-luna"
+            );
+            if accepted {
+                agent.sends_raw(RawJsonRpcMessage::response(
+                    change.id.clone(),
+                    Ok(serde_json::json!({
+                        "configOptions": config("gpt-5.6-luna")
+                    })),
+                ));
+                agent.completes_prompt().await;
+            } else {
+                agent.sends_error(
+                    change.id.clone(),
+                    agent_client_protocol::Error::invalid_params(),
+                );
+            }
+        };
+        let (result, ()) = tokio::join!(prompt(&service, session.id, "hello"), drive);
+        if accepted {
+            result.unwrap();
+            assert_eq!(prompts(&runtime.agent()).len(), 1);
+        } else {
+            assert!(result.is_err());
+            assert!(prompts(&runtime.agent()).is_empty());
+        }
+        let row = repo.get(session.id).await.unwrap();
+        assert_eq!(
+            row.model, "gpt-5.6-luna",
+            "a retry must retain the requested model"
+        );
+        assert_eq!(row.acp_session_id.is_some(), accepted);
+    }
 }
 
 #[tokio::test]
@@ -2225,6 +2746,8 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
         NoPeers,
+        KindDefaultPolicies,
+        HarnessDefaultCodingAgents,
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -2249,10 +2772,12 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
 
     let session = service
         .open_managed_session(agent_session::domain::ports::OpenManagedSession {
+            id: None,
             repo_url: None,
             repo_branch: None,
             instructions: None,
-            owner: sender(),
+            model: None,
+            owner: model_owner::Owner::User(sender()),
             prompt: None,
             profile: None,
         })
@@ -2486,10 +3011,12 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
 
     let result = service
         .open_managed_session(OpenManagedSession {
+            id: None,
             repo_url: None,
             repo_branch: None,
             instructions: None,
-            owner: sender(),
+            model: None,
+            owner: model_owner::Owner::User(sender()),
             prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
             profile: None,
         })
@@ -2513,10 +3040,12 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         .expect("the user default should persist");
 
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         instructions: None,
-        owner: sender(),
+        model: None,
+        owner: model_owner::Owner::User(sender()),
         prompt: None,
         profile: None,
     });
@@ -2543,6 +3072,33 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
             .expect("the session row exists")
             .sandbox_size,
         SandboxSize::Small
+    );
+}
+
+#[tokio::test]
+async fn set_sandbox_size_refuses_a_session_not_owned_by_a_user() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    // The size is remembered as the owner's preference, and a bot has none.
+    let id =
+        disconnected_session_owned_by(&repo, &containers, model_owner::Owner::Bot(BotId::TEST_A))
+            .await;
+
+    let error = service
+        .set_sandbox_size(id, SandboxSize::Large)
+        .await
+        .expect_err("a bot-owned session has no user whose preference this is");
+
+    assert!(
+        matches!(
+            error,
+            AgentSessionError::OwnerNotUser(model_owner::OwnerType::Bot)
+        ),
+        "unexpected error: {error:?}"
+    );
+    assert!(containers.resizes().is_empty());
+    assert_eq!(
+        repo.get(id).await.expect("session").sandbox_size,
+        SandboxSize::Default
     );
 }
 
@@ -2690,6 +3246,8 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
         forwarder.clone(),
+        KindDefaultPolicies,
+        HarnessDefaultCodingAgents,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -2741,6 +3299,8 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
         forwarder.clone(),
+        KindDefaultPolicies,
+        HarnessDefaultCodingAgents,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -2781,7 +3341,6 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
 mod lifecycle_events {
     use super::*;
 
-    use agent_client_protocol::JsonRpcMessage as _;
     use agent_client_protocol::schema::v1::{
         CreateElicitationRequest, ElicitationFormMode, ElicitationSchema, ElicitationSessionScope,
         RequestId,
@@ -3209,10 +3768,12 @@ mod lifecycle_events {
 async fn codex_named_session_provisions_egress_without_advertising_mcp() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
-        owner: sender(),
+        owner: model_owner::Owner::User(sender()),
         instructions: None,
+        model: None,
         prompt: Some("inspect".into()),
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
             bot_id: bot_id::CODEX_BOT_ID,
@@ -3303,18 +3864,104 @@ async fn codex_channel_mention_provisions_egress_without_advertising_mcp() {
 
 mod reopen;
 
-struct SelectedRepositories(Vec<String>);
+/// The owner's reachable repositories, as the GitHub App would list them.
+struct SelectedRepositories(Vec<crate::domain::model::ReachableRepository>);
+
+impl SelectedRepositories {
+    /// Repositories whose clones start on `main`.
+    fn urls(urls: &[&str]) -> Self {
+        Self(
+            urls.iter()
+                .map(|url| crate::domain::model::ReachableRepository {
+                    url: (*url).to_owned(),
+                    default_branch: Some("main".to_owned()),
+                })
+                .collect(),
+        )
+    }
+}
+
 #[async_trait::async_trait]
 impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
-    async fn for_user(&self, _: &MacroUserIdStr<'_>) -> crate::domain::error::Result<Vec<String>> {
+    async fn for_user(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> crate::domain::error::Result<Vec<crate::domain::model::ReachableRepository>> {
         Ok(self.0.clone())
     }
 }
 
+/// A model chosen on the way in is the session's model, from the row onwards.
+///
+/// The regression this pins: the picked model used to arrive as a set-model
+/// action sent before the first prompt. That is a control, controls take a
+/// turn of their own, and the automatic naming that only fires on a session's
+/// first turn therefore never ran - every session opened on a chosen model
+/// stayed "Agent Session" for life.
+#[tokio::test]
+async fn a_chosen_model_is_the_session_model_from_creation() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: Some("claude-4.5-sonnet-thinking".to_owned()),
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: bot_id::CURSOR_BOT_ID,
+            profile: None,
+        }),
+    });
+    let drive = async {
+        let session = containers.first_spawned().await;
+        let container = containers.container(session).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.model, "claude-4.5-sonnet-thinking");
+}
+
+/// The agents-view create path names the Cursor bot with no persisted
+/// profile. The deployment default harness is the sandboxed coder's
+/// `opencode`; Cursor sessions must not inherit it.
+#[tokio::test]
+async fn a_cursor_managed_session_is_always_stamped_cursor() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: None,
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: bot_id::CURSOR_BOT_ID,
+            profile: None,
+        }),
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, bot_id::CURSOR_BOT_ID);
+    assert_eq!(session.harness, "cursor");
+}
+
 fn explicit_cursor_request() -> OpenManagedSession {
     OpenManagedSession {
-        owner: sender(),
+        id: None,
+        owner: model_owner::Owner::User(sender()),
         instructions: None,
+        model: None,
         prompt: None,
         repo_url: Some("https://github.com/macro-inc/macro".into()),
         repo_branch: Some(
@@ -3333,7 +3980,7 @@ fn explicit_cursor_request() -> OpenManagedSession {
 #[tokio::test]
 async fn selected_repository_requires_owner_access_before_provisioning() {
     let (service, _, containers, _, _) = harness();
-    let service = service.with_repositories(Arc::new(SelectedRepositories(vec![])));
+    let service = service.with_repositories(Arc::new(SelectedRepositories::urls(&[])));
     let result = service
         .open_managed_session(explicit_cursor_request())
         .await;
@@ -3348,8 +3995,8 @@ async fn selected_repository_requires_owner_access_before_provisioning() {
 #[tokio::test]
 async fn selected_repository_and_branch_are_persisted_for_cursor() {
     let (service, repo, containers, _, _) = harness();
-    let service = service.with_repositories(Arc::new(SelectedRepositories(vec![
-        "https://github.com/macro-inc/macro".into(),
+    let service = service.with_repositories(Arc::new(SelectedRepositories::urls(&[
+        "https://github.com/macro-inc/macro",
     ])));
     let open = service.open_managed_session(explicit_cursor_request());
     let drive = async {
@@ -3361,6 +4008,7 @@ async fn selected_repository_and_branch_are_persisted_for_cursor() {
     };
     let (opened, _) = tokio::join!(open, drive);
     let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.harness, "cursor");
     assert_eq!(
         session.repo_url.as_deref(),
         Some("https://github.com/macro-inc/macro")
@@ -3369,6 +4017,80 @@ async fn selected_repository_and_branch_are_persisted_for_cursor() {
         session.repo_branch.as_ref().map(|branch| branch.as_str()),
         Some("feature/home")
     );
+}
+
+/// Opens `request` against a listing that reaches `macro-inc/macro` with the
+/// given default branch, and reads back the branch the row was given.
+async fn branch_persisted_for(
+    default_branch: Option<&str>,
+    request: OpenManagedSession,
+) -> Option<String> {
+    let (service, repo, containers, _, _) = harness();
+    let service = service.with_repositories(Arc::new(SelectedRepositories(vec![
+        crate::domain::model::ReachableRepository {
+            url: "https://github.com/macro-inc/macro".to_owned(),
+            default_branch: default_branch.map(str::to_owned),
+        },
+    ])));
+    let open = service.open_managed_session(request);
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    session
+        .repo_branch
+        .as_ref()
+        .map(|branch| branch.as_str().to_owned())
+}
+
+#[tokio::test]
+async fn selected_repository_without_branch_starts_on_its_default_branch() {
+    let mut request = explicit_cursor_request();
+    request.repo_branch = None;
+    assert_eq!(
+        branch_persisted_for(Some("develop"), request)
+            .await
+            .as_deref(),
+        Some("develop")
+    );
+}
+
+#[tokio::test]
+async fn selected_repository_without_a_default_branch_starts_on_main() {
+    let mut request = explicit_cursor_request();
+    request.repo_branch = None;
+    assert_eq!(
+        branch_persisted_for(None, request).await.as_deref(),
+        Some("main")
+    );
+}
+
+#[tokio::test]
+async fn explicit_branch_wins_over_the_repository_default() {
+    assert_eq!(
+        branch_persisted_for(Some("develop"), explicit_cursor_request())
+            .await
+            .as_deref(),
+        Some("feature/home")
+    );
+}
+
+#[test]
+fn starting_branch_falls_back_to_main_for_an_unusable_default() {
+    assert_eq!(
+        super::open::starting_branch(Some("release")).as_str(),
+        "release"
+    );
+    assert_eq!(
+        super::open::starting_branch(Some("bad..name")).as_str(),
+        "main"
+    );
+    assert_eq!(super::open::starting_branch(None).as_str(), "main");
 }
 
 #[tokio::test]
@@ -3382,4 +4104,46 @@ async fn branch_without_repository_is_rejected_before_provisioning() {
     ));
     assert!(service.inner.egress.provisioned().is_empty());
     assert_eq!(containers.spawned(), 0);
+}
+
+struct PromptPolicies;
+impl crate::domain::ports::PermissionPolicySource for PromptPolicies {
+    async fn permission_policy(
+        &self,
+        _: BotId,
+    ) -> anyhow::Result<crate::domain::model::PermissionPolicyConfig> {
+        Ok(crate::domain::model::PermissionPolicyConfig::Fixed(
+            AgentKind::External,
+        ))
+    }
+}
+
+#[tokio::test]
+async fn a_non_staff_session_editor_can_approve_a_managed_session_request() {
+    let ((service, _repo, containers, _announcer, _runtimes), _signals) = harness_with_policy(
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        PromptPolicies,
+    );
+    let id = AgentSessionId::new();
+    let container = live_sandboxed_coder_session(&service, &containers, id).await;
+    let agent = container.agent();
+    agent.sends_raw(permission_request("editor-approval"));
+    service
+        .control_event(
+            id,
+            ControlEvent {
+                action_id: None,
+                action: permission_answer("editor-approval", "once"),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("a human editor can approve even though only staff may prompt the coder");
+    assert_eq!(
+        permission_outcome(&agent, "editor-approval"),
+        Some(RequestPermissionOutcome::Selected(
+            SelectedPermissionOutcome::new("once")
+        ))
+    );
 }

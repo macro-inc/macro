@@ -10,6 +10,7 @@ mod test;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroChatsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 
 /// Metadata for [`ChatTopicEvent::Created`].
@@ -17,8 +18,8 @@ use serde::{Deserialize, Serialize};
 pub struct ChatCreatedMetadata {
     /// Identifier of the created chat.
     pub chat_id: String,
-    /// User who owns the chat.
-    pub owner: MacroUserIdStr<'static>,
+    /// Principal who owns the chat.
+    pub owner: Owner,
     /// Display name of the chat.
     pub name: String,
     /// Project the chat was created in, when any.

@@ -4,8 +4,12 @@ import {
 } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { notificationServiceClient } from '../service-notification/client';
-import type { NotificationUpdateOperation } from './graphql/generated/graphql';
-import { getGraphqlSoupClient } from './graphql-soup';
+import {
+  type NotificationUpdateOperation,
+  type SoupInput,
+  SoupNotificationsDocument,
+} from './graphql/generated/graphql';
+import { getGraphqlSoupClient, mapGraphqlNotification } from './graphql-soup';
 import {
   executeGraphqlUpdateNotifications,
   executeGraphqlUpdateNotificationsForEntities,
@@ -16,6 +20,37 @@ import {
 } from './graphql-update-notifications';
 
 export type { NotificationUpdateOperation };
+
+/** Load a complete notification edge only when an entity is opened. */
+export async function fetchGraphqlEntityNotifications(
+  input: SoupInput,
+  entityId: string
+) {
+  const client = getGraphqlSoupClient();
+  let result = await client
+    .query(
+      SoupNotificationsDocument,
+      { input },
+      { requestPolicy: 'cache-and-network' }
+    )
+    .toPromise();
+  if (result.error?.networkError) {
+    const cached = await client
+      .query(
+        SoupNotificationsDocument,
+        { input },
+        { requestPolicy: 'cache-only' }
+      )
+      .toPromise();
+    if (cached.data) result = cached;
+  }
+  if (result.error) throw result.error;
+  const entity = result.data?.user.soup.items.find(
+    (item) => item.id === entityId
+  );
+  if (!entity) throw new Error('Conversation notifications are unavailable');
+  return entity.notifications.map(mapGraphqlNotification);
+}
 
 /** Update user-owned notification statuses through the configured transport. */
 export async function updateNotifications(

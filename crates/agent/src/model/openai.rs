@@ -3,13 +3,26 @@ use std::sync::Arc;
 use crate::model::types::Model;
 use rig_core::{client::CompletionClient, providers::openai};
 
+/// Fireworks' Chat Completions `model` field is the account-scoped path, not
+/// the short catalog slug. Routing ids stay `fireworks/<slug>` so the picker,
+/// usage, and pricing can use the bare name.
+fn completion_model_id(model: &Model<'_>) -> String {
+    if model.provider() == "fireworks" && !model.name().starts_with("accounts/") {
+        format!("accounts/fireworks/models/{}", model.name())
+    } else {
+        model.name().to_string()
+    }
+}
+
 /// A model served over the OpenAI-compatible **Chat Completions** API.
 ///
 /// OpenAI-compatible providers differ only by the
 /// [`CompletionsClient`](openai::CompletionsClient)'s base URL and key, never
 /// by Rust type, so routing can hold any number of them without new variants.
 /// Which provider serves an id is decided by routing (the `provider/…`
-/// segment), so there is no id classification here.
+/// segment). Fireworks is the one exception on the wire: its API wants the
+/// account-scoped path, which [`completion_model_id`] derives from the
+/// catalog slug.
 pub struct OpenAiChatCompletionsModel<'a> {
     model: Model<'a>,
     client: Arc<openai::CompletionsClient>,
@@ -31,14 +44,16 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
     /// Unlike the Responses API, the Chat Completions API does not coerce tools
     /// into a strict subset, so tools are already sent verbatim.
     pub fn completion(&self) -> openai::completion::CompletionModel {
-        self.client.completion_model(self.model.name().to_string())
+        self.client
+            .completion_model(completion_model_id(&self.model))
     }
 
     /// Best-effort reasoning config, flattened into the request by rig, or
     /// `None` if the model doesn't support it.
     ///
     /// The Chat Completions API takes a flat `reasoning_effort` field, accepted
-    /// only by reasoning models (the GPT-5 family and the `o`-series); anything
+    /// only by reasoning models (the GPT-5 and GPT-6 families and the
+    /// `o`-series); anything
     /// else returns `None`, since sending it elsewhere 400s. `mini` / `nano`
     /// variants get a lower effort. `temperature` is never set (reasoning models
     /// reject it).
@@ -46,6 +61,7 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
         let model = self.model.name().to_lowercase();
 
         let is_reasoning = model.contains("gpt-5")
+            || model.contains("gpt-6")
             || model.starts_with("o1")
             || model.starts_with("o3")
             || model.starts_with("o4");
@@ -100,6 +116,7 @@ impl<'a> OpenAiResponsesModel<'a> {
         let model = self.model.name().to_lowercase();
 
         let is_reasoning = model.contains("gpt-5")
+            || model.contains("gpt-6")
             || model.starts_with("o1")
             || model.starts_with("o3")
             || model.starts_with("o4");
@@ -121,3 +138,6 @@ impl<'a> OpenAiResponsesModel<'a> {
         }))
     }
 }
+
+#[cfg(test)]
+mod test;

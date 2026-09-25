@@ -1,4 +1,8 @@
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
+import type {
+  MessageActionEvent,
+  MessageActionHandler,
+} from '@core/messages/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import CopyIcon from '@phosphor/copy.svg';
@@ -30,7 +34,6 @@ import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { HoverActions } from './HoverActions';
 import { renderIcon } from './render-icon';
 import { Timestamp } from './Timestamp';
-import type { MessageActionEvent, MessageActionHandler } from './types';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '😂'] as const;
 

@@ -68,6 +68,7 @@ pub use tool_context::{
     build_bot_tool_context, build_calendar_tool_context,
     build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
     build_channel_tool_context_without_side_effects, build_crm_tool_context,
+    build_message_service_with_side_effects, build_message_service_without_side_effects,
     build_project_tool_context, build_properties_service, build_properties_tool_context,
     build_reminders_tool_context, build_skill_tool_context, build_task_properties_adapter,
     build_team_repository, build_team_tool_context,
@@ -117,7 +118,8 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
 /// two register `SendEmail` and the deferring `CreateCalendarEvent` — on any
 /// other host those registrations would return `PendingUserExecution`
 /// forever while reading to the model as success. Second, whether the host
-/// runs the chat frontend's tool discovery and display tools.
+/// supports tool discovery and can render tool-call views. Channel bots keep
+/// discovery, but only chat and agent-session transcripts render rich views.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AiHost {
     /// The AI chat, and any host whose conversation is stored as a chat the
@@ -131,7 +133,8 @@ pub enum AiHost {
     /// waits on, never a pending composer.
     AgentSession,
     /// The channel-mention bot: no composer, so `CreateCalendarEvent`
-    /// executes directly in the agent loop and `SendEmail` is omitted.
+    /// executes directly in the agent loop and `SendEmail` is omitted. Replies
+    /// contain text only, so this host also omits `DisplayResults`.
     ChannelBot,
     /// The MCP server: like [`AiHost::ChannelBot`] for user tools — MCP
     /// clients apply their own confirmation policy from tool annotations —
@@ -159,9 +162,14 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
             .add_tool::<SearchTools, ToolServiceContext>()
-            .add_tool::<LoadTools, ToolServiceContext>()
-            .add_tool::<DisplayResults, ToolServiceContext>(),
+            .add_tool::<LoadTools, ToolServiceContext>(),
         AiHost::Mcp => toolset,
+    };
+    let toolset = match host {
+        AiHost::Chat | AiHost::AgentSession => {
+            toolset.add_tool::<DisplayResults, ToolServiceContext>()
+        }
+        AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
         AiHost::Chat => Box::new(&prompt::TOOL_USE_PROMPT),

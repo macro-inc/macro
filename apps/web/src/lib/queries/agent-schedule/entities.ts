@@ -2,6 +2,7 @@ import type { AutomationEntity } from '@entity';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { createMemo } from 'solid-js';
 import { useSchedulesQuery } from './schedules';
+import { getCronTrigger } from './triggers';
 
 // Must match `MAX_ACTION_TIME` on the backend
 // (services/scheduled_action/src/domain/models.rs). After this window
@@ -17,7 +18,8 @@ function isClaimActive(claimed: string | undefined | null): boolean {
 export function scheduleToEntity(
   schedule: ScheduledAction
 ): AutomationEntity | undefined {
-  if (!schedule.id) return undefined;
+  const trigger = getCronTrigger(schedule);
+  if (!schedule.id || !trigger) return undefined;
   return {
     id: schedule.id,
     type: 'automation',
@@ -25,7 +27,7 @@ export function scheduleToEntity(
     ownerId: schedule.owner,
     createdAt: schedule.created_at,
     updatedAt: schedule.updated_at,
-    cron: schedule.schedule,
+    cron: trigger.schedule,
     enabled: schedule.enabled,
     nextRunAt: schedule.next_run_at,
     isRunning: isClaimActive(schedule.claimed),
@@ -40,7 +42,7 @@ export function scheduleToEntity(
 export function useAutomationEntities() {
   const schedulesQuery = useSchedulesQuery(() => true);
   return createMemo<AutomationEntity[]>(() => {
-    const data = schedulesQuery.data;
+    const data = schedulesQuery.isPending ? undefined : schedulesQuery.data;
     if (!data) return [];
     const out: AutomationEntity[] = [];
     for (const schedule of data) {

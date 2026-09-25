@@ -4,6 +4,9 @@ import {
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { useItemRawName } from '@queries/preview';
+import type { ItemEntity } from '@queries/preview/types';
+import { Show } from 'solid-js';
 import type {
   EntityDetailNavigationStackEntry,
   EntityDetailTarget,
@@ -25,7 +28,7 @@ function breadcrumbIcon(target: EntityDetailTarget): EntityIconSelector {
   return fileTypeToBlockName(target.type, true);
 }
 
-function breadcrumbName(target: EntityDetailTarget) {
+function fallbackBreadcrumbName(target: EntityDetailTarget) {
   if (target.fallbackName) return target.fallbackName;
 
   if (target.type === 'document' && target.subType?.type === 'task') {
@@ -41,9 +44,10 @@ function breadcrumbName(target: EntityDetailTarget) {
   return 'Untitled';
 }
 
-export function EntityDetailBreadcrumbItem(props: {
+function BreadcrumbItem(props: {
   entry: EntityDetailNavigationStackEntry;
   order: number;
+  name: string;
 }) {
   return (
     <ViewBreadcrumbs.Item
@@ -56,16 +60,67 @@ export function EntityDetailBreadcrumbItem(props: {
           class="gap-1.5"
           isActive={item.isActive()}
           onClick={item.onSelect}
-          tooltip={breadcrumbName(props.entry.data)}
+          tooltip={props.name}
         >
           <EntityIcon
             targetType={breadcrumbIcon(props.entry.data)}
             size="xs"
             class="shrink-0"
           />
-          <span class="truncate">{breadcrumbName(props.entry.data)}</span>
+          <span class="truncate">{props.name}</span>
         </ViewBreadcrumbs.Button>
       )}
     </ViewBreadcrumbs.Item>
+  );
+}
+
+function LiveBreadcrumbItem(props: {
+  entry: EntityDetailNavigationStackEntry;
+  order: number;
+  previewItem: ItemEntity;
+}) {
+  const currentName = useItemRawName(() => props.previewItem);
+  const name = () => {
+    const current = currentName();
+    if (current?.trim()) return current;
+
+    return fallbackBreadcrumbName(props.entry.data);
+  };
+
+  return (
+    <BreadcrumbItem entry={props.entry} order={props.order} name={name()} />
+  );
+}
+
+export function EntityDetailBreadcrumbItem(props: {
+  entry: EntityDetailNavigationStackEntry;
+  order: number;
+}) {
+  return (
+    <Show
+      when={
+        props.entry.data.type === 'reminder'
+          ? undefined
+          : ({
+              id: props.entry.data.id,
+              type: props.entry.data.type,
+            } satisfies ItemEntity)
+      }
+      fallback={
+        <BreadcrumbItem
+          entry={props.entry}
+          order={props.order}
+          name={fallbackBreadcrumbName(props.entry.data)}
+        />
+      }
+    >
+      {(previewItem) => (
+        <LiveBreadcrumbItem
+          entry={props.entry}
+          order={props.order}
+          previewItem={previewItem()}
+        />
+      )}
+    </Show>
   );
 }

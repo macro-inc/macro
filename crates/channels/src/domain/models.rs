@@ -794,6 +794,8 @@ pub enum ReferencedShareItemType {
     EmailThread,
     /// Call entity.
     Call,
+    /// Calendar event entity: one owner's projection of a meeting.
+    CalendarEvent,
 }
 
 impl ReferencedShareItemType {
@@ -806,6 +808,7 @@ impl ReferencedShareItemType {
             "project" => Some(Self::Project),
             "thread" | "email" | "email_thread" => Some(Self::EmailThread),
             "call" => Some(Self::Call),
+            "calendar_event" => Some(Self::CalendarEvent),
             _ => None,
         }
     }
@@ -819,6 +822,7 @@ impl ReferencedShareItemType {
             Self::Project => "project",
             Self::EmailThread => "thread",
             Self::Call => "call",
+            Self::CalendarEvent => "calendar_event",
         }
     }
 

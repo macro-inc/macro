@@ -18,6 +18,8 @@
 
 #[cfg(any(test, target_arch = "wasm32"))]
 mod state;
+#[cfg(any(test, target_arch = "wasm32"))]
+mod write_batch;
 
 #[cfg(target_arch = "wasm32")]
 mod browser;

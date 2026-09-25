@@ -60,11 +60,11 @@
 @property --safe-right  { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --safe-left   { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --safe-top    { syntax: "<length>"; inherits: true; initial-value: 0px; }
-@property --app-border-width { syntax: "<length>"; inherits: true; initial-value: 0.5px; }
+@property --app-border-width { syntax: "<length>"; inherits: true; initial-value: 1px; }
 @property --app-ring-width   { syntax: "<length>"; inherits: true; initial-value: 0.5px; }
 
 :root {
-  --app-border-width: 0.5px;
+  --app-border-width: 1px;
   --app-ring-width: 0.5px;
 
   /* Workspace sidebar geometry. Both icon rails are 26px from the edge.
@@ -248,13 +248,193 @@ body.tauri-ios {
   --layer-inset: var(--color-surface-3);
 }
 
+/* Capture on a separate element so swapping the palette cannot create a
+   custom-property cycle. Nested InvertUtil boundaries capture the local colors. */
+[data-invert-source] {
+  --invert-surface: var(--color-ink);
+  --invert-ink: var(--color-page);
+  --invert-accent: var(--color-accent);
+  --invert-red: var(--color-red);
+  --invert-orange: var(--color-orange);
+  --invert-amber: var(--color-amber);
+  --invert-yellow: var(--color-yellow);
+  --invert-lime: var(--color-lime);
+  --invert-green: var(--color-green);
+  --invert-teal: var(--color-teal);
+  --invert-cyan: var(--color-cyan);
+  --invert-blue: var(--color-blue);
+  --invert-violet: var(--color-violet);
+  --invert-purple: var(--color-purple);
+  --invert-pink: var(--color-pink);
+  --invert-link: var(--color-link);
+  --invert-link-hover: var(--color-link-hover);
+  --invert-link-visited: var(--color-link-visited);
+  --invert-success: var(--color-success);
+  --invert-warning: var(--color-warning);
+  --invert-failure: var(--color-failure);
+}
+
+[data-invert] {
+  /* Move lightness toward the local foreground. Missing chroma and hue in
+     the target keep the authored palette chromatic instead of mixing to gray. */
+  --invert-palette-target: oklch(from var(--invert-ink) clamp(0.3, l, 0.85) none none);
+  --color-accent: color-mix(in oklch, var(--invert-accent) 20%, var(--invert-palette-target));
+  --color-red: color-mix(in oklch, var(--invert-red) 20%, var(--invert-palette-target));
+  --color-orange: color-mix(in oklch, var(--invert-orange) 20%, var(--invert-palette-target));
+  --color-amber: color-mix(in oklch, var(--invert-amber) 20%, var(--invert-palette-target));
+  --color-yellow: color-mix(in oklch, var(--invert-yellow) 20%, var(--invert-palette-target));
+  --color-lime: color-mix(in oklch, var(--invert-lime) 20%, var(--invert-palette-target));
+  --color-green: color-mix(in oklch, var(--invert-green) 20%, var(--invert-palette-target));
+  --color-teal: color-mix(in oklch, var(--invert-teal) 20%, var(--invert-palette-target));
+  --color-cyan: color-mix(in oklch, var(--invert-cyan) 20%, var(--invert-palette-target));
+  --color-blue: color-mix(in oklch, var(--invert-blue) 20%, var(--invert-palette-target));
+  --color-violet: color-mix(in oklch, var(--invert-violet) 20%, var(--invert-palette-target));
+  --color-purple: color-mix(in oklch, var(--invert-purple) 20%, var(--invert-palette-target));
+  --color-pink: color-mix(in oklch, var(--invert-pink) 20%, var(--invert-palette-target));
+  --color-link: color-mix(in oklch, var(--invert-link) 20%, var(--invert-palette-target));
+  --color-link-hover: color-mix(in oklch, var(--invert-link-hover) 20%, var(--invert-palette-target));
+  --color-link-visited: color-mix(in oklch, var(--invert-link-visited) 20%, var(--invert-palette-target));
+  --color-success: color-mix(in oklch, var(--invert-success) 20%, var(--invert-palette-target));
+  --color-warning: color-mix(in oklch, var(--invert-warning) 20%, var(--invert-palette-target));
+  --color-failure: color-mix(in oklch, var(--invert-failure) 20%, var(--invert-palette-target));
+  --color-accent-contrast: var(--invert-surface);
+  --color-accent-contrast-muted: oklch(from var(--color-accent-contrast) l c h / 0.7);
+  --theme-surface: initial;
+  --theme-inset: initial;
+  --theme-panel: initial;
+  --color-surface-0: var(--invert-surface);
+  --color-surface-1: color-mix(in oklch, var(--invert-surface) 96%, var(--invert-ink));
+  --color-surface-2: color-mix(in oklch, var(--invert-surface) 92%, var(--invert-ink));
+  --color-surface-3: color-mix(in oklch, var(--invert-surface) 88%, var(--invert-ink));
+  --color-surface-4: color-mix(in oklch, var(--invert-surface) 84%, var(--invert-ink));
+  --color-content-0: var(--invert-ink);
+  --color-content-1: color-mix(in oklch, var(--invert-ink) 80%, var(--invert-surface));
+  --color-content-2: color-mix(in oklch, var(--invert-ink) 65%, var(--invert-surface));
+  --color-content-3: color-mix(in oklch, var(--invert-ink) 40%, var(--invert-surface));
+  --color-content-4: color-mix(in oklch, var(--invert-ink) 55%, var(--invert-surface));
+  --color-edge: var(--color-surface-4);
+  --color-edge-muted: var(--color-surface-3);
+  /* Inherited aliases are already resolved; rebind them to the local ramp. */
+  --color-thread-rail: color-mix(in oklch, var(--color-surface-0) 90%, var(--color-content-0));
+  --color-ink: var(--color-content-0);
+  --color-ink-muted: var(--color-content-1);
+  --color-ink-subtle: var(--color-content-2);
+  --color-ink-disabled: var(--color-content-3);
+  --color-ink-placeholder: var(--color-content-4);
+  --color-page: var(--color-surface-0);
+  --color-panel: var(--color-surface-1);
+  --color-dialog: var(--color-surface-2);
+  --color-menu: var(--color-surface-2);
+  --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
+  --color-tooltip: var(--color-surface-2);
+  --color-toast: var(--color-surface-2);
+  --color-input: transparent;
+  --color-input-focus: var(--color-surface-1);
+  --color-message: var(--color-surface-1);
+  --color-composer: var(--color-surface-2);
+  --color-composer-ink: var(--color-ink);
+  --color-composer-placeholder: var(--color-ink-placeholder);
+  --color-composer-action: var(--color-ink);
+  --color-composer-action-ink: var(--color-panel);
+  --color-code-buffer: color-mix(in srgb, var(--color-surface-0) 60%, var(--color-surface-1));
+  --color-inline-code: color-mix(in oklch, var(--color-ink) 5%, transparent);
+  --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
+  --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
+  --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
+
+  --color-ink-extra-muted: var(--color-ink-subtle);
+  --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
+  --color-list-hover: var(--color-hover);
+  --color-list-highlighted: var(--color-hover);
+  --color-selected: color-mix(in oklch, var(--color-accent) 8%, transparent);
+  --color-list-selected: var(--color-selected);
+  --color-list-selected-highlighted: color-mix(in oklch, var(--color-accent) 16%, transparent);
+
+  /* Generated compatibility tokens. */
+  --color-accent-bg: color-mix(in oklch, var(--color-accent) 8%, transparent);
+  --color-accent-ink: var(--color-accent);
+  --color-accent-hover: color-mix(in oklch, var(--color-accent) 20%, transparent);
+
+  --color-red-bg: color-mix(in oklch, var(--color-red) 15%, transparent);
+  --color-red-ink: var(--color-red);
+  --color-red-hover: color-mix(in oklch, var(--color-red) 20%, transparent);
+  --color-orange-bg: color-mix(in oklch, var(--color-orange) 15%, transparent);
+  --color-orange-ink: var(--color-orange);
+  --color-orange-hover: color-mix(in oklch, var(--color-orange) 20%, transparent);
+  --color-amber-bg: color-mix(in oklch, var(--color-amber) 15%, transparent);
+  --color-amber-ink: var(--color-amber);
+  --color-amber-hover: color-mix(in oklch, var(--color-amber) 20%, transparent);
+  --color-yellow-bg: color-mix(in oklch, var(--color-yellow) 15%, transparent);
+  --color-yellow-ink: var(--color-yellow);
+  --color-yellow-hover: color-mix(in oklch, var(--color-yellow) 20%, transparent);
+  --color-lime-bg: color-mix(in oklch, var(--color-lime) 15%, transparent);
+  --color-lime-ink: var(--color-lime);
+  --color-lime-hover: color-mix(in oklch, var(--color-lime) 20%, transparent);
+  --color-green-bg: color-mix(in oklch, var(--color-green) 15%, transparent);
+  --color-green-ink: var(--color-green);
+  --color-green-hover: color-mix(in oklch, var(--color-green) 20%, transparent);
+  --color-teal-bg: color-mix(in oklch, var(--color-teal) 15%, transparent);
+  --color-teal-ink: var(--color-teal);
+  --color-teal-hover: color-mix(in oklch, var(--color-teal) 20%, transparent);
+  --color-cyan-bg: color-mix(in oklch, var(--color-cyan) 15%, transparent);
+  --color-cyan-ink: var(--color-cyan);
+  --color-cyan-hover: color-mix(in oklch, var(--color-cyan) 20%, transparent);
+  --color-blue-bg: color-mix(in oklch, var(--color-blue) 15%, transparent);
+  --color-blue-ink: var(--color-blue);
+  --color-blue-hover: color-mix(in oklch, var(--color-blue) 20%, transparent);
+  --color-violet-bg: color-mix(in oklch, var(--color-violet) 15%, transparent);
+  --color-violet-ink: var(--color-violet);
+  --color-violet-hover: color-mix(in oklch, var(--color-violet) 20%, transparent);
+  --color-purple-bg: color-mix(in oklch, var(--color-purple) 15%, transparent);
+  --color-purple-ink: var(--color-purple);
+  --color-purple-hover: color-mix(in oklch, var(--color-purple) 20%, transparent);
+  --color-pink-bg: color-mix(in oklch, var(--color-pink) 15%, transparent);
+  --color-pink-ink: var(--color-pink);
+  --color-pink-hover: color-mix(in oklch, var(--color-pink) 20%, transparent);
+
+  --color-success-bg: color-mix(in oklch, var(--color-success) 15%, transparent);
+  --color-success-ink: var(--color-success);
+  --color-success-hover: color-mix(in oklch, var(--color-success) 20%, transparent);
+  --color-warning-bg: color-mix(in oklch, var(--color-warning) 15%, transparent);
+  --color-warning-ink: var(--color-warning);
+  --color-warning-hover: color-mix(in oklch, var(--color-warning) 20%, transparent);
+  --color-failure-bg: color-mix(in oklch, var(--color-failure) 15%, transparent);
+  --color-failure-ink: var(--color-failure);
+  --color-failure-hover: color-mix(in oklch, var(--color-failure) 20%, transparent);
+  --color-alert: var(--color-warning);
+  --color-alert-bg: var(--color-warning-bg);
+  --color-alert-ink: var(--color-warning-ink);
+
+  /* Entity colors are aliases of the authored named palette. */
+  --color-comment:     var(--color-yellow);
+  --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
+  --color-comment-ink: var(--color-comment);
+
+  --color-calendar:    var(--color-yellow);
+  --color-contact:     var(--color-yellow);
+  --color-canvas:      var(--color-amber);
+  --color-folder:      var(--color-blue);
+  --color-image:       var(--color-yellow);
+  --color-video:       var(--color-violet);
+  --color-write:       var(--color-blue);
+  --color-code:        var(--color-lime);
+  --color-chat:        var(--color-cyan);
+  --color-html:        var(--color-orange);
+  --color-note:        var(--color-violet);
+  --color-task:        var(--color-green);
+  --color-snippet:     var(--color-pink);
+  --color-pdf:         var(--color-red);
+  --color-rss:         var(--color-blue);
+  --color-default:     var(--color-content-1);
+  --color-email:       var(--color-default);
+}
+
 /* Scope the panel semantic itself so nested bg-panel consumers share the same
-   inactive split chrome instead of only tinting the outer panel element. */
+   inactive split chrome instead of only tinting the outer panel element.
+   Lower lightness directly: mixing with ink reverses the effect in dark themes. */
 .split-panel-inactive {
-  --color-panel: color-mix(
-    in oklch,
-    var(--theme-panel, var(--color-surface-1)) 80%,
-    var(--color-page)
+  --color-panel: oklch(
+    from var(--theme-panel, var(--color-surface-1)) calc(l - 0.025) c h
   );
 }
 
@@ -315,6 +495,11 @@ body.tauri-ios {
   --color-link-visited: var(--color-accent);
   --color-page: var(--color-surface-0);
   --color-panel: var(--theme-panel, var(--color-surface-1));
+  --color-control: var(--color-surface-2);
+  --color-edge-frame: color-mix(in oklch, var(--color-content-0) 8%, transparent);
+  --color-edge-button: color-mix(in oklch, var(--color-content-0) 5%, transparent);
+  --color-edge-divider: color-mix(in oklch, var(--color-content-0) 4%, transparent);
+  --color-edge-focus: color-mix(in oklch, var(--color-content-0) 40%, transparent);
   --color-dialog: var(--color-surface-2);
   --color-menu: var(--color-surface-2);
   /* Touch surfaces keep their translucent fill; desktop overrides it below
@@ -331,6 +516,7 @@ body.tauri-ios {
   --color-composer-action: var(--color-ink);
   --color-composer-action-ink: var(--color-panel);
   --color-code-buffer: color-mix(in srgb, var(--color-surface-0) 60%, var(--color-surface-1));
+  --color-inline-code: color-mix(in oklch, var(--color-ink) 5%, transparent);
   --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
   --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
   --color-selected: color-mix(in oklch, var(--color-accent) 8%, transparent);
@@ -407,7 +593,7 @@ body.tauri-ios {
   --color-avatar-edge: oklch(0 0 0 / 0.4);
   --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
   --color-list-hover: var(--color-hover);
-  --color-list-highlighted: var(--color-hover);
+  --color-list-highlighted: var(--color-active);
   --color-list-selected: var(--color-selected);
   --color-list-selected-highlighted: color-mix(in oklch, var(--color-accent) 16%, transparent);
 
@@ -469,7 +655,7 @@ body.tauri-ios {
 
      Bands:
        0- 99  in-page — viewer internals (0-19), app chrome (20-30),
-              floating widgets (90)
+              cross-panel content (31), floating widgets (90)
      100-199  modal stack, drag previews, menus
      200-299  always on top — tooltips, toasts
 
@@ -483,7 +669,6 @@ body.tauri-ios {
      local ordering. */
 
   /* ---- 0-99: in-page --------------------------------------------------- */
-  --z-index-main-view-layout: 0;
   --z-index-user-highlight:   1;
   --z-index-annotation-layer: 2;
   /* Split-view header title strip. Local to the header's own stacking
@@ -513,6 +698,9 @@ body.tauri-ios {
   /* Split panel header/side-panel chrome: above the panel's content and the
      rest of the in-page chrome, below floating widgets. */
   --z-index-split-panel-chrome: 30;
+  /* PDF margin comments cross the document panel boundary and must remain
+     interactive when they overlap side-panel chrome. */
+  --z-index-pdf-comments: 31;
 
   /* App-level floating widgets (`z-float`: draggable call controls, incoming
      calls). Above all other in-page content, below the modal stack. */
@@ -559,7 +747,8 @@ html[data-touch-device='true'] {
   -webkit-tap-highlight-color: initial;
 }
 
-html:not([data-touch-device="true"]) {
+html:not([data-touch-device="true"]),
+html:not([data-touch-device="true"]) [data-invert] {
   --color-menu-glass: var(--color-menu);
 }
 
@@ -599,6 +788,17 @@ html[data-theme-light='false'] {
 [data-theme-light='true'] {
   --color-avatar-edge: oklch(1 0 0 / 0.4);
   --color-composer: var(--color-surface-4);
+}
+
+/* Right-side header actions share a quiet, hover-only background. */
+@utility header-actions {
+  & [data-button] {
+    @apply rounded-xl border-0 bg-transparent;
+
+    &:not(:hover):not(:active) {
+      background-image: none;
+    }
+  }
 }
 
 /* Floating "island" chrome shared by the mobile dock buttons, header islands,
@@ -774,7 +974,21 @@ html[data-theme-light='false'] {
   --glass-shadow-scale: 0.5;
 }
 
-html[data-theme-light='true'] .glass-input {
+/* Shared flat menu appearance, on the existing menu elements. */
+@utility menu-surface {
+  @apply relative min-h-0 rounded-xl border border-edge-frame bg-menu text-ink shadow-none;
+  --color-surface: var(--color-menu);
+}
+
+/* Shared dialog appearance; composers retain their original glass. */
+@utility elevated-surface {
+  @apply glass-input;
+  border-radius: 24px;
+  background-color: var(--color-dialog);
+  color: var(--color-ink);
+}
+
+html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
   --glass-shadow-y: 4px;
   --glass-shadow-blur: 16px;
   --glass-shadow-spread: -10px;
@@ -1281,17 +1495,17 @@ a {
 /* Shared text-field styling so inputs look the same across every settings tab.
    Apply to an <input>; pair with a width utility (e.g. `w-full`) as needed. */
 @utility settings-input {
-  @apply h-9 px-3 rounded-lg border border-edge-muted bg-transparent text-base text-ink outline-none transition-colors;
+  @apply h-9 px-3 rounded-full border border-edge-frame bg-control text-base text-ink outline-none transition-colors duration-120 motion-reduce:transition-none;
+  &:is(textarea) {
+    @apply rounded-xl;
+  }
   /* Matches the composer/chat placeholder token so hint text reads the same
      faintness everywhere, rather than settings sitting more prominent. */
   &::placeholder {
     @apply text-ink-placeholder;
   }
-  &:hover {
-    @apply border-edge;
-  }
-  &:focus {
-    @apply border-accent;
+  &:focus-visible {
+    @apply ring-2 ring-edge-muted;
   }
   /* State styling owned by the utility so call sites toggle an attribute instead
      of fighting the border/text classes. `aria-invalid` after `:focus` so the
@@ -1316,7 +1530,7 @@ a {
       inset-inline: calc(var(--spacing) * 6);
       bottom: 0;
       height: 1px;
-      background-color: color-mix(in oklab, var(--color-ink-muted) 5%, transparent);
+      background-color: var(--color-edge-divider);
       pointer-events: none;
     }
   }
@@ -1332,7 +1546,7 @@ a {
     inset-inline: calc(var(--spacing) * 6);
     bottom: 0;
     height: 1px;
-    background-color: color-mix(in oklab, var(--color-ink-muted) 5%, transparent);
+    background-color: var(--color-edge-divider);
     pointer-events: none;
   }
 }

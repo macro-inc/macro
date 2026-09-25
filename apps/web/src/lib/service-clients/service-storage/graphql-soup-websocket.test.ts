@@ -6,6 +6,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 import {
+  ActivityUpdatesDocument,
   NotificationUpdatesDocument,
   SoupUpdatesDocument,
 } from './graphql/generated/graphql';
@@ -82,101 +83,96 @@ describe('GraphQL Soup websocket retry policy', () => {
 });
 
 describe('GraphQL Soup subscription lifecycle', () => {
-  it('keeps notification patches active without a cache host and cleans up replacements', () => {
-    const firstSoupUnsubscribe = vi.fn();
-    const firstNotificationUnsubscribe = vi.fn();
-    const uncachedNotificationUnsubscribe = vi.fn();
-    const secondSoupUnsubscribe = vi.fn();
-    const secondNotificationUnsubscribe = vi.fn();
-    const firstClient = {
-      subscription: vi
-        .fn()
-        .mockReturnValueOnce({
-          subscribe: vi.fn(() => ({ unsubscribe: firstSoupUnsubscribe })),
-        })
-        .mockReturnValueOnce({
-          subscribe: vi.fn(() => ({
-            unsubscribe: firstNotificationUnsubscribe,
-          })),
-        })
-        .mockReturnValueOnce({
-          subscribe: vi.fn(() => ({
-            unsubscribe: uncachedNotificationUnsubscribe,
-          })),
-        }),
-    };
-    const secondClient = {
-      subscription: vi
-        .fn()
-        .mockReturnValueOnce({
-          subscribe: vi.fn(() => ({ unsubscribe: secondSoupUnsubscribe })),
-        })
-        .mockReturnValueOnce({
-          subscribe: vi.fn(() => ({
-            unsubscribe: secondNotificationUnsubscribe,
-          })),
-        }),
+  it('keeps notification and activity updates active with or without a cache host', () => {
+    const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
+    const receive = new Map<unknown, (result: { data?: unknown }) => void>();
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn((document) => ({
+        subscribe: (next: (result: { data?: unknown }) => void) => {
+          receive.set(document, next);
+          const unsubscribe = vi.fn();
+          unsubscribes.push(unsubscribe);
+          return { unsubscribe };
+        },
+      })),
     };
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
-
-    lifecycle.replace(firstClient as never, { disabled: false } as never);
-    expect(firstClient.subscription).toHaveBeenNthCalledWith(
-      1,
-      SoupUpdatesDocument,
-      {}
-    );
-    expect(firstClient.subscription).toHaveBeenNthCalledWith(
-      2,
-      NotificationUpdatesDocument,
-      {}
-    );
-
-    lifecycle.replace(secondClient as never, { disabled: false } as never);
-    expect(firstSoupUnsubscribe).toHaveBeenCalledOnce();
-    expect(firstNotificationUnsubscribe).toHaveBeenCalledOnce();
-    expect(secondClient.subscription).toHaveBeenCalledTimes(2);
-
-    lifecycle.replace(firstClient as never, { disabled: true } as never);
-    expect(secondSoupUnsubscribe).toHaveBeenCalledOnce();
-    expect(secondNotificationUnsubscribe).toHaveBeenCalledOnce();
-    expect(firstClient.subscription).toHaveBeenCalledTimes(3);
-    expect(firstClient.subscription).toHaveBeenNthCalledWith(
-      3,
-      NotificationUpdatesDocument,
-      {}
-    );
-
+    const listener = vi.fn();
+    const unregister = subscribeToGraphqlNotificationPatches(listener);
+    for (const host of [{ disabled: false }, { disabled: true }, undefined]) {
+      client.subscription.mockClear();
+      lifecycle.replace(client as never, host as never);
+      const documents = client.subscription.mock.calls.map(
+        ([document]) => document
+      );
+      expect(documents).toContain(NotificationUpdatesDocument);
+      expect(documents).toContain(ActivityUpdatesDocument);
+      expect(documents.includes(SoupUpdatesDocument)).toBe(
+        host?.disabled === false
+      );
+      const patch = {
+        __typename: 'GraphqlNewNotification',
+        notification: { id: 'one' },
+      };
+      receive.get(NotificationUpdatesDocument)?.({
+        data: { notificationUpdates: patch },
+      });
+      expect(listener).toHaveBeenLastCalledWith(patch);
+    }
     lifecycle.dispose();
-    expect(uncachedNotificationUnsubscribe).toHaveBeenCalledOnce();
+    unregister();
+    for (const unsubscribe of unsubscribes)
+      expect(unsubscribe).toHaveBeenCalledOnce();
   });
-
-  it('publishes typed notification patches to frontend listeners', () => {
-    const receive: Array<(result: { data?: unknown }) => void> = [];
+  it('pauses subscriptions for navigation and reconnects in place exactly once per restore', () => {
+    const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
     const client = {
+      query: vi.fn(),
       subscription: vi.fn(() => ({
-        subscribe: vi.fn((next) => {
-          receive.push(next);
-          return { unsubscribe: vi.fn() };
+        subscribe: vi.fn(() => {
+          const unsubscribe = vi.fn();
+          unsubscribes.push(unsubscribe);
+          return { unsubscribe };
         }),
       })),
     };
-    const listener = vi.fn();
-    const unsubscribe = subscribeToGraphqlNotificationPatches(listener);
-    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle({
+      suspendOnPagehide: true,
+    });
     lifecycle.replace(client as never, { disabled: false } as never);
+    expect(client.subscription).toHaveBeenCalledTimes(3);
+    for (let cycle = 0; cycle < 2; cycle += 1) {
+      dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      for (const unsubscribe of unsubscribes)
+        expect(unsubscribe).toHaveBeenCalledOnce();
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false }));
+      expect(client.subscription).toHaveBeenCalledTimes((cycle + 1) * 3);
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      expect(client.subscription).toHaveBeenCalledTimes((cycle + 2) * 3);
+    }
+    dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    lifecycle.dispose();
+    dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    expect(client.subscription).toHaveBeenCalledTimes(9);
+    for (const unsubscribe of unsubscribes)
+      expect(unsubscribe).toHaveBeenCalledOnce();
+  });
 
-    receive[0]?.({ data: { soupUpdates: [] } });
-    expect(listener).not.toHaveBeenCalled();
-
-    const patch = {
-      __typename: 'GraphqlNewNotification',
-      notification: { id: 'notification-id' },
+  it('does not attach browser lifecycle behavior to the native client', () => {
+    const unsubscribe = vi.fn();
+    const client = {
+      subscription: vi.fn(() => ({ subscribe: () => ({ unsubscribe }) })),
     };
-    receive[1]?.({ data: { notificationUpdates: patch } });
-    expect(listener).toHaveBeenCalledOnce();
-    expect(listener).toHaveBeenCalledWith(patch);
-
-    unsubscribe();
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle({
+      suspendOnPagehide: false,
+    });
+    lifecycle.replace(client as never);
+    dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    expect(client.subscription).toHaveBeenCalledTimes(2);
+    expect(unsubscribe).not.toHaveBeenCalled();
     lifecycle.dispose();
   });
 

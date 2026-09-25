@@ -181,7 +181,7 @@ vi.mock('./TeamStep', () => ({
 vi.mock('./PlanStep', () => ({
   PlanStep: (props: {
     onFree: (skipped: boolean) => void;
-    onPremiumPaid: () => void;
+    onPremiumPaid: (tier: 'premium' | 'max') => void;
     onStartCheckout: (tier: 'premium') => void;
   }) => (
     <>
@@ -192,8 +192,11 @@ vi.mock('./PlanStep', () => ({
       <button type="button" onClick={() => props.onFree(true)}>
         Decide later
       </button>
-      <button type="button" onClick={props.onPremiumPaid}>
+      <button type="button" onClick={() => props.onPremiumPaid('premium')}>
         Payment confirmed
+      </button>
+      <button type="button" onClick={() => props.onPremiumPaid('max')}>
+        Max payment confirmed
       </button>
       <button type="button" onClick={() => props.onStartCheckout('premium')}>
         Checkout
@@ -333,21 +336,28 @@ describe('authenticated onboarding sequencing and resume', () => {
     expect(wiring.finish).toHaveBeenCalledWith(true);
   });
 
-  it('keeps paid checkout incomplete until the final team step', () => {
-    saveStep('plan');
-    const view = render(() => <OnboardingFlow />);
-    fireEvent.click(view.getByRole('button', { name: 'Checkout' }));
-    expect(wiring.checkout).toHaveBeenCalledWith('premium');
-    expect(wiring.finishPremium).not.toHaveBeenCalled();
-    expect(view.queryByRole('button', { name: 'Create team' })).toBeNull();
-    fireEvent.click(view.getByRole('button', { name: 'Payment confirmed' }));
-    expect(wiring.finishPremium).not.toHaveBeenCalled();
-    view.unmount();
-    const resumed = render(() => <OnboardingFlow />);
-    fireEvent.click(resumed.getByRole('button', { name: 'Create team' }));
-    expect(wiring.finishPremium).toHaveBeenCalledOnce();
-    expect(wiring.finish).not.toHaveBeenCalled();
-  });
+  it.each(['premium', 'max'] as const)(
+    'keeps %s checkout incomplete until the final team step',
+    (tier) => {
+      saveStep('plan');
+      const view = render(() => <OnboardingFlow />);
+      fireEvent.click(view.getByRole('button', { name: 'Checkout' }));
+      expect(wiring.checkout).toHaveBeenCalledWith('premium');
+      expect(wiring.finishPremium).not.toHaveBeenCalled();
+      expect(view.queryByRole('button', { name: 'Create team' })).toBeNull();
+      fireEvent.click(
+        view.getByRole('button', {
+          name: tier === 'max' ? 'Max payment confirmed' : 'Payment confirmed',
+        })
+      );
+      expect(wiring.finishPremium).not.toHaveBeenCalled();
+      view.unmount();
+      const resumed = render(() => <OnboardingFlow />);
+      fireEvent.click(resumed.getByRole('button', { name: 'Create team' }));
+      expect(wiring.finishPremium).toHaveBeenCalledExactlyOnceWith(tier);
+      expect(wiring.finish).not.toHaveBeenCalled();
+    }
+  );
 
   it('restores the exact selected integration after a provider round-trip', () => {
     saveStep('connect-github');

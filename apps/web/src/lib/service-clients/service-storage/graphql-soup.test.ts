@@ -1,6 +1,11 @@
+import type { NormalizedCacheExchangeOptions } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { BrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout-policy';
+import type { Operation } from '@urql/core';
+import { parse } from 'graphql';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  ChannelListItemFieldsFragment,
+  ChannelListNotificationFieldsFragment,
   GraphqlSoupEntityType,
   SoupItemFieldsFragment,
 } from './graphql/generated/graphql';
@@ -15,6 +20,14 @@ it('maps agent sessions without discarding persona, favorites or notifications',
     sessionName: 'Fix mentions',
     ownerId: 'macro|owner@example.com',
     botId: 'bot',
+    harness: 'cursor',
+    repoUrl: 'https://github.com/macro/macro',
+    repoBranch: 'main',
+    pullRequestUrl: 'https://github.com/macro/macro/pull/6712',
+    workingBranch: 'fix-icons',
+    pullRequestState: 'MERGED',
+    pullRequestId: 'linked-pr',
+    turnState: 'idle',
     bot: {
       id: 'bot',
       name: 'Ada',
@@ -39,6 +52,14 @@ it('maps agent sessions without discarding persona, favorites or notifications',
       id: 'session',
       name: 'Fix mentions',
       bot: { name: 'Ada' },
+      harness: 'cursor',
+      repoUrl: 'https://github.com/macro/macro',
+      repoBranch: 'main',
+      pullRequestUrl: 'https://github.com/macro/macro/pull/6712',
+      workingBranch: 'fix-icons',
+      pullRequestState: 'merged',
+      pullRequestId: 'linked-pr',
+      turnState: 'idle',
       status: 'acp_ready',
       notifications: [],
     },
@@ -118,22 +139,33 @@ const mocks = vi.hoisted(() => {
     queueDepth: () => queuedMutationCount,
     recordSubscriptionDisposal: () => cleanupOrder.push('subscriptions'),
     cleanupOrder: () => [...cleanupOrder],
-    failInitialization: () =>
-      initializationErrorHandler?.(
-        new Error('injected initialization failure')
-      ),
+    failInitialization: (
+      error = new Error('injected initialization failure')
+    ) => initializationErrorHandler?.(error),
     plainClient,
     realtimeClient,
     replaceSubscriptions,
     platformFetch,
     toastFailure,
+    telemetryError: vi.fn(),
+    normalizedCacheExchange: vi.fn(
+      (host: unknown, _options?: NormalizedCacheExchangeOptions) => ({
+        kind: 'cache',
+        host,
+      })
+    ),
     createWorkerCacheHost: vi.fn(
       (options: { onInitializationError?: (error: Error) => void }) => {
         initializationErrorHandler = options.onInitializationError;
         return host;
       }
     ),
-    createTauriCacheHost: vi.fn(() => host),
+    createTauriCacheHost: vi.fn(
+      (options: { onInitializationError?: (error: Error) => void }) => {
+        initializationErrorHandler = options.onInitializationError;
+        return host;
+      }
+    ),
   };
 });
 
@@ -180,7 +212,10 @@ vi.mock('@graphql-cache/scope', () => ({
   getOrCreateCacheScope: () => 'anonymous-scope',
 }));
 vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
-  normalizedCacheExchange: (host: unknown) => ({ kind: 'cache', host }),
+  normalizedCacheExchange: mocks.normalizedCacheExchange,
+}));
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: { error: mocks.telemetryError },
 }));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
 vi.mock('graphql-ws', () => ({
@@ -227,6 +262,167 @@ vi.mock('@urql/core', () => ({
     };
   },
 }));
+
+it('maps the unread alias without pretending it is the full notification edge', async () => {
+  const { mapGraphqlSoupItem } = await import('./graphql-soup');
+  const item = {
+    __typename: 'GraphqlSoupChannel',
+    id: 'channel',
+    entityType: 'CHANNEL',
+    displayName: 'Channel',
+    channelName: 'Channel',
+    channelType: 'private',
+    ownerId: 'owner',
+    organizationId: null,
+    channelTeamId: null,
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+    viewedAt: null,
+    interactedAt: null,
+    isParticipant: true,
+    participants: [],
+    latestMessage: null,
+    latestNonThreadMessage: null,
+    cacheProjection: null,
+    frecencyScore: null,
+    isFavorited: false,
+    unreadNotifications: [
+      { id: 'one', state: 'UNSEEN', createdAt: '2026-01-01' },
+    ],
+  } satisfies ChannelListItemFieldsFragment;
+  expect(mapGraphqlSoupItem(item)).toMatchObject({
+    tag: 'channel',
+    data: {
+      notifications: undefined,
+      unreadNotifications: [
+        { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
+      ],
+    },
+  });
+});
+
+describe('legacy channel list notifications', () => {
+  const notification = (
+    metadata: ChannelListNotificationFieldsFragment['metadata']
+  ): ChannelListNotificationFieldsFragment => ({
+    id: 'notification',
+    eventType: 'channel_message_send',
+    entityId: 'channel',
+    entityType: 'CHANNEL',
+    state: 'UNSEEN',
+    sent: true,
+    senderId: 'sender',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    viewedAt: null,
+    metadata,
+  });
+
+  it('maps unread sends without inventing missing presentation content', async () => {
+    const { mapGraphqlNotification } = await import('./graphql-soup');
+    const mapped = mapGraphqlNotification(
+      notification({
+        __typename: 'GraphqlChannelMessageSendMetadata',
+        channelMessageSendSender: 'sender',
+        channelMessageSendMessageId: 'message',
+        channelMessageSendChannelType: 'PRIVATE',
+      })
+    );
+    expect(mapped).toMatchObject({
+      id: 'notification',
+      entity_id: 'channel',
+      entity_type: 'channel',
+      state: 'unseen',
+      sender_id: 'sender',
+      notification_metadata: {
+        tag: 'channel_message_send',
+        content: {
+          messageId: 'message',
+          channelType: 'private',
+          sender: 'sender',
+        },
+      },
+    });
+    expect(mapped.notification_metadata.content).not.toHaveProperty(
+      'messageContent',
+      ''
+    );
+    expect(mapped.notification_metadata.content).toHaveProperty(
+      'messageContent',
+      undefined
+    );
+    expect(
+      mapGraphqlNotification({
+        ...notification({
+          __typename: 'GraphqlChannelMessageSendMetadata',
+          channelMessageSendSender: 'sender',
+          channelMessageSendMessageId: 'message',
+          channelMessageSendChannelType: 'PRIVATE',
+        }),
+        state: 'SEEN',
+        viewedAt: '2026-01-02T00:00:00Z',
+      })
+    ).toMatchObject({ state: 'seen', viewed_at: '2026-01-02T00:00:00Z' });
+  });
+
+  it('preserves mention and reply thread membership and message targets', async () => {
+    const { mapGraphqlNotification } = await import('./graphql-soup');
+    const { scopeChannelNotificationsForEntity } = await import(
+      '../../../features/soup/entity-notifications'
+    );
+    const mapped = [
+      notification({
+        __typename: 'GraphqlChannelMessageSendMetadata',
+        channelMessageSendSender: 'sender',
+        channelMessageSendMessageId: 'top-level',
+        channelMessageSendChannelType: 'PRIVATE',
+      }),
+      {
+        ...notification({
+          __typename: 'GraphqlChannelMentionMetadata',
+          channelMentionMessageId: 'mention',
+          channelMentionThreadId: 'thread',
+          channelMentionMessageContent: 'Mention',
+          channelMentionChannelType: 'PRIVATE',
+        }),
+        id: 'mention-notification',
+        eventType: 'channel_mention',
+      },
+      {
+        ...notification({
+          __typename: 'GraphqlChannelReplyMetadata',
+          channelReplyMessageId: 'reply',
+          channelReplyThreadId: 'thread',
+          channelReplyMessageContent: 'Reply',
+          channelReplyChannelType: 'PRIVATE',
+          channelReplyUserId: 'sender',
+          channelReplyThreadParentSenderId: 'parent-sender',
+        }),
+        id: 'reply-notification',
+        eventType: 'channel_message_reply',
+      },
+    ].map(mapGraphqlNotification);
+    expect(
+      scopeChannelNotificationsForEntity({ type: 'channel' }, mapped).map(
+        (n) => n.id
+      )
+    ).toEqual(['notification']);
+    expect(
+      scopeChannelNotificationsForEntity(
+        { type: 'channel_thread', messageId: 'thread' },
+        mapped
+      ).map((n) => n.id)
+    ).toEqual(['mention-notification', 'reply-notification']);
+    expect(mapped[1].notification_metadata).toMatchObject({
+      tag: 'channel_mention',
+      content: { messageId: 'mention', threadId: 'thread' },
+    });
+    expect(mapped[2].notification_metadata).toMatchObject({
+      tag: 'channel_message_reply',
+      content: { messageId: 'reply', threadId: 'thread' },
+    });
+  });
+});
 
 describe('GraphQL Soup chat models', () => {
   it.each(['openai/gpt-5.6', 'anthropic/claude-sonnet-5', null])(
@@ -312,6 +508,7 @@ describe('GraphQL Soup browser cache session gate', () => {
     mocks.tauri = false;
     mocks.resetQueue();
     mocks.platformFetch.mockReset();
+    mocks.telemetryError.mockReset();
   });
 
   afterEach(() => {
@@ -448,13 +645,124 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.host.dispose).not.toHaveBeenCalled();
   });
 
+  it.each(['query', 'mutation', 'subscription'] as const)(
+    'reports handled cache-disposed failures for %s without exporting operation payloads',
+    async (kind) => {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      const error = new Error('cache worker host was disposed');
+      const operation: Operation = {
+        kind,
+        key: 42,
+        query: parse('query PrivateDocument { user { id } }'),
+        variables: { privateValue: 'do-not-export' },
+        context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+      };
+      const report =
+        mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.onCacheError;
+
+      const { CacheNavigationError } = await import(
+        '@graphql-cache/host/navigation-error'
+      );
+      report?.(new CacheNavigationError(), operation);
+      expect(mocks.telemetryError).not.toHaveBeenCalled();
+      report?.(error, operation);
+
+      expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(error, {
+        'error.source': 'graphql-cache',
+        'cache.backend': 'turso-wasm-opfs',
+        'cache.phase': 'operation',
+        'cache.operation_kind': kind,
+      });
+    }
+  );
+
+  it.each([
+    { native: false, backend: 'turso-wasm-opfs' },
+    { native: true, backend: 'native' },
+  ])(
+    'reports $backend initialization failures once despite in-flight operation errors',
+    async ({ native, backend }) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mocks.tauri = native;
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      const report =
+        mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.onCacheError;
+      expect(report).toBeDefined();
+      const operation: Operation = {
+        kind: 'query',
+        key: 42,
+        query: parse('query { user { id } }'),
+        variables: {},
+        context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+      };
+      const error = new Error('injected initialization failure');
+
+      mocks.failInitialization(error);
+      // Rejected in-flight reads reach the exchange after the host reports
+      // initialization failure. Cleanup can also reject outstanding work.
+      await Promise.resolve();
+      report?.(error, operation);
+      report?.(new Error('cache worker host was disposed'), operation);
+
+      expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(error, {
+        'error.source': 'graphql-cache',
+        'cache.backend': backend,
+        'cache.phase': 'initialization',
+      });
+      expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+      expect(soup.getGraphqlCacheHost()).toBeUndefined();
+      expect(soup.graphqlCacheEnabled()).toBe(false);
+    }
+  );
+
+  it('reports synchronous cache construction failures before falling back', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = new Error('cache worker construction failed');
+    mocks.createWorkerCacheHost.mockImplementationOnce(() => {
+      throw error;
+    });
+    const soup = await import('./graphql-soup');
+
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+    expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(error, {
+      'error.source': 'graphql-cache',
+      'cache.backend': 'turso-wasm-opfs',
+      'cache.phase': 'initialization',
+    });
+  });
+
+  it('does not let telemetry failures prevent terminal-cache fallback', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.telemetryError.mockImplementationOnce(() => {
+      throw new Error('telemetry unavailable');
+    });
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+
+    expect(() => mocks.failInitialization()).not.toThrow();
+    expect(mocks.telemetryError).toHaveBeenCalledOnce();
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+    expect(mocks.cleanupOrder()).toEqual(['subscriptions', 'host']);
+  });
+
   it('unsubscribes cache operations before disposing a failed host', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const soup = await import('./graphql-soup');
     const cachedClient = soup.getGraphqlSoupClient();
 
-    mocks.failInitialization();
+    const error = new Error('injected initialization failure');
+    mocks.failInitialization(error);
 
+    expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(error, {
+      'error.source': 'graphql-cache',
+      'cache.backend': 'turso-wasm-opfs',
+      'cache.phase': 'initialization',
+    });
+    // Late failure notifications from the old host do not emit duplicate logs.
+    mocks.failInitialization(error);
+    expect(mocks.telemetryError).toHaveBeenCalledOnce();
     expect(cachedClient).not.toBe(mocks.realtimeClient);
     expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
     expect(soup.graphqlCacheEnabled()).toBe(false);

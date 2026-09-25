@@ -65,7 +65,7 @@ export function SplitDrawer(
   };
 
   const getPositionClasses = () => {
-    const baseClasses = `absolute bg-surface border-edge-muted z-annotation-layer flex flex-col`;
+    const baseClasses = `absolute bg-surface border-edge-frame z-annotation-layer flex flex-col`;
     let positionClasses = '';
     switch (props.side) {
       case 'top':

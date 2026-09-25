@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { ThrownResultError } from '@core/util/result';
 import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
+import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { useEmailSignature } from '@queries/email/link';
 import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
 import { SIGNATURE_IMAGES_UNRESOLVED_CODE } from '@service-email/client';
@@ -77,7 +78,10 @@ function saveSignatureErrorMessage(error: Error): string {
  * patches `email_settings` on save. The "replies & forwards" toggle patches
  * immediately (the backend patch is partial, so it leaves the signature alone).
  */
-export function SignatureSection(props: { link: EmailLink }) {
+export function SignatureSection(props: {
+  link: EmailLink;
+  onClose: () => void;
+}) {
   const signature = useEmailSignature(() => props.link.id);
   // Draft lives in the module-level store (keyed by link id) so it survives the
   // settings tab unmounting; `null` means "no unsaved edit".
@@ -160,6 +164,18 @@ export function SignatureSection(props: { link: EmailLink }) {
 
   return (
     <div class="flex flex-col gap-3 rounded-xl border border-edge-muted p-3">
+      <div class="flex items-center justify-between gap-3">
+        <h3 class="text-sm font-medium">Signature</h3>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          tooltip="Close signature editor"
+          aria-label="Close signature editor"
+          onClick={props.onClose}
+        >
+          <XIcon class="size-4" />
+        </Button>
+      </div>
       {/* Editing (Quill) is desktop-only; on mobile the section still offers
           the replies/forwards toggle and Remove, with a pointer to desktop. */}
       <Show
