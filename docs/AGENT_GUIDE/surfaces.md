@@ -1129,8 +1129,12 @@ outside tap, or a downward swipe dismisses the sheet. Opening Settings again
 starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms
-scroll, including with the keyboard open. Desktop settings retain their panel
-and split navigation.
+scroll, including with the keyboard open. On desktop, `/app/settings/<tab>`
+opens settings fullscreen, while `/app/inbox/~/settings/<tab>` docks it beside
+Inbox. **Open fullscreen** pushes a standalone settings URL; browser Back
+restores the preceding split layout. **Move to split** restores the app layout
+and docks the selected tab, while closing a docked settings pane minimizes it.
+A direct fullscreen link returns to Inbox when there is no prior app layout.
 
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
