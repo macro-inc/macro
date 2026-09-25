@@ -3,9 +3,6 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
-import { getMeetingPath } from '@channel/Call/call-link';
-import { joinChannelCall } from '@channel/Call/join-channel-call';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
@@ -28,11 +25,10 @@ import { isMobile } from '@core/mobile/isMobile';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
-import { useCallLinkQuery } from '@queries/call/meetings';
 import type { CallRecord } from '@service-call/client';
-import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { type Accessor, Show } from 'solid-js';
+import { useCallAgain } from '../use-call-again';
 
 export function CallRecordingSplitHeaderLoading() {
   return (
@@ -58,26 +54,10 @@ export function CallRecordingSplitHeader(props: {
   const blockId = useBlockId();
   const shareCtx = useShareDialogContext();
   const callName = () => record().customName ?? record().channelName ?? 'Call';
-  const navigate = useNavigate();
-  const flag = useQuickCallsFlag();
-  const quickCallsEnabled = () => !flag().loading && flag().enabled;
-  const meeting = useCallLinkQuery(() =>
-    quickCallsEnabled() && !record().channelId ? record().callId : undefined
+  const { canCallAgain, callAgain } = useCallAgain(
+    () => record().callId,
+    () => record().channelId
   );
-  const shareToken = () =>
-    quickCallsEnabled() && meeting.isSuccess
-      ? meeting.data?.shareToken
-      : undefined;
-  const canCallAgain = () => Boolean(record().channelId || shareToken());
-  const callAgain = () => {
-    const channelId = record().channelId;
-    if (channelId) {
-      void joinChannelCall(channelId);
-      return;
-    }
-    const token = shareToken();
-    if (token) navigate(getMeetingPath(token));
-  };
 
   const shareTool: BlockTool = {
     label: 'Share',

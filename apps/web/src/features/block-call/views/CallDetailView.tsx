@@ -1,7 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { createSearchParams } from '@app/lib/split-router';
-import { useCall } from '@channel/Call/use-call';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -36,6 +35,7 @@ import {
 import { callDetailSearch } from '../call-route';
 import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody';
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
+import { useCallAgain } from '../component/use-call-again';
 import type { CallTranscriptTarget } from '../constants';
 
 function CallDetailContent(props: {
@@ -45,7 +45,10 @@ function CallDetailContent(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const [shareOpen, setShareOpen] = createSignal(false);
-  const call = useCall(() => props.record().channelId ?? '');
+  const { canCallAgain, callAgain } = useCallAgain(
+    () => props.callId,
+    () => props.record().channelId
+  );
   const callName = () =>
     props.record().customName ?? props.record().channelName ?? 'Call Recording';
 
@@ -55,15 +58,6 @@ function CallDetailContent(props: {
       void refetchSoupEntity(props.callId, 'call');
     }
   });
-
-  const handleJoin = async () => {
-    if (!props.record().channelId) return;
-    try {
-      await call.joinCall();
-    } catch (error) {
-      console.error('Failed to join call from recording', error);
-    }
-  };
 
   return (
     <ShareDialogContext.Provider
@@ -87,13 +81,9 @@ function CallDetailContent(props: {
             </span>
             <div class="ml-auto flex shrink-0 items-center gap-2">
               <Show
-                when={
-                  !isMobile() &&
-                  !props.record().isActive &&
-                  props.record().channelId
-                }
+                when={!isMobile() && !props.record().isActive && canCallAgain()}
               >
-                <Button variant="outline" size="sm" onClick={handleJoin}>
+                <Button variant="outline" size="sm" onClick={callAgain}>
                   <PhoneCallIcon class="size-4" />
                   Call Again
                 </Button>
