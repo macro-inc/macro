@@ -391,20 +391,20 @@ function buildHtml(
     .replace(/[ \t]*<title>.*?<\/title>\n?/s, '')
     .replace(/[ \t]*<(?:meta|link)\s[^>]*data-seo[^>]*>\n?/g, '');
 
-  // Bake the theme's CSS variables into <html> so the first paint isn't
-  // unthemed (at runtime they're applied by an effect in themeReactive.ts).
+  // Bake the theme into the head, keeping charset ahead of large attributes.
+  // Runtime theme changes still take precedence through <html>'s inline style.
   html = html.replace(
-    /(<html[^>]*style=")([^"]*)/,
-    (_, prefix: string, style: string) =>
-      `${prefix}${style} ${themeHtmlStyle()};`
+    '</head>',
+    `<style>:root{${themeHtmlStyle()}}</style></head>`
   );
 
-  // Inline the first-paint CSS ahead of everything else in <head>, so the page
+  // Keep charset within the first 1024 bytes, then inline first-paint CSS so the page
   // renders as the HTML streams rather than after a round-trip for the
   // render-blocking bundle. Placed first, so the bundle still wins on conflicts.
   html = html.replace(
-    '<head>',
-    `<head>\n    <style id="critical-css">${criticalCss()}</style>`
+    /<meta charset="[^"]+"\s*\/?>/i,
+    (charset) =>
+      `${charset}\n    <style id="critical-css">${criticalCss()}</style>`
   );
 
   // The prerendered HTML plus the critical CSS above is a complete first paint,

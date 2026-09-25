@@ -64,14 +64,15 @@ export async function prerenderJourney(directory: string): Promise<string> {
           '.unification-travel, .homepage-open-source-travel, script'
         )
         .forEach((node) => node.remove());
+      const html = document.documentElement.cloneNode(false) as HTMLElement;
+      const themeStyle = html.getAttribute('style') ?? '';
+      // Large inline theme attributes push charset past the browser's first
+      // 1024 bytes. Keep the same first-paint tokens in the head instead.
+      html.removeAttribute('style');
       return {
         root: copy.outerHTML,
-        htmlTag:
-          document.documentElement.cloneNode(false) instanceof HTMLElement
-            ? (
-                document.documentElement.cloneNode(false) as HTMLElement
-              ).outerHTML.replace('</html>', '')
-            : '<html lang="en" data-public-site>',
+        htmlTag: html.outerHTML.replace('</html>', ''),
+        themeStyle,
       };
     });
     if (
@@ -87,7 +88,7 @@ export async function prerenderJourney(directory: string): Promise<string> {
       .replace(/<html\b[^>]*>/, () => snapshot.htmlTag)
       .replace(
         '</head>',
-        '<style>[data-prerendered] .obf-card,[data-prerendered] .ob-orbit-tile{animation:none!important}</style></head>'
+        `<style>:root{${snapshot.themeStyle}}[data-prerendered] .obf-card,[data-prerendered] .ob-orbit-tile{animation:none!important}</style></head>`
       );
   } finally {
     await browser?.close();

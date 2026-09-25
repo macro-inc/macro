@@ -105,13 +105,10 @@ export default function HomepageEmailCompose() {
 
   // Keep one editor instance when ComposeLayout reads its body slot.
   const body = (
-    <div
-      data-email-demo-body
-      class="min-h-0 flex-1 overflow-y-auto overscroll-contain max-md:flex-[1_0_auto] max-md:overflow-visible max-md:overscroll-auto"
-    >
+    <div data-email-demo-body class="min-h-0 flex-[1_0_auto] overflow-visible">
       <MarkdownShell
         config={config}
-        class="min-h-full text-sm leading-6 max-md:h-auto max-md:overflow-visible"
+        class="h-auto min-h-full overflow-visible text-sm leading-6"
         disabled={generating()}
         onConnect={generation.onReady}
         placeholder="Write your email…"
@@ -165,10 +162,10 @@ export default function HomepageEmailCompose() {
       <ComposeProvider value={ctx}>
         <ComposerSurface
           as="div"
-          class="h-full max-md:h-auto max-md:min-h-[var(--homepage-email-height)]"
+          class="h-auto min-h-[var(--homepage-email-height)]"
         >
           <ComposeLayout
-            class="size-full p-4 sm:p-6 flex flex-col min-h-0 max-md:h-auto max-md:min-h-[var(--homepage-email-height)] max-md:[&>div:last-child]:h-auto max-md:[&>div:last-child]:flex-1"
+            class="w-full h-auto p-4 sm:p-6 flex flex-col min-h-[var(--homepage-email-height)] [&>div:last-child]:h-auto [&>div:last-child]:flex-1"
             header={
               <div class="flex flex-1 flex-wrap items-center gap-2 min-w-0">
                 <span class="text-sm text-ink-placeholder w-14 shrink-0">

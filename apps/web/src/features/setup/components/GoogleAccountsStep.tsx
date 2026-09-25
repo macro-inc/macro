@@ -7,7 +7,7 @@ import LockIcon from '@phosphor/lock-key.svg';
 import ShieldIcon from '@phosphor/shield-check.svg';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { onCleanup, onMount, Show } from 'solid-js';
-import { ContinueButton, elevatedButtonStyle } from '../flow/shared';
+import { ContinueButton } from '../flow/shared';
 import { animateOnboardingStep } from '../primitives/animateOnboardingStep';
 
 export interface GoogleAccountsStepProps {
@@ -58,7 +58,7 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
         </h1>
         <p class="mt-7 max-w-[440px] font-[Inter_Variable] text-sm font-normal leading-6 text-ink-muted sm:text-[15px] [text-wrap:balance]">
           {personal()
-            ? 'Keep your personal email and calendar alongside work. Agents ask for approval before sending email, and you can disconnect anytime.'
+            ? 'Add a personal account for email and calendar in Macro. This is optional; your work account remains your Macro sign-in. Agents ask for approval before sending email, and you can disconnect anytime.'
             : 'Connect through Google to read, send, and organize email and manage your calendars in Macro. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'}
         </p>
       </header>
@@ -88,8 +88,7 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
               onClick={() =>
                 personal() ? props.onConnectPersonal() : props.onConnectWork()
               }
-              class="glass flex min-h-14 w-full items-center justify-center gap-3 rounded-full bg-ink px-6 py-4 text-base font-medium text-surface after:p-[2px] transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
-              style={elevatedButtonStyle}
+              class="flex min-h-14 w-full items-center justify-center gap-3 rounded-full bg-ink px-6 py-4 text-base font-medium text-surface transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
             >
               <Show
                 when={!!props.connecting || props.loading}
@@ -174,9 +173,9 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
             Never sold
           </h2>
           <p class="mt-1 text-[11px] leading-[1.6] text-ink-extra-muted sm:text-xs">
-            Yours to control.
+            No generalized
             <br />
-            No AI training.
+            AI model training.
           </p>
         </div>
       </section>
