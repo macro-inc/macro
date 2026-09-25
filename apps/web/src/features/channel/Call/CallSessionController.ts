@@ -28,12 +28,21 @@ export function stopPrejoinTracks(tracks: CallPrejoinTracks | undefined) {
   tracks?.camera?.stop();
 }
 
+/** Device state and live tracks taken from a waiting room at publish time. */
+export type CallPrejoinMedia = {
+  microphoneEnabled: boolean;
+  cameraEnabled: boolean;
+  /** Owned by the call once claimed: published, or stopped if unused. */
+  localTracks?: CallPrejoinTracks;
+};
+
 export type CallSessionConnectMetadata = {
   channelTitle?: string | null;
-  microphoneEnabled?: boolean;
-  cameraEnabled?: boolean;
-  /** Session-owned tracks: reuse without prompting again, or stop if unused. */
-  localTracks?: CallPrejoinTracks;
+  /**
+   * Read once the room is connected, right before local media is published,
+   * so the waiting room keeps its preview and toggles live until then.
+   */
+  media?: () => CallPrejoinMedia | undefined;
   /** Public meeting pages use the browser media controls on every platform. */
   useBrowserSession?: boolean;
 };
@@ -126,8 +135,8 @@ function createNativeCallKitSessionController(options: {
       return !shouldSkip;
     },
     connectWithToken: async (tokenResponse, metadata) => {
-      // The native call captures its own media.
-      stopPrejoinTracks(metadata?.localTracks);
+      // The native call captures its own media; waiting-room media is never
+      // claimed, so its owner releases it.
       if (!tokenResponse.channelId) {
         throw new Error('Native channel calls require a channel');
       }

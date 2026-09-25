@@ -46,9 +46,11 @@ beforeEach(() => {
 });
 
 describe('call session platform selection', () => {
-  it('passes prejoin media preferences to the browser controller', async () => {
+  it('passes the prejoin media source to the browser controller', async () => {
     const { controller, jsConnect } = setup();
-    const preferences = { microphoneEnabled: false, cameraEnabled: true };
+    const preferences = {
+      media: () => ({ microphoneEnabled: false, cameraEnabled: true }),
+    };
     await controller.connectWithToken(token, preferences);
     expect(jsConnect).toHaveBeenCalledWith(token, preferences);
   });

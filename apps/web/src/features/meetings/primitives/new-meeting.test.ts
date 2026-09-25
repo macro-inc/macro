@@ -29,7 +29,7 @@ const credentials = {
   participantId: 'host',
   shareToken: meeting.shareToken,
 };
-const preferences = { microphoneEnabled: false, cameraEnabled: false };
+const preferences = () => ({ microphoneEnabled: false, cameraEnabled: false });
 const disposers: (() => void)[] = [];
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();

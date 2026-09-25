@@ -20,9 +20,16 @@ export type MeetingLocalTracks = {
 export type MeetingMediaPreferences = {
   microphoneEnabled: boolean;
   cameraEnabled: boolean;
-  /** Owned by `connect` once passed; the session stops them on early exits. */
+  /** Owned by the call once claimed: published, or stopped if unused. */
   localTracks?: MeetingLocalTracks;
 };
+
+/**
+ * Claimed by `connect` at the moment it publishes local media, so the waiting
+ * room stays live and its toggles keep applying until the call is connected.
+ * Never called when the attempt ends before that point.
+ */
+export type MeetingMediaSource = () => MeetingMediaPreferences;
 
 /** The session owns only the connection it joined, including late replies. */
 export type MeetingSessionCapabilities = {
@@ -36,7 +43,7 @@ export type MeetingSessionCapabilities = {
   release: (shareToken: string, token: string) => Promise<unknown>;
   connect: (
     credentials: MeetingCredentials,
-    preferences: MeetingMediaPreferences
+    media: MeetingMediaSource
   ) => Promise<void>;
   disconnect: () => Promise<void>;
 };

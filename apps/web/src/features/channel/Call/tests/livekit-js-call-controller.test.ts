@@ -39,6 +39,7 @@ function track() {
 function setup(state?: { connectionState: string; room?: Room }) {
   let room: Room | null = state?.room ?? null;
   const finishLocalMediaSetup = vi.fn(async () => undefined);
+  const setInitialMediaState = vi.fn();
   const controller = createLivekitJsCallController({
     room: () => room,
     setRoom: (next) => {
@@ -60,26 +61,40 @@ function setup(state?: { connectionState: string; room?: Room }) {
     setConnectionState: () => undefined,
     setActiveCall: () => undefined,
     setDuplicateConnectCallId: () => undefined,
-    setInitialMediaState: () => undefined,
+    setInitialMediaState,
     setRemoteParticipants: () => undefined,
     clearOptimisticJoin: () => undefined,
     bumpTrackVersion: () => undefined,
     bumpSpeakerVersion: () => undefined,
     setScreenSharing: () => undefined,
   });
-  return { controller, finishLocalMediaSetup };
+  return { controller, finishLocalMediaSetup, setInitialMediaState };
 }
 
-describe('livekit call controller prejoin tracks', () => {
+describe('livekit call controller prejoin media', () => {
   beforeEach(() => {
     connectRoom.mockReset();
     connectRoom.mockResolvedValue(undefined);
   });
 
-  it('hands prejoin tracks to media setup instead of stopping them', async () => {
-    const { controller, finishLocalMediaSetup } = setup();
+  it('claims prejoin media only once the room is connected and hands it to setup', async () => {
+    const { controller, finishLocalMediaSetup, setInitialMediaState } = setup();
     const localTracks = { microphone: track(), camera: track() };
-    await controller.connect(token, { localTracks });
+    const media = vi.fn(() => ({
+      microphoneEnabled: true,
+      cameraEnabled: true,
+      localTracks,
+    }));
+    let claimedBeforeConnected = false;
+    connectRoom.mockImplementation(async () => {
+      claimedBeforeConnected = media.mock.calls.length > 0;
+    });
+    await controller.connect(token, { media });
+    expect(claimedBeforeConnected).toBe(false);
+    expect(media).toHaveBeenCalledOnce();
+    expect(setInitialMediaState).toHaveBeenCalledWith(
+      media.mock.results[0].value
+    );
     expect(finishLocalMediaSetup).toHaveBeenCalledWith(
       expect.anything(),
       1,
@@ -89,26 +104,31 @@ describe('livekit call controller prejoin tracks', () => {
     expect(localTracks.camera.stop).not.toHaveBeenCalled();
   });
 
-  it('stops prejoin tracks when the room fails to connect', async () => {
+  it('never claims prejoin media when the room fails to connect', async () => {
     connectRoom.mockRejectedValue(new Error('offline'));
     const { controller, finishLocalMediaSetup } = setup();
-    const localTracks = { microphone: track(), camera: track() };
-    await expect(controller.connect(token, { localTracks })).rejects.toThrow(
+    const media = vi.fn(() => ({
+      microphoneEnabled: true,
+      cameraEnabled: false,
+    }));
+    await expect(controller.connect(token, { media })).rejects.toThrow(
       'offline'
     );
     expect(finishLocalMediaSetup).not.toHaveBeenCalled();
-    expect(localTracks.microphone.stop).toHaveBeenCalledOnce();
-    expect(localTracks.camera.stop).toHaveBeenCalledOnce();
+    expect(media).not.toHaveBeenCalled();
   });
 
-  it('stops prejoin tracks on a duplicate connect to the active room', async () => {
+  it('never claims prejoin media on a duplicate connect to the active room', async () => {
     const { controller, finishLocalMediaSetup } = setup({
       connectionState: 'connected',
       room: {} as Room,
     });
-    const localTracks = { camera: track() };
-    await controller.connect(token, { localTracks });
+    const media = vi.fn(() => ({
+      microphoneEnabled: true,
+      cameraEnabled: false,
+    }));
+    await controller.connect(token, { media });
     expect(finishLocalMediaSetup).not.toHaveBeenCalled();
-    expect(localTracks.camera.stop).toHaveBeenCalledOnce();
+    expect(media).not.toHaveBeenCalled();
   });
 });

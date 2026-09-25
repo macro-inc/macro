@@ -116,9 +116,9 @@ function NewMeetingSetup(props: {
         activeCallId: call.activeCallId,
         join: () => join.mutateAsync({ shareToken: shareToken() }),
         release: leaveMeeting,
-        connect: async (credentials, preferences) => {
+        connect: async (credentials, media) => {
           await call.meetingSession.connectWithToken(credentials, {
-            ...preferences,
+            media,
             useBrowserSession: true,
           });
           if (call.isInCall() && call.activeCallId() === credentials.callId) {

@@ -1,8 +1,7 @@
 import { createSignal, onCleanup } from 'solid-js';
 import type {
   MeetingCredentials,
-  MeetingLocalTracks,
-  MeetingMediaPreferences,
+  MeetingMediaSource,
   MeetingSessionCapabilities,
 } from '../context/meeting-session';
 
@@ -30,28 +29,13 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     }
   }
 
-  /** Handed-off tracks go to `connect` or are stopped; they never leak. */
+  /**
+   * Media stays with the waiting room until `connect` claims it, so an attempt
+   * that never connects leaves the preview and its devices untouched.
+   */
   async function join(
     displayName: string | undefined,
-    { localTracks, ...preferences }: MeetingMediaPreferences
-  ) {
-    let unclaimed = localTracks;
-    try {
-      await attemptJoin(displayName, preferences, () => {
-        const claimed = unclaimed;
-        unclaimed = undefined;
-        return claimed;
-      });
-    } finally {
-      unclaimed?.microphone?.stop();
-      unclaimed?.camera?.stop();
-    }
-  }
-
-  async function attemptJoin(
-    displayName: string | undefined,
-    preferences: Omit<MeetingMediaPreferences, 'localTracks'>,
-    claimLocalTracks: () => MeetingLocalTracks | undefined
+    media: MeetingMediaSource
   ) {
     if (joining() || disposed) return;
     if (issuedSession && capabilities.isInCall()) {
@@ -100,11 +84,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
         return;
       }
       issuedSession = issued;
-      const localTracks = claimLocalTracks();
-      await capabilities.connect(
-        issued.credentials,
-        localTracks ? { ...preferences, localTracks } : preferences
-      );
+      await capabilities.connect(issued.credentials, media);
       if (disposed || attempt !== generation) return;
       setJoinedCallId(issued.credentials.callId);
     } catch (cause) {

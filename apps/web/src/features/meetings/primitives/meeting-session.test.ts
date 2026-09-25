@@ -3,9 +3,9 @@ import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type {
   MeetingCredentials,
+  MeetingMediaSource,
   MeetingSessionCapabilities,
 } from '../context/meeting-session';
-import { fakeTrack } from '../tests/fake-media';
 import { createMeetingSession } from './meeting-session';
 import { createMeetingSessionLifecycle } from './meeting-session-lifecycle';
 
@@ -18,7 +18,10 @@ const token: MeetingCredentials = {
   participantId: 'guest-1',
   shareToken: 'meeting-secret',
 };
-const preferences = { microphoneEnabled: false, cameraEnabled: false };
+const preferences: MeetingMediaSource = () => ({
+  microphoneEnabled: false,
+  cameraEnabled: false,
+});
 
 function setup(overrides: Partial<MeetingSessionCapabilities> = {}) {
   let activeCallId: string | null = null;
@@ -104,11 +107,8 @@ describe('meeting session ownership', () => {
           await preparation;
         }),
       });
-      const localTracks = {
-        microphone: fakeTrack('audio'),
-        camera: fakeTrack('video'),
-      };
-      const joining = session.join(undefined, { ...preferences, localTracks });
+      const media = vi.fn(preferences);
+      const joining = session.join(undefined, media);
       await vi.waitFor(() =>
         expect(capabilities.prepare).toHaveBeenCalledOnce()
       );
@@ -121,8 +121,7 @@ describe('meeting session ownership', () => {
       expect(capabilities.connect).not.toHaveBeenCalled();
       expect(capabilities.release).not.toHaveBeenCalled();
       expect(session.error()).toBeUndefined();
-      expect(localTracks.microphone.stop).toHaveBeenCalledOnce();
-      expect(localTracks.camera.stop).toHaveBeenCalledOnce();
+      expect(media).not.toHaveBeenCalled();
       dispose();
     }
   );
@@ -355,14 +354,14 @@ describe('meeting session ownership', () => {
     const lifecycle = createMeetingSessionLifecycle();
     const cleanup = lifecycle.begin();
     const { session, capabilities, dispose } = setup({ lifecycle });
-    const localTracks = { microphone: fakeTrack('audio') };
-    const joining = session.join(undefined, { ...preferences, localTracks });
+    const media = vi.fn(preferences);
+    const joining = session.join(undefined, media);
     dispose();
     cleanup.complete();
     await joining;
     expect(capabilities.join).not.toHaveBeenCalled();
     expect(capabilities.connect).not.toHaveBeenCalled();
-    expect(localTracks.microphone.stop).toHaveBeenCalledOnce();
+    expect(media).not.toHaveBeenCalled();
   });
 
   it('releases disconnected credentials when a queued rejoin is immediately cancelled', async () => {
@@ -392,15 +391,12 @@ describe('meeting session ownership', () => {
     dispose();
   });
 
-  it('passes waiting-room tracks to the connection that uses them', async () => {
+  it('leaves waiting-room media for the connection to claim when it publishes', async () => {
     const { session, capabilities, dispose } = setup();
-    const localTracks = { microphone: fakeTrack('audio') };
-    await session.join('Taylor', { ...preferences, localTracks });
-    expect(capabilities.connect).toHaveBeenCalledWith(token, {
-      ...preferences,
-      localTracks,
-    });
-    expect(localTracks.microphone.stop).not.toHaveBeenCalled();
+    const media = vi.fn(preferences);
+    await session.join('Taylor', media);
+    expect(capabilities.connect).toHaveBeenCalledWith(token, media);
+    expect(media).not.toHaveBeenCalled();
     dispose();
   });
 
@@ -423,17 +419,13 @@ describe('meeting session ownership', () => {
       },
     ],
   ] as const)(
-    'stops waiting-room tracks when %s before connecting',
+    'keeps waiting-room media untouched when %s before connecting',
     async (_, overrides) => {
       const { session, capabilities, dispose } = setup(overrides);
-      const localTracks = {
-        microphone: fakeTrack('audio'),
-        camera: fakeTrack('video'),
-      };
-      await session.join('Taylor', { ...preferences, localTracks });
+      const media = vi.fn(preferences);
+      await session.join('Taylor', media);
       expect(capabilities.connect).not.toHaveBeenCalled();
-      expect(localTracks.microphone.stop).toHaveBeenCalledOnce();
-      expect(localTracks.camera.stop).toHaveBeenCalledOnce();
+      expect(media).not.toHaveBeenCalled();
       dispose();
     }
   );

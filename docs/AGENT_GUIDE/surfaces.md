@@ -885,6 +885,10 @@ Permission denial leaves the affected device off and still allows joining.
 The creator presses `Start call`; invitees press `Join call`. Loading the page or
 completing authentication never joins automatically, including old `?join=true`
 URLs. `Back to Macro` exits setup.
+While the button reads `Starting…` or `Joining…`, the preview keeps playing and
+the `Microphone` and `Camera` toggles stay usable; the call starts with whatever
+state they hold when it connects. `Cancel` aborts the attempt and returns to
+setup with the preview still running.
 Channel-linked calls require sign-in. While authentication is loading or the
 viewer is signed out, setup must not request microphone or camera access; the
 guest name form is available only for standalone meetings.

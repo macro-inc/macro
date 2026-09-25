@@ -100,9 +100,9 @@ export function MeetingRouteContent(props: {
         join: (displayName) =>
           join.mutateAsync({ shareToken: props.shareToken, displayName }),
         release: leaveMeeting,
-        connect: (credentials, preferences) =>
+        connect: (credentials, media) =>
           call.meetingSession.connectWithToken(credentials, {
-            ...preferences,
+            media,
             useBrowserSession: true,
           }),
         disconnect: call.meetingSession.disconnect,

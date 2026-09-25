@@ -68,14 +68,10 @@ export function MeetingPage(props: {
 
   createEffect(on(inCall, (connected) => props.onCallStateChange?.(connected)));
 
+  // The preview stays live while joining; the call claims it when it connects.
   createEffect(
     on(
-      () =>
-        Boolean(ready()) &&
-        !membersOnly() &&
-        !inCall() &&
-        !session.joining() &&
-        !leaving(),
+      () => Boolean(ready()) && !membersOnly() && !inCall() && !leaving(),
       (setup) => {
         if (setup) void media.prepare();
         else media.release();
@@ -91,11 +87,12 @@ export function MeetingPage(props: {
     if (membersOnly() || leaving() || media.pending()) return;
     // The call publishes the preview tracks rather than re-opening the
     // devices, so the waiting room is the only place permission is asked.
-    return session.join(props.authenticated() ? undefined : name(), {
+    // Read at connect time: the toggles stay usable until then.
+    return session.join(props.authenticated() ? undefined : name(), () => ({
       microphoneEnabled: media.microphoneEnabled(),
       cameraEnabled: media.cameraEnabled(),
       localTracks: media.handoff(),
-    });
+    }));
   };
   const leave = () => {
     batch(() => {
@@ -270,7 +267,6 @@ export function MeetingPage(props: {
               <div class="flex flex-wrap items-center gap-6">
                 <ToggleSwitch
                   checked={media.microphoneEnabled()}
-                  disabled={session.joining()}
                   onChange={media.setMicrophoneEnabled}
                   size="sm"
                   label="Microphone"
@@ -278,7 +274,6 @@ export function MeetingPage(props: {
                 />
                 <ToggleSwitch
                   checked={media.cameraEnabled()}
-                  disabled={session.joining()}
                   onChange={media.setCameraEnabled}
                   size="sm"
                   label="Camera"

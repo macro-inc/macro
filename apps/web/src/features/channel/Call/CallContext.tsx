@@ -1314,9 +1314,9 @@ function createCallState() {
       setStore('optimisticJoinChannelId', null);
       setStore('joinError', null);
     },
-    setInitialMediaState: (preferences) => {
-      setStore('isAudioMuted', preferences?.microphoneEnabled === false);
-      setStore('isVideoMuted', preferences?.cameraEnabled !== true);
+    setInitialMediaState: (media) => {
+      setStore('isAudioMuted', media?.microphoneEnabled === false);
+      setStore('isVideoMuted', media?.cameraEnabled !== true);
     },
     setRemoteParticipants: (participants) => {
       setStore('remoteParticipants', participants);
@@ -1334,15 +1334,9 @@ function createCallState() {
     nativeCall,
     jsConnect: async (tokenResponse, metadata) => {
       const generation = ++browserConnectGeneration;
-      let handedOff = false;
-      try {
-        const controller = await getLivekitJsController();
-        if (disposed || generation !== browserConnectGeneration) return;
-        handedOff = true;
-        return await controller.connect(tokenResponse, metadata);
-      } finally {
-        if (!handedOff) stopPrejoinTracks(metadata?.localTracks);
-      }
+      const controller = await getLivekitJsController();
+      if (disposed || generation !== browserConnectGeneration) return;
+      return controller.connect(tokenResponse, metadata);
     },
     jsDisconnect: async () => {
       // Cancel a connect that is still waiting on its dynamic import. This is
