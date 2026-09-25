@@ -778,7 +778,8 @@ the top bar. PRs are not tasks and do not appear in the Tasks list.
 Old `/app/pr/<foreignEntityId>` links redirect to the Tasks detail.
 Check an old link, a PR opened from a list or agent session,
 a second split, breadcrumb return, side-panel toggle, and phone layout. If cached
-GitHub data fails, the detail shows an error banner.
+GitHub data fails, the detail shows an error banner with a Retry button; pressing it
+refetches the PR without leaving the current detail.
 
 ## Calls — `/app/component/calls`
 

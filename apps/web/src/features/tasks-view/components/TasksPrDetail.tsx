@@ -96,6 +96,7 @@ export function TasksPrDetail(props: { foreignEntityId: string }) {
           data={detail.data()}
           status={detail.query.status}
           discussionSource={detail.discussionSource}
+          onRetry={() => void detail.query.refetch()}
         />
       </div>
     </SidePanel.Root>

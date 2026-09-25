@@ -28,6 +28,7 @@ export default function PrBlock() {
             data={detail.data()}
             status={detail.query.status}
             discussionSource={detail.discussionSource}
+            onRetry={() => void detail.query.refetch()}
           />
         </div>
       </SidePanel.Layout>
