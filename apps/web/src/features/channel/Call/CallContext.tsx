@@ -362,7 +362,13 @@ export type CallState = {
   meetingSession: Pick<
     CallSessionController,
     'connectWithToken' | 'disconnect'
-  >;
+  > & {
+    /**
+     * Fetch the browser call SDK ahead of a likely join so the download is
+     * not serialized behind the token request.
+     */
+    warmUp: () => void;
+  };
   /** Shared join, leave, and recovery lifecycle, with a reactive snapshot. */
   callLifecycle: ReturnType<typeof createCallLifecycle>;
   /** The LiveKit Room instance, null when not in a call */
@@ -1606,6 +1612,10 @@ function createCallState() {
     meetingSession: {
       connectWithToken: callSession.connectWithToken,
       disconnect: callSession.disconnect,
+      warmUp: () => {
+        // A failed prefetch is retried by the real connect, which reports it.
+        getLivekitJsController().catch(() => undefined);
+      },
     },
     callLifecycle: {
       ...lifecycle,

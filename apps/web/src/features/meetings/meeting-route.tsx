@@ -25,6 +25,8 @@ export function MeetingRouteContent(props: {
   const location = useLocation();
   const navigate = useNavigate();
   const call = useCallContext();
+  // Every visitor here is about to join; fetch the SDK while they get ready.
+  call.meetingSession.warmUp();
   const lifecycle = useMeetingSessionLifecycle();
   const authenticated = useIsAuthenticated();
   const author = useAuthor();

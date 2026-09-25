@@ -29,6 +29,8 @@ function NewMeetingSetup(props: {
   onLeave: () => void;
 }) {
   const call = useCallContext();
+  // Every visitor here is about to join; fetch the SDK while they get ready.
+  call.meetingSession.warmUp();
   const lifecycle = useMeetingSessionLifecycle();
   const author = useAuthor();
   const people = useMeetingTeammatesSource(() => props.userId, idToDisplayName);
