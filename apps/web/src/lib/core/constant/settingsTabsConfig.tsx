@@ -16,6 +16,7 @@ import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
 import { useHasPermission } from '../context/user';
+import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
 import {
@@ -166,9 +167,12 @@ export const useSettingsTabAvailable = () => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
-      case 'API Keys':
       case 'Billing':
         return true;
+      // Issuing and copying a key is desk work, and the mobile sheet has no
+      // good place for a one-time secret.
+      case 'API Keys':
+        return !isMobile();
       case 'Notifications':
         return notificationSettingsFlag().enabled;
       case 'Team':
