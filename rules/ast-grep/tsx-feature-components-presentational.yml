@@ -13,6 +13,7 @@ note: |-
   untyped wire JSON for property-changed rows. In block-agent, `ui/` is
   the presentation layer and `component/` is the composition layer.
 files:
+  - apps/web/src/features/channel/components/channel-invite*
   - apps/web/src/features/block-agent/ui/**
   - apps/web/src/features/meetings/components/**
   - apps/web/src/features/block-spreadsheet/components/**
