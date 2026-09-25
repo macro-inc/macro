@@ -33,6 +33,7 @@ export function CallRecordingBody(props: {
   record: CallRecord;
   callId: string;
   transcriptTarget?: CallTranscriptTarget;
+  showOverlayHeaderGap?: boolean;
 }) {
   const record = () => props.record;
   const hasTranscripts = createMemo(() => record().transcript.length > 0);
@@ -166,7 +167,7 @@ export function CallRecordingBody(props: {
         <div class="mx-auto max-w-3xl min-w-0 px-6 pt-12 pb-16 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
           <div class="flex flex-col gap-10">
             <header>
-              <Show when={!isMobile()}>
+              <Show when={!isMobile() && props.showOverlayHeaderGap}>
                 <div class="h-8 mb-4" />
               </Show>
               <h1 class="text-2xl font-semibold text-ink text-balance">

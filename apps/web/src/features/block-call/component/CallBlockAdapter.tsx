@@ -68,6 +68,7 @@ export function CallBlockAdapter(props: CallBlockProps) {
                     record={data()}
                     callId={callId}
                     transcriptTarget={transcriptTarget()}
+                    showOverlayHeaderGap
                   />
                 </div>
               </SidePanel.Layout>

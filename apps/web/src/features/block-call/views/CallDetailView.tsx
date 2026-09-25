@@ -47,9 +47,9 @@ export function useCallDetail(callId: Accessor<string>) {
   const query = useCallRecordQuery(callId);
 
   const data = (): CallDetailData | undefined => {
-    if (!query.isSuccess) return undefined;
+    if (query.isPending) return undefined;
     const record = query.data;
-    return { record, name: callDetailName(record) };
+    return record ? { record, name: callDetailName(record) } : undefined;
   };
 
   return { query, data };
