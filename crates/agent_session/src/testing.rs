@@ -4,6 +4,7 @@
 //! exercise their own logic against a real [`AgentSessionRepo`] /
 //! [`AgentSessionLogRepo`] contract without a database.
 
+use crate::domain::abandoned_turn::AbandonedTurnRepo;
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
@@ -538,6 +539,57 @@ impl SessionOwnership for InMemoryAgentSessionRepo {
                 replica: *holder,
                 address: address.clone(),
             }))
+    }
+}
+
+impl AbandonedTurnRepo for InMemoryAgentSessionRepo {
+    async fn abandoned_turns(
+        &self,
+        quiet_for: std::time::Duration,
+        limit: NonZeroUsize,
+    ) -> Result<Vec<AgentSessionId>> {
+        let cutoff = chrono::Utc::now()
+            - chrono::TimeDelta::from_std(quiet_for).unwrap_or(chrono::TimeDelta::MAX);
+        // Candidates first, with every lock dropped before the lease is
+        // consulted: `manager_of` takes its own, and holding one across an
+        // await is how an in-memory store learns to deadlock.
+        let mut candidates: Vec<AgentSessionId> = {
+            let turn_states = self
+                .turn_states
+                .lock()
+                .expect("in-memory turn projection store is not poisoned");
+            let sessions = self
+                .sessions
+                .lock()
+                .expect("in-memory session store is not poisoned");
+            let logs = self
+                .logs
+                .lock()
+                .expect("in-memory log store is not poisoned");
+            turn_states
+                .iter()
+                .filter(|(_, turn)| turn.is_open())
+                .map(|(id, _)| *id)
+                .filter(|id| {
+                    logs.get(id)
+                        .and_then(|rows| rows.last())
+                        .map(|row| row.created_at)
+                        .or_else(|| sessions.get(id).map(|session| session.created_at))
+                        .is_some_and(|quiet_since| quiet_since < cutoff)
+                })
+                .collect()
+        };
+        candidates.sort_unstable_by_key(AgentSessionId::as_uuid);
+        let mut abandoned = Vec::new();
+        for candidate in candidates {
+            if abandoned.len() == limit.get() {
+                break;
+            }
+            if self.manager_of(candidate).await?.is_none() {
+                abandoned.push(candidate);
+            }
+        }
+        Ok(abandoned)
     }
 }
 

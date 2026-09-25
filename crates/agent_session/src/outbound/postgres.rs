@@ -9,6 +9,7 @@ use sqlx::types::Json;
 #[cfg(test)]
 mod test;
 
+mod abandoned_turn;
 mod pull_request;
 mod sharing;
 mod turn_state;

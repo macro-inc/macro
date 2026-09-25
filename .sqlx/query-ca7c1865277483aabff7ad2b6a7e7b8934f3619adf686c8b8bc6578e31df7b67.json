@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT session.id\n            FROM agent_session AS session\n            WHERE session.turn_state IN ('starting', 'running', 'stopping', 'blocked')\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM harness_replica live\n                  WHERE live.id = session.manager_replica_id\n                    AND live.last_heartbeat_at > now() - make_interval(secs => $1)\n              )\n              AND COALESCE(\n                  (SELECT max(log.created_at)\n                   FROM agent_session_log AS log\n                   WHERE log.agent_session_id = session.id),\n                  session.created_at\n              ) < now() - make_interval(secs => $2)\n            ORDER BY session.id\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8",
+        "Float8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ca7c1865277483aabff7ad2b6a7e7b8934f3619adf686c8b8bc6578e31df7b67"
+}

@@ -1,3 +1,5 @@
+/// Closing out turns whose managing replica went away without saying so.
+pub mod abandoned_turn;
 /// Current authorization for agent session streams.
 pub mod audience;
 pub mod connection;

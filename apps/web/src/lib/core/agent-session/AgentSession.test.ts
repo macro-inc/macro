@@ -413,6 +413,79 @@ describe('AgentSession', () => {
     live.release();
   });
 
+  // Delivery is best-effort and the protocol carries no sequence numbers, so
+  // the turn the server sends with each batch is the only thing that can tell
+  // a client its log has a hole.
+
+  it('refetches the log when the server says the turn ended and the fold still has it running', async () => {
+    const live = await loadedWith('running');
+    harness.getLog.mockResolvedValue(ok({ bot, entries: [row(1), row(9)] }));
+
+    // The batch that ended the turn never arrived; this one says it happened.
+    AgentSession.ingest({
+      agentSessionId: SESSION,
+      entries: [row(2)],
+      turnState: 'disconnected',
+    });
+    await settle();
+
+    expect(inputs().at(-1)).toEqual({
+      kind: 'snapshot',
+      rows: [row(1), row(9)],
+    });
+    live.release();
+  });
+
+  it('refetches once per hole, not once per batch that reports it', async () => {
+    const live = await loadedWith('running');
+    harness.getLog.mockClear();
+
+    for (const n of [2, 3, 4]) {
+      AgentSession.ingest({
+        agentSessionId: SESSION,
+        entries: [row(n)],
+        turnState: 'idle',
+      });
+      await settle();
+    }
+
+    expect(harness.getLog).toHaveBeenCalledOnce();
+    live.release();
+  });
+
+  it.each(['starting', 'stopping'])(
+    'does not refetch while the fold is %s: speculation alone reaches that turn',
+    async (state) => {
+      const live = await loadedWith(state);
+      harness.getLog.mockClear();
+
+      AgentSession.ingest({
+        agentSessionId: SESSION,
+        entries: [row(2)],
+        turnState: 'idle',
+      });
+      await settle();
+
+      expect(harness.getLog).not.toHaveBeenCalled();
+      live.release();
+    }
+  );
+
+  it('does not refetch while the server agrees the turn is running', async () => {
+    const live = await loadedWith('running');
+    harness.getLog.mockClear();
+
+    AgentSession.ingest({
+      agentSessionId: SESSION,
+      entries: [row(2)],
+      turnState: 'running',
+    });
+    await settle();
+
+    expect(harness.getLog).not.toHaveBeenCalled();
+    live.release();
+  });
+
   it('retracts a speculation the server queued after all', async () => {
     harness.control.mockResolvedValue(
       ok({ actionId: 'server-id', status: 'queued' })

@@ -90,6 +90,23 @@ function occupiesTurn(action: AgentAction): boolean {
   return action.type === 'prompt' || action.type === 'compact';
 }
 
+/** Nothing more is coming for this turn, as the server's own fold has it. */
+function settled(turn: TurnState): boolean {
+  return turn === 'idle' || turn === 'disconnected';
+}
+
+/**
+ * A turn this client can only be in because confirmed frames put it there.
+ *
+ * `starting` and `stopping` are both reachable by speculation alone - an
+ * issued prompt, a pressed stop - so a fold reporting either may legitimately
+ * be ahead of the server. These two cannot: `running` needs agent output and
+ * `blocked` needs a live request, and both come off the log.
+ */
+function openOnConfirmedFrames(turn: TurnState): boolean {
+  return turn === 'running' || turn === 'blocked';
+}
+
 export class AgentSession {
   private static readonly open = new Map<string, AgentSession>();
 
@@ -119,9 +136,7 @@ export class AgentSession {
    * push, so a flush of many frames costs one worker round trip.
    */
   static ingest(event: AgentSessionLogEvent): void {
-    AgentSession.open
-      .get(event.agentSessionId)
-      ?.enqueueAll(event.entries.map((row) => ({ kind: 'confirmed', row })));
+    void AgentSession.open.get(event.agentSessionId)?.receive(event);
   }
 
   readonly id: string;
@@ -149,6 +164,12 @@ export class AgentSession {
    * wait in the server's queue.
    */
   private turn: TurnState = 'idle';
+  /**
+   * A hole this class has already refetched for. The refetch reads the same
+   * log the server projected from, so if the two still disagree afterwards
+   * another one cannot help; cleared the moment they agree again.
+   */
+  private refetchedHole = false;
 
   private setTurn(turn: TurnState | undefined): void {
     const next = turn ?? 'idle';
@@ -406,6 +427,42 @@ export class AgentSession {
     const log = await agentHarnessServiceClient.getLog(this.id);
     if (log.isErr() || this.closed) return;
     await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
+  }
+
+  /**
+   * One batch of frames, and the server's own turn after them.
+   *
+   * Delivery is best-effort all the way down - a saturated gateway queue, a
+   * resubscribe gap in the cross-instance relay - and a dropped batch closes
+   * no socket, so nothing else tells this class it has a hole. The turn the
+   * server sends alongside each batch does: see {@link reconcile}.
+   */
+  private async receive(event: AgentSessionLogEvent): Promise<void> {
+    await this.enqueueAll(
+      event.entries.map((row) => ({ kind: 'confirmed', row }))
+    );
+    if (event.turnState) this.reconcile(event.turnState);
+  }
+
+  /**
+   * The server says the turn is over and this fold still has it running:
+   * frames that ended it never arrived, so refetch the log.
+   *
+   * Only this direction, and only from a turn speculation cannot invent -
+   * see {@link openOnConfirmedFrames}. A fold that is behind in the other
+   * direction under-animates for one batch and the next frame corrects it;
+   * this one leaves a half-written message shimmering forever, because the
+   * frames that would have settled it are the ones that went missing.
+   */
+  private reconcile(authoritative: TurnState): void {
+    if (this.closed) return;
+    if (!settled(authoritative) || !openOnConfirmedFrames(this.turn)) {
+      this.refetchedHole = false;
+      return;
+    }
+    if (this.refetchedHole) return;
+    this.refetchedHole = true;
+    void this.resync();
   }
 
   private enqueue(input: FoldInput): Promise<void> {

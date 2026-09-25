@@ -82,6 +82,7 @@ identifier spaces and must not be confused.
 | `agent.session.turn_ended` | The connection's live fold closed the turn on a logged frame; carries `agent.turn.id`, `agent.turn.stop_reason`, and `agent.action.id` when a local prompt opened it. |
 | `agent.session.disconnect` | The session's actor wrote a `disconnected` event, and `agent.session.close_reason` says why. |
 | `agent.session.mark_disconnected` | The session was marked dead by its opener because the runtime never came up. |
+| `agent.session.close_abandoned_turns` | One replica's sweep for turns no live replica is driving; `agent.sessions.examined` / `agent.sessions.closed` say what it found. |
 | `agent.pipe.reap` | A Cursor pipe was closed for idleness, with `agent.pipe.idle_ms`. |
 | `agent.session.realtime.publish` | A frame reached watchers; `agent.log.event` names the status event when it is one. |
 | `agent.session.rename` | Auto-naming ran; `agent.rename.outcome` says whether it named, skipped, or failed. |
@@ -92,7 +93,10 @@ Two things worth knowing when reading these:
   records an error only on an `Err` return, so a turn whose future is *dropped* — a pipe torn
   down under it — closes its span with no error and looks identical to a clean finish. The
   outcome field is recorded explicitly on the way out; if it is absent, the turn did not
-  return.
+  return. When the whole replica went with it, nothing writes the turn's ending either, and
+  the transcript keeps rendering the turn as live until
+  `agent.session.close_abandoned_turns` closes it — so that span is where a "stuck thinking"
+  report ends up, a couple of minutes after the replica stopped beating.
 - **The idle-check DEBUG line fires every tick, not just the reaping one.** `agent.pipe.reaped`,
   `agent.pipe.active_turn` and `agent.pipe.idle_ms` on the ticks that did *nothing* are what
   show a deadline sitting long expired while a live turn held the pipe open.
