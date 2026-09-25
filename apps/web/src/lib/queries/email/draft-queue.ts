@@ -29,6 +29,7 @@ import {
 } from './graphql/draft';
 import { emailKeys } from './keys';
 import { fetchAndCacheThread, type ThreadQueryTransport } from './thread';
+import { evictDeletedEmailThreads } from './thread-eviction';
 
 /**
  * Whether a surface's draft writes ride the durable GraphQL mutation queue,
@@ -171,6 +172,9 @@ export async function deleteEmailDraftQueued(input: {
   if (outcome.kind === 'queued') return { kind: 'queued' };
   try {
     markThreadDraftSaved(input.threadId);
+    if (outcome.threadDeleted) {
+      void evictDeletedEmailThreads([input.threadId]);
+    }
     void queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     if (!input.completingThread) {
       void refetchSoupEntity(input.threadId, 'emailThread').catch(reportError);

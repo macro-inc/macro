@@ -6,9 +6,11 @@ import type {
   ApiDraftInput,
   CreateDraftResponse,
 } from '@service-email/generated/schemas';
+import { getGraphqlCacheHost } from '@service-storage/graphql-soup';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import { fetchGraphqlEmailThread } from './graphql/thread';
 import { emailKeys } from './keys';
 
 type CreateDraftParams = {
@@ -111,6 +113,12 @@ export function useDeleteDraftMutation(
               void refetchSoupEntity(vars.threadId, 'emailThread').catch(
                 Telemetry.error
               );
+              // The REST response doesn't say whether the thread went with
+              // the draft; a GraphQL read evicts it from the local mail index
+              // when the server no longer has it.
+              if (getGraphqlCacheHost()) {
+                void fetchGraphqlEmailThread(vars.threadId).catch(() => {});
+              }
             }
             // Discarding a draft changes view membership — the thread leaves
             // Signal/Drafts and a noise thread re-enters Noise — which a

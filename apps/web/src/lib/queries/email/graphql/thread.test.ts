@@ -4,11 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const queryMock = vi.hoisted(() => vi.fn());
 const cacheEnabledMock = vi.hoisted(() => vi.fn(() => true));
+const deleteRecordsMock = vi.hoisted(() => vi.fn(async () => {}));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({ query: queryMock }),
+  getGraphqlCacheHost: () => ({ deleteRecords: deleteRecordsMock }),
   graphqlCacheEnabled: cacheEnabledMock,
 }));
+
+const liveNetwork = { __macroNormalizedCache: { source: 'live-network' } };
+const missingThreadPage: EmailThreadPageQuery = {
+  user: { id: 'user-1', emailThread: null },
+};
 
 import { EmailThreadPageDocument } from '@service-storage/graphql/generated/graphql';
 import { fetchGraphqlEmailThread } from './thread';
@@ -40,8 +47,47 @@ const cachedPage: EmailThreadPageQuery = {
 describe('fetchGraphqlEmailThread', () => {
   beforeEach(() => {
     queryMock.mockReset();
+    deleteRecordsMock.mockClear();
     cacheEnabledMock.mockReset();
     cacheEnabledMock.mockReturnValue(true);
+  });
+
+  it('evicts a thread the server reports missing from the local cache', async () => {
+    queryMock.mockReturnValueOnce({
+      toPromise: async () => ({
+        data: missingThreadPage,
+        extensions: liveNetwork,
+      }),
+    });
+
+    await expect(fetchGraphqlEmailThread('thread-1')).rejects.toMatchObject({
+      errors: [{ code: 'NOT_FOUND' }],
+    });
+    expect(deleteRecordsMock).toHaveBeenCalledWith([
+      'GraphqlSoupEmailThread:thread-1',
+    ]);
+  });
+
+  it('keeps the local thread when only the cache answered without it', async () => {
+    queryMock
+      .mockReturnValueOnce({
+        toPromise: async () => ({
+          error: new CombinedError({ networkError: new Error('offline') }),
+        }),
+      })
+      .mockReturnValueOnce({
+        toPromise: async () => ({
+          data: missingThreadPage,
+          extensions: {
+            __macroNormalizedCache: { source: 'normalized-cache-hit' },
+          },
+        }),
+      });
+
+    await expect(fetchGraphqlEmailThread('thread-1')).rejects.toMatchObject({
+      errors: [{ code: 'NOT_FOUND' }],
+    });
+    expect(deleteRecordsMock).not.toHaveBeenCalled();
   });
 
   it('falls back to the persisted operation after a network failure', async () => {

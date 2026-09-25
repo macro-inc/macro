@@ -16,6 +16,10 @@ import {
 } from '@service-storage/graphql-soup';
 import type { CombinedError } from '@urql/core';
 import type { Accessor } from 'solid-js';
+import {
+  evictDeletedEmailThreads,
+  serverReportsThreadMissing,
+} from '../thread-eviction';
 import { mapGraphqlEmailThreadPage } from './mapper';
 
 /** REST-compatible pages exposed to the email query facade. */
@@ -134,6 +138,9 @@ export async function fetchGraphqlEmailThread(
     ]);
   }
 
+  if (serverReportsThreadMissing(result)) {
+    await evictDeletedEmailThreads([threadId]);
+  }
   return mapGraphqlEmailThreadPage(threadFromPage(result.data));
 }
 
@@ -166,6 +173,12 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     enabled: options().enabled && threadId().length > 0,
     requestPolicy: 'cache-and-network',
     keepPreviousData: false,
+    onResult: (result, page) => {
+      if (page.pageIndex !== 0 || !serverReportsThreadMissing(result)) return;
+      void evictDeletedEmailThreads([
+        String(result.operation.variables.threadId),
+      ]);
+    },
     select: ({ pages, pageParams }) => {
       const mapped = {
         pages: pages.map((page) =>
