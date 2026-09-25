@@ -116,8 +116,9 @@ pub struct OpenSession {
 /// session so resume and teardown keep routing correctly after a restart.
 ///
 /// A session's instructions are stored on its row whichever kind serves it,
-/// but only [`Self::InMemory`] reads them today - it builds its system prompt
-/// in this process, so there is nothing to transport. The rest need one, and
+/// but only [`Self::InMemory`] and [`Self::ClaudeCloud`] read them today -
+/// the first builds its system prompt in this process, the second passes
+/// them to Claude at create. The rest need a transport, and
 /// ACP supplies none: `session/new` carries a working directory, MCP servers
 /// and `_meta`, and nothing else. [`Self::SandboxedCoder`] will get a
 /// per-session file listed alongside `SYSTEM.md` in `container/opencode.json`,
@@ -329,7 +330,8 @@ pub struct AgentRuntimeConfig {
     pub model: String,
     /// Harness slug stamped onto the new session.
     pub harness: String,
-    /// Configured agent instructions, reserved for a dedicated runtime transport.
+    /// Configured agent instructions, snapshotted onto each new session's row
+    /// so a mention opens with the same system prompt the create menu does.
     pub instructions: String,
     /// Which Pipedream MCP servers the agent's sessions are handed.
     pub mcp_servers: AgentMcpServers,
