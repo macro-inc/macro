@@ -1,13 +1,13 @@
 import type { ThemeV3 } from '../types/themeTypes';
 
-/** Near-black blue-gray surfaces with a restrained depth ramp and muted blue accent. */
+/** Near-black neutral gray surfaces with a restrained depth ramp and muted blue accent. */
 export const macroDarkTheme = {
   id: 'Macro Dark',
   name: 'Macro Dark',
   version: 3,
   mode: 'dark',
   colorTokens: {
-    'surface-0': 'oklch(0.17 0.002 250deg)',
+    'surface-0': 'oklch(0.17 0 0deg)',
     'surface-1':
       'color-mix(in oklch, var(--color-surface-0) 97%, var(--color-content-0))',
     'surface-2':
@@ -62,6 +62,6 @@ export const macroDarkTheme = {
     warning: 'var(--color-amber)',
     failure: 'var(--color-red)',
     // Keep mobile glass at its original lightness, independent of the page base.
-    chrome: 'oklch(0.2 0.002 250deg)',
+    chrome: 'oklch(0.2 0 0deg)',
   },
 } satisfies ThemeV3;

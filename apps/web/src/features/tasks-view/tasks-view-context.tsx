@@ -1,4 +1,4 @@
-import type { EntityDetailNavigationOptions } from '@app/components/entity-detail/EntityDetailNavigationStack';
+import type { EntityDetailNavigationOptions } from '@app/components/entity-detail/entity-detail-target';
 import {
   createListController,
   type ListActivation,

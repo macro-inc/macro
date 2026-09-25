@@ -5,10 +5,10 @@ import {
 import { EntityDetailBreadcrumbItem } from '@app/components/entity-detail/EntityDetailBreadcrumbItem';
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
 import {
-  type EntityDetailNavigationStackEntry,
+  type EntityDetailNavigationEntry,
   type EntityDetailTarget,
   entityDetailTarget,
-} from '@app/components/entity-detail/EntityDetailNavigationStack';
+} from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import type { MarkdownDocumentKind } from '@block-md/types';
@@ -96,7 +96,7 @@ function DriveDetailTopBar() {
 }
 
 function StackEntityDetail(props: {
-  entry: EntityDetailNavigationStackEntry;
+  entry: EntityDetailNavigationEntry;
   order: number;
   shareOpen: boolean;
   onShareOpenChange: (open: boolean) => void;
