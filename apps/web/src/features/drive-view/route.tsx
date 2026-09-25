@@ -94,12 +94,19 @@ const driveDocumentParams = z.object({
   documentId: z.string().min(1),
 });
 
+const documentRemountKey = ({
+  documentType,
+  documentId,
+}: z.infer<typeof driveDocumentParams>) =>
+  `${driveDocumentBlockType(documentType)}:${documentId}`;
+
 export const driveRootDocumentRoute = defineRoute({
   id: 'drive-document',
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
   component: DriveDetailView,
+  remountKey: documentRemountKey,
   claim: ({ documentType, documentId }) => ({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
@@ -112,6 +119,7 @@ export const driveFolderDocumentRoute = defineRoute({
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
   component: DriveDetailView,
+  remountKey: documentRemountKey,
   claim: ({ documentType, documentId }) => ({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
@@ -124,6 +132,7 @@ export const driveTabDocumentRoute = defineRoute({
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
   component: DriveDetailView,
+  remountKey: documentRemountKey,
   claim: ({ documentType, documentId }) => ({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,

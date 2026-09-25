@@ -376,8 +376,10 @@ dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touc
 drops in favour of the card's DM action.
 
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
-Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
+Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task and Channel open dialogs.
+When calls are enabled, `C C` (Create → Call) opens `/app/meet/new`. The call is
+created only after `Start call`; Escape closes the Create menu.
 
 Mobile glass presses animate the enclosing surface over 300ms. Round buttons
 retain roughly 20% growth; wide pills and grouped controls extend their glass

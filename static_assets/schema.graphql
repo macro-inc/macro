@@ -4283,7 +4283,7 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	"""
 	The identifier of the channel.
 	"""
-	channelId: ID!
+	channelId: ID
 	"""
 	The channel name.
 	"""
@@ -4341,6 +4341,10 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	"""
 	participants: [GraphqlSoupCallParticipant!]!
 	"""
+	Non-account guests who attended the call.
+	"""
+	guests: [GraphqlSoupCallGuest!]!
+	"""
 	Properties assigned to this entity that the authenticated user may view.
 	"""
 	properties: [GraphqlProperty!]!
@@ -4366,6 +4370,28 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+}
+
+"""
+GraphQL representation of a non-account call guest.
+"""
+type GraphqlSoupCallGuest {
+	"""
+	Opaque guest identity; matches the guest's transcript speaker id.
+	"""
+	id: ID!
+	"""
+	Guest-provided display name.
+	"""
+	displayName: String!
+	"""
+	The joined timestamp in RFC 3339 format.
+	"""
+	joinedAt: String!
+	"""
+	The left timestamp in RFC 3339 format.
+	"""
+	leftAt: String
 }
 
 """

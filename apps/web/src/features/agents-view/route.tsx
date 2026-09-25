@@ -58,6 +58,12 @@ export const AgentsRouteView = withAuth(() => {
   usePageViewTracking('agents');
   const flag = useFeatureFlag(enableChatV3Agents);
   const enabled = () => flag().enabled && !isTouchDevice();
+  createRenderEffect(() => {
+    if (flag().loading) return;
+    panel.handle.updateMeta?.({
+      splitPanelLayout: enabled() ? 'composable' : 'legacy',
+    });
+  });
   const connectionsRequested = () => {
     const content = panel.handle.content();
     return (
@@ -65,12 +71,6 @@ export const AgentsRouteView = withAuth(() => {
       content.params?.agentPage === 'connections'
     );
   };
-  createRenderEffect(() => {
-    if (!flag().loading)
-      panel.handle.updateMeta?.({
-        splitPanelLayout: enabled() ? 'composable' : 'legacy',
-      });
-  });
   return (
     <Show when={!flag().loading} fallback={<LoadingBlock />}>
       <Show

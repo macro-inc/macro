@@ -7,13 +7,13 @@
 import type { SoupCallRecordParticipantLeftAt } from './soupCallRecordParticipantLeftAt';
 
 /**
- * A participant in a call record, as displayed in Soup.
+ * A Macro-account participant in a call record, as displayed in Soup.
  */
 export interface SoupCallRecordParticipant {
   /** When the user joined the call. */
   joinedAt: string;
   /** When the user left (None if still in an active call). */
   leftAt?: SoupCallRecordParticipantLeftAt;
-  /** The user id. */
+  /** The Macro user id. */
   userId: string;
 }

@@ -13,7 +13,7 @@ pub struct CallRecordSearchBackfill {
 #[derive(Debug, Clone)]
 pub struct CallRecordMetadataRow {
     pub call_id: Uuid,
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     pub created_by: String,
     pub started_at: DateTime<Utc>,
     pub ended_at: DateTime<Utc>,
@@ -38,7 +38,7 @@ pub struct CallRecordTranscriptSegment {
 #[derive(Debug, Clone)]
 pub struct CallRecordSearchPayload {
     pub call_id: Uuid,
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     pub created_by: String,
     pub channel_name: Option<String>,
     /// Caller-assigned name for the call, if renamed. Indexed as the call's
@@ -49,6 +49,8 @@ pub struct CallRecordSearchPayload {
 }
 
 /// `status_filter` optionally narrows visible calls by viewer-relative status.
+/// Standalone calls are discoverable only through the caller's individual grant;
+/// team/channel grants and shared links do not add them to team memory.
 #[tracing::instrument(skip(db, status_filter))]
 pub async fn get_accessible_call_ids(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -91,9 +93,11 @@ pub async fn get_accessible_call_ids(
                     WHERE ea.entity_id = cr.id
                       AND ea.entity_type = 'call'
                       AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+                      AND (cr.channel_id IS NOT NULL OR (ea.source_type = 'user' AND ea.source_id = $1))
                 ) OR EXISTS (
                     SELECT 1 FROM "SharePermission" sp
                     WHERE sp.id = cr.share_permission_id
+                      AND cr.channel_id IS NOT NULL
                       AND sp."linkShareAccessLevel" IS NOT NULL
                       AND (
                           sp."linkShare" = 'PUBLIC'
@@ -183,7 +187,7 @@ pub async fn get_call_record_search_payload(
         r#"
         SELECT
             cr.id AS "call_id!",
-            cr.channel_id AS "channel_id!",
+            cr.channel_id AS "channel_id?",
             cr.created_by AS "created_by!",
             cr.custom_name AS "custom_name?",
             cc.name AS "channel_name?"
@@ -257,7 +261,7 @@ pub async fn get_call_records_metadata(
         r#"
         SELECT
             cr.id AS "call_id!",
-            cr.channel_id AS "channel_id!",
+            cr.channel_id AS "channel_id?",
             cr.created_by AS "created_by!",
             cr.started_at AS "started_at!",
             cr.ended_at AS "ended_at!",

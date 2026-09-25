@@ -1,7 +1,8 @@
 import { EmailUserTooltip } from '@app/features/email-message/components/email-user-tooltip';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { emailToMacroId } from '@core/user/macroId';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { Key } from '@solid-primitives/keyed';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 
@@ -19,7 +20,9 @@ export function EmailParticipants() {
   const [expanded, setExpanded] = createSignal(false);
 
   const participants = createMemo(() => {
-    const messages = context.messages.unfiltered();
+    // Unsent drafts can be prepended optimistically and removed when emptied.
+    // Participants describe the conversation, not the current draft envelope.
+    const messages = context.messages.list();
     const seen = new Map<string, Participant>();
 
     for (const m of messages) {
@@ -73,30 +76,30 @@ export function EmailParticipants() {
 
   return (
     <div class="flex flex-wrap gap-1.5" role="list">
-      <For each={visibleParticipants()}>
+      <Key each={visibleParticipants()} by="email">
         {(participant) => (
           <EmailUserTooltip
-            recipient={{ email: participant.email, name: participant.name }}
-            photoUrl={participant.photoUrl}
+            recipient={{ email: participant().email, name: participant().name }}
+            photoUrl={participant().photoUrl}
           >
             <div
               role="listitem"
               class="inline-flex items-center gap-1.5 rounded-full border border-ink-muted/8 bg-ink-muted/[0.025] py-1 pr-2.5 pl-1.5 text-sm text-ink hover:bg-ink-muted/[0.06] cursor-default"
             >
               <UserIcon
-                {...getIconProps(participant)}
+                {...getIconProps(participant())}
                 isDeleted={false}
                 size="sm"
                 suppressClick
                 showTooltip={false}
               />
               <span class="truncate max-w-32">
-                {getDisplayName(participant)}
+                {getDisplayName(participant())}
               </span>
             </div>
           </EmailUserTooltip>
         )}
-      </For>
+      </Key>
       <Show when={hiddenCount() > 0}>
         <button
           type="button"

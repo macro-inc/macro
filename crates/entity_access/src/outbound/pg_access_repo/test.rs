@@ -1263,3 +1263,22 @@ async fn calendar_event_channel_share_grants_current_participants_view(
     assert_eq!(access(shared, owner).await, Some(AccessLevel::Owner));
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn direct_recipients_exclude_inherited_grants(pool: PgPool) -> anyhow::Result<()> {
+    let entity_id = Uuid::now_v7();
+    for (source, kind) in [
+        ("macro|direct@example.com".to_string(), "user"),
+        (Uuid::now_v7().to_string(), "team"),
+        (Uuid::now_v7().to_string(), "channel"),
+    ] {
+        sqlx::query!("INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ($1, 'call', $2, $3::text::entity_access_source_type, 'view')", entity_id, source, kind).execute(&pool).await?;
+    }
+    let repo = PgAccessRepository::new(pool);
+    let users = repo
+        .get_direct_entity_users(&entity_id, EntityType::Call)
+        .await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].as_ref(), "macro|direct@example.com");
+    Ok(())
+}

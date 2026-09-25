@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE call_guests SET left_at = CASE WHEN $3 THEN NULL ELSE now() END WHERE call_id = $1 AND id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "763f688e9ce6e6e9e915c7d752709c87fd256e9bb6e0eae6ab37ecbbf2a1ff0a"
+}

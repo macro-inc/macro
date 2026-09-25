@@ -1531,7 +1531,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
           is_favorited: entity.isFavorited,
           data: {
             callId: entity.id,
-            channelId: entity.channelId,
+            channelId: entity.callChannelId ?? null,
             channelName: entity.channelName ?? undefined,
             createdBy: entity.createdBy,
             customName: entity.customName ?? undefined,
@@ -1546,6 +1546,12 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
               userId: participant.userId,
               joinedAt: participant.joinedAt,
               leftAt: participant.leftAt ?? undefined,
+            })),
+            guests: entity.guests.map((guest) => ({
+              id: guest.id,
+              displayName: guest.displayName,
+              joinedAt: guest.joinedAt,
+              leftAt: guest.leftAt ?? undefined,
             })),
             properties: mapGraphqlProperties(entity.properties),
             notifications: mapGraphqlNotifications(entity.notifications),

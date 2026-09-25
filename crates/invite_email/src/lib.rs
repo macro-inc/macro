@@ -8,6 +8,9 @@
 #[cfg(test)]
 mod test;
 
+mod call_invite;
+pub use call_invite::CallInvite;
+
 use askama::Template;
 use macro_env::Environment;
 use macro_user_id::cowlike::CowLike;

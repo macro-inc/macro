@@ -1,9 +1,9 @@
 import { entityDetailBlockType } from '@app/components/entity-detail/EntityDetail';
 import type {
+  EntityDetailNavigationEntry,
   EntityDetailNavigationOptions,
-  EntityDetailNavigationStackEntry,
   EntityDetailTarget,
-} from '@app/components/entity-detail/EntityDetailNavigationStack';
+} from '@app/components/entity-detail/entity-detail-target';
 import { useNavigate, useParams, useRouteState } from '@app/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -37,8 +37,8 @@ type DriveDetailRootOptions = EntityDetailNavigationOptions & {
 };
 
 type DriveDetailNavigation = {
-  entries: Accessor<readonly EntityDetailNavigationStackEntry[]>;
-  active: Accessor<EntityDetailNavigationStackEntry | undefined>;
+  entries: Accessor<readonly EntityDetailNavigationEntry[]>;
+  active: Accessor<EntityDetailNavigationEntry | undefined>;
   navigate: (
     target: EntityDetailTarget,
     options?: EntityDetailNavigationOptions
@@ -93,7 +93,7 @@ export function DriveDetailNavigationProvider(
     return [target];
   };
 
-  const entries = createMemo<EntityDetailNavigationStackEntry[]>(() =>
+  const entries = createMemo<EntityDetailNavigationEntry[]>(() =>
     trail().map((target, index) => ({
       value: `drive-detail:${index}:${documentRouteFromTarget(target).type}:${target.id}`,
       data: target,
