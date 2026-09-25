@@ -1,3 +1,4 @@
+import { ViewShell } from '@app/components/view-shell';
 import {
   CALENDAR_PAGE_IDS,
   CalendarPagerContextProvider,
@@ -5,8 +6,8 @@ import {
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
-import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { SplitPanel } from '@components/app/split-panel';
 import { isMobile } from '@core/mobile/isMobile';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Layer } from '@ui';
@@ -19,11 +20,11 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
 import { SelectedEventDetails } from './SelectedEventDetails';
 import { SetupStatus } from './SetupStatus';
-import { SidePanelSections } from './SidePanelSections';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
@@ -95,6 +96,14 @@ function CalendarPages() {
   );
 }
 
+function CalendarPageContent() {
+  return (
+    <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
+      <CalendarPages />
+    </div>
+  );
+}
+
 function WorkspaceContent() {
   const panel = useSplitPanelOrThrow();
   const calendarView = useCalendarView();
@@ -104,24 +113,50 @@ function WorkspaceContent() {
     if (!panel.isInlinePreview) panel.handle.setDisplayName('Calendar');
   });
 
+  const eventDetails = () => (
+    <SelectedEventDetails
+      anchor={calendarView.selectedEventAnchor}
+      event={calendarView.selectedEvent}
+      timeFormat={() => calendarView.displaySettings.timeFormat}
+      onClose={calendarView.closeEventDetails}
+    />
+  );
+
   return (
-    <>
-      <Header />
-      <SidePanelSections />
-
-      <SelectedEventDetails
-        anchor={calendarView.selectedEventAnchor}
-        event={calendarView.selectedEvent}
-        timeFormat={() => calendarView.displaySettings.timeFormat}
-        onClose={calendarView.closeEventDetails}
-      />
-
-      <main class="flex size-full min-h-0">
-        <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
-          <CalendarPages />
-        </div>
-      </main>
-    </>
+    <Show
+      when={!panel.isInlinePreview}
+      fallback={
+        <>
+          <Header presentation="preview" />
+          {eventDetails()}
+          <main class="flex size-full min-h-0">
+            <CalendarPageContent />
+          </main>
+        </>
+      }
+    >
+      <SplitPanel.Root>
+        <SplitPanel.Body>
+          <ViewShell.Root
+            asidePreferenceKey="calendar"
+            resizable
+            aside={{ preserveDuringResize: false }}
+            main={{ preferredWidth: 640 }}
+          >
+            <ViewShell.Aside>
+              <CalendarSidebar />
+            </ViewShell.Aside>
+            <ViewShell.Main>
+              <Header presentation="workspace" />
+              <ViewShell.Content class="flex min-h-0 flex-1">
+                <CalendarPageContent />
+              </ViewShell.Content>
+            </ViewShell.Main>
+          </ViewShell.Root>
+          {eventDetails()}
+        </SplitPanel.Body>
+      </SplitPanel.Root>
+    </Show>
   );
 }
 
@@ -130,9 +165,7 @@ function CalendarPagerWorkspace() {
 
   return (
     <Pager.Root controller={calendarPager.pager}>
-      <SidePanel.Layout persistKey="calendar">
-        <WorkspaceContent />
-      </SidePanel.Layout>
+      <WorkspaceContent />
     </Pager.Root>
   );
 }

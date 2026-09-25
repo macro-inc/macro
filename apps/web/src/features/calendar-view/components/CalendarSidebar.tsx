@@ -15,6 +15,8 @@ import {
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import CloseIcon from '@phosphor/x.svg';
 import { Calendar as MiniCalendar, ToggleSwitch } from '@ui';
 import { format } from 'date-fns';
 import {
@@ -138,7 +140,9 @@ function TeamOooSkeleton() {
   return (
     <div aria-hidden="true" class="flex flex-col gap-0.5">
       <For each={[0, 1, 2]}>
-        {() => <div class="skeleton-shimmer h-8 w-full rounded-lg bg-skeleton" />}
+        {() => (
+          <div class="skeleton-shimmer h-8 w-full rounded-lg bg-skeleton" />
+        )}
       </For>
     </div>
   );
@@ -237,6 +241,20 @@ function CalendarTeamOooSection() {
   );
 }
 
+function CalendarSidebarOverlayClose() {
+  const shell = useViewShell();
+  return (
+    <Show when={shell.aside.isOverlay() && isTouchDevice()}>
+      <ViewSidebar.Control
+        label="Close calendar navigation"
+        onClick={shell.aside.collapse}
+      >
+        <CloseIcon class="size-4" />
+      </ViewSidebar.Control>
+    </Show>
+  );
+}
+
 export function CalendarSidebar() {
   return (
     <ViewSidebar.Root aria-label="Calendar navigation">
@@ -245,6 +263,7 @@ export function CalendarSidebar() {
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Calendar</ViewSidebar.Title>
         </div>
+        <CalendarSidebarOverlayClose />
       </ViewSidebar.Header>
       <ViewSidebar.Content>
         <CalendarMiniCalendar />

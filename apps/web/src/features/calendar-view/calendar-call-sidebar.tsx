@@ -1,4 +1,3 @@
-import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useUserId } from '@core/context/user';
 import { openExternalUrl } from '@core/util/url';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -14,21 +13,10 @@ import { useUpcomingCalendarEventsSource } from '../meetings/queries/upcoming-ca
 import { useQuickCallsFlag } from '../meetings/use-quick-calls-flag';
 import { CallSidebar } from '../meetings/views/call-sidebar';
 
-export function CalendarCallsSidePanelSection() {
-  return (
-    <SidePanel.Section
-      id="calendar-calls"
-      title="Upcoming events"
-      order={15}
-      defaultOpen
-    >
-      <CalendarCallSidebar />
-    </SidePanel.Section>
-  );
-}
-
 /** Production wiring, mounted within the section's Suspense boundary. */
-export function CalendarCallSidebar(props: { onSelectEvent?: () => void } = {}) {
+export function CalendarCallSidebar(
+  props: { onSelectEvent?: () => void } = {}
+) {
   const calendar = useCalendarView();
   const userId = useUserId();
   const quickCalls = useQuickCallsFlag();
