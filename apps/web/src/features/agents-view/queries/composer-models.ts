@@ -2,6 +2,7 @@ import {
   type AgentModelTarget,
   useAgentModelsQueries,
 } from '@queries/agents/models';
+import { isModelPickerOption } from '@core/component/AI/constant/model';
 import { ModelHarnessDto } from '@service-agent-harness/generated/schemas/modelHarnessDto';
 import type { Accessor } from 'solid-js';
 import type { RosterAgent } from '../core/roster';
@@ -35,7 +36,8 @@ export function createComposerModels(agent: Accessor<RosterAgent | undefined>) {
   // Status-gated reads keep a pending catalog from suspending the composer.
   const data = () => (queries[0]?.isSuccess ? queries[0].data : undefined);
   return {
-    models: () => data()?.models ?? [],
+    models: () =>
+      data()?.models.filter((model) => isModelPickerOption(model.id)) ?? [],
     currentModel: () => data()?.currentModel ?? undefined,
     message: () => {
       if (!agent()?.runtime.connected)

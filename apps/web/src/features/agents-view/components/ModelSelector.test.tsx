@@ -13,6 +13,12 @@ import { ModelSelector, SessionModelSelector } from './ModelSelector';
 const options = [
   { id: 'gpt-5', name: 'GPT-5', description: null, group: null },
   { id: 'claude-sonnet-4', name: 'Sonnet 4', description: null, group: null },
+  {
+    id: 'anthropic/claude-fable-5-1',
+    name: 'Fable 5.1',
+    description: null,
+    group: null,
+  },
 ];
 
 describe('shared model selector', () => {
@@ -43,6 +49,7 @@ describe('shared model selector', () => {
     ));
     const trigger = screen.getByRole('button', { name: 'Model' });
     fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(screen.queryByRole('menuitem', { name: /Fable 5.1/ })).toBeNull();
     fireEvent.keyDown(screen.getByRole('menuitem', { name: /Sonnet 4/ }), {
       key: 'Enter',
     });

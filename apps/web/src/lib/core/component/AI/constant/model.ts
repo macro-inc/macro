@@ -23,6 +23,11 @@ export type Model = (typeof Model)[keyof typeof Model];
 /** Alias kept for existing call sites. */
 export type TModel = Model;
 
+/** Models intentionally hidden from chat model pickers. */
+export function isModelPickerOption(modelId: string): boolean {
+  return modelId !== Model.fable51;
+}
+
 type ExhaustiveMap = {
   [K in TModel]: any;
 };
@@ -88,9 +93,8 @@ export const FREE_DEFAULT_MODEL: TModel = Model.haiku45;
  * Models a paid user may select. Fable remains a known model so persisted
  * chats can still be parsed, but it is intentionally absent from the picker.
  */
-export const PAID_MODELS: readonly TModel[] = Object.values(Model).filter(
-  (model) => model !== Model.fable51
-);
+export const PAID_MODELS: readonly TModel[] =
+  Object.values(Model).filter(isModelPickerOption);
 
 /**
  * Models a free user may select. Free users only get the fast model

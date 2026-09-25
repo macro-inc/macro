@@ -1,5 +1,6 @@
 import type { AgentModelSelectorProps } from '@app/features/block-agent/ui/AgentModelSelector';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
+import { isModelPickerOption } from '@core/component/AI/constant/model';
 import { modelLabel } from '@core/component/AI/constant/model-label';
 import type { JSX } from 'solid-js';
 
@@ -24,12 +25,14 @@ export function ModelSelector(props: {
   return (
     <ModelCatalogPicker
       value={props.model ?? null}
-      options={props.options.map((option) => ({
-        id: option.id,
-        label: modelLabel(option.id, option.name),
-        description: option.description,
-        group: option.group,
-      }))}
+      options={props.options
+        .filter((option) => isModelPickerOption(option.id))
+        .map((option) => ({
+          id: option.id,
+          label: modelLabel(option.id, option.name),
+          description: option.description,
+          group: option.group,
+        }))}
       triggerLabel={props.label}
       placeholder={modelLabel(props.model)}
       triggerClass="h-[33.75px] min-w-0 max-w-full gap-[5.625px] rounded-full border-0 bg-transparent hover:bg-hover px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder [&_svg]:size-[15px]"
