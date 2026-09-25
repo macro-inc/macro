@@ -39,7 +39,7 @@ export function usePrDetail(foreignEntityId: Accessor<string>) {
   // Detail-lifetime local Macro discussion (prototype-only, lost on reload).
   const discussionSource = createPrDiscussionSource();
   const data = (): PrForeignEntityData | undefined =>
-    query.isSuccess ? query.data : undefined;
+    query.isPending ? undefined : query.data;
   return { query, data, discussionSource };
 }
 
