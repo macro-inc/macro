@@ -1,5 +1,4 @@
 import { queryClient } from '@queries/client';
-import { crmKeys } from '@queries/crm/keys';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
 import { messageKeys } from '@queries/messages/keys';
@@ -82,7 +81,6 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
       ]) {
         void queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
       }
-      void queryClient.invalidateQueries({ queryKey: crmKeys.comments._def });
       void invalidateEntityNotifications(notification.entity_id);
     })
     .with({ tag: 'channel_invite' }, () => {

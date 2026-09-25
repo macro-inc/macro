@@ -37,6 +37,7 @@ import {
   isBlockAlias,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { z } from 'zod';
 import type { SplitContent } from '../layoutManager';
 
@@ -368,6 +369,7 @@ export const legacySplitRoute = defineRoute({
     const { type } = routeParams(entry.location.route);
     if (type === 'email') return Object.values(EMAIL_URL_PARAMS);
     if (type === 'channel') return Object.values(CHANNEL_URL_PARAMS);
+    if (type === 'company' || type === 'contact') return [COMMENT_LINK_PARAM];
     return [];
   },
   claim: ({ type, id }) => {
