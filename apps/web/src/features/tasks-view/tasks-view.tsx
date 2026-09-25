@@ -83,7 +83,9 @@ function TasksViewRoot() {
             <TasksSidebar />
           </ViewShell.Aside>
           <ViewShell.Main>
-            <SplitRouter.Outlet fallback={list} />
+            <Suspense fallback={<TasksListFallback />}>
+              <SplitRouter.Outlet fallback={list} />
+            </Suspense>
           </ViewShell.Main>
         </ViewShell.Root>
       </SplitPanel.Body>

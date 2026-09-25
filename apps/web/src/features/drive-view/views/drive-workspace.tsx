@@ -77,7 +77,9 @@ export function DriveWorkspace() {
                   </>
                 }
               >
-                <SplitRouter.Outlet />
+                <Suspense fallback={<DriveLoading />}>
+                  <SplitRouter.Outlet />
+                </Suspense>
               </Show>
             </ViewShell.Main>
           </ViewShell.Root>
