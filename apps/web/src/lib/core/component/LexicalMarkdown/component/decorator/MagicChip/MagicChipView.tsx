@@ -155,13 +155,18 @@ const StatusRow: Component<{
       </Show>
       <button
         type="button"
-        class="inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-edge bg-surface px-2 font-medium text-ink-muted text-xs disabled:opacity-50"
+        // On a phone the pill's label eats the width the activity line needs,
+        // cropping it to a few letters; there the arrow alone opens the
+        // session, and the label names the button for assistive tech.
+        aria-label="View session"
+        title="View session"
+        class="inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-edge bg-surface px-2 font-medium text-ink-muted text-xs disabled:opacity-50 max-sm:w-5 max-sm:justify-center max-sm:px-0"
         classList={{ 'hover:bg-active hover:text-ink': Boolean(props.onOpen) }}
         disabled={!props.onOpen}
         onClick={props.onOpen}
       >
-        View session
-        <ArrowUpRight class="size-3" />
+        <span class="max-sm:hidden">View session</span>
+        <ArrowUpRight class="size-3 shrink-0" />
       </button>
     </div>
   </Layer>
