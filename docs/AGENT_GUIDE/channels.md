@@ -615,7 +615,8 @@ shows Connecting and waits for that request before registering again.
 
 Private and team channels show an `Invite` button on the right of both the
 split header and the inline conversation header for current participants.
-Click it to open `Invite people to <channel>` using the standard dialog (a
+Click it to open `Invite people to <channel>` using the standard dialog at the
+top of the viewport, matching the create menu and create-channel dialog (a
 drawer on mobile). Choose `Add all members of <team>` to add current teammates
 once, or `Add specific people` to search teammates and enter external email
 addresses using the same recipient picker as channel creation. Existing channel

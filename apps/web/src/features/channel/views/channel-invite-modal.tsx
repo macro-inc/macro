@@ -53,12 +53,7 @@ export function ChannelInviteModal(props: {
   };
 
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => !open && close()}
-      position="center"
-      class="w-140"
-    >
+    <Dialog open onOpenChange={(open) => !open && close()} class="w-140">
       <Panel depth={2} class="rounded-xl *:max-h-[85vh]">
         <Panel.Body scroll>
           <div class="flex flex-col gap-6 p-6">
