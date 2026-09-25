@@ -1366,3 +1366,41 @@ fn conference_data_survives_the_raw_payload_round_trip() {
         Some("https://meet.google.com/abc-defg-hij")
     );
 }
+
+#[test]
+fn import_body_copies_the_meeting_without_guests_or_conference() {
+    let source = crate::domain::models::CalendarEventCopySource {
+        access: crate::domain::models::CalendarEventCopyAccess::ChannelShared,
+        ical_uid: "meeting@example.com".to_string(),
+        sequence: 4,
+        event_type: EventType::Default,
+        title: "Offsite".to_string(),
+        description: Some("<p>Agenda</p>".to_string()),
+        location: Some("HQ".to_string()),
+        time: EventTime::AllDay {
+            start_date: NaiveDate::from_ymd_opt(2026, 9, 24).unwrap(),
+            end_date: NaiveDate::from_ymd_opt(2026, 9, 25).unwrap(),
+        },
+        recurrence_lines: vec!["RRULE:FREQ=WEEKLY".to_string()],
+        organizer_email: Some("organizer@example.com".to_string()),
+        organizer_name: Some("Organizer".to_string()),
+        updated_at: Utc::now(),
+    };
+
+    let body = import_body(&source);
+
+    assert_eq!(body["iCalUID"], "meeting@example.com");
+    assert_eq!(body["summary"], "Offsite");
+    assert_eq!(body["description"], "<p>Agenda</p>");
+    assert_eq!(body["location"], "HQ");
+    assert_eq!(body["sequence"], 4);
+    assert_eq!(body["start"]["date"], "2026-09-24");
+    assert_eq!(body["end"]["date"], "2026-09-25");
+    assert_eq!(body["recurrence"], serde_json::json!(["RRULE:FREQ=WEEKLY"]));
+    assert_eq!(
+        body["organizer"],
+        serde_json::json!({ "email": "organizer@example.com", "displayName": "Organizer" })
+    );
+    assert!(body.get("attendees").is_none());
+    assert!(body.get("conferenceData").is_none());
+}

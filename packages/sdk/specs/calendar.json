@@ -300,6 +300,100 @@
         }
       }
     },
+    "/events/{event_id}/copy": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Add a private copy of an event shared with one of the requester's\nchannels to their own calendar and return the synced copy.",
+        "operationId": "copy_calendar_event",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Shared calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyCalendarEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The copy on the requester's calendar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The event cannot be copied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only or needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event not found or not shared with the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already on the requester's calendar, no writable calendar, or the provider rejected the copy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/events/{event_id}/rsvp": {
       "put": {
         "tags": ["calendar_events"],
@@ -704,6 +798,7 @@
           "read_only",
           "no_writable_calendar",
           "not_attendee",
+          "already_on_calendar",
           "invalid_input",
           "reauth_required",
           "provider_rejected",
@@ -730,6 +825,17 @@
         "type": "string",
         "description": "The conferencing system backing an event's join URL.\n\nMacro generates only Google Meet conferences, so this distinguishes one it\ncreated from a third party's — Zoom and friends arriving as `addOn`\nconference data, or a legacy classic Hangout. Clients use it to label the\nconference and to tell whether the Meet toggle reflects a Macro-managed\nconference.\n\nIt does not gate mutation. An explicit request replaces or detaches any\nconference, third-party included, exactly as deleting the event would;\nwhat protects a conference is that omitting the field leaves it untouched,\nso an unrelated edit never disturbs it.",
         "enum": ["google_meet", "other"]
+      },
+      "CopyCalendarEventRequest": {
+        "type": "object",
+        "description": "Request body adding a shared event to the requester's calendar.",
+        "properties": {
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Calendar to add the copy to; defaults to the requester's primary\ninbox's primary calendar."
+          }
+        }
       },
       "CreateCalendarEventRequest": {
         "type": "object",

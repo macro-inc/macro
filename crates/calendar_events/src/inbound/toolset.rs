@@ -443,6 +443,9 @@ fn mutation_tool_error(action: &str, error: CalendarMutationError) -> ToolCallEr
         CalendarMutationError::NotAttendee => {
             "The user's connected account is not an attendee of this event.".to_string()
         }
+        CalendarMutationError::AlreadyOnCalendar => {
+            "This event is already on one of the user's calendars.".to_string()
+        }
         CalendarMutationError::InvalidInput(message) => message.clone(),
         CalendarMutationError::ReauthRequired(_) => {
             "Calendar access must be re-authorized. Ask the user to reconnect their calendar in \

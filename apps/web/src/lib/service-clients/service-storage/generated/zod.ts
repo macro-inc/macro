@@ -1798,6 +1798,14 @@ export const listTeamOutOfOfficeResponse = zod
   .describe('Team out-of-office viewport response.');
 
 /**
+ * @summary Export an event the requester can see — their own, or one shared with a
+channel they belong to — as an iCalendar file.
+ */
+export const eventIcsParams = zod.object({
+  event_id: zod.uuid().describe('Calendar event entity id'),
+});
+
+/**
  * Lists all active calls in channels the caller is an active member of,
 newest first. Calls with no active participants (orphaned by dropped RTC
 webhooks) are excluded.

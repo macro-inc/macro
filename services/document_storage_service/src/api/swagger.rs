@@ -160,6 +160,7 @@ use utoipa::OpenApi;
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
         calendar_events::inbound::axum_router::mention_previews,
+        calendar_events::inbound::axum_router::event_ics,
         calendar_events::inbound::axum_router::list_team_out_of_office,
 
         // annotations

@@ -1,12 +1,13 @@
 use super::*;
 use crate::domain::models::{
     ActorInboxes, AppliedGoogleGrant, CalendarAttendee, CalendarAttendeeInput,
-    CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventOverride, CalendarEventSource,
-    CalendarLinkTokenIdentity, CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus,
-    CalendarWatchRelease, ConferenceChange, DisconnectedGoogleCalendar, EventStart, EventStatus,
-    EventTransparency, EventType, EventVisibility, GoogleCalendarSyncSnapshot,
-    GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel, OutOfOfficeAutoDeclineMode,
-    OutOfOfficeProperties, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+    CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventCopySource, CalendarEventOverride,
+    CalendarEventSource, CalendarLinkTokenIdentity, CalendarOccurrence, CalendarOccurrenceCursor,
+    CalendarSyncStatus, CalendarWatchRelease, ConferenceChange, DisconnectedGoogleCalendar,
+    EventStart, EventStatus, EventTransparency, EventType, EventVisibility,
+    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel,
+    OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, ProviderCalendar, StoredGoogleCalendar,
+    VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -158,6 +159,7 @@ struct FakeRepo {
     visible_calendars: Vec<VisibleCalendar>,
     fail_list_visible: bool,
     fail_owned_inboxes: bool,
+    copy_source: Option<CalendarEventCopySource>,
 }
 
 impl Default for FakeRepo {
@@ -177,6 +179,7 @@ impl Default for FakeRepo {
             visible_calendars: Vec::new(),
             fail_list_visible: false,
             fail_owned_inboxes: false,
+            copy_source: None,
         }
     }
 }
@@ -398,6 +401,14 @@ impl CalendarRepository for FakeRepo {
         Ok(Vec::new())
     }
 
+    async fn get_event_copy_source(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<CalendarEventCopySource>, rootcause::Report> {
+        Ok(self.copy_source.clone())
+    }
+
     async fn remove_google_source(
         &self,
         account_id: Uuid,
@@ -431,6 +442,7 @@ struct FakeProvider {
     echo_overrides: Vec<CalendarEventOverride>,
     created_drafts: Arc<Mutex<Vec<CalendarEventDraft>>>,
     updated_patches: Arc<Mutex<Vec<CalendarEventPatch>>>,
+    imported_sources: Arc<Mutex<Vec<(String, CalendarEventCopySource)>>>,
 }
 
 impl FakeProvider {
@@ -443,6 +455,7 @@ impl FakeProvider {
             echo_overrides: Vec::new(),
             created_drafts: Arc::new(Mutex::new(Vec::new())),
             updated_patches: Arc::new(Mutex::new(Vec::new())),
+            imported_sources: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -537,6 +550,26 @@ impl GoogleCalendarMutationProvider for FakeProvider {
             return Err(error);
         }
         Ok(())
+    }
+
+    async fn import_event(
+        &self,
+        _access_token: &str,
+        target: &GoogleCalendarTarget,
+        source: &CalendarEventCopySource,
+    ) -> Result<Option<CalendarEventUpsert>, GoogleProviderError> {
+        self.calls.lock().unwrap().push("import".to_string());
+        self.imported_sources
+            .lock()
+            .unwrap()
+            .push((target.provider_calendar_id.clone(), source.clone()));
+        if let Some(error) = self.fail() {
+            return Err(error);
+        }
+        if matches!(self.behavior, FakeProviderBehavior::Gone) {
+            return Ok(None);
+        }
+        Ok(Some(self.echo(&target.owner_id)))
     }
 
     async fn stop_watch_channel(
@@ -2443,4 +2476,169 @@ async fn disconnecting_an_inbox_the_requester_does_not_own_is_not_found() {
         Err(CalendarMutationError::NotFound)
     ));
     assert!(calls.lock().unwrap().is_empty());
+}
+
+fn copy_source(access: CalendarEventCopyAccess) -> CalendarEventCopySource {
+    CalendarEventCopySource {
+        access,
+        ical_uid: "meeting@example.com".to_string(),
+        sequence: 3,
+        event_type: EventType::Default,
+        title: "Shared meeting".to_string(),
+        description: Some("Agenda".to_string()),
+        location: None,
+        time: timed_time(),
+        recurrence_lines: vec!["RRULE:FREQ=WEEKLY".to_string()],
+        organizer_email: Some("organizer@example.com".to_string()),
+        organizer_name: None,
+        updated_at: Utc::now(),
+    }
+}
+
+#[tokio::test]
+async fn copy_imports_a_channel_shared_event_onto_the_requesters_calendar() {
+    let applied_id = Uuid::now_v7();
+    let repo = FakeRepo {
+        copy_source: Some(copy_source(CalendarEventCopyAccess::ChannelShared)),
+        creation_target: Some(creation_target(false)),
+        persisted_event_id: Some(applied_id),
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let imported = provider.imported_sources.clone();
+
+    let copied = service(repo, provider, FakeTokens::ok())
+        .copy_shared_event("macro|user", Uuid::now_v7(), None)
+        .await
+        .unwrap();
+
+    assert_eq!(copied.id, applied_id);
+    assert_eq!(upserts.lock().unwrap().len(), 1);
+    let imported = imported.lock().unwrap();
+    assert_eq!(imported.len(), 1);
+    assert_eq!(imported[0].0, "primary");
+    assert_eq!(imported[0].1.ical_uid, "meeting@example.com");
+}
+
+#[tokio::test]
+async fn copy_rejects_an_event_the_requester_cannot_see() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let error = service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .copy_shared_event("macro|user", Uuid::now_v7(), None)
+    .await
+    .unwrap_err();
+
+    assert!(matches!(error, CalendarMutationError::NotFound));
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn copy_rejects_a_meeting_already_on_the_requesters_calendar() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let error = service(
+        FakeRepo {
+            copy_source: Some(copy_source(CalendarEventCopyAccess::OwnCopy)),
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .copy_shared_event("macro|user", Uuid::now_v7(), None)
+    .await
+    .unwrap_err();
+
+    assert!(matches!(error, CalendarMutationError::AlreadyOnCalendar));
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn copy_rejects_status_events() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let error = service(
+        FakeRepo {
+            copy_source: Some(CalendarEventCopySource {
+                event_type: EventType::OutOfOffice,
+                ..copy_source(CalendarEventCopyAccess::ChannelShared)
+            }),
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .copy_shared_event("macro|user", Uuid::now_v7(), None)
+    .await
+    .unwrap_err();
+
+    assert!(matches!(error, CalendarMutationError::InvalidInput(_)));
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn copy_requires_a_writable_calendar() {
+    let missing = service(
+        FakeRepo {
+            copy_source: Some(copy_source(CalendarEventCopyAccess::ChannelShared)),
+            ..FakeRepo::default()
+        },
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    );
+    assert!(matches!(
+        missing
+            .copy_shared_event("macro|user", Uuid::now_v7(), None)
+            .await,
+        Err(CalendarMutationError::NoWritableCalendar)
+    ));
+
+    let read_only = service(
+        FakeRepo {
+            copy_source: Some(copy_source(CalendarEventCopyAccess::ChannelShared)),
+            creation_target: Some(creation_target(true)),
+            ..FakeRepo::default()
+        },
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    );
+    assert!(matches!(
+        read_only
+            .copy_shared_event("macro|user", Uuid::now_v7(), None)
+            .await,
+        Err(CalendarMutationError::ReadOnly)
+    ));
+}
+
+#[tokio::test]
+async fn copy_leaves_an_event_the_calendar_already_holds_untouched() {
+    let repo = FakeRepo {
+        copy_source: Some(copy_source(CalendarEventCopyAccess::ChannelShared)),
+        creation_target: Some(creation_target(false)),
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+
+    // `Gone` makes the fake report that Google already holds the UID.
+    let error = service(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Gone),
+        FakeTokens::ok(),
+    )
+    .copy_shared_event("macro|user", Uuid::now_v7(), None)
+    .await
+    .unwrap_err();
+
+    assert!(matches!(error, CalendarMutationError::AlreadyOnCalendar));
+    assert!(upserts.lock().unwrap().is_empty());
 }

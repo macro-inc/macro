@@ -1,0 +1,113 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                resolved.is_channel_shared AS \"is_channel_shared!\",\n                resolved.ical_uid AS \"ical_uid!\",\n                resolved.sequence AS \"sequence!\",\n                resolved.event_type AS \"event_type!\",\n                resolved.title AS \"title!\",\n                resolved.description,\n                resolved.location,\n                resolved.starts_at,\n                resolved.ends_at,\n                resolved.start_date,\n                resolved.end_date,\n                resolved.time_zone,\n                resolved.recurrence_lines AS \"recurrence_lines!\",\n                resolved.organizer_email,\n                resolved.organizer_name,\n                resolved.updated_at AS \"updated_at!\"\n            FROM calendar_events mentioned\n            CROSS JOIN LATERAL (\n                SELECT\n                    false AS is_channel_shared,\n                    (candidate.owner_id = $1) AS is_owned,\n                    (candidate.id = mentioned.id) AS is_mentioned,\n                    candidate.id,\n                    candidate.ical_uid,\n                    candidate.sequence,\n                    candidate.event_type,\n                    candidate.title,\n                    candidate.description,\n                    candidate.location,\n                    candidate.starts_at,\n                    candidate.ends_at,\n                    candidate.start_date,\n                    candidate.end_date,\n                    candidate.time_zone,\n                    candidate.recurrence_lines,\n                    candidate.organizer_email,\n                    candidate.organizer_name,\n                    candidate.updated_at\n                FROM calendar_events candidate\n                WHERE candidate.ical_uid = mentioned.ical_uid\n                  AND candidate.status <> 'cancelled'\n                  AND (\n                        candidate.owner_id = $1\n                        OR EXISTS (\n                            SELECT 1\n                            FROM macro_user_links link\n                            WHERE link.link_id = candidate.source_link_id\n                              AND link.primary_macro_id = $1\n                        )\n                  )\n                UNION ALL\n                SELECT\n                    true,\n                    false,\n                    true,\n                    mentioned.id,\n                    mentioned.ical_uid,\n                    mentioned.sequence,\n                    mentioned.event_type,\n                    mentioned.title,\n                    mentioned.description,\n                    mentioned.location,\n                    mentioned.starts_at,\n                    mentioned.ends_at,\n                    mentioned.start_date,\n                    mentioned.end_date,\n                    mentioned.time_zone,\n                    mentioned.recurrence_lines,\n                    mentioned.organizer_email,\n                    mentioned.organizer_name,\n                    mentioned.updated_at\n                WHERE mentioned.visibility IN ('default', 'public')\n                  AND EXISTS (\n                        SELECT 1\n                        FROM entity_access grant_row\n                        JOIN comms_channel_participants participant\n                          ON participant.channel_id::text = grant_row.source_id\n                         AND participant.user_id = $1\n                         AND participant.left_at IS NULL\n                        WHERE grant_row.entity_id = mentioned.id\n                          AND grant_row.entity_type = 'calendar_event'\n                          AND grant_row.source_type = 'channel'\n                  )\n                ORDER BY\n                    is_channel_shared,\n                    is_owned DESC,\n                    is_mentioned DESC,\n                    updated_at DESC,\n                    id\n                LIMIT 1\n            ) resolved\n            WHERE mentioned.id = $2\n              AND mentioned.status <> 'cancelled'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_channel_shared!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "ical_uid!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "sequence!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "title!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "start_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 10,
+        "name": "end_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 11,
+        "name": "time_zone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "recurrence_lines!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 13,
+        "name": "organizer_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "organizer_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "89f3ed80978fe9954f94456bfb64cc7d0ea34db1ed831b0c5617f7809daf39df"
+}

@@ -32,6 +32,8 @@ export * from './calendarRsvpScopeParam';
 export * from './calendarUpdateScopeParam';
 export * from './conferenceChange';
 export * from './conferenceProvider';
+export * from './copyCalendarEventRequest';
+export * from './copyCalendarEventRequestCalendarId';
 export * from './createCalendarEventRequest';
 export * from './createCalendarEventRequestCalendarId';
 export * from './createCalendarEventRequestConference';

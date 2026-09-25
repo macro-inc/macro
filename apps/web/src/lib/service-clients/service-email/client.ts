@@ -7,6 +7,7 @@ import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type {
   CalendarEvent,
+  CopyCalendarEventRequest,
   CreateCalendarEventRequest,
   ListCalendarsResponse,
   RsvpCalendarEventRequest,
@@ -615,6 +616,16 @@ export const emailClient = {
   async createCalendarEvent(args: CreateCalendarEventRequest) {
     return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
       `${calendarHost}/events`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
+  },
+  async copyCalendarEvent(eventId: string, args: CopyCalendarEventRequest) {
+    return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
+      `${calendarHost}/events/${eventId}/copy`,
       {
         method: 'POST',
         body: JSON.stringify(args),

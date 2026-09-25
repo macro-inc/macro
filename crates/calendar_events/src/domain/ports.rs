@@ -9,15 +9,15 @@ use uuid::Uuid;
 use super::models::{
     ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
     CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
-    CalendarBackfillJobKey, CalendarCreationTarget, CalendarEvent, CalendarEventDraft,
-    CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert, CalendarGrantIntent,
-    CalendarLinkTokenIdentity, CalendarMentionPreview, CalendarMentionRequestItem,
-    CalendarOccurrence, CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome,
-    CalendarReminderDispatchMessage, CalendarReminderFiring, CalendarReminderSweepSummary,
-    CalendarSyncStatus, DisconnectedGoogleCalendar, DueCalendarReminder,
-    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet,
-    GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
-    StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
+    CalendarBackfillJobKey, CalendarCreationTarget, CalendarEvent, CalendarEventCopySource,
+    CalendarEventDraft, CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert,
+    CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarMentionPreview,
+    CalendarMentionRequestItem, CalendarOccurrence, CalendarOccurrenceCursor,
+    CalendarReminderDeliveryOutcome, CalendarReminderDispatchMessage, CalendarReminderFiring,
+    CalendarReminderSweepSummary, CalendarSyncStatus, DisconnectedGoogleCalendar,
+    DueCalendarReminder, GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch,
+    GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange,
+    ProviderCalendar, StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -202,6 +202,21 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
         scope: &CalendarRsvpScope,
     ) -> impl Future<Output = Result<GoogleRsvpOutcome, GoogleProviderError>> + Send;
 
+    /// Import a private copy of another calendar's event into the target
+    /// calendar under the source's iCalendar UID. Guests are not notified:
+    /// the copy carries no attendees and Google sends nothing on import.
+    ///
+    /// Returns `None`, importing nothing, when the calendar already holds a
+    /// live event with that UID. Google's import updates such an event in
+    /// place, which would strip the guests and join link of an invitation
+    /// Macro has not synced yet.
+    fn import_event(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        source: &CalendarEventCopySource,
+    ) -> impl Future<Output = Result<Option<CalendarEventUpsert>, GoogleProviderError>> + Send;
+
     /// Close a push notification channel. A channel Google no longer knows
     /// about is success, since the goal is only that it stops delivering.
     fn stop_watch_channel(
@@ -343,6 +358,15 @@ pub trait CalendarOccurrenceService: Send + Sync + 'static {
     fn primary_time_zone(
         &self,
         requester_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
+
+    /// Render an event the requester can see — their own, or one shared with
+    /// a channel they belong to — as an iCalendar document. `None` when the
+    /// event does not exist or is not visible to them.
+    fn event_ics(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
 }
 
@@ -612,6 +636,21 @@ pub trait CalendarRepository: Send + Sync + 'static {
         requester_id: &str,
     ) -> impl Future<Output = Result<Vec<String>, Report>> + Send;
 
+    /// Series-level content of an event for copying or export, with how the
+    /// requester sees it: [`OwnCopy`] when any projection of the meeting
+    /// (same iCalendar UID) is on one of their own or linked calendars, else
+    /// [`ChannelShared`] when the mentioned row itself is neither private nor
+    /// confidential and was shared with a channel they currently belong to.
+    /// `None` covers an unknown or cancelled event and one they cannot see.
+    ///
+    /// [`OwnCopy`]: super::models::CalendarEventCopyAccess::OwnCopy
+    /// [`ChannelShared`]: super::models::CalendarEventCopyAccess::ChannelShared
+    fn get_event_copy_source(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CalendarEventCopySource>, Report>> + Send;
+
     /// Retire a Google source the provider confirmed deleted (a recurring
     /// master also retires its expanded instances), restoring the best
     /// surviving source or removing the entity, mirroring feed tombstones.
@@ -705,6 +744,18 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         scope: CalendarRsvpScope,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
 
+    /// Add a private copy of an event shared with one of the requester's
+    /// channels to their own calendar — the selected one, or their primary
+    /// inbox's primary calendar — and persist the provider echo. The copy
+    /// keeps the meeting's iCalendar UID, so it becomes the requester's own
+    /// projection of that meeting.
+    fn copy_shared_event(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
+
     /// Turn calendar off for one of the requester's own connected inboxes:
     /// its calendar data is removed, the calendar scopes leave the recorded
     /// grant, and its push channels are closed at Google.
@@ -734,6 +785,9 @@ pub enum CalendarMutationError {
     /// The connected account is not an attendee of the event.
     #[error("the connected account is not an attendee of this event")]
     NotAttendee,
+    /// The meeting is already on one of the requester's calendars.
+    #[error("the event is already on one of the requester's calendars")]
+    AlreadyOnCalendar,
     /// The supplied fields were invalid.
     #[error("invalid calendar mutation: {0}")]
     InvalidInput(String),

@@ -11307,6 +11307,42 @@ export type ListTeamOutOfOfficeResponses = {
 
 export type ListTeamOutOfOfficeResponse = ListTeamOutOfOfficeResponses[keyof ListTeamOutOfOfficeResponses];
 
+export type EventIcsData = {
+    body?: never;
+    path: {
+        /**
+         * Calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/calendar-events/{event_id}/ics';
+};
+
+export type EventIcsErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Event not found or not visible to the requester
+     */
+    404: unknown;
+    /**
+     * Calendar query failed
+     */
+    500: unknown;
+};
+
+export type EventIcsResponses = {
+    /**
+     * The event as an iCalendar document
+     */
+    200: string;
+};
+
+export type EventIcsResponse = EventIcsResponses[keyof EventIcsResponses];
+
 export type GetActiveCallsData = {
     body?: never;
     path?: never;

@@ -888,6 +888,50 @@ pub struct CalendarMentionEvent {
     pub updated_at: DateTime<Utc>,
 }
 
+/// How a requester can see an event they might copy onto their own
+/// calendar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CalendarEventCopyAccess {
+    /// The event is on one of the requester's own or linked calendars.
+    OwnCopy,
+    /// The requester sees the event only because it was shared with a
+    /// channel they currently belong to.
+    ChannelShared,
+}
+
+/// Series-level content of an event a requester can see, used to add a
+/// private copy to their calendar or to export it as iCalendar.
+///
+/// Attendees and the conference link are deliberately absent: a channel
+/// share exposes the meeting, not its guest list or join link.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarEventCopySource {
+    /// How the requester sees the event.
+    pub access: CalendarEventCopyAccess,
+    /// RFC 5545 UID shared by every projection of the meeting.
+    pub ical_uid: String,
+    /// Provider/iCalendar sequence number.
+    pub sequence: u32,
+    /// Provider event type; only regular events can be copied.
+    pub event_type: EventType,
+    /// Display title.
+    pub title: String,
+    /// Full provider description, plain text or HTML.
+    pub description: Option<String>,
+    /// Location label.
+    pub location: Option<String>,
+    /// Series time: the first instance of a recurring event.
+    pub time: EventTime,
+    /// Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
+    pub recurrence_lines: Vec<String>,
+    /// Organizer email.
+    pub organizer_email: Option<String>,
+    /// Organizer display name.
+    pub organizer_name: Option<String>,
+    /// Entity update time.
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Inclusive/exclusive viewport range for occurrence queries.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -150,6 +150,14 @@ impl CalendarRepository for FakeRepo {
         Ok(Vec::new())
     }
 
+    async fn get_event_copy_source(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<crate::domain::models::CalendarEventCopySource>, Report> {
+        unreachable!("event export is not exercised by sync tests")
+    }
+
     async fn remove_google_source(
         &self,
         _account_id: Uuid,

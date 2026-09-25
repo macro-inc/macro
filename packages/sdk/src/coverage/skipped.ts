@@ -131,6 +131,8 @@ export const authBacklog = [
 ] as const satisfies readonly (keyof AuthSdk)[];
 
 export const calendarExcluded = [
+  // Adding a channel-shared event to the viewer's calendar is a web-app action.
+  'copyCalendarEvent',
   // Health probe is infra, not SDK surface.
   'healthHandler',
 ] as const satisfies readonly (keyof CalendarSdk)[];
@@ -293,6 +295,8 @@ export const storageExcluded = [
   'createViewHandler',
   'deleteCollabSurface',
   'ensureCollabSurface',
+  // The .ics download behind the web app's calendar mention card.
+  'eventIcs',
   'deleteHistoryHandler',
   'deleteUserDocumentViewLocation',
   'deleteViewHandler',

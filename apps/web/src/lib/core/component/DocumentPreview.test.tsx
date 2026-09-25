@@ -44,6 +44,13 @@ vi.mock('./AccessErrorViews/Unauthorized', () => ({
 vi.mock('./AccessErrorViews/NotFound', () => ({
   default: () => <p>Not found</p>,
 }));
+// The actions own their calendar queries; the card only decides whether and
+// for which event to show them.
+vi.mock('@app/features/calendar-view/components/SharedEventActions', () => ({
+  SharedEventActions: (props: { eventId: string }) => (
+    <p>Shared event actions for {props.eventId}</p>
+  ),
+}));
 
 import { DocumentPreviewContent } from './DocumentPreview';
 
@@ -99,6 +106,7 @@ describe('calendar mention preview card', () => {
 
     expect(screen.getByRole('button', { name: 'Pilates' })).toBeTruthy();
     expect(screen.queryByText(/not on your calendar/)).toBeNull();
+    expect(screen.queryByText(/Shared event actions/)).toBeNull();
     expect(view.container.textContent).toContain('Bring a mat');
     expect(view.container.querySelector('b')?.textContent).toBe('mat');
     expect(view.container.querySelector('script')).toBeNull();
@@ -123,6 +131,9 @@ describe('calendar mention preview card', () => {
     expect(screen.queryByRole('button', { name: 'Pilates' })).toBeNull();
     expect(view.container.textContent).toContain('Pilates');
     expect(view.container.textContent).toContain('Bring a mat');
+    expect(
+      screen.getByText('Shared event actions for mentioned-event')
+    ).toBeTruthy();
   });
 
   it('shows no event details without access', () => {
