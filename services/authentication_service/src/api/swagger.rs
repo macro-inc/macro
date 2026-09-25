@@ -344,6 +344,9 @@ mod tests {
                 .get("GithubLinkStatusResponse")
                 .is_some()
         );
+        let fields = &openapi["components"]["schemas"]["GithubLinkStatusResponse"]["properties"];
+        assert!(fields.get("github_username").is_some());
+        assert!(fields.get("github_user_id").is_some());
     }
 
     #[test]
