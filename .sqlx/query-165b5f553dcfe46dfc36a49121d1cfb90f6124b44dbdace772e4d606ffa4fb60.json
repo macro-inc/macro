@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            (SELECT count(*) FROM crm_thread WHERE metadata IS NOT NULL)\n              + (SELECT count(*) FROM crm_comment WHERE metadata IS NOT NULL) AS \"metadata!\",\n            (SELECT count(*) FROM crm_comment WHERE sender IS NOT NULL AND sender <> owner) AS \"foreign_senders!\",\n            (SELECT count(*) FROM crm_comment WHERE \"order\" IS NOT NULL) AS \"explicit_order!\",\n            (SELECT count(*) FROM crm_comment c JOIN comms_messages m ON m.id = c.id\n              WHERE m.import_metadata->>'source' IS DISTINCT FROM 'crm_comment') AS \"id_collisions!\",\n            (SELECT count(*) FROM crm_comment c\n              WHERE NOT EXISTS (SELECT 1 FROM comms_messages m WHERE m.id = c.id)) AS \"pending_comments!\",\n            (SELECT count(*) FROM crm_comment c\n              JOIN crm_thread t ON t.id = c.thread_id\n              JOIN comms_messages m ON m.id = c.id\n              WHERE m.import_metadata->>'source' = 'crm_comment'\n                AND m.updated_at <= c.updated_at\n                AND (m.content, m.updated_at, m.deleted_at)\n                    IS DISTINCT FROM\n                    (c.text, c.updated_at, COALESCE(c.deleted_at, t.deleted_at) AT TIME ZONE 'UTC')) AS \"stale_comments!\",\n            (SELECT count(*) FROM crm_thread t\n              WHERE NOT EXISTS (SELECT 1 FROM crm_comment c WHERE c.thread_id = t.id)) AS \"empty_threads!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "metadata!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "foreign_senders!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "explicit_order!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "id_collisions!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "pending_comments!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "stale_comments!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "empty_threads!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "165b5f553dcfe46dfc36a49121d1cfb90f6124b44dbdace772e4d606ffa4fb60"
+}

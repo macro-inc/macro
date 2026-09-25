@@ -870,3 +870,61 @@ async fn delete_crm_comment_non_owner_forbidden(pool: PgPool) -> anyhow::Result<
     assert_eq!(threads[0].comments.len(), 1);
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn legacy_thread_root_is_the_first_comment_on_the_record(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let other_company = insert_company(&pool, team_id, true, &["other.com"]).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let thread = repo
+        .create_crm_comment(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &company_id,
+            owner,
+            None,
+            None,
+            "first",
+            None,
+            false,
+        )
+        .await?;
+    let thread_id = thread.thread.thread_id;
+    let first = thread.comments[0].comment_id;
+    repo.create_crm_comment(
+        &team_id,
+        CrmCommentEntityType::CrmCompany,
+        &company_id,
+        owner,
+        Some(thread_id),
+        None,
+        "second",
+        None,
+        false,
+    )
+    .await?;
+    // A deleted first comment still names the imported root.
+    sqlx::query("UPDATE crm_comment SET deleted_at = now() WHERE id = $1")
+        .bind(first)
+        .execute(&pool)
+        .await?;
+
+    assert_eq!(
+        repo.legacy_thread_root(&company_id, &thread_id).await?,
+        Some(first)
+    );
+    assert_eq!(
+        repo.legacy_thread_root(&other_company, &thread_id).await?,
+        None
+    );
+    assert_eq!(
+        repo.legacy_thread_root(&company_id, &Uuid::now_v7())
+            .await?,
+        None
+    );
+    Ok(())
+}

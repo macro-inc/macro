@@ -651,6 +651,17 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         comment_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
 
+    /// The first comment of a legacy `crm_thread` on the record, which is the
+    /// id its imported discussion root carries. Lets a client that still holds
+    /// a legacy thread id reply to the imported discussion.
+    fn legacy_thread_root(
+        &self,
+        _entity_id: &uuid::Uuid,
+        _thread_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send {
+        async { Ok(None) }
+    }
+
     /// Read the team's CRM configuration from `team_crm_settings`.
     /// A missing row yields [`CrmTeamSettings::default`].
     fn get_team_settings(

@@ -94,6 +94,9 @@ impl MessageReader for FakeMessages {
     ) -> Result<Message, MessageError> {
         panic!("unexpected resolve_legacy call")
     }
+    async fn parent_of(&self, _id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+        panic!("unexpected parent_of call")
+    }
 }
 
 #[async_trait::async_trait]

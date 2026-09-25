@@ -73,6 +73,8 @@ pub struct CrmRouterState<C, St, Eas, Auth> {
     pub entity_access_service: Arc<Eas>,
     /// State used to authorize direct users and internal service callers.
     pub authorization_state: MacroAuthorizationState<Auth>,
+    /// Shared message service that stores CRM discussions.
+    pub messages: Arc<dyn messages::domain::api::MessageServiceApi>,
 }
 
 impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for Arc<Eas> {
@@ -108,6 +110,17 @@ impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for CrmServiceR
     }
 }
 
+/// The shared message service, pulled from [`CrmRouterState`] by the comment
+/// extractor to find which record a comment belongs to.
+#[derive(Clone)]
+pub struct CrmMessagesRef(pub Arc<dyn messages::domain::api::MessageServiceApi>);
+
+impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for CrmMessagesRef {
+    fn from_ref(state: &CrmRouterState<C, St, Eas, Auth>) -> Self {
+        CrmMessagesRef(state.messages.clone())
+    }
+}
+
 // Manual Clone so C, St, Eas, and Auth don't need Clone.
 impl<C, St, Eas, Auth> Clone for CrmRouterState<C, St, Eas, Auth> {
     fn clone(&self) -> Self {
@@ -116,6 +129,7 @@ impl<C, St, Eas, Auth> Clone for CrmRouterState<C, St, Eas, Auth> {
             stage_service: self.stage_service.clone(),
             entity_access_service: self.entity_access_service.clone(),
             authorization_state: self.authorization_state.clone(),
+            messages: self.messages.clone(),
         }
     }
 }

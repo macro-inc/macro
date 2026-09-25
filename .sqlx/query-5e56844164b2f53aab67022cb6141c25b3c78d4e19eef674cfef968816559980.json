@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH legacy AS (\n               SELECT c.id, c.text, c.owner, c.created_at, c.updated_at,\n                   COALESCE(c.deleted_at, t.deleted_at) AT TIME ZONE 'UTC' AS deleted_at,\n                   CASE WHEN t.contact_id IS NULL THEN 'crm_company' ELSE 'crm_contact' END AS parent_type,\n                   COALESCE(t.contact_id, t.company_id)::text AS parent_id,\n                   NULLIF(first_value(c.id) OVER (PARTITION BY c.thread_id ORDER BY c.created_at, c.id), c.id) AS root_id\n               FROM crm_comment c\n               JOIN crm_thread t ON t.id = c.thread_id\n           )\n           SELECT\n               count(*) FILTER (WHERE m.id IS NULL) AS \"missing_messages!\",\n               count(*) FILTER (\n                   WHERE m.id IS NOT NULL\n                     AND (m.parent_entity_type, m.parent_entity_id, m.thread_id)\n                         IS DISTINCT FROM (l.parent_type, l.parent_id, l.root_id)\n               ) AS \"misplaced_messages!\",\n               count(*) FILTER (\n                   WHERE m.id IS NOT NULL AND l.root_id IS NULL\n                     AND NOT EXISTS (SELECT 1 FROM comms_message_threads th WHERE th.root_id = m.id)\n               ) AS \"roots_without_threads!\",\n               count(*) FILTER (\n                   WHERE m.updated_at <= l.updated_at\n                     AND (m.content, m.sender_id, m.created_at, m.deleted_at)\n                         IS DISTINCT FROM (l.text, l.owner, l.created_at, l.deleted_at)\n               ) AS \"content_mismatches!\"\n           FROM legacy l\n           LEFT JOIN comms_messages m ON m.id = l.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "missing_messages!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "misplaced_messages!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "roots_without_threads!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "content_mismatches!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "5e56844164b2f53aab67022cb6141c25b3c78d4e19eef674cfef968816559980"
+}

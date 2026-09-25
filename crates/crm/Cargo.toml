@@ -17,6 +17,7 @@ ai_tools = [
 ]
 axum = [
   "dep:axum",
+  "dep:messages",
   "dep:macro_authorization",
   "dep:macro_uuid",
   "dep:model-error-response",
@@ -83,7 +84,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
-messages = { path = "../messages", default-features = false, features = ["outbound"] }
+messages = { path = "../messages", default-features = false, features = ["outbound", "test-utils"] }
 macro_user_id = { path = "../macro_user_id" }
 properties = { path = "../properties", default-features = false, features = [
   "outbound",
