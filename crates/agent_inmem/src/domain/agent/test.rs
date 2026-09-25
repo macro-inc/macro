@@ -11,6 +11,7 @@ use rig_agent::agent::StreamingError;
 use rig_agent::completion::PromptError;
 
 use super::*;
+use crate::domain::admission::{AdmissionCheckingTurnEngine, test::Admission};
 use crate::domain::engine::TurnEngine;
 use crate::testing::{HangingEngine, ScriptedEngine};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -142,6 +143,88 @@ fn text_prompt(session: &SessionId, text: &str) -> PromptRequest {
         session.clone(),
         vec![ContentBlock::Text(TextContent::new(text))],
     )
+}
+
+#[tokio::test]
+async fn admission_failures_retain_public_acp_data_without_model_or_tool_output() {
+    use ai_billing::domain::{AiAdmissionService, DenyReason, UnconfiguredAiAdmissionService};
+
+    for reason in [
+        Some(DenyReason::AllowanceExhausted),
+        Some(DenyReason::OverageLimitReached),
+        Some(DenyReason::OveragePaymentFailed),
+        None,
+    ] {
+        let admission: Arc<dyn AiAdmissionService> = match reason {
+            Some(reason) => Arc::new(Admission {
+                denial: Some(reason),
+                ..Default::default()
+            }),
+            None => Arc::new(UnconfiguredAiAdmissionService),
+        };
+        let inner = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+            "forbidden".into(),
+        )]));
+        let engine = Arc::new(AdmissionCheckingTurnEngine::new(inner.clone(), admission));
+        let (notifications, _, error) = with_agent(engine, async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "run AI"))
+                .block_task()
+                .await
+                .expect_err("admission must fail")
+        })
+        .await;
+        let (code, message) = match reason {
+            Some(reason) => (reason.code(), reason.message()),
+            None => (
+                "ai_billing_unavailable",
+                "AI billing is unavailable. Please try again.",
+            ),
+        };
+        assert_eq!(
+            error.data,
+            Some(serde_json::json!({"error": message, "code": code}))
+        );
+        assert!(
+            notifications.iter().all(|notification| matches!(
+                notification.update,
+                SessionUpdate::AvailableCommandsUpdate(_)
+            )),
+            "denied turns must emit neither model nor tool updates"
+        );
+        assert!(inner.requests().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn a_rejected_turn_leaves_no_history_and_can_be_retried_after_recovery() {
+    let admission = Arc::new(Admission::default());
+    admission.exhausted.store(true, Ordering::SeqCst);
+    let inner = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "answer".into(),
+    )]));
+    let engine = Arc::new(AdmissionCheckingTurnEngine::new(
+        inner.clone(),
+        admission.clone(),
+    ));
+    let (_, _, response) = with_agent(engine, async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "rejected"))
+            .block_task()
+            .await
+            .expect_err("exhausted");
+        admission.exhausted.store(false, Ordering::SeqCst);
+        connection
+            .send_request(text_prompt(&session, "accepted"))
+            .block_task()
+            .await
+            .expect("allowance recovered")
+    })
+    .await;
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(inner.requests().len(), 1);
+    assert_eq!(inner.requests()[0].messages, vec!["accepted"]);
+    assert_eq!(admission.calls.lock().unwrap().len(), 2);
 }
 
 #[tokio::test]
@@ -1027,6 +1110,53 @@ impl TurnEngine for ReviewingEngine {
         });
         receiver
     }
+}
+
+/// Exhaust the snapshot after admission but before requesting tool approval.
+struct ExhaustingReviewEngine(Arc<Admission>);
+
+impl TurnEngine for ExhaustingReviewEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        self.0.exhausted.store(true, Ordering::SeqCst);
+        ReviewingEngine.run_turn(request)
+    }
+}
+
+#[tokio::test]
+async fn an_admitted_turn_finishes_tool_approval_after_allowance_is_exhausted() {
+    use agent_client_protocol::schema::v1::{ElicitationAcceptAction, ElicitationAction};
+
+    let admission = Arc::new(Admission::default());
+    let engine = Arc::new(AdmissionCheckingTurnEngine::new(
+        Arc::new(ExhaustingReviewEngine(admission.clone())),
+        admission.clone(),
+    ));
+    let (notifications, asked, response) = with_asking_engine(
+        engine,
+        false,
+        ElicitationAction::Accept(ElicitationAcceptAction::new()),
+        Duration::ZERO,
+        async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "create the event"))
+                .block_task()
+                .await
+                .expect("admitted turn completes")
+        },
+    )
+    .await;
+    assert_eq!(asked.len(), 1);
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(spoken(&notifications), "accepted {}");
+    assert!(admission.exhausted.load(Ordering::SeqCst));
+    assert_eq!(admission.calls.lock().unwrap().len(), 1);
 }
 
 /// A user tool's review goes out as a tool-call-scoped form elicitation the

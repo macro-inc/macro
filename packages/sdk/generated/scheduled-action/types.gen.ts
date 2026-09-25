@@ -55,6 +55,20 @@ export type AgentTask = {
 };
 
 /**
+ * A public admission failure, without payer or internal diagnostic details.
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable code distinguishing quota denials from retryable billing failures.
+     */
+    code: string;
+    /**
+     * Human-readable explanation and recovery guidance.
+     */
+    error: string;
+};
+
+/**
  * Exactly one representation is accepted, even if mixed fields agree or are null.
  */
 export type CreateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
@@ -323,12 +337,20 @@ export type ExecuteScheduledActionNowData = {
 export type ExecuteScheduledActionNowErrors = {
     400: string;
     401: string;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
     404: string;
     /**
      * Action is already running
      */
     409: string;
     500: string;
+    /**
+     * AI billing unavailable
+     */
+    503: AiAdmissionErrorBody;
 };
 
 export type ExecuteScheduledActionNowError = ExecuteScheduledActionNowErrors[keyof ExecuteScheduledActionNowErrors];

@@ -16,6 +16,7 @@ anyhow = { workspace = true }
 ai_tools = { path = "../ai_tools" }
 attachment = { path = "../attachment" }
 ai_toolset = { path = "../ai_toolset" }
+ai_billing = { path = "../ai_billing" }
 ai_usage = { path = "../ai_usage" }
 bytes = { workspace = true }
 async-trait = { workspace = true }

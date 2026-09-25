@@ -411,6 +411,20 @@ export type AgentSetModelAction = {
     model: string;
 };
 
+/**
+ * A public admission failure, without payer or internal diagnostic details.
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable code distinguishing quota denials from retryable billing failures.
+     */
+    code: string;
+    /**
+     * Human-readable explanation and recovery guidance.
+     */
+    error: string;
+};
+
 export type BotId = string;
 
 /**
@@ -1335,10 +1349,12 @@ export type CreateAgentSessionData = {
 
 export type CreateAgentSessionErrors = {
     401: string;
+    402: AiAdmissionErrorBody;
     403: string;
     404: string;
     422: string;
     500: string;
+    503: AiAdmissionErrorBody;
 };
 
 export type CreateAgentSessionError = CreateAgentSessionErrors[keyof CreateAgentSessionErrors];
@@ -1516,9 +1532,11 @@ export type ControlAgentSessionData = {
 
 export type ControlAgentSessionErrors = {
     401: string;
+    402: AiAdmissionErrorBody;
     403: string;
     422: string;
     500: string;
+    503: AiAdmissionErrorBody;
 };
 
 export type ControlAgentSessionError = ControlAgentSessionErrors[keyof ControlAgentSessionErrors];

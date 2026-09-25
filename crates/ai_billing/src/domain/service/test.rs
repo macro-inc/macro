@@ -1,10 +1,12 @@
 use super::*;
+use crate::domain::admission::{AiAdmissionError, AiAdmissionService, BillingAdmissionService};
 use crate::domain::ledger::plan_settlement;
 use crate::domain::models::{
     AllowanceStore, DenyReason, OpenPeriodStart, PayerScope, PeriodAllowance, PeriodLedger,
     SeatGeneration,
 };
 use crate::domain::ports::SettlementOutcome;
+use ai_usage::domain::AiFeature;
 use macro_user_id::cowlike::CowLike;
 use macro_uuid::Uuid;
 use std::collections::HashMap;
@@ -1419,4 +1421,155 @@ impl EntitlementSource for ReleaseOnSecondRead {
     async fn team_payer(&self, _team_id: Uuid) -> Result<Option<MacroUserIdStr<'static>>> {
         Ok(None)
     }
+}
+
+async fn assert_admission_matches_snapshot(
+    service: &Service,
+    actor: &MacroUserIdStr<'_>,
+    expected: Option<DenyReason>,
+) {
+    let snapshot = service.snapshot(actor).await.unwrap();
+    assert_eq!(snapshot.blocked_reason, expected);
+    let admission = BillingAdmissionService::new(service.clone());
+    match (admission.admit(actor, AiFeature::Chat).await, expected) {
+        (Ok(()), None) => {}
+        (Err(AiAdmissionError::Denied(actual)), Some(expected)) => assert_eq!(actual, expected),
+        (result, expected) => panic!("admission {result:?} disagrees with snapshot {expected:?}"),
+    }
+}
+
+#[tokio::test]
+async fn admission_matches_snapshot_without_settlement_or_payments() {
+    // Usage, credits, overage enabled, cap, suspended, remaining, denial.
+    let cases = [
+        (3_999, 0, false, 0, false, 1, None),
+        (
+            4_000,
+            0,
+            false,
+            0,
+            false,
+            0,
+            Some(DenyReason::AllowanceExhausted),
+        ),
+        (
+            4_600,
+            500,
+            false,
+            0,
+            false,
+            0,
+            Some(DenyReason::AllowanceExhausted),
+        ),
+        (
+            4_600,
+            600,
+            false,
+            0,
+            false,
+            0,
+            Some(DenyReason::AllowanceExhausted),
+        ),
+        (4_600, 601, false, 0, false, 1, None),
+        (4_600, 0, true, 1_000, false, 400, None),
+        (
+            5_000,
+            0,
+            true,
+            1_000,
+            false,
+            0,
+            Some(DenyReason::OverageLimitReached),
+        ),
+        (
+            4_600,
+            0,
+            true,
+            1_000,
+            true,
+            0,
+            Some(DenyReason::OveragePaymentFailed),
+        ),
+        (4_600, 601, true, 1_000, true, 1, None),
+    ];
+    for (used, balance, enabled, cap, suspended, remaining, reason) in cases {
+        let (service, repo, payments, _) = premium_service(used);
+        {
+            let mut state = repo.state.lock().unwrap();
+            state.balance = balance;
+            state.settings.overage_enabled = enabled;
+            state.settings.overage_limit_cents = cap;
+            state.suspended = suspended;
+        }
+        let payer = user("payer@x.com");
+        assert_admission_matches_snapshot(&service, &payer, reason).await;
+        assert_eq!(
+            service.snapshot(&payer).await.unwrap().remaining_cents,
+            remaining
+        );
+        let state = repo.state.lock().unwrap();
+        assert_eq!(state.balance, balance);
+        assert!(state.consumed.is_empty());
+        assert!(state.charges.is_empty());
+        assert!(state.purchases.is_empty());
+        assert!(payments.opened().is_empty());
+        assert!(payments.payments().is_empty());
+        assert!(payments.checkouts.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn admission_preserves_free_and_enterprise_billing_decisions() {
+    for (tier, unlimited) in [(PlanTier::Free, false), (PlanTier::Premium, true)] {
+        let actor = user("actor@x.com");
+        let mut entitlement = Entitlement::personal(actor.clone(), tier);
+        entitlement.unlimited = unlimited;
+        let usage = FakeUsage::default();
+        *usage.cents.lock().unwrap() = 1_000_000;
+        let service = BillingServiceImpl::new(
+            FakeEntitlements::default().with(entitlement),
+            usage,
+            FakeRepo::default(),
+            FakePayments::default(),
+        );
+        assert_admission_matches_snapshot(&service, &actor, None).await;
+    }
+}
+
+#[tokio::test]
+async fn admission_uses_mixed_team_seats_and_shared_unsettled_usage() {
+    let owner = user("owner@x.com");
+    let member = user("member@x.com");
+    let entitlement = Entitlement {
+        tier: PlanTier::Max,
+        seat_tiers: vec![PlanTier::Max, PlanTier::Premium],
+        unlimited: false,
+        payer: owner.clone(),
+        billed_users: vec![owner.clone(), member.clone()],
+        scope: PayerScope::TeamOwner {
+            team_id: macro_uuid::generate_uuid_v7(),
+        },
+    };
+    let usage = FakeUsage::default();
+    usage.add(&member, Utc::now(), 4_600);
+    let repo = FakeRepo::default();
+    let service = BillingServiceImpl::new(
+        FakeEntitlements::default().with(entitlement),
+        usage.clone(),
+        repo.clone(),
+        FakePayments::default(),
+    );
+    // The owner's unused Max allowance cannot rescue the Premium member.
+    repo.state.lock().unwrap().balance = 500;
+    assert_admission_matches_snapshot(&service, &owner, None).await;
+    assert_admission_matches_snapshot(&service, &member, Some(DenyReason::AllowanceExhausted))
+        .await;
+    repo.state.lock().unwrap().balance = 601;
+    assert_admission_matches_snapshot(&service, &member, None).await;
+    // Both seats draw on the same credits once the owner's allowance is exhausted.
+    usage.add(&owner, Utc::now(), 20_001);
+    assert_admission_matches_snapshot(&service, &owner, Some(DenyReason::AllowanceExhausted)).await;
+    assert_admission_matches_snapshot(&service, &member, Some(DenyReason::AllowanceExhausted))
+        .await;
+    assert_eq!(repo.state.lock().unwrap().balance, 601);
 }

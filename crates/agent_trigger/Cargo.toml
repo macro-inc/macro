@@ -9,12 +9,13 @@ version = "0.1.0"
 # models_search → models_soup → notification → rdkafka, and the self-hosted
 # daemon only needs domain events from this crate. Services that construct
 # the adapters enable this; do not add it to coding_agent_worker.
-outbound = ["dep:agent", "dep:ai_usage", "dep:lexical_client", "dep:sqlx", "channels/ports"]
+outbound = ["dep:agent", "dep:lexical_client", "dep:sqlx", "channels/ports"]
 
 [dependencies]
 agent = { path = "../agent", optional = true }
 agent_session = { path = "../agent_session", default-features = false }
-ai_usage = { path = "../ai_usage", optional = true }
+ai_billing = { path = "../ai_billing" }
+ai_usage = { path = "../ai_usage" }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }

@@ -15074,6 +15074,21 @@
                 "description": "The session was deleted."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Accepted work was rejected without starting a runtime turn.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.command_rejected"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CommandRejectedMetadata",
+                "description": "Accepted work was rejected without starting a runtime turn."
+              }
+            }
           }
         ],
         "description": "Events publishable to [`MacroAgentSessionLifecycleTopic`].\n\nThe serde tag and [`AgentSessionLifecycleEventName`] spell the same wire\nnames: subscribers filter on them, so they are API. The\n`event_names_match_the_wire` test holds the two in step. Exhaustive on\npurpose: a consumer's match should break when a variant is added."
@@ -19109,6 +19124,29 @@
           "token": {
             "type": "string",
             "description": "The signed JWT to pass to the sync-service websocket connect."
+          }
+        }
+      },
+      "CommandRejectedMetadata": {
+        "type": "object",
+        "description": "Accepted work was terminally rejected before reaching the runtime.",
+        "required": ["identity", "action_id", "code", "error"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The rejected action, correlated with the queue/control response."
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable public denial code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Safe public failure message, never internal billing diagnostics."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session that was to run the action."
           }
         }
       },

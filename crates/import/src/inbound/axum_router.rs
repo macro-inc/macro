@@ -3,6 +3,7 @@
 use crate::domain::models::{ImportSource, ImportState};
 use crate::domain::ports::ImportError;
 use crate::domain::service::{ImportService, RunImportOutcome};
+use ai_billing::inbound::admission::{AiAdmissionErrorBody, admission_error_response};
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
@@ -18,6 +19,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 /// Body for accepting/declining staged imports.
 #[derive(Debug, Deserialize, ToSchema)]
@@ -85,7 +89,10 @@ where
 
 fn error_response(e: ImportError) -> Response {
     tracing::error!(error = ?e, "import request failed");
-    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    match e {
+        ImportError::Admission(error) => admission_error_response(&error).into_response(),
+        _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 fn unknown_source_response(source: &str) -> Response {
@@ -125,6 +132,8 @@ pub async fn get_state_handler<T: ImportService, Auth: MacroAuthorizationService
     request_body = RunImportRequest,
     responses(
         (status = 200, description = "Import run outcome", body = RunImportOutcome),
+        (status = 402, description = "AI allowance exhausted", body = AiAdmissionErrorBody),
+        (status = 503, description = "AI billing unavailable", body = AiAdmissionErrorBody),
         (status = 500, description = "Internal server error"),
     ),
     tag = "import"
@@ -155,6 +164,8 @@ pub async fn run_import_handler<T: ImportService, Auth: MacroAuthorizationServic
     params(("source" = String, Path, description = "Import source")),
     responses(
         (status = 204, description = "Retry accepted (idempotent)"),
+        (status = 402, description = "AI allowance exhausted", body = AiAdmissionErrorBody),
+        (status = 503, description = "AI billing unavailable", body = AiAdmissionErrorBody),
         (status = 400, description = "Unknown import source"),
         (status = 500, description = "Internal server error"),
     ),

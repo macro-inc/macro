@@ -22,6 +22,7 @@ use agent_runtime_protocol::domain::{
     action::{AgentAction, AgentActionId},
     schema::v0::SystemEvent,
 };
+use ai_billing::inbound::admission::{AiAdmissionErrorBody, admission_error_response};
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
@@ -288,6 +289,9 @@ impl From<AgentSessionError> for AgentSessionApiError {
 impl IntoResponse for AgentSessionApiError {
     fn into_response(self) -> Response {
         match self {
+            Self::Domain(AgentSessionError::Admission(error)) => {
+                admission_error_response(&error).into_response()
+            }
             // A session whose runtime is not attached is the everyday state of
             // a self-hosted agent: the operator's daemon dials on a trigger and
             // its bridge ends when the session goes quiet. Nothing is wrong
@@ -876,9 +880,11 @@ async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
                            running turn to end and can be edited or removed meanwhile."
         ),
         (status = 401, body = String),
+        (status = 402, body = AiAdmissionErrorBody),
         (status = 403, body = String),
         (status = 422, body = String),
         (status = 500, body = String),
+        (status = 503, body = AiAdmissionErrorBody),
     )
 )]
 /// Perform a control operation on a live agent session.
@@ -1630,6 +1636,9 @@ impl From<AgentSessionError> for CreateSessionApiError {
 impl IntoResponse for CreateSessionApiError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
+            Self::Domain(AgentSessionError::Admission(error)) => {
+                return admission_error_response(&error).into_response();
+            }
             Self::BotRequired => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "botId is required for user callers".to_owned(),
@@ -1806,10 +1815,12 @@ fn resolve_owner(
     responses(
         (status = 201, body = CreateAgentSessionResponse),
         (status = 401, body = String),
+        (status = 402, body = AiAdmissionErrorBody),
         (status = 403, body = String),
         (status = 404, body = String),
         (status = 422, body = String),
         (status = 500, body = String),
+        (status = 503, body = AiAdmissionErrorBody),
     )
 )]
 /// Open an agent session served by an external runtime.

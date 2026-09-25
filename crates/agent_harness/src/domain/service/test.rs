@@ -3,6 +3,7 @@
 //! recording announcer. Only the edges are doubles.
 
 mod chat_reply;
+mod quota;
 mod user_cleanup;
 
 use messages::domain::models::MessageParent;
@@ -423,12 +424,12 @@ fn harness_with_policies_and_mentions(
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
     mentions: PromptMentionsMock,
 ) -> (TestBench, TurnSignals) {
-    harness_with_ports(
+    harness_with_admission(
         prompt_context,
         prompt_composer,
         permission_policies,
-        HarnessDefaultCodingAgents,
         mentions,
+        Arc::new(quota::TestAdmission::default()),
     )
 }
 
@@ -439,6 +440,24 @@ fn harness_with_coding_choice(chosen: bool) -> (TestBench, TurnSignals) {
         KindDefaultPolicies,
         ChosenCodingAgents(chosen),
         PromptMentionsMock::new(),
+        Arc::new(quota::TestAdmission::default()),
+    )
+}
+
+fn harness_with_admission(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+    mentions: PromptMentionsMock,
+    admission: Arc<dyn ai_billing::domain::AiAdmissionService>,
+) -> (TestBench, TurnSignals) {
+    harness_with_ports(
+        prompt_context,
+        prompt_composer,
+        permission_policies,
+        HarnessDefaultCodingAgents,
+        mentions,
+        admission,
     )
 }
 
@@ -448,6 +467,7 @@ fn harness_with_ports(
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
     coding_agents: impl crate::domain::ports::CodingAgentSource,
     mentions: PromptMentionsMock,
+    admission: Arc<dyn ai_billing::domain::AiAdmissionService>,
 ) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
@@ -498,6 +518,7 @@ fn harness_with_ports(
         crate::domain::pending::PendingCommands::new(),
         mentions,
         notifier.clone(),
+        admission,
     );
     let (ended, ended_rx) = mpsc::unbounded_channel();
     turn_observer.bind(SignallingTurnObserver {
@@ -2768,6 +2789,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         crate::domain::pending::PendingCommands::new(),
         crate::domain::ports::NoPromptMentions,
         crate::domain::ports::NoopAgentSessionNotifier,
+        Arc::new(quota::TestAdmission::default()),
     );
 
     let session = service
@@ -3258,6 +3280,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
         crate::domain::pending::PendingCommands::new(),
         crate::domain::ports::NoPromptMentions,
         crate::domain::ports::NoopAgentSessionNotifier,
+        Arc::new(quota::TestAdmission::default()),
     );
 
     service
@@ -3311,6 +3334,7 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
         crate::domain::pending::PendingCommands::new(),
         crate::domain::ports::NoPromptMentions,
         crate::domain::ports::NoopAgentSessionNotifier,
+        Arc::new(quota::TestAdmission::default()),
     );
     let session = service
         .open_external_session(open_external_request("/srv/agent"))

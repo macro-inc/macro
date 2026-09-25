@@ -12,6 +12,9 @@ pub type Result<T, E = HarnessError> = std::result::Result<T, E>;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum HarnessError {
+    /// Billing refused admission or could not determine allowance.
+    #[error(transparent)]
+    Admission(#[from] ai_billing::domain::AiAdmissionError),
     /// A container could not be spawned or reattached.
     #[error("container unavailable: {0}")]
     Container(String),

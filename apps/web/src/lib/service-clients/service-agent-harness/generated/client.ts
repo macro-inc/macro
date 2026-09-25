@@ -12,6 +12,7 @@ import type {
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
+  AiAdmissionErrorBody,
   CompleteRequest,
   ControlRequest,
   ControlResponse,
@@ -392,6 +393,11 @@ export type createAgentSessionResponse401 = {
   status: 401;
 };
 
+export type createAgentSessionResponse402 = {
+  data: AiAdmissionErrorBody;
+  status: 402;
+};
+
 export type createAgentSessionResponse403 = {
   data: string;
   status: 403;
@@ -412,16 +418,23 @@ export type createAgentSessionResponse500 = {
   status: 500;
 };
 
+export type createAgentSessionResponse503 = {
+  data: AiAdmissionErrorBody;
+  status: 503;
+};
+
 export type createAgentSessionResponseSuccess =
   createAgentSessionResponse201 & {
     headers: Headers;
   };
 export type createAgentSessionResponseError = (
   | createAgentSessionResponse401
+  | createAgentSessionResponse402
   | createAgentSessionResponse403
   | createAgentSessionResponse404
   | createAgentSessionResponse422
   | createAgentSessionResponse500
+  | createAgentSessionResponse503
 ) & {
   headers: Headers;
 };
@@ -867,6 +880,11 @@ export type controlAgentSessionResponse401 = {
   status: 401;
 };
 
+export type controlAgentSessionResponse402 = {
+  data: AiAdmissionErrorBody;
+  status: 402;
+};
+
 export type controlAgentSessionResponse403 = {
   data: string;
   status: 403;
@@ -882,15 +900,22 @@ export type controlAgentSessionResponse500 = {
   status: 500;
 };
 
+export type controlAgentSessionResponse503 = {
+  data: AiAdmissionErrorBody;
+  status: 503;
+};
+
 export type controlAgentSessionResponseSuccess =
   controlAgentSessionResponse200 & {
     headers: Headers;
   };
 export type controlAgentSessionResponseError = (
   | controlAgentSessionResponse401
+  | controlAgentSessionResponse402
   | controlAgentSessionResponse403
   | controlAgentSessionResponse422
   | controlAgentSessionResponse500
+  | controlAgentSessionResponse503
 ) & {
   headers: Headers;
 };

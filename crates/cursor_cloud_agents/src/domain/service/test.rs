@@ -2888,6 +2888,44 @@ async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambigu
 }
 
 #[tokio::test]
+async fn repository_choice_public_refusal_survives_startup_without_remote_work() {
+    struct DeniedChooser;
+    impl RepositoryChooser for DeniedChooser {
+        async fn choose(
+            &self,
+            _: &str,
+            _: &Path,
+        ) -> Result<crate::domain::ports::SessionIntent, rootcause::Report> {
+            Err(rootcause::Report::new(
+                PromptRefusal::plain("AI allowance exhausted").with_code("ai_allowance_exhausted"),
+            )
+            .into_dynamic())
+        }
+    }
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        DeniedChooser,
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    let id = service.new_session(Path::new(""), vec![]);
+    for _ in 0..2 {
+        let error = service.prompt(&id, "fix home").await.unwrap_err();
+        let SessionError::Rejected(refusal) = error else {
+            panic!("expected public startup refusal");
+        };
+        assert_eq!(refusal.code.as_deref(), Some("ai_allowance_exhausted"));
+        assert_eq!(refusal.message, "AI allowance exhausted");
+    }
+    assert!(
+        cursor.calls().is_empty(),
+        "a denial must not create remote work or a no-repository decision"
+    );
+}
+
+#[tokio::test]
 async fn native_pr_is_reported_to_the_host_without_cursor_metadata() {
     let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());

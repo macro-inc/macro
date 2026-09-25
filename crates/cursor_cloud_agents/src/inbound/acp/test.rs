@@ -19,6 +19,18 @@ use futures::channel::mpsc;
 use tokio::io::AsyncBufReadExt as _;
 use tokio::io::AsyncWriteExt as _;
 
+#[test]
+fn repository_choice_refusal_preserves_public_code_in_acp_error() {
+    let error = SessionError::Rejected(
+        crate::domain::error::PromptRefusal::plain("AI billing is unavailable. Please try again.")
+            .with_code("ai_billing_unavailable"),
+    );
+    let encoded = serde_json::to_value(prompt_error(&error)).unwrap();
+    assert_eq!(encoded["data"]["code"], "ai_billing_unavailable");
+    assert_eq!(encoded["data"]["error"], error.to_string());
+    assert_eq!(encoded["message"], error.to_string());
+}
+
 type Service = CursorSessionService<
     FakeCursor,
     AcpNotifier,

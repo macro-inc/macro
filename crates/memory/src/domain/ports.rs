@@ -1,4 +1,5 @@
 use agent::AgentError;
+use ai_billing::domain::AiAdmissionError;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -6,6 +7,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum MemoryError {
+    /// Background generation was refused or billing could not be checked.
+    #[error(transparent)]
+    Admission(#[from] AiAdmissionError),
     #[error(transparent)]
     AgentError(#[from] AgentError),
     #[error("Nothing was generated")]

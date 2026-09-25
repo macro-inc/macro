@@ -1137,6 +1137,7 @@ async fn run() -> anyhow::Result<()> {
             lexical_client.clone(),
             message_commands.clone(),
         );
+    let ai_admission = macro_agent_tool_context.admission.clone();
     let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
     let conversation_access = Arc::new(
         channel_bots::outbound::conversation::EntityAccessConversation(
@@ -1157,7 +1158,8 @@ async fn run() -> anyhow::Result<()> {
                 Arc::new(channel_bots::outbound::FastModelTriggerClassifier::new(
                     ai_usage::pg_recorder(db.clone()),
                 )),
-            ),
+            )
+            .with_ai_admission(ai_admission.clone()),
         ),
         Arc::new(channel_bots::outbound::PrimaryCalendarTimeZones::new(
             Arc::new(calendar_events::domain::service::CalendarService::new(
@@ -1167,6 +1169,7 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(channel_bots::outbound::LexicalCommentMarks::new(
             (*lexical_client).clone(),
         )),
+        ai_admission,
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
 

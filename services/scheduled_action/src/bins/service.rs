@@ -19,6 +19,7 @@ use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use scheduled_action::config::Config;
+use scheduled_action::domain::ai_runner::AdmittedScheduledAgentRunner;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, dispatch::EventDispatchService,
 };
@@ -108,12 +109,16 @@ async fn main() -> Result<()> {
         tool_context.clone(),
         tools_for(AiHost::Chat),
     );
-    let runner = Arc::new(AgentTaskRunner::new(
-        Arc::clone(&tool_context.chat_tool_context.service),
-        PgChatRepo::new(db.clone()),
-        memory,
-        tool_context,
-        notification_ingress,
+    let admission = Arc::clone(&tool_context.admission);
+    let runner = Arc::new(AdmittedScheduledAgentRunner::new(
+        AgentTaskRunner::new(
+            Arc::clone(&tool_context.chat_tool_context.service),
+            PgChatRepo::new(db.clone()),
+            memory,
+            tool_context,
+            notification_ingress,
+        ),
+        admission,
     ));
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),

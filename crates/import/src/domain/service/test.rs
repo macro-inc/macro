@@ -1,4 +1,192 @@
 use super::*;
+use ai_billing::domain::{AiAdmissionError, AiAdmissionService, DenyReason};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[derive(Clone, Copy)]
+enum AdmissionDecision {
+    Allow,
+    Deny,
+    Unavailable,
+}
+
+struct FakeAdmission {
+    decision: Mutex<AdmissionDecision>,
+    calls: AtomicUsize,
+}
+
+impl AiAdmissionService for FakeAdmission {
+    fn admit<'a>(
+        &'a self,
+        user: &'a MacroUserIdStr<'_>,
+        feature: ai_usage::AiFeature,
+    ) -> Pin<Box<dyn Future<Output = std::result::Result<(), AiAdmissionError>> + Send + 'a>> {
+        Box::pin(async move {
+            assert_eq!(user.as_ref(), "macro|importer@example.com");
+            assert_eq!(feature, ai_usage::AiFeature::Import);
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            match *self.decision.lock().unwrap() {
+                AdmissionDecision::Allow => Ok(()),
+                AdmissionDecision::Deny => {
+                    Err(AiAdmissionError::Denied(DenyReason::AllowanceExhausted))
+                }
+                AdmissionDecision::Unavailable => Err(AiAdmissionError::Unavailable(
+                    rootcause::report!("private billing database failure"),
+                )),
+            }
+        })
+    }
+}
+
+fn admission_fixture(
+    decision: AdmissionDecision,
+) -> (
+    ImportServiceImpl<(), (), ()>,
+    Arc<FakeAdmission>,
+    MacroUserIdStr<'static>,
+) {
+    let gate = Arc::new(FakeAdmission {
+        decision: Mutex::new(decision),
+        calls: AtomicUsize::new(0),
+    });
+    let service = ImportServiceImpl::new(
+        (),
+        Arc::new(()),
+        Arc::new(()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+        gate.clone(),
+    );
+    let user = MacroUserIdStr::parse_from_str("macro|importer@example.com").unwrap();
+    (service, gate, user)
+}
+
+#[tokio::test]
+async fn direct_import_succeeds_without_checking_exhausted_or_unavailable_billing() {
+    for decision in [AdmissionDecision::Deny, AdmissionDecision::Unavailable] {
+        let (service, gate, user) = admission_fixture(decision);
+        service
+            .direct_or_ai(&user, Some(async { Ok(()) }), async {
+                panic!("direct success must not invoke AI")
+            })
+            .await
+            .unwrap();
+        assert_eq!(gate.calls.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[tokio::test]
+async fn failed_direct_import_cannot_start_ai_when_denied_or_unavailable() {
+    for decision in [AdmissionDecision::Deny, AdmissionDecision::Unavailable] {
+        let (service, gate, user) = admission_fixture(decision);
+        let error = service
+            .direct_or_ai(
+                &user,
+                Some(async { anyhow::bail!("connector needs an AI fallback") }),
+                async { panic!("blocked fallback must not invoke a provider or recorder") },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ImportError::Admission(_)));
+        let reason = notion_import_failure_reason(&Err(error));
+        match decision {
+            AdmissionDecision::Deny => {
+                assert!(reason.starts_with("ai_allowance_exhausted: "));
+            }
+            AdmissionDecision::Unavailable => {
+                assert_eq!(
+                    reason,
+                    "ai_billing_unavailable: AI billing is unavailable. Please try again."
+                );
+                assert!(!reason.contains("private"));
+            }
+            AdmissionDecision::Allow => unreachable!(),
+        }
+        assert_eq!(gate.calls.load(Ordering::SeqCst), 1);
+    }
+}
+
+#[tokio::test]
+async fn gather_denial_never_enters_the_model_fallback_chain() {
+    for decision in [AdmissionDecision::Deny, AdmissionDecision::Unavailable] {
+        let (service, gate, user) = admission_fixture(decision);
+        let error = service
+            .direct_or_ai(
+                &user,
+                None::<std::future::Ready<anyhow::Result<()>>>,
+                async { panic!("neither primary nor fallback model may run") },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ImportError::Admission(_)));
+        assert_eq!(gate.calls.load(Ordering::SeqCst), 1);
+    }
+}
+
+#[tokio::test]
+async fn one_admission_covers_both_gather_models_even_if_allowance_changes() {
+    let (service, gate, user) = admission_fixture(AdmissionDecision::Allow);
+    let model_calls = AtomicUsize::new(0);
+    service
+        .direct_or_ai(
+            &user,
+            None::<std::future::Ready<anyhow::Result<()>>>,
+            async {
+                let primary = async {
+                    model_calls.fetch_add(1, Ordering::SeqCst);
+                    *gate.decision.lock().unwrap() = AdmissionDecision::Deny;
+                    anyhow::bail!("provider rate limited")
+                };
+                match primary.await {
+                    Ok(()) => Ok(()),
+                    Err(_) => {
+                        model_calls.fetch_add(1, Ordering::SeqCst);
+                        Ok(())
+                    }
+                }
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(model_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(gate.calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn retry_can_start_ai_after_credits_are_added() {
+    let (service, gate, user) = admission_fixture(AdmissionDecision::Deny);
+    let model_calls = AtomicUsize::new(0);
+    for allowed in [false, true] {
+        let result = service
+            .direct_or_ai(
+                &user,
+                Some(async { anyhow::bail!("page requires AI conversion") }),
+                async {
+                    model_calls.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                },
+            )
+            .await;
+        assert_eq!(result.is_ok(), allowed);
+        *gate.decision.lock().unwrap() = AdmissionDecision::Allow;
+    }
+    assert_eq!(gate.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(model_calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn durable_admission_failures_preserve_every_public_denial_code() {
+    for reason in [
+        DenyReason::AllowanceExhausted,
+        DenyReason::OverageLimitReached,
+        DenyReason::OveragePaymentFailed,
+    ] {
+        let error = ImportError::Admission(AiAdmissionError::Denied(reason));
+        assert_eq!(
+            admission::failure_reason(&error),
+            format!("{}: {}", reason.code(), reason.message())
+        );
+    }
+}
 
 fn meta(
     identifier: Option<&str>,
@@ -102,7 +290,7 @@ fn notion_import_turns_scale_with_pages_and_cap() {
 
 #[test]
 fn notion_import_failure_reason_preserves_the_actual_error() {
-    let failure = Err(anyhow::anyhow!("notion fetch was truncated"));
+    let failure = Err(anyhow::anyhow!("notion fetch was truncated").into());
     assert_eq!(
         notion_import_failure_reason(&failure),
         "notion fetch was truncated"

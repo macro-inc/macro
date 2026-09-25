@@ -24,6 +24,20 @@ fn mcp_annotations(annotations: &ai_toolset::ToolAnnotations) -> ToolAnnotations
         .open_world(annotations.open_world)
 }
 
+fn tool_error_result(error: ai_toolset::ToolCallError) -> rmcp::model::CallToolResult {
+    if let Some(admission) = error
+        .internal_error
+        .downcast_ref::<ai_billing::domain::AiAdmissionError>()
+    {
+        let body = ai_billing::inbound::admission::AiAdmissionErrorBody::from(admission);
+        let data = serde_json::json!(body);
+        let mut result = rmcp::model::CallToolResult::error(vec![Content::text(data.to_string())]);
+        result.structured_content = Some(data);
+        return result;
+    }
+    rmcp::model::CallToolResult::error(vec![Content::text(error.description)])
+}
+
 /// MCP server handler that extracts authenticated user identity from HTTP
 /// request parts injected by rmcp's `StreamableHttpService`.
 #[allow(
@@ -146,7 +160,8 @@ where
     ) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
 
-        let request_context = RequestContext::new(user_id.clone());
+        let mut request_context = RequestContext::new(user_id.clone());
+        request_context.cancel = context.ct.clone();
 
         let arguments = request
             .arguments
@@ -180,9 +195,7 @@ where
                 value,
             )
             .await),
-            Err(error) => Ok(rmcp::model::CallToolResult::error(vec![Content::text(
-                error.description,
-            )])),
+            Err(error) => Ok(tool_error_result(error)),
         }
     }
 }

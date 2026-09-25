@@ -14,6 +14,56 @@ use rootcause::Report;
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
 
+#[tokio::test]
+async fn session_admission_errors_preserve_public_response_in_both_api_adapters() {
+    use ai_billing::domain::{AiAdmissionError, DenyReason};
+
+    for create in [false, true] {
+        for (error, status, code, message) in [
+            (
+                AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+                StatusCode::PAYMENT_REQUIRED,
+                "ai_allowance_exhausted",
+                DenyReason::AllowanceExhausted.message(),
+            ),
+            (
+                AiAdmissionError::Denied(DenyReason::OverageLimitReached),
+                StatusCode::PAYMENT_REQUIRED,
+                "ai_overage_limit_reached",
+                DenyReason::OverageLimitReached.message(),
+            ),
+            (
+                AiAdmissionError::Denied(DenyReason::OveragePaymentFailed),
+                StatusCode::PAYMENT_REQUIRED,
+                "ai_overage_payment_failed",
+                DenyReason::OveragePaymentFailed.message(),
+            ),
+            (
+                AiAdmissionError::Unavailable(rootcause::report!("private billing diagnostics")),
+                StatusCode::SERVICE_UNAVAILABLE,
+                "ai_billing_unavailable",
+                "AI billing is unavailable. Please try again.",
+            ),
+        ] {
+            let domain = AgentSessionError::from(error);
+            let response = if create {
+                CreateSessionApiError::from(domain).into_response()
+            } else {
+                AgentSessionApiError::from(domain).into_response()
+            };
+            assert_eq!(response.status(), status);
+            assert_eq!(response.headers()["content-type"], "application/json");
+            let bytes = axum::body::to_bytes(response.into_body(), 4096)
+                .await
+                .unwrap();
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+                serde_json::json!({"error": message, "code": code})
+            );
+        }
+    }
+}
+
 const BOT_TOKEN: &str = "mbot_self_test";
 const HARNESS_TOKEN: &str = "mhns_self_test";
 const OWNER: &str = "macro|owner@example.com";

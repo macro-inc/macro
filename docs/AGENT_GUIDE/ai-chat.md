@@ -286,16 +286,44 @@ documents:
 ## AI usage limits
 
 Paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
-usage rates). When it is used up and no credits or usage billing cover the
-request, sending a message answers HTTP 402 and the app opens the
-**AI usage limit** dialog (title `You've used this month's included AI`, or the
-spending-limit / failed-charge variants). It shows the same meter and controls
-as Settings → Billing: credit-pack buttons, the `Usage billing` toggle, an
-`Open billing settings` button, and `Upgrade to Max` for Premium payers (on a
-team this moves only the payer's own seat). Team members who are not the payer
-see a note to ask the team owner, or a team admin to move their seat to Max.
+usage rates). The backend rejects new billable chat, structured completion and
+Macro-funded agent work when that allowance and usable credits/usage billing
+are exhausted. HTTP 402 carries `ai_allowance_exhausted`,
+`ai_overage_limit_reached`, or `ai_overage_payment_failed`. Billing lookup failure
+is instead HTTP 503, `ai_billing_unavailable`: retry later, not a purchase
+requirement. This backend enforcement adds no new purchase dialog; existing UI
+handling can differ by surface. Inspect the network response rather than assuming
+a dialog appears. DCS rejection includes a `stream_id` but starts no stream.
+
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
+Settings → Billing remains available for authorized payers to buy credits or
+manage usage billing. A purchase first covers unsettled usage; it may not leave
+headroom. Free/enterprise billing exemptions and model permissions are unchanged.
+Dictation and direct document AI editing remain quota-free. Reading, Stop, queue
+removal, and billing controls remain available; starting the next queued turn
+still requires admission. External subscription-funded runtimes keep their own
+execution policy, but Macro-billed helpers such as MCP Subagent can be rejected.
+
+Backend verification checklist (use disposable accounts and test-mode purchases,
+never change hosted customer billing for a test):
+
+- With exhausted Premium and Max accounts, send from Home, a legacy/doc-scoped
+  chat, and a Macro agent session. Check the public 402 code and no new provider
+  work; also try an allowed free model on a paid account.
+- Send while another turn runs, exhaust allowance before dispatch, and inspect
+  the session's rejection/lifecycle state. Acceptance is not execution. Concurrent
+  or already-running operations may finish and overshoot; there is no mid-loop
+  cutoff. A billing outage at dispatch keeps work queued for an explicit retry.
+- Simulate billing unavailability locally: expect 503, not an exhaustion code.
+  Keep history, Stop, queue removal and Settings → Billing usable.
+- After test credits or a period rollover restore positive headroom, submit a
+  fresh request. Rejected work is not automatically replayed. Check dictation
+  still appends to an unsent draft while chat is blocked.
+
+See the [backend contract](../AI_QUOTA_ENFORCEMENT.md) for asynchronous error
+transports and the full enforcement inventory. These are rollout checks, not a
+claim that every deployed environment or browser surface has been verified.
 
 ## Start a doc-scoped chat
 

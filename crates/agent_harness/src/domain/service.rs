@@ -1,6 +1,8 @@
 //! The orchestrator behind every agent session: one service over the ports
 //! in [`crate::domain::ports`], split by concern.
 //!
+//! - [`admission`]: access and billing checks before acceptance and dispatch,
+//!   including idempotent retries and terminal queued refusals.
 //! - [`queue`]: the per-session command queue and its worker, the one-turn-
 //!   in-flight invariant, and routing a command to whichever replica holds
 //!   the session's actor.
@@ -16,6 +18,7 @@
 #[cfg(test)]
 mod test;
 
+mod admission;
 mod deliver;
 mod lifecycle;
 mod lifecycle_events;
@@ -123,6 +126,7 @@ struct AgentHarnessInner<
     Notifier,
 > {
     sessions: Sessions,
+    admission: Arc<dyn ai_billing::domain::AiAdmissionService>,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
@@ -309,10 +313,12 @@ where
         pending: PendingCommands,
         mentions: Mentions,
         notifier: Notifier,
+        admission: Arc<dyn ai_billing::domain::AiAdmissionService>,
     ) -> Self {
         Self {
             inner: Arc::new(AgentHarnessInner {
                 sessions,
+                admission,
                 containers,
                 announcer,
                 runtimes,
@@ -491,6 +497,7 @@ where
 fn into_session_error(error: HarnessError) -> AgentSessionError {
     match error {
         HarnessError::Session(error) => error,
+        HarnessError::Admission(error) => AgentSessionError::Admission(error),
         HarnessError::Disconnected(session) => AgentSessionError::Disconnected(session),
         other => AgentSessionError::Unknown(anyhow::anyhow!(other)),
     }

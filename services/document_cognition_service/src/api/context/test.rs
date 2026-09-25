@@ -9,6 +9,21 @@ use stream::domain::{
 use tokio::sync::broadcast::{self, Receiver};
 use tokio_util::task::TaskTracker;
 
+struct AllowImportAdmission;
+
+impl ai_billing::domain::AiAdmissionService for AllowImportAdmission {
+    fn admit<'a>(
+        &'a self,
+        _user: &'a macro_user_id::user_id::MacroUserIdStr<'_>,
+        feature: ai_usage::AiFeature,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = Result<(), ai_billing::domain::AiAdmissionError>> + Send + 'a>,
+    > {
+        assert_eq!(feature, ai_usage::AiFeature::Import);
+        Box::pin(async { Ok(()) })
+    }
+}
+
 pub struct MockConnectionRepo;
 
 impl MockConnectionRepo {
@@ -403,6 +418,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
+        admission: Arc::new(ai_billing::domain::UnconfiguredAiAdmissionService),
         recorder: ai_usage::pg_recorder(pool.clone()),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
@@ -446,6 +462,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             mcp_selector.clone(),
             Arc::new(creator),
             ai_usage::pg_recorder(pool.clone()),
+            Arc::new(AllowImportAdmission),
         ));
         let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(pool.clone()),

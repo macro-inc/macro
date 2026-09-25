@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use ai_billing::domain::AiAdmissionService;
 use messages::domain::{api::MessageServiceApi, events::MessagePostedMetadata};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tracing::Instrument as _;
@@ -51,11 +52,13 @@ where
         detector: Arc<D>,
         time_zones: Arc<Z>,
         marks: Arc<dyn CommentMarks>,
+        ai_admission: Arc<dyn AiAdmissionService>,
     ) -> Self {
         Self {
-            macro_ai: Arc::new(MacroAiHandler::new(
-                messages, access, responder, time_zones, marks,
-            )),
+            macro_ai: Arc::new(
+                MacroAiHandler::new(messages, access, responder, time_zones, marks)
+                    .with_ai_admission(ai_admission),
+            ),
             detector,
         }
     }

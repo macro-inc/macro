@@ -147,6 +147,11 @@ export function hydrateAgentSessionEvent(
       metadata,
       ...sessionHandles(client, metadata.identity),
     }))
+    .with({ event_type: 'agent_session.command_rejected' }, ({ metadata }) => ({
+      event_type: 'agent_session.command_rejected' as const,
+      metadata,
+      ...sessionHandles(client, metadata.identity),
+    }))
     .with({ event_type: 'agent_session.deleted' }, ({ metadata }) => ({
       event_type: 'agent_session.deleted' as const,
       metadata,

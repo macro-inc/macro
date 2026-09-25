@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+use ai_billing::domain::{AiAdmissionService, UnconfiguredAiAdmissionService};
+use ai_usage::AiFeature;
 use async_trait::async_trait;
 use messages::domain::{api::MessageReader, events::MessagePostedMetadata};
 use uuid::Uuid;
@@ -26,6 +28,7 @@ pub struct MentionOrInferredDetector<I> {
     messages: Arc<dyn MessageReader>,
     access: Arc<dyn ConversationAccess>,
     classifier: Arc<I>,
+    ai_admission: Arc<dyn AiAdmissionService>,
 }
 
 impl<I> MentionOrInferredDetector<I>
@@ -42,7 +45,15 @@ where
             messages,
             access,
             classifier,
+            ai_admission: Arc::new(UnconfiguredAiAdmissionService),
         }
+    }
+
+    /// Configure admission for inferred classification. Explicit triggers do not
+    /// spend on classification; their execution service checks admission instead.
+    pub fn with_ai_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.ai_admission = admission;
+        self
     }
 
     /// Load the thread (parent + replies, oldest-first) as a transcript. The
@@ -98,6 +109,14 @@ where
         if !transcript.iter().any(|message| message.from_agent) {
             return None;
         }
+
+        self.ai_admission
+            .admit(requesting_user, AiFeature::ChannelBot)
+            .await
+            .inspect_err(
+                |error| tracing::warn!(error=?error, "inferred classification not admitted"),
+            )
+            .ok()?;
 
         match self
             .classifier

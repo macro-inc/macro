@@ -1427,6 +1427,8 @@ pub struct ToolServiceContext {
     pub skill_tool_context: ToolSkillToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
     pub anthropic_tool_context: AnthropicToolContext,
+    /// Admits independently initiated billable AI operations, not ordinary tools.
+    pub admission: Arc<dyn ai_billing::domain::AiAdmissionService>,
     /// Records token usage / cost for AI calls made with this context.
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     /// The usage context (feature/user/entity) of the request currently using

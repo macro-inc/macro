@@ -6,6 +6,7 @@ mod test;
 
 use std::{sync::Arc, time::Duration};
 
+use ai_billing::domain::AiAdmissionError;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -140,7 +141,16 @@ fn execution_record(
         is_success: result.is_ok(),
         result: match result {
             Ok(()) => Value::Null,
-            Err(error) => Value::String(error.to_string()),
+            Err(error) => match error.downcast_ref::<AiAdmissionError>() {
+                Some(admission) => {
+                    let code = match admission {
+                        AiAdmissionError::Denied(reason) => reason.code(),
+                        AiAdmissionError::Unavailable(_) => "ai_billing_unavailable",
+                    };
+                    serde_json::json!({"error": admission.to_string(), "code": code})
+                }
+                None => Value::String(error.to_string()),
+            },
         },
         created_at: end_time,
     }

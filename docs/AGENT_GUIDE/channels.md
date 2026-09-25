@@ -249,6 +249,33 @@ The Magic Chip that streams the agent's reply stays inside the message column: l
 thoughts, file paths, and unbreakable tokens wrap or truncate instead of expanding the
 thread past the chat's right edge.
 
+## AI quota rejection
+
+Human messages, replies, reading and dictation remain available when AI allowance
+is exhausted. Classic `@Macro` response admission uses the mentioning user;
+inferred classification and its later response are separate billable operations.
+An explicit classic-bot rejection posts a public reason/code in the existing
+reply mechanism without leaving a thinking placeholder. An inferred rejection
+skips the AI invocation, not the human message. Session-backed mentions instead
+follow the agent-session admission and asynchronous failure contract. If a
+session follow-up is already announced when quota is exhausted, its pending
+chat reply must resolve as failed when dispatch rejects it, rather than keep
+spinning. The preceding completed turn must still publish its settled event
+when quota rejection empties the queue.
+
+For a rollout check, use a disposable exhausted paid account: send an ordinary
+message and then an explicit `@Macro` mention, and test an inferred follow-up in
+a thread with prior bot participation. Confirm normal messaging still works and
+no rejected operation invokes a provider. Repeat in document Discussion. Check
+`ai_allowance_exhausted`, `ai_overage_limit_reached`, or
+`ai_overage_payment_failed`; billing lookup failures use `ai_billing_unavailable`
+and are not purchase requirements. A successful message-post HTTP response does
+not prove the asynchronously triggered AI was admitted. Inspect the bot reply,
+session state and backend logs; do not assume a new purchase dialog appears.
+After test billing recovery, send a fresh mention rather than expecting replay.
+See [AI usage limits](ai-chat.md#ai-usage-limits) and the
+[backend contract](../AI_QUOTA_ENFORCEMENT.md).
+
 ## Message scrolling and navigation
 
 Thread rails end at the last reply avatar when there is no inline composer or

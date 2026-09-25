@@ -936,9 +936,13 @@ where
                     // request there, which no later correction undoes.
                     Err(error) => {
                         tracing::warn!(error = ?error, "could not choose a repository for this session");
-                        Err(SessionError::Rejected(PromptRefusal::plain(
-                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection.",
-                        )))
+                        let refusal = error
+                            .downcast_current_context::<PromptRefusal>()
+                            .cloned()
+                            .unwrap_or_else(|| PromptRefusal::plain(
+                                "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection.",
+                            ));
+                        Err(SessionError::Rejected(refusal))
                     }
                 }
             }

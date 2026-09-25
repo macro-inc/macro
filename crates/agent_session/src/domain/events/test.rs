@@ -97,6 +97,12 @@ fn one_of_each() -> Vec<AgentSessionLifecycleEvent> {
         AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata {
             identity: identity(),
         }),
+        AgentSessionLifecycleEvent::CommandRejected(CommandRejectedMetadata {
+            identity: identity(),
+            action_id: action_id(),
+            code: "ai_allowance_exhausted".to_owned(),
+            error: "AI allowance exhausted".to_owned(),
+        }),
     ]
 }
 

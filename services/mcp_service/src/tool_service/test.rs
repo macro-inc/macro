@@ -2,6 +2,66 @@ use super::*;
 use ai_toolset::AsyncToolCollection;
 use rmcp::{handler::server::ServerHandler, model::ErrorCode};
 
+#[tokio::test]
+async fn admission_failures_are_structured_mcp_tool_errors() {
+    use ai_billing::domain::{
+        AiAdmissionError, AiAdmissionService, DenyReason, UnconfiguredAiAdmissionService,
+    };
+
+    let unavailable = UnconfiguredAiAdmissionService
+        .admit(
+            &MacroUserIdStr::try_from_email("user@macro.com").unwrap(),
+            ai_usage::AiFeature::Chat,
+        )
+        .await
+        .unwrap_err();
+    for (failure, code) in [
+        (
+            AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+            "ai_allowance_exhausted",
+        ),
+        (
+            AiAdmissionError::Denied(DenyReason::OverageLimitReached),
+            "ai_overage_limit_reached",
+        ),
+        (
+            AiAdmissionError::Denied(DenyReason::OveragePaymentFailed),
+            "ai_overage_payment_failed",
+        ),
+        (unavailable, "ai_billing_unavailable"),
+    ] {
+        let result = tool_error_result(ai_toolset::ToolCallError {
+            description: "must not leak adapter details".to_owned(),
+            internal_error: anyhow::Error::new(failure).context("internal context"),
+        });
+        assert_eq!(result.is_error, Some(true));
+        let body = result.structured_content.as_ref().unwrap();
+        assert_eq!(body["code"], code);
+        assert!(body["error"].is_string());
+        let wire = serde_json::to_value(&result).unwrap();
+        let text = wire["content"][0]["text"].as_str().unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(text).unwrap(),
+            *body
+        );
+        for private in ["not configured", "internal context", "adapter details"] {
+            assert!(!wire.to_string().contains(private));
+        }
+    }
+}
+
+#[test]
+fn ordinary_tool_errors_keep_existing_shape() {
+    let result = tool_error_result(ai_toolset::ToolCallError {
+        description: "tool failed".to_owned(),
+        internal_error: anyhow::anyhow!("private tool details"),
+    });
+    assert_eq!(result.is_error, Some(true));
+    assert!(result.structured_content.is_none());
+    let wire = serde_json::to_value(result).unwrap();
+    assert_eq!(wire["content"][0]["text"], "tool failed");
+}
+
 fn empty_service() -> AuthenticatedToolService<()> {
     AuthenticatedToolService::new(
         Arc::new(AsyncToolCollection::new()),

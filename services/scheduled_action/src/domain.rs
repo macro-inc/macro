@@ -1,3 +1,4 @@
+pub mod ai_runner;
 pub mod event_runs;
 pub mod event_trigger;
 pub mod models;

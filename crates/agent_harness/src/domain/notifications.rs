@@ -144,7 +144,8 @@ pub fn plan(event: &AgentSessionLifecycleEvent, is_coding: bool) -> Vec<PlannedN
         | AgentSessionLifecycleEvent::InputReceived(_)
         | AgentSessionLifecycleEvent::Stopped(_)
         | AgentSessionLifecycleEvent::Renamed(_)
-        | AgentSessionLifecycleEvent::Deleted(_) => Vec::new(),
+        | AgentSessionLifecycleEvent::Deleted(_)
+        | AgentSessionLifecycleEvent::CommandRejected(_) => Vec::new(),
     }
 }
 

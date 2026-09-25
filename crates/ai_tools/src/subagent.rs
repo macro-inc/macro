@@ -1,16 +1,23 @@
-use agent::PredefinedModel;
+use crate::{ToolServiceContext, ai_operations::complete_subagent};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use tokio::select;
 
-use crate::ToolServiceContext;
+#[cfg(test)]
+mod test;
 
-static SUBAGENT_MODEL: PredefinedModel = PredefinedModel::Smart;
-
-static SUBAGENT_PROMPT: &str = include_str!("prompts/subagent.md");
+fn subagent_error(error: anyhow::Error) -> ToolCallError {
+    let description = match error.downcast_ref::<ai_billing::domain::AiAdmissionError>() {
+        Some(admission) => admission.to_string(),
+        None => "subagent encountered an error".to_owned(),
+    };
+    ToolCallError {
+        description,
+        internal_error: error,
+    }
+}
 
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct SubagentResponse {
@@ -44,31 +51,16 @@ impl AsyncTool<ToolServiceContext> for Subagent {
         service_context: ServiceContext<ToolServiceContext>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        // Subagents have no feature of their own — their usage rolls up into the
-        // feature that spawned them, carried on the service context.
-        //
-        // Cooperative cancellation: race the completion against the request's
-        // cancel token. If the user cancels, drop the in-flight completion and
-        // report "cancelled" rather than a partial or errored result.
-        let completion = agent::complete(
-            SUBAGENT_MODEL,
-            SUBAGENT_PROMPT,
-            &self.task,
+        complete_subagent(
+            service_context.admission.as_ref(),
             service_context.recorder.as_ref(),
-            service_context.usage_context.clone(),
-        );
-
-        select! {
-            biased;
-            _ = request_context.cancel.cancelled() => Ok(SubagentResponse {
-                result: "cancelled".to_string(),
-            }),
-            result = completion => result
-                .map_err(|e| ToolCallError {
-                    description: "subagent encountered an error".to_string(),
-                    internal_error: e,
-                })
-                .map(|result| SubagentResponse { result }),
-        }
+            &service_context.usage_context,
+            request_context.user_id,
+            &self.task,
+            &request_context.cancel,
+        )
+        .await
+        .map(|result| SubagentResponse { result })
+        .map_err(subagent_error)
     }
 }

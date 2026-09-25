@@ -280,6 +280,20 @@ pub struct SessionDeletedMetadata {
     pub identity: SessionIdentity,
 }
 
+/// Accepted work was terminally rejected before reaching the runtime.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct CommandRejectedMetadata {
+    /// The session that was to run the action.
+    pub identity: SessionIdentity,
+    /// The rejected action, correlated with the queue/control response.
+    pub action_id: AgentActionId,
+    /// Stable public denial code.
+    pub code: String,
+    /// Safe public failure message, never internal billing diagnostics.
+    pub error: String,
+}
+
 /// Events publishable to [`MacroAgentSessionLifecycleTopic`].
 ///
 /// The serde tag and [`AgentSessionLifecycleEventName`] spell the same wire
@@ -335,6 +349,10 @@ pub enum AgentSessionLifecycleEvent {
     #[serde(rename = "agent_session.deleted")]
     #[strum_discriminants(strum(serialize = "agent_session.deleted"))]
     Deleted(SessionDeletedMetadata),
+    /// Accepted work was rejected without starting a runtime turn.
+    #[serde(rename = "agent_session.command_rejected")]
+    #[strum_discriminants(strum(serialize = "agent_session.command_rejected"))]
+    CommandRejected(CommandRejectedMetadata),
 }
 
 impl AgentSessionLifecycleEvent {
@@ -352,6 +370,7 @@ impl AgentSessionLifecycleEvent {
             Self::Stopped(metadata) => &metadata.identity,
             Self::Renamed(metadata) => &metadata.identity,
             Self::Deleted(metadata) => &metadata.identity,
+            Self::CommandRejected(metadata) => &metadata.identity,
         }
     }
 

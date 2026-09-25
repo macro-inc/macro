@@ -4,6 +4,8 @@ use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
+use ai_billing::domain::{AiAdmissionError, AiAdmissionService, UnconfiguredAiAdmissionService};
+use ai_usage::AiFeature;
 use entity_access::domain::models::EntityAccessReceipt;
 use messages::domain::{
     api::MessageServiceApi,
@@ -249,6 +251,7 @@ pub struct MacroAiHandler<R, Z> {
     responder: Arc<R>,
     time_zones: Arc<Z>,
     marks: Arc<dyn CommentMarks>,
+    ai_admission: Arc<dyn AiAdmissionService>,
 }
 
 impl<R, Z> MacroAiHandler<R, Z>
@@ -270,7 +273,14 @@ where
             responder,
             time_zones,
             marks,
+            ai_admission: Arc::new(UnconfiguredAiAdmissionService),
         }
+    }
+
+    /// Configure admission for each response. Unconfigured handlers fail closed.
+    pub fn with_ai_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.ai_admission = admission;
+        self
     }
 
     /// What a mark covers in the document now. Called only after the thread
@@ -489,6 +499,37 @@ where
         Ok(prompt)
     }
 
+    /// Reply to an explicit invocation with only the public admission failure.
+    async fn post_admission_error(
+        &self,
+        event: &BotEvent,
+        error: &AiAdmissionError,
+    ) -> anyhow::Result<()> {
+        let code = error.code();
+        let access = self
+            .access
+            .bot_write(&event.requesting_user, &event.message.parent)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        self.messages
+            .post(
+                access,
+                PostMessage {
+                    id: None,
+                    attribution: MessageAttribution::ActingUser,
+                    notification_policy: PostMessageNotificationPolicy::Default,
+                    content: format!("{error} ({code})"),
+                    thread_id: Some(event.reply_thread_id),
+                    anchor: None,
+                    mentions: Vec::new(),
+                    attachments: Vec::new(),
+                    nonce: None,
+                },
+            )
+            .await?;
+        Ok(())
+    }
+
     /// React to a Macro AI mention.
     #[tracing::instrument(skip(self, event), fields(parent = ?event.message.parent), err)]
     pub(crate) async fn handle(&self, event: &BotEvent) -> anyhow::Result<()> {
@@ -498,6 +539,25 @@ where
         //    "thinking" message is not included). An unreadable or revoked
         //    conversation stops here: nothing is prompted from the event alone.
         let prompt = self.build_prompt(event).await?;
+
+        // Classification and response are independently billed operations. Admit
+        // this response once, before any placeholder or internal agent turns.
+        if let Err(error) = self
+            .ai_admission
+            .admit(&event.requesting_user, AiFeature::ChannelBot)
+            .await
+        {
+            tracing::warn!(error = ?error, code = error.code(), "channel bot response not admitted");
+            if event.trigger == BotTrigger::Mention {
+                let _ = self
+                    .post_admission_error(event, &error)
+                    .await
+                    .inspect_err(|post_error| {
+                        tracing::warn!(error = ?post_error, code = error.code(), "failed to post admission error reply");
+                    });
+            }
+            return Ok(());
+        }
 
         // 2. Post the immediate "thinking" message in the thread. The capability
         //    carries the requesting user, so the message records who triggered it.

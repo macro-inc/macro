@@ -7,6 +7,9 @@ pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// Billing refused a new AI operation or could not check allowance.
+    #[error(transparent)]
+    Admission(#[from] ai_billing::domain::AiAdmissionError),
     /// Invalid link or channel sharing input.
     #[error("{0}")]
     InvalidSharing(&'static str),

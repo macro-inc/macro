@@ -1,6 +1,7 @@
 //! Orchestration for evaluating one posted message.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 #[cfg(test)]
 mod test;
@@ -8,6 +9,8 @@ mod test;
 use agent_session::domain::error::Result;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ThreadSession};
 use agent_session::domain::ports::AgentSessionRepo;
+use ai_billing::domain::{AiAdmissionService, UnconfiguredAiAdmissionService};
+use ai_usage::domain::AiFeature;
 use bot_id::BotId;
 use bots::domain::models::{Agent, AgentChannelScope, Bot, BotKind, BotOwner};
 use entity_access::domain::models::EntityAccessReceipt;
@@ -170,6 +173,7 @@ pub struct AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, Hist
     replies: Replies,
     judge: Judge,
     history: History,
+    admission: Arc<dyn AiAdmissionService>,
 }
 
 impl<Repo, Bots, Teams, Channels, Replies, Judge, History>
@@ -184,8 +188,9 @@ where
     History: ThreadHistory,
 {
     /// Creates a trigger service backed by session, bot, membership, and
-    /// participation lookups.
-    pub const fn new(
+    /// participation lookups. Model-backed classification fails closed until
+    /// admission is configured with [`Self::with_admission`].
+    pub fn new(
         sessions: Repo,
         bots: Bots,
         teams: Teams,
@@ -202,7 +207,16 @@ where
             replies,
             judge,
             history,
+            admission: Arc::new(UnconfiguredAiAdmissionService),
         }
+    }
+
+    /// Configure admission for model-backed classification. Deterministic
+    /// triggers remain subject to admission at their execution boundary.
+    #[must_use]
+    pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     /// Whether `posted` may address `bot_id` under the bot's current scope.
@@ -410,9 +424,9 @@ where
     /// exactly one agent is live; picking among several by recency would route
     /// on nothing the author meant.
     ///
-    /// Extractor and judge failures are treated as "no" rather than propagated:
-    /// implicit triggering is best-effort, and an outage must not wedge the
-    /// message stream or fabricate forwards.
+    /// Admission refusals and extractor/judge failures are treated as "no"
+    /// rather than propagated: implicit triggering is best-effort, and an
+    /// outage must not wedge the message stream or fabricate forwards.
     async fn evaluate_implicit(
         &self,
         posted: &MessagePostedMetadata,
@@ -423,9 +437,9 @@ where
         };
         // Only a user implicitly addresses an agent; bot traffic must always
         // mention explicitly, or bots would relay each other forever.
-        if posted.sender.as_user().is_none() {
+        let Some(user) = posted.sender.as_user() else {
             return Ok(None);
-        }
+        };
         let mut candidates = Vec::new();
         for session in self.sessions.find_all_for_thread(thread_id).await? {
             if session.thread_parent.as_ref() == Some(&posted.parent)
@@ -462,6 +476,23 @@ where
                 return Ok(None);
             }
         };
+
+        if self
+            .admission
+            .admit(user, AiFeature::Automation)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    error = ?error,
+                    code = error.code(),
+                    message_id = %posted.message_id,
+                    "implicit trigger admission refused; skipping classification"
+                );
+            })
+            .is_err()
+        {
+            return Ok(None);
+        }
 
         if self
             .is_addressed_to_agent(posted, &self.transcript(posted, invocation, &session).await)
