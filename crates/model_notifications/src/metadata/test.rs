@@ -555,6 +555,131 @@ fn channel_reply_title_falls_back_to_bot_display_name() {
 }
 
 #[test]
+fn channel_message_send_apns_moves_channel_into_group_name() {
+    let notification = bot_channel_message_send();
+    let entity = EntityType::Channel.with_entity_str("channel-1");
+
+    let apns = notification
+        .as_apns(None, &entity, Uuid::from_u128(7))
+        .expect("channel message should build an APNS alert");
+
+    let data = &apns.push_notification_data;
+    assert_eq!(data.communication_title.as_deref(), Some("Helper Bot"));
+    assert_eq!(data.group_name.as_deref(), Some("#AI Team"));
+    assert_eq!(data.conversation_id.as_deref(), Some("channel-1"));
+
+    // Even without a sender photo the extension must run so it can apply
+    // the generic channel icon in the group layout.
+    assert_eq!(apns.aps.mutable_content, Some(1));
+
+    // The alert title keeps the channel so clients without the group-aware
+    // extension lose nothing.
+    match &apns.aps.alert {
+        Some(Alert::Dictionary(alert)) => {
+            assert_eq!(alert.title.as_deref(), Some("Helper Bot <AI Team>"));
+        }
+        other => panic!("expected dictionary alert, got {other:?}"),
+    }
+}
+
+#[test]
+fn channel_message_send_dm_apns_has_no_group_name() {
+    let notification = ChannelMessageSendMetadata {
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::DirectMessage,
+            channel_name: String::new(),
+        },
+        ..bot_channel_message_send()
+    };
+    let entity = EntityType::Channel.with_entity_str("channel-1");
+
+    let apns = notification
+        .as_apns(None, &entity, Uuid::from_u128(7))
+        .expect("channel message should build an APNS alert");
+
+    assert_eq!(apns.push_notification_data.group_name, None);
+    assert_eq!(
+        apns.push_notification_data.communication_title.as_deref(),
+        Some("Helper Bot")
+    );
+    // A DM without a sender photo has no fallback icon, so the extension
+    // stays out of the way.
+    assert_eq!(apns.aps.mutable_content, None);
+}
+
+#[test]
+fn channel_mention_apns_strips_channel_from_communication_title() {
+    let notification = ChannelMentionMetadata {
+        message_id: Uuid::nil().to_string(),
+        message_content: "hello".to_string(),
+        has_attachments: false,
+        thread_id: None,
+        sender_display_name: None,
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::Public,
+            channel_name: "bug-reports".to_string(),
+        },
+        sender_profile_picture_url: None,
+    };
+    let entity = EntityType::Channel.with_entity_str("channel-1");
+
+    let apns = notification
+        .as_apns(
+            Some(uid("macro|hutch@macro.com")),
+            &entity,
+            Uuid::from_u128(7),
+        )
+        .expect("channel mention should build an APNS alert");
+
+    let data = &apns.push_notification_data;
+    assert_eq!(
+        data.communication_title.as_deref(),
+        Some("hutch mentioned you")
+    );
+    assert_eq!(data.group_name.as_deref(), Some("#bug-reports"));
+
+    match &apns.aps.alert {
+        Some(Alert::Dictionary(alert)) => {
+            assert_eq!(
+                alert.title.as_deref(),
+                Some("hutch mentioned you in #bug-reports")
+            );
+        }
+        other => panic!("expected dictionary alert, got {other:?}"),
+    }
+}
+
+#[test]
+fn channel_reply_apns_adds_group_name_without_communication_title() {
+    let notification = ChannelReplyMetadata {
+        thread_id: Uuid::nil().to_string(),
+        message_id: Uuid::nil().to_string(),
+        user_id: Some(uid("macro|reply.sender@macro.com")),
+        sender_display_name: None,
+        message_content: "hello".to_string(),
+        has_attachments: false,
+        thread_parent_sender_id: None,
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::Team,
+            channel_name: "AI Team".to_string(),
+        },
+        sender_profile_picture_url: None,
+    };
+    let entity = EntityType::Channel.with_entity_str("channel-1");
+
+    let apns = notification
+        .as_apns(None, &entity, Uuid::from_u128(7))
+        .expect("channel reply should build an APNS alert");
+
+    let data = &apns.push_notification_data;
+    // `Reply from …` is already channel-less; the title stays the sender line.
+    assert_eq!(data.communication_title, None);
+    assert_eq!(data.group_name.as_deref(), Some("#AI Team"));
+    assert_eq!(data.conversation_id.as_deref(), Some("channel-1"));
+    assert_eq!(apns.aps.mutable_content, Some(1));
+}
+
+#[test]
 fn channel_mention_title_falls_back_to_bot_display_name() {
     let notification = ChannelMentionMetadata {
         message_id: Uuid::nil().to_string(),
@@ -763,6 +888,7 @@ fn new_email_metadata() -> NewEmailMetadata {
         thread_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa".to_string(),
         subject: "Quarterly plan".to_string(),
         snippet: "Here is the draft".to_string(),
+        sender_photo_url: None,
     }
 }
 
@@ -803,6 +929,10 @@ fn new_email_apns_matches_gmail_layout() {
         Some(metadata.thread_id.as_str())
     );
     assert_eq!(
+        apns.push_notification_data.conversation_id.as_deref(),
+        Some(metadata.thread_id.as_str())
+    );
+    assert_eq!(
         apns.push_notification_data.notification_id,
         Uuid::parse_str("55555555-5555-4555-8555-555555555555").unwrap()
     );
@@ -811,6 +941,35 @@ fn new_email_apns_matches_gmail_layout() {
     assert_eq!(json["aps"]["alert"]["title"], "Ada Lovelace");
     assert_eq!(json["aps"]["alert"]["subtitle"], "Quarterly plan");
     assert_eq!(json["aps"]["alert"]["body"], "Here is the draft");
+    assert_eq!(json["notificationType"], "new_email");
+}
+
+#[test]
+fn new_email_apns_always_requests_mutable_content() {
+    // Even without a sender photo the Notification Service Extension must run
+    // so it can substitute the bundled generic email avatar.
+    let apns = new_email_apns(&new_email_metadata());
+    assert_eq!(apns.aps.mutable_content, Some(1));
+    assert_eq!(apns.push_notification_data.sender_profile_picture_url, None);
+
+    let json = serde_json::to_value(&apns).unwrap();
+    assert!(json.get("senderProfilePictureUrl").is_none());
+}
+
+#[test]
+fn new_email_apns_carries_sender_photo() {
+    let mut metadata = new_email_metadata();
+    metadata.sender_photo_url = Some("https://example.com/pic.png".to_string());
+
+    let apns = new_email_apns(&metadata);
+    assert_eq!(apns.aps.mutable_content, Some(1));
+
+    let json = serde_json::to_value(&apns).unwrap();
+    assert_eq!(
+        json["senderProfilePictureUrl"],
+        "https://example.com/pic.png"
+    );
+    assert_eq!(json["notificationType"], "new_email");
 }
 
 #[test]

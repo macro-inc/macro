@@ -712,6 +712,12 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod.object({
                         sender: zod.string().nullish(),
+                        senderPhotoUrl: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "Profile photo of the sender (Macro profile picture or the recipient's\nsynced contact photo), when known."
+                          ),
                         snippet: zod.string(),
                         subject: zod.string(),
                         threadId: zod.string(),
@@ -2467,6 +2473,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod.object({
                         sender: zod.string().nullish(),
+                        senderPhotoUrl: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "Profile photo of the sender (Macro profile picture or the recipient's\nsynced contact photo), when known."
+                          ),
                         snippet: zod.string(),
                         subject: zod.string(),
                         threadId: zod.string(),
@@ -4216,6 +4228,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod.object({
                         sender: zod.string().nullish(),
+                        senderPhotoUrl: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "Profile photo of the sender (Macro profile picture or the recipient's\nsynced contact photo), when known."
+                          ),
                         snippet: zod.string(),
                         subject: zod.string(),
                         threadId: zod.string(),
@@ -5930,6 +5948,12 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod.object({
                 sender: zod.string().nullish(),
+                senderPhotoUrl: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Profile photo of the sender (Macro profile picture or the recipient's\nsynced contact photo), when known."
+                  ),
                 snippet: zod.string(),
                 subject: zod.string(),
                 threadId: zod.string(),

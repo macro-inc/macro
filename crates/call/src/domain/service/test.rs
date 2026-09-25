@@ -2998,3 +2998,33 @@ async fn enroll_stable_speaker_voices_links_all_voices_for_consistent_diarized_s
     assert!(voice_repo.get_user_voices(&MACRO_USER_B).await?.is_empty());
     Ok(())
 }
+
+#[test]
+fn call_started_apns_requests_mutable_content_only_with_avatar() {
+    use notification::domain::models::NotificationExtIos;
+
+    let entity = model_entity::EntityType::Channel.with_entity_str("channel-1");
+    let notification_id = Uuid::from_u128(1);
+
+    let with_avatar = super::CallStartedNotification {
+        sender_profile_picture_url: Some("https://example.com/pic.png".to_string()),
+        channel_name: Some("general".to_string()),
+    };
+    let apns = with_avatar
+        .as_apns(None, &entity, notification_id)
+        .expect("call_started should build an APNS alert");
+    assert_eq!(apns.aps.mutable_content, Some(1));
+    assert_eq!(
+        apns.push_notification_data.notification_type.as_deref(),
+        Some("call_started")
+    );
+
+    let without_avatar = super::CallStartedNotification {
+        sender_profile_picture_url: None,
+        channel_name: None,
+    };
+    let apns = without_avatar
+        .as_apns(None, &entity, notification_id)
+        .expect("call_started should build an APNS alert");
+    assert_eq!(apns.aps.mutable_content, None);
+}

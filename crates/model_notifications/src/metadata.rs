@@ -513,6 +513,17 @@ pub struct CommonChannelMetadata {
     pub channel_name: String,
 }
 
+impl CommonChannelMetadata {
+    /// The `#channel` line shown as the conversation group name in iOS
+    /// communication notifications. DMs are one-to-one and have none.
+    fn group_name(&self) -> Option<String> {
+        match self.channel_type {
+            ChannelType::DirectMessage => None,
+            _ => Some(format!("#{}", self.channel_name)),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelMessageSendMetadata {
@@ -672,6 +683,10 @@ pub struct NewEmailMetadata {
     pub thread_id: String,
     pub subject: String,
     pub snippet: String,
+    /// Profile photo of the sender (Macro profile picture or the recipient's
+    /// synced contact photo), when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_photo_url: Option<String>,
 }
 
 /// Metadata for a notification that a linked inbox's grant has died and the
@@ -756,7 +771,13 @@ impl NotificationExtIos for NewEmailMetadata {
         _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let mut apns = alert_apns(self, sender_id, notification_id, None).ok()?;
+        let mut apns = alert_apns(
+            self,
+            sender_id,
+            notification_id,
+            self.sender_photo_url.clone(),
+        )
+        .ok()?;
         if let Some(Alert::Dictionary(alert)) = &mut apns.aps.alert {
             let subject = self.subject.trim();
             if self.sender_line().is_some() && !subject.is_empty() {
@@ -764,6 +785,12 @@ impl NotificationExtIos for NewEmailMetadata {
             }
         }
         apns.aps.thread_id = Some(self.thread_id.clone());
+        // Always run the Notification Service Extension for emails: when no
+        // sender photo exists it substitutes the bundled generic email icon
+        // so the alert still gets the communication-notification layout.
+        apns.aps.mutable_content = Some(1);
+        // Group intent donations by the email thread, matching aps.thread-id.
+        apns.push_notification_data.conversation_id = Some(self.thread_id.clone());
         Some(apns)
     }
 }
@@ -788,14 +815,22 @@ impl notification::domain::models::Notification for DocumentMentionMetadata {
     const TYPE_NAME: &'static str = "document_mention";
 }
 
+impl ChannelMentionMetadata {
+    /// Sender's short display line: email local part, or bot display name.
+    fn sender_line(&self, sender_id: Option<&MacroUserIdStr<'_>>) -> Option<String> {
+        sender_id
+            .map(|sender| sender.email_part().local_part().to_string())
+            .or_else(|| self.sender_display_name.clone())
+    }
+}
+
 impl NotificationTitle for ChannelMentionMetadata {
     fn format_title(
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender = sender_id
-            .map(|sender| sender.email_part().local_part().to_string())
-            .or_else(|| self.sender_display_name.clone())
+        let sender = self
+            .sender_line(sender_id.as_ref())
             .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
         Ok(match self.common.channel_type {
             ChannelType::DirectMessage => {
@@ -838,16 +873,23 @@ impl NotificationTitle for DocumentMentionMetadata {
     }
 }
 
+impl ChannelMessageSendMetadata {
+    /// Sender's short display line: email local part, or bot display name.
+    fn sender_line(&self) -> Option<String> {
+        self.sender
+            .as_ref()
+            .map(|sender| sender.email_part().local_part().to_string())
+            .or_else(|| self.sender_display_name.clone())
+    }
+}
+
 impl NotificationTitle for ChannelMessageSendMetadata {
     fn format_title(
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
         let sender = self
-            .sender
-            .as_ref()
-            .map(|sender| sender.email_part().local_part().to_string())
-            .or_else(|| self.sender_display_name.clone())
+            .sender_line()
             .ok_or_else(|| report!("Expected sender to exist for {:?}", &self))?;
         let title = match self.common.channel_type {
             ChannelType::DirectMessage => sender,
@@ -952,7 +994,7 @@ fn parse_message_plain_text_or_attachment(
 }
 
 /// Helper to create an alert-style APNS notification with title and body.
-fn alert_apns<T: NotificationTitle>(
+fn alert_apns<T: NotificationTitle + Notification>(
     notif: &T,
     sender_id: Option<MacroUserIdStr<'_>>,
     notification_id: Uuid,
@@ -981,6 +1023,10 @@ fn alert_apns<T: NotificationTitle>(
         push_notification_data: PushNotificationData {
             notification_id,
             sender_profile_picture_url,
+            notification_type: Some(T::TYPE_NAME.to_string()),
+            communication_title: None,
+            group_name: None,
+            conversation_id: None,
         },
     })
 }
@@ -1027,11 +1073,20 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        let mut apns = alert_apns(self, sender_id, notification_id, profile_pic).ok()?;
+        apns.push_notification_data.communication_title = self.sender_line();
+        apns.push_notification_data.group_name = self.common.group_name();
+        apns.push_notification_data.conversation_id = Some(entity.entity_id.to_string());
+        // Run the Notification Service Extension even without a sender photo
+        // so it can substitute the generic channel icon in the group layout.
+        if apns.push_notification_data.group_name.is_some() {
+            apns.aps.mutable_content = Some(1);
+        }
+        Some(apns)
     }
 }
 
@@ -1045,11 +1100,23 @@ impl NotificationExtIos for ChannelMentionMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        let communication_title = self
+            .sender_line(sender_id.as_ref())
+            .map(|sender| format!("{sender} mentioned you"));
+        let mut apns = alert_apns(self, sender_id, notification_id, profile_pic).ok()?;
+        apns.push_notification_data.communication_title = communication_title;
+        apns.push_notification_data.group_name = self.common.group_name();
+        apns.push_notification_data.conversation_id = Some(entity.entity_id.to_string());
+        // Run the Notification Service Extension even without a sender photo
+        // so it can substitute the generic channel icon in the group layout.
+        if apns.push_notification_data.group_name.is_some() {
+            apns.aps.mutable_content = Some(1);
+        }
+        Some(apns)
     }
 }
 
@@ -1063,11 +1130,21 @@ impl NotificationExtIos for ChannelReplyMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        let mut apns = alert_apns(self, sender_id, notification_id, profile_pic).ok()?;
+        // The title (`Reply from …`) is already channel-less, so only the
+        // group line and conversation identity are added here.
+        apns.push_notification_data.group_name = self.common.group_name();
+        apns.push_notification_data.conversation_id = Some(entity.entity_id.to_string());
+        // Run the Notification Service Extension even without a sender photo
+        // so it can substitute the generic channel icon in the group layout.
+        if apns.push_notification_data.group_name.is_some() {
+            apns.aps.mutable_content = Some(1);
+        }
+        Some(apns)
     }
 }
 
@@ -1081,11 +1158,21 @@ impl NotificationExtIos for DocumentMentionMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.channel.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        let mut apns = alert_apns(self, sender_id, notification_id, profile_pic).ok()?;
+        // The title (`… sent a document`) is already channel-less, so only
+        // the group line and conversation identity are added here.
+        apns.push_notification_data.group_name = self.channel.common.group_name();
+        apns.push_notification_data.conversation_id = Some(entity.entity_id.to_string());
+        // Run the Notification Service Extension even without a sender photo
+        // so it can substitute the generic channel icon in the group layout.
+        if apns.push_notification_data.group_name.is_some() {
+            apns.aps.mutable_content = Some(1);
+        }
+        Some(apns)
     }
 }
 
