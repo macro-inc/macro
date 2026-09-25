@@ -41,10 +41,6 @@ const DriveDetailView = lazy(async () => ({
 const DriveCallDetail = lazy(async () => ({
   default: (await import('./views/DriveCallDetail')).DriveCallDetail,
 }));
-const StandaloneCallDetail = lazy(async () => ({
-  default: (await import('@block-call/views/CallDetailView'))
-    .StandaloneCallDetail,
-}));
 
 type DriveRouteViewProps = DriveViewProps & {
   initialFilters?: Query;
@@ -101,7 +97,7 @@ export const DriveRouteView = withAuth(() => {
         />
       }
       detailRequested={() => !!params.callId}
-      detailFallback={<StandaloneCallDetail callId={params.callId!} />}
+      alwaysRenderDetail
     >
       <DriveView initialFacets={props().initialFacets} />
     </NewAppView>
@@ -215,7 +211,7 @@ export const driveSplitRoute = defineRoute({
   children: [
     driveFolderRoute,
     driveTabRoute,
-    driveRootDocumentRoute,
     driveCallRoute,
+    driveRootDocumentRoute,
   ],
 });
