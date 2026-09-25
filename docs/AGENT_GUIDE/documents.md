@@ -387,7 +387,11 @@ Enter) to open `/app/agent/<id>`.
 It references an existing session; it does not invoke the persona, attach its
 transcript to AI context, or grant access. Private/deleted sessions show an
 unavailable label. Mounted references refresh every 30 seconds while the tab is
-active to update titles and check access.
+active to update titles and check access. Expanded session references are block-level
+Magic Chips with the same filled background as document cards. Click the card body
+to select its editor node (border and selection ring); use **Open session** to navigate.
+The collapse action returns the card to an inline session mention. Text before and
+after an expanded reference remains in separate paragraphs.
 
 Hover a document reference chip to open its preview without navigating. With
 the preview open, the compact header shows a tinted icon, title, and author/time

@@ -3,7 +3,7 @@ import ArrowsIn from '@phosphor/arrows-in.svg';
 import CheckCircle from '@phosphor-fill/check-circle-fill.svg';
 import QuestionCircle from '@phosphor-fill/question-fill.svg';
 import WarningCircle from '@phosphor-fill/warning-circle-fill.svg';
-import { Badge, Button, cn, Layer } from '@ui';
+import { Badge, Button, Card, cn } from '@ui';
 import { match } from 'ts-pattern';
 import './magic-chip-morph.css';
 import { type Component, createMemo, Show } from 'solid-js';
@@ -106,6 +106,9 @@ export const MagicChipView: Component<{
   presentation: MagicChipPresentation;
   header?: MagicChipHeader;
   loading?: boolean;
+  inDocument?: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
   onOpen?: () => void;
   onCollapse?: () => void;
 }> = (props) => {
@@ -131,129 +134,136 @@ export const MagicChipView: Component<{
   const preview = () => status().detail || line() || status().label;
 
   return (
-    <Layer depth={2}>
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label="Open agent session"
-        class="my-2 w-full min-w-0 max-w-full text-left"
-        data-magic-chip={props.agentSessionId}
-        data-magic-chip-preview
-        data-message-reply-preview={preview()}
-        data-lexical-interactive
-        on:click={(event) => {
-          event.stopPropagation();
-          if (
-            event.target instanceof Element &&
-            event.target.closest('button, a')
-          )
-            return;
-          props.onOpen?.();
-        }}
-        on:mousedown={(event) => event.preventDefault()}
-        on:keydown={(event) => {
-          if (
-            event.target !== event.currentTarget ||
-            (event.key !== 'Enter' && event.key !== ' ')
-          )
-            return;
-          event.preventDefault();
-          event.stopPropagation();
-          props.onOpen?.();
-        }}
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label="Open agent session"
+      class="my-2 w-full min-w-0 max-w-full text-left"
+      data-magic-chip={props.agentSessionId}
+      data-magic-chip-preview
+      data-message-reply-preview={preview()}
+      data-lexical-interactive
+      on:click={(event) => {
+        event.stopPropagation();
+        if (
+          event.target instanceof Element &&
+          event.target.closest('button, a')
+        )
+          return;
+        if (props.onSelect) props.onSelect();
+        else props.onOpen?.();
+      }}
+      on:mousedown={(event) => event.preventDefault()}
+      on:keydown={(event) => {
+        if (
+          event.target !== event.currentTarget ||
+          (event.key !== 'Enter' && event.key !== ' ')
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        props.onOpen?.();
+      }}
+    >
+      <Card
+        depth={2}
+        variant={props.inDocument ? 'filled' : 'ghost'}
+        contentEditable={false}
+        data-magic-chip-card
+        aria-label={`${props.header?.agent ?? 'Agent'} session`}
+        aria-busy={props.loading}
+        class={cn(
+          '@container h-22 min-h-22 w-full min-w-0 shrink-0 overflow-hidden rounded-2xl border border-edge p-3 text-ink',
+          props.inDocument &&
+            props.selected &&
+            'border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] ring-2 ring-edge-muted'
+        )}
       >
-        <article
-          data-magic-chip-card
-          aria-label={`${props.header?.agent ?? 'Agent'} session`}
-          aria-busy={props.loading}
-          class="@container h-22 min-h-22 w-full min-w-0 shrink-0 overflow-hidden rounded-2xl border border-edge p-3 text-ink"
-        >
-          <div class="flex h-6 min-w-0 items-center gap-2">
-            <MagicChipStatusIcon status={status()} loading={props.loading} />
-            <span class="min-w-0 truncate text-xs font-semibold">
-              {props.header?.agent ?? 'Agent'}
-            </span>
-            <Show when={props.header?.model}>
-              {(model) => (
-                <span
-                  class="hidden max-w-40 min-w-0 truncate text-xs text-ink-muted @[600px]:block"
-                  data-magic-chip-model
-                >
-                  {model()}
-                </span>
-              )}
-            </Show>
-            <MagicChipStatusBadge status={status()} loading={props.loading} />
-            <div class="min-w-0 flex-1" />
-            <Show when={props.onCollapse}>
-              <Button
-                variant="plain"
-                size="icon-sm"
-                noTouchResize
-                aria-label="Collapse to mention"
-                on:click={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  props.onCollapse?.();
-                }}
+        <div class="flex h-6 min-w-0 items-center gap-2">
+          <MagicChipStatusIcon status={status()} loading={props.loading} />
+          <span class="min-w-0 truncate text-xs font-semibold">
+            {props.header?.agent ?? 'Agent'}
+          </span>
+          <Show when={props.header?.model}>
+            {(model) => (
+              <span
+                class="hidden max-w-40 min-w-0 truncate text-xs text-ink-muted @[600px]:block"
+                data-magic-chip-model
               >
-                <ArrowsIn />
-              </Button>
-            </Show>
+                {model()}
+              </span>
+            )}
+          </Show>
+          <MagicChipStatusBadge status={status()} loading={props.loading} />
+          <div class="min-w-0 flex-1" />
+          <Show when={props.onCollapse}>
             <Button
-              variant="outline"
-              size="sm"
+              variant="plain"
+              size="icon-sm"
               noTouchResize
-              class="aspect-square rounded-full bg-transparent p-0 font-normal @[600px]:aspect-auto @[600px]:px-2"
-              aria-label="Open session"
-              disabled={props.loading || !props.onOpen}
+              aria-label="Collapse to mention"
               on:click={(event) => {
+                event.preventDefault();
                 event.stopPropagation();
-                props.onOpen?.();
+                props.onCollapse?.();
               }}
             >
-              <span class="hidden @[600px]:inline">Open session</span>
-              <ArrowUpRight aria-hidden="true" class="size-3" />
+              <ArrowsIn />
             </Button>
-          </div>
-          <div
-            class="mt-1.5 flex h-8 min-w-0 items-center gap-2"
-            data-magic-chip-output-row
+          </Show>
+          <Button
+            variant="outline"
+            size="sm"
+            noTouchResize
+            class="aspect-square rounded-full bg-transparent p-0 font-normal @[600px]:aspect-auto @[600px]:px-2"
+            aria-label="Open session"
+            disabled={props.loading || !props.onOpen}
+            on:click={(event) => {
+              event.stopPropagation();
+              props.onOpen?.();
+            }}
+          >
+            <span class="hidden @[600px]:inline">Open session</span>
+            <ArrowUpRight aria-hidden="true" class="size-3" />
+          </Button>
+        </div>
+        <div
+          class="mt-1.5 flex h-8 min-w-0 items-center gap-2"
+          data-magic-chip-output-row
+        >
+          <Show
+            when={!props.loading}
+            fallback={
+              <div
+                class="flex h-8 min-w-0 flex-1 items-center pl-7"
+                aria-hidden="true"
+              >
+                <span class="h-3 w-4/5 rounded bg-hover" />
+              </div>
+            }
           >
             <Show
-              when={!props.loading}
+              when={!status().detail && props.header?.pullRequestUrl}
               fallback={
-                <div
-                  class="flex h-8 min-w-0 flex-1 items-center pl-7"
-                  aria-hidden="true"
+                <p
+                  class="h-8 min-w-0 flex-1 truncate pl-7 text-sm leading-8"
+                  classList={{
+                    italic:
+                      status().tone === 'failure' ||
+                      Boolean(status().detail) ||
+                      !line(),
+                  }}
+                  data-magic-chip-body
                 >
-                  <span class="h-3 w-4/5 rounded bg-hover" />
-                </div>
+                  {status().detail || line() || 'Nothing written yet'}
+                </p>
               }
             >
-              <Show
-                when={!status().detail && props.header?.pullRequestUrl}
-                fallback={
-                  <p
-                    class="h-8 min-w-0 flex-1 truncate pl-7 text-sm leading-8"
-                    classList={{
-                      italic:
-                        status().tone === 'failure' ||
-                        Boolean(status().detail) ||
-                        !line(),
-                    }}
-                    data-magic-chip-body
-                  >
-                    {status().detail || line() || 'Nothing written yet'}
-                  </p>
-                }
-              >
-                {(url) => <MagicChipPullRequest url={url()} />}
-              </Show>
+              {(url) => <MagicChipPullRequest url={url()} />}
             </Show>
-          </div>
-        </article>
-      </div>
-    </Layer>
+          </Show>
+        </div>
+      </Card>
+    </div>
   );
 };
