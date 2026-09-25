@@ -69,6 +69,9 @@ export function ChatComposer(props: {
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [height, setHeight] = createSignal<number>();
   createResizeObserver(content, (_, element) => {
+    // Content held offscreen by a pending Suspense reports 0; pinning that
+    // would animate the surface up from nothing once it attaches.
+    if (!element.isConnected) return;
     setHeight(element.getBoundingClientRect().height);
   });
   let container: HTMLDivElement | undefined;
