@@ -138,6 +138,7 @@ function WorkspaceContent() {
       <SplitPanel.Root>
         <SplitPanel.Body>
           <ViewShell.Root
+            class="calendar-workspace-shell"
             asidePreferenceKey="calendar"
             resizable
             aside={{ preserveDuringResize: false }}
