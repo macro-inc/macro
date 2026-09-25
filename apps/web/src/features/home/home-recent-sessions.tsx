@@ -1,5 +1,6 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ChatProviderIcon } from '@entity/components/ChatProviderIcon';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
@@ -8,7 +9,7 @@ import {
   useSoupItemsQuery,
 } from '@queries/soup/items';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { ErrorBoundary, For, Show, Suspense } from 'solid-js';
+import { ErrorBoundary, For, Show } from 'solid-js';
 
 const DEFAULT_LIMIT = 3;
 
@@ -36,9 +37,9 @@ export function useRecentChatSessions(limit = DEFAULT_LIMIT) {
 export function RecentSessionsSection(props: { limit?: number }) {
   return (
     <ErrorBoundary fallback={() => null}>
-      <Suspense fallback={null}>
+      <DebugSuspense name="Home.recent-sessions" fallback={null}>
         <RecentSessionsContent limit={props.limit} />
-      </Suspense>
+      </DebugSuspense>
     </ErrorBoundary>
   );
 }
