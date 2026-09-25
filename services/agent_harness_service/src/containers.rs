@@ -131,6 +131,7 @@ where
                 owner: row.owner_id,
                 model: row.model,
                 identity: Some(AgentIdentity {
+                    bot: row.bot_id,
                     name: bot.name,
                     handle: bot.handle,
                 }),

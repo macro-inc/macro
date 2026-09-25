@@ -1446,6 +1446,16 @@ impl ToolServiceContext {
         self.channel_tool_context = self.channel_tool_context.with_actor(actor);
         self
     }
+
+    /// Name the actor set with [`Self::with_actor`], so what the tools write
+    /// is presented under the agent's own name where a reader sees it live -
+    /// the cursor the editing worker draws while it types. First-party bots
+    /// present under their constant names without this; a user- or
+    /// team-owned bot has no name the tools can find on their own.
+    pub fn with_actor_name(mut self, name: &str) -> Self {
+        self.document_tool_context = self.document_tool_context.with_actor_name(name);
+        self
+    }
 }
 
 impl FromRef<ToolServiceContext> for ai_toolset::NoContext {
