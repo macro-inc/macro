@@ -4,8 +4,9 @@ Audited September 23, 2026 against the live `https://macro.com/sitemap.xml`,
 its 30 listed pages, robots.txt, the imported marketing source, and the previous
 `solid-site` CloudFront configuration. No production infrastructure was changed.
 
-See [the September 24 recheck](RECHECK-2026-09-24.md) for the latest live crawl,
-performance fixes, Lighthouse measurements, and remaining deployment checks.
+See [the September 24 recheck](RECHECK-2026-09-24.md) for the live crawl and
+[the September 25 standalone verification](LAUNCH-RECHECK-2026-09-25.md) for
+current architecture, artifact sizes, Lighthouse measurements, and deployment checks.
 
 ## Preserved and repaired
 
@@ -32,13 +33,15 @@ performance fixes, Lighthouse measurements, and remaining deployment checks.
   those URLs to migrate, and none exist in the old public assets directory.
 - Restored the marketing analytics initialization and Meta Pixel on the public
   journey. The existing GA4, Ads and PostHog configuration is reused.
-- Nearby demo code preloads sequentially during idle time after page load (except on
-  Save-Data/2G connections); editors only mount near the viewport, with section
-  copy always present and quiet placeholders if loading is still in progress. Direct mention-icon imports avoid loading the app's block
-  registry on arrival. Initial JS was about 312 KB gzip in this first audit and
-  is about 394 KB after the September 24 recheck, versus more than 1.9 MB
-  before the first pass; the build fails above 400 KB. These are artifact sizes, not
-  production Core Web Vitals or a promise about field performance.
+- Nearby demo code preloads sequentially during idle time after page load (except
+  on Save-Data/2G connections); editors only mount near the viewport, with section
+  copy always present and quiet placeholders while loading. Demos, components,
+  styles, and assets are website-owned, with no application source dependencies.
+  Initial JS is 192 KB gzip after the September 25 isolation, versus more than
+  1.9 MB before the first pass; the build now fails above 225 KB. The homepage
+  hydrates its server-rendered content, prioritizes CSS/fonts, and loads PostHog
+  after paint while preserving queued events and attribution. These artifact
+  sizes and local lab results do not establish production Core Web Vitals.
 
 ## Hosting contract — required before switching traffic
 

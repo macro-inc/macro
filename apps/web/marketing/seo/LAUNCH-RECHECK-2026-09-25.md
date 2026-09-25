@@ -36,7 +36,7 @@ account creation continues in the existing app.
   analytics queue behavior, and architecture boundary tests.
 - Website TypeScript, production build, standalone gate, `just check`, and
   `git diff --check` pass.
-- 31 prerendered pages; all 30 baseline live URLs preserved; 626 internal links
+- Homepage plus 31 prerendered routes; all 30 baseline live URLs preserved; 626 internal links
   and 697 local assets verified; metadata, structured data, sitemap, robots,
   and signup noindex checked.
 - Browser comparisons against a saved pre-isolation production artifact covered
@@ -71,10 +71,12 @@ through the public website deployment, preserve `/app/*` and existing edge
 routes, then run `verify-seo-live.ts` against that candidate. The existing app
 preview deployment does not automatically publish the website artifact.
 
-CI must also recalculate both platform dependency hashes for the new workspace.
-This machine has no Nix installation; prior CI hash values predate these package
-changes. Production analytics delivery, CDN caching/redirects, and physical
-mobile browser checks remain deployment verification, not claims of this audit.
+Both platform dependency hashes were refreshed from the computed outputs in
+[CI run 36175744456](https://github.com/macro-inc/macro/actions/runs/36175744456).
+Its tested merge commit has identical dependency inputs to `c47e2d1465`.
+This machine has no Nix installation; the updated hashes need the final CI run.
+Production analytics delivery, CDN caching/redirects, and physical mobile
+browser checks remain deployment verification, not claims of this audit.
 
 Reports and screenshots are retained in this session under
 `/tmp/macro-standalone-*`; the matched baseline is under
