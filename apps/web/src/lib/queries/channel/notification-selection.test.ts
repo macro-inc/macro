@@ -48,7 +48,9 @@ describe('channel selection hydration', () => {
   });
 
   it('keeps the pre-await channel id if the store proxy loses it mid-fetch', async () => {
-    const row = channel([{ id: 'one', state: 'unseen', createdAt: '2026-01-01' }]);
+    const row = channel([
+      { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
+    ]);
     fetchNotifications.mockImplementation(async () => {
       (row as { id?: string }).id = undefined;
       return [{ id: 'one' }];

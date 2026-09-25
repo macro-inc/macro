@@ -503,9 +503,7 @@ export function channelPreviewSelection(
     type: 'channel',
     id: channelId,
     ...(target ? { target } : {}),
-    ...(options.notifications
-      ? { notifications: options.notifications }
-      : {}),
+    ...(options.notifications ? { notifications: options.notifications } : {}),
   };
 }
 
@@ -513,8 +511,7 @@ export function channelPreviewSelection(
 export function channelIdForPreviewNavigation(
   channel: ChannelPreviewSelection
 ): string {
-  const channelId =
-    channel.type === 'channel' ? channel.id : channel.channelId;
+  const channelId = channel.type === 'channel' ? channel.id : channel.channelId;
   if (typeof channelId !== 'string' || channelId.length === 0) {
     throw new Error('Missing channel id for channel preview navigation');
   }

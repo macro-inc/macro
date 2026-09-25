@@ -125,9 +125,9 @@ import { type ChannelEntityTarget, type EntityData, queryKeys } from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
 import {
   type CalendarPreviewSelection,
+  type ChannelPreviewSelection,
   channelIdForPreviewNavigation,
   channelPreviewSelection,
-  type ChannelPreviewSelection,
   executeMarkEntitiesDone,
   executeMarkEntitiesUndone,
   getChannelEntityTarget,
@@ -347,8 +347,9 @@ describe('channel unread clicks', () => {
       id: 'channel-1',
       target: { messageId: 'newer', threadId: 'thread' },
     });
-    expect(channelPreviewSelection('channel-1', { target: { kind: 'latest' } }))
-      .toEqual({ type: 'channel', id: 'channel-1' });
+    expect(
+      channelPreviewSelection('channel-1', { target: { kind: 'latest' } })
+    ).toEqual({ type: 'channel', id: 'channel-1' });
     expect(() => channelPreviewSelection('')).toThrow(/Missing channel id/);
   });
 

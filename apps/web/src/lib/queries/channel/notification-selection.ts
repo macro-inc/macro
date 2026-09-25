@@ -34,10 +34,7 @@ async function fetchChannelNotificationSelection(
   const target = channel.target;
   const input = buildGraphqlEntitySoupInput('CHANNEL', channelId);
   if (!input) throw new Error('Invalid channel notification selection');
-  const notifications = await fetchGraphqlEntityNotifications(
-    input,
-    channelId
-  );
+  const notifications = await fetchGraphqlEntityNotifications(input, channelId);
   return {
     type: 'channel',
     id: channelId,
