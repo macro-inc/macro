@@ -2,7 +2,7 @@
 
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
 use cache_core::link_patch::{
-    LinkOperation, LinkPathSegment, ListItemByScalar, OptimisticLinkPatch,
+    LinkOperation, LinkPathSegment, ListItemByScalar, OptimisticLinkPatch, QueryLinkPatch,
 };
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::store::InMemoryStorage;
@@ -148,7 +148,7 @@ fn group_page_without_destination() -> Json {
 }
 
 fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
-    OptimisticLinkPatch {
+    OptimisticLinkPatch::Query(QueryLinkPatch {
         query: GROUP_MEMBERSHIP_QUERY.into(),
         operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),
@@ -173,11 +173,11 @@ fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
             },
         ],
         operation,
-    }
+    })
 }
 
 fn remove_bin_patch(bin: &str) -> OptimisticLinkPatch {
-    OptimisticLinkPatch {
+    OptimisticLinkPatch::Query(QueryLinkPatch {
         query: GROUP_MEMBERSHIP_QUERY.into(),
         operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),
@@ -201,11 +201,11 @@ fn remove_bin_patch(bin: &str) -> OptimisticLinkPatch {
             count_field: "totalCount".into(),
             entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
         },
-    }
+    })
 }
 
 fn upsert_bin_patch(bin: &str) -> OptimisticLinkPatch {
-    OptimisticLinkPatch {
+    OptimisticLinkPatch::Query(QueryLinkPatch {
         query: GROUP_MEMBERSHIP_QUERY.into(),
         operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),
@@ -230,7 +230,7 @@ fn upsert_bin_patch(bin: &str) -> OptimisticLinkPatch {
             entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
             insert_fields: std::collections::HashMap::from([("nextCursor".into(), Json::Null)]),
         },
-    }
+    })
 }
 
 async fn read_group(engine: &mut Engine<InMemoryStorage>) -> Json {

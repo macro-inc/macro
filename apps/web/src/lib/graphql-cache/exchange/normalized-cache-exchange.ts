@@ -1104,13 +1104,21 @@ export function normalizedCacheExchange(
               {
                 ...args,
                 linkPatches: [],
+                // Record-rooted patches imply no revalidation: their
+                // mutation response carries the settled list.
                 revalidations: [
                   ...args.revalidations,
-                  ...args.linkPatches.map((patch) => ({
-                    query: patch.query,
-                    operationName: patch.operationName,
-                    variablesJson: patch.variablesJson,
-                  })),
+                  ...args.linkPatches.flatMap((patch) =>
+                    'query' in patch
+                      ? [
+                          {
+                            query: patch.query,
+                            operationName: patch.operationName,
+                            variablesJson: patch.variablesJson,
+                          },
+                        ]
+                      : []
+                  ),
                 ],
               },
               claim

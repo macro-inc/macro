@@ -143,10 +143,71 @@ pub struct QueryRevalidation {
     pub variables_json: String,
 }
 
+/// One mutation-scoped update to a normalized-link list.
+///
+/// Serialized untagged so query-rooted recipes persisted before record-rooted
+/// updates existed still decode unchanged.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OptimisticLinkPatch {
+    /// Update located by a response-key path through a generated query.
+    Query(QueryLinkPatch),
+    /// Update applied directly to one normalized record's link-list field.
+    Record(RecordLinkPatch),
+}
+
+impl OptimisticLinkPatch {
+    /// Query to refresh after this optimistic update commits. Record-rooted
+    /// updates have none: their mutation response carries the settled list.
+    pub fn revalidation(&self) -> Option<QueryRevalidation> {
+        match self {
+            Self::Query(patch) => Some(patch.revalidation()),
+            Self::Record(_) => None,
+        }
+    }
+
+    /// Idempotent relation operation applied by this update.
+    pub fn operation(&self) -> &LinkOperation {
+        match self {
+            Self::Query(patch) => &patch.operation,
+            Self::Record(patch) => &patch.operation,
+        }
+    }
+}
+
+impl From<QueryLinkPatch> for OptimisticLinkPatch {
+    fn from(patch: QueryLinkPatch) -> Self {
+        Self::Query(patch)
+    }
+}
+
+impl From<RecordLinkPatch> for OptimisticLinkPatch {
+    fn from(patch: RecordLinkPatch) -> Self {
+        Self::Record(patch)
+    }
+}
+
+/// An update to a top-level link-list field on one normalized record.
+///
+/// Used when the owning entity has no query entrypoint by id, such as a Soup
+/// entity's `properties`. Only argument-free fields and plain list operations
+/// are accepted. An absent record or field is not an error: there is nothing
+/// cached to update, and the field is never recreated from a recipe.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordLinkPatch {
+    /// Normalized key of the record owning the link list.
+    pub record_key: EntityKey<'static>,
+    /// Argument-free field holding the link list.
+    pub field: FieldKey,
+    /// Idempotent relation operation; embedded-item operations are rejected.
+    pub operation: LinkOperation,
+}
+
 /// One mutation-scoped update rooted at a generated GraphQL query.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OptimisticLinkPatch {
+pub struct QueryLinkPatch {
     /// GraphQL query document that gives the path its typed entrypoint.
     pub query: String,
     /// Selected operation when the document contains multiple operations.
@@ -160,7 +221,7 @@ pub struct OptimisticLinkPatch {
     pub operation: LinkOperation,
 }
 
-impl OptimisticLinkPatch {
+impl QueryLinkPatch {
     /// Query to refresh after this optimistic update commits.
     pub fn revalidation(&self) -> QueryRevalidation {
         QueryRevalidation {
@@ -233,6 +294,12 @@ pub enum LinkPatchError {
     /// Embedded item insertion values must be JSON scalars.
     #[error("embedded insert field values must be JSON scalars")]
     NonScalarInsertField,
+    /// A record-rooted update named a field with arguments or an invalid name.
+    #[error("record link update field `{0}` must be an argument-free field name")]
+    InvalidRecordField(String),
+    /// A record-rooted update used an embedded-item operation.
+    #[error("record link updates support only remove and prependUnique")]
+    UnsupportedRecordOperation,
 }
 
 /// Removes exact duplicate recipes while retaining the first occurrence and
@@ -259,6 +326,30 @@ pub fn deduplicate_patches(
 }
 
 fn validate_recipe(patch: &OptimisticLinkPatch) -> Result<(), LinkPatchError> {
+    match patch {
+        OptimisticLinkPatch::Query(patch) => validate_query_recipe(patch),
+        OptimisticLinkPatch::Record(patch) => validate_record_recipe(patch),
+    }
+}
+
+fn validate_record_recipe(patch: &RecordLinkPatch) -> Result<(), LinkPatchError> {
+    validate_entity_key(patch.record_key.borrowed())?;
+    validate_entity_key(patch.operation.entity_key())?;
+    let valid_field = patch.field.chars().enumerate().all(|(index, ch)| {
+        ch == '_' || ch.is_ascii_alphabetic() || (index > 0 && ch.is_ascii_digit())
+    });
+    if patch.field.is_empty() || !valid_field {
+        return Err(LinkPatchError::InvalidRecordField(patch.field.clone()));
+    }
+    match patch.operation {
+        LinkOperation::Remove { .. } | LinkOperation::PrependUnique { .. } => Ok(()),
+        LinkOperation::RemoveEmbeddedLink { .. } | LinkOperation::UpsertEmbeddedLink { .. } => {
+            Err(LinkPatchError::UnsupportedRecordOperation)
+        }
+    }
+}
+
+fn validate_query_recipe(patch: &QueryLinkPatch) -> Result<(), LinkPatchError> {
     if patch.path.is_empty() || patch.path.len() > MAX_PATH_DEPTH {
         return Err(LinkPatchError::InvalidDepth(patch.path.len()));
     }
@@ -336,7 +427,7 @@ fn validate_embedded_link_fields(
 }
 
 fn validate_entrypoint(
-    patch: &OptimisticLinkPatch,
+    patch: &QueryLinkPatch,
 ) -> Result<serde_json::Map<String, Json>, LinkPatchError> {
     let document = Document::parse(&patch.query)
         .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
@@ -398,7 +489,7 @@ pub fn apply_link_patches(
     let mut staged_updates = updates.clone();
     for patch in &patches {
         if let Err(error) = apply_one(&mut staged_effective, &mut staged_updates, patch) {
-            if skip_not_applicable {
+            if skip_not_applicable || is_uncached_record_target(patch, &error) {
                 continue;
             }
             return Err(error);
@@ -409,13 +500,23 @@ pub fn apply_link_patches(
     Ok(())
 }
 
+/// A record-rooted update whose record or field is not cached has nothing to
+/// update, even for a strict newly submitted tail.
+fn is_uncached_record_target(patch: &OptimisticLinkPatch, error: &LinkPatchError) -> bool {
+    matches!(patch, OptimisticLinkPatch::Record(_))
+        && matches!(
+            error,
+            LinkPatchError::MissingParent(_) | LinkPatchError::MissingField { .. }
+        )
+}
+
 fn apply_one(
     effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
     patch: &OptimisticLinkPatch,
 ) -> Result<(), LinkPatchError> {
     let resolved = resolve_target(effective, patch)?;
-    if let Some(inserted) = patch.operation.inserted_entity_key()
+    if let Some(inserted) = patch.operation().inserted_entity_key()
         && !effective.contains_key(inserted)
     {
         return Err(LinkPatchError::MissingLinkedRecord(inserted.clone()));
@@ -432,7 +533,7 @@ fn apply_one(
             field: resolved.field_key.clone(),
         })?;
     let target = traverse(&mut field_value, &resolved.path)?;
-    match &patch.operation {
+    match patch.operation() {
         LinkOperation::Remove { entity_key } => {
             let links = normalized_links(target)?;
             links.retain(
@@ -696,6 +797,26 @@ pub fn missing_patch_record(
 fn resolve_target(
     effective: &HashMap<EntityKey<'static>, Record>,
     patch: &OptimisticLinkPatch,
+) -> Result<ResolvedTarget, LinkPatchError> {
+    match patch {
+        OptimisticLinkPatch::Query(patch) => resolve_query_target(effective, patch),
+        OptimisticLinkPatch::Record(patch) => {
+            if !effective.contains_key(&patch.record_key) {
+                return Err(LinkPatchError::MissingParent(patch.record_key.clone()));
+            }
+            Ok(ResolvedTarget {
+                parent_entity_key: patch.record_key.clone(),
+                field_key: patch.field.clone(),
+                path: Vec::new(),
+                embedded_link: None,
+            })
+        }
+    }
+}
+
+fn resolve_query_target(
+    effective: &HashMap<EntityKey<'static>, Record>,
+    patch: &QueryLinkPatch,
 ) -> Result<ResolvedTarget, LinkPatchError> {
     let variables = validate_entrypoint(patch)?;
     let document = Document::parse(&patch.query)
@@ -1113,7 +1234,7 @@ mod tests {
     }
 
     fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
-        OptimisticLinkPatch {
+        OptimisticLinkPatch::Query(QueryLinkPatch {
             query: QUERY.into(),
             operation_name: None,
             variables_json: "{}".into(),
@@ -1138,11 +1259,11 @@ mod tests {
                 },
             ],
             operation,
-        }
+        })
     }
 
     fn upsert_bin_patch(bin: &str) -> OptimisticLinkPatch {
-        OptimisticLinkPatch {
+        OptimisticLinkPatch::Query(QueryLinkPatch {
             query: QUERY.into(),
             operation_name: None,
             variables_json: "{}".into(),
@@ -1167,11 +1288,11 @@ mod tests {
                 entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
                 insert_fields: HashMap::from([("nextCursor".into(), Json::Null)]),
             },
-        }
+        })
     }
 
     fn remove_bin_patch(bin: &str) -> OptimisticLinkPatch {
-        OptimisticLinkPatch {
+        OptimisticLinkPatch::Query(QueryLinkPatch {
             query: QUERY.into(),
             operation_name: None,
             variables_json: "{}".into(),
@@ -1195,19 +1316,27 @@ mod tests {
                 count_field: "totalCount".into(),
                 entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
             },
-        }
+        })
+    }
+
+    /// The query-rooted recipe inside a fixture patch, for field edits.
+    fn query_recipe(patch: OptimisticLinkPatch) -> QueryLinkPatch {
+        let OptimisticLinkPatch::Query(patch) = patch else {
+            panic!("fixture patches are query-rooted")
+        };
+        patch
     }
 
     #[test]
     fn rejects_conflicting_embedded_managed_fields() {
-        let mut direct_conflict = upsert_bin_patch("urgent");
+        let mut direct_conflict = query_recipe(upsert_bin_patch("urgent"));
         let LinkOperation::UpsertEmbeddedLink { link_field, .. } = &mut direct_conflict.operation
         else {
             panic!()
         };
         *link_field = "key".into();
         assert_eq!(
-            deduplicate_patches(&[direct_conflict]).unwrap_err(),
+            deduplicate_patches(&[direct_conflict.into()]).unwrap_err(),
             LinkPatchError::ConflictingManagedField {
                 first: "key".into(),
                 second: "key".into(),
@@ -1224,7 +1353,7 @@ mod tests {
             ),
             (parent, initial),
         ]);
-        let mut resolved_conflict = upsert_bin_patch("urgent");
+        let mut resolved_conflict = query_recipe(upsert_bin_patch("urgent"));
         resolved_conflict.query = "query { user { groupSoup { bins { selector: key link: key totalCount nextCursor items { id } } } } }".into();
         let LinkOperation::UpsertEmbeddedLink {
             list_item,
@@ -1237,7 +1366,7 @@ mod tests {
         list_item.where_field = "selector".into();
         *link_field = "link".into();
         assert_eq!(
-            resolve_target(&effective, &resolved_conflict).unwrap_err(),
+            resolve_target(&effective, &resolved_conflict.into()).unwrap_err(),
             LinkPatchError::ConflictingManagedField {
                 first: "key".into(),
                 second: "key".into(),
@@ -1257,7 +1386,7 @@ mod tests {
             ),
             (parent, initial),
         ]);
-        let mut duplicate = upsert_bin_patch("urgent");
+        let mut duplicate = query_recipe(upsert_bin_patch("urgent"));
         duplicate.query = "query { user { groupSoup { bins { key totalCount firstCursor: nextCursor secondCursor: nextCursor items { id } } } } }".into();
         let LinkOperation::UpsertEmbeddedLink { insert_fields, .. } = &mut duplicate.operation
         else {
@@ -1269,7 +1398,7 @@ mod tests {
         ]);
 
         assert_eq!(
-            resolve_target(&effective, &duplicate).unwrap_err(),
+            resolve_target(&effective, &duplicate.into()).unwrap_err(),
             LinkPatchError::ConflictingInsertField("nextCursor".into())
         );
     }
@@ -1565,5 +1694,147 @@ mod tests {
             ),
             Err(LinkPatchError::InvalidEntityKey("bad".into()))
         );
+    }
+
+    fn record_patch(field: &str, operation: LinkOperation) -> OptimisticLinkPatch {
+        RecordLinkPatch {
+            record_key: EntityKey("GraphqlSoupDocument:doc-1".into()),
+            field: field.into(),
+            operation,
+        }
+        .into()
+    }
+
+    fn prepend(entity_key: &str) -> LinkOperation {
+        LinkOperation::PrependUnique {
+            entity_key: EntityKey(entity_key.to_string().into()),
+        }
+    }
+
+    fn document_with_properties(links: &[&str]) -> (EntityKey<'static>, Record) {
+        (
+            EntityKey("GraphqlSoupDocument:doc-1".into()),
+            Record {
+                fields: BTreeMap::from([(
+                    "properties".into(),
+                    CacheValue::List(
+                        links
+                            .iter()
+                            .map(|key| CacheValue::Ref(EntityKey(key.to_string().into())))
+                            .collect(),
+                    ),
+                )]),
+            },
+        )
+    }
+
+    fn property_record(key: &str) -> (EntityKey<'static>, Record) {
+        (EntityKey(key.to_string().into()), Record::default())
+    }
+
+    #[test]
+    fn record_patch_prepends_into_the_record_field() {
+        let mut effective = HashMap::from([
+            document_with_properties(&["GraphqlProperty:p1"]),
+            property_record("GraphqlProperty:p1"),
+            property_record("GraphqlProperty:temp"),
+        ]);
+        let mut updates = RecordUpdates::new();
+        apply_link_patches(
+            &mut effective,
+            &mut updates,
+            &[record_patch("properties", prepend("GraphqlProperty:temp"))],
+            false,
+        )
+        .unwrap();
+
+        let expected = CacheValue::List(vec![
+            CacheValue::Ref(EntityKey("GraphqlProperty:temp".into())),
+            CacheValue::Ref(EntityKey("GraphqlProperty:p1".into())),
+        ]);
+        let key = EntityKey("GraphqlSoupDocument:doc-1".into());
+        assert_eq!(effective[&key].fields["properties"], expected);
+        assert_eq!(updates[&key].fields["properties"], expected);
+    }
+
+    #[test]
+    fn record_patch_skips_an_uncached_record_or_field_even_when_strict() {
+        let (key, _) = document_with_properties(&[]);
+        let mut without_field = HashMap::from([
+            (key, Record::default()),
+            property_record("GraphqlProperty:temp"),
+        ]);
+        let mut without_record = HashMap::from([property_record("GraphqlProperty:temp")]);
+        for effective in [&mut without_field, &mut without_record] {
+            let before = effective.clone();
+            let mut updates = RecordUpdates::new();
+            apply_link_patches(
+                effective,
+                &mut updates,
+                &[record_patch("properties", prepend("GraphqlProperty:temp"))],
+                false,
+            )
+            .unwrap();
+            assert_eq!(*effective, before, "the field must never be recreated");
+            assert!(updates.is_empty());
+        }
+    }
+
+    #[test]
+    fn record_patch_rejects_argument_fields_and_embedded_operations() {
+        assert_eq!(
+            deduplicate_patches(&[record_patch(
+                "soup({\"limit\":1})",
+                prepend("GraphqlProperty:temp")
+            )])
+            .unwrap_err(),
+            LinkPatchError::InvalidRecordField("soup({\"limit\":1})".into())
+        );
+        assert_eq!(
+            deduplicate_patches(&[record_patch(
+                "properties",
+                LinkOperation::RemoveEmbeddedLink {
+                    list_item: ListItemByScalar {
+                        where_field: "key".into(),
+                        equals: Json::String("urgent".into()),
+                    },
+                    link_field: "items".into(),
+                    count_field: "totalCount".into(),
+                    entity_key: EntityKey("GraphqlProperty:temp".into()),
+                },
+            )])
+            .unwrap_err(),
+            LinkPatchError::UnsupportedRecordOperation
+        );
+    }
+
+    #[test]
+    fn persisted_query_recipes_decode_unchanged_beside_record_recipes() {
+        let query = patch("urgent", prepend("GraphqlSoupItem:task-1"));
+        let encoded = serde_json::to_value(&query).unwrap();
+        assert!(
+            encoded.get("query").is_some(),
+            "query recipes keep their wire shape"
+        );
+        assert_eq!(
+            serde_json::from_value::<OptimisticLinkPatch>(encoded).unwrap(),
+            query
+        );
+
+        let record = record_patch("properties", prepend("GraphqlProperty:temp"));
+        let encoded = serde_json::to_value(&record).unwrap();
+        assert_eq!(
+            encoded,
+            serde_json::json!({
+                "recordKey": "GraphqlSoupDocument:doc-1",
+                "field": "properties",
+                "operation": { "kind": "prependUnique", "entityKey": "GraphqlProperty:temp" }
+            })
+        );
+        assert_eq!(
+            serde_json::from_value::<OptimisticLinkPatch>(encoded).unwrap(),
+            record
+        );
+        assert_eq!(record.revalidation(), None);
     }
 }

@@ -21,6 +21,7 @@ import { validate as validateUuid } from 'uuid';
 import type {
   EmbeddedLinkPathSegment,
   OptimisticLinkPatchWire,
+  QueryLinkPatchWire,
   QueryRevalidationWire,
 } from '../protocol';
 import {
@@ -98,8 +99,13 @@ export type LinkDiff =
   | { kind: 'remove'; entity: NormalizedEntityIdentity }
   | { kind: 'prependUnique'; entity: NormalizedEntityIdentity };
 
-/** Opaque serializable cache update produced only by {@link update}. */
+/** Opaque serializable cache update produced only by this module's builders. */
 export type OptimisticUpdate = OptimisticLinkPatchWire & {
+  readonly [optimisticUpdateType]: true;
+};
+
+/** A cache update rooted at a generated query, produced by {@link update}. */
+export type QueryOptimisticUpdate = QueryLinkPatchWire & {
   readonly [optimisticUpdateType]: true;
 };
 
@@ -287,7 +293,7 @@ export function prependUnique(entity: NormalizedEntityIdentity): LinkDiff {
 export function update<TItem extends object>(
   selection: ListSelection<TItem>,
   operation: LinkDiff
-): OptimisticUpdate {
+): QueryOptimisticUpdate {
   return {
     query: stringifyDocument(selection.document),
     operationName: documentOperationName(selection.document),
@@ -297,7 +303,30 @@ export function update<TItem extends object>(
       kind: operation.kind,
       entityKey: normalizedEntityKey(operation.entity),
     },
-  } as OptimisticUpdate;
+  } as QueryOptimisticUpdate;
+}
+
+/**
+ * Compiles a list diff on one normalized entity's argument-free link field,
+ * for relations with no query entrypoint by id, such as a Soup entity's
+ * `properties`. An uncached entity or field is left untouched. No
+ * revalidation is implied, so the mutation response must carry the settled
+ * list.
+ */
+export function updateEntityLinks(
+  entity: NormalizedEntityIdentity,
+  field: string,
+  operation: LinkDiff
+): OptimisticUpdate {
+  const update: OptimisticLinkPatchWire = {
+    recordKey: normalizedEntityKey(entity),
+    field,
+    operation: {
+      kind: operation.kind,
+      entityKey: normalizedEntityKey(operation.entity),
+    },
+  };
+  return update as OptimisticUpdate;
 }
 
 /**
@@ -320,8 +349,8 @@ export function removeEmbeddedLink<
     countField: TCountField;
     entity: NormalizedEntityIdentity;
   }
-): OptimisticUpdate {
-  const update: OptimisticLinkPatchWire = {
+): QueryOptimisticUpdate {
+  const update: QueryLinkPatchWire = {
     query: stringifyDocument(selection.document),
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
@@ -334,7 +363,7 @@ export function removeEmbeddedLink<
       entityKey: normalizedEntityKey(args.entity),
     },
   };
-  return update as OptimisticUpdate;
+  return update as QueryOptimisticUpdate;
 }
 
 /**
@@ -362,8 +391,8 @@ export function upsertEmbeddedLink<
       TSelectorField | TCountField | TLinkField
     >;
   }
-): OptimisticUpdate {
-  const update: OptimisticLinkPatchWire = {
+): QueryOptimisticUpdate {
+  const update: QueryLinkPatchWire = {
     query: stringifyDocument(selection.document),
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
@@ -377,7 +406,7 @@ export function upsertEmbeddedLink<
       insertFields: definedScalarFields(args.insertFields),
     },
   };
-  return update as OptimisticUpdate;
+  return update as QueryOptimisticUpdate;
 }
 
 /**
