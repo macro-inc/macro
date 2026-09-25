@@ -45,7 +45,7 @@ function CallDetailContent(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const [shareOpen, setShareOpen] = createSignal(false);
-  const call = useCall(() => props.record().channelId);
+  const call = useCall(() => props.record().channelId ?? '');
   const callName = () =>
     props.record().customName ?? props.record().channelName ?? 'Call Recording';
 
@@ -57,6 +57,7 @@ function CallDetailContent(props: {
   });
 
   const handleJoin = async () => {
+    if (!props.record().channelId) return;
     try {
       await call.joinCall();
     } catch (error) {
@@ -85,7 +86,13 @@ function CallDetailContent(props: {
               {callName()}
             </span>
             <div class="ml-auto flex shrink-0 items-center gap-2">
-              <Show when={!isMobile() && !props.record().isActive}>
+              <Show
+                when={
+                  !isMobile() &&
+                  !props.record().isActive &&
+                  props.record().channelId
+                }
+              >
                 <Button variant="outline" size="sm" onClick={handleJoin}>
                   <PhoneCallIcon class="size-4" />
                   Call Again
