@@ -4,12 +4,15 @@ import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTa
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
+import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
 import { ChannelCallButton } from '@channel/Call/ChannelCallButton';
 import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
+import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
 import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
@@ -22,12 +25,12 @@ import type { PriorityCollapser } from '@components/app/split-layout/utils/creat
 import { TabsInset } from '@core/component/TabsInset';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelName, useChannelType } from '@core/context/channels';
+import { createMethodRegistration } from '@core/orchestrator';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import {
   type Accessor,
   children,
   createComputed,
-  createMemo,
   createSignal,
   type JSX,
   Match,
@@ -45,6 +48,12 @@ import { ChannelTabProvider, useChannelTab } from './ChannelTabContext';
 import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
 import { toIconTabItems } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
+import {
+  isJoinCallRequested,
+  isOpenCallTabRequested,
+  toChannelTargetRequest,
+  URL_PARAMS,
+} from './link';
 import {
   canUseInlineCallTab,
   normalizeChannelTab,
@@ -216,26 +225,38 @@ function ChannelDetailHeader(props: {
 
 function ChannelDetailContent(props: ChannelDetailProps) {
   const panel = useSplitPanelOrThrow();
+  const orchestrator = useGlobalBlockOrchestrator();
   const channelId = props.channelId;
   const channelName = useChannelName(channelId, props.fallbackName);
 
-  // Convert the value-semantic target prop into identity-stable surface
-  // requests: only a changed target or explicit re-open produces a new request.
-  let lastTargetKey: string | undefined;
-  const targetRequest = createMemo<ChannelTargetRequest | undefined>(
-    (previous) => {
-      const target = props.target;
-      const location = !target
-        ? ''
-        : target.kind === 'latest'
-          ? 'latest'
-          : `${target.messageId}:${target.threadId ?? ''}`;
-      const key = `${location}:${props.navigationRequest ?? 0}`;
-      if (lastTargetKey !== undefined && key === lastTargetKey) return previous;
-      lastTargetKey = key;
-      return target ? { ...target } : undefined;
-    }
-  );
+  const requestFromTarget = (
+    target: ChannelTargetRequest | undefined
+  ): ChannelTargetRequest | undefined => (target ? { ...target } : undefined);
+
+  const targetKey = () => {
+    const target = props.target;
+    const location = !target
+      ? ''
+      : target.kind === 'latest'
+        ? 'latest'
+        : `${target.messageId}:${target.threadId ?? ''}`;
+    return `${location}:${props.navigationRequest ?? 0}`;
+  };
+
+  // The surface navigates on a fresh request object. The host's `target` is
+  // value-semantic, so it only produces one when its value changes; a mention
+  // chip or notification arriving through the block handle always does.
+  let lastTargetKey = targetKey();
+  const [targetRequest, setTargetRequest] = createSignal<
+    ChannelTargetRequest | undefined
+  >(requestFromTarget(props.target));
+
+  createComputed(() => {
+    const key = targetKey();
+    if (key === lastTargetKey) return;
+    lastTargetKey = key;
+    setTargetRequest(requestFromTarget(props.target));
+  });
 
   const callCtx = useCallContextOptional();
   // A channel that owns this client's active call opens on the Call tab, so
@@ -249,6 +270,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const setActiveTab = (tab: ChannelTabId) => {
     setActiveTabInternal(normalizeChannelTab(tab));
   };
+  const [pendingJoinCall, setPendingJoinCall] = createSignal(false);
 
   // A new target within the already-mounted channel (a notification jump)
   // must land on the messages pane, whichever tab is open.
@@ -261,6 +283,33 @@ function ChannelDetailContent(props: ChannelDetailProps) {
       { defer: true }
     )
   );
+
+  // Mention chips, notifications, and call deep links aim an open channel
+  // through its block handle; without one the click only activates the view.
+  createComputed(() => {
+    const handle = orchestrator.registerBlockHandle('channel', channelId);
+    createMethodRegistration(() => handle, {
+      goToLocationFromParams: async (params: Record<string, unknown>) => {
+        // Store any message target first: a request that also opens the call
+        // tab leaves it waiting for whenever the user returns to Messages.
+        const request = toChannelTargetRequest(params);
+        if (request) setTargetRequest(request);
+
+        if (isOpenCallTabRequested(params[URL_PARAMS.openCallTab])) {
+          setActiveTab(getCallJoinTab());
+          return;
+        }
+
+        if (isJoinCallRequested(params[URL_PARAMS.joinCall])) {
+          setActiveTab(getCallJoinTab());
+          setPendingJoinCall(true);
+        }
+      },
+      goToLatest: async () => {
+        setTargetRequest({ kind: 'latest' });
+      },
+    });
+  });
 
   // CallContext: which channel has the Call tab selected (for isCallPage(), etc.).
   createComputed(() =>
@@ -278,6 +327,11 @@ function ChannelDetailContent(props: ChannelDetailProps) {
     <ChannelSurface channelId={channelId} targetRequest={targetRequest()}>
       <CallEventSync />
       <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
+        <ChannelCallAutoJoin
+          channelId={channelId}
+          pendingJoinCall={pendingJoinCall}
+          onHandled={() => setPendingJoinCall(false)}
+        />
         <div class="flex size-full min-h-0 flex-col">
           <ChannelDetailHeader
             render={props.children}
@@ -309,7 +363,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
               <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
                 <ChannelCallTab
                   channelId={channelId}
-                  pendingJoin={() => false}
+                  pendingJoin={pendingJoinCall}
                 />
               </Match>
             </Switch>
