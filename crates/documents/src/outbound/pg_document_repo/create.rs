@@ -446,8 +446,9 @@ pub async fn insert_new_document<B: BotFacts>(
 
     set_share_permission(transaction, &document_id, share_permission).await?;
 
-    let history_user = if skip_history { None } else { owner.as_user() };
-    insert_history(transaction, &document_id, history_user, created_at).await?;
+    if !skip_history {
+        insert_history(transaction, &document_id, owner.as_user(), created_at).await?;
+    }
 
     registrar
         .register_owned_entity(

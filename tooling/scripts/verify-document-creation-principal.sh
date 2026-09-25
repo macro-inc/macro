@@ -33,7 +33,11 @@ PY
 
 cargo test -p bot_id -p model_owner -p entity_registry --lib
 cargo test -p activity --lib creation_principal
+cargo test -p properties --lib entity_property_event
+cargo test -p share_permission_db_utils --lib team_share
 cargo test -p documents --lib
 cargo test -p projects --lib pg_project_repo
+cargo test -p document_storage_service bot_tokens_keep_the_actor_without_inventing_a_user
 cargo test --no-run -p ai_tools -p memory -p github -p document_storage_service \
-  -p document_cognition_service -p mcp_service -p document_upload_finalizer_handler
+  -p document_cognition_service -p mcp_service -p document_upload_finalizer_handler \
+  -p webhook -p search_processing_service

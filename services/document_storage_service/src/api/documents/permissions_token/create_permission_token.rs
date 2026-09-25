@@ -1,4 +1,7 @@
 use crate::api::context::{AuthorizationService, EntityAccessService};
+#[cfg(test)]
+mod test;
+
 use axum::{
     Json,
     extract::{Path, State},
@@ -8,9 +11,7 @@ use axum::{
 use documents_hex::domain::permission_token::encode_permission_token;
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::{
-    OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
-};
+use macro_authorization::{AnyPrincipal, MacroAuthorization, OptionalMacroAuthorizationExtractor};
 use model::response::ErrorResponse;
 use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 use serde::Deserialize;
@@ -27,6 +28,26 @@ pub struct Params {
 pub struct DocumentPermissionsTokenResponse {
     /// The encoded document permissions token
     pub token: String,
+}
+
+fn token_identity(
+    authorization: Option<&MacroAuthorization>,
+) -> Result<(Option<String>, Option<String>), ()> {
+    match authorization {
+        None => Ok((None, None)),
+        Some(MacroAuthorization::User(user)) => Ok((Some(user.macro_user_id.to_string()), None)),
+        Some(MacroAuthorization::Bot(bot)) => Ok((
+            bot.acting_user
+                .as_ref()
+                .map(|user| user.macro_user_id.to_string()),
+            Some(bot.bot_id.into_storage_id().to_string()),
+        )),
+        Some(MacroAuthorization::Internal(user)) => Ok((
+            user.as_ref().map(|user| user.macro_user_id.to_string()),
+            None,
+        )),
+        Some(MacroAuthorization::Harness(_)) => Err(()),
+    }
 }
 
 /// Generates a document permissions token for a provided document id
@@ -51,7 +72,7 @@ pub struct DocumentPermissionsTokenResponse {
 )]
 pub async fn handler(
     State(state): State<ApiContext>,
-    user: OptionalMacroAuthorizationExtractor<AuthorizationService, UserOrInternalService>,
+    user: OptionalMacroAuthorizationExtractor<AuthorizationService, AnyPrincipal>,
     users_access_level: DocumentAccessExtractor<
         ViewAccessLevel,
         EntityAccessService,
@@ -62,11 +83,15 @@ pub async fn handler(
     if let Some(actor) = user.acting_entity() {
         tracing::Span::current().record("actor", tracing::field::display(actor));
     }
-    let user_id = user
-        .authorization
-        .as_ref()
-        .and_then(UserOrInternalServiceAuthorization::acting_user)
-        .map(|user| user.macro_user_id.to_string());
+    let (user_id, actor) = token_identity(user.authorization.as_ref()).map_err(|()| {
+        (
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                message: "forbidden".into(),
+            }),
+        )
+            .into_response()
+    })?;
 
     let access_level = match users_access_level.entity_access_receipt.entity_permission() {
         EntityPermission::AccessLevel { access_level } => *access_level,
@@ -78,7 +103,7 @@ pub async fn handler(
         document_id,
         access_level,
         state.config.document_permission_jwt.as_ref(),
-        None,
+        actor,
     )
     .map_err(|e| {
         tracing::error!(error=?e, "unable to encode jwt");

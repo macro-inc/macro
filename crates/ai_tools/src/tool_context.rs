@@ -1063,6 +1063,13 @@ pub struct ToolEntityCreator {
 }
 
 impl ToolEntityCreator {
+    fn creation_principal(user: &MacroUserIdStr<'static>) -> model_owner::CreationPrincipal {
+        model_owner::CreationPrincipal::BotForUser {
+            bot: bot_id::MACRO_AI_BOT_ID,
+            user: user.clone(),
+        }
+    }
+
     async fn create_doc(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -1079,10 +1086,7 @@ impl ToolEntityCreator {
         .text(markdown.to_string())
         .task_flag(is_task, team_id)
         .build()?;
-        let ai_for_user = model_owner::CreationPrincipal::BotForUser {
-            bot: bot_id::MACRO_AI_BOT_ID,
-            user: user.clone(),
-        };
+        let ai_for_user = Self::creation_principal(user);
         let created = self
             .document_creator
             .create_plain_text(&ai_for_user, document)
@@ -1140,7 +1144,7 @@ impl ToolEntityCreator {
         use models_properties::api::requests::SetPropertyValue;
         use system_properties::SystemPropertyKey;
 
-        let principal = model_owner::CreationPrincipal::User(user.clone());
+        let principal = Self::creation_principal(user);
 
         if let Some(status) = properties.status.as_deref()
             && let Err(e) = self

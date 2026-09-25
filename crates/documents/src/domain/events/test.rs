@@ -71,6 +71,8 @@ fn owner_bearing_events_round_trip_all_owner_kinds_as_strings() {
                 source_document_id: "source-document".to_string(),
                 source_version_id: None,
                 owner,
+                actor: None,
+                on_behalf_of: None,
                 document_name: "copy".to_string(),
                 file_type: None,
                 project_id: None,

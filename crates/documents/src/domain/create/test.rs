@@ -133,7 +133,7 @@ impl DocumentBytesUploadPort for FakeBytesUploader {
 
 #[derive(Default)]
 struct RecordingMentionTracker {
-    calls: Mutex<Vec<(String, String, String)>>,
+    calls: Mutex<Vec<(String, Option<String>, String)>>,
     fail: bool,
 }
 
@@ -145,7 +145,7 @@ impl RecordingMentionTracker {
         }
     }
 
-    fn calls(&self) -> Vec<(String, String, String)> {
+    fn calls(&self) -> Vec<(String, Option<String>, String)> {
         self.calls.lock().unwrap().clone()
     }
 }
@@ -154,12 +154,12 @@ impl DocumentMentionTrackingPort for &RecordingMentionTracker {
     async fn track_document_mentions(
         &self,
         document_id: &str,
-        user_id: &MacroUserIdStr<'static>,
+        user_id: Option<&MacroUserIdStr<'static>>,
         markdown: &str,
     ) -> anyhow::Result<()> {
         self.calls.lock().unwrap().push((
             document_id.to_string(),
-            user_id.as_ref().to_string(),
+            user_id.map(|user| user.as_ref().to_string()),
             markdown.to_string(),
         ));
         if self.fail {
@@ -220,7 +220,7 @@ async fn markdown_creation_tracks_the_seeded_mentions_once() {
         tracker.calls(),
         vec![(
             DOCUMENT_ID.to_string(),
-            "macro|owner@example.com".to_string(),
+            Some("macro|owner@example.com".to_string()),
             EMAIL_SEED.to_string(),
         )]
     );
@@ -265,7 +265,7 @@ async fn a_task_is_created_and_propertied_as_one_principal() {
 }
 
 #[tokio::test]
-async fn mentions_are_tracked_only_for_an_acting_user() {
+async fn mentions_are_tracked_with_an_optional_acting_user() {
     let bot_for_user = CreationPrincipal::BotForUser {
         bot: bot_id::MACRO_AI_BOT_ID,
         user: owner(),
@@ -281,19 +281,12 @@ async fn mentions_are_tracked_only_for_an_acting_user() {
             .await
             .expect("creation should succeed");
 
-        let tracked_users: Vec<String> = tracker
+        let tracked_users: Vec<Option<String>> = tracker
             .calls()
             .into_iter()
             .map(|(_, user, _)| user)
             .collect();
-        assert_eq!(
-            tracked_users,
-            expected_user
-                .map(str::to_string)
-                .into_iter()
-                .collect::<Vec<_>>(),
-            "{principal:?}"
-        );
+        assert_eq!(tracked_users, vec![expected_user.map(str::to_string)]);
     }
 }
 

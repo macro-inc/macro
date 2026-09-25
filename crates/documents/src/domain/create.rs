@@ -673,11 +673,10 @@ where
             }
         };
 
-        if let Some(user) = principal.user()
-            && let Err(error) = self
-                .mention_tracker
-                .track_document_mentions(&document_id, user, &markdown)
-                .await
+        if let Err(error) = self
+            .mention_tracker
+            .track_document_mentions(&document_id, principal.user(), &markdown)
+            .await
         {
             tracing::error!(error=?error, document_id=%document_id, "unable to track document mentions");
         }

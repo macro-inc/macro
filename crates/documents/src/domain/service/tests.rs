@@ -2325,7 +2325,7 @@ impl crate::domain::ports::mentions::DocumentMentionTrackingPort for RejectUnexp
     async fn track_document_mentions(
         &self,
         _: &str,
-        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        _: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
         _: &str,
     ) -> anyhow::Result<()> {
         panic!("failed repository creation must not track mentions");
@@ -2410,6 +2410,34 @@ fn new_document(file_type: FileType) -> NewDocument {
         skip_history: false,
         initial_link_share: InitialLinkShare::EntityDefault,
     }
+}
+
+#[tokio::test]
+async fn team_bot_task_rejects_a_different_numbering_team() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team().times(0);
+    repo.expect_create_document().times(0);
+    let (service, broker) = make_test_service_with_event_broker(repo);
+    let team = uuid::Uuid::from_u128(7);
+    let principal = CreationPrincipal::TeamBot {
+        bot: bot_id::NonSystemBotId::new(bot_id::BotId::TEST_A).unwrap(),
+        team,
+    };
+    let mut document = new_document(FileType::Md);
+    document.sub_type = Some(DocumentSubType::Task);
+    document.team_id = Some(uuid::Uuid::from_u128(8));
+
+    let error = crate::domain::ports::DocumentService::create_document(
+        &service, &principal, document, None,
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "bad request: task team does not match the creating bot's team"
+    );
+    assert!(broker.published().lock().unwrap().is_empty());
 }
 
 async fn create_document_with_team_default(

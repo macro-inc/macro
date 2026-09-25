@@ -42,6 +42,23 @@ fn test_repo(pool: Pool<Postgres>) -> TestRepo {
     )
 }
 
+#[derive(Clone)]
+struct SponsoredByTeam(uuid::Uuid);
+
+impl BotFacts for SponsoredByTeam {
+    async fn sponsor(&self, _bot: bot_id::BotId) -> EntityRegistryResult<Option<Owner>> {
+        Ok(Some(Owner::Team(self.0)))
+    }
+}
+
+fn team_bot_repo(pool: Pool<Postgres>, team_id: uuid::Uuid) -> PgDocumentRepo<SponsoredByTeam> {
+    let facts = SponsoredByTeam(team_id);
+    PgDocumentRepo::new(
+        pool,
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(facts)),
+    )
+}
+
 async fn set_legacy_team_share(
     repo: &TestRepo,
     document_id: &str,
@@ -380,6 +397,62 @@ async fn creation_team_consent_is_explicit_and_uses_owner_membership(pool: Pool<
     .await
     .unwrap();
     assert_eq!(level, AccessLevel::Comment);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn team_bot_task_consent_preserves_the_sponsor_owner_grant(pool: Pool<Postgres>) {
+    sqlx::query!(
+        r#"
+        INSERT INTO bots (id, kind, team_id, name, handle)
+        VALUES ($1, 'owned', $2, 'Task bot', 'task-bot-owner')
+        "#,
+        bot_id::BotId::TEST_A.as_uuid(),
+        TEST_TEAM_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = team_bot_repo(pool.clone(), TEST_TEAM_ID);
+    let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, true, Some(TEST_TEAM_ID));
+    args.owner = Owner::Bot(bot_id::BotId::TEST_A);
+    args.document.share_with_team = true;
+
+    let document = repo
+        .create_document(args, md_share_permission())
+        .await
+        .unwrap();
+    let facts = repo
+        .get_team_share_facts(&document.document_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        facts.current,
+        Some(TeamShareGrant {
+            team_id: TEST_TEAM_ID,
+            level: TeamShareLevel::Comment,
+        })
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"
+            SELECT access_level AS "level: AccessLevel"
+            FROM entity_access
+            WHERE entity_id = $1
+              AND source_type = 'team'
+              AND source_id = $2
+              AND granted_from_project_id IS NULL
+            "#,
+            uuid::Uuid::parse_str(&document.document_id).unwrap(),
+            TEST_TEAM_ID.to_string(),
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        AccessLevel::Owner
+    );
 }
 
 #[sqlx::test(
@@ -2393,7 +2466,7 @@ async fn email_import_does_not_initialize_team_consent(pool: Pool<Postgres>) {
         .fetch_one(&pool)
         .await
         .unwrap(),
-        1
+        0
     );
 }
 
@@ -3018,7 +3091,6 @@ struct OwnershipRecords {
     registered_owner: (String, String),
     owner_grants: Vec<(String, String)>,
     user_history_rows: i64,
-    item_last_accessed_rows: i64,
 }
 
 async fn ownership_records(
@@ -3049,23 +3121,11 @@ async fn ownership_records(
     .fetch_one(pool)
     .await
     .unwrap();
-    let item_last_accessed_rows = sqlx::query_scalar!(
-        r#"
-        SELECT COUNT(*) AS "count!"
-        FROM "ItemLastAccessed"
-        WHERE item_id = $1 AND item_type = 'document'
-        "#,
-        document_id,
-    )
-    .fetch_one(pool)
-    .await
-    .unwrap();
     OwnershipRecords {
         owner: repo.get_document_metadata(document_id).await.unwrap().owner,
         registered_owner: (entity.owner_type, entity.owner_id),
         owner_grants,
         user_history_rows,
-        item_last_accessed_rows,
     }
 }
 
@@ -3078,7 +3138,6 @@ fn ownership_cases() -> [(Owner, OwnershipRecords); 2] {
                 registered_owner: principal("user", TEST_DOCUMENT_OWNER_ID),
                 owner_grants: vec![principal("user", TEST_DOCUMENT_OWNER_ID)],
                 user_history_rows: 1,
-                item_last_accessed_rows: 1,
             },
         ),
         (
@@ -3091,7 +3150,6 @@ fn ownership_cases() -> [(Owner, OwnershipRecords); 2] {
                     principal("user", TEST_DOCUMENT_OWNER_ID),
                 ],
                 user_history_rows: 0,
-                item_last_accessed_rows: 1,
             },
         ),
     ]

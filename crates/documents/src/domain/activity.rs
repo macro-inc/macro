@@ -32,6 +32,17 @@ fn actor_from_owner(
     }
 }
 
+fn creation_attribution(
+    owner: &Owner,
+    actor: &Option<Actor<'static>>,
+    on_behalf_of: &Option<MacroUserIdStr<'static>>,
+) -> Attribution {
+    let actor = actor
+        .clone()
+        .unwrap_or_else(|| actor_from_owner(owner, on_behalf_of.as_ref()));
+    Attribution::new(actor, on_behalf_of.clone())
+}
+
 /// Attribution for `updated` / `deleted` events. Bot receipts publish `actor`;
 /// user receipts (and events from before attribution) only `actor_user_id`.
 /// `None` when neither is set, e.g. internal callers.
@@ -68,17 +79,12 @@ impl ActivitySource for DocumentTopicEvent {
         };
 
         match self {
-            DocumentTopicEvent::Created(metadata) => {
-                let actor = metadata.actor.clone().unwrap_or_else(|| {
-                    actor_from_owner(&metadata.owner, metadata.on_behalf_of.as_ref())
-                });
-                single(
-                    Attribution::new(actor, metadata.on_behalf_of.clone()),
-                    CommonAction::Created,
-                    &metadata.document_id,
-                    metadata.created_at.unwrap_or_else(|| event_time(event_id)),
-                )
-            }
+            DocumentTopicEvent::Created(metadata) => single(
+                creation_attribution(&metadata.owner, &metadata.actor, &metadata.on_behalf_of),
+                CommonAction::Created,
+                &metadata.document_id,
+                metadata.created_at.unwrap_or_else(|| event_time(event_id)),
+            ),
             DocumentTopicEvent::Updated(metadata) => {
                 match mutation_attribution(
                     &metadata.actor,
@@ -111,7 +117,7 @@ impl ActivitySource for DocumentTopicEvent {
             }
             // The copy is a new document; its creation is the activity.
             DocumentTopicEvent::Copied(metadata) => single(
-                Attribution::direct(actor_from_owner(&metadata.owner, None)),
+                creation_attribution(&metadata.owner, &metadata.actor, &metadata.on_behalf_of),
                 CommonAction::Created,
                 &metadata.document_id,
                 event_time(event_id),

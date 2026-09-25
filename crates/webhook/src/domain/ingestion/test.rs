@@ -515,6 +515,8 @@ fn document_event_cases() -> Vec<EventCase> {
                     source_document_id: DOCUMENT_ID.to_string(),
                     source_version_id: None,
                     owner: Owner::User(user_id("macro|owner@example.com")),
+                    actor: None,
+                    on_behalf_of: None,
                     document_name: "notes (copy)".to_string(),
                     file_type: None,
                     project_id: None,

@@ -833,7 +833,7 @@ impl<
     async fn create_document(
         &self,
         principal: &CreationPrincipal,
-        document: NewDocument,
+        mut document: NewDocument,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         <Self as DocumentService>::create_document(self, principal, document, job_id).await
@@ -1296,6 +1296,16 @@ impl<
             return Err(DocumentError::BadRequest(
                 "initiative descriptions must set an exact initial link share".to_string(),
             ));
+        }
+        if let CreationPrincipal::TeamBot { team, .. } = principal
+            && document.sub_type == Some(DocumentSubType::Task)
+        {
+            if document.team_id.is_some_and(|requested| requested != *team) {
+                return Err(DocumentError::BadRequest(
+                    "task team does not match the creating bot's team".to_string(),
+                ));
+            }
+            document.team_id = Some(*team);
         }
 
         let owner = principal.owner();
@@ -1811,6 +1821,7 @@ impl<
         let team_task_metadata = self
             .team_task_metadata_for_document(&new_document_id)
             .await?;
+        let attribution = Attribution::from(principal);
 
         self.publish_document_event(&DocumentMacroEvent::copied(
             new_document_id.clone(),
@@ -1819,6 +1830,8 @@ impl<
                 source_document_id: original_metadata.document_id.clone(),
                 source_version_id: query_version_id,
                 owner: new_owner.clone(),
+                actor: Some(attribution.actor()),
+                on_behalf_of: attribution.on_behalf_of(),
                 document_name: new_metadata.document_name.clone(),
                 file_type,
                 project_id: new_metadata.project_id.clone(),
