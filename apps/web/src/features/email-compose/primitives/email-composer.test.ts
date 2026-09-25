@@ -55,13 +55,63 @@ describe('standalone compose controller', () => {
       expect(root.state.context.fromAddress?.()).toBeUndefined();
       expect(root.state.context.validationError('no_link')).toMatchObject({
         type: 'no_link',
-        message: 'Unable to find linked email account',
+        message: 'Unable to find linked email account. Select a sending inbox.',
       });
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();
     } finally {
       root.dispose();
     }
   });
+
+  it.each(['initial', 'draft'])(
+    'recovers a missing %s sender after explicitly choosing the remaining inbox',
+    async (source) => {
+      const context = createComposeContext();
+      const root = mountEmailComposer(
+        context,
+        undefined,
+        source === 'draft'
+          ? {
+              draft: message('existing-draft', {
+                is_draft: true,
+                link_id: 'removed-inbox',
+              }),
+            }
+          : { initialInboxId: 'removed-inbox' }
+      );
+      try {
+        root.state.context.setRecipients('to', [
+          {
+            kind: 'custom',
+            id: 'colleague@example.com',
+            data: {
+              id: 'colleague@example.com',
+              email: 'colleague@example.com',
+              invalid: false,
+            },
+          },
+        ]);
+        root.edit('Keep this message');
+        root.state.context.onSend();
+        expect(root.state.context.validationError('no_link')).toBeDefined();
+        expect(root.state.hasInboxError()).toBe(false);
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+
+        root.state.context.onSelectInbox?.('inbox');
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(root.state.context.validationError('no_link')).toBeUndefined();
+        expect(root.state.context.fromAddress?.()).toBe('me@example.com');
+        root.state.context.onSend();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.delivery.sendMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ inboxId: 'inbox' })
+        );
+      } finally {
+        root.dispose();
+      }
+    }
+  );
 
   it.each([undefined, 'missing-primary'])(
     'falls back to the first inbox without an explicit selection when primary is %s',

@@ -610,7 +610,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     if (!currentLink) {
       setValidationError({
         type: 'no_link',
-        message: 'Unable to find linked email account',
+        message: 'Unable to find linked email account. Select a sending inbox.',
       });
       return;
     }
@@ -1061,6 +1061,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
     // Validation
     validationError: (type) => {
+      if (type === 'no_link' && link()) return undefined;
       const error = validationError();
       if (error?.type === type) return error;
       return undefined;

@@ -578,8 +578,12 @@ search field, filter menu and preview control. The sidebar lists the inboxes abo
 scrolling list. `New email` prefills From with the selected inbox, or the primary
 inbox when All inboxes is selected; reopening a draft keeps its saved sender.
 If an explicitly selected sending inbox is unavailable, Send reports
-`Unable to find linked email account` without delivering through another
-account. With no explicit selection, an unavailable primary still falls back to
+`Unable to find linked email account. Select a sending inbox.` without delivering
+through another account. The From picker stays available as `Select sending inbox`,
+including when only one linked inbox remains. On mobile, expand `Cc/Bcc, From:`
+to choose the sender. Selecting an available inbox clears the error and allows
+sending; the picker never displays another inbox as selected before that choice.
+With no explicit selection, an unavailable primary still falls back to
 the first linked inbox.
 Sidebar rows, including `All inboxes`, replace their icon with an accent-colored checkmark when
 selected. With exactly one connected inbox, only its address appears as the selected
