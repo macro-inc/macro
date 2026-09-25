@@ -27,6 +27,8 @@ export type EmailThreadHostViewProps = {
   threadTransport: EmailThreadProps['threadTransport'];
   host: EmailThreadHost;
   topBar?: (context: EmailThreadHostViewContext) => JSX.Element;
+  /** Host chrome that stays mounted for both drafts and message threads. */
+  chrome?: (context: EmailThreadHostViewContext) => JSX.Element;
   sidePanelHeaderToggle?: boolean;
 };
 
@@ -65,16 +67,19 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       header={props.topBar?.({ createTask })}
       actions={<ThreadActions title={props.title} onCreateTask={createTask} />}
       frame={(content) => (
-        <SidePanel.Layout
-          defaultOpen={false}
-          headerToggle={props.sidePanelHeaderToggle}
-        >
-          {content()}
-          <EmailSidePanelSections
-            threadId={props.threadId()}
-            title={props.title}
-          />
-        </SidePanel.Layout>
+        <>
+          {props.chrome?.({ createTask })}
+          <SidePanel.Layout
+            defaultOpen={false}
+            headerToggle={props.sidePanelHeaderToggle}
+          >
+            {content()}
+            <EmailSidePanelSections
+              threadId={props.threadId()}
+              title={props.title}
+            />
+          </SidePanel.Layout>
+        </>
       )}
     />
   );

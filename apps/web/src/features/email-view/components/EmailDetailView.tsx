@@ -250,7 +250,7 @@ export function EmailDetailView(props: {
               source={source}
               threadTransport={() => threadQuery.transport}
               host={host}
-              topBar={({ createTask }) => (
+              chrome={({ createTask }) => (
                 <EmailDetailHeader
                   id={props.thread.id}
                   title={title()}
