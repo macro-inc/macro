@@ -13,6 +13,16 @@ const state = vi.hoisted(() => ({
   mountActivity: vi.fn(),
 }));
 
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
 vi.mock('@core/auth', () => ({
   useIsAuthenticated: () => () => state.authenticated(),
 }));
@@ -96,7 +106,9 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => false,
 }));
 vi.mock('@queries/agent-schedule/entities', () => ({}));
-vi.mock('@ui', () => ({}));
+vi.mock('@ui', () => ({
+  createVariants: () => () => '',
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
