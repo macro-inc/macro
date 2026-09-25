@@ -141,7 +141,10 @@ workspaces reopen navigation as an overlay; the backdrop or **Hide navigation**
 closes it temporarily. Opening or closing the narrow overlay never changes the
 saved wide-layout preference. Widening restores that preference, including in
 Home and Chat: navigation returns unless explicitly hidden at desktop width.
-Shrinking again starts with the overlay closed.
+Shrinking again starts with the overlay closed. Chat is the exception while no
+conversation is selected: its navigation stays docked with no **Hide
+navigation** control, and narrow Chat opens the overlay on its own (see
+[Chat navigation rail](channels.md#chat-navigation-rail)).
 The overlay never contains the split's **Close** button. Mobile keeps
 its existing navigation controls. Block detail panels (including Calendar) have
 **Hide side panel** in their own header and a hamburger **Show side panel** beside

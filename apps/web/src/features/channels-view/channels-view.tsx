@@ -43,7 +43,7 @@ export type ChannelsViewProps = {
 
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, mobileLayout, setAsideWidth, setMobileTab } =
+  const { state, mobileLayout, selectedChannel, setAsideWidth, setMobileTab } =
     useChannelsView();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
@@ -71,6 +71,8 @@ function ChannelsViewRoot() {
                 <div class="size-full min-h-0 bg-panel">
                   <ViewShell.Root
                     asidePreferenceKey="channels"
+                    // The empty state only points at the rail, so keep it open.
+                    asideRequired={selectedChannel() === undefined}
                     aside={{
                       width: state.asideWidth,
                       preserveDuringResize: false,

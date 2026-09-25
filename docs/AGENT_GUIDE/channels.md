@@ -334,12 +334,16 @@ Participants, and Calls tabs (when calls are enabled). A message target switches
 back to Messages; changing unread notifications does not restart navigation.
 
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
-**Show navigation** (the hamburger) immediately before the conversation title,
-or in the Chat header when no conversation is selected. Chat remembers this
-choice independently of other workspaces and restores it after reload. Chat uses
+**Show navigation** (the hamburger) immediately before the conversation title.
+Chat remembers this choice independently of other workspaces and restores it
+after reload. While no conversation is selected, the rail stays open regardless
+of that choice and offers no **Hide navigation** control (`Cmd+.` is inert);
+selecting a conversation applies the saved choice again. Chat uses
 the shared 256px default sidebar width and resize limits. In splits narrower than
 720px, navigation collapses; the hamburger or `Cmd+.` opens it as a slide-over
-with the same full sidebar contents. There is no separate skinny sidebar mode.
+with the same full sidebar contents. With no conversation selected, the
+slide-over opens on its own and closes once a conversation is picked; the
+backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mode.
 
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section and the
