@@ -1508,6 +1508,22 @@ describe('layoutManager', () => {
       }
     );
 
+    it.each(['company', 'contact'])(
+      'keeps a %s discussion link comment for the record page',
+      async (type) => {
+        const { location, router, dispose } = ingressRouter(
+          `/${type}/record-1?comment_id=message-1`
+        );
+        await router.settled();
+        expect(location.read().pathname).toBe(`/${type}/record-1`);
+        expect(
+          new URLSearchParams(location.read().search).get('comment_id')
+        ).toBe('message-1');
+        router.dispose();
+        dispose();
+      }
+    );
+
     it('upgrades renderable legacy details and preserves repeated raw target values', async () => {
       let dispose!: () => void;
       let router!: ReturnType<typeof createSplitRouter<string>>;
