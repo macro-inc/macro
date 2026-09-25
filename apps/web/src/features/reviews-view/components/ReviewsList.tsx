@@ -29,7 +29,7 @@ function ReviewRow(props: {
       <button
         type="button"
         class="flex min-h-11 w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-list-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
-        onClick={(event) => props.onOpen(props.review.foreignId, event)}
+        onClick={(event) => props.onOpen(props.review.id, event)}
         aria-label={`${props.review.metadata.name}, ${repository()}, ${props.review.metadata.status}`}
       >
         <PrStatusIcon
@@ -71,7 +71,7 @@ export function ReviewsList(props: ReviewsListProps) {
     <section aria-label="Reviews" class="flex size-full min-h-0 flex-col">
       <div class="shrink-0 border-b border-edge-muted px-4 py-3">
         <h2 class="text-sm font-semibold text-ink">
-          {props.scope === 'authored' ? 'Authored by me' : 'Open pull requests'}
+          {props.scope === 'authored' ? 'Authored by me' : 'Pull requests'}
         </h2>
       </div>
       <Suspense
@@ -126,7 +126,7 @@ export function ReviewsList(props: ReviewsListProps) {
                           props.selectedRepositories.length ||
                           props.selectedAuthors.length
                         ? 'No pull requests match these filters.'
-                        : 'No open pull requests in this view.'}
+                        : 'No pull requests in this view.'}
                   </div>
                 }
               >

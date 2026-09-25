@@ -31,7 +31,7 @@ export function ReviewsSidebar(props: {
             <ViewSidebar.Icon>
               <GitPullRequestIcon class="size-4" />
             </ViewSidebar.Icon>
-            <span class="truncate">All open PRs</span>
+            <span class="truncate">All PRs</span>
           </ViewSidebar.Item>
           <ViewSidebar.Item
             active={props.scope === 'authored'}

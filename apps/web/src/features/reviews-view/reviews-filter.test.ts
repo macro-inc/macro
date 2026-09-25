@@ -16,6 +16,7 @@ const review = (
       repo,
       authorLogin,
       number: Number(id),
+      status: id === '3' ? 'merged' : 'open',
     },
   }) as unknown as GithubPullRequestEntity;
 
@@ -32,7 +33,7 @@ const defaults = {
 };
 
 describe('Reviews filters', () => {
-  it('includes every relevant open PR by default', () => {
+  it('includes open and merged PRs by default', () => {
     expect(filterReviews(reviews, defaults)).toHaveLength(3);
   });
 

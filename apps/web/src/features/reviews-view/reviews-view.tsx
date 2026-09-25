@@ -32,7 +32,7 @@ import type { ReviewsScope, ReviewsSortId } from './reviews-types';
 import { reviewsPrRoute, reviewsSplitRoute } from './route';
 
 const REVIEW_SCOPE_TABS: PillTabItem<ReviewsScope>[] = [
-  { value: 'all', label: 'All open' },
+  { value: 'all', label: 'All PRs' },
   { value: 'authored', label: 'Authored by me' },
 ];
 function ReviewsRoot() {

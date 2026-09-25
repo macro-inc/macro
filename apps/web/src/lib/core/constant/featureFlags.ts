@@ -126,7 +126,7 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
-/** Shows the Reviews view and shortcut in Tasks. */
+/** Shows the Reviews shortcut in Tasks; copied Reviews links remain accessible. */
 export const enableTasksReviews = defineFlag({
   key: 'enable-tasks-reviews',
   env: 'ENABLE_TASKS_REVIEWS',
