@@ -21,7 +21,7 @@ import {
   getEntityNotifications,
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
-import { tasksHostedContent } from '@app/features/tasks-view/tasks-hosted-content';
+import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { isRecord } from '@app/lib/split-router/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
@@ -668,7 +668,7 @@ export const openEntityInSplitFromUnifiedList = async (
     if (USE_MACRO_PR_SUMMARY_BLOCK) {
       const content = { type: 'pr', id: entity.id };
       const result = splitManager.openWithSplit(
-        tasksHostedContent(content) ?? content,
+        reviewsHostedContent(content) ?? content,
         {
           referredFrom: options.referredFrom,
           activate: true,
@@ -757,7 +757,7 @@ export const openEntityInSplitFromUnifiedList = async (
   // Construct hosted content before opening the split so details do not mount
   // legacy blocks. Comment targets keep their document block.
   const hostedContent =
-    tasksHostedContent(content) ??
+    reviewsHostedContent(content) ??
     driveHostedContent(content, {
       allowDocuments: !isTouchDevice() && !commentParams,
     });

@@ -14,9 +14,6 @@ import { TasksView } from './tasks-view';
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
 }));
-const TasksPrDetailRouteView = lazy(async () => ({
-  default: (await import('./components/TasksPrDetail')).TasksPrDetailRouteView,
-}));
 
 function LegacyTasksView() {
   const user = useUserContext();
@@ -44,19 +41,14 @@ function TasksLegacyRouteView() {
 }
 
 export const TasksRouteView = withAuth(() => {
-  const params = useParams<{ taskId?: string; foreignEntityId?: string }>();
-  const detailRequested = () =>
-    typeof params.taskId === 'string' ||
-    typeof params.foreignEntityId === 'string';
-
+  const params = useParams<{ taskId?: string }>();
   return (
     <NewAppView
       id="tasks"
       composableOnTouch
-      detailDesktopOnly={!params.foreignEntityId}
-      detailRequested={detailRequested}
+      detailDesktopOnly
+      detailRequested={() => typeof params.taskId === 'string'}
       detailFallback={<TasksLegacyRouteView />}
-      alwaysRenderDetail={!!params.foreignEntityId}
       fallback={<LegacyTasksView />}
     >
       <TasksView />
@@ -64,11 +56,16 @@ export const TasksRouteView = withAuth(() => {
   );
 });
 
+// Preserve older Tasks-hosted PR links while the Reviews route owns PR details.
+function TasksLegacyPrRedirectView() {
+  const params = useParams<{ foreignEntityId: string }>();
+  return <RedirectSplit to={{ type: 'pr', id: params.foreignEntityId }} />;
+}
 export const tasksPrRoute = defineRoute({
   id: 'tasks-pr',
   path: 'pr/:foreignEntityId',
   params: z.object({ foreignEntityId: z.string().min(1) }),
-  component: TasksPrDetailRouteView,
+  component: TasksLegacyPrRedirectView,
   remountKey: ({ foreignEntityId }) => foreignEntityId,
   claim: ({ foreignEntityId }) => ({
     namespace: 'block',

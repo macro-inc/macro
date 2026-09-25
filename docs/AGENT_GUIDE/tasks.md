@@ -27,6 +27,26 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+## Reviews view
+
+With `enable-tasks-reviews` enabled (on by default in development), a
+`Reviews` shortcut appears above `My Tasks` in the Tasks sidebar and mobile tabs.
+It opens a separate `/app/reviews` shell with `All open PRs` and `Authored by me`
+in its sidebar. The list contains relevant open GitHub pull requests; the authored
+view uses the linked GitHub username. If no username is available, the list
+explains that GitHub must be connected. Search, repository and author filters,
+and Updated/Created sort controls appear above the list.
+
+Select a PR to open `/app/reviews/pr/<foreignEntityId>` in the Reviews shell.
+Its breadcrumb returns to the Reviews list. Old `/app/pr/<id>` and
+`/app/tasks/pr/<id>` links redirect to the Reviews detail. When the flag is off,
+the Reviews shortcut is hidden, but copied PR detail links still work.
+
+Check the All open and Authored views, filters, sort, loading, empty, error,
+and pagination states; then open a PR and return via the breadcrumb. Open a
+copied PR link in a second split. Use existing PRs and do not modify hosted
+data while verifying navigation.
+
 ## Create a task
 
 On touch devices, task creation opens in a bottom sheet with a drag handle and

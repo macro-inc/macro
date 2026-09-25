@@ -22,6 +22,7 @@ import {
   searchRoute,
 } from '@app/features/next-soup/route';
 import { remindersRoute } from '@app/features/reminders/route';
+import { reviewsSplitRoute } from '@app/features/reviews-view/route';
 import { settingsRoute } from '@app/features/settings/route';
 import { tasksSplitRoute } from '@app/features/tasks-view/route';
 import { defineRoutes } from '@app/lib/split-router';
@@ -44,6 +45,7 @@ export const appSplitRoutes = defineRoutes({
     agentsViewRoute,
     emailSplitRoute,
     tasksSplitRoute,
+    reviewsSplitRoute,
     calendarSplitRoute,
     channelsSplitRoute,
     callsRoute,

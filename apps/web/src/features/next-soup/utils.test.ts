@@ -605,7 +605,7 @@ describe('calendar view navigation', () => {
 });
 
 describe('Hosted details and Drive document routing', () => {
-  it('opens GitHub pull requests as Tasks-hosted content', async () => {
+  it('opens GitHub pull requests as Reviews-hosted content', async () => {
     const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
     setGlobalSplitManager({
       activeSplit: vi.fn(),
@@ -625,12 +625,12 @@ describe('Hosted details and Drive document routing', () => {
     expect(openWithSplit).toHaveBeenCalledWith(
       {
         type: 'component',
-        id: 'tasks',
+        id: 'reviews',
         entryMetadata: {
           route: {
             matches: [
-              { id: 'view-tasks', params: {} },
-              { id: 'tasks-pr', params: { foreignEntityId: 'pr-1' } },
+              { id: 'view-reviews', params: {} },
+              { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } },
             ],
           },
         },

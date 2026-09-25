@@ -289,6 +289,11 @@ the task in a new split instead. While the list is visible, `J` and `K` move
 focus without opening a task until activation. In an open task detail, they
 replace it with the next or previous task in the same filtered order.
 
+When `enable-tasks-reviews` is enabled, `Reviews` appears above `My Tasks` as a
+shortcut to the separate Reviews view. It lists relevant open GitHub pull requests;
+selecting one opens `/app/reviews/pr/<foreignEntityId>` with a Reviews breadcrumb.
+See [Tasks](tasks.md#reviews-view) for verification.
+
 The desktop `Create` → `Task` modal uses the standard dialog panel, circular
 icon controls, and a pill-shaped `Create Task` button with 16px outer padding.
 The mobile task drawer retains its existing layout.
@@ -770,13 +775,13 @@ Every calendar mention's hover card shows the schedule, location, organizer and 
 count, plus the first lines of the event description (its links open), and no last-updated
 byline.
 
-## Pull requests — `/app/tasks/pr/<foreignEntityId>`
+## Pull requests — `/app/reviews/pr/<foreignEntityId>`
 
-Macro-linked GitHub pull requests open inside the Tasks shell, with a Tasks breadcrumb,
-PR title/status, GitHub action, discussion timeline, and Details/Checks side panel below
-the top bar. PRs are not tasks and do not appear in the Tasks list.
-Old `/app/pr/<foreignEntityId>` links redirect to the Tasks detail.
-Check an old link, a PR opened from a list or agent session,
+Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
+breadcrumb, PR title/status, GitHub action, discussion timeline, and Details/Checks
+side panel below the top bar. PRs are not tasks and do not appear in the Tasks list.
+Old `/app/pr/<foreignEntityId>` and `/app/tasks/pr/<foreignEntityId>` links
+redirect to Reviews. Check an old link, a PR opened from a list or agent session,
 a second split, breadcrumb return, side-panel toggle, and phone layout. If cached
 GitHub data fails, the detail shows an error banner.
 
