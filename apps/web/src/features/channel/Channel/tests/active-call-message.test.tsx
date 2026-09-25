@@ -11,10 +11,7 @@ import { ActiveCallMessage } from '../ActiveCallMessage';
 import { ChannelTabProvider } from '../ChannelTabContext';
 
 vi.mock('@channel/Call/use-call', () => ({
-  useCall: (
-    _channelId: () => string,
-    options?: { onJoin?: () => void }
-  ) => ({
+  useCall: (_channelId: () => string, options?: { onJoin?: () => void }) => ({
     isInThisChannel: () => false,
     joinCall: async () => options?.onJoin?.(),
   }),

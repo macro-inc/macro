@@ -32,8 +32,7 @@ export function ActiveCallMessage(props: { channelId: string }) {
   );
   onCleanup(() => globalThis.clearInterval(durationTimer));
 
-  const shouldShow = () =>
-    !!activeCallQuery.data && !call.isInThisChannel();
+  const shouldShow = () => !!activeCallQuery.data && !call.isInThisChannel();
   const duration = createMemo(() =>
     formatDuration(activeCallQuery.data?.createdAt, nowMs())
   );
