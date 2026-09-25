@@ -2,11 +2,13 @@ import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import {
   CallDetailActions,
-  CallDetailView,
+  CallDetailContent,
+  CallDetailRoot,
+  useCallDetail,
 } from '@block-call/views/CallDetailView';
 import { SplitPanel } from '@components/app/split-panel';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
-import { type Accessor, onMount } from 'solid-js';
+import { onMount, Show } from 'solid-js';
 import { DriveBreadcrumbsOutlet } from '../components/DriveBreadcrumbs';
 import { useDriveView } from '../context/drive-context';
 import {
@@ -14,10 +16,7 @@ import {
   driveLocationBreadcrumbs,
 } from '../core/breadcrumbs';
 
-function DriveCallBreadcrumb(props: {
-  callId: string;
-  name: Accessor<string>;
-}) {
+function DriveCallBreadcrumb(props: { callId: string; name: string }) {
   const { state, sidebar } = useDriveView();
   const order = () =>
     driveLocationBreadcrumbs(state.value().location, sidebar.folders()).length;
@@ -34,10 +33,10 @@ function DriveCallBreadcrumb(props: {
             class="gap-1.5"
             isActive={item.isActive()}
             onClick={item.onSelect}
-            tooltip={props.name()}
+            tooltip={props.name}
           >
             <PhoneCallIcon class="size-4 shrink-0" />
-            <span class="truncate">{props.name()}</span>
+            <span class="truncate">{props.name}</span>
           </ViewBreadcrumbs.Button>
         )}
       </ViewBreadcrumbs.Item>
@@ -46,7 +45,12 @@ function DriveCallBreadcrumb(props: {
   );
 }
 
-export function DriveCallDetail(props: { callId: string }) {
+export function DriveCallDetail(props: {
+  callId: string;
+  transcriptId?: string;
+  seek?: string;
+}) {
+  const detail = useCallDetail(() => props.callId);
   const analytics = useAnalytics();
   onMount(() => {
     analytics.pageView('call');
@@ -57,14 +61,33 @@ export function DriveCallDetail(props: { callId: string }) {
   });
 
   return (
-    <CallDetailView callId={props.callId}>
-      {({ record, name }) => (
+    <CallDetailRoot callId={props.callId} data={detail.data()}>
+      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
         <ViewShell.TopBar class="touch:flex">
           <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-          <DriveCallBreadcrumb callId={props.callId} name={name} />
-          <CallDetailActions callId={props.callId} record={record} />
+          <DriveCallBreadcrumb
+            callId={props.callId}
+            name={detail.data()?.name ?? 'Call Recording'}
+          />
+          <Show when={detail.data()}>
+            {(data) => (
+              <CallDetailActions
+                callId={props.callId}
+                channelId={data().record.channelId}
+                name={data().name}
+                isActive={data().record.isActive}
+              />
+            )}
+          </Show>
         </ViewShell.TopBar>
-      )}
-    </CallDetailView>
+        <CallDetailContent
+          callId={props.callId}
+          query={detail.query}
+          data={detail.data()}
+          transcriptId={props.transcriptId}
+          seek={props.seek}
+        />
+      </div>
+    </CallDetailRoot>
   );
 }

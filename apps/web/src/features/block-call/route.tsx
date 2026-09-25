@@ -1,5 +1,9 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { defineRoute, useRouteParams } from '@app/lib/split-router';
+import {
+  createSearchParams,
+  defineRoute,
+  useRouteParams,
+} from '@app/lib/split-router';
 import { withAuth } from '@components/app/split-layout/split-router/app-route-shell';
 import { lazy, onMount } from 'solid-js';
 import { z } from 'zod';
@@ -12,6 +16,7 @@ const StandaloneCallDetail = lazy(async () => ({
 
 const CallDetailRouteView = withAuth(() => {
   const params = useRouteParams(callDetailRoute);
+  const [search] = createSearchParams(callDetailSearch);
   const analytics = useAnalytics();
   onMount(() => {
     analytics.pageView('call');
@@ -20,7 +25,13 @@ const CallDetailRouteView = withAuth(() => {
       entityId: params.callId,
     });
   });
-  return <StandaloneCallDetail callId={params.callId} />;
+  return (
+    <StandaloneCallDetail
+      callId={params.callId}
+      transcriptId={search.transcriptId}
+      seek={search.seek}
+    />
+  );
 });
 
 export const callDetailRoute = defineRoute({

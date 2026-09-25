@@ -58,16 +58,16 @@ export function CallBlockAdapter(props: CallBlockProps) {
     <DocumentBlockContainer>
       <div class="h-full flex flex-col @container">
         <ModalsProvider>
-          <Show when={callRecord.data}>
+          <Show when={callRecord.isSuccess ? callRecord.data : undefined}>
             {(data) => (
               <SidePanel.Layout>
-                <CallSidePanelSections record={data} callId={callId} />
+                <CallSidePanelSections record={data()} callId={callId} />
                 <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-                  <CallRecordingSplitHeader record={data} />
+                  <CallRecordingSplitHeader record={data()} />
                   <CallRecordingBody
-                    data={data}
+                    record={data()}
                     callId={callId}
-                    transcriptTarget={transcriptTarget}
+                    transcriptTarget={transcriptTarget()}
                   />
                 </div>
               </SidePanel.Layout>

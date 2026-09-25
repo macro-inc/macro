@@ -28,7 +28,7 @@ import IconShared from '@icon/share.svg';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { Button } from '@ui';
-import { type Accessor, Show } from 'solid-js';
+import { Show } from 'solid-js';
 
 export function CallRecordingSplitHeaderLoading() {
   return (
@@ -47,10 +47,8 @@ export function CallRecordingSplitHeaderLoading() {
   );
 }
 
-export function CallRecordingSplitHeader(props: {
-  record: Accessor<CallRecord>;
-}) {
-  const record = props.record;
+export function CallRecordingSplitHeader(props: { record: CallRecord }) {
+  const record = () => props.record;
   const blockId = useBlockId();
   const shareCtx = useShareDialogContext();
   const callName = () => record().customName ?? record().channelName ?? 'Call';

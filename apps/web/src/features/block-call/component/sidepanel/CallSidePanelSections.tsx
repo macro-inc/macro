@@ -16,11 +16,11 @@ import {
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { cn, InlineCheckbox } from '@ui';
-import { type Accessor, Show, Suspense } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import { formatCallDuration } from '../../utils';
 
 interface CallSidePanelSectionsProps {
-  record: Accessor<CallRecord>;
+  record: CallRecord;
   callId: string;
 }
 
@@ -36,13 +36,15 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
         defaultOpen
         order={15}
       >
-        <PropertiesSectionContent record={props.record} />
+        <Suspense fallback={<SidePanel.Loading />}>
+          <PropertiesSectionContent record={props.record} />
+        </Suspense>
       </SidePanel.Section>
       <SidePanel.Section id="sharing" title="Sharing" order={20}>
         <SharingSectionContent record={props.record} />
       </SidePanel.Section>
       <EntityActivitySectionConditional
-        entityId={props.record().callId}
+        entityId={props.record.callId}
         entityType="CALL_RECORD"
         order={40}
       />
@@ -51,8 +53,8 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
   );
 }
 
-function DetailsSectionContent(props: { record: Accessor<CallRecord> }) {
-  const record = props.record;
+function DetailsSectionContent(props: { record: CallRecord }) {
+  const record = () => props.record;
 
   const startedAt = (): DateValue | undefined => record().startedAt;
   const endedAt = (): DateValue | undefined => record().endedAt ?? undefined;
@@ -102,17 +104,17 @@ function DetailsSectionContent(props: { record: Accessor<CallRecord> }) {
   );
 }
 
-function PropertiesSectionContent(props: { record: Accessor<CallRecord> }) {
+function PropertiesSectionContent(props: { record: CallRecord }) {
   // Tag/property writes are authorized server-side via the call's owning
   // channel (edit access), mirroring the sharing control above, so the editor
   // is always mounted and the backend rejects unauthorized mutations.
   return (
     <EntityPropertiesSection
-      entityId={props.record().callId}
+      entityId={props.record.callId}
       entityType="CALL_RECORD"
       canEdit
       documentName={
-        props.record().customName ?? props.record().channelName ?? undefined
+        props.record.customName ?? props.record.channelName ?? undefined
       }
     />
   );
@@ -143,8 +145,8 @@ function DateValueDisplay(props: { value: DateValue }) {
 // Sharing Section
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
-  const record = props.record;
+function SharingSectionContent(props: { record: CallRecord }) {
+  const record = () => props.record;
   const callCtx = useCallContextOptional();
   const userId = useUserId();
   const toggleLiveShare = useToggleShareWithTeamMutation();

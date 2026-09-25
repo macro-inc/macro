@@ -1,4 +1,5 @@
 import {
+  createSearchParams,
   defineRoute,
   routeParams,
   type SplitRouterEntry,
@@ -101,7 +102,14 @@ export const DriveRouteView = withAuth(() => {
 
 function DriveCallRouteView() {
   const params = useRouteParams(driveCallRoute);
-  return <DriveCallDetail callId={params.callId} />;
+  const [search] = createSearchParams(callDetailSearch);
+  return (
+    <DriveCallDetail
+      callId={params.callId}
+      transcriptId={search.transcriptId}
+      seek={search.seek}
+    />
+  );
 }
 
 export const driveCallRoute = defineRoute({

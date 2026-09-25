@@ -4,19 +4,16 @@ import { idToEmail } from '@core/user';
 
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
-import type { Accessor } from 'solid-js';
 import { createMemo, For } from 'solid-js';
 import { dedupeCallRecordingParticipants } from './call-recording-utils';
 
-export function CallRecordingParticipantsSection(props: {
-  record: Accessor<CallRecord>;
-}) {
+export function CallRecordingParticipantsSection(props: { record: CallRecord }) {
   const { openWithSplit } = useSplitLayout();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
   const participants = createMemo(() =>
     dedupeCallRecordingParticipants(
-      props.record().participants,
-      props.record().createdBy
+      props.record.participants,
+      props.record.createdBy
     )
   );
 
