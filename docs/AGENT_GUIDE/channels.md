@@ -143,9 +143,10 @@ session boots and the same height in every state. Its status row starts with a d
 pulses while the turn works, turns amber while it waits on a question, and becomes a green
 check once the turn is over; then the persona (`Cursor Agent`, or a custom agent's name),
 what the turn is doing (`Booting agent`, `Running command · cargo test`, `Waiting for
-you`, `Done`), and a `View session` pill. The row beneath holds one line of the agent's
-latest prose (`Nothing written yet` before it has written; the question itself while it
-waits), with the pull request the session opened as a pill beside it once there is one.
+you`, `Done`), and a `View session` pill — on a phone-width viewport that pill is its
+arrow alone, so the activity line keeps the width it needs. The row beneath holds one
+line of the agent's latest prose (`Nothing written yet` before it has written; the
+question itself while it waits), with the pull request the session opened as a pill beside it once there is one.
 The whole card is one control: clicking anywhere on it, or `View session`, opens the agent
 session, which is where the passage whole and any question are read and answered. The
 card never expands in place.
