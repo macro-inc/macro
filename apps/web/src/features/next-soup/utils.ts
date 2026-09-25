@@ -56,7 +56,7 @@ import {
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { compareDateDesc, type DateValue } from '@core/util/date';
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
 import {
@@ -103,6 +103,7 @@ import {
 } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
 import { fetchAndCacheThread } from '@queries/email/thread';
+import { evictDeletedEmailThreads } from '@queries/email/thread-eviction';
 import {
   type NotificationEntityRef,
   updateNotificationsForEntities,
@@ -1324,7 +1325,19 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
         )
       );
 
-      const failure = outcomes.find((o) => o.status === 'rejected');
+      // A thread the server no longer has is a stale local row, not a failed
+      // trash: drop it from the local cache instead of restoring it.
+      const missingIds = ids.filter((_, i) => {
+        const outcome = outcomes[i];
+        return (
+          outcome?.status === 'rejected' &&
+          thrownResultErrorHasCode(outcome.reason, 'NOT_FOUND')
+        );
+      });
+      if (missingIds.length > 0) await evictDeletedEmailThreads(missingIds);
+      const failure = outcomes.find(
+        (o, i) => o.status === 'rejected' && !missingIds.includes(ids[i]!)
+      );
       if (failure) {
         // Revert the threads that did trash so the server matches the rollback
         // below; best effort, so a failed revert can't mask the original error.
@@ -1347,7 +1360,11 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
       }
 
       // Every thread trashed — remember the labels so undo can remove them.
-      ids.forEach((id, i) => threadTrashLabelIds.set(id, labelIds[i]!));
+      ids.forEach((id, i) => {
+        if (outcomes[i]?.status === 'fulfilled') {
+          threadTrashLabelIds.set(id, labelIds[i]!);
+        }
+      });
     } catch (err) {
       rollback();
       throw err;

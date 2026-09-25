@@ -16,6 +16,7 @@ const errResult: ResultLike = {
 
 const operationMocks = vi.hoisted(() => ({
   cancelQueries: vi.fn(async () => {}),
+  evictDeletedEmailThreads: vi.fn(async (_ids: string[]) => {}),
   fetchAndCacheThread: vi.fn(),
   fetchQuery: vi.fn(),
   getQueriesData: vi.fn(() => []),
@@ -73,6 +74,9 @@ vi.mock('@queries/soup/graphql/active-queries', () => ({
 }));
 vi.mock('@queries/email/thread', () => ({
   fetchAndCacheThread: operationMocks.fetchAndCacheThread,
+}));
+vi.mock('@queries/email/thread-eviction', () => ({
+  evictDeletedEmailThreads: operationMocks.evictDeletedEmailThreads,
 }));
 vi.mock('@queries/notification/entity-mutations', () => ({
   updateNotificationsForEntities: vi.fn(async () => []),
@@ -284,6 +288,41 @@ describe('trashEmails', () => {
     await handle.undo();
     expect(operationMocks.updateThreadLabel).not.toHaveBeenCalledWith(
       expect.objectContaining({ value: false, thread_id: 'thread-b' })
+    );
+  });
+
+  it('evicts a thread the server no longer has instead of failing', async () => {
+    operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
+    operationMocks.updateThreadLabel.mockImplementation(async (args) =>
+      args.thread_id === 'thread-ghost'
+        ? {
+            isErr: () => true,
+            error: [{ code: 'NOT_FOUND', message: 'Resource not found' }],
+          }
+        : okResult
+    );
+
+    const handle = trashEmails([
+      { id: 'thread-a', linkId: 'link-a' },
+      { id: 'thread-ghost', linkId: 'link-b' },
+    ]);
+
+    await expect(handle.done).resolves.toBeUndefined();
+    expect(operationMocks.evictDeletedEmailThreads).toHaveBeenCalledWith([
+      'thread-ghost',
+    ]);
+    expect(operationMocks.updateThreadLabel).not.toHaveBeenCalledWith(
+      expect.objectContaining({ value: false })
+    );
+
+    await handle.undo();
+    expect(operationMocks.updateThreadLabel).toHaveBeenCalledWith({
+      thread_id: 'thread-a',
+      label_id: 'trash-a',
+      value: false,
+    });
+    expect(operationMocks.updateThreadLabel).not.toHaveBeenCalledWith(
+      expect.objectContaining({ thread_id: 'thread-ghost', value: false })
     );
   });
 });
