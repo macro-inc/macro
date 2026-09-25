@@ -3,15 +3,13 @@ import {
   CRM_VIEW_URL_PARAM,
   decodeCrmViewParam,
 } from '@companies/crm/saved-views';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { createRenderEffect, lazy } from 'solid-js';
+import { lazy } from 'solid-js';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 
 const SoupView = lazy(async () => ({
@@ -22,12 +20,6 @@ export const CompaniesRouteView = withAuth(() => {
   if (!isFeatureEnabled(enableCrm))
     return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
   usePageViewTracking('companies');
-  const panel = useSplitPanelOrThrow();
-  createRenderEffect(() =>
-    panel.handle.updateMeta?.({
-      splitPanelLayout: isTouchDevice() ? 'legacy' : 'composable',
-    })
-  );
   const preset = getViewPreset('companies');
   const crmView = new URLSearchParams(window.location.search).get(
     CRM_VIEW_URL_PARAM
