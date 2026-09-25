@@ -1,3 +1,4 @@
+import type { ListDetailNavigationTarget } from '@app/components/list';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
@@ -338,27 +339,45 @@ function SoupNavigationButtons() {
 
   return (
     <Show when={shouldShow()}>
-      <div class="flex items-center gap-0.5">
-        <Button
-          size="icon-md"
-          label="Previous item"
-          hotkey={TOKENS.entity.step.start}
-          disabled={!canNavigateUp()}
-          onClick={() => navigate(-1)}
-        >
-          <CaretUp class="size-4" />
-        </Button>
-        <Button
-          size="icon-md"
-          label="Next item"
-          hotkey={TOKENS.entity.step.end}
-          disabled={!canNavigateDown()}
-          onClick={() => navigate(1)}
-        >
-          <CaretDown class="size-4" />
-        </Button>
-      </div>
+      <ListNavigationButtons
+        navigation={{
+          canPrevious: canNavigateUp,
+          canNext: canNavigateDown,
+          previous: () => navigate(-1),
+          next: () => navigate(1),
+        }}
+      />
     </Show>
+  );
+}
+
+/** Shared header controls; each host supplies its current list navigation. */
+export function ListNavigationButtons(props: {
+  navigation: ListDetailNavigationTarget;
+}) {
+  return (
+    <div class="flex items-center gap-0.5">
+      <Button
+        size="icon-md"
+        label="Previous item"
+        hotkey={TOKENS.entity.step.start}
+        disabled={!props.navigation.canPrevious()}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={props.navigation.previous}
+      >
+        <CaretUp class="size-4" />
+      </Button>
+      <Button
+        size="icon-md"
+        label="Next item"
+        hotkey={TOKENS.entity.step.end}
+        disabled={!props.navigation.canNext()}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={props.navigation.next}
+      >
+        <CaretDown class="size-4" />
+      </Button>
+    </div>
   );
 }
 
