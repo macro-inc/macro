@@ -10,6 +10,8 @@ export type AgentRosterSource = {
   roster: Accessor<RosterAgent[]>;
   /** The saved agents are still on their first load. */
   loading: Accessor<boolean>;
+  /** Runtime or Cursor connection status is not known yet. */
+  availabilityLoading: Accessor<boolean>;
   /** The saved agents failed to load; the first-party ones are still listed. */
   error: Accessor<boolean>;
   cursorConnected: Accessor<boolean>;
@@ -58,6 +60,8 @@ export function createAgentRosterSource(): AgentRosterSource {
   return {
     roster,
     loading: () => agentsQuery.isPending,
+    availabilityLoading: () =>
+      harnessesQuery.isPending || cursorStatus.isPlaceholderData,
     error: () => agentsQuery.isError,
     cursorConnected,
   };
