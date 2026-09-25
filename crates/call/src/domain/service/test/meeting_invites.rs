@@ -415,3 +415,82 @@ async fn successful_join_resolves_only_the_answering_users_meeting_ring() {
         );
     }
 }
+
+#[tokio::test]
+async fn first_join_starts_transcription_and_recording_concurrently() {
+    let mut meeting = invitation();
+    meeting.call_id = None;
+    let token = meeting.share_token.clone();
+    let mut call = active_call_for_archived_event(OWNER_EMAIL, None);
+    call.channel_id = None;
+    call.created_by = user(OWNER_EMAIL).to_string();
+    let call_id = call.id;
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_meeting()
+        .return_once(move |_| Box::pin(async move { Ok(Some(meeting)) }));
+    repo.expect_get_or_create_meeting_call()
+        .return_once(move |_, _| Box::pin(async move { Ok((call, true)) }));
+    repo.expect_set_egress_id()
+        .times(1)
+        .withf(move |id, egress_id| *id == call_id && egress_id == "egress-1")
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    repo.expect_find_active_call_for_user()
+        .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_add_meeting_participant()
+        .returning(move |call_id, actor| {
+            let participant = CallParticipant {
+                call_id: *call_id,
+                user_id: actor.to_string(),
+                joined_at: Utc::now(),
+            };
+            Box::pin(async move { Ok(participant) })
+        });
+    // Agent dispatch only completes once recording has been requested, so a
+    // sequential implementation deadlocks here and trips the timeout.
+    let recording_requested = Arc::new(tokio::sync::Notify::new());
+    let mut rtc = MockCallRtcClient::new();
+    rtc.expect_create_room()
+        .returning(|_| Box::pin(async { Ok(()) }));
+    let awaited = recording_requested.clone();
+    rtc.expect_dispatch_transcription_agent()
+        .times(1)
+        .returning(move |_| {
+            let awaited = awaited.clone();
+            Box::pin(async move {
+                awaited.notified().await;
+                Ok(())
+            })
+        });
+    let notify = recording_requested.clone();
+    rtc.expect_start_room_composite_egress()
+        .times(1)
+        .returning(move |_, _| {
+            notify.notify_one();
+            Box::pin(async { Ok("egress-1".to_string()) })
+        });
+    rtc.expect_generate_token()
+        .returning(|_, _| Box::pin(async { Ok("join-token".to_string()) }));
+    let service = CallServiceImpl::<_, _, _, _, _, _, NoopCallSummarizer>::new(
+        repo,
+        rtc,
+        RecordingConnectionService::default(),
+        TeamAccessService::default(),
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://livekit.example.com",
+    )
+    .with_egress(EgressS3Config {
+        bucket: "recordings".to_string(),
+        region: "us-east-1".to_string(),
+        access_key: "access-key".to_string(),
+        secret: "secret".to_string(),
+    });
+    let issued = tokio::time::timeout(
+        Duration::from_secs(2),
+        service.join_meeting(token, user(TEAMMATE_EMAIL)),
+    )
+    .await
+    .expect("agent dispatch and recording start overlap")
+    .unwrap();
+    assert_eq!(issued.call_id, call_id);
+}

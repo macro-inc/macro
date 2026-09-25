@@ -177,21 +177,26 @@ impl<
         }
         let (call, created) = allocated?;
         if created {
-            self.rtc_client.dispatch_transcription_agent(&call.room_name).await
-                .inspect_err(|error| tracing::error!(error=?error, "failed to dispatch meeting transcription agent")).ok();
-            if let Some(config) = &self.egress_s3_config {
-                match self
-                    .rtc_client
+            // Both are independent RTC round trips on the first joiner's
+            // critical path; the join waits for the slower one, not the sum.
+            let dispatch_agent = async {
+                self.rtc_client.dispatch_transcription_agent(&call.room_name).await
+                    .inspect_err(|error| tracing::error!(error=?error, "failed to dispatch meeting transcription agent")).ok();
+            };
+            let start_recording = async {
+                let config = self.egress_s3_config.as_ref()?;
+                self.rtc_client
                     .start_room_composite_egress(&call.room_name, config)
                     .await
-                {
-                    Ok(egress_id) => self
-                        .repo
-                        .set_egress_id(&call.id, &egress_id)
-                        .await
-                        .map_err(|e| CallError::Internal(e.into()))?,
-                    Err(error) => tracing::error!(error=?error, "failed to record meeting"),
-                }
+                    .inspect_err(|error| tracing::error!(error=?error, "failed to record meeting"))
+                    .ok()
+            };
+            let ((), egress_id) = tokio::join!(dispatch_agent, start_recording);
+            if let Some(egress_id) = egress_id {
+                self.repo
+                    .set_egress_id(&call.id, &egress_id)
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?;
             }
             let created_by = MacroUserIdStr::parse_from_str(&call.created_by)
                 .map_err(|error| CallError::Internal(error.into()))?
