@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { type Component, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 

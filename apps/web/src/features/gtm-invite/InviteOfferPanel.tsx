@@ -1,8 +1,10 @@
 import { PLAN_FEATURES, PLANS } from '@app/features/paywall/plans';
-import { ContinueButton, SkipButton } from '@app/features/setup/flow/shared';
+import { SkipButton } from '@app/features/setup/flow/shared';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import Check from '@phosphor/check.svg';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
+import { Button } from '@ui';
 import { Index, onMount } from 'solid-js';
 import { formatFreeMonths } from './core/invite-link';
 
@@ -76,13 +78,15 @@ export function InviteOfferPanel(props: {
       </p>
 
       <div class="flex flex-col gap-3">
-        <ContinueButton
+        <Button
+          variant="cta"
+          size="xl"
           disabled={props.finishing}
           onClick={() => props.onStartCheckout()}
-          label={
-            props.finishing ? 'Heading to checkout…' : 'Claim your free month'
-          }
-        />
+        >
+          {props.finishing ? 'Heading to checkout…' : 'Claim your free month'}
+          <ArrowRight class="size-5" />
+        </Button>
         <SkipButton
           label="Continue with Free instead"
           disabled={props.finishing}

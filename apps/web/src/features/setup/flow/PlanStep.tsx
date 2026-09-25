@@ -7,22 +7,23 @@ import {
   type PlanTier,
 } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import Check from '@phosphor/check.svg';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { useSearchParams } from '@solidjs/router';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import { createSignal, Index, onCleanup, onMount, Show } from 'solid-js';
-import { ContinueButton, SkipButton } from './shared';
+import { SkipButton } from './shared';
 
 // The license flips via Stripe webhook after checkout; poll briefly so the
 // app already reflects Premium when the user continues in.
 const LICENSE_POLL_ATTEMPTS = 10;
 const LICENSE_POLL_INTERVAL_MS = 1_000;
 
-/** Free vs paid, before the final team step. Free/skip continues; premium
+/** Free vs paid. The last step: free/skip finishes immediately; premium
  * round-trips through Stripe checkout (the flow stays incomplete, so both
- * checkout legs land back here) and continues once payment is confirmed.
+ * checkout legs land back here) and finishes once payment is confirmed.
  * An account that signed up through a GTM invite link sees its free-month
  * offer in place of the picker; checkout applies the promotion server-side. */
 export function PlanStep(props: {
@@ -100,11 +101,15 @@ export function PlanStep(props: {
               </p>
             </div>
           </div>
-          <ContinueButton
+          <Button
+            variant="cta"
+            size="xl"
             disabled={props.finishing}
             onClick={() => props.onPremiumPaid(paidTier())}
-            label={props.finishing ? 'Setting up your workspace…' : 'Continue'}
-          />
+          >
+            {props.finishing ? 'Setting up your workspace…' : 'Continue'}
+            <ArrowRight class="size-5" />
+          </Button>
         </div>
       }
     >
@@ -200,17 +205,19 @@ function PlanPicker(props: {
       </div>
 
       <div class="flex flex-col gap-3">
-        <ContinueButton
+        <Button
+          variant="cta"
+          size="xl"
           disabled={props.finishing}
           onClick={() => props.onFinish()}
-          label={
-            props.finishing
-              ? selected() === 'free'
-                ? 'Setting up your workspace…'
-                : 'Heading to checkout…'
-              : `Continue with ${PLAN_BY_TIER[selected()].name}`
-          }
-        />
+        >
+          {props.finishing
+            ? selected() === 'free'
+              ? 'Setting up your workspace…'
+              : 'Heading to checkout…'
+            : `Continue with ${PLAN_BY_TIER[selected()].name}`}
+          <ArrowRight class="size-5" />
+        </Button>
         <SkipButton
           label="Decide later"
           disabled={props.finishing}

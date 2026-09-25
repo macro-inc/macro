@@ -378,11 +378,11 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
    *
    * @return a new websocket, with the set options
    */
-  public build(options?: { autoConnect?: boolean }): Websocket<Send, Receive> {
+  public build(): Websocket<Send, Receive> {
     const ws = new Websocket<Send, Receive>(
       this._urlResolver,
       this._protocols,
-      { ...this._options, ...options } as WebsocketOptions<Send, Receive>
+      this._options as WebsocketOptions<Send, Receive>
     ); // instantiate the websocket with the set options
 
     return ws;

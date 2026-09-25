@@ -218,8 +218,8 @@ const bytes = [...assets].reduce(
   0
 );
 assert(
-  bytes < 400_000,
-  `Homepage initial JS exceeds 400 KB gzip: ${bytes}; check for eager editor imports`
+  bytes < 225_000,
+  `Homepage initial JS exceeds 225 KB gzip: ${bytes}; check for eager demo or analytics imports`
 );
 console.log(
   `[seo] Preserved ${baseline.routes.length} live URLs, static content, schema, metadata, internal links and crawler rules.`

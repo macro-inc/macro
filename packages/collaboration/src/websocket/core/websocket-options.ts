@@ -15,8 +15,6 @@ export interface WebsocketOptions<
   Send = WebsocketData,
   Receive = WebsocketData,
 > {
-  /** Leave the socket dormant until explicitly reconnected. Defaults to true. */
-  autoConnect?: boolean;
   readonly binaryType?: BinaryType;
 
   /**

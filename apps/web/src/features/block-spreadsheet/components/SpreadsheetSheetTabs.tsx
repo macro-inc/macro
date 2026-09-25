@@ -108,17 +108,6 @@ function SheetActions(props: SpreadsheetSheetTabsProps) {
   );
 }
 
-/** Keep the active tab in the strip without scrolling the surrounding page. */
-function revealTab(button: HTMLButtonElement) {
-  const scroller = button.closest<HTMLElement>('[role="tablist"]');
-  if (!scroller) return;
-  const left = button.offsetLeft;
-  const right = left + button.offsetWidth;
-  if (left < scroller.scrollLeft) scroller.scrollLeft = left;
-  else if (right > scroller.scrollLeft + scroller.clientWidth)
-    scroller.scrollLeft = right - scroller.clientWidth;
-}
-
 /** Workbook navigation stays local; the owner supplies mutations and dialogs. */
 export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
   const buttons = new Map<string, HTMLButtonElement>();
@@ -126,10 +115,8 @@ export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
   createEffect(
     on(
       () => props.activeSheetId,
-      (id) => {
-        const button = buttons.get(id);
-        if (button) revealTab(button);
-      }
+      (id) =>
+        buttons.get(id)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
     )
   );
 
@@ -148,9 +135,10 @@ export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
     event.stopPropagation();
     const sheet = props.sheets[next];
     props.onSelect(sheet.id);
-    const button = buttons.get(sheet.id);
-    button?.focus({ preventScroll: true });
-    if (button) revealTab(button);
+    buttons.get(sheet.id)?.focus({ preventScroll: true });
+    buttons
+      .get(sheet.id)
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
   return (

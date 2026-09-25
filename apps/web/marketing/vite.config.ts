@@ -4,15 +4,19 @@ import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { standaloneBoundary } from './scripts/standaloneBoundary';
+import { standaloneDev } from './scripts/standaloneDev';
 import { solidSvgOptions } from './vite.svgo';
 
 export default defineConfig({
   root: import.meta.dirname,
   plugins: [
-    solid(),
+    standaloneBoundary(),
+    standaloneDev(),
+    solid({ ssr: true }),
     solidSvg({ ...solidSvgOptions, defaultAsComponent: true }),
     tailwind(),
-    tsconfigPaths({ projects: ['../tsconfig.json'] }),
+    tsconfigPaths({ projects: ['./tsconfig.json'] }),
   ],
   worker: { format: 'es' },
   build: {

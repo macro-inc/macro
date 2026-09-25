@@ -2,7 +2,7 @@ import ArrowUpRight from '@phosphor/arrow-up-right.svg';
 import ArrowsIn from '@phosphor/arrows-in.svg';
 import Check from '@phosphor/check.svg';
 import { Button, Layer } from '@ui';
-import { type Component, createMemo, type JSX, Show } from 'solid-js';
+import { type Component, createMemo, Show } from 'solid-js';
 import { MagicChipPullRequest } from './MagicChipPullRequest';
 import {
   type MagicChipActivity,
@@ -104,13 +104,10 @@ const StatusRow: Component<{
   header?: MagicChipHeader;
   status: MagicChipActivity;
   tone: MagicChipTone;
-  pullRequest?: JSX.Element;
   /** The reply preview, while the output row has nothing to offer. */
   preview?: string;
   onOpen?: () => void;
   onCollapse?: () => void;
-  /** Host-owned actions at the end of the status row. */
-  headerActions?: JSX.Element;
 }> = (props) => (
   <Layer offset={1}>
     <div
@@ -166,12 +163,6 @@ const StatusRow: Component<{
         View session
         <ArrowUpRight class="size-3" />
       </button>
-      <Show when={props.pullRequest}>
-        <div class="flex min-w-0 max-w-[40%] justify-end overflow-hidden">
-          {props.pullRequest}
-        </div>
-      </Show>
-      {props.headerActions}
     </div>
   </Layer>
 );
@@ -187,13 +178,9 @@ const StatusRow: Component<{
 export const MagicChipView: Component<{
   agentSessionId: string;
   presentation: MagicChipPresentation;
-  /** Host-supplied PR link for surfaces that already own the entity data. */
-  pullRequest?: JSX.Element;
   header?: MagicChipHeader;
   onOpen?: () => void;
   onCollapse?: () => void;
-  /** Host-owned actions at the end of the status row. */
-  headerActions?: JSX.Element;
 }> = (props) => {
   const status = createMemo(() => presentationStatus(props.presentation));
   const tone = createMemo(() => presentationTone(props.presentation));
@@ -249,8 +236,6 @@ export const MagicChipView: Component<{
           preview={preview()}
           onOpen={props.onOpen}
           onCollapse={props.onCollapse}
-          headerActions={props.headerActions}
-          pullRequest={props.pullRequest}
         />
         <div
           class="flex h-8 min-w-0 items-center gap-2 pr-2.5 pl-2.5 text-ink text-sm leading-5"
@@ -266,7 +251,7 @@ export const MagicChipView: Component<{
               {(text) => <>{text()}</>}
             </Show>
           </span>
-          <Show when={!props.pullRequest && props.header?.pullRequestUrl}>
+          <Show when={props.header?.pullRequestUrl}>
             {(url) => (
               <div
                 class="flex h-6 min-w-0 max-w-[45%] shrink-0 items-center overflow-hidden rounded-full border border-edge-muted bg-surface px-1 text-xs"

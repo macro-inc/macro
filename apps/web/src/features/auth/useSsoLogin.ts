@@ -12,11 +12,7 @@ import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
 
-export function useSsoLogin(opts?: {
-  signupMode?: boolean;
-  /** An explicit callback keeps onboarding's OAuth return on the login route. */
-  returnUrl?: () => string;
-}) {
+export function useSsoLogin(opts?: { signupMode?: boolean }) {
   const analytics = useAnalytics();
   const location = useLocation<RedirectLocation>();
   const { initEmailLink } = useEmailLinks();
@@ -97,9 +93,7 @@ export function useSsoLogin(opts?: {
       return;
     }
 
-    if (opts?.returnUrl) {
-      authUrl.searchParams.set('original_url', opts.returnUrl());
-    } else if (location.state?.originalLocation) {
+    if (location.state?.originalLocation) {
       const { pathname, search, hash } = location.state.originalLocation;
 
       authUrl.searchParams.set(

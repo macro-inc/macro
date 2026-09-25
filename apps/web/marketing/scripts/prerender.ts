@@ -1,13 +1,12 @@
 /**
- * Build-time prerenderer (Solid SSR plus a browser snapshot of the public journey).
+ * Build-time Solid SSR for the homepage and public feature pages.
  *
  * Runs after `vite build` and `vite build -c vite.prerender.config.ts`:
  * renders feature/blog routes with Solid's renderToStringAsync and
  * writes them to `dist-site/<route>/index.html` (plus sitemap.xml and robots.txt).
  * The deployed S3 bucket then serves real, content-complete HTML to crawlers
- * and agents that don't execute JavaScript, while the client bundle still
- * boots and takes over in browsers (src/app/main/index.tsx clears #root
- * before render()).
+ * and agents that do not execute JavaScript. The homepage hydrates the same
+ * DOM in browsers; legacy feature routes retain their existing client boot.
  *
  * Usage: bun scripts/prerender.ts
  * Env:   VITE_APP_BASE_URL — public origin used for sitemap/robots/JSON-LD
@@ -18,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Window as HappyWindow } from 'happy-dom';
 import type { PageSeo } from '../src/app/utils/utilSeo';
-import { prerenderJourney } from './prerenderJourney';
+import { verifyHomepage } from './verifyHomepage';
 
 // Scene modules parse their SVG sources with DOMParser at import time;
 // happy-dom (pure JS, no browser) provides it for the SSR render.
@@ -28,6 +27,7 @@ import { prerenderJourney } from './prerenderJourney';
 // without a DOM. Imported dynamically so the polyfill above is in place first.
 const {
   renderPage,
+  renderHomepage,
   buildSeoTagsHtml,
   canonicalUrl,
   themeHtmlStyle,
@@ -552,7 +552,21 @@ const start = journeyHtml({
 fs.mkdirSync(path.join(DIST_DIR, 'start'), { recursive: true });
 fs.writeFileSync(path.join(DIST_DIR, 'start/index.html'), start);
 fs.writeFileSync(path.join(DIST_DIR, 'start.html'), start);
+const homepage = renderHomepage();
 fs.writeFileSync(
   path.join(DIST_DIR, 'index.html'),
-  await prerenderJourney(DIST_DIR)
+  fs
+    .readFileSync(path.join(DIST_DIR, 'index.html'), 'utf8')
+    .replace(
+      /(<div id="root"[^>]*)(><\/div>)/,
+      (_, opening) => `${opening} data-hydrate-homepage>${homepage.html}</div>`
+    )
+    .replace('</head>', `${homepage.hydration}</head>`)
+    // The complete SSR hero only needs CSS and fonts to paint. Keep hydration
+    // downloads from competing with those assets on a slow connection.
+    .replace(
+      /<(script|link)\b(?=[^>]*(?:type="module"|rel="modulepreload"))(?![^>]*fetchpriority)/g,
+      '<$1 fetchpriority="low"'
+    )
 );
+await verifyHomepage(DIST_DIR);

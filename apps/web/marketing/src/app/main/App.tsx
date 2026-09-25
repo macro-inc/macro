@@ -9,12 +9,12 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { FeatureDock } from '../../../../src/features/marketing/components/FeatureDock';
-import { PageVignette } from '../../../../src/features/marketing/components/PageVignette';
+import { FeatureDock } from '../../features/marketing/components/FeatureDock';
+import { PageVignette } from '../../features/marketing/components/PageVignette';
 import {
   FEATURE_PAGES,
   journeyHref,
-} from '../../../../src/features/marketing/core/navigation';
+} from '../../features/marketing/core/navigation';
 import {
   applyTheme,
   systemThemeEffect,

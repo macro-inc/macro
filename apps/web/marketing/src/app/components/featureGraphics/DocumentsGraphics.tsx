@@ -1702,7 +1702,7 @@ export function HeroDocCollabWindow() {
             </span>
           </div>
 
-          {/* Document body — swaps in the real Macro editor (lazy, browser-only);
+          {/* Document body — activates the website-owned editor demo;
               the static collaborative doc below is the prerender/mobile fallback. */}
           <div
             class="docs-gfx-collab-editor-region"

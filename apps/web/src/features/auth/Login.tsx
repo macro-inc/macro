@@ -1,9 +1,3 @@
-import {
-  consumeOnboardingHandoff,
-  createOnboardingHandoff,
-  GOOGLE_WORK_ONBOARDING_PARAM,
-  hasOnboardingHandoff,
-} from '@app/features/setup/core/onboardingHandoff';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { NoiseBackground } from '@app/features/setup/flow/shared';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
@@ -22,7 +16,7 @@ import IconGoogle from '@icon/macro-google.svg';
 import LogoIcon from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
-import { useIsAuthenticated, useUserInfo } from '@queries/auth';
+import { useUserInfo } from '@queries/auth';
 import {
   invalidateAllAfterLogin,
   useUserInfoQuery,
@@ -66,15 +60,14 @@ function PostLoginRedirect() {
   // Login init is owned by the per-method handlers (the session-token effect and
   // onComplete); this redirect only navigates, so login doesn't fire init twice.
   onMount(() => {
-    const handoff = consumeOnboardingHandoff(sessionStorage);
-    navigate(handoff?.next ?? '/', { replace: true });
+    navigate('/', { replace: true });
   });
 
   return <LoadingBlock />;
 }
 
 /**
- * Where login and onboarding meet: once authenticated, first-time web
+ * Where login and onboarding meet: once authenticated, first-time desktop
  * users continue straight into the onboarding steps IN PLACE — same page,
  * no redirect — while everyone else proceeds into the app. This keeps
  * /login a single surface that decides what the user needs next.
@@ -83,26 +76,19 @@ function PostAuthGate() {
   const userInfoQuery = useUserInfoQuery();
   const onboardingV4 = useOnboardingV4Flag();
 
-  const userInfo = () =>
-    userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
-  const explicitJourney = () =>
-    hasOnboardingHandoff(sessionStorage, userInfo()?.id);
-  const isFirstTimeWebUser = () =>
+  const isFirstTimeDesktopUser = () =>
+    !isMobile() &&
     !isNativeMobilePlatform() &&
-    userInfo()?.authenticated === true &&
-    userInfo()?.tutorialComplete === false;
+    userInfoQuery.data?.authenticated === true &&
+    userInfoQuery.data.tutorialComplete === false;
 
   const needsOnboarding = () =>
-    isFirstTimeWebUser() &&
-    (explicitJourney() || (onboardingV4().enabled && !isMobile()));
+    onboardingV4().enabled && isFirstTimeDesktopUser();
 
   // Don't redirect into the app while the gate is still unknown: a first-time
   // user would land on home for a beat and then get yanked to /onboarding.
   const waitingOnFlag = () =>
-    !explicitJourney() &&
-    !isMobile() &&
-    onboardingV4().loading &&
-    isFirstTimeWebUser();
+    onboardingV4().loading && isFirstTimeDesktopUser();
 
   return (
     <Suspense fallback={<LoadingBlock />}>
@@ -489,52 +475,7 @@ function VerifyFormNew(props: {
 }
 
 export function Login(props: { signupMode?: boolean }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const workOnboardingRequested =
-    searchParams.onboarding === GOOGLE_WORK_ONBOARDING_PARAM;
-  const [startingWorkSso, setStartingWorkSso] = createSignal(
-    workOnboardingRequested && !searchParams.token
-  );
-  if (workOnboardingRequested && !searchParams.token) {
-    // Initialize before an already signed-in visitor mounts PostAuthGate,
-    // whose onboarding child consumes this one-time return intent.
-    createOnboardingHandoff(sessionStorage, {
-      next:
-        typeof searchParams.next === 'string' ? searchParams.next : undefined,
-    });
-  }
-  const isAuthenticated = useIsAuthenticated();
-  const startWorkSso = useSsoLogin({
-    signupMode: true,
-    returnUrl: () => {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('onboarding');
-      url.searchParams.delete('token');
-      return url.toString();
-    },
-  });
-  let startedWorkHandoff = false;
-  createEffect(() => {
-    const authenticated = isAuthenticated();
-    if (
-      !workOnboardingRequested ||
-      startedWorkHandoff ||
-      searchParams.token ||
-      authenticated === undefined
-    )
-      return;
-    startedWorkHandoff = true;
-    // Consume the URL trigger before OAuth. Returning or cancelling must not
-    // immediately send the visitor back to Google's consent screen.
-    setSearchParams({ onboarding: undefined }, { replace: true });
-    if (authenticated) {
-      setStartingWorkSso(false);
-      return;
-    }
-    void startWorkSso(GOOGLE_GMAIL_IDP)
-      .catch(() => toast.failure('Could not open Google. Please try again.'))
-      .finally(() => setStartingWorkSso(false));
-  });
+  const [searchParams] = useSearchParams();
   const [stage, setStage] = createSignal(
     searchParams.email ? Stage.Email : Stage.None
   );
@@ -656,10 +597,9 @@ export function Login(props: { signupMode?: boolean }) {
 
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostAuthGate />}>
-      <Show when={!startingWorkSso()} fallback={<LoadingBlock />}>
-        <div class="flex items-center justify-center size-full overflow-hidden relative">
-          <style>{
-            /*css*/ `
+      <div class="flex items-center justify-center size-full overflow-hidden relative">
+        <style>{
+          /*css*/ `
           @keyframes ln-card-in {
             from { opacity: 0; transform: translateY(14px) scale(0.985); }
             to   { opacity: 1; transform: translateY(0)    scale(1);     }
@@ -677,65 +617,64 @@ export function Login(props: { signupMode?: boolean }) {
             transition: background-color 5000s ease-in-out 0s;
           }
         `
-          }</style>
+        }</style>
 
-          <NoiseBackground />
+        <NoiseBackground />
 
-          <div class="relative z-10 w-full max-w-sm sm:max-w-lg ln-card">
-            <div class="px-4 sm:px-8 flex flex-col gap-12">
-              <div class="flex flex-col gap-8">
-                <Show when={!virtualKeyboardVisible()}>
-                  <div class="flex flex-col gap-1.5">
-                    <LogoIcon class="mb-2 size-9 text-accent" />
-                    <h1 class="font-semibold tracking-tight text-ink text-2xl">
-                      Welcome to Macro
-                    </h1>
-                    <p class="text-sm text-ink-muted">
-                      The open source workspace
-                    </p>
-                  </div>
-                </Show>
+        <div class="relative z-10 w-full max-w-sm sm:max-w-lg ln-card">
+          <div class="px-4 sm:px-8 flex flex-col gap-12">
+            <div class="flex flex-col gap-8">
+              <Show when={!virtualKeyboardVisible()}>
+                <div class="flex flex-col gap-1.5">
+                  <LogoIcon class="mb-2 size-9 text-accent" />
+                  <h1 class="font-semibold tracking-tight text-ink text-2xl">
+                    Welcome to Macro
+                  </h1>
+                  <p class="text-sm text-ink-muted">
+                    The open source workspace
+                  </p>
+                </div>
+              </Show>
 
-                <Stepper
-                  step={stepIndex()}
-                  transition={Stepper.transitions.scale}
-                >
-                  <Stepper.Step>
-                    <LoginPicker
-                      setStage={onStageChange}
-                      signupMode={props.signupMode}
-                    />
-                  </Stepper.Step>
-                  <Stepper.Step>
-                    <EmailFormNew setStage={onStageChange} onBack={onBack} />
-                  </Stepper.Step>
-                  <Stepper.Step>
-                    <VerifyFormNew setStage={onStageChange} onBack={onBack} />
-                  </Stepper.Step>
-                </Stepper>
-              </div>
+              <Stepper
+                step={stepIndex()}
+                transition={Stepper.transitions.scale}
+              >
+                <Stepper.Step>
+                  <LoginPicker
+                    setStage={onStageChange}
+                    signupMode={props.signupMode}
+                  />
+                </Stepper.Step>
+                <Stepper.Step>
+                  <EmailFormNew setStage={onStageChange} onBack={onBack} />
+                </Stepper.Step>
+                <Stepper.Step>
+                  <VerifyFormNew setStage={onStageChange} onBack={onBack} />
+                </Stepper.Step>
+              </Stepper>
+            </div>
 
-              <div class="text-center text-xs text-ink/50 wrap-break-word">
-                By continuing, you agree to our{' '}
-                <a
-                  class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
-                  href="/terms"
-                >
-                  terms
-                </a>{' '}
-                and{' '}
-                <a
-                  class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
-                  href="/privacy"
-                >
-                  privacy policy
-                </a>
-                .
-              </div>
+            <div class="text-center text-xs text-ink/50 wrap-break-word">
+              By continuing, you agree to our{' '}
+              <a
+                class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
+                href="/terms"
+              >
+                terms
+              </a>{' '}
+              and{' '}
+              <a
+                class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
+                href="/privacy"
+              >
+                privacy policy
+              </a>
+              .
             </div>
           </div>
         </div>
-      </Show>
+      </div>
     </Show>
   );
 }

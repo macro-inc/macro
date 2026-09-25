@@ -1,6 +1,6 @@
 import type { JSX } from 'solid-js';
 import { isServer } from 'solid-js/web';
-import { journeyHref } from '../../../../src/features/marketing/core/navigation';
+import { journeyHref } from '../../features/marketing/core/navigation';
 import { analytics, buildCalLinkWithAttribution } from './utilAnalytic';
 
 // Mobile/touch browsers (phones, touch tablets). Signing up + onboarding on a

@@ -14,11 +14,10 @@ function SortableHeader(props: {
   sortId?: TaskSortId;
   align?: 'start' | 'end';
   class?: string;
-  activeSort?: { id: TaskSortId; reversed?: boolean };
-  onSort?: (id: TaskSortId) => void;
 }) {
-  const active = () => props.activeSort?.id === props.sortId;
-  const reversed = () => active() && props.activeSort?.reversed === true;
+  const { state, setPrimarySort } = useTasksView();
+  const active = () => state.sort[0]?.id === props.sortId;
+  const reversed = () => active() && state.sort[0]?.reversed === true;
   const alignment = () => {
     if (props.align === 'end') return 'justify-end';
     return 'justify-start';
@@ -42,8 +41,7 @@ function SortableHeader(props: {
               'flex h-full min-w-0 items-center gap-1 text-ink-extra-muted hover:text-ink',
               active() && 'text-ink'
             )}
-            disabled={!props.onSort}
-            onClick={() => props.onSort?.(sortId())}
+            onClick={() => setPrimarySort(sortId())}
           >
             <span class="truncate">{props.label}</span>
             <ArrowDownIcon
@@ -60,17 +58,6 @@ function SortableHeader(props: {
 }
 
 export function TaskListHeader() {
-  const { state, setPrimarySort } = useTasksView();
-  return (
-    <TaskListHeaderSurface activeSort={state.sort[0]} onSort={setPrimarySort} />
-  );
-}
-
-/** The same column header for fixture-backed previews without a task provider. */
-export function TaskListHeaderSurface(props: {
-  activeSort?: { id: TaskSortId; reversed?: boolean };
-  onSort?: (id: TaskSortId) => void;
-}) {
   return (
     <div
       role="row"
@@ -101,8 +88,6 @@ export function TaskListHeaderSurface(props: {
         area="timestamp"
         sortId="updated_at"
         align="end"
-        activeSort={props.activeSort}
-        onSort={props.onSort}
       />
     </div>
   );

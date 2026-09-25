@@ -1,5 +1,5 @@
-import posthog from 'posthog-js';
 import { isServer } from 'solid-js/web';
+import { createDeferredPosthog } from './utilDeferredPosthog';
 
 declare const gtag: (
   command: 'config' | 'event' | 'js',
@@ -84,11 +84,7 @@ const initializePosthog = () => {
     import.meta.env.VITE_POSTHOG_API_KEY ||
     'phc_eSQcxAxPf0FAmnCTckz84305pNlMlOdDKciSKkuX0GO';
 
-  posthog.init(key, {
-    api_host: 'https://macro-prox.macroverse.workers.dev/i/ph',
-    ui_host: 'https://us.posthog.com',
-    defaults: '2026-01-30',
-  });
+  return createDeferredPosthog(key);
 };
 
 const generateEventId = (): string => {
@@ -116,19 +112,22 @@ const PAGE_VIEW_FAIL_ERROR_MESSAGE = '[Analytics] Failed to send page view';
 const createAnalytics = () => {
   // No analytics in dev or during build-time prerendering.
   const disabled = import.meta.env.DEV === true || isServer;
+  let posthog: ReturnType<typeof createDeferredPosthog> | undefined;
 
   const initializeProviders = () => {
     if (disabled) return;
 
     tryCatch(initializeGoogleAnalytics, INITIALIZE_FAIL_ERROR_MESSAGE);
     // Meta Pixel: base code lives in index.html (fires on cold load before bundle).
-    tryCatch(initializePosthog, INITIALIZE_FAIL_ERROR_MESSAGE);
+    tryCatch(() => {
+      posthog = initializePosthog();
+    }, INITIALIZE_FAIL_ERROR_MESSAGE);
   };
 
   initializeProviders();
 
-  // PostHog is absent here on purpose: its `defaults` config auto-captures
-  // initial + history-change pageviews, so a manual capture would double-count.
+  // The deferred PostHog queue records navigation until the SDK is ready, then
+  // its history-change capture takes over without duplicating pageviews.
   const pageView = (path: string) => {
     if (disabled) {
       return;
@@ -144,6 +143,8 @@ const createAnalytics = () => {
     tryCatch(() => {
       fbq('track', 'PageView', {}, { eventID: generateEventId() });
     }, PAGE_VIEW_FAIL_ERROR_MESSAGE);
+
+    posthog?.pageView();
   };
 
   const sendEvent = (
@@ -171,7 +172,7 @@ const createAnalytics = () => {
           break;
         }
         case 'posthog': {
-          posthog.capture(event, data);
+          posthog?.capture(event, data);
           break;
         }
       }
@@ -238,8 +239,8 @@ const createAnalytics = () => {
     tryCatch(() => {
       gtag('config', GA_ID, { user_id: email, email });
       fbq('init', META_PIXEL_ID, { em: email });
-      posthog.identify(email, { email });
     }, '[Analytics] Failed to identify visitor:');
+    posthog?.identify(email);
   };
 
   const trackPosthog = (event: string, data?: Record<string, unknown>) => {

@@ -5,7 +5,6 @@ import { Login } from '@app/features/auth/Login';
 import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAuthWelcome';
 import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from '@app/features/auth/Shared';
-import { SignupEntry } from '@app/features/auth/SignupEntry';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
 import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
@@ -15,7 +14,6 @@ import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxCo
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
-import { hasOnboardingHandoff } from '@app/features/setup/core/onboardingHandoff';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { SearchProvider } from '@app/features/soup/search/context';
@@ -196,30 +194,15 @@ function SetupRedirect() {
 
 /**
  * The old split-screen /setup surface is retired; the onboarding flow lives at
- * /onboarding now. Explicit web signups can resume regardless of rollout;
- * other flag-off visits still go home.
+ * /onboarding now. Flag off, /setup must go home — forwarding would land
+ * flag-off web users on /login and native users on MobileOnboarding.
  */
 function SetupRoute() {
   const onboardingV4 = useOnboardingV4Flag();
-  const userQuery = useUserInfoQuery();
-  const explicitJourney = () =>
-    !isNativeMobilePlatform() &&
-    hasOnboardingHandoff(
-      sessionStorage,
-      userQuery.isSuccess ? userQuery.data?.id : undefined
-    );
 
   return (
-    <Show
-      when={
-        explicitJourney() || (!userQuery.isPending && !onboardingV4().loading)
-      }
-      fallback={<LoadingBlock />}
-    >
-      <Show
-        when={explicitJourney() || onboardingV4().enabled}
-        fallback={<Navigate href="/" />}
-      >
+    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
+      <Show when={onboardingV4().enabled} fallback={<Navigate href="/" />}>
         <SetupRedirect />
       </Show>
     </Show>
@@ -227,30 +210,16 @@ function SetupRoute() {
 }
 
 /**
- * An explicit web signup always resumes its flow. Other visits wait for the
- * rollout flag before redirecting, preserving their return destination.
+ * Web/desktop gate for /onboarding. Waits for PostHog to report flags before
+ * bouncing: with the flag on but not yet loaded, a direct visit (or a reload
+ * mid-flow) would otherwise get kicked to /login and lose its ?next.
  */
 function OnboardingRoute() {
   const onboardingV4 = useOnboardingV4Flag();
-  const location = useLocation();
-  const userQuery = useUserInfoQuery();
-  const explicitJourney = () =>
-    hasOnboardingHandoff(
-      sessionStorage,
-      userQuery.isSuccess ? userQuery.data?.id : undefined
-    );
 
   return (
-    <Show
-      when={
-        explicitJourney() || (!userQuery.isPending && !onboardingV4().loading)
-      }
-      fallback={<LoadingBlock />}
-    >
-      <Show
-        when={explicitJourney() || onboardingV4().enabled}
-        fallback={<Navigate href={`/login${location.search}`} />}
-      >
+    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
+      <Show when={onboardingV4().enabled} fallback={<Navigate href="/login" />}>
         <OnboardingFlow />
       </Show>
     </Show>
@@ -269,7 +238,7 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/signup',
-    component: SignupEntry,
+    component: () => <Login signupMode />,
   },
   {
     path: CALLBACK_PATH,
@@ -315,7 +284,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/welcome',
     component: () =>
-      isNativeMobilePlatform() ? <MobileAuthWelcome /> : <SignupEntry />,
+      isNativeMobilePlatform() ? <MobileAuthWelcome /> : <Login />,
   },
   {
     // Mobile-web visitors can't sign up on a phone, so instead of pushing them
@@ -490,15 +459,9 @@ function InitialInteractiveOnboardingModal() {
   const onboardingV4 = useOnboardingV4Flag();
   const [open, setOpen] = createSignal(true);
   const [onboardingStarted, setOnboardingStarted] = createSignal(false);
-  const explicitJourney = () =>
-    hasOnboardingHandoff(
-      sessionStorage,
-      userInfoQuery.isSuccess ? userInfoQuery.data?.id : undefined
-    );
 
   const modalOpen = () =>
     open() &&
-    !explicitJourney() &&
     // `just run_local` sets VITE_ENABLE_ONBOARDING_V4=false; without this the
     // v4-off fallback would still open this legacy modal. Opt in with
     // `just run_local --enable-onboarding`.

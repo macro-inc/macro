@@ -1,6 +1,5 @@
 import { createBlockEffect, inBlock } from '@core/block';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
-import { isPublicSurface } from '@core/constant/publicSurface';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
 import {
@@ -55,7 +54,7 @@ export const ws = new WebsocketBuilder(resolveWsUrl)
     pongMessage: 'pong',
     maxMissedHeartbeats: 3,
   })
-  .build({ autoConnect: !isPublicSurface });
+  .build();
 
 function reconnectIfDisconnected() {
   ws.reconnectIfDisconnected();
@@ -70,11 +69,7 @@ function handleVisibilityChange() {
 // When the browser regains connectivity or a background tab becomes visible,
 // kick the connection immediately instead of waiting for heartbeat/backoff
 // timers, which may have been throttled while the tab was stale.
-if (
-  !isPublicSurface &&
-  typeof window !== 'undefined' &&
-  typeof document !== 'undefined'
-) {
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   window.addEventListener('online', reconnectIfDisconnected);
   document.addEventListener('visibilitychange', handleVisibilityChange);
 }

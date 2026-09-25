@@ -16,6 +16,11 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
+      "@ui": ["src/ui/index.ts"],
+      "@ui/*": ["src/ui/*"],
+      "@icon/*": ["src/assets/app-icons/*"],
+      "@phosphor/*": ["../../../node_modules/@phosphor-icons/core/assets/regular/*"],
+      "@phosphor-fill/*": ["../../../node_modules/@phosphor-icons/core/assets/fill/*"],
       "@animal/*": ["src/lib/animal/*"],
       "@svggg/*": ["src/lib/svggg/*"],
       "@theme/*": ["src/lib/theme/*"],

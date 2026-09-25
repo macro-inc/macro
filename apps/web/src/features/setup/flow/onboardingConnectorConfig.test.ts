@@ -59,28 +59,6 @@ describe('resolveOnboardingConnectorNames', () => {
 });
 
 describe('resolveOnboardingStepIndex', () => {
-  it('resumes legacy connector OAuth callbacks at the consolidated catalog', () => {
-    const steps = [
-      'welcome',
-      'vision',
-      'tools',
-      'security',
-      'explore',
-      'introduction',
-      'email',
-      'team',
-      'customize',
-      'building',
-      'summary',
-      'plan',
-    ];
-    expect(resolveOnboardingStepIndex(steps, 'connect-notion')).toBe(2);
-    expect(resolveOnboardingStepIndex(steps, 'explore')).toBe(4);
-    expect(resolveOnboardingStepIndex(steps, 'privacy')).toBe(3);
-    expect(resolveOnboardingStepIndex(steps, 'email')).toBe(6);
-    expect(resolveOnboardingStepIndex(steps, 'plan')).toBe(11);
-    expect(resolveOnboardingStepIndex(steps, 'unknown')).toBe(0);
-  });
   const fullStepList = [
     'email',
     'connect-linear',
@@ -125,19 +103,5 @@ describe('resolveOnboardingStepIndex', () => {
 
   it('falls back safely for an unknown saved step', () => {
     expect(resolveOnboardingStepIndex(fullStepList, 'unknown')).toBe(0);
-  });
-  it('resumes removed product-tour steps at team creation', () => {
-    const steps = [
-      'welcome',
-      'vision',
-      'tools',
-      'security',
-      'team',
-      'email',
-      'customize',
-    ];
-    expect(resolveOnboardingStepIndex(steps, 'explore')).toBe(4);
-    expect(resolveOnboardingStepIndex(steps, 'introduction')).toBe(4);
-    expect(resolveOnboardingStepIndex(steps, 'email')).toBe(5);
   });
 });

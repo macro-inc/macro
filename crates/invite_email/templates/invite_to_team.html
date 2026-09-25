@@ -53,7 +53,7 @@
         mso-hide: all;
       "
     >
-      Your colleague invited you to {{ team_name }}. Bring your work into one shared context.
+      An invitation to join a team on Macro.
     </div>
     <table
       role="presentation"
@@ -125,7 +125,7 @@
                     color: #222222;
                   "
                 >
-                  Good work starts together.
+                  Your team is on Macro.
                 </h1>
                 {% if let Some(url) = sender_profile_picture_url %}
                 <table
@@ -160,12 +160,8 @@
                     color: #525252;
                   "
                 >
-                  Your colleague <strong>{{ invited_by.email_part().as_ref() }}</strong>
-                  invited you to join <strong>{{ team_name }}</strong> on Macro.
-                </p>
-                <p style="margin: 0 0 20px; font-size: 16px; line-height: 26px; color: #525252;">
-                  Macro brings your team’s conversations, documents, and tools into
-                  one workspace, so the context behind your work is always close.
+                  {{ invited_by.email_part().as_ref() }} has invited you to the
+                  <strong>{{ team_name }}</strong> team.
                 </p>
                 {% if let Some(r) = role %}
                 <p
@@ -189,7 +185,7 @@
                     <td
                       bgcolor="#222222"
                       style="
-                        border-radius: 999px;
+                        border-radius: 6px;
                         text-align: center;
                         mso-padding-alt: 14px 24px;
                       "
@@ -200,7 +196,7 @@
                           display: inline-block;
                           padding: 14px 24px;
                           border: 1px solid #222222;
-                          border-radius: 999px;
+                          border-radius: 6px;
                           color: #ffffff;
                           background-color: #222222;
                           font-size: 15px;
@@ -209,7 +205,7 @@
                           text-decoration: none;
                           mso-padding-alt: 0;
                         "
-                        >Join {{ team_name }}</a
+                        >Join team</a
                       >
                     </td>
                   </tr>

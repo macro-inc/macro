@@ -1,7 +1,7 @@
 import { emailDomain, isPlausibleEmail } from './shared';
 
-/** Keep the initial invitation small; additional teammates can be invited in Settings. */
-export const PREFILL_CAP = 4;
+/** How many same-domain teammates get pre-added to the invite list. */
+export const PREFILL_CAP = 6;
 
 /**
  * Same-domain teammates worth pre-adding to the invite list: the user's
@@ -19,12 +19,9 @@ export function prefillableTeammates(args: {
   if (!domain) return [];
   const teammates = new Set(
     contacts
-      .map((contact) => contact.email.trim().toLowerCase())
+      .map((contact) => contact.email)
       .filter(
-        (address) =>
-          isPlausibleEmail(address) &&
-          address !== ownEmail?.trim().toLowerCase() &&
-          emailDomain(address) === domain.toLowerCase()
+        (address) => address !== ownEmail && emailDomain(address) === domain
       )
   );
   return [...teammates].slice(0, PREFILL_CAP);
@@ -44,8 +41,7 @@ export function validInviteEmails(
   slots: string[],
   ownEmail: string | undefined
 ): string[] {
-  return [...new Set(slots.map((value) => value.trim().toLowerCase()))].filter(
-    (value) =>
-      isPlausibleEmail(value) && value !== ownEmail?.trim().toLowerCase()
+  return [...new Set(slots.map((value) => value.trim()))].filter(
+    (value) => isPlausibleEmail(value) && value !== ownEmail
   );
 }

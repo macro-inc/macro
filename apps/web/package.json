@@ -40,10 +40,11 @@
     "fix": "bunx --bun biome lint --write",
     "clean": "bun scripts/clean-env.js",
     "knip": "bunx --bun knip",
-    "build:site": "vite build -c marketing/vite.config.ts && vite build -c marketing/vite.prerender.config.ts && bun marketing/scripts/prerender.ts && bun marketing/scripts/verify-seo.ts",
+    "build:site": "bun run --cwd marketing build",
     "check:seo:live": "bun marketing/scripts/verify-seo-live.ts",
     "check:seo": "bun marketing/scripts/verify-seo.ts",
-    "build:all": "bun run build && bun run build:site"
+    "build:all": "bun run build && bun run build:site",
+    "dev:site": "bun run --cwd marketing dev"
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",
@@ -65,7 +66,6 @@
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/playfair-display": "^5.2.8",
     "@fontsource-variable/roboto-mono": "^5.2.8",
-    "@fontsource-variable/roboto-slab": "^5.3.0",
     "@fullcalendar/core": "^6.1.21",
     "@fullcalendar/daygrid": "^6.1.21",
     "@fullcalendar/interaction": "^6.1.21",
@@ -174,8 +174,7 @@
     "vite-plugin-wasm": "^3.5.0",
     "wonka": "^6.3.2",
     "zod": "^4.3.6",
-    "zod-validation-error": "^5.0.0",
-    "simplex-noise": "^4.0.3"
+    "zod-validation-error": "^5.0.0"
   },
   "devDependencies": {
     "@apidevtools/json-schema-ref-parser": "^15.3.5",
@@ -220,7 +219,6 @@
     "vite-plugin-solid-svg": "^0.8.1",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "5.0.1",
-    "webdriverio": "9.29.1",
-    "sirv": "^3.0.2"
+    "webdriverio": "9.29.1"
   }
 }

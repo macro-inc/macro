@@ -60,14 +60,6 @@ describe('removeInviteSlot', () => {
 });
 
 describe('validInviteEmails', () => {
-  it('normalizes case before deduplication and self exclusion', () => {
-    expect(
-      validInviteEmails(
-        ['ADA@Macro.com', 'ada@macro.com', 'ME@MACRO.COM'],
-        'me@macro.com'
-      )
-    ).toEqual(['ada@macro.com']);
-  });
   it('trims, dedupes, and drops blanks, junk, and the user themselves', () => {
     expect(
       validInviteEmails(

@@ -3,7 +3,11 @@
  * vite.prerender.config.ts` into dist-prerender/, then driven by
  * scripts/prerender.ts under Bun — no browser involved.
  */
-import { renderToStringAsync } from 'solid-js/web';
+import {
+  generateHydrationScript,
+  renderToString,
+  renderToStringAsync,
+} from 'solid-js/web';
 import { App } from '../src/app/main/App';
 import {
   buildSeoTagsHtml,
@@ -11,6 +15,7 @@ import {
   consumeServerSeo,
   type PageSeo,
 } from '../src/app/utils/utilSeo';
+import { Homepage } from '../src/features/setup/Homepage';
 import { themes } from '../src/lib/theme/signals/themeSignals';
 import { posts } from '../src/routes/posts/registry';
 
@@ -98,4 +103,12 @@ export function criticalCss(themeId = 'Macro'): string {
     // than the viewport and slide back when the bundle arrives.
     '#app-scroll-root :is(section,div):not(.no-scrollbar,.no-scrollbar *){min-width:0}',
   ].join('');
+}
+
+/** Real Solid SSR markup, so the browser keeps the headline instead of replacing it. */
+export function renderHomepage(): { html: string; hydration: string } {
+  return {
+    html: renderToString(() => <Homepage />),
+    hydration: generateHydrationScript(),
+  };
 }

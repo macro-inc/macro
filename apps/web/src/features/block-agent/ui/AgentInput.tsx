@@ -43,8 +43,6 @@ export type QuoteInsert = (text: string) => void;
 
 export interface AgentInputProps {
   placeholder?: string;
-  /** Omit workspace lookup and link previews in isolated, fixture-backed embeds. */
-  workspaceContext?: boolean;
   /** The agent is working: the send button becomes a stop square. */
   busy?: boolean;
   /**
@@ -196,13 +194,12 @@ export function AgentInput(props: AgentInputProps) {
     (props.onSendNext ?? props.onStop)?.();
   };
 
-  const editor = buildConfig('chat').namespace('agent-input');
-  if (props.workspaceContext !== false) {
-    editor.withMentions({ showOpenTabs: true, block: 'agent' });
-  } else {
-    editor.withSkipPreviewFetch();
-  }
-  editor
+  const editor = buildConfig('chat')
+    .namespace('agent-input')
+    .withMentions({
+      showOpenTabs: true,
+      block: 'agent',
+    })
     .withEmojis()
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
