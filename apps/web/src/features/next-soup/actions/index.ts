@@ -12,6 +12,7 @@ export {
 export { makeAddTagAction } from './make-add-tag-action';
 export { makeBlockSenderAction } from './make-block-sender-action';
 export { makeCopyAction } from './make-copy-action';
+export { makeDuplicateAsTaskAction } from './make-duplicate-as-task-action';
 export { makeCopyBranchNameAction } from './make-copy-branch-name-action';
 export { makeCopyEntityIdAction } from './make-copy-entity-id-action';
 export { makeCopyLinkAction } from './make-copy-link-action';
