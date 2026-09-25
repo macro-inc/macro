@@ -11,14 +11,11 @@ import {
   calendarTargetSearch,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
-import type { DriveLocation } from '@app/features/drive-view/core/types';
-import type { DriveDocumentRoute } from '@app/features/drive-view/primitives/drive-route';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import {
   defineRoute,
   routeParams,
   type SplitLocation,
-  type SplitRouteMatch,
   type SplitRouterEntry,
   type UnmatchedSplitPathHandler,
 } from '@app/lib/split-router';
@@ -34,7 +31,12 @@ import { isRecord } from '@app/lib/split-router/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
-import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import {
+  blocks,
+  fileTypeToBlockName,
+  isBlockAlias,
+  resolveBlockAlias,
+} from '@core/constant/allBlocks';
 import { z } from 'zod';
 import type { SplitContent } from '../layoutManager';
 
@@ -63,7 +65,11 @@ export function decodeLegacyPair(
     };
   }
 
-  const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);
+  const resolvedType =
+    type === 'write'
+      ? resolveBlockAlias(fileTypeToBlockName(type))
+      : resolveBlockAlias(type as BlockName | BlockAlias);
+  if (!Object.hasOwn(blocks, resolvedType)) return;
 
   if (isBlockAlias(type)) {
     return {
@@ -173,39 +179,6 @@ export function encodeLegacyContent(content: SplitContent): string[] {
   ];
 }
 
-export function driveSplitContent(
-  location: DriveLocation,
-  document?: DriveDocumentRoute
-): SplitContent {
-  const matches: [SplitRouteMatch, ...SplitRouteMatch[]] = [
-    { id: 'drive', params: {} },
-  ];
-  if (location.kind === 'folder') {
-    matches.push({
-      id: 'drive-folder',
-      params: { view: 'folder', folderId: location.id ?? undefined },
-    });
-  } else if (location.tab !== 'owned') {
-    matches.push({ id: 'drive-tab', params: { tab: location.tab } });
-  }
-  if (document) {
-    matches.push({
-      id:
-        location.kind === 'folder'
-          ? 'drive-folder-document'
-          : location.tab === 'owned'
-            ? 'drive-document'
-            : 'drive-tab-document',
-      params: { documentId: document.id, documentType: document.type },
-    });
-  }
-  return {
-    type: 'component',
-    id: 'documents',
-    entryMetadata: { route: { matches } },
-  };
-}
-
 export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
@@ -240,6 +213,22 @@ export function splitLocationFromContent(
         ],
       },
       ...(search ? { search: { [CALENDAR_SEARCH_NAMESPACE]: search } } : {}),
+    };
+  }
+
+  if (content.type === 'pr') {
+    return {
+      route: {
+        matches: [{ id: 'pr-detail', params: { foreignEntityId: content.id } }],
+      },
+    };
+  }
+
+  if (content.type === 'call') {
+    return {
+      route: {
+        matches: [{ id: 'call-detail', params: { callId: content.id } }],
+      },
     };
   }
 
@@ -331,6 +320,20 @@ export function splitContentFromLocation(
     return { type: 'component', id: root.id.slice('view-'.length) };
   if (root.id === 'drive') return { type: 'component', id: 'documents' };
   if (root.id === 'settings') return { type: 'component', id: 'settings' };
+  if (root.id === 'pr-detail') {
+    const { foreignEntityId } = routeParams(location.route);
+    if (typeof foreignEntityId === 'string' && foreignEntityId.length > 0) {
+      return { type: 'pr', id: foreignEntityId };
+    }
+    throw new Error('Invalid PR detail split route');
+  }
+  if (root.id === 'call-detail') {
+    const { callId } = routeParams(location.route);
+    if (typeof callId === 'string' && callId.length > 0) {
+      return { type: 'call', id: callId };
+    }
+    throw new Error('Invalid call detail split route');
+  }
 
   const params = routeParams(location.route);
   if (
@@ -358,7 +361,9 @@ export const legacySplitRoute = defineRoute({
   id: 'legacy-content',
   path: ':type/:id',
   search: '*',
-  params: z.object({ type: z.string().min(1), id: z.string().min(1) }),
+  params: z
+    .object({ type: z.string().min(1), id: z.string().min(1) })
+    .refine(({ type, id }) => decodeLegacyPair(type, id) !== undefined),
   externalSearch: (entry) => {
     const { type } = routeParams(entry.location.route);
     if (type === 'email') return Object.values(EMAIL_URL_PARAMS);

@@ -2,6 +2,7 @@ import { PLAN_BY_TIER, type PlanTier } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import { usePermissions, useUserId } from '@core/context/user';
 import { plural } from '@core/util/string';
@@ -18,8 +19,7 @@ import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer } from '@ui';
 import { createMemo, For, Match, Show, Switch } from 'solid-js';
-// AI usage billing is temporarily disabled; keep the UI for re-enabling.
-// import { AiUsageControls, AiUsageMeter } from './AiUsage';
+import { AiUsageControls, AiUsageMeter } from './AiUsage';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
 const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
@@ -27,7 +27,7 @@ const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
   premium: [
     'All agents',
     'All models',
-    // '$40 of AI usage each month',
+    ...(DEV_MODE_ENV ? ['$40 of AI usage each month'] : []),
     'No watermark',
     'AI projections',
     'Multiple email inboxes',
@@ -37,7 +37,7 @@ const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
   ],
   max: [
     'Everything in Premium',
-    // '$200 of AI usage each month',
+    ...(DEV_MODE_ENV ? ['$200 of AI usage each month'] : []),
     'Priority support',
   ],
 };
@@ -72,9 +72,10 @@ function describeSeatPlans(members: TeamMember[]): string {
 const PlanPrice = (props: { tier: PaidPlan }) => (
   <p class="text-ink-extra-muted text-xs">
     ${PLAN_BY_TIER[props.tier].price} per seat / month
-    {/* AI usage billing is temporarily disabled.
-    · includes ${PLAN_BY_TIER[props.tier].aiIncluded} of AI usage
-    */}
+    <Show when={DEV_MODE_ENV}>
+      {' '}
+      · includes ${PLAN_BY_TIER[props.tier].aiIncluded} of AI usage
+    </Show>
   </p>
 );
 
@@ -140,14 +141,12 @@ export const Billing = () => {
     try {
       await changePlan.mutateAsync({ plan });
       analytics.track('plan_changed', { plan });
-      // AI usage billing is temporarily disabled.
-      // toast.success(
-      //   plan === 'max'
-      //     ? 'Upgraded to Max. Your larger AI allowance applies right away.'
-      //     : 'Switched to Premium.'
-      // );
       toast.success(
-        plan === 'max' ? 'Upgraded to Max.' : 'Switched to Premium.'
+        plan === 'max'
+          ? DEV_MODE_ENV
+            ? 'Upgraded to Max. Your larger AI allowance applies right away.'
+            : 'Upgraded to Max.'
+          : 'Switched to Premium.'
       );
     } catch (error) {
       console.error(error);
@@ -164,7 +163,7 @@ export const Billing = () => {
     }
   };
 
-  // const returnUrl = () => `${window.location.origin}/app/settings/billing`;
+  const returnUrl = () => `${window.location.origin}/app/settings/billing`;
 
   return (
     <SettingsPage
@@ -254,8 +253,9 @@ export const Billing = () => {
         </SettingsCard>
       </SettingsSection>
 
-      {/* AI usage billing is temporarily disabled.
-      <Show when={hasPaid() && summary.isSuccess && summary.data}>
+      <Show
+        when={DEV_MODE_ENV && hasPaid() && summary.isSuccess && summary.data}
+      >
         {(snapshot) => (
           <SettingsSection
             title="AI usage"
@@ -284,7 +284,6 @@ export const Billing = () => {
           </SettingsSection>
         )}
       </Show>
-      */}
 
       <Show when={canChangePlan()}>
         <Switch>
@@ -335,8 +334,7 @@ export const Billing = () => {
             </SettingsSection>
           </Match>
           <Match when={tier() === 'premium'}>
-            {/* <SettingsSection title="Need more AI?"> */}
-            <SettingsSection title="Upgrade">
+            <SettingsSection title={DEV_MODE_ENV ? 'Need more AI?' : 'Upgrade'}>
               <SettingsCard>
                 <section class="flex flex-col gap-4 p-4">
                   <header class="flex items-center gap-2">
@@ -381,8 +379,8 @@ export const Billing = () => {
                 >
                   Switch to Premium
                 </button>{' '}
-                {/* ($40 per seat / month with $40 of AI usage). */}
-                ($40 per seat / month).
+                ($40 per seat / month
+                <Show when={DEV_MODE_ENV}> with $40 of AI usage</Show>).
               </p>
             </SettingsSection>
           </Match>

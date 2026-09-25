@@ -1,5 +1,5 @@
 import { EntityDetail } from '@app/components/entity-detail/EntityDetail';
-import type { EntityDetailTarget } from '@app/components/entity-detail/EntityDetailNavigationStack';
+import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { useParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';

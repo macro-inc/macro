@@ -2,11 +2,13 @@
 //! command at a time, and routing to the replica that holds the session.
 
 use agent_fold::domain::model::{StopReason, TurnSignal};
+use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::events::{
     AgentSessionLifecycleEvent, InputReceivedMetadata, SessionDeletedMetadata,
     SessionSettledMetadata, SessionStoppedMetadata, TurnEndedMetadata, TurnStartedMetadata,
     WaitingForInputMetadata,
 };
+use agent_session::domain::model::StoredQueuedAction;
 
 use super::*;
 
@@ -278,6 +280,12 @@ where
         session_id: AgentSessionId,
         command: HarnessCommand,
     ) -> Result<CommandOutcome> {
+        // Persist-as-we-go needs a current working copy before the first
+        // mutation, or a restart would overwrite the store with an empty
+        // queue. Open creates the row and has nothing to restore.
+        if !matches!(command, HarnessCommand::Open(_)) {
+            self.ensure_hydrated(session_id).await?;
+        }
         match &command {
             HarnessCommand::Open(open)
                 if AgentKind::of(open.bot_id) == AgentKind::SandboxedCoder
@@ -349,11 +357,13 @@ where
                         .edit_prompt(session_id, action_id, prompt, actor),
                     session_id,
                 )?;
+                self.persist_or_rollback(session_id).await?;
                 self.publish_queue(session_id).await;
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::RemoveQueued { action_id, .. } => {
                 queue_result(self.queues.remove(session_id, action_id), session_id)?;
+                self.persist_or_rollback(session_id).await?;
                 self.publish_queue(session_id).await;
                 Ok(CommandOutcome::Completed)
             }
@@ -515,6 +525,7 @@ where
                 // empty snapshot is the viewers' goodbye.
                 self.busy.clear(session_id);
                 self.queues.drop_session(session_id);
+                self.hydrated.remove(&session_id);
                 self.publish_queue(session_id).await;
                 match identity {
                     Ok(identity) => {
@@ -593,6 +604,7 @@ where
             self.queues.enqueue(session_id, entry)
         };
         queue_result(enqueued, session_id)?;
+        self.persist_or_rollback(session_id).await?;
         // Mentions are a fact about the prompt, not the turn: published as
         // soon as the prompt is accepted, whether it dispatches now or waits.
         if let Some(prompt) = prompt {
@@ -682,6 +694,84 @@ where
                     .mark_announced(session_id, action_id, announced.message_id),
                 session_id,
             )?;
+            self.persist_or_rollback(session_id).await?;
+        }
+        Ok(())
+    }
+
+    /// Write the working copy through to the session store.
+    async fn write_queue(&self, session_id: AgentSessionId) -> Result<()> {
+        let stored = self
+            .queues
+            .snapshot(session_id)
+            .iter()
+            .map(QueuedEntry::to_stored)
+            .collect::<anyhow::Result<Vec<StoredQueuedAction>>>()
+            .map_err(AgentSessionError::Unknown)?;
+        self.sessions
+            .replace_queued_actions(session_id, &stored)
+            .await?;
+        Ok(())
+    }
+
+    /// Persist after a working-copy mutation. A failed write reloads the last
+    /// good row so this process does not keep a queue the store never saw.
+    async fn persist_or_rollback(&self, session_id: AgentSessionId) -> Result<()> {
+        if let Err(error) = self.write_queue(session_id).await {
+            if let Err(reload) = self.reload_queue(session_id).await {
+                tracing::error!(
+                    error = ?reload,
+                    %session_id,
+                    "failed to reload the agent session queue after a persist error"
+                );
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Put a claimed entry back and persist. A persist failure here loses the
+    /// in-flight item on the next restart — the same as losing the turn mark.
+    async fn requeue_claimed(&self, session_id: AgentSessionId, entry: QueuedEntry) {
+        self.queues.requeue_front(session_id, entry);
+        if let Err(error) = self.write_queue(session_id).await {
+            tracing::error!(
+                error = ?error,
+                %session_id,
+                "failed to persist a requeued agent session action"
+            );
+        }
+    }
+
+    /// Replace the working copy from the session store.
+    async fn reload_queue(&self, session_id: AgentSessionId) -> Result<()> {
+        let stored = self.sessions.list_queued_actions(session_id).await?;
+        let entries = stored
+            .into_iter()
+            .map(QueuedEntry::from_stored)
+            .collect::<anyhow::Result<Vec<QueuedEntry>>>()
+            .map_err(AgentSessionError::Unknown)?;
+        self.queues.replace(session_id, entries);
+        Ok(())
+    }
+
+    /// Restore the working copy from the session store and mark it current.
+    /// Resume always does this so waiting prompts survive a replica restart.
+    pub(super) async fn restore_queue(&self, session_id: AgentSessionId) -> Result<()> {
+        self.reload_queue(session_id).await?;
+        self.hydrated.insert(session_id);
+        Ok(())
+    }
+
+    /// Load the durable queue the first time this process handles the session,
+    /// so a later persist cannot wipe waiting actions this replica never saw.
+    async fn ensure_hydrated(&self, session_id: AgentSessionId) -> Result<()> {
+        if self.hydrated.contains(&session_id) {
+            return Ok(());
+        }
+        if let Err(error) = self.restore_queue(session_id).await {
+            self.hydrated.remove(&session_id);
+            return Err(error);
         }
         Ok(())
     }
@@ -727,6 +817,13 @@ where
         let Some(mut entry) = self.queues.claim_next(session_id) else {
             return Ok(Dispatch::QueueEmpty);
         };
+        // Persist the remaining queue before any fallible work: a crash after
+        // this leaves the claimed entry as in-flight (lost, like the turn
+        // mark) and keeps every still-waiting action.
+        if let Err(error) = self.write_queue(session_id).await {
+            self.queues.requeue_front(session_id, entry);
+            return Err(error);
+        }
 
         // Compose a copy: the queued entry stays raw so a retry still edits
         // and re-composes the user's text, and the chip (below) still shows
@@ -736,7 +833,7 @@ where
             .compose_action(&mut composed, entry.actor.as_ref(), entry.announce.as_ref())
             .await
         {
-            self.queues.requeue_front(session_id, entry);
+            self.requeue_claimed(session_id, entry).await;
             return Err(error);
         }
 
@@ -746,7 +843,7 @@ where
         let prompted_message_id = match self.sessions.next_prompt_message_id(session_id).await {
             Ok(message_id) => message_id,
             Err(error) => {
-                self.queues.requeue_front(session_id, entry);
+                self.requeue_claimed(session_id, entry).await;
                 return Err(error.into());
             }
         };
@@ -764,7 +861,7 @@ where
             {
                 Ok(announcement) => announcement,
                 Err(error) => {
-                    self.queues.requeue_front(session_id, entry);
+                    self.requeue_claimed(session_id, entry).await;
                     return Err(error);
                 }
             };
@@ -772,7 +869,7 @@ where
                 match self.announcer.announce(announcement).await {
                     Ok(announced) => entry.announced = Some(announced.message_id),
                     Err(error) => {
-                        self.queues.requeue_front(session_id, entry);
+                        self.requeue_claimed(session_id, entry).await;
                         return Err(error);
                     }
                 }
@@ -808,7 +905,7 @@ where
                 Ok(Dispatch::Dispatched)
             }
             Err(error) => {
-                self.queues.requeue_front(session_id, entry);
+                self.requeue_claimed(session_id, entry).await;
                 Err(error)
             }
         }

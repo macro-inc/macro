@@ -10,7 +10,8 @@ use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
     ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence,
     ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
-    SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, ThreadSession,
+    SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, StoredQueuedAction,
+    ThreadSession,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -59,6 +60,8 @@ pub struct InMemoryAgentSessionRepo {
     /// Session -> lease, mirroring the lease columns: release clears the
     /// holder and leaves the counter.
     leases: Arc<Mutex<HashMap<AgentSessionId, Lease>>>,
+    /// Session -> waiting actions, mirroring `agent_session_queue`.
+    queues: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredQueuedAction>>>>,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -444,6 +447,37 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory log store is not poisoned")
             .remove(&id);
+        self.queues
+            .lock()
+            .expect("in-memory queue store is not poisoned")
+            .remove(&id);
+        Ok(())
+    }
+
+    async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {
+        Ok(self
+            .queues
+            .lock()
+            .expect("in-memory queue store is not poisoned")
+            .get(&id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
+    ) -> Result<()> {
+        let mut queues = self
+            .queues
+            .lock()
+            .expect("in-memory queue store is not poisoned");
+        if entries.is_empty() {
+            queues.remove(&id);
+        } else {
+            queues.insert(id, entries.to_vec());
+        }
         Ok(())
     }
 }

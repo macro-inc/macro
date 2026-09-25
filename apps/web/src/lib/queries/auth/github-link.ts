@@ -14,9 +14,9 @@ export type GithubLinkStatus =
 
 export type GithubLink = {
   status: GithubLinkStatus;
-  // Populated once auth-service includes the linked account handle on
-  // /link/github/status.
+  /** Linked account identity, when the auth service exposes it. */
   username?: string;
+  userId?: string;
 };
 
 type UseGithubLinkStatusQueryOptions = {
@@ -33,15 +33,18 @@ export async function fetchGithubLinkStatus(): Promise<GithubLink> {
   const response = await authServiceClient.checkGithubLinkStatus();
 
   if (response.isOk()) {
-    const username =
-      (response.value as { github_username?: string | null }).github_username ??
-      undefined;
+    // The deployed auth service can lag the identity fields in the API schema.
+    const link = response.value as typeof response.value & {
+      github_username?: string | null;
+      github_user_id?: string | null;
+    };
 
     return {
-      status: response.value.reauthentication_required
+      status: link.reauthentication_required
         ? 'reauthentication_required'
         : 'linked',
-      username,
+      username: link.github_username ?? undefined,
+      userId: link.github_user_id ?? undefined,
     };
   }
 

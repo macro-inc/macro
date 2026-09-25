@@ -51,7 +51,10 @@ function controllerFor(
   return createRoot((dispose) => {
     disposers.push(dispose);
     return createCalendarEventFormController({
-      initialValue: { ...defaultEditorInitialValues(), ...initialValue },
+      initialValue: {
+        ...defaultEditorInitialValues(new Date(), true),
+        ...initialValue,
+      },
       calendarOptions: () => [
         { id: 'calendar-1', label: 'Calendar', color: '#000000' },
       ],
@@ -153,6 +156,55 @@ describe('pastEventWarning', () => {
   });
 });
 
+describe('conferencing selection', () => {
+  it('defaults new events to Macro without requesting provider conferencing', () => {
+    const controller = controllerFor({ title: 'Planning' });
+    expect(controller.state().conference).toBe('macro');
+    expect(controller.submitValues()?.conferenceChoice).toBe('macro');
+    expect(controller.submitValues()?.conference).toBeUndefined();
+  });
+
+  it('carries changes between Macro, no link, and Google Meet through submission', () => {
+    const controller = controllerFor({ title: 'Planning' });
+    controller.setField('conference', 'none');
+    expect(controller.submitValues()?.conferenceChoice).toBe('none');
+    expect(controller.submitValues()?.conference).toBeUndefined();
+    controller.setField('conference', 'google_meet');
+    expect(controller.submitValues()?.conferenceChoice).toBe('google_meet');
+    expect(controller.submitValues()?.conference).toBe('google_meet');
+    controller.setField('conference', 'macro');
+    expect(controller.submitValues()?.conferenceChoice).toBe('macro');
+    expect(controller.submitValues()?.conference).toBeUndefined();
+  });
+
+  it('clears existing provider conferencing when switching to Macro', () => {
+    const controller = controllerFor(
+      { title: 'Planning', conference: 'google_meet' },
+      { isEdit: true }
+    );
+    controller.setField('conference', 'macro');
+    expect(controller.submitValues()?.conferenceChoice).toBe('macro');
+    expect(controller.submitValues()?.conference).toBe('none');
+  });
+
+  it('keeps an edited event with no meeting link opted out', () => {
+    const controller = controllerFor(
+      { title: 'Planning', conference: 'none' },
+      { isEdit: true }
+    );
+    expect(controller.submitValues()?.conferenceChoice).toBe('none');
+    expect(controller.submitValues()?.conference).toBeUndefined();
+  });
+
+  it('submits preselected Google Meet on new events', () => {
+    const controller = controllerFor({
+      title: 'Planning',
+      conference: 'google_meet',
+    });
+    expect(controller.submitValues()?.conference).toBe('google_meet');
+  });
+});
+
 const MIXED_CALENDARS = () => [
   { id: 'shared-1', label: 'Team', color: '#000000', isPrimary: false },
   { id: 'primary-1', label: 'Mine', color: '#000000', isPrimary: true },
@@ -223,6 +275,7 @@ describe('out of office', () => {
     expect(values?.location).toBe('');
     expect(values?.description).toBe('');
     expect(values?.conference).toBeUndefined();
+    expect(values?.conferenceChoice).toBe('none');
     expect(values?.calendarId).toBe('primary-1');
   });
 

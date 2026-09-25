@@ -17,36 +17,52 @@ export function AgentSettings(props: {
     searchParams.pair ? 'runtimes' : (props.initialSection ?? 'agents')
   );
   const [startPairing, setStartPairing] = createSignal(false);
+  let host: HTMLDivElement | undefined;
+  const scrollBody = () =>
+    host?.querySelector<HTMLElement>('[data-settings-page]') ?? null;
+
+  // Each section is its own SettingsPage, so switching mounts a fresh scroll
+  // container. Carry the offset across so the section tabs, which sit below
+  // the shared header, stay under the finger or pointer that chose them.
+  const showSection = (next: AgentManagementSection) => {
+    const scrollTop = scrollBody()?.scrollTop ?? 0;
+    setSection(next);
+    const body = scrollBody();
+    if (body) body.scrollTop = scrollTop;
+  };
+
   const navigation = () => (
     <AgentManagementNavigation
       section={section()}
       onChange={(section) => {
         setStartPairing(false);
-        setSection(section);
+        showSection(section);
       }}
     />
   );
 
   return (
-    <Show
-      when={section() === 'agents'}
-      fallback={
-        <Harness navigation={navigation()} startPairing={startPairing()} />
-      }
-    >
-      <Agents
-        navigation={
-          <>
-            <BringYourOwnAgent
-              onAddRuntime={() => {
-                setStartPairing(true);
-                setSection('runtimes');
-              }}
-            />
-            {navigation()}
-          </>
+    <div ref={host} class="contents">
+      <Show
+        when={section() === 'agents'}
+        fallback={
+          <Harness navigation={navigation()} startPairing={startPairing()} />
         }
-      />
-    </Show>
+      >
+        <Agents
+          navigation={
+            <>
+              <BringYourOwnAgent
+                onAddRuntime={() => {
+                  setStartPairing(true);
+                  showSection('runtimes');
+                }}
+              />
+              {navigation()}
+            </>
+          }
+        />
+      </Show>
+    </div>
   );
 }

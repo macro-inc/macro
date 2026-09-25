@@ -1,3 +1,5 @@
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+
 export type PlanTier = 'free' | 'premium' | 'max';
 export type Plan = {
   tier: PlanTier;
@@ -46,19 +48,19 @@ export const PLAN_BY_TIER: Record<PlanTier, Plan> = {
 interface PlanFeature {
   label: string;
   values: Record<PlanTier, string>;
+  devOnly?: boolean;
 }
 
-export const PLAN_FEATURES: PlanFeature[] = [
-  /* AI usage billing is temporarily disabled.
+const planFeatures: PlanFeature[] = [
   {
     label: 'AI usage included',
+    devOnly: true,
     values: {
       free: 'Limited',
       premium: '$40 / mo',
       max: '$200 / mo',
     },
   },
-  */
   {
     label: 'AI Agent',
     values: {
@@ -67,16 +69,15 @@ export const PLAN_FEATURES: PlanFeature[] = [
       max: 'All models',
     },
   },
-  /* AI usage billing is temporarily disabled.
   {
     label: 'Beyond included',
+    devOnly: true,
     values: {
       free: '—',
       premium: 'Credits or usage billing',
       max: 'Credits or usage billing',
     },
   },
-  */
   {
     label: 'Storage',
     values: {
@@ -86,3 +87,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
     },
   },
 ];
+
+export const PLAN_FEATURES = planFeatures.filter(
+  (feature) => !feature.devOnly || DEV_MODE_ENV
+);

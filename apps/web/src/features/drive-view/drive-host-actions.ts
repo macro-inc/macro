@@ -1,4 +1,4 @@
-import { entityDetailTarget } from '@app/components/entity-detail/EntityDetailNavigationStack';
+import { entityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { makeShareAction } from '@app/features/next-soup/actions';
 import {
   markReminderSeenOnOpen,

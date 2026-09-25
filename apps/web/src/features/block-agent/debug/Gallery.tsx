@@ -45,9 +45,9 @@ import {
   TodoList,
   ToolCard,
   ToolErrorCard,
-  ToolGroup,
   ToolStatusTitle,
 } from '../ui';
+import { LiveToolGroup } from '../views/LiveToolGroup';
 
 /**
  * A Cursor-shaped catalog: long enough to scroll, with one grouped tail. Auto
@@ -1117,7 +1117,7 @@ export default function AgentUiGallery() {
           </Item>
 
           <Item label="ToolGroup (active / settled)">
-            <ToolGroup count={3} active={pulse()}>
+            <LiveToolGroup count={3} active={pulse()}>
               <ToolCard
                 title="Read"
                 icon={<FileText />}
@@ -1136,8 +1136,8 @@ export default function AgentUiGallery() {
                 subtitle="cargo test -p agent_fold"
                 status={pulse() ? 'running' : 'completed'}
               />
-            </ToolGroup>
-            <ToolGroup count={2} active={false} defaultOpen>
+            </LiveToolGroup>
+            <LiveToolGroup count={2} active={false} defaultOpen>
               <ToolCard
                 title="Search"
                 icon={<MagnifyingGlass />}
@@ -1146,7 +1146,7 @@ export default function AgentUiGallery() {
                 trailing="3 results"
               />
               <ToolCard title="Read" icon={<FileText />} status="completed" />
-            </ToolGroup>
+            </LiveToolGroup>
           </Item>
 
           <Item label="Thought (active / settled)">

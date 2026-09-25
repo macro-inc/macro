@@ -13,6 +13,7 @@ import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
 import { useIsAuthenticated } from '@core/auth';
 import type { ThreadId } from '@core/comments/commentType';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
+import { useCopyLink } from '@core/util/useCopyLink';
 import { cn } from '@ui';
 import { detect } from 'detect-browser';
 import type { PageViewport } from 'pdfjs-dist';
@@ -385,9 +386,10 @@ export function PageOverlay(props: IPageOverlayProps) {
   });
 
   const createShareUrl = useCreateShareUrl();
+  const copyLink = useCopyLink();
   const shareLinkProps = () => ({
     share: () => {
-      createShareUrl(LocationType.Annotation);
+      copyLink(createShareUrl(LocationType.Annotation), { silent: true });
     },
   });
 

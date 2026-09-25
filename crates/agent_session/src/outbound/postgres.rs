@@ -10,6 +10,7 @@ use sqlx::types::Json;
 mod test;
 
 mod pull_request;
+mod queue;
 mod sharing;
 mod turn_state;
 mod working_branch;
@@ -19,7 +20,7 @@ use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
     ClaimOutcome, CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaAddress,
     ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager, SessionPreviewCandidate,
-    SessionStatus, StoredAgentSessionLog, ThreadSession, cursor_run_checkpoint,
+    SessionStatus, StoredAgentSessionLog, StoredQueuedAction, ThreadSession, cursor_run_checkpoint,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -901,6 +902,18 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .await
         .context("failed to persist user sandbox size")?;
         Ok(())
+    }
+
+    async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {
+        self.load_queued_actions(id).await
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
+    ) -> Result<()> {
+        self.store_queued_actions(id, entries).await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

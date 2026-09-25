@@ -35,12 +35,15 @@ import { RecurrenceBuilder } from './RecurrenceBuilder';
 
 export interface EventFormProps {
   controller: CalendarEventFormController;
+  /** Whether this host can create and attach Macro call links. */
+  macroCallsEnabled: boolean;
   isEdit?: boolean;
   disabledFields?: EventEditorDisabledFields;
   showRecurringEditNotice?: boolean;
   /** Disable interaction without presenting the form as an in-flight save. */
   disabled?: boolean;
   pending: boolean;
+  saveError?: string;
   class?: string;
   onCalendarChange?: (calendarId: string, color: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
@@ -258,6 +261,7 @@ export function EventForm(props: EventFormProps) {
               />
               <EventComposerConferencePill
                 value={state().conference}
+                macroCallsEnabled={props.macroCallsEnabled}
                 canKeepExisting={
                   controller.initialConferenceChoice() === 'existing'
                 }
@@ -349,6 +353,11 @@ export function EventForm(props: EventFormProps) {
         </Show>
       </div>
 
+      <Show when={props.saveError}>
+        <p role="alert" class="text-sm text-failure">
+          {props.saveError}
+        </p>
+      </Show>
       <div class="flex shrink-0 items-center justify-end gap-3">
         <Show when={props.showRecurringEditNotice}>
           <RadioGroup

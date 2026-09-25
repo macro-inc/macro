@@ -1,10 +1,13 @@
 //! A [`UsageRecorder`] that books usage and then asks for settlement when the
 //! payer has usage past their allowance.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{BillingService, SettlementTrigger};
 use ai_usage::domain::service::UsageServiceImpl;
-// use ai_usage::SYSTEM_USER_ID;
-use ai_usage::{UsageEvent, UsageRecorder, UsageRepo};
+use ai_usage::{SYSTEM_USER_ID, UsageEvent, UsageRecorder, UsageRepo};
+use macro_env::Environment;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -27,19 +30,24 @@ const RECORD_RETRY_BACKOFF: [Duration; 3] = [
 /// re-delivered after an ambiguous failure could double count instead.
 pub struct SettlingUsageRecorder<Repo, B, T> {
     inner: Arc<UsageServiceImpl<Repo>>,
-    #[expect(dead_code, reason = "AI usage billing is temporarily disabled")]
     billing: Arc<B>,
-    #[expect(dead_code, reason = "AI usage billing is temporarily disabled")]
     trigger: T,
+    environment: Environment,
 }
 
 impl<Repo, B, T> SettlingUsageRecorder<Repo, B, T> {
-    /// Build the recorder.
-    pub fn new(inner: Arc<UsageServiceImpl<Repo>>, billing: Arc<B>, trigger: T) -> Self {
+    /// Build the recorder. Usage is recorded everywhere; settlement is requested only in dev.
+    pub fn new(
+        inner: Arc<UsageServiceImpl<Repo>>,
+        billing: Arc<B>,
+        trigger: T,
+        environment: Environment,
+    ) -> Self {
         Self {
             inner,
             billing,
             trigger,
+            environment,
         }
     }
 }
@@ -52,11 +60,11 @@ where
 {
     fn record(&self, event: UsageEvent) {
         let inner = self.inner.clone();
-        // AI usage billing is temporarily disabled; keep recording usage with retries.
-        // let billing = self.billing.clone();
-        // let trigger = self.trigger.clone();
+        let billing = self.billing.clone();
+        let trigger = self.trigger.clone();
+        let environment = self.environment;
         tokio::spawn(async move {
-            // let user = event.user.clone();
+            let user = event.user.clone();
             let mut backoff = RECORD_RETRY_BACKOFF.iter();
             loop {
                 let Err(e) = inner.record_now(event.clone()).await else {
@@ -79,8 +87,9 @@ where
                     }
                 }
             }
-            /* AI usage billing is temporarily disabled: do not request settlement.
-            if user.as_ref() == SYSTEM_USER_ID.as_ref() {
+            if !matches!(environment, Environment::Develop)
+                || user.as_ref() == SYSTEM_USER_ID.as_ref()
+            {
                 return;
             }
             match billing.snapshot(&user).await {
@@ -96,7 +105,6 @@ where
                     tracing::warn!(error = ?e, "failed to read ai billing position");
                 }
             }
-            */
         });
     }
 }

@@ -16,10 +16,9 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
-import {
-  ShareDialogContext,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { getPermissions } from '@core/component/SharePermissions';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -27,7 +26,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { buildEntityData } from '@entity';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
-import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { createEffect, createMemo, Show } from 'solid-js';
 import { emailDetailSearch } from '../email-route';
 import { useEmailView } from '../email-view-context';
 import { emailThreadRoute } from '../route';
@@ -71,7 +70,6 @@ export function EmailDetailView(props: {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const canAutofocus = useCanAutofocusSplitContent();
-  const [shareOpen, setShareOpen] = createSignal(false);
   const threadId = () => props.thread.id;
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
@@ -92,6 +90,17 @@ export function EmailDetailView(props: {
       'Email'
     );
   };
+  const openShare = useShareModal(() => {
+    const thread = threadData()?.thread;
+    if (!thread) return;
+    return {
+      id: props.thread.id,
+      blockAlias: 'email',
+      itemType: 'email',
+      name: title(),
+      userPermissions: getPermissions(thread.access_level),
+    };
+  });
   const commandEntity = createMemo(() => {
     if (!threadQuery.isSuccess) return undefined;
     const thread = threadQuery.data?.thread;
@@ -161,13 +170,7 @@ export function EmailDetailView(props: {
   };
 
   return (
-    <ShareDialogContext.Provider
-      value={{
-        isOpen: shareOpen,
-        open: () => setShareOpen(true),
-        close: () => setShareOpen(false),
-      }}
-    >
+    <>
       <EmailThreadBreadcrumb
         value={breadcrumbValue()}
         title={title()}
@@ -184,6 +187,7 @@ export function EmailDetailView(props: {
             <div class="ml-auto flex shrink-0 items-center gap-2">
               <Show when={ENABLE_EMAIL_SHARING}>
                 <ShareTrigger
+                  onClick={openShare}
                   id={props.thread.id}
                   blockType="email"
                   hotkeyScope={panel.splitHotkeyScope}
@@ -212,14 +216,12 @@ export function EmailDetailView(props: {
                 threadTransport={() => threadQuery.transport}
                 host={host}
                 sidePanelHeaderToggle={false}
-                shareOpen={shareOpen()}
-                onShareOpenChange={setShareOpen}
               />
             </EmailThreadLoadGate>
           </div>
         </div>
       </SidePanel.Root>
-    </ShareDialogContext.Provider>
+    </>
   );
 }
 

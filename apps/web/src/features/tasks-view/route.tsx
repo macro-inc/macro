@@ -42,14 +42,12 @@ function TasksLegacyRouteView() {
 
 export const TasksRouteView = withAuth(() => {
   const params = useParams<{ taskId?: string }>();
-  const detailRequested = () => typeof params.taskId === 'string';
-
   return (
     <NewAppView
       id="tasks"
       composableOnTouch
       detailDesktopOnly
-      detailRequested={detailRequested}
+      detailRequested={() => typeof params.taskId === 'string'}
       detailFallback={<TasksLegacyRouteView />}
       fallback={<LegacyTasksView />}
     >

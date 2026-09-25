@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT channel_id AS \"channel_id?\", share_permission_id AS \"share_permission_id!\"\n        FROM calls\n        WHERE id = $1\n        UNION ALL\n        SELECT channel_id, share_permission_id\n        FROM call_records\n        WHERE id = $1\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "share_permission_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "768a058ebc239672e75f959eb9aa6976f4b1846bf82d03580249579cf8ccc55a"
+}

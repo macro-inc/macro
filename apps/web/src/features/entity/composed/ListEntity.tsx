@@ -148,6 +148,7 @@ export function ListEntity(props: ListEntityProps) {
 
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
+    authorDisplayName: props.authorDisplayName,
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
     onChecked: props.onChecked,

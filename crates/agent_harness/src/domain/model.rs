@@ -352,13 +352,56 @@ pub struct AnnounceOrigin {
     pub message_id: Uuid,
 }
 
-/// One prior message supplied as untrusted prompt context.
+/// One message supplied as untrusted prompt context.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PriorMessage {
+pub struct ContextMessage {
+    /// Message id.
+    pub id: Uuid,
     /// Sender identifier as the message service represents it.
-    pub sender: String,
+    pub sender_id: String,
+    /// Readable name of the sender.
+    pub author: String,
     /// Message body.
     pub content: String,
+    /// When the message was posted.
+    pub posted_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Messages of one discussion, oldest first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContextThread {
+    /// Root message of the discussion.
+    pub root_id: Uuid,
+    /// Live messages, the root first when it is included.
+    pub messages: Vec<ContextMessage>,
+    /// Whether some messages of the discussion were left out.
+    pub messages_omitted: bool,
+}
+
+/// What a prompt answers. Without this the agent has to guess which of the
+/// surrounding messages "fix this" means.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReplyTarget {
+    /// The author quote-replied to one message.
+    Quote {
+        /// The quoted message.
+        message_id: Uuid,
+        /// The discussion holding the quoted message.
+        thread_id: Uuid,
+        /// The one-line preview the quote renders.
+        preview: String,
+        /// The quoted message in full. Absent when it lives in another
+        /// conversation or could not be read.
+        message: Option<ContextMessage>,
+    },
+    /// The prompt was posted as a reply in a discussion.
+    Thread {
+        /// Root of that discussion.
+        root_id: Uuid,
+    },
+    /// The prompt was posted at the top level of a channel and replies to
+    /// no particular message.
+    None,
 }
 
 /// Where in a document a comment thread sits. An annotation id alone names a
@@ -407,8 +450,17 @@ pub struct MarkedPassage {
 pub struct ConversationContext {
     /// The document location, when the prompt came from an anchored comment.
     pub anchor: Option<CommentAnchor>,
-    /// Untrusted prior messages, oldest first.
-    pub messages: Vec<PriorMessage>,
+    /// What the prompt answers.
+    pub reply_target: Option<ReplyTarget>,
+    /// The prompting message, marked where it appears in the context.
+    pub prompt_message_id: Option<Uuid>,
+    /// The discussion the prompt was posted in, through the prompt itself.
+    /// Absent for a top-level channel message.
+    pub thread: Option<ContextThread>,
+    /// Other recent channel activity, grouped by discussion, oldest first.
+    /// For a top-level channel prompt this is the primary context and ends
+    /// with the prompt.
+    pub channel: Vec<ContextThread>,
 }
 
 /// Do something in a session that already exists.

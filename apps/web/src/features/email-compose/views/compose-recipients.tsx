@@ -341,7 +341,7 @@ export function ComposeRecipients(props: {
                 Cc/Bcc, From:
               </span>
               <span class="ph-no-capture text-sm text-ink-muted truncate min-h-9 flex items-center">
-                {ctx.fromAddress?.()}
+                {ctx.fromAddress?.() ?? 'Select sending inbox'}
               </span>
             </button>
           }

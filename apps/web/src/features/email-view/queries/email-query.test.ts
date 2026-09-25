@@ -15,6 +15,17 @@ import {
 import { groupEmailEntitiesByDate } from './email-results';
 import { buildEmailSearchRequest } from './email-search';
 
+vi.mock('@app/features/soup', async () => ({
+  ...(await import('@app/features/soup/filters')),
+}));
+vi.mock('@entity', async () => ({
+  ...(await import('@entity/types/entity')),
+  ...(await import('@entity/utils/notification')),
+  ...(await import('@entity/utils/task-properties')),
+  ...(await import('@entity/utils/company-properties')),
+}));
+vi.mock('@notifications', async () => await import('@notifications/types'));
+
 // The soup barrel these pull in transitively imports the websocket client
 // modules, which open real sockets at module scope and reject under jsdom.
 vi.mock('@service-storage/websocket', () => ({
