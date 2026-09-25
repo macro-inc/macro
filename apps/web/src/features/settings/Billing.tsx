@@ -18,7 +18,8 @@ import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer } from '@ui';
 import { createMemo, For, Match, Show, Switch } from 'solid-js';
-import { AiUsageControls, AiUsageMeter } from './AiUsage';
+// AI usage billing is temporarily disabled; keep the UI for re-enabling.
+// import { AiUsageControls, AiUsageMeter } from './AiUsage';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
 const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
@@ -26,7 +27,7 @@ const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
   premium: [
     'All agents',
     'All models',
-    '$40 of AI usage each month',
+    // '$40 of AI usage each month',
     'No watermark',
     'AI projections',
     'Multiple email inboxes',
@@ -36,7 +37,7 @@ const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
   ],
   max: [
     'Everything in Premium',
-    '$200 of AI usage each month',
+    // '$200 of AI usage each month',
     'Priority support',
   ],
 };
@@ -70,8 +71,10 @@ function describeSeatPlans(members: TeamMember[]): string {
 
 const PlanPrice = (props: { tier: PaidPlan }) => (
   <p class="text-ink-extra-muted text-xs">
-    ${PLAN_BY_TIER[props.tier].price} per seat / month · includes $
-    {PLAN_BY_TIER[props.tier].aiIncluded} of AI usage
+    ${PLAN_BY_TIER[props.tier].price} per seat / month
+    {/* AI usage billing is temporarily disabled.
+    · includes ${PLAN_BY_TIER[props.tier].aiIncluded} of AI usage
+    */}
   </p>
 );
 
@@ -137,10 +140,14 @@ export const Billing = () => {
     try {
       await changePlan.mutateAsync({ plan });
       analytics.track('plan_changed', { plan });
+      // AI usage billing is temporarily disabled.
+      // toast.success(
+      //   plan === 'max'
+      //     ? 'Upgraded to Max. Your larger AI allowance applies right away.'
+      //     : 'Switched to Premium.'
+      // );
       toast.success(
-        plan === 'max'
-          ? 'Upgraded to Max. Your larger AI allowance applies right away.'
-          : 'Switched to Premium.'
+        plan === 'max' ? 'Upgraded to Max.' : 'Switched to Premium.'
       );
     } catch (error) {
       console.error(error);
@@ -157,7 +164,7 @@ export const Billing = () => {
     }
   };
 
-  const returnUrl = () => `${window.location.origin}/app/settings/billing`;
+  // const returnUrl = () => `${window.location.origin}/app/settings/billing`;
 
   return (
     <SettingsPage
@@ -247,6 +254,7 @@ export const Billing = () => {
         </SettingsCard>
       </SettingsSection>
 
+      {/* AI usage billing is temporarily disabled.
       <Show when={hasPaid() && summary.isSuccess && summary.data}>
         {(snapshot) => (
           <SettingsSection
@@ -276,6 +284,7 @@ export const Billing = () => {
           </SettingsSection>
         )}
       </Show>
+      */}
 
       <Show when={canChangePlan()}>
         <Switch>
@@ -326,7 +335,8 @@ export const Billing = () => {
             </SettingsSection>
           </Match>
           <Match when={tier() === 'premium'}>
-            <SettingsSection title="Need more AI?">
+            {/* <SettingsSection title="Need more AI?"> */}
+            <SettingsSection title="Upgrade">
               <SettingsCard>
                 <section class="flex flex-col gap-4 p-4">
                   <header class="flex items-center gap-2">
@@ -371,7 +381,8 @@ export const Billing = () => {
                 >
                   Switch to Premium
                 </button>{' '}
-                ($40 per seat / month with $40 of AI usage).
+                {/* ($40 per seat / month with $40 of AI usage). */}
+                ($40 per seat / month).
               </p>
             </SettingsSection>
           </Match>

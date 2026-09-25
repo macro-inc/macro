@@ -4,17 +4,20 @@
 #[cfg(test)]
 mod test;
 
-use super::ledger::{SettlementPolicy, build_snapshot, decide};
+// AI usage billing is temporarily disabled; retain settlement and gating for re-enabling.
+// use super::ledger::{SettlementPolicy, build_snapshot, decide};
+use super::ledger::build_snapshot;
 use super::models::{
     AllowanceDecision, AllowanceStore, BillingError, BillingPeriod, BillingSettings,
-    CREDIT_PACKS_CENTS, Entitlement, OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS,
-    OVERAGE_LIMIT_MIN_CENTS, OverageChargeStatus, PayerScope, PeriodAllowance, PlanTier, Result,
-    SeatAllowance, SeatUsage, UsageSnapshot,
+    CREDIT_PACKS_CENTS, Entitlement, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS,
+    OverageChargeStatus, PayerScope, Result, SeatAllowance, SeatUsage, UsageSnapshot,
 };
+// use super::models::{OVERAGE_CHARGE_THRESHOLD_CENTS, PeriodAllowance, PlanTier};
 use super::ports::{
-    BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,
-    PaymentGateway, PendingCharge, UsageReader,
+    BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, PaymentGateway,
+    UsageReader,
 };
+// use super::ports::{OverageChargeRequest, PendingCharge};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -205,6 +208,7 @@ where
         ))
     }
 
+    /* AI usage billing is temporarily disabled. Keep settlement helpers for re-enabling.
     /// Per-seat allowances to settle `period` with.
     ///
     /// A closed period uses the freeze recorded while it was open. An open
@@ -396,6 +400,8 @@ where
         self.repo.suspend_overage(payer).await
     }
 
+    */
+
     fn require_payer(entitlement: &Entitlement, user: &MacroUserIdStr<'_>) -> Result<()> {
         if !entitlement.is_payer(user) {
             return Err(BillingError::NotPayer);
@@ -442,12 +448,14 @@ where
 {
     #[tracing::instrument(skip(self), err)]
     async fn check_allowance(&self, user: &MacroUserIdStr<'_>) -> Result<AllowanceDecision> {
-        let position = self.position(user, Utc::now()).await?;
-        if position.entitlement.unlimited || position.entitlement.tier == PlanTier::Free {
-            return Ok(AllowanceDecision::Allow);
-        }
-        let snapshot = self.snapshot_at(user, &position).await?;
-        Ok(decide(&snapshot))
+        // AI usage billing is temporarily disabled: do not block requests on credits.
+        // let position = self.position(user, Utc::now()).await?;
+        // if position.entitlement.unlimited || position.entitlement.tier == PlanTier::Free {
+        //     return Ok(AllowanceDecision::Allow);
+        // }
+        // let snapshot = self.snapshot_at(user, &position).await?;
+        // Ok(decide(&snapshot))
+        Ok(AllowanceDecision::Allow)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -458,6 +466,10 @@ where
 
     #[tracing::instrument(skip(self), err)]
     async fn settle(&self, user: &MacroUserIdStr<'_>) -> Result<()> {
+        // AI usage billing is temporarily disabled for every caller (summary reads,
+        // usage recording, settings changes, purchases, and internal settlement).
+        // Do not consume credits, reserve charges, or create/retry Stripe invoices.
+        /*
         let now = Utc::now();
         let position = self.position(user, now).await?;
         if position.entitlement.unlimited || !position.entitlement.tier.is_paid() {
@@ -471,6 +483,8 @@ where
             .await?;
         self.settle_period(&position.entitlement, position.period, now)
             .await
+        */
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]

@@ -3,7 +3,8 @@
 
 use crate::domain::{BillingService, SettlementTrigger};
 use ai_usage::domain::service::UsageServiceImpl;
-use ai_usage::{SYSTEM_USER_ID, UsageEvent, UsageRecorder, UsageRepo};
+// use ai_usage::SYSTEM_USER_ID;
+use ai_usage::{UsageEvent, UsageRecorder, UsageRepo};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,7 +27,9 @@ const RECORD_RETRY_BACKOFF: [Duration; 3] = [
 /// re-delivered after an ambiguous failure could double count instead.
 pub struct SettlingUsageRecorder<Repo, B, T> {
     inner: Arc<UsageServiceImpl<Repo>>,
+    #[expect(dead_code, reason = "AI usage billing is temporarily disabled")]
     billing: Arc<B>,
+    #[expect(dead_code, reason = "AI usage billing is temporarily disabled")]
     trigger: T,
 }
 
@@ -49,10 +52,11 @@ where
 {
     fn record(&self, event: UsageEvent) {
         let inner = self.inner.clone();
-        let billing = self.billing.clone();
-        let trigger = self.trigger.clone();
+        // AI usage billing is temporarily disabled; keep recording usage with retries.
+        // let billing = self.billing.clone();
+        // let trigger = self.trigger.clone();
         tokio::spawn(async move {
-            let user = event.user.clone();
+            // let user = event.user.clone();
             let mut backoff = RECORD_RETRY_BACKOFF.iter();
             loop {
                 let Err(e) = inner.record_now(event.clone()).await else {
@@ -75,6 +79,7 @@ where
                     }
                 }
             }
+            /* AI usage billing is temporarily disabled: do not request settlement.
             if user.as_ref() == SYSTEM_USER_ID.as_ref() {
                 return;
             }
@@ -91,6 +96,7 @@ where
                     tracing::warn!(error = ?e, "failed to read ai billing position");
                 }
             }
+            */
         });
     }
 }

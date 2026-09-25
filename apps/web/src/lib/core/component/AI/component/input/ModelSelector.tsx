@@ -4,7 +4,7 @@ import {
   MODEL_PRETTYNAME,
   MODEL_PROVIDER_ICON,
   Model,
-  modelUsageHint,
+  // modelUsageHint,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
 import { isMobile } from '@core/mobile/isMobile';
@@ -98,7 +98,8 @@ export function ModelSelector(props: ModelSelectorProps) {
                     <span class="flex-1 truncate">
                       {MODEL_PRETTYNAME[option.id]}
                     </span>
-                    {/* Decorative: the item's accessible name stays the model. */}
+                    {/* AI usage billing is temporarily disabled.
+                    Decorative: the item's accessible name stays the model.
                     <Show when={modelUsageHint(option.id)}>
                       {(hint) => (
                         <span
@@ -109,6 +110,7 @@ export function ModelSelector(props: ModelSelectorProps) {
                         </span>
                       )}
                     </Show>
+                    */}
                     <Show when={!option.available}>
                       <LockIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
                     </Show>
@@ -189,6 +191,7 @@ export function ModelSelector(props: ModelSelectorProps) {
                           <span class="text-base font-medium leading-5">
                             {MODEL_PRETTYNAME[option.id]}
                           </span>
+                          {/* AI usage billing is temporarily disabled.
                           <Show when={modelUsageHint(option.id)}>
                             {(hint) => (
                               <span class="text-xs text-ink-extra-muted">
@@ -196,6 +199,7 @@ export function ModelSelector(props: ModelSelectorProps) {
                               </span>
                             )}
                           </Show>
+                          */}
                         </span>
                         <span class="text-[13px] leading-[18px] text-ink-muted">
                           {MODEL_DESCRIPTION[option.id]}

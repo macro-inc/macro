@@ -49,6 +49,7 @@ interface PlanFeature {
 }
 
 export const PLAN_FEATURES: PlanFeature[] = [
+  /* AI usage billing is temporarily disabled.
   {
     label: 'AI usage included',
     values: {
@@ -57,6 +58,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
       max: '$200 / mo',
     },
   },
+  */
   {
     label: 'AI Agent',
     values: {
@@ -65,6 +67,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
       max: 'All models',
     },
   },
+  /* AI usage billing is temporarily disabled.
   {
     label: 'Beyond included',
     values: {
@@ -73,6 +76,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
       max: 'Credits or usage billing',
     },
   },
+  */
   {
     label: 'Storage',
     values: {

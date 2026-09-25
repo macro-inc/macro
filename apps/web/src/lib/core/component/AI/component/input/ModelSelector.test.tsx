@@ -75,6 +75,13 @@ describe('ModelSelector: availability', () => {
     );
   });
 
+  it('hides usage multipliers while AI usage billing is paused', () => {
+    const { container } = render(() => (
+      <ModelSelector models={ALL_PAID} onSelect={() => {}} />
+    ));
+    expect(container.textContent).not.toContain('× usage');
+  });
+
   it('grays out and locks inaccessible models, leaving accessible ones clean', () => {
     // A free user: only the fast model is available.
     const freeAllowed = modelsForPlan(false);
