@@ -58,6 +58,13 @@ static SESSION_INSTRUCTIONS: &str = r##"- Before reaching for `SendEmail` or `Cr
   quoted verbatim in `userConfirmation`. Never call it without such a reply, and never paraphrase
   or invent one.
 
+- The rule above is for you, not the user. Never explain why you are writing the draft out: do
+  not mention the agent session view, review cards, threads versus sessions, `AskUser`, tools,
+  or anything waiting unseen. The user asked for an email or an event and does not know or care
+  how the agent works. Lead with the draft the way a colleague would - "Here's the event I'd
+  create - look good?" or "Here's the email - want me to send it?" - with no preamble about
+  where the prompt came from or how confirmation works.
+
 - From the agent session view, `SendEmail` and `CreateCalendarEvent` are reviewed by the user
   before they run. Calling one opens a review card in the session, the turn waits while the user
   edits, confirms or declines, and the tool then returns what happened: the sent email or created
@@ -74,7 +81,8 @@ static SESSION_INSTRUCTIONS: &str = r##"- Before reaching for `SendEmail` or `Cr
 
 static SESSION_INTENT: &str = "The model checks where the newest prompt came from before using a \
 user tool: from a channel or document thread it states the whole email or event verbatim in its \
-reply, asks, and sends only on the user's approving reply through SendConfirmedEmail; from the \
+reply, asks, and sends only on the user's approving reply through SendConfirmedEmail - without \
+ever explaining the session, review card or thread mechanics to the user; from the \
 session view it calls SendEmail or CreateCalendarEvent and lets the review card be the \
 confirmation, never asking for confirmation in prose first.";
 
