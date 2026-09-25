@@ -178,6 +178,9 @@ export const FILTER_TARGETS = {
       domain: [true, false],
     },
     foreignEntityIncludesMe: { backend: 'me', compile: 'unit' },
+    foreignEntityRepositoryId: { backend: 'repo' },
+    foreignEntityAuthorId: { backend: 'au' },
+    foreignEntityStatus: { backend: 'st' },
   },
 
   // ccf — crm companies
@@ -303,6 +306,11 @@ type FilterTargetsMeta = {
     foreignEntitySeen: boolean;
     foreignEntityDone: boolean;
     foreignEntityIncludesMe: boolean;
+    /** Numeric GitHub repository id. */
+    foreignEntityRepositoryId: string[];
+    /** Numeric GitHub user id of the author. */
+    foreignEntityAuthorId: string[];
+    foreignEntityStatus: string[];
   };
 
   // ccf — crm companies

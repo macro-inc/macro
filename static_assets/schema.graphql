@@ -2516,6 +2516,18 @@ input GraphqlForeignEntityLiteral @oneOf {
 	Exact notification state for the requester.
 	"""
 	notificationState: NotificationState
+	"""
+	The GitHub repository id option.
+	"""
+	repository: String
+	"""
+	The author GitHub user id option.
+	"""
+	author: String
+	"""
+	The metadata status option, such as `open`, `closed`, or `merged`.
+	"""
+	status: String
 }
 
 """

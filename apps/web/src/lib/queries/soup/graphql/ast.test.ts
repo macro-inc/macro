@@ -361,6 +361,48 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
+  it('maps pull request foreign entity literals', () => {
+    const input = makeGraphqlSoupInput({
+      params: { limit: 100, sort_method: 'updated_at' },
+      body: {
+        fef: {
+          '&': [
+            { l: { repo: '1296269' } },
+            {
+              '&': [
+                { l: { au: '42' } },
+                { '|': [{ l: { st: 'open' } }, { l: { st: 'merged' } }] },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    expect(input).toMatchObject({
+      initial: {
+        filters: {
+          foreignEntityFilter: {
+            and: {
+              left: { literal: { repository: '1296269' } },
+              right: {
+                and: {
+                  left: { literal: { author: '42' } },
+                  right: {
+                    or: {
+                      left: { literal: { status: 'open' } },
+                      right: { literal: { status: 'merged' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
   it('throws for unsupported calendar literals so callers can fall back', () => {
     expect(() =>
       makeGraphqlSoupInput({

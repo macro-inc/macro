@@ -348,6 +348,16 @@ impl ValidatedGithubWebhookEvent {
             .and_then(|v| v.as_str())
     }
 
+    /// Extract the numeric repository ID from the webhook payload.
+    ///
+    /// Unlike the owner and name, the ID survives renames and transfers.
+    pub fn repository_id(&self) -> Option<u64> {
+        self.payload
+            .get("repository")
+            .and_then(|r| r.get("id"))
+            .and_then(|v| v.as_u64())
+    }
+
     /// Extract the GitHub App installation ID from the webhook payload.
     pub fn installation_id(&self) -> Option<u64> {
         self.payload

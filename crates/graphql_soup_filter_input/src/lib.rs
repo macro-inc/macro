@@ -1203,6 +1203,12 @@ enum GraphqlForeignEntityLiteral {
     IncludesMe(bool),
     /// Exact notification state for the requester.
     NotificationState(GraphqlNotificationState),
+    /// The GitHub repository id option.
+    Repository(String),
+    /// The author GitHub user id option.
+    Author(String),
+    /// The metadata status option, such as `open`, `closed`, or `merged`.
+    Status(String),
 }
 
 impl IntoFilterExpr<ForeignEntityLiteral> for GraphqlForeignEntityLiteral {
@@ -1219,6 +1225,9 @@ impl IntoFilterExpr<ForeignEntityLiteral> for GraphqlForeignEntityLiteral {
                 ));
             }
             Self::NotificationState(state) => ForeignEntityLiteral::NotificationState(state.into()),
+            Self::Repository(repository) => ForeignEntityLiteral::Repository(repository),
+            Self::Author(github_user_id) => ForeignEntityLiteral::Author(github_user_id),
+            Self::Status(status) => ForeignEntityLiteral::Status(status),
         };
         Ok(Expr::val(literal))
     }

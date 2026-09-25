@@ -22,6 +22,16 @@ pub enum ForeignEntityLiteral {
     /// An entity has a non-deleted notification in this exact state.
     #[serde(rename = "ns")]
     NotificationState(crate::NotificationState),
+    /// Filter to entities whose metadata `repositoryId` is this numeric GitHub repository id,
+    /// which survives repository renames and transfers.
+    #[serde(rename = "repo")]
+    Repository(String),
+    /// Filter to entities whose metadata `authorId` is this numeric GitHub user id.
+    #[serde(rename = "au")]
+    Author(String),
+    /// Filter by the metadata `status`, e.g. `open`, `closed`, or `merged`.
+    #[serde(rename = "st")]
+    Status(String),
 }
 
 impl ExpandFrame<ForeignEntityLiteral> for ForeignEntityFilters {

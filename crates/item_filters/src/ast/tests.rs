@@ -1271,6 +1271,31 @@ fn foreign_entity_notification_done_ands_with_source() {
 }
 
 #[test]
+fn foreign_entity_pull_request_literals_round_trip_wire_keys() {
+    let wire = json!({
+        "&": [
+            { "l": { "repo": "1296269" } },
+            {
+                "&": [
+                    { "l": { "au": "12345" } },
+                    { "|": [{ "l": { "st": "open" } }, { "l": { "st": "merged" } }] }
+                ]
+            }
+        ]
+    });
+
+    let ast: Expr<ForeignEntityLiteral> = serde_json::from_value(wire.clone()).unwrap();
+    let Expr::And(repository, _) = &ast else {
+        panic!("expected an AND root: {ast:?}");
+    };
+    assert_matches!(
+        repository.as_ref(),
+        Expr::Literal(ForeignEntityLiteral::Repository(repository)) if repository == "1296269"
+    );
+    assert_eq!(serde_json::to_value(ast).unwrap(), wire);
+}
+
+#[test]
 fn foreign_entity_invalid_id_returns_uuid_error() {
     let f = EntityFilters {
         foreign_entity_filters: ForeignEntityFilters {

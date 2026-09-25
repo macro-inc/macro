@@ -174,6 +174,8 @@ fn foreign_entity_expr_jsonpath(expr: &Expr<ForeignEntityLiteral>) -> String {
     }
 }
 
+const JSONPATH_MATCH_NOTHING: &str = "(1 == 0)";
+
 fn foreign_entity_literal_jsonpath(literal: &ForeignEntityLiteral) -> String {
     match literal {
         ForeignEntityLiteral::Id(id) => jsonpath_text_eq("id", &id.to_string()),
@@ -181,11 +183,16 @@ fn foreign_entity_literal_jsonpath(literal: &ForeignEntityLiteral) -> String {
         ForeignEntityLiteral::ForeignEntitySource(source) => {
             jsonpath_text_eq("foreignEntitySource", source)
         }
+        ForeignEntityLiteral::Repository(repository_id) => {
+            jsonpath_id_eq("repositoryId", repository_id)
+        }
+        ForeignEntityLiteral::Author(github_user_id) => jsonpath_id_eq("authorId", github_user_id),
+        ForeignEntityLiteral::Status(status) => jsonpath_text_eq("status", status),
         // IncludesMe and the notification literals are hoisted into dedicated SQL predicates by
         // extract_hoisted_filters and never reach the jsonpath; if one slips through, match nothing
         // rather than everything.
         ForeignEntityLiteral::IncludesMe | ForeignEntityLiteral::NotificationState(_) => {
-            "(1 == 0)".to_string()
+            JSONPATH_MATCH_NOTHING.to_string()
         }
     }
 }
@@ -194,6 +201,14 @@ fn jsonpath_text_eq(field_name: &str, expected_value: &str) -> String {
     let expected_value = serde_json::to_string(expected_value)
         .expect("serializing a string literal to JSON should not fail");
     format!("($.{field_name} == {expected_value})")
+}
+
+/// Match a numeric GitHub id stored as a JSON number; a non-numeric id matches nothing.
+fn jsonpath_id_eq(field_name: &str, id: &str) -> String {
+    match id.parse::<u64>() {
+        Ok(id) => format!("($.{field_name} == {id})"),
+        Err(_) => JSONPATH_MATCH_NOTHING.to_string(),
+    }
 }
 
 /// PostgreSQL-backed foreign entity repository.
@@ -261,7 +276,10 @@ impl PgForeignEntityRepo {
                         jsonb_build_object(
                             'id', fe.id::text,
                             'foreignEntityId', fe.foreign_entity_id,
-                            'foreignEntitySource', fe.foreign_entity_source
+                            'foreignEntitySource', fe.foreign_entity_source,
+                            'repositoryId', fe.metadata -> 'repositoryId',
+                            'authorId', fe.metadata -> 'authorId',
+                            'status', fe.metadata -> 'status'
                         ),
                         ($4::text)::jsonpath
                     )

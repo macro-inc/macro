@@ -52,6 +52,7 @@ pub(crate) async fn fetch_pull_request_metadata(
     let author_id = pull_request.user.as_ref().and_then(|user| user.id);
 
     Ok(GithubPullRequestDetails {
+        repository_id: pull_request.base.repository_id(),
         title: pull_request.title,
         state: pull_request.state,
         merged_at: pull_request.merged_at,
@@ -183,6 +184,8 @@ struct GithubOpenPullRequestResponse {
     title: String,
     html_url: String,
     body: Option<String>,
+    #[serde(default)]
+    base: GithubPullRequestBaseResponse,
     user: Option<GithubUserResponse>,
     #[serde(default)]
     requested_reviewers: Vec<GithubUserResponse>,
@@ -199,6 +202,8 @@ struct GithubPullRequestResponse {
     deletions: u64,
     body: Option<String>,
     head: GithubPullRequestHeadResponse,
+    #[serde(default)]
+    base: GithubPullRequestBaseResponse,
     user: Option<GithubUserResponse>,
     #[serde(default)]
     requested_reviewers: Vec<GithubUserResponse>,
@@ -233,6 +238,22 @@ fn structural_participant_ids(
 #[derive(Debug, serde::Deserialize)]
 struct GithubPullRequestHeadResponse {
     sha: String,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct GithubPullRequestBaseResponse {
+    repo: Option<GithubRepositoryIdResponse>,
+}
+
+impl GithubPullRequestBaseResponse {
+    fn repository_id(&self) -> Option<u64> {
+        self.repo.as_ref().map(|repo| repo.id)
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubRepositoryIdResponse {
+    id: u64,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -597,6 +618,7 @@ impl GithubOpenPullRequestResponse {
             github_key: GithubKey::new(owner, repo, self.number).to_string(),
             owner: owner.to_string(),
             repo: repo.to_string(),
+            repository_id: self.base.repository_id(),
             number: self.number,
             url: self.html_url,
             display_name: format!("{owner}/{repo}#{}", self.number),

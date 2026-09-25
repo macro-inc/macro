@@ -727,16 +727,22 @@ export type GraphqlForeignEntityExpr =
 
 /** GraphQL input representing the foreign entity literal. */
 export type GraphqlForeignEntityLiteral =
-  {   /** The foreign entity id option. */
-  foreignEntityId: string; foreignEntitySource?: never; id?: never; includesMe?: never; notificationState?: never; }
-  |  { foreignEntityId?: never;   /** The foreign entity source option. */
-  foreignEntitySource: string; id?: never; includesMe?: never; notificationState?: never; }
-  |  { foreignEntityId?: never; foreignEntitySource?: never;   /** The id option. */
-  id: string | number; includesMe?: never; notificationState?: never; }
-  |  { foreignEntityId?: never; foreignEntitySource?: never; id?: never;   /** The includes me option. */
-  includesMe: boolean; notificationState?: never; }
-  |  { foreignEntityId?: never; foreignEntitySource?: never; id?: never; includesMe?: never;   /** Exact notification state for the requester. */
-  notificationState: NotificationState; };
+  {   /** The author GitHub user id option. */
+  author: string; foreignEntityId?: never; foreignEntitySource?: never; id?: never; includesMe?: never; notificationState?: never; repository?: never; status?: never; }
+  |  { author?: never;   /** The foreign entity id option. */
+  foreignEntityId: string; foreignEntitySource?: never; id?: never; includesMe?: never; notificationState?: never; repository?: never; status?: never; }
+  |  { author?: never; foreignEntityId?: never;   /** The foreign entity source option. */
+  foreignEntitySource: string; id?: never; includesMe?: never; notificationState?: never; repository?: never; status?: never; }
+  |  { author?: never; foreignEntityId?: never; foreignEntitySource?: never;   /** The id option. */
+  id: string | number; includesMe?: never; notificationState?: never; repository?: never; status?: never; }
+  |  { author?: never; foreignEntityId?: never; foreignEntitySource?: never; id?: never;   /** The includes me option. */
+  includesMe: boolean; notificationState?: never; repository?: never; status?: never; }
+  |  { author?: never; foreignEntityId?: never; foreignEntitySource?: never; id?: never; includesMe?: never;   /** Exact notification state for the requester. */
+  notificationState: NotificationState; repository?: never; status?: never; }
+  |  { author?: never; foreignEntityId?: never; foreignEntitySource?: never; id?: never; includesMe?: never; notificationState?: never;   /** The GitHub repository id option. */
+  repository: string; status?: never; }
+  |  { author?: never; foreignEntityId?: never; foreignEntitySource?: never; id?: never; includesMe?: never; notificationState?: never; repository?: never;   /** The metadata status option, such as `open`, `closed`, or `merged`. */
+  status: string; };
 
 /** GraphQL GitHub check-run state. */
 export type GraphqlGithubPrCheckRunState =

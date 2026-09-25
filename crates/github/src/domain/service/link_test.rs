@@ -209,6 +209,7 @@ fn default_pull_request_details() -> GithubPullRequestDetails {
     GithubPullRequestDetails {
         title: "Add token validation".to_string(),
         state: "open".to_string(),
+        repository_id: None,
         merged_at: None,
         additions: 12,
         deletions: 3,

@@ -164,6 +164,9 @@ pub struct GithubPullRequestDetails {
     pub title: String,
     /// The raw GitHub pull request state, usually `open` or `closed`.
     pub state: String,
+    /// The numeric ID of the base repository, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repository_id: Option<u64>,
     /// The merge timestamp returned by GitHub, when the pull request was merged.
     pub merged_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The number of added lines reported by GitHub.
@@ -221,6 +224,10 @@ pub struct EnrichedGithubPullRequest {
     pub owner: String,
     /// The GitHub repository name.
     pub repo: String,
+    /// The numeric GitHub repository ID, when known. Unlike `owner` and `repo`, it survives
+    /// renames and transfers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repository_id: Option<u64>,
     /// The GitHub pull request number.
     pub number: u64,
     /// The public GitHub URL for the pull request.
@@ -264,6 +271,7 @@ impl EnrichedGithubPullRequest {
             github_key: reference.github_key,
             owner: reference.owner,
             repo: reference.repo,
+            repository_id: None,
             number: reference.number,
             url: reference.url,
             display_name: reference.display_name,
@@ -291,6 +299,7 @@ impl EnrichedGithubPullRequest {
             github_key: reference.github_key,
             owner: reference.owner,
             repo: reference.repo,
+            repository_id: details.repository_id,
             number: reference.number,
             url: reference.url,
             display_name: reference.display_name,
@@ -311,8 +320,9 @@ impl EnrichedGithubPullRequest {
     ///
     /// Partial refreshes may omit `comments` or `checks`. When an omitted field exists as an array in
     /// `existing_metadata`, the existing array is copied forward so richer metadata is not discarded.
-    /// The same applies to the scalar `authorLogin`, `authorId`, and `description` fields, which
-    /// fallback write paths (such as comment webhooks without a `pull_request` payload) omit.
+    /// The same applies to the scalar `repositoryId`, `authorLogin`, `authorId`, and `description`
+    /// fields, which fallback write paths (such as comment webhooks without a `pull_request`
+    /// payload) omit.
     pub fn foreign_entity_metadata(
         &self,
         existing_metadata: Option<&serde_json::Value>,
@@ -337,7 +347,7 @@ impl EnrichedGithubPullRequest {
             }
         }
 
-        for field in ["authorLogin", "authorId", "description"] {
+        for field in ["repositoryId", "authorLogin", "authorId", "description"] {
             if metadata_object.contains_key(field) {
                 continue;
             }

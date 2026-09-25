@@ -25,6 +25,7 @@ fn pull_request_details(
     GithubPullRequestDetails {
         title: "Add pull request enrichment".to_string(),
         state: state.to_string(),
+        repository_id: None,
         merged_at,
         additions: 42,
         deletions: 12,
@@ -152,6 +153,7 @@ fn pull_request_response_serializes_with_camel_case_fields() {
             github_key: reference.github_key,
             owner: reference.owner,
             repo: reference.repo,
+            repository_id: None,
             number: reference.number,
             url: reference.url,
             display_name: reference.display_name,
@@ -285,6 +287,7 @@ fn pull_request_enrichment_copies_details_fields() {
     let details = GithubPullRequestDetails {
         title: "Add pull request enrichment".to_string(),
         state: "closed".to_string(),
+        repository_id: None,
         merged_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
         additions: 42,
         deletions: 12,
@@ -336,6 +339,7 @@ fn pull_request_foreign_entity_metadata_serializes_enriched_pull_request() {
     let details = GithubPullRequestDetails {
         title: "Add pull request enrichment".to_string(),
         state: "closed".to_string(),
+        repository_id: None,
         merged_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
         additions: 42,
         deletions: 12,
@@ -457,6 +461,7 @@ fn pull_request_foreign_entity_metadata_keeps_fresh_arrays() {
     let details = GithubPullRequestDetails {
         title: "Add pull request enrichment".to_string(),
         state: "open".to_string(),
+        repository_id: None,
         merged_at: None,
         additions: 42,
         deletions: 12,
@@ -508,6 +513,27 @@ fn pull_request_foreign_entity_metadata_carries_existing_author_and_description_
     assert_eq!(
         metadata.get("description"),
         Some(&serde_json::json!("Existing description"))
+    );
+}
+
+#[test]
+fn pull_request_foreign_entity_metadata_stores_and_carries_repository_id() {
+    let mut details = pull_request_details("open", None);
+    details.repository_id = Some(1296269);
+    let fresh = EnrichedGithubPullRequest::from_details(pull_request_reference(), details)
+        .foreign_entity_metadata(None)
+        .unwrap();
+    assert_eq!(fresh.get("repositoryId"), Some(&serde_json::json!(1296269)));
+
+    let partial = EnrichedGithubPullRequest::from_details(
+        pull_request_reference(),
+        pull_request_details("open", None),
+    )
+    .foreign_entity_metadata(Some(&fresh))
+    .unwrap();
+    assert_eq!(
+        partial.get("repositoryId"),
+        Some(&serde_json::json!(1296269))
     );
 }
 
@@ -790,6 +816,23 @@ fn repo_name_present() {
 fn repo_name_missing() {
     let event = ValidatedGithubWebhookEvent::new("pull_request".to_string(), serde_json::json!({}));
     assert_eq!(event.repo_name(), None);
+}
+
+#[test]
+fn repository_id_present() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "repository": { "id": 1296269, "name": "cool-repo", "owner": { "login": "x" } }
+        }),
+    );
+    assert_eq!(event.repository_id(), Some(1296269));
+}
+
+#[test]
+fn repository_id_missing() {
+    let event = ValidatedGithubWebhookEvent::new("pull_request".to_string(), serde_json::json!({}));
+    assert_eq!(event.repository_id(), None);
 }
 
 #[test]

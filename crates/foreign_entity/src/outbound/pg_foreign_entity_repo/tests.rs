@@ -1,4 +1,5 @@
 mod notification_state;
+mod pull_request_filters;
 
 use std::sync::Arc;
 

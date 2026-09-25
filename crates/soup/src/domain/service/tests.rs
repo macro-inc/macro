@@ -362,6 +362,14 @@ fn foreign_entity_matches_expr(entity: &ForeignEntity, expr: &Expr<ForeignEntity
     }
 }
 
+fn metadata_id_eq(entity: &ForeignEntity, key: &str, id: &str) -> bool {
+    entity
+        .metadata
+        .get(key)
+        .and_then(|v| v.as_u64())
+        .is_some_and(|value| value.to_string() == id)
+}
+
 fn foreign_entity_matches_literal(entity: &ForeignEntity, literal: &ForeignEntityLiteral) -> bool {
     match literal {
         ForeignEntityLiteral::Id(id) => entity.id == *id,
@@ -371,6 +379,13 @@ fn foreign_entity_matches_literal(entity: &ForeignEntity, literal: &ForeignEntit
         ForeignEntityLiteral::ForeignEntitySource(source) => {
             entity.foreign_entity_source.as_str() == source.as_str()
         }
+        ForeignEntityLiteral::Repository(id) => metadata_id_eq(entity, "repositoryId", id),
+        ForeignEntityLiteral::Author(id) => metadata_id_eq(entity, "authorId", id),
+        ForeignEntityLiteral::Status(status) => entity
+            .metadata
+            .get("status")
+            .and_then(|v| v.as_str())
+            .is_some_and(|value| value == status),
         // "me" and notification done/seen resolution happen in the repository (against the
         // metadata participant list and the notification tables); the fake cannot resolve them,
         // so fail closed.

@@ -505,6 +505,12 @@ function mapForeignEntityLiteral(
       return { includesMe: mapBoolean(value, 'includesMe') };
     case 'ns':
       return { notificationState: mapNotificationState(value) };
+    case 'repo':
+      return { repository: mapString(value, 'repository') };
+    case 'au':
+      return { author: mapString(value, 'author') };
+    case 'st':
+      return { status: mapString(value, 'status') };
     default:
       unsupported(`foreign entity literal ${field}`);
   }

@@ -231,6 +231,13 @@ impl<
             github_key: github_key.as_ref().to_string(),
             owner: owner.to_string(),
             repo: repo.to_string(),
+            repository_id: event.repository_id().or_else(|| {
+                pull_request
+                    .and_then(|pr| pr.get("base"))
+                    .and_then(|base| base.get("repo"))
+                    .and_then(|repo| repo.get("id"))
+                    .and_then(|value| value.as_u64())
+            }),
             number,
             url,
             display_name: format!("{owner}/{repo}#{number}"),
@@ -349,6 +356,7 @@ impl<
             github_key: fallback.github_key,
             owner: fallback.owner,
             repo: fallback.repo,
+            repository_id: details.repository_id.or(fallback.repository_id),
             number: fallback.number,
             url: fallback.url,
             display_name: fallback.display_name,
