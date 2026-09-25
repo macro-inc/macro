@@ -228,10 +228,12 @@ impl crate::domain::audience::SessionSubscriptions for ConnectionGatewaySessionS
             .into_iter()
             .collect();
         if let Some(parent) = parent {
-            let kind = if parent.is_discussion() {
-                GatewayEntityType::Document
-            } else {
-                GatewayEntityType::Channel
+            use messages::domain::models::MessageParent;
+            let kind = match parent {
+                MessageParent::Channel(_) => GatewayEntityType::Channel,
+                MessageParent::Document(_) => GatewayEntityType::Document,
+                MessageParent::CrmCompany(_) => GatewayEntityType::CrmCompany,
+                MessageParent::CrmContact(_) => GatewayEntityType::CrmContact,
             };
             users.extend(
                 self.0

@@ -676,7 +676,7 @@ async fn discussion_delivery_context_reads_document_assignees_and_thread_authors
         .await
         .unwrap();
     assert!(context.is_task);
-    assert_eq!(context.owner, USER);
+    assert_eq!(context.owner.as_deref(), Some(USER));
     assert_eq!(context.assignees, vec![USER]);
     assert_eq!(context.participants, vec![USER]);
 }

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.team_id, ct.company_id, COALESCE(NULLIF(ct.name, ''), ct.email) AS \"name!\"\n            FROM crm_contacts ct\n            JOIN crm_companies c ON c.id = ct.company_id\n            WHERE ct.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "5316a12440101cce65f224c1fdb6bbd39428b332471b74451ae7ec2e1aed762a"
+}

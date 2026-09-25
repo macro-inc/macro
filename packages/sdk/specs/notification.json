@@ -1569,6 +1569,48 @@
           }
         ]
       },
+      "CrmDiscussionMetadata": {
+        "type": "object",
+        "description": "CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.",
+        "required": ["recordName", "reason", "messageId", "threadId", "text"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical shared message UUID."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/CrmDiscussionReason",
+            "description": "Semantic reason selected by the message delivery domain."
+          },
+          "recordName": {
+            "type": "string",
+            "description": "Company or contact display name."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public display name for a bot author."
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "Optional avatar for push notification attachments."
+          },
+          "text": {
+            "type": "string",
+            "description": "Posted Markdown content."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical discussion root UUID."
+          }
+        }
+      },
+      "CrmDiscussionReason": {
+        "type": "string",
+        "description": "Why a CRM discussion notification was delivered.",
+        "enum": ["mention", "reply", "owner"]
+      },
       "DeviceRequest": {
         "type": "object",
         "description": "Request to register or unregister a device for push notifications.",
@@ -2262,6 +2304,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["commented_on_document"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone commented, replied, or mentioned the recipient on a CRM company or contact.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CrmDiscussionMetadata",
+                "description": "Someone commented, replied, or mentioned the recipient on a CRM company or contact."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["crm_discussion"]
               }
             }
           },

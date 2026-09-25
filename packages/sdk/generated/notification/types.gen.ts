@@ -408,6 +408,46 @@ export type CreateNotification = Entity & {
 };
 
 /**
+ * CRM discussion metadata. The notification entity identifies the company or
+ * contact; message and thread UUIDs select the discussion inside it.
+ */
+export type CrmDiscussionMetadata = {
+    /**
+     * Canonical shared message UUID.
+     */
+    messageId: string;
+    /**
+     * Semantic reason selected by the message delivery domain.
+     */
+    reason: CrmDiscussionReason;
+    /**
+     * Company or contact display name.
+     */
+    recordName: string;
+    /**
+     * Public display name for a bot author.
+     */
+    senderDisplayName?: string | null;
+    /**
+     * Optional avatar for push notification attachments.
+     */
+    senderProfilePictureUrl?: string | null;
+    /**
+     * Posted Markdown content.
+     */
+    text: string;
+    /**
+     * Canonical discussion root UUID.
+     */
+    threadId: string;
+};
+
+/**
+ * Why a CRM discussion notification was delivered.
+ */
+export type CrmDiscussionReason = 'mention' | 'reply' | 'owner';
+
+/**
  * Request to register or unregister a device for push notifications.
  */
 export type DeviceRequest = {
@@ -885,6 +925,12 @@ export type NotifEvent = {
      */
     content: CommentedOnDocumentMetadata;
     tag: 'commented_on_document';
+} | {
+    /**
+     * Someone commented, replied, or mentioned the recipient on a CRM company or contact.
+     */
+    content: CrmDiscussionMetadata;
+    tag: 'crm_discussion';
 } | {
     /**
      * The user was invited to a channel.

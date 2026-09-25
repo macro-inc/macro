@@ -1041,7 +1041,10 @@ async fn run() -> anyhow::Result<()> {
         conn_gateway_client.clone(),
     );
     let discussion_delivery = messages::domain::delivery::DiscussionDelivery::new(
-        messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()),
+        messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()).with_crm(
+            crm::outbound::lookup::PgCrmParentReader::new(db.clone()),
+            properties_service.clone(),
+        ),
         messages::outbound::entity_access_audience::EntityAccessMessageAudience(
             (*entity_access_service).clone(),
         ),
@@ -1059,7 +1062,8 @@ async fn run() -> anyhow::Result<()> {
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(
-            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
+                .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
                 channel_bots::outbound::conversation::LocalBotPublisher::new(bot_trigger_sender),

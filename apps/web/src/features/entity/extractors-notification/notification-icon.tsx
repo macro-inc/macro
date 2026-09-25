@@ -39,7 +39,8 @@ function getNotificationIcon(
       P.union(
         'mentioned_in_document_comment',
         'replied_to_document_comment_thread',
-        'commented_on_document'
+        'commented_on_document',
+        'crm_discussion'
       ),
       () => ChatTeardropIcon
     )

@@ -505,6 +505,15 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		commentedOnDocumentSenderProfilePictureUrl: senderProfilePictureUrl
 		commentedOnDocumentSenderDisplayName: senderDisplayName
 	}
+	... on GraphqlCrmDiscussionMetadata {
+		crmDiscussionRecordName: recordName
+		crmDiscussionReason: reason
+		crmDiscussionMessageId: messageId
+		crmDiscussionThreadId: threadId
+		crmDiscussionText: text
+		crmDiscussionSenderDisplayName: senderDisplayName
+		crmDiscussionSenderProfilePictureUrl: senderProfilePictureUrl
+	}
 	... on GraphqlChannelInviteMetadata {
 		channelInviteInvitedBy: invitedBy
 		channelInviteChannelName: channelName

@@ -18,5 +18,5 @@ pub mod domain;
 pub mod inbound;
 
 /// The outbound module contains the outbound adapters for CRM
-#[cfg(any(feature = "outbound", feature = "search"))]
+#[cfg(any(feature = "outbound", feature = "search", feature = "lookup"))]
 pub mod outbound;

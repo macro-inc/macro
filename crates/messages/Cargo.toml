@@ -10,6 +10,8 @@ broker = ["dep:macro_event_broker", "dep:macro_event_topics", "ports"]
 default = []
 delivery = [
   "dep:connection_gateway_client",
+  "dep:models_properties",
+  "dep:properties",
   "dep:model-entity",
   "dep:model_notifications",
   "dep:model_owner",
@@ -58,6 +60,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 system_properties = { path = "../system_properties", optional = true }
+models_properties = { path = "../models_properties", optional = true }
+properties = { path = "../properties", default-features = false, features = ["ports"], optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }

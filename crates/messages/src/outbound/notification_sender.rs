@@ -29,6 +29,8 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
             std::collections::HashSet::from([MacroUserIdStr::try_from(n.recipient)?]);
         let kind = match n.event.parent {
             MessageParent::Document(_) => EntityType::Document,
+            MessageParent::CrmCompany(_) => EntityType::CrmCompany,
+            MessageParent::CrmContact(_) => EntityType::CrmContact,
             MessageParent::Channel(_) => {
                 return Err(rootcause::report!(
                     "comment notification requires discussion parent"
@@ -55,7 +57,41 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
                     .await?
             };
         }
-        let owner = Owner::from_principal_str(&n.context.owner)?;
+        if matches!(
+            n.event.parent,
+            MessageParent::CrmCompany(_) | MessageParent::CrmContact(_)
+        ) {
+            use model_notifications::{CrmDiscussionMetadata, CrmDiscussionReason};
+            let reason = match n.reason {
+                CommentNotificationReason::Mention => CrmDiscussionReason::Mention,
+                CommentNotificationReason::Reply => CrmDiscussionReason::Reply,
+                CommentNotificationReason::Owner => CrmDiscussionReason::Owner,
+                CommentNotificationReason::Assignee => {
+                    return Err(rootcause::report!("crm records have no assignees"));
+                }
+            };
+            send!(CrmDiscussionMetadata {
+                record_name: n.context.name.clone(),
+                reason,
+                message_id: n.message.id,
+                thread_id: n.message.root_id(),
+                text: n.message.content.clone(),
+                sender_display_name,
+                sender_profile_picture_url: n
+                    .message
+                    .bot_profile
+                    .as_ref()
+                    .and_then(|profile| profile.avatar_url.clone())
+                    .or_else(|| n.context.sender_profile_picture.clone()),
+            });
+            return Ok(());
+        }
+        let owner = Owner::from_principal_str(
+            n.context
+                .owner
+                .as_deref()
+                .ok_or_else(|| rootcause::report!("discussion parent has no owner"))?,
+        )?;
         let sub_type = n
             .context
             .is_task

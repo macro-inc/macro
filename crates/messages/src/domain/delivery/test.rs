@@ -57,7 +57,7 @@ impl DiscussionContextReader for Context {
     ) -> Result<DiscussionContext, rootcause::Report> {
         Ok(DiscussionContext {
             name: "Document".into(),
-            owner: "owner".into(),
+            owner: Some("owner".into()),
             file_type: None,
             is_task: false,
             participants: vec!["revoked".into(), "viewer".into()],
@@ -224,4 +224,34 @@ async fn channel_events_are_rejected_by_discussion_delivery() {
     );
     assert!(log.live.lock().unwrap().is_empty());
     assert!(log.notices.lock().unwrap().is_empty());
+}
+
+struct OwnerlessContext;
+impl DiscussionContextReader for OwnerlessContext {
+    async fn context(
+        &self,
+        parent: &MessageParent,
+        root: Uuid,
+    ) -> Result<DiscussionContext, rootcause::Report> {
+        let mut context = Context.context(parent, root).await?;
+        context.owner = None;
+        context.link_share_access = None;
+        Ok(context)
+    }
+}
+
+#[tokio::test]
+async fn crm_records_without_an_owner_only_notify_mentions_and_participants() {
+    let log = DeliveryLog::default();
+    let shares = Shares::default();
+    let delivery = DiscussionDelivery::new(OwnerlessContext, Access, log.clone(), log.clone())
+        .with_sharing(shares.clone());
+    let mut event = event();
+    event.parent = MessageParent::CrmContact(Uuid::from_u128(24));
+    delivery.publish(event).await.unwrap();
+    assert!(shares.0.lock().unwrap().is_empty());
+    assert_eq!(
+        *log.notices.lock().unwrap(),
+        vec![("viewer".into(), CommentNotificationReason::Mention)]
+    );
 }

@@ -197,15 +197,18 @@ describe('availableBotMentionUsers', () => {
     expect(availableBotMentionUsers([], [cursorAgent], true)).toHaveLength(1);
   });
 
-  it('includes channel-selected agents on a document surface only', () => {
-    const selected = agent('doc-only', 'Doc only', 'selected');
-    expect(
-      availableBotMentionUsers([], [selected], true, 'channel').map((u) => u.id)
-    ).toEqual([]);
-    expect(
-      availableBotMentionUsers([], [selected], true, 'document').map(
-        (u) => u.id
-      )
-    ).toEqual(['bot|doc-only']);
-  });
+  it.each(['document', 'crm_company', 'crm_contact'] as const)(
+    'includes channel-selected agents on a %s discussion surface',
+    (surface) => {
+      const selected = agent('doc-only', 'Doc only', 'selected');
+      expect(
+        availableBotMentionUsers([], [selected], true, 'channel').map(
+          (u) => u.id
+        )
+      ).toEqual([]);
+      expect(
+        availableBotMentionUsers([], [selected], true, surface).map((u) => u.id)
+      ).toEqual(['bot|doc-only']);
+    }
+  );
 });

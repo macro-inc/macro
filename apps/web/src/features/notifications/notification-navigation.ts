@@ -347,6 +347,15 @@ function getSupportedHandler(
           );
         };
       })
+      .with('crm_discussion', () => {
+        const blockName =
+          notification.entity_type === 'crm_contact' ? 'contact' : 'company';
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
+            newSplit,
+            sourceHandle,
+          });
+      })
       .with('inbox_reauth_required', () => null)
       .exhaustive()
   );
