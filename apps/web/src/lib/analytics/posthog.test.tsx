@@ -8,6 +8,7 @@ import { PosthogProvider, ShowFeatureFlag, useFeatureFlag } from './posthog';
 const posthog = vi.hoisted(() => ({
   onFeatureFlags: vi.fn<PostHog['onFeatureFlags']>(),
   getFeatureFlagResult: vi.fn<PostHog['getFeatureFlagResult']>(),
+  featureFlags: { getFlags: vi.fn<() => string[]>() },
   unsubscribe: vi.fn(),
 }));
 
@@ -58,6 +59,7 @@ function renderFlag(flag: RemoteFlag = channelTags) {
 beforeEach(() => {
   vi.clearAllMocks();
   posthog.getFeatureFlagResult.mockReset();
+  posthog.featureFlags.getFlags.mockReturnValue([]);
   posthog.onFeatureFlags.mockReturnValue(posthog.unsubscribe);
 });
 afterEach(cleanup);
@@ -129,6 +131,24 @@ describe('reactive PostHog flags', () => {
     ).toBeTruthy();
     expect(screen.queryByText('Painted')).toBeNull();
     expect(screen.queryByText('Suspense fallback')).toBeNull();
+  });
+
+  it('serves cached flags before PostHog answers, then applies the answer', async () => {
+    posthog.featureFlags.getFlags.mockReturnValue([channelTags.key]);
+    posthog.getFeatureFlagResult.mockReturnValue(flagResult(true, 'cached'));
+    const view = renderFlag();
+
+    expect(view.result()).toEqual({
+      enabled: true,
+      payload: 'cached',
+      loading: false,
+    });
+    expect(screen.getByRole('button', { name: 'New label' })).toBeTruthy();
+
+    await receiveFlags(flagResult(false));
+    expect(view.result().enabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'New label' })).toBeNull();
+    expect(view.mount).toHaveBeenCalledOnce();
   });
 
   it.each([false, true])(
