@@ -1,10 +1,12 @@
+import { appendFileSync } from 'node:fs';
 import {
   createRoutesManifest,
   decodeRoute,
   encodeRoute,
 } from '@app/lib/split-router/routes';
-import { describe, expect, it, vi } from 'vitest';
-import { appSplitRoutes } from '../split-router/app-routes';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+let appSplitRoutes: typeof import('../split-router/app-routes')['appSplitRoutes'];
 
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
@@ -37,6 +39,39 @@ vi.mock('@app/features/next-soup/soup-view/soup-view', () => {
 });
 vi.mock('@app/features/settings/Settings', () => {
   throw new Error('Route declarations must not eagerly load settings views');
+});
+
+beforeAll(async () => {
+  // #region agent log
+  appendFileSync(
+    '/opt/cursor/logs/debug.log',
+    `${JSON.stringify({ hypothesisId: 'A,C,E', location: 'app-route-isolation.test.ts:before-route-import', message: 'route import starting', data: { broadcastChannelType: typeof globalThis.BroadcastChannel, resources: process.getActiveResourcesInfo() }, timestamp: Date.now() })}\n`
+  );
+  // #endregion
+  const OriginalBroadcastChannel = globalThis.BroadcastChannel;
+  if (OriginalBroadcastChannel) {
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class extends OriginalBroadcastChannel {
+        constructor(name: string) {
+          super(name);
+          // #region agent log
+          appendFileSync(
+            '/opt/cursor/logs/debug.log',
+            `${JSON.stringify({ hypothesisId: 'A', location: 'app-route-isolation.test.ts:BroadcastChannel', message: 'route import constructed BroadcastChannel', data: { name, resources: process.getActiveResourcesInfo() }, timestamp: Date.now() })}\n`
+          );
+          // #endregion
+        }
+      }
+    );
+  }
+  ({ appSplitRoutes } = await import('../split-router/app-routes'));
+  // #region agent log
+  appendFileSync(
+    '/opt/cursor/logs/debug.log',
+    `${JSON.stringify({ hypothesisId: 'A,C,E', location: 'app-route-isolation.test.ts:after-route-import', message: 'route import finished', data: { resources: process.getActiveResourcesInfo() }, timestamp: Date.now() })}\n`
+  );
+  // #endregion
 });
 
 describe('application route import isolation', () => {

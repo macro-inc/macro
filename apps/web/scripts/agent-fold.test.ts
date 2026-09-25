@@ -1,24 +1,44 @@
 import { execFile } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { promisify } from 'node:util';
-import { beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { FoldStream } from '../src/lib/core/agent-fold/wasm-module';
 
 let Stream: new (session: string) => FoldStream;
 
 beforeAll(async () => {
+  // #region agent log
+  appendFileSync('/opt/cursor/logs/debug.log', `${JSON.stringify({ hypothesisId: 'A,D', location: 'scripts/agent-fold.test.ts:beforeAll', message: 'beforeAll entered', data: { resources: process.getActiveResourcesInfo() }, timestamp: Date.now() })}\n`);
+  // #endregion
   // Keep the worker responsive to Vitest RPC while a cold WASM build runs.
-  await promisify(execFile)('just', ['build-agent-fold-wasm'], {
+  const build = promisify(execFile)('just', ['build-agent-fold-wasm'], {
     cwd: new URL('..', import.meta.url),
     maxBuffer: 10 * 1024 * 1024,
   });
+  const child = Reflect.get(build, 'child');
+  // #region agent log
+  appendFileSync('/opt/cursor/logs/debug.log', `${JSON.stringify({ hypothesisId: 'A,B', location: 'scripts/agent-fold.test.ts:build-spawned', message: 'WASM build child spawned', data: { pid: child?.pid, resources: process.getActiveResourcesInfo() }, timestamp: Date.now() })}\n`);
+  // #endregion
+  const result = await build;
+  // #region agent log
+  appendFileSync('/opt/cursor/logs/debug.log', `${JSON.stringify({ hypothesisId: 'A,B,E', location: 'scripts/agent-fold.test.ts:build-resolved', message: 'WASM build child resolved', data: { pid: child?.pid, exitCode: child?.exitCode, killed: child?.killed, stdoutBytes: result.stdout.length, stderrBytes: result.stderr.length, resources: process.getActiveResourcesInfo() }, timestamp: Date.now() })}\n`);
+  // #endregion
   const path = new URL('../src/lib/core/agent-fold/wasm/', import.meta.url);
   const wasm = await import(/* @vite-ignore */ new URL('agent_fold.js', path).href);
   await wasm.default({
     module_or_path: readFileSync(new URL('agent_fold_bg.wasm', path)),
   });
+  // #region agent log
+  appendFileSync('/opt/cursor/logs/debug.log', `${JSON.stringify({ hypothesisId: 'C,E', location: 'scripts/agent-fold.test.ts:wasm-initialized', message: 'wasm-bindgen initialized', data: { resources: process.getActiveResourcesInfo() }, timestamp: Date.now() })}\n`);
+  // #endregion
   Stream = wasm.FoldStream;
 }, 300_000);
+
+afterAll(() => {
+  // #region agent log
+  appendFileSync('/opt/cursor/logs/debug.log', `${JSON.stringify({ hypothesisId: 'A,B,C,D,E', location: 'scripts/agent-fold.test.ts:afterAll', message: 'tests finished', data: { resources: process.getActiveResourcesInfo() }, timestamp: Date.now() })}\n`);
+  // #endregion
+});
 
 it('decodes durable DTOs, reconciles overlap, and folds a batch like a stream', () => {
   const session = '00000000-0000-0000-0000-00000000000a';
