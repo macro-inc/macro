@@ -15,6 +15,15 @@ pub const ROUTED_MODELS: &[(&str, &str)] = &[
     ("fireworks/kimi-k3", "Kimi K3"),
     ("fireworks/deepseek-v4-pro-0813", "DeepSeek V4 Pro"),
     ("fireworks/muse-glimmer-30b", "Muse Glimmer"),
+    ("fireworks/glm-5p3", "GLM 5.3"),
+    ("fireworks/glm-5p3-flash", "GLM 5.3 Flash"),
+    ("fireworks/qwen3p8-max", "Qwen 3.8 Max"),
+    ("fireworks/minimax-m3", "MiniMax M3"),
+    ("cerebras/gpt-oss-120b", "GPT OSS 120B"),
+    (
+        "fireworks/nemotron-lightning-3p5-30b-a3b",
+        "Nemotron Lightning 3.5 30B A3B",
+    ),
     ("google/gemini-3.8-flash", "Gemini 3.8 Flash"),
 ];
 

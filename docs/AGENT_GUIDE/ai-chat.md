@@ -63,17 +63,19 @@ permission failures should display a failed tool call without a successful resul
   Direct model selections show only the model name and provider icon in the input.
   Saved and coding agents show their identity beside the current model. There is
   no Chat/Code switch or separate model button.
-- The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
-  grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
-  Macro’s available models with readable names (for example, **Sonnet 5**) and
-  provider or model icons aligned with the agent icons. The in-memory catalog
-  offers the closed Anthropic and OpenAI chat models, Fireworks-hosted
-  **Kimi K3**, **DeepSeek V4 Pro**, and **Muse Glimmer**, and Google's
-  **Gemini 3.8 Flash**; older Sonnet and Opus versions are not offered.
+- The agent dropdown includes every saved agent regardless of runtime, plus Cursor.
+  Macro's models use the same searchable catalog as running sessions: a short
+  **Recommended** list and a **More models** submenu grouped by model family,
+  followed by **Agents** and **Coding agents** sections. Models have readable
+  names (for example, **Sonnet 5**) and provider or model icons aligned with the
+  agent icons. The in-memory catalog offers the closed Anthropic and OpenAI chat
+  models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
+  open-weight models; and Google's **Gemini 3.8 Flash**. Older Sonnet and Opus
+  versions are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
-  A model chosen from that **Models** list is remembered in local storage as the
-  default for Macro's in-memory agent until another Models entry is picked.
+  A model chosen from that catalog is remembered in local storage as the
+  default for Macro's in-memory agent until another model entry is picked.
   The built-in Macro agent is the only agent excluded from these sections; its models remain available.
   Unavailable paired agents stay visible with a reason. Model discovery uses the
   selected runtime, including Claude Cloud. Every coding agent opens the repository

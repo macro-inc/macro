@@ -22,6 +22,12 @@ const HARNESS_PRETTYNAME: Record<string, string> = {
   'kimi-k3': 'Kimi K3',
   'deepseek-v4-pro-0813': 'DeepSeek V4 Pro',
   'muse-glimmer-30b': 'Muse Glimmer',
+  'glm-5p3': 'GLM 5.3',
+  'glm-5p3-flash': 'GLM 5.3 Flash',
+  'qwen3p8-max': 'Qwen 3.8 Max',
+  'minimax-m3': 'MiniMax M3',
+  'gpt-oss-120b': 'GPT OSS 120B',
+  'nemotron-lightning-3p5-30b-a3b': 'Nemotron Lightning 3.5 30B A3B',
   'gemini-3.8-flash': 'Gemini 3.8 Flash',
 };
 
