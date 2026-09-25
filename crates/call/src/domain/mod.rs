@@ -17,3 +17,6 @@ pub mod ports;
 /// Service orchestration for calls.
 #[cfg(feature = "ports")]
 pub mod service;
+
+/// Persistent meeting invitations and guest models.
+pub mod meetings;

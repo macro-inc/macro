@@ -2,7 +2,7 @@ import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { SidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import type { CallRecord } from '@service-call/client';
 import { format } from 'date-fns';
 import type { Accessor } from 'solid-js';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
@@ -210,6 +210,7 @@ export function CallRecordingBody(props: {
                   <CallTranscript
                     transcript={record().transcript}
                     channelId={record().channelId}
+                    record={record()}
                     timelineStartMs={timelineStartMs()}
                     activeSequenceNum={activeSequenceNum()}
                     videoSeekGeneration={videoSeekGeneration()}

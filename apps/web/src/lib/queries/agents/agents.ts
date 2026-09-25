@@ -7,6 +7,7 @@ import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { AgentChannelScope } from '@service-storage/generated/schemas/agentChannelScope';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { agentKeys } from './keys';
 
 /**
@@ -53,9 +54,10 @@ export type DeleteAgentParams = {
   channelIds: string[];
 };
 
-export function useAgentsQuery() {
+export function useAgentsQuery(enabled: Accessor<boolean> = () => true) {
   return useQuery(() => ({
     queryKey: agentKeys.list.queryKey,
+    enabled: enabled(),
     queryFn: async (): Promise<AgentWithHarnessId[]> =>
       await throwOnErr(() => storageServiceClient.getAgents()),
   }));

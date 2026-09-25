@@ -210,7 +210,7 @@ export const ListNav = (props: ListNavProps) => {
           icon={props.item.icon}
           iconActive={props.item.iconActive}
           filled={isActive()}
-          class="size-5.5"
+          class="size-5"
         />
         <Show
           when={props.activeCall}

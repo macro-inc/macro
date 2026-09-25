@@ -6,6 +6,7 @@ import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { ChannelsRecentWidget } from '@app/features/channel/sidebar/channels-recent-widget';
+import { useHasActiveChannelsCall } from '@app/features/channels-view/use-has-active-call';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
 import { FavoritesSection } from '@app/features/favorites/sidebar/favorites-section';
@@ -90,7 +91,6 @@ import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import XIcon from '@phosphor/x.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
-import { useActiveCallsQuery } from '@queries/call/call';
 import { useMailAccountsQuery } from '@queries/email/mail-accounts';
 import {
   useJoinTeamMutation,
@@ -1853,15 +1853,21 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
 };
 
 /**
- * Accent phone icon on the Channels link while any channel the user is a
- * member of has a live call. Backed by the shared all-active-calls query,
- * which the call websocket events keep current.
+ * Accent phone icon for a visible active channel call or Quick Call.
  */
 const ChannelsActiveCallIcon = () => {
-  const activeCallsQuery = useActiveCallsQuery();
+  return (
+    <Suspense>
+      <ChannelsActiveCallIconContent />
+    </Suspense>
+  );
+};
+
+const ChannelsActiveCallIconContent = () => {
+  const hasActiveCall = useHasActiveChannelsCall();
 
   return (
-    <Show when={(activeCallsQuery.data ?? []).length > 0}>
+    <Show when={hasActiveCall()}>
       <PhoneIcon class="size-4 shrink-0 text-accent fill-accent" />
     </Show>
   );

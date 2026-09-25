@@ -29,7 +29,7 @@ pub async fn process_call_record(
     }
 
     let call_id_s = payload.call_id.to_string();
-    let channel_id_s = payload.channel_id.to_string();
+    let channel_id_s = payload.channel_id.map(|id| id.to_string());
 
     // The searchable call name is the caller-assigned custom name, falling
     // back to the owning channel's name.
@@ -92,7 +92,7 @@ pub async fn process_call_record(
 #[tracing::instrument(skip(opensearch_client), err)]
 pub async fn process_remove_call_record(
     opensearch_client: &OpensearchClient,
-    channel_id: Uuid,
+    channel_id: Option<Uuid>,
     call_id: Option<Uuid>,
     index_override: Option<&str>,
 ) -> anyhow::Result<()> {
@@ -101,7 +101,7 @@ pub async fn process_remove_call_record(
         opensearch_client
             .delete_call_record(&call_id, index_override)
             .await?;
-    } else {
+    } else if let Some(channel_id) = channel_id {
         let channel_id = channel_id.to_string();
         opensearch_client
             .delete_call_records_by_channel(&channel_id, index_override)

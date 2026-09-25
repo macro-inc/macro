@@ -25,8 +25,19 @@ vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/collection/rows')),
   ...(await import('@app/features/soup/search/create-search-state')),
 }));
-vi.mock('@queries/soup/search', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@queries/soup/search')>()),
+// Exercise query transitions without loading UI barrels or the local-search provider.
+vi.mock('@entity', async () => ({
+  ...(await import('@entity/types/entity')),
+  ...(await import('@entity/utils/notification')),
+  ...(await import('@entity/utils/task-properties')),
+  ...(await import('@entity/utils/company-properties')),
+}));
+vi.mock('@app/features/soup/search/context', () => ({
+  useOptionalSearchContext: () => undefined,
+}));
+vi.mock('@notifications', async () => await import('@notifications/types'));
+vi.mock('@queries/soup/search', () => ({
+  validateSearchServiceText: (text: string) => text.length >= 3,
   useSearchSoupQuery: searchQueryMock,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({

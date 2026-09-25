@@ -8,8 +8,12 @@ import userEvent from '@testing-library/user-event';
 import { Dialog } from '@ui';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EventComposerGuestsPill } from './EventPropertyPills';
+import {
+  EventComposerConferencePill,
+  EventComposerGuestsPill,
+} from './EventPropertyPills';
 import type {
+  EventEditorConferenceChoice,
   EventEditorGuestOption,
   SelectedEventEditorGuest,
 } from './event-form-model';
@@ -92,5 +96,76 @@ describe('EventComposerGuestsPill', () => {
     // trigger) is aria-hidden while the list is open.
     expect(guests.getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByPlaceholderText('Add guests...')).toBeTruthy();
+  });
+});
+
+describe('EventComposerConferencePill', () => {
+  it('offers Macro only after the host flag resolves enabled', async () => {
+    const user = userEvent.setup();
+    const [enabled, setEnabled] = createSignal(false);
+    render(() => (
+      <EventComposerConferencePill
+        value="none"
+        macroCallsEnabled={enabled()}
+        canKeepExisting={false}
+        onChange={vi.fn()}
+      />
+    ));
+    await user.click(
+      screen.getByRole('button', { name: /Video conferencing/ })
+    );
+    expect(screen.queryByRole('option', { name: 'Macro call' })).toBeNull();
+    setEnabled(true);
+    expect(
+      await screen.findByRole('option', { name: 'Macro call' })
+    ).toBeTruthy();
+    setEnabled(false);
+    expect(screen.queryByRole('option', { name: 'Macro call' })).toBeNull();
+  });
+
+  it('shows the Macro selection and lets users switch to no link or Google Meet', async () => {
+    const user = userEvent.setup();
+    render(() => {
+      const [choice, setChoice] =
+        createSignal<EventEditorConferenceChoice>('macro');
+      return (
+        <EventComposerConferencePill
+          value={choice()}
+          macroCallsEnabled
+          canKeepExisting={false}
+          onChange={setChoice}
+        />
+      );
+    });
+    const trigger = screen.getByRole('button', {
+      name: /Video conferencing/,
+    });
+    expect(trigger.textContent).toContain('Macro call');
+    await user.click(trigger);
+    await user.click(screen.getByRole('option', { name: 'No meeting link' }));
+    expect(trigger.textContent).toContain('Add meeting link');
+    await user.click(trigger);
+    await user.click(screen.getByRole('option', { name: 'Google Meet' }));
+    expect(trigger.textContent).toContain('Google Meet');
+    await user.click(trigger);
+    await user.click(screen.getByRole('option', { name: 'Macro call' }));
+    expect(trigger.textContent).toContain('Macro call');
+  });
+
+  it('does not offer a new Macro call when calls are unavailable', async () => {
+    const user = userEvent.setup();
+    render(() => (
+      <EventComposerConferencePill
+        value="none"
+        macroCallsEnabled={false}
+        canKeepExisting={false}
+        onChange={vi.fn()}
+      />
+    ));
+    await user.click(
+      screen.getByRole('button', { name: /Video conferencing/ })
+    );
+    expect(screen.queryByRole('option', { name: 'Macro call' })).toBeNull();
+    expect(screen.getByRole('option', { name: 'Google Meet' })).toBeTruthy();
   });
 });

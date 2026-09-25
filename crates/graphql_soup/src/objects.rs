@@ -13,7 +13,7 @@ use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
     agent_session::{AgentPullRequestState, SoupAgentSession},
     calendar_event::SoupCalendarEvent,
-    call_record::{SoupCallRecord, SoupCallRecordParticipant},
+    call_record::{SoupCallRecord, SoupCallRecordGuest, SoupCallRecordParticipant},
     chat::SoupChat,
     comms::{ChannelMessage, ChannelParticipant, ChannelType, SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
@@ -1915,6 +1915,31 @@ impl GraphqlSoupCallParticipant {
     }
 }
 
+/// GraphQL representation of a non-account call guest.
+#[derive(SimpleObject)]
+pub struct GraphqlSoupCallGuest {
+    /// Opaque guest identity; matches the guest's transcript speaker id.
+    id: ID,
+    /// Guest-provided display name.
+    display_name: String,
+    /// The joined timestamp in RFC 3339 format.
+    joined_at: String,
+    /// The left timestamp in RFC 3339 format.
+    left_at: Option<String>,
+}
+
+impl GraphqlSoupCallGuest {
+    /// Construct a GraphQL call guest from the Soup model.
+    pub fn new(value: &SoupCallRecordGuest) -> Self {
+        Self {
+            id: ID(value.id.to_string()),
+            display_name: value.display_name.clone(),
+            joined_at: value.joined_at.to_rfc3339(),
+            left_at: value.left_at.map(|ts| ts.to_rfc3339()),
+        }
+    }
+}
+
 /// GraphQL call entity.
 pub struct GraphqlSoupCall<E: SoupEntityEdges>(SoupCallRecord<()>, E, Option<f64>);
 
@@ -1952,10 +1977,10 @@ where
         GraphqlEntityMetadata {
             owner_id: Some(self.0.created_by.clone()),
             owner_type: Some(GraphqlOwnerType::User),
-            parent: Some(graphql_entity(
-                model_entity::EntityType::Channel,
-                self.0.channel_id,
-            )),
+            parent: self
+                .0
+                .channel_id
+                .map(|id| graphql_entity(model_entity::EntityType::Channel, id)),
             created_at: Some(self.0.started_at.to_rfc3339()),
             updated_at: self.0.ended_at.map(|ts| ts.to_rfc3339()),
             viewed_at: None,
@@ -1964,8 +1989,8 @@ where
     }
 
     /// The identifier of the channel.
-    async fn channel_id(&self) -> ID {
-        ID(self.0.channel_id.to_string())
+    async fn channel_id(&self) -> Option<ID> {
+        self.0.channel_id.map(|id| ID(id.to_string()))
     }
 
     /// The channel name.
@@ -2050,6 +2075,15 @@ where
             .participants
             .iter()
             .map(GraphqlSoupCallParticipant::new)
+            .collect()
+    }
+
+    /// Non-account guests who attended the call.
+    async fn guests(&self) -> Vec<GraphqlSoupCallGuest> {
+        self.0
+            .guests
+            .iter()
+            .map(GraphqlSoupCallGuest::new)
             .collect()
     }
 
