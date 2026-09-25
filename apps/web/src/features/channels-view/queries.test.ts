@@ -1,3 +1,4 @@
+import type { ChannelEntity } from '@entity/types/entity';
 import { QueryClient } from '@tanstack/query-core';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
@@ -21,7 +22,20 @@ vi.mock('@entity', () => ({
   isChannelEntity: (entity: { type: string }) => entity.type === 'channel',
 }));
 
-import { useChannelByIdQuery, useChannelsSources } from './queries';
+import {
+  resolveReferencedChannels,
+  useChannelByIdQuery,
+  useChannelsSources,
+} from './queries';
+
+const channel = (id: string) =>
+  ({
+    id,
+    type: 'channel',
+    name: id,
+    ownerId: 'viewer',
+    channelType: 'team',
+  }) as ChannelEntity;
 
 describe('channel list query selection', () => {
   it('refreshes a newly cached full edge instead of reusing it for 30 seconds', async () => {
@@ -79,5 +93,61 @@ describe('channel list query selection', () => {
     } finally {
       dispose();
     }
+  });
+});
+
+describe('channels resolved by id', () => {
+  const resolved = [channel('design'), channel('support')];
+  const settled = {
+    isEnabled: true,
+    isLoading: false,
+    error: undefined,
+    entities: undefined,
+  };
+
+  it('replaces the previous answer, dropping channels the lookup stops returning', () => {
+    expect(
+      resolveReferencedChannels(resolved, {
+        ...settled,
+        entities: [
+          channel('design'),
+          { id: 'note', type: 'document' } as never,
+        ],
+      })
+    ).toEqual([channel('design')]);
+  });
+
+  it('keeps the previous answer while the lookup is disabled or loading', () => {
+    expect(
+      resolveReferencedChannels(resolved, {
+        ...settled,
+        isEnabled: false,
+        entities: [],
+      })
+    ).toBe(resolved);
+    expect(
+      resolveReferencedChannels(resolved, {
+        ...settled,
+        isLoading: true,
+        entities: [],
+      })
+    ).toBe(resolved);
+  });
+
+  it('keeps the previous answer when a page fails instead of emptying the rows', () => {
+    expect(
+      resolveReferencedChannels(resolved, {
+        ...settled,
+        error: new Error('page failed'),
+        entities: [channel('design')],
+      })
+    ).toBe(resolved);
+    // A failed first page leaves no data behind at all.
+    expect(
+      resolveReferencedChannels(resolved, {
+        ...settled,
+        error: new Error('lookup failed'),
+      })
+    ).toBe(resolved);
   });
 });

@@ -75,6 +75,7 @@ import {
   type ChannelsSourceScope,
   type ChannelsSources,
   deduplicateChannels,
+  resolveReferencedChannels,
   useChannelsByIdsQuery,
 } from '../../queries';
 import type {
@@ -396,16 +397,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return referencedChannelIds().filter((id) => !loaded.has(id));
   });
   const referencedChannelsQuery = useChannelsByIdsQuery(missingChannelIds);
-  // A settled lookup answers for every id it asked about, so it replaces the
-  // previous one: a channel it stops returning is unresolved again rather than
-  // a stale entity the rail keeps acting on.
-  const referencedChannels = createMemo<ChannelEntity[]>((previous) => {
-    if (!referencedChannelsQuery.isEnabled || referencedChannelsQuery.isLoading)
-      return previous;
-    return (referencedChannelsQuery.data?.entities ?? []).filter(
-      isChannelEntity
-    );
-  }, []);
+  const referencedChannels = createMemo<ChannelEntity[]>(
+    (previous) =>
+      resolveReferencedChannels(previous, {
+        isEnabled: referencedChannelsQuery.isEnabled,
+        isLoading: referencedChannelsQuery.isLoading,
+        error: referencedChannelsQuery.error,
+        entities: referencedChannelsQuery.data?.entities,
+      }),
+    []
+  );
   // Only a label puts a fetched channel in a section. A favorited one stays
   // out of the section lists, and so out of their unread counts.
   const labelledChannels = createMemo<ChannelEntity[]>(() => {
