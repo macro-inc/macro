@@ -651,6 +651,7 @@ dependencies = [
  "chrono",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_env",
  "macro_user_id",
  "macro_uuid",
  "roles_and_permissions",

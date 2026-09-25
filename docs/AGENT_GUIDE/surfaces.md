@@ -1006,13 +1006,11 @@ and split navigation.
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing` (current plan card with
-`Manage`; AI usage meters, balances, credit purchases, and usage-billing
-controls are temporarily hidden;
-<!-- Retained for when AI usage billing is re-enabled: on paid plans an
-**AI usage** card with the period meter, credit balance, credit-pack buttons
-`$10`/`$25`/`$50`/`$100` that redirect to Stripe Checkout, and a `Usage billing`
-toggle with per-period limit pills; -->
-an
+`Manage`; only in dev (`dev.macro.com/app` or a local frontend using the dev
+backend), paid plans show an **AI usage** card with the period meter, credit
+balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
+Checkout, and a `Usage billing` toggle with per-period limit pills; these
+controls and usage-billing promotional copy are hidden outside dev; an
 `Upgrade`/`Upgrade to Max` card, or a `Switch to Premium` link on Max; on a team
 the plan change moves only the viewer's own seat),
 `Appearance`, `Agents`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);

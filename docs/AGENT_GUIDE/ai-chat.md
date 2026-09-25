@@ -285,13 +285,16 @@ documents:
 
 ## AI usage limits
 
-AI usage billing is temporarily paused. Chat requests are not blocked by
-Macro's credit allowance, spending cap, or failed-overage-payment state. The
-app does not show usage meters, credit-purchase controls, out-of-credit dialogs,
-or model usage multipliers. Normal paid-model access rules still apply.
+AI usage billing is enabled only in the dev environment (`dev.macro.com/app`,
+including a local frontend pointed at the dev backend). The backend enforces
+allowances and settles usage only in `Environment::Develop`. In production and
+local-backend environments, requests are not blocked by credits, spending caps,
+or failed-overage-payment state, and usage is recorded without settlement.
+Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
+are hidden outside frontend development mode. Normal paid-model access rules
+still apply everywhere.
 
-<!-- Retained for when AI usage billing is re-enabled.
-Paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
+In dev, paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
 usage rates). When it is used up and no credits or usage billing cover the
 request, sending a message answers HTTP 402 and the app opens the
 **AI usage limit** dialog (title `You've used this month's included AI`, or the
@@ -302,7 +305,6 @@ team this moves only the payer's own seat). Team members who are not the payer
 see a note to ask the team owner, or a team admin to move their seat to Max.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
--->
 
 ## Start a doc-scoped chat
 
@@ -358,7 +360,7 @@ existing text sizing.
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
 - Model picker button showing the current model (e.g. `Haiku 4.5`). Paid plans list
   `Sonnet 5`, `Opus 5`, `Fable 5.1`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
-  <!-- heavy models carry a `2.5× usage` / `5× usage` hint. -->
+  in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
   On the free plan everything but `Haiku 4.5` is
   dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
