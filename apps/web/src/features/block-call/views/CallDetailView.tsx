@@ -1,6 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
-import { useCall } from '@channel/Call/use-call';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -34,6 +33,7 @@ import {
 } from 'solid-js';
 import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody';
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
+import { useCallAgain } from '../component/use-call-again';
 import type { CallTranscriptTarget } from '../constants';
 
 export type CallDetailData = { record: CallRecord; name: string };
@@ -62,20 +62,15 @@ export function CallDetailActions(props: {
   isActive: boolean;
 }) {
   const panel = useSplitPanelOrThrow();
-  const call = useCall(() => props.channelId ?? '');
-  const join = async () => {
-    if (!props.channelId) return;
-    try {
-      await call.joinCall();
-    } catch (error) {
-      console.error('Failed to join call from recording', error);
-    }
-  };
+  const { canCallAgain, callAgain } = useCallAgain(
+    () => props.callId,
+    () => props.channelId
+  );
 
   return (
     <div class="ml-auto flex shrink-0 items-center gap-2">
-      <Show when={!isMobile() && !props.isActive && props.channelId}>
-        <Button variant="outline" size="sm" onClick={join}>
+      <Show when={!isMobile() && !props.isActive && canCallAgain()}>
+        <Button variant="outline" size="sm" onClick={callAgain}>
           <PhoneCallIcon class="size-4" />
           Call Again
         </Button>
