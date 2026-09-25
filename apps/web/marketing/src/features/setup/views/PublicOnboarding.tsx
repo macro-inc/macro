@@ -1,6 +1,5 @@
 import { createSignal, Match, onCleanup, Show, Switch } from 'solid-js';
 import { GoogleAccountsStep } from '../components/GoogleAccountsStep';
-import { ImportSummary } from '../components/ImportSummary';
 import { OnboardingShell } from '../components/OnboardingShell';
 import { OnboardingTrustDetails } from '../components/OnboardingTrustDetails';
 import { StoryStage } from '../components/StoryStage';
@@ -25,7 +24,6 @@ export function PublicOnboarding(props: {
     'work',
     'personal',
     'tools',
-    'summary',
     'team',
   ] as const;
   type Step = (typeof steps)[number];
@@ -136,39 +134,9 @@ export function PublicOnboarding(props: {
                 )}
                 selected={selected()}
                 onSelectionChange={setSelected}
-                onContinue={() => goTo('summary')}
+                onContinue={() => goTo('team')}
               />
             </StoryStage>
-          </Match>
-          <Match when={props.preview && step() === 'summary'}>
-            <ImportSummary
-              inboxCount={2}
-              emailState="syncing"
-              emailProgress={{ completed: 840, total: 1200 }}
-              contactCount={128}
-              runs={selected()
-                .filter(
-                  (item) =>
-                    item.id === 'linear' ||
-                    item.id === 'notion' ||
-                    item.id === 'slack'
-                )
-                .map((item) => ({
-                  source:
-                    item.id === 'linear'
-                      ? 'linear'
-                      : item.id === 'notion'
-                        ? 'notion'
-                        : 'slack',
-                  status: 'running',
-                  auto_import: true,
-                  updated_at: '2026-09-25T12:00:00Z',
-                }))}
-              entities={[]}
-              onRefresh={() => {}}
-              onRetryGather={() => {}}
-              onContinue={() => goTo('team')}
-            />
           </Match>
           <Match when={props.preview && step() === 'team'}>
             <PublicTeamStep

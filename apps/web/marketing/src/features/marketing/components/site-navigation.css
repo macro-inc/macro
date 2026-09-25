@@ -59,13 +59,15 @@
 .feature-dock-next span { font-size: 13px; line-height: 12px; }
 @media (min-width: 640px) { .site-header { left: 40px; } }
 @media (max-width: 600px) {
-  .site-header { top: 14px; left: 16px; right: 16px; }
+  .site-header { top: 14px; left: 16px; right: 16px; align-items: center; }
   .site-menu-trigger { width: 54px; height: 54px; margin-inline: -5px; }
   .site-menu-mark { width: 32px; height: 32px; }
   .site-header-actions { gap: 8px; }
-  .site-nav-demo { min-height: 48px; padding: 10px 14px; font-size: 15px; }
+  .site-nav-demo { min-height: 32px; padding: 4px 12px; font-size: 13px; }
   .site-nav-start { min-width: 144px; min-height: 48px; padding: 10px 18px; gap: 12px; font-size: 15px; }
   .site-nav-start svg { width: 22px; height: 22px; }
+  .site-header .site-nav-start { min-width: 0; min-height: 32px; padding: 4px 14px; gap: 8px; font-size: 13px; }
+  .site-header .site-nav-start svg { width: 18px; height: 18px; }
   .site-menu-panel { grid-template-columns: 1fr 1.2fr; width: calc(100vw - 32px); max-height: calc(100dvh - 96px); padding: 20px 14px; gap: 20px 12px; }
   .site-menu-group:first-child { grid-row: span 2; }
   .feature-dock a, .feature-dock button { padding-inline: 7px; }

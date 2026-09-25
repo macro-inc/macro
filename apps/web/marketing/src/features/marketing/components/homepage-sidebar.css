@@ -77,7 +77,7 @@
 @media (max-width: 799px) {
   .homepage-sidebar-section { padding: 48px 0 64px; }
   .homepage-sidebar-window { width: 410px; margin-left: max(52%, calc(100% - 190px)); margin-right: 0; transform: perspective(1400px) rotateY(-9deg) rotateX(3deg); }
-  .homepage-sidebar-callouts [data-callout] { left: 0; right: auto; width: calc(52% - 44px); text-align: right; font-size: 11px; line-height: 1.5; }
+  .homepage-sidebar-callouts [data-callout][data-side] { left: 0; right: auto; width: calc(52% - 44px); text-align: right; font-size: 11px; line-height: 1.5; }
   .homepage-sidebar-callouts [data-callout] > span { font-size: 12px; }
   .homepage-sidebar-callouts [data-callout=documents] { top: 145px; }
   .homepage-sidebar-callouts [data-callout=email] { top: 198px; }

@@ -39,6 +39,8 @@ Normal navigation and explicit public endpoints are allowed: links to `/app`,
 Google sign-in, and the unauthenticated mobile email handoff do not load app UI.
 Public integration selections are preview preferences, not OAuth connections.
 Local preview data must not be presented as server-backed account state.
+The preview proceeds from integration selection directly to workspace setup;
+Back from workspace setup returns to integrations.
 
 ## Develop and validate
 
