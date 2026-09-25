@@ -11,7 +11,7 @@ import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
-import { createRenderEffect, lazy, Show } from 'solid-js';
+import { lazy, Show } from 'solid-js';
 import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { parseAgentsRoute } from './core/route';
@@ -65,12 +65,6 @@ export const AgentsRouteView = withAuth(() => {
       content.params?.agentPage === 'connections'
     );
   };
-  createRenderEffect(() => {
-    if (!flag().loading)
-      panel.handle.updateMeta?.({
-        splitPanelLayout: enabled() ? 'composable' : 'legacy',
-      });
-  });
   return (
     <Show when={!flag().loading} fallback={<LoadingBlock />}>
       <Show
