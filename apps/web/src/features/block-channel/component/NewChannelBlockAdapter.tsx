@@ -425,15 +425,17 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // inside `onChannelReady` (Messages tab), so open-call from Attachments/etc. was a no-op.
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: ChannelTargetMessageParams) => {
-      if (isOpenCallTabRequested(params[CHANNEL_URL_PARAMS.openCallTab])) {
-        setActiveTab(getCallJoinTab());
-        return;
-      }
-
+      // Store any message target first: a request that also opens the call tab
+      // leaves it waiting for whenever the user returns to Messages.
       const target = toChannelTargetRequest(params);
       if (target) {
         setActiveTab(DEFAULT_CHANNEL_TAB);
         setTargetRequest(target);
+      }
+
+      if (isOpenCallTabRequested(params[CHANNEL_URL_PARAMS.openCallTab])) {
+        setActiveTab(getCallJoinTab());
+        return;
       }
 
       if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {

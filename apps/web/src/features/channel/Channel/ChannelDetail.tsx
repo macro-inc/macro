@@ -290,13 +290,15 @@ function ChannelDetailContent(props: ChannelDetailProps) {
     const handle = orchestrator.registerBlockHandle('channel', channelId);
     createMethodRegistration(() => handle, {
       goToLocationFromParams: async (params: Record<string, unknown>) => {
+        // Store any message target first: a request that also opens the call
+        // tab leaves it waiting for whenever the user returns to Messages.
+        const request = toChannelTargetRequest(params);
+        if (request) setTargetRequest(request);
+
         if (isOpenCallTabRequested(params[URL_PARAMS.openCallTab])) {
           setActiveTab(getCallJoinTab());
           return;
         }
-
-        const request = toChannelTargetRequest(params);
-        if (request) setTargetRequest(request);
 
         if (isJoinCallRequested(params[URL_PARAMS.joinCall])) {
           setActiveTab(getCallJoinTab());

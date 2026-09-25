@@ -196,5 +196,14 @@ describe('channel detail navigation', () => {
     await navigate({ join_call: 'true' });
     expect(activeTab?.()).toBe('call');
     expect(mocks.joinRequested).toBe(true);
+
+    // A message target that arrives alongside a call param is kept, so
+    // returning to Messages lands on it.
+    await navigate({ open_call_tab: 'true', channel_message_id: 'message-2' });
+    expect(activeTab?.()).toBe('call');
+    expect(messageRequests().at(-1)).toEqual({
+      kind: 'message',
+      messageId: 'message-2',
+    });
   });
 });
