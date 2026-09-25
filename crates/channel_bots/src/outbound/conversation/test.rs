@@ -19,6 +19,7 @@ fn posted(parent: MessageParent, bot: bool) -> MessageEvent {
     MessageEvent {
         parent,
         actor: message.sender_id.as_ref().to_owned(),
+        acting_user: None,
         nonce: None,
         change: MessageChange::Posted {
             notification_policy: Default::default(),
