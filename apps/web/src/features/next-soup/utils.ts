@@ -666,7 +666,7 @@ export const openEntityInSplitFromUnifiedList = async (
 
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {
-      const content = { type: 'pr', id: entity.id };
+      const content = { type: 'pr' as const, id: entity.id };
       const result = splitManager.openWithSplit(
         tasksHostedContent(content) ?? content,
         {

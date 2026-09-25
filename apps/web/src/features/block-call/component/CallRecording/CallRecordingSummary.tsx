@@ -16,9 +16,7 @@ export function CallRecordingSummarySection(props: { record: CallRecord }) {
 
   const isPending = createMemo(
     () =>
-      !summary() &&
-      !props.record.isActive &&
-      props.record.transcript.length > 0
+      !summary() && !props.record.isActive && props.record.transcript.length > 0
   );
 
   const shouldShow = createMemo(() => summary() || isPending());
