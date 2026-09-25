@@ -12,6 +12,7 @@ import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-
 import { FavoritesSection } from '@app/features/favorites/sidebar/favorites-section';
 import { useGettingStartedEnabled } from '@app/features/getting-started/account-gate';
 import { createGettingStartedSidebarVisibility } from '@app/features/getting-started/sidebar-visibility';
+import { requestHomeStart } from '@app/features/inbox-view/home-controllers';
 import { buildDocumentTypeQuery } from '@app/features/next-soup/filters/configs/document-type-query';
 import { getDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
 import {
@@ -1315,6 +1316,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
       params: channelsLink()?.params,
     }) as const;
 
+  // Home stays the active view while it shows an item inline, so pressing its
+  // row again is the way back to the start pane.
+  const returnToHomeStart = () => {
+    const split = globalSplitManager()?.activeSplit();
+    if (split) requestHomeStart(split.id);
+  };
+
   const renderSidebarLink = (link: SidebarItem) => (
     <Dynamic
       component={link.id === 'mail' ? SidebarMailLink : SidebarLink}
@@ -1322,6 +1330,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       sidebarState={sidebarDisplayState()}
       hotkeyVisible={goToHotkeyVisible()}
       onContextMenuOpenChange={handleOverlayDropdownOpenChange}
+      onActiveClick={link.id === 'inbox' ? returnToHomeStart : undefined}
       trailing={link.id === 'channels' ? <ChannelsActiveCallIcon /> : undefined}
       removeAction={
         link.id === 'getting-started'

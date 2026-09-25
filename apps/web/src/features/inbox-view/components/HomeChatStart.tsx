@@ -13,8 +13,18 @@ import { HomeChatInput } from '../../home/home-chat-input';
 import { HomeGettingStartedLink } from '../../home/home-getting-started-link';
 import { useHomePreferences } from '../../home/home-prefs';
 
+export type HomeChatStartProps = {
+  /**
+   * Focus the composer as it mounts. Off by default; the host turns it on when
+   * the pane is reached by an explicit request for a new chat.
+   */
+  autoFocus?: boolean;
+  /** See `HomeChatInputProps.registerFocus`. */
+  registerFocus?: (focus: (() => void) | undefined) => void;
+};
+
 /** Desktop Home's idle pane uses the single-line chat composer and send flow. */
-export function HomeChatStart() {
+export function HomeChatStart(props: HomeChatStartProps) {
   const shell = useViewShell();
   const agents = useFeatureFlag(enableChatV3Agents);
   const preferences = useHomePreferences();
@@ -65,7 +75,8 @@ export function HomeChatStart() {
             <HomeChatInput
               variant="default"
               placeholder="Type @ to reference / for skills"
-              autoFocusOnMount={false}
+              autoFocusOnMount={props.autoFocus ?? false}
+              registerFocus={props.registerFocus}
             />
             <div class="min-h-0 min-w-0 pb-8">
               <HomeGettingStartedLink preferences={preferences} />
