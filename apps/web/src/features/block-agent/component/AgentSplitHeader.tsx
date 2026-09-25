@@ -13,11 +13,8 @@ import {
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { Permissions } from '@core/component/SharePermissions';
-import {
-  ShareDialogContext,
-  ShareModal,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
@@ -25,7 +22,7 @@ import ShareIcon from '@icon/share.svg';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
-import { createSignal, For, Show, Suspense } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
 import {
@@ -89,20 +86,28 @@ export function AgentSplitHeader(props: {
     };
   };
   useBlockEntityCommands({ resolveEntity: entity });
-  const [shareOpen, setShareOpen] = createSignal(false);
-  const shareContext = {
-    isOpen: shareOpen,
-    open: () => setShareOpen(true),
-    close: () => setShareOpen(false),
-  };
+  const openShare = useShareModal(() => {
+    const session = entity();
+    if (!session) return;
+    return {
+      id: session.id,
+      name: title(),
+      owner: session.ownerId,
+      itemType: 'agent_session',
+      blockAlias: 'agent',
+      userPermissions: permissions(),
+    };
+  });
 
   const shareTools: BlockTool[] = [
     {
       label: 'Share',
       icon: ShareIcon,
-      action: () => setShareOpen(true),
+      action: openShare,
       condition: () => Boolean(entity()),
-      buttonComponent: () => <ShareTrigger id={sessionId()} />,
+      buttonComponent: () => (
+        <ShareTrigger onClick={openShare} id={sessionId()} />
+      ),
     },
   ];
 
@@ -138,7 +143,7 @@ export function AgentSplitHeader(props: {
   ];
 
   return (
-    <ShareDialogContext.Provider value={shareContext}>
+    <>
       <SplitHeaderLeft>
         <StaticSplitLabel
           icon={
@@ -173,23 +178,6 @@ export function AgentSplitHeader(props: {
         </div>
       </SplitHeaderRight>
 
-      <Show when={entity()}>
-        {(session) => (
-          <Suspense>
-            <ShareModal
-              id={session().id}
-              name={title()}
-              owner={session().ownerId}
-              itemType="agent_session"
-              blockAlias="agent"
-              userPermissions={permissions()}
-              isSharePermOpen={shareOpen()}
-              setIsSharePermOpen={setShareOpen}
-            />
-          </Suspense>
-        )}
-      </Show>
-
       <ResponsiveBlockToolbar
         tools={shareTools}
         menuTools={tools}
@@ -200,6 +188,6 @@ export function AgentSplitHeader(props: {
         permissions={permissions()}
         name={title()}
       />
-    </ShareDialogContext.Provider>
+    </>
   );
 }

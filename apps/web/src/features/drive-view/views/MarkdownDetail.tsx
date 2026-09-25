@@ -42,8 +42,6 @@ export type MarkdownDetailProps = {
   documentId: string;
   kind?: MarkdownDocumentKind;
   fallbackName?: string;
-  shareOpen?: boolean;
-  onShareOpenChange?: (open: boolean) => void;
   children?: (context: MarkdownDetailContext) => JSX.Element;
 };
 
@@ -86,8 +84,6 @@ function MarkdownDetailContent(props: {
   kind: MarkdownDocumentKind;
   fallbackName: string;
   data: MarkdownDocumentData;
-  shareOpen?: boolean;
-  onShareOpenChange?: (open: boolean) => void;
   children?: (context: MarkdownDetailContext) => JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
@@ -114,10 +110,7 @@ function MarkdownDetailContent(props: {
       persistedName={props.data.metadata.documentName}
       fallbackName={props.fallbackName}
     >
-      <ModalsProvider
-        shareOpen={props.shareOpen}
-        onShareOpenChange={props.onShareOpenChange}
-      >
+      <ModalsProvider>
         <OldOverlay />
         {props.children?.({
           data: props.data,
@@ -190,8 +183,6 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
                 kind={props.kind ?? 'document'}
                 fallbackName={props.fallbackName ?? 'Untitled'}
                 data={data()}
-                shareOpen={props.shareOpen}
-                onShareOpenChange={props.onShareOpenChange}
                 children={props.children}
               />
             </ErrorBoundary>

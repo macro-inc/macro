@@ -1,8 +1,10 @@
 import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
+import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from '@core/component/Toast/Toast';
-import { useShareDialogContext } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { blockMetadataSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -13,7 +15,6 @@ import { lazy, Show, Suspense } from 'solid-js';
 import { isUploadedWorkbook } from '../../block-spreadsheet/core/uploaded-workbook';
 import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
 import { useGetFileBlob } from '../signal/blockData';
-import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 import { UnknownContent } from './UnknownContent';
 
@@ -25,9 +26,7 @@ export default function BlockUnknown() {
   return (
     <DocumentBlockContainer>
       <div class="size-full select-none overscroll-none overflow-hidden flex flex-col relative">
-        <ModalsProvider>
-          <BlockUnknownContent />
-        </ModalsProvider>
+        <BlockUnknownContent />
       </div>
     </DocumentBlockContainer>
   );
@@ -39,7 +38,16 @@ function BlockUnknownContent() {
     enabled() && isUploadedWorkbook(blockMetadataSignal.get()?.fileType);
   const fileName = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
-  const shareCtx = useShareDialogContext();
+  const blockId = useBlockId();
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: blockId,
+    blockAlias: 'unknown',
+    itemType: 'document',
+    name: fileName() ?? '',
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
   const getBlob = useGetFileBlob();
 
   const downloadDocument = createCallback(async () => {
@@ -57,7 +65,7 @@ function BlockUnknownContent() {
       <FileSidePanelSections />
       <div class="flex size-full min-w-0 flex-col overflow-hidden">
         <div class="relative">
-          <TopBar />
+          <TopBar onShare={openShare} />
         </div>
         <div class="w-full grow relative overflow-hidden">
           <Show
@@ -65,7 +73,7 @@ function BlockUnknownContent() {
             fallback={
               <UnknownContent
                 fileName={fileName()}
-                onShare={shareCtx.open}
+                onShare={openShare}
                 onDownload={() => void downloadDocument()}
               />
             }

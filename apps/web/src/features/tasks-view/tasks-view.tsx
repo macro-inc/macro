@@ -54,7 +54,7 @@ function TasksViewRoot() {
 
   onMount(() => panel.handle.setDisplayName('Tasks'));
 
-  const list = () => (
+  const taskList = () => (
     <>
       <TasksTopBar />
       <ViewShell.Header>
@@ -81,7 +81,9 @@ function TasksViewRoot() {
             <TasksSidebar />
           </ViewShell.Aside>
           <ViewShell.Main>
-            <SplitRouter.Outlet fallback={list} />
+            <Suspense fallback={<TasksListFallback />}>
+              <SplitRouter.Outlet fallback={taskList} />
+            </Suspense>
           </ViewShell.Main>
         </ViewShell.Root>
       </SplitPanel.Body>

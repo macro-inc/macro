@@ -5,7 +5,6 @@ import {
   type IUpdateFindControlStateEvent,
 } from '@block-pdf/PdfViewer/EventBus';
 import type { FindController } from '@block-pdf/PdfViewer/FindController';
-import { useReferralCode } from '@core/context/user';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { waitForSignal } from '@core/util/waitForSignal';
 import { createCallback } from '@solid-primitives/rootless';
@@ -182,15 +181,12 @@ export function selectLocationForFidelity(
   return validLocations[0]?.[1];
 }
 
+/** Builds a link to the PDF at the most precise location for `fidelity`. */
 export function useCreateShareUrl() {
   const pdf = usePdfDocument();
   const rootViewer = usePdfViewer().root;
-  const referralCode = useReferralCode();
 
-  const createShareUrl = (
-    fidelity: PdfLocationType,
-    copy: boolean = true
-  ): string => {
+  const createShareUrl = (fidelity: PdfLocationType): string => {
     const shareLocation = pdf.shareLocation();
     const locations = {
       general: {
@@ -205,21 +201,7 @@ export function useCreateShareUrl() {
     const selectedLocation = selectLocationForFidelity(fidelity, locations);
     const url = locationToUrl(selectedLocation);
     const params = Object.fromEntries(new URL(url).searchParams);
-    const code = referralCode();
-    if (code) {
-      params.referral_code = code;
-    }
-    const updatedUrl = buildSimpleEntityUrl(
-      {
-        type: 'pdf',
-        id: pdf.documentId(),
-      },
-      params
-    );
-    if (copy && updatedUrl) {
-      navigator.clipboard.writeText(updatedUrl);
-    }
-    return url;
+    return buildSimpleEntityUrl({ type: 'pdf', id: pdf.documentId() }, params);
   };
   return createCallback(createShareUrl);
 }

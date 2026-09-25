@@ -10,6 +10,9 @@
 #[cfg(test)]
 mod test;
 
+/// Meeting invitation HTTP endpoints.
+pub mod meetings;
+
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -114,6 +117,36 @@ where
 {
     Router::new()
         .route(
+            "/meetings",
+            get(meetings::list::<S, Svc, Auth>).post(meetings::create::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/active",
+            get(meetings::list_active::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/{meeting_id}",
+            axum::routing::delete(meetings::cancel::<S, Svc, Auth>)
+                .patch(meetings::update::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/join/{token}",
+            post(meetings::join::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/invite/{token}",
+            post(meetings::invite::<S, Svc, Auth>)
+                .get(meetings::invite_permissions::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/invite/{token}/users",
+            post(meetings::invite_users::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/link",
+            post(meetings::share::<S, Svc, Auth>),
+        )
+        .route(
             "/{channel_id}",
             get(get_or_create_call_handler::<S, Svc, Auth>)
                 .delete(leave_or_end_call_handler::<S, Svc, Auth>),
@@ -168,19 +201,31 @@ impl<S: CallService> WebhookRouterState<S> {
     }
 }
 
-/// Webhook router for endpoints outside the user-auth layer; each handler
-/// validates its own credentials.
+/// Routes outside user authentication; each handler validates its credentials.
 ///
-/// Routes:
-/// - `POST /webhook` — ingest a webhook event from LiveKit (signed by LiveKit)
-/// - `GET /ring-status/{call_id}` — per-user ring status, authenticated with
-///   the LiveKit JWT delivered in the VoIP push payload
-pub fn webhook_router<S, T>(state: WebhookRouterState<S>) -> Router<T>
+/// - `GET /join/{token}` — public capability lookup (per-IP rate limited)
+/// - `POST /join/{token}` — public guest join (per-IP rate limited)
+/// - `POST /join/{token}/leave` — RTC-token-authorized leave (per-IP rate limited)
+/// - `POST /webhook` — signed LiveKit events
+/// - `GET /ring-status/{call_id}` — status authorized by the VoIP-delivered RTC token
+pub fn webhook_router<S, R, T>(state: WebhookRouterState<S>, rate_limiter: R) -> Router<T>
 where
     S: CallService,
+    R: rate_limit::RateLimitService + Clone + Send + Sync + 'static,
     T: Send + Sync,
 {
     Router::new()
+        .route(
+            "/join/{token}",
+            get(meetings::lookup::<S>).post(meetings::guest_join::<S>),
+        )
+        .route("/join/{token}/leave", post(meetings::leave::<S>))
+        // Apply the anonymous budget only to the routes above, not signed
+        // LiveKit webhooks or authenticated ring-status requests.
+        .route_layer(axum::middleware::from_fn_with_state(
+            rate_limiter,
+            meetings::enforce_public_rate_limit::<R>,
+        ))
         .route("/webhook", post(webhook_handler::<S>))
         .route("/ring-status/{call_id}", get(ring_status_handler::<S>))
         .with_state(state)
@@ -219,14 +264,16 @@ impl<S> FromRef<InternalCallRouterState<S>> for Arc<S> {
 /// Internal call router for agent-submitted transcript segments.
 ///
 /// Routes:
-/// - `POST /{channel_id}/transcript` — ingest a transcript segment (from internal agent)
+/// - `POST /{room_name}/transcript` — ingest a transcript segment (from the
+///   transcription agent; the path segment is the RTC room name, which equals
+///   the call id for new calls)
 pub fn internal_call_router<S, T>(state: InternalCallRouterState<S>) -> Router<T>
 where
     S: CallService,
     T: Send + Sync,
 {
     Router::new()
-        .route("/{channel_id}/transcript", post(transcript_handler::<S>))
+        .route("/{room_name}/transcript", post(transcript_handler::<S>))
         .with_state(state)
 }
 
@@ -718,9 +765,9 @@ pub async fn ring_status_handler<S: CallService>(
 #[utoipa::path(
     post,
     operation_id = "ingest_transcript",
-    path = "/call/{channel_id}/transcript",
+    path = "/call/{room_name}/transcript",
     params(
-        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("room_name" = Uuid, Path, description = "RTC room name; the transcription agent passes its LiveKit room verbatim"),
     ),
     request_body = TranscriptSegmentRequest,
     responses(
@@ -734,12 +781,12 @@ pub async fn ring_status_handler<S: CallService>(
 pub async fn transcript_handler<S: CallService>(
     State(state): State<InternalCallRouterState<S>>,
     _access: InternalCallAccessExtractor,
-    axum::extract::Path(channel_id): axum::extract::Path<Uuid>,
+    axum::extract::Path(room_name): axum::extract::Path<Uuid>,
     Json(segment): Json<TranscriptSegmentRequest>,
 ) -> Result<StatusCode, CallError> {
     state
         .service
-        .ingest_transcript_segment(&channel_id, segment)
+        .ingest_transcript_segment(&room_name, segment)
         .await?;
 
     Ok(StatusCode::OK)

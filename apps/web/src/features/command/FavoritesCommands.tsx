@@ -39,6 +39,7 @@ export function FavoritesCommands() {
   const openFavorite = (favorite: Favorite) => {
     const result = openWithSplit(favoriteSplitContent(favorite), {
       referredFrom: 'kommand-menu',
+      allowDuplicate: favorite.entityType === 'foreign_entity',
     });
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
       toast.alert('Content already open');

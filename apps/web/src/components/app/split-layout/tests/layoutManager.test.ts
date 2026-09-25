@@ -1,18 +1,24 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
 import { CALENDAR_PREFERENCES_KEY } from '@app/features/calendar/calendar-preferences';
+import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { driveDestination } from '@app/features/drive-view/drive-route-navigation';
 import { driveSplitRoute } from '@app/features/drive-view/route';
 import {
   emailSplitRoute,
   emailThreadRoute,
 } from '@app/features/email-view/route';
+import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
+import { reviewsSplitRoute } from '@app/features/reviews-view/route';
 import {
   getListNavigationSource,
   listNavigationSourceId,
   registerListNavigationSource,
   withListNavigationSource,
 } from '@app/features/soup/collection/list-navigation-source';
-import { taskDetailRoute } from '@app/features/tasks-view/route';
+import {
+  taskDetailRoute,
+  tasksSplitRoute,
+} from '@app/features/tasks-view/route';
 import { createMemorySplitRouterLocation } from '@app/lib/split-router/integrations/memory';
 import { createSplitRouter } from '@app/lib/split-router/router';
 import { createRoutesManifest } from '@app/lib/split-router/routes';
@@ -35,6 +41,23 @@ import { createAppSplitRouterMiddleware } from '../split-router/app-middleware';
 import { appSplitRoutes } from '../split-router/app-routes';
 import { createAppSplitRouterLayout } from '../splitRouterLayout';
 
+// Settings UI imports the app route registry and is unrelated to layout behavior.
+vi.mock('@core/constant/SettingsState', () => ({
+  useSettingsState: vi.fn(),
+}));
+
+// The route graph imports websocket clients; jsdom cannot open their sockets.
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: vi.fn() },
 }));
@@ -45,12 +68,6 @@ vi.mock('../componentRegistry', () => ({
     id,
     params,
   })),
-}));
-
-vi.mock('@core/constant/allBlocks', () => ({
-  fileTypeToBlockName: vi.fn((type: string) => type),
-  isBlockAlias: vi.fn(() => false),
-  resolveBlockAlias: vi.fn((type: string) => type),
 }));
 
 beforeAll(() => {
@@ -883,6 +900,324 @@ describe('layoutManager', () => {
       }
     );
 
+    it('opens the Reviews list on its own component route', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/reviews');
+      await router.settled();
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'reviews',
+      });
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(router.route(manager.splits()[0].id)?.matches[0]?.id).toBe(
+        'view-reviews'
+      );
+      expect(location.read().pathname).toBe('/reviews');
+      router.dispose();
+      dispose();
+    });
+    it('navigates from Tasks to Reviews and back in the same pane', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/tasks');
+      await router.settled();
+      const splitId = manager.splits()[0].id;
+
+      router.navigate(splitId, { route: reviewsSplitRoute, params: {} });
+      await router.settled();
+      expect(manager.splits()[0].id).toBe(splitId);
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'reviews',
+      });
+      expect(location.read().pathname).toBe('/reviews');
+
+      router.navigate(splitId, { route: tasksSplitRoute, params: {} });
+      await router.settled();
+      expect(manager.splits()[0].id).toBe(splitId);
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'tasks',
+      });
+      expect(location.read().pathname).toBe('/tasks');
+      router.dispose();
+      dispose();
+    });
+    it('opens PR details in Reviews and redirects older PR links', async () => {
+      for (const path of ['/pr/pr-1', '/reviews/pr/pr-1']) {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        const split = manager.splits()[0];
+        expect(split.content).toMatchObject({
+          type: 'component',
+          id: 'reviews',
+        });
+        expect(split.mount.kind).toBe('component');
+        expect(router.route(split.id)?.matches).toEqual([
+          { id: 'view-reviews', params: {} },
+          { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } },
+        ]);
+        expect(location.read().pathname).toBe('/reviews/pr/pr-1');
+        router.dispose();
+        dispose();
+      }
+    });
+
+    it('opens a Reviews PR in a new split without reusing the Reviews list', async () => {
+      const { manager, router, dispose } = ingressRouter('/reviews');
+      await router.settled();
+      const listSplit = manager.splits()[0];
+      const content = reviewsHostedContent({ type: 'pr', id: 'pr-1' });
+      if (!content) throw new Error('Expected hosted PR content');
+
+      const opened = manager.openWithSplit(content, {
+        handle: manager.getSplit(listSplit.id),
+        preferNewSplit: true,
+        allowDuplicate: true,
+      });
+      await router.settled();
+
+      expect(opened.status).toBe('opened');
+      expect(manager.splits()).toHaveLength(2);
+      expect(manager.splits()[0].id).toBe(listSplit.id);
+      if (opened.status === 'opened') {
+        expect(router.route(opened.split.id)?.matches.at(-1)).toEqual({
+          id: 'reviews-pr',
+          params: { foreignEntityId: 'pr-1' },
+        });
+      }
+      router.dispose();
+      dispose();
+    });
+    it('keeps PR details in Reviews on touch', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/pr/pr-1', {
+        touch: true,
+      });
+      await router.settled();
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'reviews',
+      });
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(location.read().pathname).toBe('/reviews/pr/pr-1');
+      router.dispose();
+      dispose();
+    });
+
+    it('uses the Reviews PR route for existing split navigation', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/inbox');
+      await router.settled();
+      manager.getSplit(manager.splits()[0].id)!.replace({
+        next: { type: 'pr', id: 'pr-2' },
+      });
+      await router.settled();
+      expect(location.read().pathname).toBe('/reviews/pr/pr-2');
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'reviews',
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('upgrades stored PR route metadata to Reviews content', async () => {
+      const { manager, router, dispose } = ingressRouter('/inbox');
+      await router.settled();
+      const split = manager.getSplit(manager.splits()[0].id)!;
+      split.replace({
+        next: {
+          type: 'pr',
+          id: 'pr-1',
+          entryMetadata: {
+            route: {
+              matches: [
+                { id: 'pr-detail', params: { foreignEntityId: 'pr-1' } },
+              ],
+            },
+          },
+        },
+      });
+      await router.settled();
+      expect(split.content()).toMatchObject({
+        type: 'component',
+        id: 'reviews',
+      });
+      expect(router.route(split.id)?.matches.at(-1)?.id).toBe('reviews-pr');
+      router.dispose();
+      dispose();
+    });
+
+    it.each(['/inbox/channel', '/not-a-block/example'])(
+      'rejects an invalid legacy pair %s without mounting a block',
+      async (path) => {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        expect(manager.splits()[0].content).toMatchObject({
+          type: 'component',
+          id: 'inbox',
+        });
+        expect(location.read().pathname).toBe('/inbox');
+        router.dispose();
+        dispose();
+      }
+    );
+
+    it('opens calls as Drive components and redirects old links', async () => {
+      for (const path of ['/call/call-1', '/drive/call/call-1']) {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        const split = manager.splits()[0];
+        expect(split.content).toMatchObject({
+          type: 'component',
+          id: 'documents',
+        });
+        expect(split.mount.kind).toBe('component');
+        expect(router.route(split.id)?.matches).toEqual([
+          { id: 'drive', params: {} },
+          { id: 'drive-call', params: { callId: 'call-1' } },
+        ]);
+        expect(location.read().pathname).toBe('/drive/call/call-1');
+        router.dispose();
+        dispose();
+      }
+    });
+
+    it('keeps call details in Drive on touch', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/call/call-1',
+        { touch: true }
+      );
+      await router.settled();
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'documents',
+      });
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(location.read().pathname).toBe('/drive/call/call-1');
+      router.dispose();
+      dispose();
+    });
+
+    it('upgrades old call route metadata without losing transcript search', async () => {
+      const { manager, router, dispose } = ingressRouter('/inbox');
+      await router.settled();
+      const split = manager.getSplit(manager.splits()[0].id)!;
+      split.replace({
+        next: {
+          type: 'call',
+          id: 'call-1',
+          entryMetadata: {
+            route: {
+              matches: [{ id: 'call-detail', params: { callId: 'call-1' } }],
+            },
+            search: { 'call-detail': { transcriptId: ['segment-1'] } },
+          },
+        },
+      });
+      await router.settled();
+      expect(split.content()).toMatchObject({
+        type: 'component',
+        id: 'documents',
+      });
+      expect(router.route(split.id)?.matches.at(-1)?.id).toBe('drive-call');
+      expect(router.search(split.id, 'call-detail')).toEqual({
+        transcriptId: ['segment-1'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('uses the Drive call detail route for existing split navigation', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/inbox');
+      await router.settled();
+      manager.getSplit(manager.splits()[0].id)!.replace({
+        next: { type: 'call', id: 'call-2' },
+      });
+      await router.settled();
+      expect(location.read().pathname).toBe('/drive/call/call-2');
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'documents',
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('retains pane-local transcript targeting during call navigation', async () => {
+      const { manager, router, dispose } = ingressRouter('/inbox');
+      await router.settled();
+      const split = manager.getSplit(manager.splits()[0].id)!;
+      split.replace({
+        next: driveHostedContent(
+          { type: 'call', id: 'call-2' },
+          {
+            allowDocuments: true,
+            search: { 'call-detail': { transcriptId: ['segment-2'] } },
+          }
+        )!,
+      });
+      await router.settled();
+      expect(router.search(split.id, 'call-detail')).toEqual({
+        transcriptId: ['segment-2'],
+      });
+      const mount = manager.splits()[0].mount;
+      split.replace({
+        next: driveHostedContent(
+          { type: 'call', id: 'call-2' },
+          {
+            allowDocuments: true,
+            search: {
+              'call-detail': { transcriptId: ['segment-2'], seek: ['again'] },
+            },
+          }
+        )!,
+        mergeHistory: true,
+      });
+      await router.settled();
+      expect(router.search(split.id, 'call-detail')).toEqual({
+        transcriptId: ['segment-2'],
+        seek: ['again'],
+      });
+      expect(manager.splits()[0].mount).toBe(mount);
+      router.dispose();
+      dispose();
+    });
+
+    it('restores a call transcript target from old and Drive links', async () => {
+      for (const path of [
+        '/call/call-1?call_transcript_id=segment-1',
+        '/drive/call/call-1?call_transcript_id=segment-1',
+      ]) {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        const split = manager.splits()[0];
+        expect(router.search(split.id, 'call-detail')).toEqual({
+          transcriptId: ['segment-1'],
+        });
+        expect(location.read().pathname).toBe('/drive/call/call-1');
+        expect(
+          new URLSearchParams(location.read().search).get('call_transcript_id')
+        ).toBe('segment-1');
+        router.dispose();
+        dispose();
+      }
+    });
+
+    it('preserves canonical transcript search when upgrading an old call link', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/call/call-1?s0.call-detail.transcriptId=segment-3&referral_code=code#focus'
+      );
+      await router.settled();
+      expect(router.search(manager.splits()[0].id, 'call-detail')).toEqual({
+        transcriptId: ['segment-3'],
+      });
+      expect(location.read().pathname).toBe('/drive/call/call-1');
+      expect(
+        new URLSearchParams(location.read().search).get('referral_code')
+      ).toBe('code');
+      expect(location.read().hash).toBe('#focus');
+      router.dispose();
+      dispose();
+    });
     it('keeps Drive list routes on touch', async () => {
       const { location, router, dispose } = ingressRouter(
         '/drive/~/drive/shared/~/drive/folder/folder',

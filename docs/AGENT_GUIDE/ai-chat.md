@@ -48,8 +48,10 @@ permission failures should display a failed tool call without a successful resul
   **#<number>** beneath the title (icon colored by open / merged / closed; no
   status word). Clicking it opens the synced
   GitHub PR entity in a split (the same destination as the session header chip
-  and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
-  tab. Either click leaves the session unopened. Changing the composer mode does not filter the sidebar.
+  and Magic Chip). A synced PR opens at `/pr/<foreign-entity-id>`; existing
+  inline previews retain their legacy block host. Until GitHub has synced the
+  entity it opens GitHub in a new tab. Either click leaves the session unopened.
+  Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Delete, and the other session actions.
@@ -137,6 +139,8 @@ permission failures should display a failed tool call without a successful resul
   Its trigger, model options, and session metadata use the same readable model names
   as the new-conversation picker. The menu includes provider icons, search, a short
   **Recommended** list, and a scrollable **More models** submenu shared with Settings.
+  At phone width there is no room beside the menu, so **More models** replaces the
+  list in place and a **Recommended** row at the top goes back.
 - Chat agents' empty input cycles tips about connectors, skills, mentions, and
   agents; coding agents show **Describe what you want to build**. Type `@` for
   mentions and `/` for skills.
@@ -285,13 +289,16 @@ documents:
 
 ## AI usage limits
 
-AI usage billing is temporarily paused. Chat requests are not blocked by
-Macro's credit allowance, spending cap, or failed-overage-payment state. The
-app does not show usage meters, credit-purchase controls, out-of-credit dialogs,
-or model usage multipliers. Normal paid-model access rules still apply.
+AI usage billing is enabled only in the dev environment (`dev.macro.com/app`,
+including a local frontend pointed at the dev backend). The backend enforces
+allowances and settles usage only in `Environment::Develop`. In production and
+local-backend environments, requests are not blocked by credits, spending caps,
+or failed-overage-payment state, and usage is recorded without settlement.
+Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
+are hidden outside frontend development mode. Normal paid-model access rules
+still apply everywhere.
 
-<!-- Retained for when AI usage billing is re-enabled.
-Paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
+In dev, paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
 usage rates). When it is used up and no credits or usage billing cover the
 request, sending a message answers HTTP 402 and the app opens the
 **AI usage limit** dialog (title `You've used this month's included AI`, or the
@@ -302,7 +309,6 @@ team this moves only the payer's own seat). Team members who are not the payer
 see a note to ask the team owner, or a team admin to move their seat to Max.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
--->
 
 ## Start a doc-scoped chat
 
@@ -358,7 +364,7 @@ existing text sizing.
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
 - Model picker button showing the current model (e.g. `Haiku 4.5`). Paid plans list
   `Sonnet 5`, `Opus 5`, `Fable 5.1`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
-  <!-- heavy models carry a `2.5× usage` / `5× usage` hint. -->
+  in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
   On the free plan everything but `Haiku 4.5` is
   dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
@@ -521,15 +527,24 @@ Only tools with a supported result view can expand. Unknown tools, unsupported
 drafts, and payloads that do not fit their renderer stay as summary rows with
 no caret. Tool arguments and results never fall back to raw JSON.
 
-Consecutive calls collect under an expanded **Calling N tools** group while
-running. Rows appear as calls arrive; after the calls finish, the group briefly
-settles and collapses to **Called N tools**. Group growth and collapse happen
-immediately, without animation, including fast batches. Completed groups in
-history start collapsed and can be reopened. The group caret sits immediately
-after its label and appears on hover or keyboard focus. Expand an edit row to
-view its diffs. Result bodies load only when their row opens; syntax highlighting
-may appear after the diff text. Opening a session or expanding a group should
-leave the app responsive, even when the session contains many file edits.
+Tool runs keep one group from their first call. Historical runs start collapsed;
+live calls get a 150 ms buffer, so fast parallel bursts can finish as **Called N
+tools** without flashing a list. Ongoing work opens a scrollable window of at
+most five compact rows. The window follows unfinished calls first, keeping slow
+work visible even when later calls finish, until you scroll or interact with it;
+scrolling back to the bottom resumes following. An automatically opened window
+stays visible for at least 600 ms and waits for 150 ms without an active call
+before collapsing smoothly. These delays are shared by the group, never queued
+per call, and do not delay answer text or tool execution. Manually opening,
+closing, or interacting with a group overrides automatic collapse. Subagents
+and tools requiring user input remain outside these groups so they stay visible
+during other tool bursts. Nested agent activity has its own scrollable window.
+
+The group caret sits immediately after its label and appears on hover or keyboard
+focus. Expand an edit row to view its diffs. Result bodies load only when their
+row opens; syntax highlighting may appear after the diff text. Opening a session
+or expanding a group should leave the app responsive, even when the session
+contains many file edits.
 
 `DisplayResults` renders its dynamic view directly in the reply and stays visible
 without opening a tool row. It breaks tool groups before and after itself,
@@ -544,8 +559,9 @@ server do not currently receive this tool.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
-rows accumulate, completed calls stop shimmering, the group collapses after
-completion without height animation, and its carets still expand the results.
+ongoing rows accumulate in the five-row window, completed calls stop shimmering,
+fast batches stay compact, and the group collapses smoothly after completion.
+Its carets should still expand the results, and reduced motion disables animation.
 Check that rich result controls still work and `DisplayResults` stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat

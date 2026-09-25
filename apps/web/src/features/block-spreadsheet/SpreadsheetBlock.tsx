@@ -15,16 +15,17 @@ import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';
-import { useCanEdit } from '@core/signal/permissions';
+import { blockMetadataSignal } from '@core/signal/load';
+import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import { Show } from 'solid-js';
+import { onMount, Show } from 'solid-js';
 import { spreadsheetChatContext } from './core/chat-context';
 import type { SpreadsheetData } from './definition';
 import { createSpreadsheetStore } from './primitives/create-spreadsheet-store';
@@ -33,7 +34,6 @@ import { createSpreadsheetSession } from './queries/spreadsheet-session';
 import { SpreadsheetComments } from './SpreadsheetComments';
 import { spreadsheetMentions } from './spreadsheet-mentions';
 import { SpreadsheetEditor } from './views/SpreadsheetEditor';
-import { SpreadsheetModalsProvider } from './views/SpreadsheetModalsProvider';
 
 export default function SpreadsheetBlock(props: { share?: string }) {
   const enabled = useSpreadsheetAccess();
@@ -46,20 +46,29 @@ export default function SpreadsheetBlock(props: { share?: string }) {
         </div>
       }
     >
-      <SpreadsheetModalsProvider share={props.share}>
-        <SpreadsheetBlockContent />
-      </SpreadsheetModalsProvider>
+      <SpreadsheetBlockContent share={props.share} />
     </Show>
   );
 }
 
-function SpreadsheetBlockContent() {
+function SpreadsheetBlockContent(props: { share?: string }) {
   useBlockEntityCommands();
   const documentId = useBlockId();
   const name = useBlockDocumentName('New Spreadsheet');
   const canEdit = useCanEdit();
   const userId = useUserId();
-  const share = useShareDialogContext();
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: documentId,
+    blockAlias: 'spreadsheet',
+    itemType: 'document',
+    name: name() ?? '',
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
+  onMount(() => {
+    if (props.share === 'true') openShare();
+  });
   const data = () => {
     const value = blockDataSignal.get() as
       | (SpreadsheetData & { __block?: string })
@@ -92,8 +101,8 @@ function SpreadsheetBlockContent() {
               group: 'sharing',
               label: 'Share',
               icon: IconShared,
-              action: () => share.open(),
-              buttonComponent: () => <ShareTrigger />,
+              action: openShare,
+              buttonComponent: () => <ShareTrigger onClick={openShare} />,
               focusTarget: getShareDrawerRecipientInput,
             },
           ]}

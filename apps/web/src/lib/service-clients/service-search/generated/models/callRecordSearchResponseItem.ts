@@ -5,13 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { CallRecordSearchResponseItemChannelId } from './callRecordSearchResponseItemChannelId';
 import type { CallRecordSearchResponseItemName } from './callRecordSearchResponseItemName';
 import type { CallRecordSearchResult } from './callRecordSearchResult';
 
 export interface CallRecordSearchResponseItem {
   call_id: string;
   call_search_results: CallRecordSearchResult[];
-  channel_id: string;
+  channel_id?: CallRecordSearchResponseItemChannelId;
   id: string;
   name?: CallRecordSearchResponseItemName;
   owner_id: string;

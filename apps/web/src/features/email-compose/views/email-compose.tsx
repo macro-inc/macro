@@ -29,6 +29,7 @@ export type EmailComposeViewProps = Pick<
   | 'recipientOptions'
   | 'onRecipientsChange'
   | 'initialTo'
+  | 'initialInboxId'
 > & { context: EmailComposeContext };
 export function EmailComposeView(props: EmailComposeViewProps) {
   const composeContext = props.context;
@@ -50,6 +51,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
     recipientOptions: props.recipientOptions,
     onRecipientsChange: props.onRecipientsChange,
     initialTo: props.initialTo,
+    initialInboxId: props.initialInboxId,
   });
   const {
     editor,

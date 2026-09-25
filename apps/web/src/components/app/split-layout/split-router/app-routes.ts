@@ -5,6 +5,8 @@ import {
   agentsViewRoute,
   codersRoute,
 } from '@app/features/agents-view/route';
+import { callDetailRoute } from '@app/features/block-call/route';
+import { prDetailRoute } from '@app/features/block-pr/route';
 import { calendarSplitRoute } from '@app/features/calendar-view/route';
 import { channelsSplitRoute } from '@app/features/channels-view/route';
 import { companiesRoute } from '@app/features/companies/route';
@@ -20,6 +22,7 @@ import {
   searchRoute,
 } from '@app/features/next-soup/route';
 import { remindersRoute } from '@app/features/reminders/route';
+import { reviewsSplitRoute } from '@app/features/reviews-view/route';
 import { settingsRoute } from '@app/features/settings/route';
 import { tasksSplitRoute } from '@app/features/tasks-view/route';
 import { defineRoutes } from '@app/lib/split-router';
@@ -42,12 +45,15 @@ export const appSplitRoutes = defineRoutes({
     agentsViewRoute,
     emailSplitRoute,
     tasksSplitRoute,
+    reviewsSplitRoute,
     calendarSplitRoute,
     channelsSplitRoute,
     callsRoute,
+    callDetailRoute,
     companiesRoute,
     foldersRoute,
     searchRoute,
+    prDetailRoute,
     ...debugRoutes,
     legacySplitRoute,
   ],

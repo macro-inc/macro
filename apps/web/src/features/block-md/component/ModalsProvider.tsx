@@ -1,87 +1,19 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { NotificationsDrawer } from '@core/component/NotificationsModal';
-import { Permissions } from '@core/component/SharePermissions';
-import {
-  ShareDialogContext,
-  ShareModal,
-} from '@core/component/TopBar/ShareButton';
-import { queryReadyGate } from '@queries/gate';
-import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
-import {
-  createSignal,
-  type ParentProps,
-  type Setter,
-  Suspense,
-  useContext,
-} from 'solid-js';
+import type { ParentProps } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { useMarkdownName } from './MarkdownNameProvider';
 
-export function ModalsProvider(
-  props: ParentProps<{
-    shareOpen?: boolean;
-    onShareOpenChange?: (open: boolean) => void;
-  }>
-) {
-  const {
-    documentId,
-    kind,
-    permissions: documentPermissions,
-  } = useMarkdownDocument();
-  const { displayName } = useMarkdownName();
+export function ModalsProvider(props: ParentProps) {
+  const { documentId } = useMarkdownDocument();
   const notificationSource = useGlobalNotificationSource();
-  const metadataQuery = useDocumentMetadataQuery(documentId);
-  const parentShareContext = useContext(ShareDialogContext);
-  const [localShareOpen, setLocalShareOpen] = createSignal(false);
-  const shareOpen = () => props.shareOpen ?? localShareOpen();
-  const setShareOpen: Setter<boolean> = (next) => {
-    const open = typeof next === 'function' ? next(shareOpen()) : next;
-    props.onShareOpenChange?.(open);
-    if (props.shareOpen === undefined) setLocalShareOpen(() => open);
-    return open;
-  };
-
-  const blockAlias = (): 'md' | 'task' | 'snippet' | 'skill' => {
-    const documentKind = kind();
-    return documentKind === 'document' ? 'md' : documentKind;
-  };
-  const permissions = () => {
-    if (documentPermissions.isOwner()) return Permissions.OWNER;
-    if (documentPermissions.canEdit()) return Permissions.CAN_EDIT;
-    if (documentPermissions.canComment()) {
-      return Permissions.CAN_COMMENT;
-    }
-    return Permissions.CAN_VIEW;
-  };
 
   return (
-    <ShareDialogContext.Provider
-      value={{
-        isOpen: shareOpen,
-        open: () => setShareOpen(true),
-        close: () => setShareOpen(false),
-        copyLink: parentShareContext?.copyLink,
-      }}
-    >
+    <>
       {props.children}
       <NotificationsDrawer
         entity={{ id: documentId(), type: 'document' }}
         notificationSource={notificationSource}
       />
-      <Suspense>
-        <ShareModal
-          isSharePermOpen={shareOpen()}
-          setIsSharePermOpen={setShareOpen}
-          id={documentId()}
-          blockAlias={blockAlias()}
-          itemType="document"
-          name={displayName() ?? ''}
-          userPermissions={permissions()}
-          owner={
-            queryReadyGate(metadataQuery) ? metadataQuery.data.owner : undefined
-          }
-        />
-      </Suspense>
-    </ShareDialogContext.Provider>
+    </>
   );
 }

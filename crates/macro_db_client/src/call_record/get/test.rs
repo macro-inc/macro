@@ -221,3 +221,110 @@ async fn preserves_explicit_access_and_status_filtering(pool: PgPool) -> anyhow:
 
     Ok(())
 }
+
+#[sqlx::test]
+async fn standalone_record_metadata_and_search_payload_do_not_require_a_channel(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, REQUESTER).await?;
+    let call_id = insert_call_record(&pool, REQUESTER, None).await?;
+    sqlx::query!(
+        "UPDATE call_records SET channel_id = NULL, custom_name = 'Customer review' WHERE id = $1",
+        call_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let metadata = get_call_records_metadata(&pool, REQUESTER, &[call_id]).await?;
+    assert_eq!(metadata.len(), 1);
+    assert_eq!(metadata[0].channel_id, None);
+    assert_eq!(metadata[0].custom_name.as_deref(), Some("Customer review"));
+    let payload = get_call_record_search_payload(&pool, &call_id)
+        .await?
+        .expect("standalone recording exists");
+    assert_eq!(payload.channel_id, None);
+    assert_eq!(payload.channel_name, None);
+    assert_eq!(payload.custom_name.as_deref(), Some("Customer review"));
+    Ok(())
+}
+
+#[sqlx::test]
+async fn standalone_search_requires_individual_access_even_with_team_or_public_sharing(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
+
+    insert_user(&pool, REQUESTER).await?;
+    insert_user(&pool, SAME_TEAM_OWNER).await?;
+    insert_team(
+        &pool,
+        REQUESTER_TEAM,
+        SAME_TEAM_OWNER,
+        &[REQUESTER, SAME_TEAM_OWNER],
+    )
+    .await?;
+    let public = insert_call_record(&pool, SAME_TEAM_OWNER, Some("PUBLIC")).await?;
+    let team_link = insert_call_record(&pool, SAME_TEAM_OWNER, Some("TEAM")).await?;
+    let team_grant = insert_call_record(&pool, SAME_TEAM_OWNER, None).await?;
+    let call_ids = [public, team_link, team_grant];
+
+    let mut tx = pool.begin().await?;
+    for call_id in call_ids {
+        sqlx::query!(
+            "UPDATE call_records SET channel_id = NULL WHERE id = $1",
+            call_id,
+        )
+        .execute(tx.as_mut())
+        .await?;
+        entity_access_db_utils::insert_entity_access_row(
+            &mut tx,
+            &call_id,
+            EntityType::Call,
+            SAME_TEAM_OWNER,
+            EntityAccessSourceType::User,
+            AccessLevel::Owner,
+        )
+        .await?;
+    }
+    entity_access_db_utils::insert_entity_access_row(
+        &mut tx,
+        &team_grant,
+        EntityType::Call,
+        &REQUESTER_TEAM.to_string(),
+        EntityAccessSourceType::Team,
+        AccessLevel::View,
+    )
+    .await?;
+    tx.commit().await?;
+
+    assert!(
+        get_accessible_call_ids(&pool, REQUESTER, &[])
+            .await?
+            .is_empty()
+    );
+    assert_eq!(
+        get_accessible_call_ids(&pool, SAME_TEAM_OWNER, &[])
+            .await?
+            .len(),
+        call_ids.len(),
+    );
+
+    let mut tx = pool.begin().await?;
+    for call_id in call_ids {
+        entity_access_db_utils::insert_entity_access_row(
+            &mut tx,
+            &call_id,
+            EntityType::Call,
+            REQUESTER,
+            EntityAccessSourceType::User,
+            AccessLevel::View,
+        )
+        .await?;
+    }
+    tx.commit().await?;
+    assert_eq!(
+        get_accessible_call_ids(&pool, REQUESTER, &[]).await?.len(),
+        call_ids.len(),
+    );
+    Ok(())
+}

@@ -20,12 +20,13 @@ import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@components/app/split-layout/components/SplitLabel';
+import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
@@ -53,8 +54,18 @@ export function TopBar(props: {
   isDraft?: boolean;
   onCreateTask?: () => void;
 }) {
-  const shareCtx = useShareDialogContext();
   const emailCtx = useEmailThreadState();
+  const openShare = useShareModal(() => {
+    const thread = emailCtx.thread();
+    if (!thread) return;
+    return {
+      id: props.id,
+      blockAlias: 'email',
+      itemType: 'email',
+      name: props.title,
+      userPermissions: getPermissions(thread.access_level),
+    };
+  });
   const soup = useMaybeSoup();
   const linksQuery = useEmailLinksQuery();
   const moveToProjectAction = makeMoveToProjectAction();
@@ -167,9 +178,11 @@ export function TopBar(props: {
     group: 'sharing',
     label: 'Share',
     icon: IconShared,
-    action: () => shareCtx.open(),
+    action: openShare,
     condition: () => ENABLE_EMAIL_SHARING,
-    buttonComponent: () => <ShareTrigger id={props.id} blockType="email" />,
+    buttonComponent: () => (
+      <ShareTrigger onClick={openShare} id={props.id} blockType="email" />
+    ),
     focusTarget: getShareDrawerRecipientInput,
   };
 

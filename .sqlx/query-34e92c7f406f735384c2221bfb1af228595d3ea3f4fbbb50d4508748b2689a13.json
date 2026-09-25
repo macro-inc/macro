@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, user_id, active_call_id, channel_call_id FROM call_meetings WHERE id = $1 AND cancelled_at IS NULL FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "active_call_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "channel_call_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "34e92c7f406f735384c2221bfb1af228595d3ea3f4fbbb50d4508748b2689a13"
+}

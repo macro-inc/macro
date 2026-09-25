@@ -1,19 +1,145 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
+import { safeFetch } from '@core/util/safeFetch';
 
 import type { ActiveCallsResponse } from '@service-storage/generated/schemas/activeCallsResponse';
+import type { ActiveMeeting as ApiActiveMeeting } from '@service-storage/generated/schemas/activeMeeting';
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
-import type { CallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
+import type { CallTokenResponse as ApiCallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
+import type { CreateMeetingRequest } from '@service-storage/generated/schemas/createMeetingRequest';
 import type { EditCallRecordRequest } from '@service-storage/generated/schemas/editCallRecordRequest';
+import type { InviteMeetingUsersRequest } from '@service-storage/generated/schemas/inviteMeetingUsersRequest';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
+import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/meeting';
+import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 
-export type { CallRecord, CallTokenResponse };
+export type { CallRecord, CreateMeetingRequest, UpdateMeetingRequest };
+
+// Rust serializes these nullable fields explicitly; Orval marks Option<T> optional.
+export type CallTokenResponse = Required<ApiCallTokenResponse>;
+export type Meeting = Required<ApiMeeting>;
+export type ActiveMeeting = Required<ApiActiveMeeting>;
 
 const host: string = SERVER_HOSTS['document-storage-service'];
 
 export const callServiceClient = {
+  inviteMeetingUsers(shareToken: string, userIds: string[]) {
+    const body: InviteMeetingUsersRequest = { userIds };
+    return fetchWithToken<Record<string, never>>(
+      `${host}/call/meetings/invite/${encodeURIComponent(shareToken)}/users`,
+      { method: 'POST', body: JSON.stringify(body) }
+    );
+  },
+  createMeeting(body: CreateMeetingRequest) {
+    return fetchWithToken<Meeting>(`${host}/call/meetings`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateMeeting(meetingId: string, body: UpdateMeetingRequest) {
+    return fetchWithToken<Meeting>(
+      `${host}/call/meetings/${encodeURIComponent(meetingId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) }
+    );
+  },
+
+  async getMeetings() {
+    return (
+      await fetchWithToken<{ meetings: Meeting[] }, 'MEETINGS_UNAVAILABLE'>(
+        `${host}/call/meetings`,
+        {
+          errorResponseHandler: async (response) => {
+            if (response.status === 400) {
+              const body = await response.json().catch(() => undefined);
+              // Older servers route the literal "meetings" as a channel UUID.
+              if (body?.message === 'Bad request: Invalid channel ID format')
+                return {
+                  code: 'MEETINGS_UNAVAILABLE',
+                  message:
+                    'Quick and scheduled calls are not available on this server yet.',
+                };
+            }
+            return {
+              code:
+                response.status === 401
+                  ? 'UNAUTHORIZED'
+                  : response.status === 403
+                    ? 'FORBIDDEN'
+                    : response.status === 404
+                      ? 'NOT_FOUND'
+                      : response.status >= 500
+                        ? 'SERVER_ERROR'
+                        : 'HTTP_ERROR',
+              message: `HTTP error! status: ${response.status}`,
+            };
+          },
+        }
+      )
+    ).map((result) => result.meetings);
+  },
+
+  /** Live Quick Calls the current user created, attended, or was invited to. */
+  async getActiveMeetings() {
+    return (
+      await fetchWithToken<{ meetings: ActiveMeeting[] }>(
+        `${host}/call/meetings/active`
+      )
+    ).map((result) => result.meetings);
+  },
+
+  cancelMeeting(meetingId: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${host}/call/meetings/${encodeURIComponent(meetingId)}`,
+      { method: 'DELETE' }
+    );
+  },
+
+  getCallLink(callId: string) {
+    return fetchWithToken<Meeting>(
+      `${host}/call/record/${encodeURIComponent(callId)}/link`,
+      { method: 'POST' }
+    );
+  },
+
+  getMeeting(shareToken: string) {
+    return safeFetch<Meeting>(
+      `${host}/call/join/${encodeURIComponent(shareToken)}`,
+      { credentials: 'omit' }
+    );
+  },
+
+  joinMeeting(shareToken: string) {
+    return fetchWithToken<CallTokenResponse>(
+      `${host}/call/meetings/join/${encodeURIComponent(shareToken)}`,
+      { method: 'POST' }
+    );
+  },
+
+  joinMeetingAsGuest(shareToken: string, displayName: string) {
+    return safeFetch<CallTokenResponse>(
+      `${host}/call/join/${encodeURIComponent(shareToken)}`,
+      {
+        method: 'POST',
+        credentials: 'omit',
+        body: JSON.stringify({ displayName }),
+      }
+    );
+  },
+
+  leaveMeeting(shareToken: string, token: string) {
+    return safeFetch<LeaveCallResponse>(
+      `${host}/call/join/${encodeURIComponent(shareToken)}/leave`,
+      {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+  },
+
   async getOrCreateCall(channelId: string) {
     return (
       await fetchWithToken<CallTokenResponse>(`${host}/call/${channelId}`, {

@@ -1832,6 +1832,394 @@ export const getActiveCallsResponse = zod
   );
 
 /**
+ * @summary Handle `GET /call/join/{token}` through the call domain service.
+ */
+export const meetingLookupParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingLookupResponse = zod
+  .object({
+    callId: zod
+      .uuid()
+      .nullish()
+      .describe('Currently active call session, if any.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Associated channel, for links to existing channel calls only.'
+      ),
+    id: zod.uuid().describe('Persistent meeting identifier.'),
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled end, or none for an instant meeting.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled start, or none for an instant meeting.'),
+    shareToken: zod
+      .string()
+      .describe(
+        "A bearer capability that grants access only to a meeting's RTC room."
+      ),
+    title: zod.string().describe('Human-readable meeting title.'),
+  })
+  .describe(
+    'Persistent meeting metadata. No channel contents or archived media are exposed.'
+  );
+
+/**
+ * @summary Handle `POST /call/join/{token}` through the call domain service.
+ */
+export const meetingGuestJoinParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingGuestJoinBody = zod
+  .object({
+    displayName: zod
+      .string()
+      .describe("Guest's name, displayed to everyone in the room."),
+  })
+  .describe(
+    'Public guest join inputs. The server generates the participant identity.'
+  );
+
+export const meetingGuestJoinResponse = zod
+  .object({
+    callId: zod.uuid().describe('The call identifier.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call is associated with.'),
+    participantId: zod.string().describe('RTC participant identity.'),
+    roomName: zod.string().describe('The RTC room name.'),
+    serverUrl: zod
+      .string()
+      .describe('The RTC server URL for the frontend SDK to connect to.'),
+    shareToken: zod
+      .string()
+      .nullish()
+      .describe('Meeting link capability, when joined using a link.'),
+    token: zod.string().describe('The RTC token for connecting to the room.'),
+  })
+  .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Handle `POST /call/join/{token}/leave` through the call domain service.
+ */
+export const meetingLeaveParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingLeaveResponse = zod
+  .object({
+    callEnded: zod
+      .boolean()
+      .describe('Whether the entire call was ended (room deleted).'),
+  })
+  .describe('Response for the leave\/end call operation.');
+
+/**
+ * @summary Handle `GET /call/meetings` through the call domain service.
+ */
+export const meetingListResponse = zod
+  .object({
+    meetings: zod
+      .array(
+        zod
+          .object({
+            callId: zod
+              .uuid()
+              .nullish()
+              .describe('Currently active call session, if any.'),
+            channelId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Associated channel, for links to existing channel calls only.'
+              ),
+            id: zod.uuid().describe('Persistent meeting identifier.'),
+            scheduledEnd: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Scheduled end, or none for an instant meeting.'),
+            scheduledStart: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Scheduled start, or none for an instant meeting.'),
+            shareToken: zod
+              .string()
+              .describe(
+                "A bearer capability that grants access only to a meeting's RTC room."
+              ),
+            title: zod.string().describe('Human-readable meeting title.'),
+          })
+          .describe(
+            'Persistent meeting metadata. No channel contents or archived media are exposed.'
+          )
+      )
+      .describe('Persistent meeting invitations, most recently created first.'),
+  })
+  .describe(
+    'Uncancelled standalone meetings visible in the requested meeting list.'
+  );
+
+/**
+ * @summary Handle `POST /call/meetings` through the call domain service.
+ */
+export const meetingCreateBody = zod
+  .object({
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Optional scheduled end.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Optional scheduled start.'),
+    title: zod.string().nullish().describe('Optional display title.'),
+  })
+  .describe('Inputs for creating a meeting without starting its RTC room.');
+
+export const meetingCreateResponse = zod
+  .object({
+    callId: zod
+      .uuid()
+      .nullish()
+      .describe('Currently active call session, if any.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Associated channel, for links to existing channel calls only.'
+      ),
+    id: zod.uuid().describe('Persistent meeting identifier.'),
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled end, or none for an instant meeting.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled start, or none for an instant meeting.'),
+    shareToken: zod
+      .string()
+      .describe(
+        "A bearer capability that grants access only to a meeting's RTC room."
+      ),
+    title: zod.string().describe('Human-readable meeting title.'),
+  })
+  .describe(
+    'Persistent meeting metadata. No channel contents or archived media are exposed.'
+  );
+
+/**
+ * @summary List the authenticated actor's active quick calls.
+ */
+export const meetingListActiveResponse = zod
+  .object({
+    meetings: zod
+      .array(
+        zod
+          .object({
+            callId: zod
+              .uuid()
+              .nullish()
+              .describe('Currently active call session, if any.'),
+            channelId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Associated channel, for links to existing channel calls only.'
+              ),
+            id: zod.uuid().describe('Persistent meeting identifier.'),
+            scheduledEnd: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Scheduled end, or none for an instant meeting.'),
+            scheduledStart: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Scheduled start, or none for an instant meeting.'),
+            shareToken: zod
+              .string()
+              .describe(
+                "A bearer capability that grants access only to a meeting's RTC room."
+              ),
+            title: zod.string().describe('Human-readable meeting title.'),
+          })
+          .describe(
+            'Persistent meeting metadata. No channel contents or archived media are exposed.'
+          )
+          .and(
+            zod.object({
+              createdBy: zod
+                .string()
+                .describe(
+                  'Creator identity for displaying the caller in the authenticated active list.'
+                ),
+            })
+          )
+          .describe(
+            'Active quick-call metadata available to its authenticated owner or attendees.'
+          )
+      )
+      .describe(
+        'Persistent meeting invitations for currently active sessions.'
+      ),
+  })
+  .describe(
+    "The authenticated actor's active quick calls, including their creators."
+  );
+
+/**
+ * @summary Read the authenticated caller's invitation capability without exposing the creator.
+ */
+export const meetingInvitePermissionsParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingInvitePermissionsResponse = zod
+  .object({
+    canInvite: zod
+      .boolean()
+      .describe('True for the owner of an uncancelled standalone meeting.'),
+  })
+  .describe(
+    'Whether the authenticated caller can invite teammates to this meeting.'
+  );
+
+/**
+ * @summary Queue an owner-authorized guest invitation email.
+ */
+export const meetingInviteParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingInviteBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe('Recipient email; no Macro account is required.'),
+  })
+  .describe('A single email recipient for a call invitation.');
+
+/**
+ * @summary Ring registered teammates selected by the standalone meeting owner.
+ */
+export const meetingInviteUsersParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingInviteUsersBody = zod
+  .object({
+    userIds: zod
+      .array(zod.string())
+      .describe(
+        'Human user principals; bot principals and historical bare bot UUIDs are invalid.'
+      ),
+  })
+  .describe('Registered teammates selected for an incoming call invitation.');
+
+/**
+ * @summary Handle `POST /call/meetings/join/{token}` through the call domain service.
+ */
+export const meetingJoinParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingJoinResponse = zod
+  .object({
+    callId: zod.uuid().describe('The call identifier.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call is associated with.'),
+    participantId: zod.string().describe('RTC participant identity.'),
+    roomName: zod.string().describe('The RTC room name.'),
+    serverUrl: zod
+      .string()
+      .describe('The RTC server URL for the frontend SDK to connect to.'),
+    shareToken: zod
+      .string()
+      .nullish()
+      .describe('Meeting link capability, when joined using a link.'),
+    token: zod.string().describe('The RTC token for connecting to the room.'),
+  })
+  .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Handle `DELETE /call/meetings/{meeting_id}` through the call domain service.
+ */
+export const meetingCancelParams = zod.object({
+  meeting_id: zod.uuid(),
+});
+
+/**
+ * @summary Handle owner-authorized meeting title and schedule edits.
+ */
+export const meetingUpdateParams = zod.object({
+  meeting_id: zod.uuid(),
+});
+
+export const meetingUpdateBody = zod
+  .object({
+    clearSchedule: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Remove timed scheduling, for example when the calendar event becomes all-day.'
+      ),
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Replacement scheduled end; requires a matching start.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Replacement scheduled start; requires a matching end.'),
+    title: zod.string().nullish().describe('Replacement title, when supplied.'),
+  })
+  .describe(
+    "Changes to a meeting's title or scheduled time; omitted values stay unchanged."
+  );
+
+export const meetingUpdateResponse = zod
+  .object({
+    callId: zod
+      .uuid()
+      .nullish()
+      .describe('Currently active call session, if any.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Associated channel, for links to existing channel calls only.'
+      ),
+    id: zod.uuid().describe('Persistent meeting identifier.'),
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled end, or none for an instant meeting.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled start, or none for an instant meeting.'),
+    shareToken: zod
+      .string()
+      .describe(
+        "A bearer capability that grants access only to a meeting's RTC room."
+      ),
+    title: zod.string().describe('Human-readable meeting title.'),
+  })
+  .describe(
+    'Persistent meeting metadata. No channel contents or archived media are exposed.'
+  );
+
+/**
  * Batch-fetches lightweight previews for a list of call ids. Mirrors the
 `POST /documents/preview` endpoint: no per-id access checks, duplicate
 ids are deduplicated server-side, and missing ids come back as
@@ -1861,6 +2249,7 @@ export const getBatchCallRecordPreviewResponse = zod
                 callId: zod.uuid().describe('The call identifier.'),
                 channelId: zod
                   .uuid()
+                  .nullish()
                   .describe('The channel this call belongs to.'),
                 channelName: zod
                   .string()
@@ -1928,7 +2317,10 @@ export const getCallRecordParams = zod.object({
 export const getCallRecordResponse = zod
   .object({
     callId: zod.uuid().describe('The call identifier.'),
-    channelId: zod.uuid().describe('The channel this call belongs to.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call belongs to.'),
     channelName: zod
       .string()
       .nullish()
@@ -1949,6 +2341,31 @@ export const getCallRecordResponse = zod
       .datetime({})
       .nullish()
       .describe('When the call ended (None if still active).'),
+    guests: zod
+      .array(
+        zod
+          .object({
+            displayName: zod.string().describe('Guest-provided display name.'),
+            id: zod
+              .uuid()
+              .describe(
+                "A non-account guest of a single call session.\n\nThe id doubles as the guest's RTC participant identity, so identities are\nopaque UUIDs and never share a namespace (or a column) with Macro user\nids. Only the server mints them; Macro users keep `macro|…` identities,\nso an RTC identity classifies as exactly one of the two."
+              ),
+            joinedAt: zod.iso
+              .datetime({})
+              .describe('When the guest joined the call.'),
+            leftAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the guest left (None if still in an active call).'
+              ),
+          })
+          .describe('A non-account guest as returned in a [`CallRecord`].')
+      )
+      .describe(
+        'Non-account guests (both active and historic). Guests only ever exist\non standalone meeting calls, never on channel calls.'
+      ),
     isActive: zod
       .boolean()
       .describe('Whether the call is currently active (from `calls` table).'),
@@ -1965,13 +2382,13 @@ export const getCallRecordResponse = zod
               .describe(
                 'When the user left (None if still in an active call).'
               ),
-            userId: zod.string().describe('The user id.'),
+            userId: zod.string().describe('The Macro user id.'),
           })
           .describe(
             'A participant as returned in a [`CallRecord`] (historic — includes `left_at`).'
           )
       )
-      .describe('Participants (both active and historic).'),
+      .describe('Macro-account participants (both active and historic).'),
     recordingPreviewUrl: zod
       .string()
       .nullish()
@@ -2160,6 +2577,45 @@ export const editCallRecordBody = zod
   .describe('Edit call request, as supplied by inbound callers.');
 
 /**
+ * @summary Handle `POST /call/record/{call_id}/link` through the call domain service.
+ */
+export const meetingShareParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const meetingShareResponse = zod
+  .object({
+    callId: zod
+      .uuid()
+      .nullish()
+      .describe('Currently active call session, if any.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Associated channel, for links to existing channel calls only.'
+      ),
+    id: zod.uuid().describe('Persistent meeting identifier.'),
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled end, or none for an instant meeting.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled start, or none for an instant meeting.'),
+    shareToken: zod
+      .string()
+      .describe(
+        "A bearer capability that grants access only to a meeting's RTC room."
+      ),
+    title: zod.string().describe('Human-readable meeting title.'),
+  })
+  .describe(
+    'Persistent meeting metadata. No channel contents or archived media are exposed.'
+  );
+
+/**
  * Flips the live call's share-with-team toggle and returns the new value as
 the JSON body. The toggle is applied as canonical team sharing (View for
 the creator's team) when the call is archived; archived calls answer 409
@@ -2245,11 +2701,19 @@ export const getOrCreateCallParams = zod.object({
 export const getOrCreateCallResponse = zod
   .object({
     callId: zod.uuid().describe('The call identifier.'),
-    channelId: zod.uuid().describe('The channel this call is associated with.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call is associated with.'),
+    participantId: zod.string().describe('RTC participant identity.'),
     roomName: zod.string().describe('The RTC room name.'),
     serverUrl: zod
       .string()
       .describe('The RTC server URL for the frontend SDK to connect to.'),
+    shareToken: zod
+      .string()
+      .nullish()
+      .describe('Meeting link capability, when joined using a link.'),
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');
@@ -2293,7 +2757,11 @@ Duplicate segments (same `segment_id`) are ignored.
  * @summary Handler for `POST /call/{channel_id}/transcript`.
  */
 export const ingestTranscriptParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
+  room_name: zod
+    .uuid()
+    .describe(
+      'RTC room name; the transcription agent passes its LiveKit room verbatim'
+    ),
 });
 
 export const ingestTranscriptBody = zod
@@ -12235,6 +12703,7 @@ export const getItemsSoupResponse = zod
                     callId: zod.uuid().describe('The call identifier.'),
                     channelId: zod
                       .uuid()
+                      .nullish()
                       .describe('The channel this call belongs to.'),
                     channelName: zod
                       .string()
@@ -12259,6 +12728,33 @@ export const getItemsSoupResponse = zod
                       .datetime({})
                       .nullish()
                       .describe('When the call ended (None if still active).'),
+                    guests: zod
+                      .array(
+                        zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe('Guest-provided display name.'),
+                            id: zod
+                              .uuid()
+                              .describe(
+                                "Opaque guest identity; matches the guest's transcript speaker id."
+                              ),
+                            joinedAt: zod.iso
+                              .datetime({})
+                              .describe('When the guest joined the call.'),
+                            leftAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                'When the guest left (None if still in an active call).'
+                              ),
+                          })
+                          .describe(
+                            'A non-account guest of a call record, as displayed in Soup.'
+                          )
+                      )
+                      .describe('Non-account guests in the call.'),
                     isActive: zod
                       .boolean()
                       .describe('Whether the call is currently active.'),
@@ -12275,13 +12771,13 @@ export const getItemsSoupResponse = zod
                               .describe(
                                 'When the user left (None if still in an active call).'
                               ),
-                            userId: zod.string().describe('The user id.'),
+                            userId: zod.string().describe('The Macro user id.'),
                           })
                           .describe(
-                            'A participant in a call record, as displayed in Soup.'
+                            'A Macro-account participant in a call record, as displayed in Soup.'
                           )
                       )
-                      .describe('Participants in the call.'),
+                      .describe('Macro-account participants in the call.'),
                     startedAt: zod.iso
                       .datetime({})
                       .describe('When the call started.'),
@@ -16260,6 +16756,7 @@ export const postItemsSoupResponse = zod
                     callId: zod.uuid().describe('The call identifier.'),
                     channelId: zod
                       .uuid()
+                      .nullish()
                       .describe('The channel this call belongs to.'),
                     channelName: zod
                       .string()
@@ -16284,6 +16781,33 @@ export const postItemsSoupResponse = zod
                       .datetime({})
                       .nullish()
                       .describe('When the call ended (None if still active).'),
+                    guests: zod
+                      .array(
+                        zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe('Guest-provided display name.'),
+                            id: zod
+                              .uuid()
+                              .describe(
+                                "Opaque guest identity; matches the guest's transcript speaker id."
+                              ),
+                            joinedAt: zod.iso
+                              .datetime({})
+                              .describe('When the guest joined the call.'),
+                            leftAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                'When the guest left (None if still in an active call).'
+                              ),
+                          })
+                          .describe(
+                            'A non-account guest of a call record, as displayed in Soup.'
+                          )
+                      )
+                      .describe('Non-account guests in the call.'),
                     isActive: zod
                       .boolean()
                       .describe('Whether the call is currently active.'),
@@ -16300,13 +16824,13 @@ export const postItemsSoupResponse = zod
                               .describe(
                                 'When the user left (None if still in an active call).'
                               ),
-                            userId: zod.string().describe('The user id.'),
+                            userId: zod.string().describe('The Macro user id.'),
                           })
                           .describe(
-                            'A participant in a call record, as displayed in Soup.'
+                            'A Macro-account participant in a call record, as displayed in Soup.'
                           )
                       )
-                      .describe('Participants in the call.'),
+                      .describe('Macro-account participants in the call.'),
                     startedAt: zod.iso
                       .datetime({})
                       .describe('When the call started.'),
@@ -19728,6 +20252,7 @@ export const postItemsSoupAstResponse = zod
                     callId: zod.uuid().describe('The call identifier.'),
                     channelId: zod
                       .uuid()
+                      .nullish()
                       .describe('The channel this call belongs to.'),
                     channelName: zod
                       .string()
@@ -19752,6 +20277,33 @@ export const postItemsSoupAstResponse = zod
                       .datetime({})
                       .nullish()
                       .describe('When the call ended (None if still active).'),
+                    guests: zod
+                      .array(
+                        zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe('Guest-provided display name.'),
+                            id: zod
+                              .uuid()
+                              .describe(
+                                "Opaque guest identity; matches the guest's transcript speaker id."
+                              ),
+                            joinedAt: zod.iso
+                              .datetime({})
+                              .describe('When the guest joined the call.'),
+                            leftAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                'When the guest left (None if still in an active call).'
+                              ),
+                          })
+                          .describe(
+                            'A non-account guest of a call record, as displayed in Soup.'
+                          )
+                      )
+                      .describe('Non-account guests in the call.'),
                     isActive: zod
                       .boolean()
                       .describe('Whether the call is currently active.'),
@@ -19768,13 +20320,13 @@ export const postItemsSoupAstResponse = zod
                               .describe(
                                 'When the user left (None if still in an active call).'
                               ),
-                            userId: zod.string().describe('The user id.'),
+                            userId: zod.string().describe('The Macro user id.'),
                           })
                           .describe(
-                            'A participant in a call record, as displayed in Soup.'
+                            'A Macro-account participant in a call record, as displayed in Soup.'
                           )
                       )
-                      .describe('Participants in the call.'),
+                      .describe('Macro-account participants in the call.'),
                     startedAt: zod.iso
                       .datetime({})
                       .describe('When the call started.'),
@@ -23528,6 +24080,7 @@ export const postItemsSoupAstGroupedResponse = zod
                           callId: zod.uuid().describe('The call identifier.'),
                           channelId: zod
                             .uuid()
+                            .nullish()
                             .describe('The channel this call belongs to.'),
                           channelName: zod
                             .string()
@@ -23554,6 +24107,35 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'When the call ended (None if still active).'
                             ),
+                          guests: zod
+                            .array(
+                              zod
+                                .object({
+                                  displayName: zod
+                                    .string()
+                                    .describe('Guest-provided display name.'),
+                                  id: zod
+                                    .uuid()
+                                    .describe(
+                                      "Opaque guest identity; matches the guest's transcript speaker id."
+                                    ),
+                                  joinedAt: zod.iso
+                                    .datetime({})
+                                    .describe(
+                                      'When the guest joined the call.'
+                                    ),
+                                  leftAt: zod.iso
+                                    .datetime({})
+                                    .nullish()
+                                    .describe(
+                                      'When the guest left (None if still in an active call).'
+                                    ),
+                                })
+                                .describe(
+                                  'A non-account guest of a call record, as displayed in Soup.'
+                                )
+                            )
+                            .describe('Non-account guests in the call.'),
                           isActive: zod
                             .boolean()
                             .describe('Whether the call is currently active.'),
@@ -23570,13 +24152,17 @@ export const postItemsSoupAstGroupedResponse = zod
                                     .describe(
                                       'When the user left (None if still in an active call).'
                                     ),
-                                  userId: zod.string().describe('The user id.'),
+                                  userId: zod
+                                    .string()
+                                    .describe('The Macro user id.'),
                                 })
                                 .describe(
-                                  'A participant in a call record, as displayed in Soup.'
+                                  'A Macro-account participant in a call record, as displayed in Soup.'
                                 )
                             )
-                            .describe('Participants in the call.'),
+                            .describe(
+                              'Macro-account participants in the call.'
+                            ),
                           startedAt: zod.iso
                             .datetime({})
                             .describe('When the call started.'),
@@ -26996,6 +27582,7 @@ export const postItemsSoupAstGroupedResponse = zod
                           callId: zod.uuid().describe('The call identifier.'),
                           channelId: zod
                             .uuid()
+                            .nullish()
                             .describe('The channel this call belongs to.'),
                           channelName: zod
                             .string()
@@ -27022,6 +27609,35 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'When the call ended (None if still active).'
                             ),
+                          guests: zod
+                            .array(
+                              zod
+                                .object({
+                                  displayName: zod
+                                    .string()
+                                    .describe('Guest-provided display name.'),
+                                  id: zod
+                                    .uuid()
+                                    .describe(
+                                      "Opaque guest identity; matches the guest's transcript speaker id."
+                                    ),
+                                  joinedAt: zod.iso
+                                    .datetime({})
+                                    .describe(
+                                      'When the guest joined the call.'
+                                    ),
+                                  leftAt: zod.iso
+                                    .datetime({})
+                                    .nullish()
+                                    .describe(
+                                      'When the guest left (None if still in an active call).'
+                                    ),
+                                })
+                                .describe(
+                                  'A non-account guest of a call record, as displayed in Soup.'
+                                )
+                            )
+                            .describe('Non-account guests in the call.'),
                           isActive: zod
                             .boolean()
                             .describe('Whether the call is currently active.'),
@@ -27038,13 +27654,17 @@ export const postItemsSoupAstGroupedResponse = zod
                                     .describe(
                                       'When the user left (None if still in an active call).'
                                     ),
-                                  userId: zod.string().describe('The user id.'),
+                                  userId: zod
+                                    .string()
+                                    .describe('The Macro user id.'),
                                 })
                                 .describe(
-                                  'A participant in a call record, as displayed in Soup.'
+                                  'A Macro-account participant in a call record, as displayed in Soup.'
                                 )
                             )
-                            .describe('Participants in the call.'),
+                            .describe(
+                              'Macro-account participants in the call.'
+                            ),
                           startedAt: zod.iso
                             .datetime({})
                             .describe('When the call started.'),

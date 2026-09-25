@@ -21,6 +21,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 const live = vi.hoisted(() => ({
   acquire: vi.fn(),
+  load: vi.fn(),
   release: vi.fn(),
   issue: vi.fn(),
   snapshot: {
@@ -49,7 +50,7 @@ vi.mock('@core/agent-session/AgentSession', () => ({
       live.acquire(id);
       return {
         id,
-        load: () => Promise.resolve({ session: {}, bot: {} }),
+        load: live.load,
         snapshot: () => Promise.resolve(live.snapshot),
         subscribe: (listener: (events: unknown[]) => void) => {
           live.listeners.add(listener);
@@ -173,6 +174,33 @@ describe('createMagicChipModel', () => {
       },
     });
     live.issue.mockResolvedValue({ isErr: () => false });
+    live.load.mockResolvedValue({ session: {}, bot: {} });
+  });
+
+  it('reports a failed load only while the chip is mounted', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    const loads: Array<(error: Error) => void> = [];
+    live.load.mockImplementation(
+      () => new Promise((_, reject) => loads.push(reject))
+    );
+    const [mounted, unmounted] = [0, 1].map(() =>
+      createRoot((dispose) => {
+        createModel(props);
+        return dispose;
+      })
+    );
+    unmounted?.();
+    loads[1]?.(new Error('agent session released: session'));
+    await settle();
+    expect(consoleError).not.toHaveBeenCalled();
+
+    loads[0]?.(new Error('agent session log could not be fetched: session'));
+    await settle();
+    expect(consoleError).toHaveBeenCalledOnce();
+    mounted?.();
+    consoleError.mockRestore();
   });
 
   it.each([0, '0'])(

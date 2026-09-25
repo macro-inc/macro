@@ -22,11 +22,13 @@ import type { GithubPullRequestEntity } from '../../types/entity';
 type PillProps = {
   children: JSX.Element;
   class?: string;
+  title?: string;
 };
 
 function Pill(props: PillProps) {
   return (
     <span
+      title={props.title}
       class={cn(
         'min-w-0 rounded-full inline-flex items-center gap-1 px-1.5 py-1 leading-tight text-xs font-medium border border-edge bg-surface/50',
         props.class
@@ -417,8 +419,44 @@ export function GithubPullRequestChecksIndicator(props: {
   );
 }
 
+export function GithubAuthorBadge(props: {
+  entity: GithubPullRequestEntity;
+  displayName?: string;
+}) {
+  const login = () =>
+    props.entity.metadata.authorLogin?.replace(/\[bot\]$/, '');
+  const name = () => props.displayName || login() || 'GitHub user';
+  const avatarUrl = () => {
+    const id = props.entity.metadata.authorId;
+    if (id !== undefined)
+      return `https://avatars.githubusercontent.com/u/${id}?s=48&v=4`;
+    const githubLogin = login();
+    return githubLogin
+      ? `https://github.com/${encodeURIComponent(githubLogin)}.png?size=48`
+      : undefined;
+  };
+  return (
+    <span
+      class="inline-flex min-w-0 items-center gap-1.5"
+      title={`Authored by ${name()}`}
+    >
+      <Show when={avatarUrl()}>
+        {(url) => (
+          <img
+            src={url()}
+            alt=""
+            loading="lazy"
+            class="size-4 shrink-0 rounded-full"
+          />
+        )}
+      </Show>
+      <span class="min-w-0 truncate">{name()}</span>
+    </span>
+  );
+}
 export function GithubPullRequestPills(props: {
   entity: GithubPullRequestEntity;
+  authorDisplayName?: string;
 }) {
   const additions = () => props.entity.metadata.additions;
   const deletions = () => props.entity.metadata.deletions;
@@ -427,6 +465,18 @@ export function GithubPullRequestPills(props: {
 
   return (
     <>
+      <Show
+        when={
+          props.entity.metadata.authorLogin || props.entity.metadata.authorId
+        }
+      >
+        <Pill class="max-w-32 text-ink-muted">
+          <GithubAuthorBadge
+            entity={props.entity}
+            displayName={props.authorDisplayName}
+          />
+        </Pill>
+      </Show>
       <Pill class="tabular-nums">
         <span
           class={cn(
