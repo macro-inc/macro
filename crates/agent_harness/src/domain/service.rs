@@ -53,9 +53,9 @@ use crate::domain::model::{
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
-    AgentPromptComposer, AgentSessionNotifier, CommandForwarder, ContainerManager,
-    MessagePromptContext, PermissionPolicySource, PromptMentions, RuntimeConnections,
-    SandboxEgressProvisioner, SessionAnnouncer,
+    AgentPromptComposer, AgentSessionNotifier, CodingAgentSource, CommandForwarder,
+    ContainerManager, MessagePromptContext, PermissionPolicySource, PromptMentions,
+    RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
@@ -92,6 +92,24 @@ impl<S: PermissionPolicySource> ErasedPermissionPolicySource for S {
     }
 }
 
+/// [`CodingAgentSource`], object-safe, erased like
+/// [`ErasedPermissionPolicySource`].
+trait ErasedCodingAgentSource: Send + Sync + 'static {
+    fn coding_agent_choice<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<bool>>> + Send + 'a>>;
+}
+
+impl<S: CodingAgentSource> ErasedCodingAgentSource for S {
+    fn coding_agent_choice<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<bool>>> + Send + 'a>> {
+        Box::pin(CodingAgentSource::coding_agent_choice(self, bot))
+    }
+}
+
 struct AgentHarnessInner<
     Sessions,
     Containers,
@@ -113,6 +131,7 @@ struct AgentHarnessInner<
     egress: Egress,
     forwarder: Box<dyn ErasedForwarder>,
     permission_policies: Box<dyn ErasedPermissionPolicySource>,
+    coding_agents: Box<dyn ErasedCodingAgentSource>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory beside the live actors this replica manages.
@@ -284,6 +303,7 @@ where
         egress: Egress,
         forwarder: impl CommandForwarder,
         permission_policies: impl PermissionPolicySource,
+        coding_agents: impl CodingAgentSource,
         defaults: impl Into<HarnessDefaults>,
         lifecycle_publisher: Lifecycle,
         pending: PendingCommands,
@@ -301,6 +321,7 @@ where
                 egress,
                 forwarder: Box::new(forwarder),
                 permission_policies: Box::new(permission_policies),
+                coding_agents: Box::new(coding_agents),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 busy: pending,
@@ -382,12 +403,13 @@ where
             return Ok(());
         }
 
+        let persona = self.inner.reply_persona(&session).await?;
         self.inner
             .announcer
             .announce(SessionAnnouncement {
                 session_id,
                 bot_id: session.bot_id,
-                kind: AgentKind::for_session(session.bot_id, &session.harness),
+                is_coding: persona.is_coding,
                 origin_parent: prompt.origin.parent,
                 origin_thread_id: prompt.origin.thread_id,
                 origin_message_id: prompt.origin.message_id,

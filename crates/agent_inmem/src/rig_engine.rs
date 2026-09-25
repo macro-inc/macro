@@ -97,7 +97,7 @@ fn tools_for_turn(
 
 impl TurnEngine for RigTurnEngine {
     fn supported_models(&self) -> &[&str] {
-        chat::domain::models::CHAT_MODELS
+        crate::domain::models::advertised_models()
     }
 
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {

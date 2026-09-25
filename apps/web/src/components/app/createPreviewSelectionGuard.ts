@@ -2,6 +2,7 @@ import type { NavigationStackChangeReason } from '@app/components/navigation-sta
 import { toast } from '@core/component/Toast/Toast';
 import { createSignal, onCleanup, untrack, useContext } from 'solid-js';
 import {
+  type PreviewBlockTarget,
   type PreviewPanelSelection,
   previewBlockTarget,
 } from './previewTarget';
@@ -9,8 +10,11 @@ import type { ContentIdentity } from './split-layout/contentInstanceRegistry';
 import { SplitLayoutContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
+/** A live row, or the block target a route already resolved it to. */
+export type PreviewSelectionInput = PreviewPanelSelection | PreviewBlockTarget;
+
 type SelectPreview = (
-  selection: PreviewPanelSelection | undefined,
+  selection: PreviewSelectionInput | undefined,
   reason?: NavigationStackChangeReason
 ) => boolean;
 
@@ -35,9 +39,11 @@ export function createPreviewSelectionGuard(): PreviewSelectionGuard {
   });
   onCleanup(unregister);
 
-  const identity = (selection: PreviewPanelSelection | undefined) => {
-    const target = selection && previewBlockTarget(selection);
-    return target && { type: target.blockType, id: target.blockId };
+  const identity = (selection: PreviewSelectionInput | undefined) => {
+    if (!selection) return;
+    const target =
+      'blockType' in selection ? selection : previewBlockTarget(selection);
+    return { type: target.blockType, id: target.blockId };
   };
   const canSelect: SelectPreview = (selection, reason = 'navigate') =>
     untrack(() => {

@@ -175,13 +175,16 @@ export const ListNav = (props: ListNavProps) => {
     <SidebarOpenInSplitMenu
       content={content}
       onOpenChange={props.onContextMenuOpenChange}
-      // The trigger defaults to `w-full h-7`, which clips the square button.
-      triggerClass="size-9"
+      // The trigger defaults to `w-full h-7`, which clips the round button.
+      triggerClass="size-10"
     >
       <Button
         variant="ghost"
         size="icon-md"
-        class="cursor-default rounded-xl"
+        class={cn(
+          'size-10 cursor-default rounded-xl',
+          isActive() && 'bg-hover text-ink'
+        )}
         label={props.item.label}
         aria-description={
           [props.unread && 'Unread items', props.activeCall && 'Active call']
@@ -203,21 +206,11 @@ export const ListNav = (props: ListNavProps) => {
         onMouseDown={onMouseDown}
         onClick={onClick}
       >
-        {/* Fixed geometry keeps the marker flush to the rail edge without
-            moving the glyph when selection changes. */}
-        <span
-          aria-hidden="true"
-          class={cn(
-            'absolute -left-2.5 top-1/2 h-3/4 w-1 -translate-y-1/2 rounded-r-full bg-ink-muted',
-            isActive() ? 'opacity-100' : 'opacity-0'
-          )}
-        />
-
         <NavGlyph
           icon={props.item.icon}
           iconActive={props.item.iconActive}
           filled={isActive()}
-          class={cn('size-5.5', isActive() && 'text-ink-muted')}
+          class="size-5.5"
         />
         <Show
           when={props.activeCall}

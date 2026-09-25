@@ -216,11 +216,15 @@ impl AgentKind {
 
     /// Whether this kind's sessions work in a repository.
     ///
-    /// Decides how a mention is answered in its thread. A coding runtime runs
-    /// for minutes and produces diffs, so its turn is announced as a magic
-    /// chip - a live portal into the session. The in-memory runtime has no
-    /// repository and chats, so its thread gets a pending reply that becomes
-    /// the answer when the turn ends, the way the original Macro bot replied.
+    /// The runtime's nature, and what a persona is taken to be for until it
+    /// says otherwise: how a mention is answered in its thread is the
+    /// persona's choice ([`is_coding_agent`]), and this is the default for
+    /// one that has not chosen and the answer for the fixed system bots. A
+    /// coding runtime runs for minutes and produces diffs, so its turn is
+    /// announced as a magic chip - a live portal into the session. The
+    /// in-memory runtime has no repository and chats, so its thread gets a
+    /// pending reply that becomes the answer when the turn ends, the way the
+    /// original Macro bot replied.
     #[must_use]
     pub const fn is_coding(self) -> bool {
         !matches!(self, Self::InMemory)
@@ -244,6 +248,30 @@ impl AgentKind {
             Self::External => PermissionPolicy::Prompt,
         }
     }
+}
+
+/// Whether a session's turns are announced as a coding agent's.
+///
+/// A persona's setting is the source of truth. The fixed system bots have no
+/// persona and so no setting; `choice` is `None` for them alone, and the
+/// runtime's nature ([`AgentKind::is_coding`]) decides.
+#[must_use]
+pub const fn is_coding_agent(choice: Option<bool>, kind: AgentKind) -> bool {
+    match choice {
+        Some(chosen) => chosen,
+        None => kind.is_coding(),
+    }
+}
+
+/// The persona a session's thread replies speak as, read from its bot at
+/// the moment of speaking.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyPersona {
+    /// The bot's display name, what a link to the session is labelled.
+    pub name: String,
+    /// Whether the turn is announced as a magic chip (coding) or answered
+    /// as a reply in the thread (chat); see [`is_coding_agent`].
+    pub is_coding: bool,
 }
 
 /// Stored facts used by the domain to choose a session permission policy.
@@ -524,9 +552,9 @@ pub struct SessionAnnouncement {
     pub session_id: AgentSessionId,
     /// The bot the session runs for; the announcement posts as it.
     pub bot_id: BotId,
-    /// The runtime serving the session, which decides what the announcement
-    /// looks like (see [`AgentKind::is_coding`]).
-    pub kind: AgentKind,
+    /// Whether the announcement is a coding agent's magic chip or a chat
+    /// agent's pending reply (see [`is_coding_agent`]).
+    pub is_coding: bool,
     /// Channel or document containing the mention that opened the session.
     pub origin_parent: messages::domain::models::MessageParent,
     /// Thread where the announcement should be posted.
@@ -645,9 +673,9 @@ pub struct ResolvedReply {
     pub session_id: AgentSessionId,
     /// The bot the session runs for; the patch is made as it.
     pub bot_id: BotId,
-    /// The runtime serving the session. A coding runtime's chip renders
-    /// the turn itself, so there is nothing to resolve for one.
-    pub kind: AgentKind,
+    /// Whether the session's bot is a coding agent. A coding agent's chip
+    /// renders the turn itself, so there is nothing to resolve for one.
+    pub is_coding: bool,
     /// The pending reply posted when the turn was announced.
     pub message_id: Uuid,
     /// Channel or document the mention was posted in.

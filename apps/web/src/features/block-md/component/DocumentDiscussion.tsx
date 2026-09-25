@@ -23,7 +23,14 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import type { MessageParent } from '@service-storage/messages';
-import { createEffect, createMemo, on, onCleanup, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { createDocumentDiscussionSource } from '../comments/documentDiscussionSource';
 import { URL_PARAMS } from '../constants';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -100,6 +107,13 @@ export function MessageDocumentDiscussion(props: {
     undefined,
     { equals: (a, b) => a?.key === b?.key }
   );
+  // Clicking the linked message releases its highlight until the next
+  // navigation to a comment.
+  const [clearedKey, setClearedKey] = createSignal<string>();
+  const targetCleared = () => {
+    const key = scrollRequest()?.key;
+    return key !== undefined && key === clearedKey();
+  };
   let scrolledKey: string | undefined;
   createEffect(
     on(scrollRequest, (request) => {
@@ -115,6 +129,8 @@ export function MessageDocumentDiscussion(props: {
           parent={parent}
           canWrite={permissions.canComment()}
           targetId={params.commentId()}
+          targetCleared={targetCleared()}
+          onClearTarget={() => setClearedKey(scrollRequest()?.key)}
           label={props.label}
           buildLink={(message) =>
             buildSimpleEntityUrl(

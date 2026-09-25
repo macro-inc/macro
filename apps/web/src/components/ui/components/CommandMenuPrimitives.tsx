@@ -120,7 +120,7 @@ function CommandMenuShellRoot(props: SurfaceProps) {
 
   return (
     <Panel
-      class={cn('max-h-[75vh] rounded-xl bg-transparent', local.class)}
+      class={cn('max-h-[75vh] rounded-[inherit] bg-transparent', local.class)}
       {...rest}
     >
       {local.children}
@@ -130,18 +130,14 @@ function CommandMenuShellRoot(props: SurfaceProps) {
 
 function CommandMenuHeader(props: ParentProps<{ class?: string }>) {
   return (
-    <Panel.Header class={cn('gap-2 px-4 my-1', props.class)}>
+    <Panel.Header class={cn('gap-2 px-4 py-2', props.class)}>
       {props.children}
     </Panel.Header>
   );
 }
 
 function CommandMenuToolbar(props: ParentProps<{ class?: string }>) {
-  return (
-    <Panel.Toolbar class={cn('bg-dialog', props.class)}>
-      {props.children}
-    </Panel.Toolbar>
-  );
+  return <Panel.Toolbar class={props.class}>{props.children}</Panel.Toolbar>;
 }
 
 function CommandMenuBody(
@@ -157,10 +153,7 @@ function CommandMenuBody(
 function CommandMenuFooter(props: ParentProps<{ class?: string }>) {
   return (
     <Panel.Footer
-      class={cn(
-        'gap-4 px-4 bg-dialog text-xs text-ink-extra-muted/80',
-        props.class
-      )}
+      class={cn('gap-4 px-4 text-xs text-ink-extra-muted/80', props.class)}
     >
       {props.children}
     </Panel.Footer>
@@ -265,7 +258,7 @@ export function CommandMenuSearchInput(
   return (
     <input
       class={cn(
-        'flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder',
+        'min-w-0 flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder',
         local.class
       )}
       {...rest}

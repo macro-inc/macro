@@ -1,14 +1,15 @@
 //! Speak for an agent session in its originating thread through the shared
 //! message service.
 //!
-//! Two shapes, by the session's [`AgentKind`]: a coding agent's turn is a
-//! magic chip, a live portal into the session that renders the turn itself;
+//! Two shapes, by whether the session's bot is a coding agent: a coding
+//! agent's turn is a magic chip, a live portal into the session that renders
+//! the turn itself;
 //! a chat agent's turn is a pending reply - the channel markdown's pulsing
 //! await node - that is patched into the answer when the turn ends, the way
 //! the original Macro bot replied, and that says so while the turn waits on
 //! a question only the session view can answer. A chat agent's message
-//! leads with a link to its session in every state. The domain names the
-//! kind, this module chooses the words, and Lexical composes every node:
+//! leads with a link to its session in every state. The domain decides the
+//! shape, this module chooses the words, and Lexical composes every node:
 //! no node syntax is written here.
 
 #[cfg(test)]
@@ -213,7 +214,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 &announcement.origin_parent,
             )
             .await?;
-        let content = if announcement.kind.is_coding() {
+        let content = if announcement.is_coding {
             self.lexical
                 .compose_agent_announcement(
                     &announcement_reply_target(&announcement),
@@ -258,7 +259,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
     }
 
     async fn resolve(&self, resolution: ResolvedReply) -> Result<()> {
-        if resolution.kind.is_coding() {
+        if resolution.is_coding {
             return Ok(());
         }
         let access = self

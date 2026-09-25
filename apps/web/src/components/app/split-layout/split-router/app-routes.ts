@@ -25,6 +25,7 @@ import { remindersRoute } from '@app/features/reminders/route';
 import { settingsRoute } from '@app/features/settings/route';
 import { tasksSplitRoute } from '@app/features/tasks-view/route';
 import { defineRoutes } from '@app/lib/split-router';
+import { debugRoutes } from './debug-routes';
 import { handleLegacySplitPath, legacySplitRoute } from './legacy-route';
 
 export const appSplitRoutes = defineRoutes({
@@ -51,6 +52,7 @@ export const appSplitRoutes = defineRoutes({
     foldersRoute,
     searchRoute,
     prDetailRoute,
+    ...debugRoutes,
     legacySplitRoute,
   ],
   globalSearch: ['referral_code'],

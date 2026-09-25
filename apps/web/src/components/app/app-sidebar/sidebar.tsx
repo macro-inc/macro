@@ -569,6 +569,7 @@ const SidebarSectionMenu = (props: {
     onOpenChange={props.onOpenChange}
   >
     <Dropdown.Trigger
+      size="icon-xs"
       variant="ghost"
       class="opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity rounded-md size-5 min-h-0 p-0 bg-transparent hover:bg-ink/6 [&_svg]:size-3.5"
       label={`Customize ${props.label}`}
@@ -639,6 +640,7 @@ const TryCard = (props: {
             Quick Start
           </h3>
           <Button
+            size="icon-xs"
             variant="ghost"
             class="shrink-0 size-5 rounded-sm p-0 [&_svg]:size-3"
             label="Dismiss Quick Start"
@@ -864,7 +866,7 @@ export const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
       onOpenChange={props.onMenuOpenChange}
     >
       <Dropdown.Trigger
-        variant="ghost"
+        variant="plain"
         class={cn(
           'flex items-center rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
           props.compact
@@ -936,7 +938,7 @@ export const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
               <div class="truncate text-sm text-ink-muted">{email()}</div>
             </div>
           </div>
-          <div class="-mx-1.5 mt-2 mb-1.5 h-px bg-edge-muted" />
+          <div class="-mx-1.5 mt-2 mb-1.5 h-px bg-edge-divider" />
           <Show when={props.gettingStartedLink}>
             {(link) => (
               <Dropdown.Item
@@ -1488,7 +1490,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar flex flex-col gap-0 overflow-hidden bg-surface px-3 pb-3 pt-4 text-[13px]',
         isExpanded() &&
-          'relative h-full shrink-0 max-w-55 w-55 border-r border-edge-muted opacity-100',
+          'relative h-full shrink-0 max-w-55 w-55 border-edge-frame opacity-100',
+        isExpanded() &&
+          (globalSplitManager()?.splits().length ?? 1) <= 1 &&
+          'border-r',
         props.sidebarState === 'hidden' &&
           'fixed left-0 top-0 bottom-0 h-full -translate-x-full max-w-0 w-0 opacity-0 pointer-events-none',
         isCollapsed() && 'fixed z-modal-content',
@@ -1496,7 +1501,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           !overlayOpen() &&
           'left-0 inset-y-0 h-full max-w-0 w-0 opacity-0 pointer-events-none -translate-x-2',
         isOverlayExpanded() &&
-          'left-0 inset-y-0 h-full max-w-55 w-55 opacity-100 translate-x-0 rounded-r-xl shadow-menu ring-1 ring-edge-muted'
+          'left-0 inset-y-0 h-full max-w-55 w-55 opacity-100 translate-x-0 rounded-r-xl shadow-menu ring-1 ring-edge-frame'
       )}
       data-expanded={isExpandedView()}
       data-slim={isSlim()}

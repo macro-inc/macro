@@ -37,7 +37,8 @@ export const SegmentedControl = <T extends string | number | boolean>(
       onChange={handleChange}
       aria-label={props['aria-label']}
       class={cn(
-        'border border-edge-muted rounded-xs inline-flex overflow-hidden',
+        'border border-edge-frame rounded-full inline-flex overflow-hidden',
+        size() === 'sm' ? 'h-6' : 'h-8',
         props.class
       )}
     >
@@ -47,11 +48,11 @@ export const SegmentedControl = <T extends string | number | boolean>(
             value={serialize(option.value)}
             disabled={option.disabled}
             class={cn(
-              'relative flex items-center justify-center border-r border-edge-muted last:border-r-0 font-medium',
-              size() === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm',
+              'relative flex h-full items-center justify-center border-r border-edge-divider last:border-r-0 font-medium outline-none has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus transition-colors duration-120 motion-reduce:transition-none',
+              size() === 'sm' ? 'px-2 text-xs' : 'px-3 text-sm',
               option.disabled
                 ? 'opacity-50'
-                : 'text-ink-muted hover:text-ink hover:bg-ink/15 data-checked:text-ink data-checked:bg-ink/10 data-checked:hover:bg-ink/20'
+                : 'text-ink-muted not-touch:hover:text-ink not-touch:hover:overlay-hover active:overlay-active data-checked:text-ink data-checked:overlay-active'
             )}
           >
             <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />

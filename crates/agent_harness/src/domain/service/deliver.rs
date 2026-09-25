@@ -227,11 +227,12 @@ where
         // The announcement posts as the session's own bot, which only the
         // row remembers.
         let session = self.sessions.get_session(session_id).await?;
+        let persona = self.reply_persona(&session).await?;
 
         Ok(Some(SessionAnnouncement {
             session_id,
             bot_id: session.bot_id,
-            kind: AgentKind::for_session(session.bot_id, &session.harness),
+            is_coding: persona.is_coding,
             origin_parent: origin.parent,
             origin_thread_id: origin.thread_id,
             origin_message_id: origin.message_id,
@@ -246,11 +247,10 @@ where
     ///
     /// Best-effort, like every lifecycle publish: the turn is over or still
     /// running regardless, and the queue behind it drains whether or not the
-    /// thread hears. The bot and runtime kind are re-read from the row, as
-    /// they were when the turn was announced. A turn nobody announced - no
-    /// origin, no actor, or no message posted - has nothing to resolve.
-    /// Whether the kind's message needs resolving at all is the announcer's
-    /// call.
+    /// thread hears. The bot and its persona are re-read as they were when
+    /// the turn was announced. A turn nobody announced - no origin, no
+    /// actor, or no message posted - has nothing to resolve. Whether the
+    /// persona's message needs resolving at all is the announcer's call.
     pub(super) async fn resolve_reply(
         &self,
         session_id: AgentSessionId,
@@ -279,12 +279,24 @@ where
                 return;
             }
         };
+        let persona = match self.reply_persona(&session).await {
+            Ok(persona) => persona,
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    %session_id,
+                    %message_id,
+                    "leaving a turn's reply unresolved: the session's persona is unavailable"
+                );
+                return;
+            }
+        };
         if let Err(error) = self
             .announcer
             .resolve(ResolvedReply {
                 session_id,
                 bot_id: session.bot_id,
-                kind: AgentKind::for_session(session.bot_id, &session.harness),
+                is_coding: persona.is_coding,
                 message_id,
                 origin_parent: origin.parent.clone(),
                 triggered_by: triggered_by.clone(),

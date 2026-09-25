@@ -1,13 +1,9 @@
-import {
-  getDocumentCommentTarget,
-  navigateCalendarPreviewToTarget,
-  navigateChannelEntityToTarget,
-  navigateDocumentEntityToComment,
-} from '@app/features/next-soup/utils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createContextProvider } from '@solid-primitives/context';
+import deepEqual from 'fast-deep-equal';
 import {
+  type Accessor,
   createMemo,
   createRenderEffect,
   createSignal,
@@ -17,14 +13,11 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  type PreviewPanelSelection,
-  previewBlockTarget,
-} from './previewTarget';
-
-export type { PreviewPanelSelection } from './previewTarget';
-
 import { ViewShell } from '../view-shell/ViewShell';
+import type {
+  PreviewBlockTarget,
+  PreviewPanelSelection,
+} from './previewTarget';
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
@@ -37,31 +30,31 @@ import {
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
     (props: {
-      previewEntity: PreviewPanelSelection;
+      previewTarget: PreviewBlockTarget;
+      previewEntity?: PreviewPanelSelection;
       onFocusOut?: VoidFunction;
     }) => ({
+      previewTarget: () => props.previewTarget,
       previewEntity: () => props.previewEntity,
       onFocusOut: () => props.onFocusOut?.(),
     })
   );
 
-export type PreviewPanelProps = {
-  selectedEntity: PreviewPanelSelection | undefined;
-  /**
-   * Bumped by the host when the user re-opens the selection already shown, so
-   * the block navigates to its target again.
-   */
-  navigationRequest?: number;
-  orchestrator: BlockOrchestrator;
+export type PreviewFrameProps = {
   splitPanelContext: SplitPanelContextType;
   onFocusOut?: VoidFunction;
   ref?: (el: HTMLElement) => void;
   headerLeading?: JSX.Element;
+  /** A new value marks a new location, which hands focus back to the host. */
+  locationKey?: Accessor<unknown>;
+  children: JSX.Element;
 };
 
-function PreviewPanelContent(
-  props: PreviewPanelProps & { selectedEntity: PreviewPanelSelection }
-) {
+/**
+ * Inline preview chrome: header and toolbar slots, focus containment, and a
+ * split-panel context scoped to the preview. Content mounts as children.
+ */
+export function PreviewFrame(props: PreviewFrameProps) {
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
@@ -69,85 +62,11 @@ function PreviewPanelContent(
   const [attachHotkeys, previewHotkeyScope] =
     useHotkeyDOMScope('preview-panel');
 
-  const blockInstance = createMemo<
-    ReturnType<BlockOrchestrator['createBlockInstance']> | undefined
-  >((previous) => {
-    const entity = props.selectedEntity;
-
-    const target = previewBlockTarget(entity);
-
-    if (previous?.type === target.blockType && previous.id === target.blockId) {
-      return previous;
-    }
-
-    return props.orchestrator.createBlockInstance(
-      target.blockType,
-      target.blockId,
-      {
-        aliasContext: target.aliasContext,
-        params: target.params,
-      }
-    );
-  });
-
-  // Cache reconciliation can replace an unchanged channel object. Only a new
-  // selection or explicit target should navigate/reset focus, not fresh metadata
-  // or notifications. Keep the live entity available to the preview context.
-  const navigationSelection = createMemo(() => {
-    const entity = props.selectedEntity;
-    if (
-      entity.type === 'channel' ||
-      entity.type === 'channel_message' ||
-      entity.type === 'channel_thread'
-    ) {
-      return JSON.stringify([
-        entity.type,
-        entity.id,
-        entity.type === 'channel' ? undefined : entity.channelId,
-        entity.type === 'channel' ? undefined : entity.messageId,
-        entity.type === 'channel' ? undefined : entity.threadId,
-        entity.target?.messageId,
-        entity.target?.threadId,
-      ]);
-    }
-    if (entity.type === 'document') {
-      return JSON.stringify([
-        entity.type,
-        entity.id,
-        getDocumentCommentTarget(entity)?.commentId,
-      ]);
-    }
-    return entity;
-  });
-
-  const navigation = createMemo(
-    () => ({
-      selection: navigationSelection(),
-      request: props.navigationRequest ?? 0,
-    }),
-    undefined,
-    {
-      equals: (a, b) => a.selection === b.selection && a.request === b.request,
-    }
-  );
-
   createRenderEffect(
-    on(navigation, () => {
-      const entity = props.selectedEntity;
-      setInteractedWith(false);
-      if (!blockInstance()) return;
-      if (
-        entity.type === 'channel' ||
-        entity.type === 'channel_message' ||
-        entity.type === 'channel_thread'
-      ) {
-        void navigateChannelEntityToTarget(entity, props.orchestrator);
-      } else if (entity.type === 'calendar_event') {
-        void navigateCalendarPreviewToTarget(entity, props.orchestrator);
-      } else if (entity.type === 'document') {
-        void navigateDocumentEntityToComment(entity, props.orchestrator);
-      }
-    })
+    on(
+      () => props.locationKey?.(),
+      () => setInteractedWith(false)
+    )
   );
 
   return (
@@ -235,33 +154,111 @@ function PreviewPanelContent(
             toolbarCollapser: toolbarCollapseController.collapser,
           }}
         >
-          <PreviewPanelContext
-            previewEntity={props.selectedEntity}
-            onFocusOut={props.onFocusOut}
-          >
-            <Suspense>
-              <Show when={blockInstance()}>
-                {(instance) => <Dynamic component={instance().element} />}
-              </Show>
-            </Suspense>
-          </PreviewPanelContext>
+          <Suspense>{props.children}</Suspense>
         </SplitPanelContext.Provider>
       </div>
     </div>
   );
 }
 
+export type PreviewPanelProps = {
+  target: PreviewBlockTarget | undefined;
+  /** Re-open the same target without replacing its mounted block. */
+  navigationRequest?: number;
+  /** Live selection metadata when a row opened this route. */
+  selectedEntity?: PreviewPanelSelection;
+  orchestrator: BlockOrchestrator;
+  splitPanelContext: SplitPanelContextType;
+  onFocusOut?: VoidFunction;
+  ref?: (el: HTMLElement) => void;
+  headerLeading?: JSX.Element;
+};
+
+function sameLocation(left: PreviewBlockTarget, right: PreviewBlockTarget) {
+  return (
+    left.blockType === right.blockType &&
+    left.blockId === right.blockId &&
+    deepEqual(left.params, right.params)
+  );
+}
+
+function PreviewBlock(
+  props: PreviewPanelProps & { target: PreviewBlockTarget }
+) {
+  const blockInstance = createMemo<
+    ReturnType<BlockOrchestrator['createBlockInstance']> | undefined
+  >((previous) => {
+    const { blockType, blockId, aliasContext, params } = props.target;
+
+    if (previous?.type === blockType && previous.id === blockId) {
+      return previous;
+    }
+
+    return props.orchestrator.createBlockInstance(blockType, blockId, {
+      aliasContext,
+      params,
+    });
+  });
+
+  // Fresh objects for the same block and params are not a navigation. Only a
+  // new block or a new location should drive the block or reset focus.
+  const location = createMemo(() => props.target, undefined, {
+    equals: sameLocation,
+  });
+  const navigation = createMemo(
+    () => ({ target: location(), request: props.navigationRequest ?? 0 }),
+    undefined,
+    {
+      equals: (a, b) =>
+        a.request === b.request && sameLocation(a.target, b.target),
+    }
+  );
+  const locate = async (target: PreviewBlockTarget) => {
+    const handle = await props.orchestrator.getBlockHandle(
+      target.blockId,
+      target.blockType
+    );
+    if (target.params) await handle?.goToLocationFromParams(target.params);
+    else if (target.blockType === 'channel') await handle?.goToLatest();
+  };
+
+  createRenderEffect(
+    on(navigation, ({ target }) => {
+      if (!blockInstance()) return;
+      void locate(target);
+    })
+  );
+
+  return (
+    <PreviewFrame
+      splitPanelContext={props.splitPanelContext}
+      onFocusOut={props.onFocusOut}
+      ref={props.ref}
+      headerLeading={props.headerLeading}
+      locationKey={navigation}
+    >
+      <PreviewPanelContext
+        previewTarget={props.target}
+        previewEntity={props.selectedEntity}
+        onFocusOut={props.onFocusOut}
+      >
+        <Show when={blockInstance()}>
+          {(instance) => <Dynamic component={instance().element} />}
+        </Show>
+      </PreviewPanelContext>
+    </PreviewFrame>
+  );
+}
+
 /**
- * Renders an admitted selection. Hosts use createPreviewSelectionGuard before
- * changing selection so conflicts never replace their current detail view.
+ * Renders an admitted block target inline. Hosts use createPreviewSelectionGuard
+ * before changing the target so conflicts never replace their current detail view.
  */
 export function PreviewPanel(props: PreviewPanelProps) {
   return (
     <div class="flex size-full min-h-0">
-      <Show when={props.selectedEntity}>
-        {(selectedEntity) => (
-          <PreviewPanelContent {...props} selectedEntity={selectedEntity()} />
-        )}
+      <Show when={props.target}>
+        {(target) => <PreviewBlock {...props} target={target()} />}
       </Show>
     </div>
   );

@@ -2,6 +2,7 @@ import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
 import {
   deriveMagicChipPresentation,
+  flattenToLine,
   presentationStatus,
 } from './presentation';
 
@@ -551,5 +552,25 @@ describe('presentationStatus', () => {
     expect(presentationStatus({ kind: 'settled', markdown: 'Fixed.' })).toEqual(
       { label: 'Done', busy: false }
     );
+  });
+});
+
+describe('flattenToLine', () => {
+  it('collapses block structure onto one line', () => {
+    expect(
+      flattenToLine('## Fixed\n\n- The **batch** fold now\n  buffers it.')
+    ).toBe('Fixed The batch fold now buffers it.');
+  });
+
+  it('keeps snake_case identifiers whole but drops emphasis', () => {
+    expect(flattenToLine('It buffers `turn_ended` _before_ the replay.')).toBe(
+      'It buffers turn_ended before the replay.'
+    );
+  });
+
+  it('drops fenced code entirely', () => {
+    expect(
+      flattenToLine('Run it:\n\n```sh\ncargo test\n```\n\nThen look.')
+    ).toBe('Run it: Then look.');
   });
 });

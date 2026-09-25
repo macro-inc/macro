@@ -49,3 +49,30 @@ describe('splitLeadingAgentSessionLink', () => {
     });
   });
 });
+
+describe('a session mention the agent meant as prose', () => {
+  it('keeps a chip the message keeps writing after on the same line', () => {
+    const content =
+      '<m-agent-session-mention>{"id":"s1","label":"Agent session"}</m-agent-session-mention> - picked this up there';
+    expect(splitLeadingAgentSessionLink(content)).toEqual({
+      link: undefined,
+      body: content,
+    });
+  });
+
+  it('lifts a chip that stands alone as its own paragraph', () => {
+    expect(
+      splitLeadingAgentSessionLink(
+        '<m-agent-session-mention>{"id":"s1","label":"Agent session"}</m-agent-session-mention>\n\nOn it.'
+      )
+    ).toEqual({ link: { sessionId: 's1' }, body: 'On it.' });
+  });
+
+  it('lifts a chip that is the whole message', () => {
+    expect(
+      splitLeadingAgentSessionLink(
+        '<m-agent-session-mention>{"id":"s1","label":"Agent session"}</m-agent-session-mention>'
+      )
+    ).toEqual({ link: { sessionId: 's1' }, body: '' });
+  });
+});

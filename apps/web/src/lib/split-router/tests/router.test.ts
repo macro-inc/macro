@@ -889,6 +889,46 @@ describe('split router', () => {
     expect(routeParams(router.route(first!.splitId)).folderId).toBe('three');
   });
 
+  it('ignores navigation and search writes that resolve to the current destination', async () => {
+    const middleware = vi.fn<SplitRouterMiddleware>(() => undefined);
+    const location = createMemorySplitRouterLocation(
+      '/drive/folder/one?s0.drive.sort=name'
+    );
+    const layout = createLayout();
+    const router = createSplitRouter({
+      layout,
+      routes,
+      location,
+      middleware: [middleware],
+    });
+    await router.settled();
+    const splitId = layout.snapshot().entries[0]!.splitId;
+    const listener = vi.fn();
+    router.subscribe(listener);
+    middleware.mockClear();
+    const committed = location.history().length;
+
+    router.navigate(splitId, '/drive/folder/one');
+    router.navigate(splitId, {
+      route: driveFolderRoute,
+      params: { folderId: 'one' },
+    });
+    router.navigate(splitId, '/drive/folder/one', { replace: true });
+    router.updateSearch(splitId, 'drive', { sort: ['name'] });
+    await router.settled();
+
+    expect(middleware).not.toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
+    expect(location.history()).toHaveLength(committed);
+    expect(router.canGo(splitId, -1)).toBe(false);
+
+    // A real change still transitions.
+    router.updateSearch(splitId, 'drive', { sort: ['size'] });
+    await router.settled();
+    expect(middleware).toHaveBeenCalledOnce();
+    expect(location.read().search).toBe('?s0.drive.sort=size');
+  });
+
   it('pushes a repeated route as a new history entry', async () => {
     const location = createMemorySplitRouterLocation('/drive/folder/one');
     const layout = createLayout();

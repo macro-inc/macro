@@ -309,10 +309,10 @@ function Toggle() {
     <Show when={ctx.hasSections()}>
       <Button
         depth={2}
-        variant={isTouchDevice() ? 'ghost' : 'outline'}
-        size="icon-sm"
+        variant="plain"
+        size="icon-md"
         class={cn(
-          !isTouchDevice() && 'bg-surface',
+          'rounded-xl',
           isTouchDevice() &&
             'rounded-full border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
           isTouchDevice() && ctx.isOpen() && 'text-accent'

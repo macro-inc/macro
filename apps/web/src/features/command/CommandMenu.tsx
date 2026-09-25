@@ -578,7 +578,7 @@ export function CommandMenuInner(props: {
 
   return (
     <CommandMenuShell
-      class={cn('max-h-[75vh] rounded-xl', props.class)}
+      class={cn('max-h-[75vh]', props.class)}
       ref={setCommandMenuRef}
       depth={props.depth}
     >

@@ -255,6 +255,18 @@ export function createSplitRouter<TSplitId>(
     if (index < 0) return;
     return accepted[index];
   };
+  // A settled destination with the same URL and route state needs no new key,
+  // transition, history entry, or middleware run.
+  const isCurrentDestination = (splitId: TSplitId, entry: SplitRouterEntry) => {
+    if (transitions.has(GLOBAL_TRANSITION) || transitions.pending(splitId))
+      return false;
+    const current = findEntry(splitId);
+    return (
+      current !== undefined &&
+      deepEqual(current.location, entry.location) &&
+      Object.is(current.state, entry.state)
+    );
+  };
 
   const findClaimedSplit = (
     claim: SplitRouteClaim,
@@ -788,8 +800,11 @@ export function createSplitRouter<TSplitId>(
       };
       if (state !== undefined) next.state = state;
 
-      let targetId: TSplitId | undefined;
-      if (target !== 'new-split') targetId = target;
+      const targetId =
+        target === 'new-split' ? undefined : (target as TSplitId);
+      if (targetId !== undefined && isCurrentDestination(targetId, next)) {
+        return;
+      }
       transitionEntry({
         key: targetId ?? Symbol('new-split-transition'),
         splitId: targetId,
@@ -826,6 +841,7 @@ export function createSplitRouter<TSplitId>(
           [namespace]: update,
         }),
       };
+      if (isCurrentDestination(splitId, next)) return;
 
       transitionEntry({
         key: splitId,

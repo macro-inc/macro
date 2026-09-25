@@ -1,5 +1,10 @@
 # AI Chat (Agents)
 
+User-sent messages in chat and agent transcripts use an ink-colored bubble with
+`InvertUtil` in light themes. Dark themes use `Layer depth={3}` for the slightly
+lighter bubble with the normal text palette. Preview Markdown and controls at
+`/app/debug/ui?ui=invert-util` under **User-sent AI message**.
+
 ## Uploading files with AI
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
@@ -63,10 +68,14 @@ permission failures should display a failed tool call without a successful resul
 - The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
   grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
   Macro’s available models with readable names (for example, **Sonnet 5**) and
-  provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
-  Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
+  provider or model icons aligned with the agent icons. The in-memory catalog
+  offers the closed Anthropic and OpenAI chat models, Fireworks-hosted
+  **Kimi K3**, **DeepSeek V4 Pro**, and **Muse Glimmer**, and Google's
+  **Gemini 3.8 Flash**; older Sonnet and Opus versions are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
+  A model chosen from that **Models** list is remembered in local storage as the
+  default for Macro's in-memory agent until another Models entry is picked.
   The built-in Macro agent is the only agent excluded from these sections; its models remain available.
   Unavailable paired agents stay visible with a reason. Model discovery uses the
   selected runtime, including Claude Cloud. Every coding agent opens the repository

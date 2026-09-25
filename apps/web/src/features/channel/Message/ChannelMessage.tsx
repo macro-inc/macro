@@ -167,7 +167,7 @@ function GroupedMessageLayout(props: {
           />
           {/* No sender line to sit on: the link takes the top right of the
               content row instead. */}
-          <Message.AgentSessionLink class="pt-1" />
+          <Message.AgentSessionLink class="mt-0.5" />
         </div>
       </Message.Slot>
       <Message.Slot

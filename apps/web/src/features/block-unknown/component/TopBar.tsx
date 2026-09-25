@@ -20,8 +20,8 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
+import IconShared from '@icon/share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
-import IconShared from '@phosphor/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { useGetFileBlob } from '../signal/blockData';
 

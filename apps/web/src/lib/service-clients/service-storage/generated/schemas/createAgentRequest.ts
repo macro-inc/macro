@@ -37,6 +37,9 @@ asking. Omit to always prompt. */
   harness_id?: CreateAgentRequestHarnessId;
   /** Instructions supplied to the agent at the start of a conversation. */
   instructions: string;
+  /** Whether the agent is a coding agent: a mention is answered with a magic
+chip into its live session (`true`) or a reply in the thread (`false`). */
+  is_coding: boolean;
   /** Which MCP servers sessions of this agent are handed. */
   mcp?: AgentMcpServers;
   /** Display name. */

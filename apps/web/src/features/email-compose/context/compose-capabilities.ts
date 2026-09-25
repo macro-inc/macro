@@ -119,10 +119,15 @@ export interface EmailAttachmentStorage {
 
 export interface EmailDelivery {
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
-  unschedule(input: { draftId: string; inboxId?: string }): Promise<void>;
+  unschedule(input: {
+    draftId: string;
+    threadId?: string;
+    inboxId?: string;
+  }): Promise<void>;
   schedule(
     input: {
       draftId: string;
+      threadId?: string;
       sendTime: string;
       includeSignature?: boolean;
     },
@@ -237,6 +242,8 @@ export interface EmailEditorFiles {
     directories: FileSystemDirectoryEntry[];
     dropEvent?: DragEvent;
     onUploaded(ids: string[]): void;
+    /** Videos, which email clients drop from HTML; callers attach them instead of inlining. */
+    onVideos?(files: File[]): void;
   }): void;
 }
 

@@ -1,4 +1,3 @@
-import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -29,32 +28,22 @@ vi.mock('@ui', async () => ({
 
 afterEach(cleanup);
 
-describe.each(['recent', 'new chat'] as const)('Home %s press', (kind) => {
+describe('Home recent press', () => {
   function setup() {
     const activate = vi.fn();
-    const view = render(() =>
-      kind === 'new chat' ? (
-        <SidebarCreateHeader
-          title="Home"
-          label="New chat"
-          onCreate={activate}
-        />
-      ) : (
-        <HomeListEntity
-          entity={{
-            type: 'chat',
-            id: 'recent-chat',
-            name: 'Recent chat',
-            ownerId: 'test-user',
-          }}
-          occurrenceKey="recent-chat"
-          onClick={activate}
-        />
-      )
-    );
-    const item = view.container.querySelector<HTMLElement>(
-      kind === 'new chat' ? 'button' : '[data-home-item]'
-    )!;
+    const view = render(() => (
+      <HomeListEntity
+        entity={{
+          type: 'chat',
+          id: 'recent-chat',
+          name: 'Recent chat',
+          ownerId: 'test-user',
+        }}
+        occurrenceKey="recent-chat"
+        onClick={activate}
+      />
+    ));
+    const item = view.container.querySelector<HTMLElement>('[data-home-item]')!;
     return { activate, item };
   }
 
@@ -62,9 +51,7 @@ describe.each(['recent', 'new chat'] as const)('Home %s press', (kind) => {
     const { activate, item } = setup();
     fireEvent.mouseDown(item, { button: 0, detail: 1, ctrlKey: true });
     expect(activate).toHaveBeenCalledTimes(1);
-    if (kind === 'recent') {
-      expect(activate.mock.calls[0][0].ctrlKey).toBe(true);
-    }
+    expect(activate.mock.calls[0][0].ctrlKey).toBe(true);
     fireEvent.mouseUp(item, { button: 0, detail: 1 });
     fireEvent.click(item, { button: 0, detail: 1 });
     expect(activate).toHaveBeenCalledTimes(1);
