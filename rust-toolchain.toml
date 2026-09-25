@@ -14,4 +14,10 @@ targets = [
   # whatever distro they have, so it must not link a host libc.
   "aarch64-unknown-linux-musl",
   "x86_64-unknown-linux-musl",
+  # The arm64 iOS Simulator slice for the Appetize PR preview
+  # (see `ios_preview`). It has to live here rather than in the workflow: the
+  # Nix dev shell's `rustup` is a shim whose `target add` silently exits 0, so
+  # installing it from a CI step would appear to succeed and then fail at link
+  # time.
+  "aarch64-apple-ios-sim",
 ]
