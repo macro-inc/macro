@@ -163,6 +163,7 @@ export * from './sessionStatusDtoOneOfFiveKind';
 export * from './sessionStatusDtoOneOfKind';
 export * from './sessionStatusDtoOneOfThree';
 export * from './sessionStatusDtoOneOfThreeKind';
+export * from './setAgentSessionArchivedRequest';
 export * from './sharePermissionV2';
 export * from './sharePermissionV2ChannelSharePermissions';
 export * from './sharePermissionV2LinkShare';

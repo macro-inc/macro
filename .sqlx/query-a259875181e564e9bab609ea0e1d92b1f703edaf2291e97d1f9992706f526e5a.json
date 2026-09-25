@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session\n            SET name = $2,\n                modified_at = NOW()\n            WHERE id = $1\n              AND name = $3\n              AND NOT is_archived\n            RETURNING modified_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "modified_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a259875181e564e9bab609ea0e1d92b1f703edaf2291e97d1f9992706f526e5a"
+}

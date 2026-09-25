@@ -359,6 +359,63 @@ async fn manual_rename_trims_persists_and_publishes() {
 }
 
 #[tokio::test]
+async fn archive_is_persisted_published_and_blocks_rename() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let realtime = RecordingRealtime::default();
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+
+    service
+        .set_archived(&owner_access(session), true)
+        .await
+        .expect("archive session");
+
+    assert!(repo.get(session).await.expect("get session").is_archived);
+    assert_eq!(realtime.updated(), vec![session]);
+    assert!(matches!(
+        service
+            .rename_session(&owner_access(session), "New Name")
+            .await,
+        Err(AgentSessionError::Archived(id)) if id == session
+    ));
+    assert!(matches!(
+        service
+            .send_action(
+                session,
+                None,
+                AgentAction::prompt("still there?"),
+                AgentActionId::mint(),
+            )
+            .await,
+        Err(AgentSessionError::Archived(id)) if id == session
+    ));
+    assert!(
+        !repo
+            .set_name_if_default(session, "Generated Name")
+            .await
+            .expect("skip generated rename for archived session")
+    );
+
+    service
+        .set_archived(&owner_access(session), false)
+        .await
+        .expect("unarchive session");
+    service
+        .rename_session(&owner_access(session), "New Name")
+        .await
+        .expect("rename unarchived session");
+}
+
+#[tokio::test]
 async fn manual_rename_rejects_blank_and_overlong_names() {
     let repo = InMemoryAgentSessionRepo::new();
     let session = test_session();
@@ -567,6 +624,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
 
     async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
         self.repo.set_name(id, name).await
+    }
+
+    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
+        self.repo.set_archived(id, is_archived).await
     }
 
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {

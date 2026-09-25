@@ -40,6 +40,8 @@ creator owns the session, so a create response always says so. */
   /** Instructions the session's runtime works under, when any were stated
 at creation. Absent otherwise, so existing payloads are unchanged. */
   instructions?: AgentSessionResponseInstructions;
+  /** Whether the session is archived and read-only. */
+  isArchived: boolean;
   /** Model slug. */
   model: string;
   /** When the session was last modified. */

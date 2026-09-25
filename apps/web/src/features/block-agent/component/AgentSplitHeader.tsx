@@ -21,9 +21,11 @@ import type { AgentSessionEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
+import TrayIcon from '@phosphor/tray.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { changeSessionArchiveState } from '../queries/change-session-archive-state';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
 import {
   harnessTitle,
@@ -32,6 +34,36 @@ import {
 } from './compose-agent-session-options';
 
 export { harnessTitle, sessionRepositoryUrl };
+
+export function agentSessionFileOperations(
+  session: AgentSessionResponse | undefined,
+  permissions: Permissions,
+  setArchived: () => void
+): FileOperation[] {
+  const repositoryUrl = sessionRepositoryUrl(session);
+  return [
+    ...(!session?.isArchived ? [{ op: 'rename' } as const] : []),
+    ...(permissions === Permissions.OWNER
+      ? [
+          {
+            label: session?.isArchived ? 'Unarchive' : 'Archive',
+            icon: TrayIcon,
+            action: setArchived,
+          },
+        ]
+      : []),
+    { op: 'delete' },
+    ...(repositoryUrl
+      ? [
+          {
+            label: 'Open repository',
+            icon: GitBranch,
+            action: () => openExternalUrl(repositoryUrl),
+          },
+        ]
+      : []),
+  ];
+}
 
 /** Shared title precedence for standalone and workspace agent sessions. */
 export function agentSessionTitle(
@@ -77,6 +109,7 @@ export function AgentSplitHeader(props: {
       type: 'agent_session',
       id,
       name: title(),
+      isArchived: session.isArchived,
       ownerId: session.ownerId,
       botId: session.botId,
       status:
@@ -128,19 +161,13 @@ export function AgentSplitHeader(props: {
     },
   ];
 
-  const openRepository: FileOperation = {
-    label: 'Open repository',
-    icon: GitBranch,
-    action: () => {
-      const url = sessionRepositoryUrl(props.session);
-      if (url) openExternalUrl(url);
-    },
+  const setArchived = async () => {
+    const id = sessionId();
+    if (!id || !props.session) return;
+    await changeSessionArchiveState(id, !props.session.isArchived);
   };
-  const ops = (): FileOperation[] => [
-    { op: 'rename' },
-    { op: 'delete' },
-    ...(sessionRepositoryUrl(props.session) ? [openRepository] : []),
-  ];
+  const ops = () =>
+    agentSessionFileOperations(props.session, permissions(), setArchived);
 
   return (
     <>

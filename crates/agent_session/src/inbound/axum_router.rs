@@ -192,6 +192,10 @@ where
             "/{session_id}/name",
             put(rename_agent_session_handler::<T, Access, Auth>),
         )
+        .route(
+            "/{session_id}/archived",
+            put(set_agent_session_archived_handler::<T, Access, Auth>),
+        )
         .with_state(state)
 }
 
@@ -357,6 +361,9 @@ impl IntoResponse for AgentSessionApiError {
             Self::Domain(error @ AgentSessionError::TooManyPreviewIds(_)) => {
                 (StatusCode::BAD_REQUEST, error.to_string()).into_response()
             }
+            Self::Domain(error @ AgentSessionError::Archived(_)) => {
+                (StatusCode::CONFLICT, error.to_string()).into_response()
+            }
             // Somebody else answered first, or the agent moved on: nothing to
             // answer anymore, and the transcript already shows how it went.
             Self::Domain(error @ AgentSessionError::PermissionRequestNotFound(_)) => {
@@ -417,6 +424,14 @@ impl From<SessionStatusDto> for SessionStatus {
 pub struct RenameAgentSessionRequest {
     /// New user-facing name. Leading and trailing whitespace is discarded.
     pub name: String,
+}
+
+/// Request body for archiving or unarchiving an agent session.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetAgentSessionArchivedRequest {
+    /// The requested archive state.
+    pub is_archived: bool,
 }
 
 /// Request body for a control operation on a live session.
@@ -518,6 +533,8 @@ pub struct AgentSessionResponse {
     pub id: Uuid,
     /// User-facing session name.
     pub name: String,
+    /// Whether the session is archived and read-only.
+    pub is_archived: bool,
     /// The user who created and owns the session.
     pub owner_id: String,
     /// Whether the caller may drive the session - prompt it, answer its
@@ -602,6 +619,7 @@ impl AgentSessionResponse {
         Self {
             id: session.id.as_uuid(),
             name: session.name,
+            is_archived: session.is_archived,
             owner_id: session.owner_id.to_string(),
             can_edit,
             thread_id: session.thread_id,
@@ -653,10 +671,11 @@ pub async fn get_agent_session_handler<
         .service
         .get_session(AgentSessionId::new_from_uuid(session_id))
         .await?;
-    let can_edit = access
-        .entity_access_receipt
-        .entity_permission()
-        .satisfies::<EditAccessLevel>();
+    let can_edit = !session.is_archived
+        && access
+            .entity_access_receipt
+            .entity_permission()
+            .satisfies::<EditAccessLevel>();
 
     Ok(Json(AgentSessionResponse::new(session, can_edit)))
 }
@@ -817,6 +836,7 @@ pub async fn preview_agent_sessions_handler<
         (status = 400, body = String),
         (status = 401, body = String),
         (status = 403, body = String),
+        (status = 409, body = String, description = "The session is archived"),
         (status = 500, body = String),
     )
 )]
@@ -835,6 +855,39 @@ pub async fn rename_agent_session_handler<
     state
         .service
         .rename_session(&access.entity_access_receipt, &request.name)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    put,
+    path = "/agent-sessions/{session_id}/archived",
+    tag = "agent-sessions",
+    operation_id = "set_agent_session_archived",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    request_body = SetAgentSessionArchivedRequest,
+    responses(
+        (status = 204),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Archive or unarchive an agent session.
+#[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
+pub async fn set_agent_session_archived_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    Path(session_id): Path<Uuid>,
+    Json(request): Json<SetAgentSessionArchivedRequest>,
+) -> Result<StatusCode, AgentSessionApiError> {
+    state
+        .service
+        .set_archived(&access.entity_access_receipt, request.is_archived)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

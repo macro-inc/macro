@@ -120,6 +120,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** The session's user-facing display name. */
   readonly name = this.field('name');
 
+  /** Whether the session is archived and read-only. */
+  readonly isArchived = this.field('isArchived');
+
   /** The model currently configured for the session. */
   readonly model = this.field('model');
 
@@ -156,6 +159,25 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.renameAgentSession({
         path: { session_id: this.id },
         body: { name },
+      })
+    );
+  }
+
+  /** Archive this session, making it read-only until unarchived. */
+  async archive(): Promise<void> {
+    await this.setArchived(true);
+  }
+
+  /** Restore an archived session so it can be edited and prompted again. */
+  async unarchive(): Promise<void> {
+    await this.setArchived(false);
+  }
+
+  private async setArchived(isArchived: boolean): Promise<void> {
+    await this.mutate((client) =>
+      client.agentHarness.setAgentSessionArchived({
+        path: { session_id: this.id },
+        body: { isArchived },
       })
     );
   }

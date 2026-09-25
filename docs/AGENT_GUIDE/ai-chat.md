@@ -54,7 +54,8 @@ permission failures should display a failed tool call without a successful resul
   Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
-  Rename, Favorite, Copy link, Share, Delete, and the other session actions.
+  Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
+  actions. Archived sessions are grouped at the bottom under **Archived**.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
   non-paragraph blocks expand immediately, even with short text. This also applies
@@ -181,6 +182,9 @@ permission failures should display a failed tool call without a successful resul
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
   choose another. Stop, queued-message advancement, and quoting remain available.
+  Archived sessions are read-only: Rename and all message controls are unavailable,
+  and an **Unarchive** action replaces the composer at the bottom. Archive /
+  Unarchive is also available from the title dropdown.
 - Touch devices and users outside the flag retain the Owned / Running / Shared /
   Automations / Skills list. On touch devices, conversation links open standalone
   agent sessions or legacy chats instead of the desktop Agents workspace. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat

@@ -10,9 +10,10 @@ import { AgentComposer } from '@app/features/block-agent/component/AgentComposer
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { AgentSessionReadMarker } from '@app/features/block-agent/component/AgentSessionReadMarker';
 import {
+  agentSessionFileOperations,
   agentSessionTitle,
-  sessionRepositoryUrl,
 } from '@app/features/block-agent/component/AgentSplitHeader';
+import { ArchivedSessionFooter } from '@app/features/block-agent/component/ArchivedSessionFooter';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
@@ -43,9 +44,9 @@ import type { AgentSessionEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
 import type { NotificationSource } from '@notifications/notification-source';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import GitBranch from '@phosphor/git-branch.svg';
 import { EmptyStatePanel } from '@ui';
 import { onCleanup, Show } from 'solid-js';
+import { changeSessionArchiveState } from '../../block-agent/queries/change-session-archive-state';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
 import { Topbar } from './Topbar';
@@ -96,6 +97,7 @@ function SessionContent(props: {
       type: 'agent_session',
       id,
       name: title(),
+      isArchived: current.isArchived,
       ownerId: current.ownerId,
       botId: current.botId,
       status:
@@ -117,6 +119,12 @@ function SessionContent(props: {
       userPermissions: permissions(),
     };
   });
+  const setArchived = async () => {
+    const id = sessionId();
+    const current = session();
+    if (!id || !current) return;
+    await changeSessionArchiveState(id, !current.isArchived);
+  };
   return (
     <>
       <AgentSessionReadMarker
@@ -165,22 +173,11 @@ function SessionContent(props: {
                         entity={current()}
                         permissions={permissions()}
                         onDelete={props.onDeleted}
-                        ops={[
-                          { op: 'rename' },
-                          { op: 'delete' },
-                          ...(sessionRepositoryUrl(session())
-                            ? [
-                                {
-                                  label: 'Open repository',
-                                  icon: GitBranch,
-                                  action: () => {
-                                    const url = sessionRepositoryUrl(session());
-                                    if (url) openExternalUrl(url);
-                                  },
-                                },
-                              ]
-                            : []),
-                        ]}
+                        ops={agentSessionFileOperations(
+                          session(),
+                          permissions(),
+                          setArchived
+                        )}
                         tools={[
                           {
                             label: () => {
@@ -274,13 +271,22 @@ function SessionContent(props: {
                 </div>
                 <div class="dock">
                   <div class="composer-anchor flex flex-col gap-2">
-                    <ChangesHandoff />
-                    <ReviewNotesDock />
-                    <AgentComposer
-                      autofocus
-                      input={ChatSessionInput}
-                      modelSelector={SessionModelSelector}
-                    />
+                    <Show
+                      when={!session()?.isArchived}
+                      fallback={
+                        <Show when={sessionId()}>
+                          {(id) => <ArchivedSessionFooter sessionId={id()} />}
+                        </Show>
+                      }
+                    >
+                      <ChangesHandoff />
+                      <ReviewNotesDock />
+                      <AgentComposer
+                        autofocus
+                        input={ChatSessionInput}
+                        modelSelector={SessionModelSelector}
+                      />
+                    </Show>
                   </div>
                 </div>
               </Show>

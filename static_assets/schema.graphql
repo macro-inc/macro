@@ -4042,6 +4042,10 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
+	Whether the session is archived and read-only.
+	"""
+	isArchived: Boolean!
+	"""
 	The principal identifier of the owner.
 	"""
 	ownerId: String!

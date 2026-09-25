@@ -6,6 +6,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { changeSessionArchiveState } from '@app/features/block-agent/queries/change-session-archive-state';
 import {
   type EntityActionListState,
   type EntityActionViewContext,
@@ -16,11 +17,14 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { MenuItem } from '@core/component/ContextMenu';
+import { useUserId } from '@core/context/user';
 import { unreadFilterFn } from '@entity/utils/filter';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlugIcon from '@phosphor/plugs-connected.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
+import TrayIcon from '@phosphor/tray.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
@@ -65,6 +69,15 @@ function ConversationContextMenu(props: {
   list: EntityActionListState;
   children: JSX.Element;
 }) {
+  const userId = useUserId();
+  const setArchived = async () => {
+    if (props.conversation.type !== 'agent_session') return;
+    await changeSessionArchiveState(
+      props.conversation.id,
+      !props.conversation.isArchived
+    );
+  };
+
   return (
     <SoupEntityContextMenu
       entity={props.conversation}
@@ -75,6 +88,16 @@ function ConversationContextMenu(props: {
       // The nav is a fixed-height flex column, so the trigger's default
       // `h-full` would split that height between the rows; keep rows content-sized.
       class="block h-auto w-full shrink-0"
+      extraItems={
+        props.conversation.type === 'agent_session' &&
+        props.conversation.ownerId === userId() ? (
+          <MenuItem
+            icon={TrayIcon}
+            text={props.conversation.isArchived ? 'Unarchive' : 'Archive'}
+            onClick={setArchived}
+          />
+        ) : undefined
+      }
       onOpenChange={(open) => {
         if (!open) return;
         props.list.focus.set(props.conversation.id);

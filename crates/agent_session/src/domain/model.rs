@@ -211,6 +211,8 @@ pub struct AgentSession {
     pub id: AgentSessionId,
     /// User-facing session name.
     pub name: String,
+    /// Whether the session is archived and therefore read-only.
+    pub is_archived: bool,
     /// Who created and owns the session. Immutable for its life.
     pub owner_id: Owner,
     /// The root message where the bot was originally invoked, if any.

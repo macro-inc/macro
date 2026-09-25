@@ -310,6 +310,9 @@ where
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
+                if session.is_archived {
+                    return Err(AgentSessionError::Archived(session_id).into());
+                }
                 if AgentKind::for_session(session.bot_id, &session.harness)
                     == AgentKind::ClaudeCloud
                     && !actor
@@ -327,8 +330,12 @@ where
             HarnessCommand::Open(_)
             | HarnessCommand::Turn(_)
             | HarnessCommand::SessionStopped { .. }
-            | HarnessCommand::SetSandboxSize(_)
             | HarnessCommand::Delete => {}
+            HarnessCommand::SetSandboxSize(_) => {
+                if self.sessions.get_session(session_id).await?.is_archived {
+                    return Err(AgentSessionError::Archived(session_id).into());
+                }
+            }
         }
 
         match command {
@@ -814,6 +821,12 @@ where
     /// own action triggered this dispatch hears about it.
     #[tracing::instrument(err, skip(self), fields(%session_id))]
     pub(super) async fn dispatch_next(&self, session_id: AgentSessionId) -> Result<Dispatch> {
+        if self.sessions.get_session(session_id).await?.is_archived {
+            self.queues.drop_session(session_id);
+            self.write_queue(session_id).await?;
+            self.publish_queue(session_id).await;
+            return Ok(Dispatch::QueueEmpty);
+        }
         let Some(mut entry) = self.queues.claim_next(session_id) else {
             return Ok(Dispatch::QueueEmpty);
         };
