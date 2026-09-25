@@ -691,6 +691,13 @@ the caret after send does not pan the page while the keyboard resizes. Repeat wi
 and check that sent text does not return. Scroll into history before an incoming
 message or acknowledgement and verify that it does not pull you to latest.
 
+Also check receiving while older history is loading: scroll up to start the next
+page, return to the latest messages, and receive a message from another account
+before the history request finishes. That message must remain visible after the
+request finishes and after sending a reply. Edits and deletions to already loaded
+messages during the same request must also survive. If a network delay is needed
+to exercise this timing, delay only the real history response and preserve its body.
+
 
 ## Channel pictures
 

@@ -8,8 +8,9 @@ import type {
   MessageCursor,
   MessageListItem,
   MessageParent,
+  MessageTimelinePage,
 } from '@service-storage/messages';
-import { QueryClient } from '@tanstack/solid-query';
+import { InfiniteQueryObserver, QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 let testQueryClient: QueryClient;
+const observerDisposals: Array<() => void> = [];
 
 vi.mock('../../client', () => ({
   get queryClient() {
@@ -43,10 +45,12 @@ import { channelKeys } from '../../channel/keys';
 import { normalizeChannelMessageSender } from '../message-sender';
 import {
   getMessageTimelineQueryKey,
+  insertTopLevelMessageIntoMessageTimeline,
   isMissingMessageError,
   type MessageTimelineData,
   mergeCatchUpPage,
   messageTimelineQueryOptions,
+  removeTopLevelMessageFromMessageTimeline,
 } from '../timeline';
 
 const parent: MessageParent = { type: 'channel', id: 'channel-1' };
@@ -146,7 +150,184 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const dispose of observerDisposals.splice(0)) dispose();
   testQueryClient.clear();
+});
+
+function observeTimeline() {
+  const observer = new InfiniteQueryObserver(testQueryClient, {
+    ...messageTimelineQueryOptions(parent, null),
+    // Solid Query disables structural sharing, so a fix relying on that option
+    // would pass a core-only test but still lose messages in the application.
+    structuralSharing: false,
+  });
+  observerDisposals.push(observer.subscribe(() => {}));
+  return observer;
+}
+
+function deferPage() {
+  let resolve!: (page: MessageTimelinePage) => void;
+  const promise = new Promise<MessageTimelinePage>((done) => {
+    resolve = done;
+  });
+  mocks.list.mockReturnValueOnce(promise);
+  return resolve;
+}
+
+describe('live messages during infinite timeline pagination', () => {
+  it('retains an incoming message when an older response completes and can keep paging', async () => {
+    const cached = createMessage('cached', '2026-09-10T13:00:00Z');
+    const incoming = createMessage('incoming', '2026-09-10T14:00:00Z');
+    const older = createMessage('older', '2026-09-10T12:00:00Z');
+    const oldest = createMessage('oldest', '2026-09-10T11:00:00Z');
+    seedLatestCache([cached]);
+    const observer = observeTimeline();
+    const release = deferPage();
+    const pending = observer.fetchNextPage();
+    expect(mocks.list).toHaveBeenCalledTimes(1);
+
+    testQueryClient.setQueryData<MessageTimelineData>(
+      getMessageTimelineQueryKey(parent, null),
+      (data) => insertTopLevelMessageIntoMessageTimeline(data, incoming)
+    );
+    const next = cursor(older.id, older.created_at);
+    release({ ...fullPage([older]), next_cursor: next });
+    const result = await pending;
+
+    expect(
+      result.data?.pages.map((page) => page.items.map((item) => item.id))
+    ).toEqual([['incoming', 'cached'], ['older']]);
+    expect(result.data?.pageParams).toEqual([
+      null,
+      { next_cursor: cachedNext, previous_cursor: null },
+    ]);
+    expect(result.hasNextPage).toBe(true);
+    mocks.list.mockResolvedValueOnce(fullPage([oldest]));
+    const nextResult = await observer.fetchNextPage();
+    expect(mocks.list).toHaveBeenLastCalledWith(parent, {
+      ...fullSelection,
+      limit: 100,
+      cursor: next,
+    });
+    expect(
+      nextResult.data?.pages.flatMap((page) =>
+        page.items.map((item) => item.id)
+      )
+    ).toEqual(['incoming', 'cached', 'older', 'oldest']);
+    expect(nextResult.data?.pages).toHaveLength(3);
+    expect(nextResult.hasNextPage).toBe(false);
+  });
+
+  it('keeps edits, tombstones and removals without duplicating an overlapping page', async () => {
+    const edited = createMessage('edited', '2026-09-10T13:00:00Z');
+    const removed = createMessage('removed', '2026-09-10T12:30:00Z');
+    const deleted = createMessage('tombstone', '2026-09-10T12:15:00Z');
+    const older = createMessage('older', '2026-09-10T12:00:00Z');
+    seedLatestCache([edited, removed, deleted]);
+    const observer = observeTimeline();
+    const release = deferPage();
+    const pending = observer.fetchNextPage();
+    testQueryClient.setQueryData<MessageTimelineData>(
+      getMessageTimelineQueryKey(parent, null),
+      (data) => {
+        const retained = removeTopLevelMessageFromMessageTimeline(
+          data,
+          removed.id
+        )!;
+        return {
+          ...retained,
+          pages: retained.pages.map((page) => ({
+            ...page,
+            items: page.items.map((message) =>
+              message.id === edited.id
+                ? {
+                    ...message,
+                    content: 'Live edit',
+                    edited_at: '2026-09-10T14:00:00Z',
+                  }
+                : { ...message, deleted_at: '2026-09-10T14:00:00Z' }
+            ),
+          })),
+        };
+      }
+    );
+    release(fullPage([edited, removed, deleted, older, older]));
+    const result = await pending;
+    const items = result.data?.pages.flatMap((page) => page.items);
+
+    expect(items?.map((item) => item.id)).toEqual([
+      'edited',
+      'tombstone',
+      'older',
+    ]);
+    expect(items?.[0]).toMatchObject({
+      content: 'Live edit',
+      edited_at: '2026-09-10T14:00:00Z',
+    });
+    expect(items?.[1].deleted_at).toBe('2026-09-10T14:00:00Z');
+    expect(result.data?.pages[1].next_cursor).toBeNull();
+    expect(result.data?.pageParams).toHaveLength(2);
+  });
+
+  it('keeps live changes in the cached slice while fetching a newer page', async () => {
+    const cached = createMessage('cached', '2026-09-10T13:00:00Z');
+    const newer = createMessage('newer', '2026-09-10T14:00:00Z');
+    const previous = cursor('newer-boundary', '2026-09-10T13:30:00Z');
+    const initialParam = { next_cursor: cachedNext, previous_cursor: null };
+    seedLatestCache([cached], {
+      previousCursor: previous,
+      pageParam: initialParam,
+    });
+    const observer = observeTimeline();
+    const release = deferPage();
+    const pending = observer.fetchPreviousPage();
+    testQueryClient.setQueryData<MessageTimelineData>(
+      getMessageTimelineQueryKey(parent, null),
+      (data) => ({
+        ...data!,
+        pages: data!.pages.map((page) => ({
+          ...page,
+          items: page.items.map((message) => ({
+            ...message,
+            content: 'Live edit',
+          })),
+        })),
+      })
+    );
+    release(fullPage([newer]));
+    const result = await pending;
+
+    expect(
+      result.data?.pages.map((page) => page.items.map((item) => item.id))
+    ).toEqual([['newer'], ['cached']]);
+    expect(result.data?.pages[1].items[0].content).toBe('Live edit');
+    expect(result.data?.pageParams).toEqual([
+      { next_cursor: null, previous_cursor: previous },
+      initialParam,
+    ]);
+    expect(result.hasPreviousPage).toBe(false);
+  });
+
+  it('does not attach an obsolete response after the cached pagination boundary changed', async () => {
+    seedLatestCache([createMessage('original', '2026-09-10T13:00:00Z')]);
+    const observer = observeTimeline();
+    const release = deferPage();
+    const pending = observer.fetchNextPage();
+    const replacementNext = cursor(
+      'replacement-cursor',
+      '2026-09-10T14:00:00Z'
+    );
+    seedLatestCache([createMessage('replacement', '2026-09-10T15:00:00Z')], {
+      nextCursor: replacementNext,
+    });
+    release(fullPage([createMessage('obsolete-page', '2026-09-10T12:00:00Z')]));
+    const result = await pending;
+
+    expect(result.data?.pages).toHaveLength(1);
+    expect(result.data?.pageParams).toEqual([null]);
+    expect(result.data?.pages[0].items[0].id).toBe('replacement');
+    expect(result.data?.pages[0].next_cursor).toEqual(replacementNext);
+  });
 });
 
 describe('messageTimelineQueryOptions', () => {
