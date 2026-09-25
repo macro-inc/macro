@@ -137,10 +137,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
   const link = createMemo(() => {
     const inboxes = props.accounts.inboxes();
     if (inboxes.length === 0) return undefined;
-    // Send from the inbox the user picked, else the inbox that owns the draft
-    // being edited, else the primary inbox — not whichever inbox sorts first.
-    const targetId =
-      form.selectedInboxId() ?? props.draft?.link_id ?? primaryInboxId();
+    // An explicit sender must resolve before sending from that account.
+    const selectedInboxId = form.selectedInboxId();
+    if (selectedInboxId !== undefined) {
+      return inboxes.find((inbox) => inbox.id === selectedInboxId);
+    }
+    const targetId = props.draft?.link_id ?? primaryInboxId();
     return inboxes.find((inbox) => inbox.id === targetId) ?? inboxes[0];
   });
 

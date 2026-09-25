@@ -42,6 +42,49 @@ describe('standalone compose controller', () => {
     }
   );
 
+  it('blocks sending when an explicit initial inbox cannot be resolved', async () => {
+    const context = createComposeContext();
+    const root = mountEmailComposer(context, undefined, {
+      initialInboxId: 'removed-inbox',
+    });
+    try {
+      root.edit('Send only from the selected inbox');
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(600);
+
+      expect(root.state.context.fromAddress?.()).toBeUndefined();
+      expect(root.state.context.validationError('no_link')).toMatchObject({
+        type: 'no_link',
+        message: 'Unable to find linked email account',
+      });
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it.each([undefined, 'missing-primary'])(
+    'falls back to the first inbox without an explicit selection when primary is %s',
+    async (primaryId) => {
+      const context = createComposeContext();
+      context.accounts.primaryId = () => primaryId;
+      const root = mountEmailComposer(context);
+      try {
+        root.edit('Use the default sender');
+        root.state.context.onSend();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(root.state.context.fromAddress?.()).toBe('me@example.com');
+        expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+        expect(context.delivery.sendMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ inboxId: 'inbox' })
+        );
+      } finally {
+        root.dispose();
+      }
+    }
+  );
+
   it('keeps a draft sender instead of the initial inbox and still allows a sender change', async () => {
     const context = createComposeContext();
     context.accounts.inboxes = () => [

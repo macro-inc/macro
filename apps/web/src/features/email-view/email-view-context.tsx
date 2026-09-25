@@ -322,7 +322,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     selectedIds: () => state.inboxIds,
     loadedLinks: () =>
       linksQuery.isSuccess ? linksQuery.data.links : undefined,
-    clearSelection: () => setInboxIds(undefined),
+    // Widening stale scope to all inboxes should preserve the current thread.
+    clearSelection: () => setState('inboxIds', undefined),
   });
 
   const setFacets = (facets: EmailViewState['facets']) => {
