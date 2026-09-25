@@ -262,10 +262,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         } = params;
         let mcp_servers_json = serde_json::to_value(mcp_servers.servers())
             .context("serialize agent session mcp servers")?;
-        // The row's `owner_id` references `"User"`, the owner's grant is a
-        // user access row, and the session lands in the owner's history:
-        // this store holds user-owned sessions, and says so before writing
-        // anything rather than letting the foreign key say it for a bot.
+        // The owner's grant is a user access row, and the session lands in
+        // the owner's history: this store still holds user-owned sessions,
+        // even though the denormalized owner_id no longer references "User".
         let owner_user = owner_id
             .as_user()
             .ok_or_else(|| AgentSessionError::OwnerNotUser(owner_id.owner_type()))?;
@@ -328,7 +327,6 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             |error| match error.as_database_error().and_then(|e| e.constraint()) {
                 Some("agent_session_pkey") => AgentSessionError::SessionIdTaken(id),
                 Some("agent_session_thread_bot_unique") => AgentSessionError::ThreadSessionExists,
-                Some("agent_session_owner_id_fkey") => AgentSessionError::UnknownOwner,
                 _ => AgentSessionError::Unknown(
                     anyhow::Error::new(error).context("failed to create agent session"),
                 ),

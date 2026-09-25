@@ -18,8 +18,8 @@ fn user_id(value: &str) -> MacroUserIdStr<'static> {
 /// The fixed owner every [`new_session`] fixture uses.
 const OWNER: &str = "macro|agent-session-owner@example.com";
 
-/// Insert a `"User"` row (and its `macro_user` parent) so the id can satisfy
-/// `agent_session.owner_id`'s foreign key.
+/// Insert a `"User"` row (and its `macro_user` parent) for user-owned sessions
+/// and their user history.
 async fn insert_user(pool: &PgPool, user_id: &str) {
     let email = user_id.strip_prefix("macro|").unwrap_or(user_id);
     // The no-op update makes the existing row's id come back when the user
@@ -55,9 +55,8 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
 }
 
 pub(super) async fn create_test_bot(pool: &PgPool) -> BotId {
-    // Every session fixture is owned by the same user, and
-    // `agent_session.owner_id` references `"User"(id)` - so seed the
-    // row here, where every session-creating test already passes through.
+    // Seed the shared owner here so every session-creating test has a user
+    // row for history and other user-specific relations.
     insert_user(pool, OWNER).await;
     let owner = user_id("macro|agent-session-test-bot-owner@example.com");
     let bot = PgBotsRepo::new(pool.clone())

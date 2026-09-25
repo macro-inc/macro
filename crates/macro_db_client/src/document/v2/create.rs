@@ -330,6 +330,9 @@ async fn insert_document_with_id(
 }
 
 #[cfg(test)]
+mod test;
+
+#[cfg(test)]
 mod tests {
     #[allow(unused_imports)]
     use super::*;
@@ -497,38 +500,6 @@ mod tests {
         );
 
         Ok(())
-    }
-    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
-    async fn test_create_document_no_user(pool: Pool<Postgres>) {
-        // document exists
-        let document_metadata = create_document(
-            &pool,
-            CreateDocumentArgs {
-                id: None,
-                sha: "sha",
-                document_name: "document-name",
-                user_id: MacroUserIdStr::parse_from_str("macro|non-existent-user@fake.com")
-                    .unwrap(),
-                file_type: Some(FileType::Pdf),
-                project_id: None,
-                project_name: None,
-                share_permission: &SharePermissionV2::new_document_share_permission(
-                    Some(FileType::Pdf),
-                    None,
-                ),
-                skip_history: false,
-                email_attachment_id: None,
-                created_at: None,
-                is_task: false,
-            },
-        )
-        .await;
-
-        assert!(document_metadata.is_err());
-        assert_eq!(
-            document_metadata.err().unwrap().to_string(),
-            "unable to create document: error returned from database: insert or update on table \"Document\" violates foreign key constraint \"Document_owner_fkey\"".to_string()
-        );
     }
 
     // should return appropriate error if we try to insert a document with a duplicate ID
