@@ -29,7 +29,12 @@ import { isRecord } from '@app/lib/split-router/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
-import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import {
+  blocks,
+  fileTypeToBlockName,
+  isBlockAlias,
+  resolveBlockAlias,
+} from '@core/constant/allBlocks';
 import { z } from 'zod';
 import type { SplitContent } from '../layoutManager';
 
@@ -58,7 +63,11 @@ export function decodeLegacyPair(
     };
   }
 
-  const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);
+  const resolvedType =
+    type === 'write'
+      ? resolveBlockAlias(fileTypeToBlockName(type))
+      : resolveBlockAlias(type as BlockName | BlockAlias);
+  if (!Object.hasOwn(blocks, resolvedType)) return;
 
   if (isBlockAlias(type)) {
     return {
@@ -340,7 +349,9 @@ export const legacySplitRoute = defineRoute({
   id: 'legacy-content',
   path: ':type/:id',
   search: '*',
-  params: z.object({ type: z.string().min(1), id: z.string().min(1) }),
+  params: z
+    .object({ type: z.string().min(1), id: z.string().min(1) })
+    .refine(({ type, id }) => decodeLegacyPair(type, id) !== undefined),
   externalSearch: (entry) => {
     const { type } = routeParams(entry.location.route);
     if (type === 'email') return Object.values(EMAIL_URL_PARAMS);

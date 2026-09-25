@@ -909,6 +909,21 @@ describe('layoutManager', () => {
       dispose();
     });
 
+    it.each(['/inbox/channel', '/not-a-block/example'])(
+      'rejects an invalid legacy pair %s without mounting a block',
+      async (path) => {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        expect(manager.splits()[0].content).toMatchObject({
+          type: 'component',
+          id: 'inbox',
+        });
+        expect(location.read().pathname).toBe('/inbox');
+        router.dispose();
+        dispose();
+      }
+    );
+
     it('opens calls as Drive components and redirects old links', async () => {
       for (const path of ['/call/call-1', '/drive/call/call-1']) {
         const { manager, location, router, dispose } = ingressRouter(path);
