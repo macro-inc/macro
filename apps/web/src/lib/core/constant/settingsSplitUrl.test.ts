@@ -12,6 +12,17 @@ vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: vi.fn((type: string) => type),
 }));
 
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
 describe('settingsTabSlugFromUrl', () => {
   it('reads schema-defaulted settings state from a framed layout', () => {
     expect(settingsTabSlugFromUrl('/drive/folder/f-1/~/settings')).toBe(
