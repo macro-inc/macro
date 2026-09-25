@@ -106,7 +106,9 @@ export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
   interactions: InteractionController;
+  loading: Accessor<boolean>;
 } {
+  const [loading, setLoading] = createSignal(true);
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
   const sessionQuery = useAgentSessionQuery(() => props.agentSessionId);
   // Guard pending data so a cold query cannot suspend the surrounding editor.
@@ -131,16 +133,19 @@ export function createMagicChipModel(props: MagicChipData): {
     }
   };
   const unsubscribe = live.subscribe(applyEvents);
-  void live
-    .load()
-    .then(() => live.snapshot())
-    .then((snapshot) => {
+  async function loadSession() {
+    try {
+      await live.load();
+      const snapshot = await live.snapshot();
       setMessages(snapshot.messages);
       setMetadata(snapshot.metadata);
-    })
-    .catch((error: unknown) => {
+    } catch (error: unknown) {
       console.error('[magic-chip] session log could not be folded', error);
-    });
+    } finally {
+      setLoading(false);
+    }
+  }
+  void loadSession();
 
   onCleanup(() => {
     unsubscribe();
@@ -221,5 +226,5 @@ export function createMagicChipModel(props: MagicChipData): {
       : undefined;
   });
 
-  return { presentation, header, interactions };
+  return { presentation, header, interactions, loading };
 }

@@ -534,7 +534,7 @@ describe('createMagicChipModel', () => {
 
     expect(presentation()).toEqual({
       kind: 'working',
-      activity: { label: 'Session disconnected', busy: false },
+      activity: { label: 'Session disconnected', busy: false, tone: 'stopped' },
     });
 
     dispose();

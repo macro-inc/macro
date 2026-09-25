@@ -142,17 +142,18 @@ A follow-up sent while that session is still working stops the current turn,
 posts a new Magic Chip on the follow-up message, and steers the agent with
 that text — the chip appears at the follow-up, not after the cancelled turn
 finishes.
-The reply renders a Magic Chip: a compact two-row card, present from the moment the
-session boots and the same height in every state. Its status row starts with a dot that
-pulses while the turn works, turns amber while it waits on a question, and becomes a green
-check once the turn is over; then the persona (`Cursor Agent`, or a custom agent's name),
-what the turn is doing (`Booting agent`, `Running command · cargo test`, `Waiting for
-you`, `Done`), and a `View session` pill. The row beneath holds one line of the agent's
-latest prose (`Nothing written yet` before it has written; the question itself while it
-waits), with the pull request the session opened as a pill beside it once there is one.
-The whole card is one control: clicking anywhere on it, or `View session`, opens the agent
-session, which is where the passage whole and any question are read and answered. The
-card never expands in place.
+The reply renders a Magic Chip: a fixed 88px two-row card on desktop and mobile,
+including lazy loading. The header shows a leading status icon, agent name, model
+(hidden below 600px), an xs status badge, and an outlined **Open session** button
+(icon-only and circular on narrow cards). Working and tool calls use a slow Morph;
+lazy loading and queued states use a gray pulsing dot. Done uses a filled check circle,
+errors a warning circle, input requests a yellow question circle, and stopped a square.
+The lower row shows either a full-width PR preview with available line diff counts or
+one truncated line of agent output. Failure explanations replace that preview; tool
+commands and other secondary details stay inside the session. There are no tooltips.
+Click the card or **Open session** to read the full response or answer a question;
+click the PR to open its Macro split (GitHub until its entity has synced). Expanded
+session mentions retain their collapse control. The card never expands in place.
 
 `@codex` and `@claude` are offered to every user before account setup. The built-in
 `@cursor` entry requires the `enable-cursor-agents` rollout flag (local override:
@@ -188,12 +189,9 @@ PR status in an open Magic Chip updates from connection-gateway events after
 webhook sync. Reconnecting refreshes active PR lookups to recover missed updates.
 A late webhook does not require reloading the page.
 
-When the agent requests permission, the Magic Chip replaces its loading state
-with the action and `Allow once`, `Deny`, and `More options` controls. Permission
-requests and questions share the chip's pending-interaction state and apply only
-to its anchored turn. Session editors and owners can answer directly in the chip;
-viewers and commenters see a waiting notice. Answering clears the request in both
-the chip and the open session, and the chip follows the agent's next activity.
+When the agent requests permission or input, the Magic Chip displays the waiting
+status for its anchored turn. Open the session to answer; editors and owners can
+respond there. The chip follows the agent's next activity after the answer.
 
 Coding agents use `macro_internal.set_pull_request` to register an existing or
 new GitHub PR with their session. Macro Internal MCP is hosted by the harness

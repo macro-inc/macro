@@ -16,6 +16,7 @@ export const MagicChip: Component<
       agentSessionId={props.agentSessionId}
       presentation={model.presentation()}
       header={model.header()}
+      loading={model.loading()}
       onCollapse={props.onCollapse}
       onOpen={() => insertSplit({ type: 'agent', id: props.agentSessionId })}
     />
