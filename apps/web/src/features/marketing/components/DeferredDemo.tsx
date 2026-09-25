@@ -8,7 +8,7 @@ import {
 } from 'solid-js';
 import { preloadHomepageDemo } from './preloadHomepageDemo';
 
-/** Warm code in the background; only nearby demos mount their editors. */
+/** Warm nearby demos in the background; distant editors stay off the network. */
 export function DeferredDemo(props: {
   children: JSX.Element;
   fallback: JSX.Element;
@@ -17,7 +17,6 @@ export function DeferredDemo(props: {
   let host!: HTMLDivElement;
   const [ready, setReady] = createSignal(false);
   onMount(() => {
-    onCleanup(preloadHomepageDemo(props.preload));
     // The journey scrolls inside its shell. A viewport-rooted observer would
     // have its preload margin clipped by that scroll container.
     let scrollRoot = host.parentElement;
@@ -27,6 +26,16 @@ export function DeferredDemo(props: {
     ) {
       scrollRoot = scrollRoot.parentElement;
     }
+    let cancelPreload: (() => void) | undefined;
+    const preloadObserver = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        cancelPreload = preloadHomepageDemo(props.preload);
+        preloadObserver.disconnect();
+      },
+      { root: scrollRoot, rootMargin: '2400px 0px' }
+    );
+    preloadObserver.observe(host);
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
@@ -37,7 +46,11 @@ export function DeferredDemo(props: {
       { root: scrollRoot, rootMargin: '1400px 0px' }
     );
     observer.observe(host);
-    onCleanup(() => observer.disconnect());
+    onCleanup(() => {
+      observer.disconnect();
+      preloadObserver.disconnect();
+      cancelPreload?.();
+    });
   });
   return (
     <div ref={host} data-deferred-demo>

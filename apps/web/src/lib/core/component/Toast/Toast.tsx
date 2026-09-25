@@ -4,7 +4,9 @@ import CheckIcon from '@phosphor/check.svg';
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
 import Spinner from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';
-import { Button, cn, Surface } from '@ui';
+import { Button } from '@ui/components/Button';
+import { Surface } from '@ui/components/Surface';
+import { cn } from '@ui/utils/classname';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,

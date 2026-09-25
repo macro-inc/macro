@@ -1,6 +1,6 @@
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CheckIcon from '@phosphor/check.svg';
-import { Layer } from '@ui';
+import { Layer } from '@ui/components/Layer';
 import { For, onCleanup, onMount } from 'solid-js';
 
 /** Where the flow persists its current step, so full-page OAuth round-trips
@@ -109,7 +109,7 @@ export function SkipButton(props: {
   return (
     <button
       type="button"
-      class="glass self-center rounded-full bg-surface px-4 py-2 text-xs text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
+      class="self-center rounded-full border border-edge-muted bg-surface px-4 py-2 text-xs text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
       disabled={props.disabled}
       onClick={props.onClick}
     >
@@ -117,14 +117,6 @@ export function SkipButton(props: {
     </button>
   );
 }
-
-export const elevatedButtonStyle = {
-  '--glass-tint': 'var(--color-surface)',
-  background:
-    'linear-gradient(155deg, var(--color-ink) 35%, color-mix(in oklab, var(--color-ink) 72%, var(--color-surface)))',
-  'box-shadow':
-    'inset 0 2px 1px var(--color-ink), inset 0 -4px 3px color-mix(in oklab, var(--color-surface) 35%, transparent), 0 5px 0 color-mix(in oklab, var(--color-ink) 30%, var(--color-surface)), 0 10px 16px color-mix(in oklab, var(--color-surface) 80%, transparent)',
-};
 
 export function ContinueButton(props: {
   label?: string;
@@ -140,8 +132,7 @@ export function ContinueButton(props: {
           title={props.label ?? 'Continue'}
           disabled={props.disabled}
           onClick={props.onClick}
-          class="glass flex min-h-14 min-w-44 max-w-full items-center justify-center gap-4 rounded-full bg-ink px-7 py-3.5 text-base font-medium text-surface after:p-[2px] focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-ink disabled:opacity-40"
-          style={elevatedButtonStyle}
+          class="flex min-h-14 min-w-44 max-w-full items-center justify-center gap-4 rounded-full bg-ink px-7 py-3.5 text-base font-medium text-surface transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-ink disabled:opacity-40"
         >
           <span>{props.label ?? 'Continue'}</span>
           <ArrowRightIcon class="size-5 shrink-0" aria-hidden="true" />

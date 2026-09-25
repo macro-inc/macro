@@ -43,11 +43,13 @@
 .homepage-feature-visual { position: relative; }
 /* Feature headings introduce the conversation and graphic as one group. */
 .homepage-feature-heading { margin-bottom: 56px; text-align: center; }
-.homepage-feature-heading h2 { text-wrap: balance; margin: 0 0 20px; color: var(--color-ink); font-family: 'Roboto Slab Variable', display, serif; font-size: clamp(28px, 3.2vw, 40px); font-weight: 315; line-height: 1.25; letter-spacing: -.035em; }
+.homepage-feature-title { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 20px; }
+#coding-agents .homepage-feature-title { flex-direction: column; }
+.homepage-feature-heading h2 { text-wrap: balance; margin: 0; color: var(--color-ink); font-family: 'Roboto Slab Variable', display, serif; font-size: clamp(28px, 3.2vw, 40px); font-weight: 315; line-height: 1.25; letter-spacing: -.035em; }
 .homepage-section-break { display: flex; align-items: center; gap: 24px; width: 100%; color: var(--color-ink-placeholder); font: 400 14px/1.65 'Inter Variable', Inter, sans-serif; }
 .homepage-section-break > span { flex: 1; height: 1px; background: color-mix(in srgb, var(--color-ink) 16%, transparent); }
 .homepage-section-break p { flex: 0 1 440px; min-width: 0; margin: 0; color: inherit; text-wrap: balance; }
-@media (max-width: 699px) { .homepage-feature-heading { margin-bottom: 36px; } .homepage-feature-heading h2 { margin-bottom: 16px; } .homepage-section-break { gap: 12px; font-size: 13px; } .homepage-section-break > span { flex: 0 0 20px; } .homepage-section-break p { flex: 1; } }
+@media (max-width: 699px) { .homepage-feature-heading { margin-bottom: 36px; } .homepage-feature-title { margin-bottom: 16px; } #coding-agents .homepage-feature-title { gap: 10px; } #coding-agents .homepage-feature-heading h2 { font-size: clamp(18px, 5.5vw, 28px); white-space: nowrap; } .homepage-section-break { gap: 12px; font-size: 13px; } .homepage-section-break > span { flex: 0 0 20px; } .homepage-section-break p { flex: 1; } }
 .homepage-founder-rule { color: color-mix(in srgb, var(--color-ink) 16%, transparent); }
 @media (max-width: 699px) { .homepage-founder-letter { font-size: 12px; } }
 .homepage-feature-email, .homepage-feature-spreadsheet { max-width: 920px; margin-inline: auto; }
@@ -58,13 +60,13 @@
 }
 .homepage-spreadsheet { display: flex; flex-direction: column; height: 460px; overflow: hidden; border: 1px solid var(--color-edge-muted); border-radius: 16px; background: var(--color-surface); }
 .homepage-spreadsheet .homepage-compose-status { padding: 16px 20px 0; }
-.homepage-doc-history { margin: 48px 0 0; overflow: hidden; }
-.homepage-doc-history figcaption { max-width: 480px; margin: 0 auto 28px; padding-inline: 20px; color: var(--color-ink-muted); font: 400 14px/1.75 'Inter Variable', Inter, sans-serif; text-align: center; text-wrap: balance; }
-.homepage-doc-history figcaption > span { display: block; margin-bottom: 8px; color: var(--color-ink); font-size: 16px; }
-.homepage-feature-end { position: relative; margin-top: clamp(48px, 6svh, 80px); padding: clamp(72px, 12svh, 140px) 0 56px; }
+.homepage-doc-history { margin: 0; }
+.homepage-doc-history figcaption { max-width: 180px; margin: -42px 0 0 70px; opacity: .7; color: var(--color-ink-placeholder); font: 400 clamp(11px, 3.333vw, 12px)/1.75 'Inter Variable', Inter, sans-serif; text-align: left; text-wrap: pretty; }
+.homepage-doc-history figcaption > span { display: block; margin-bottom: 8px; color: var(--color-ink); font-size: 16px; white-space: nowrap; }
+.homepage-feature-end { position: relative; margin-top: 0; padding: clamp(72px, 12svh, 140px) 0 56px; }
 .homepage-closing-rule { position: absolute; top: 0; left: 0; width: 100%; margin: 0; border: 0; border-top: 1px solid var(--color-edge-muted); }
 .homepage-app-landing { height: 200px; }
-@media(max-width: 699px) { .homepage-sections-inner { width: calc(100% - 36px); } .homepage-feature { padding: 40px 0; } .homepage-conversation { gap: 24px; margin-bottom: 32px; font-size: 15px; } .homepage-message { max-width: 92%; } }
+@media(max-width: 699px) { .homepage-sections-inner { width: calc(100% - 36px); } .homepage-feature { padding: 40px 0; } .homepage-conversation { gap: 24px; margin-bottom: 32px; font-size: 15px; } .homepage-message { max-width: 92%; } .homepage-doc-history figcaption { margin: 0; } }
 .workspace-demo { color: var(--color-ink); font-family: var(--font-sans); }
 .homepage-compose-status { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 18px; font-size: 13px; color: var(--color-ink-muted); }
 .homepage-compose-status span:last-child { color: var(--color-ink-placeholder); }

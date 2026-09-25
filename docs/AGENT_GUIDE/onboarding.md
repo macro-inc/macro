@@ -42,10 +42,9 @@ line immediately. The sidebar has no separate visible heading or split rule.
 The annotated Home sidebar brings docs, email, messages, tasks, calendar, CRM,
 and external agents into one list.
 Thin angular pointer lines connect the surrounding labels to rail icons and recent
-items. The preview matches the live app's compact 32px rows, with a fine glass rim, soft cast shadow, and perspective. The plus opens the shared create menu with links to local
-interactive examples; Search highlights matching example items as you type.
-Escape closes search and returns focus to its button. Neither control creates
-server content.
+items. The preview matches the live app's compact 32px rows, with a fine glass rim,
+soft cast shadow, and perspective. Breakdown is static: its icons, rows, and
+callouts do not navigate or open controls when clicked.
 Full Demo is temporarily hidden behind `FULL_DEMO_ENABLED` in
 `HomepageSidebar.tsx`. The public homepage shows only Breakdown: no mode toggle,
 no expanded panel, and no mounting of the interactive workspace. Keep the demo
@@ -71,14 +70,15 @@ CRM uses the shared Kanban columns and cards. The demo uses ViewSidebar and
 ViewShell header components with a 256px navigation column. Calendar omits that
 column, matching the app. All right-hand detail panels stay closed; unavailable
 actions are disabled.
-Search filters
+The plus opens the shared create menu only in Full Demo. Search filters
 the sample workspace and Escape returns focus to Search. Changes and drafts remain
 in memory when switching views or collapsing the demo; reloading resets them.
 Verify sending a channel message, editing a doc, toggling a task, inspecting tool
 output, and asking a sample agent a follow-up. These controls never send messages,
 save documents, execute tools, or call a model outside the local demo.
-Hovering or keyboard-focusing a label highlights its destination; clicking follows
-a native anchor to the corresponding homepage example. On narrow screens the sidebar extends halfway beyond the right edge, with all
+Hovering a label highlights its corresponding icon or row. Verify clicking the
+breakdown leaves the page position and URL unchanged and adds no tab stops.
+On narrow screens the sidebar extends halfway beyond the right edge, with all
 seven labels on the left and pointer lines to the corresponding rail icons. The
 line above starts at the viewport center, then curves toward the offset sidebar.
 The reveal respects reduced motion and never
@@ -99,10 +99,9 @@ the sample PR as merged locally, including in the PR dialog; reloading resets it
 There is no standalone PR card. All content is fictional fixture data with no
 authenticated queries. Verify the chip with mouse and keyboard, thought/tool
 expansion, the PR tab, closing and focus return, and unclipped phone layouts. These local
-previews never run an agent or create a GitHub branch or pull request. The sidebar’s
-External agents link lands at `#coding-agents`. Version history belongs inside Docs & Tasks;
-there are no standalone Version control or @linked tasks sections. Sidebar task
-links land on the document demo, message links on Email and chat, and agent links on Agents and pull requests;
+previews never run an agent or create a GitHub branch or pull request. Version
+history belongs inside Docs & Tasks; there are no standalone Version control or
+@linked tasks sections. The breakdown has no links to these sections;
 explanations belong to the example below them, not the previous example. Short exchanges
 between Jacob, Julia, Gabriel, and Teo use the app's message bubbles and Avatar
 component with local photos from the original site. Photos sit beside the bottom
@@ -116,12 +115,10 @@ mentions; Julia is already cc’d. Generation pauses offscreen or in a hidden ta
 and reduced motion shows the completed draft immediately. The mentions animate
 into place without opening a mentions menu. Editing is enabled after generation.
 The email placeholder and composer reserve the same 560px height on desktop and
-720px below 768px. Desktop edits scroll inside the body while the toolbar stays
-visible. On mobile, both the body and editor allow visible overflow and the card
-can grow for longer edits; swiping over the email scrolls the page. Verify that
-the generated draft fits without cropping or resizing the card, mobile swipes
-never scroll an inner email container, and desktop long edits and Bcc keep the
-card's height stable.
+720px below 768px as a minimum. Both the body and editor allow visible overflow,
+and the card grows for longer edits, Bcc, and attachments at every width. Wheel
+and touch scrolling over the email scroll the page. Verify that the generated
+draft fits without cropping and long edits create no inner scroll container.
 Inline document, PDF, task, email, calendar, channel, spreadsheet, and call mentions use the app's entity icons and
 hover cards. Hover or focus a mention for its local preview; clicking follows a
 native anchor to the related demo. Valentina’s CRM request references the “Sales sync” call with the same phone-call icon used by real call mentions. The document is the same animation as the documents page: the launch plan types
@@ -130,10 +127,12 @@ and a channel. Playback runs only while the graphic is on screen and shows the
 finished document for reduced motion. No document is created on the server.
 The Documents and tasks section retains Julia’s typing animation, including the
 linked launch-checklist task and its owner/status metadata inside the document.
-The animated version-history band sits
-directly beneath it with a short Inter caption. `#tasks` and `#version-control`
+The document fades into the overlapping animated version-history band as one
+continuous graphic, with a short Inter caption beneath it aligned to the left.
+The caption describes an audit log of changes by humans and agents over time.
+`#tasks` and `#version-control`
 remain valid anchors within `#documents`. Verify the timeline on desktop and
-mobile, its reduced-motion state, and both sidebar task links after the merge.
+mobile, its reduced-motion state, and the preserved document anchors.
 Message bubbles pop in once from the sender’s corner, a short scale with a slight settle. Graphics gently fade and slide in once when visible, using an
 IntersectionObserver. There is no scroll interception or pinning; scrolling back
 keeps revealed messages visible. Reduced motion immediately reveals everything,
@@ -195,7 +194,8 @@ Continue moves the proof items downward as they fade, then reveals the Google
 screen's retention, security, and ownership items in their destination positions.
 Text and actions crossfade during the same handoff. Motion uses only opacity and
 transform, lasts about 1.1 seconds, and settles immediately on resize. Reduced-motion
-users advance immediately. Both screens use the same elevated button finish.
+users advance immediately. Onboarding actions use flat fills without gradients,
+beveled rims, or raised shadows; focus outlines and disabled states remain visible.
 Verify interruption, restored interaction, and heading focus after the handoff.
 
 Security and the Google connection screens have an optional “Read more” cue,
@@ -260,7 +260,7 @@ continue in the background.
 
 Team is the final onboarding step, after integrations and the plan decision. Its
 single-line “Built for teams.” heading, Workspace name field,
-and elevated white CTA match the other slides. The public preview reaches the same
+and flat white CTA match the other slides. The public preview reaches the same
 form after Tools, using sample recipients for a fresh draft; it saves a local draft
 and never creates a team or sends invites. The preview disclaimer is hidden so the
 layout matches production.
@@ -379,9 +379,9 @@ and opacity transitions. Verify a fast fling, a slow approach, and reversal.
 The production homepage includes prerendered HTML before JavaScript runs. In a
 fresh browser context (including OS light mode), the landing stays dark without
 changing the visitor's saved app theme. The menu's links exist in HTML while
-closed. Demo code preloads sequentially during idle time after page load, while
-editors only mount within 1400px of the viewport. Verify that code downloads
-without scrolling but editors remain unmounted at the hero. Save-Data and 2G
+closed. Demo code preloads sequentially during idle time after page load when
+within 2400px of the viewport; editors only mount within 1400px. Verify that
+distant demo code and editors remain unloaded at the hero. Save-Data and 2G
 skip background preloading. Scrolling to Email, Docs and Spreadsheets should
 replace quiet placeholders with interactive demos without loading text, and the
 footer CTA should still reach its destination.

@@ -85,7 +85,7 @@ export function SecurityStep(props: { onContinue: () => void }) {
       <h1 tabindex="-1" class="sr-only">
         A workspace built to earn your trust.
       </h1>
-      <p class="mt-9 max-w-[440px] font-[Inter_Variable] text-sm font-normal leading-6 text-ink-muted sm:text-[15px] [text-wrap:balance]">
+      <p class="mb-6 mt-9 max-w-[440px] font-[Inter_Variable] text-sm font-normal leading-6 text-ink-muted sm:text-[15px] [text-wrap:balance]">
         We don’t sell your data or train AI on it. Our agreements with OpenAI
         and Anthropic ensure zero data retention. Review permissions and
         disconnect anytime.

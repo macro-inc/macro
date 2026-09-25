@@ -26,15 +26,18 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type { DemoPage } from '../core/workspace-demo';
 import { createWorkspaceDemo } from '../primitives/createWorkspaceDemo';
-import { HomepageWorkspaceList } from './HomepageWorkspaceList';
 
 // Keep the unfinished interactive workspace available for a later polish pass.
 const FULL_DEMO_ENABLED = false;
 
 const loadWorkspace = () => import('./HomepageWorkspace');
 const HomepageWorkspace = lazy(loadWorkspace);
+const HomepageWorkspaceList = lazy(async () => ({
+  default: (await import('./HomepageWorkspaceList')).HomepageWorkspaceList,
+}));
 
 import { HomepagePersonAvatar } from './HomepageConversation';
 import './homepage-sidebar.css';
@@ -52,42 +55,36 @@ const CALLOUTS: readonly {
   id: Destination;
   label: string;
   description?: string;
-  href: string;
   icon: NavIcon;
   side: 'left' | 'right';
 }[] = [
   {
     id: 'documents',
     label: 'Docs',
-    href: '#documents',
     icon: FolderIcon,
     side: 'left',
   },
   {
     id: 'email',
     label: 'Email',
-    href: '#email',
     icon: EmailIcon,
     side: 'left',
   },
   {
     id: 'messages',
     label: 'Messages',
-    href: '#email',
     icon: ChatIcon,
     side: 'left',
   },
   {
     id: 'tasks',
     label: 'Tasks',
-    href: '#tasks',
     icon: TaskIcon,
     side: 'right',
   },
   {
     id: 'calendar',
     label: 'Calendar',
-    href: '/app/calendar',
     icon: CalendarIcon,
     side: 'left',
   },
@@ -95,14 +92,12 @@ const CALLOUTS: readonly {
     id: 'agents',
     label: 'External agents',
     description: 'Cursor, Claude, ChatGPT, Hermes, ACP, etc.',
-    href: '#coding-agents',
     icon: AgentIcon,
     side: 'right',
   },
   {
     id: 'crm',
     label: 'CRM',
-    href: '/crm',
     icon: BuildingsIcon,
     side: 'left',
   },
@@ -112,63 +107,55 @@ const RECENT_ITEMS: readonly {
   label: string;
   icon: NavIcon;
   kind: Destination;
-  href: string;
   unread?: boolean;
 }[] = [
   {
     label: 'launch',
     icon: HashIcon,
     kind: 'messages',
-    href: '#email',
     unread: true,
   },
   {
     label: 'Thursday’s launch',
     icon: EmailIcon,
     kind: 'email',
-    href: '#email',
     unread: true,
   },
   {
     label: 'Q3 launch plan',
     icon: DocumentIcon,
     kind: 'documents',
-    href: '#documents',
   },
   {
     label: 'Prepare the launch checklist',
     icon: TaskIcon,
     kind: 'tasks',
-    href: '#tasks',
   },
   {
     label: 'Cursor · Fix the deploy pipeline',
     icon: AgentIcon,
     kind: 'agents',
-    href: '#coding-agents',
   },
 ];
 
 const CREATE_ITEMS = [
-  { label: 'Email', icon: EmailIcon, href: '#email', page: 'email' },
-  { label: 'Agent', icon: AgentIcon, href: '#coding-agents', page: 'agents' },
+  { label: 'Email', icon: EmailIcon, page: 'email' },
+  { label: 'Agent', icon: AgentIcon, page: 'agents' },
   {
     label: 'Document',
     icon: DocumentIcon,
-    href: '#documents',
     page: 'documents',
   },
-  { label: 'Task', icon: TaskIcon, href: '#tasks', page: 'tasks' },
-  { label: 'Message', icon: ChatIcon, href: '#email', page: 'messages' },
+  { label: 'Task', icon: TaskIcon, page: 'tasks' },
+  { label: 'Message', icon: ChatIcon, page: 'messages' },
   {
     label: 'Spreadsheet',
     icon: SheetIcon,
-    href: '#spreadsheet',
     page: 'spreadsheet',
   },
 ] as const;
 
-/** A local Home preview, using the app's rail glyphs and linked demo entities. */
+/** A static Home breakdown; the retained full demo has local navigation. */
 export function HomepageSidebar() {
   let stage!: HTMLDivElement;
   let measurePointers = () => {};
@@ -187,9 +174,8 @@ export function HomepageSidebar() {
     setExpanded(next);
     setHighlighted(undefined);
   };
-  const navigate = (event: MouseEvent, page: DemoPage) => {
+  const navigate = (page: DemoPage) => {
     if (!expanded()) return;
-    event.preventDefault();
     setSearching(false);
     setQuery('');
     demo.open(page);
@@ -300,55 +286,57 @@ export function HomepageSidebar() {
           }}
         >
           <span class="homepage-sidebar-line-anchor" aria-hidden="true" />
-          <nav
-            class="homepage-sidebar-rail"
-            aria-label="Explore the workspace examples"
-          >
-            <Dropdown placement="right-start" gutter={10} modal={false}>
-              <Dropdown.Trigger
-                class="homepage-sidebar-create"
-                aria-label="Create in the workspace preview"
-              >
-                <PlusIcon />
-              </Dropdown.Trigger>
-              <Dropdown.Content
-                class="homepage-sidebar-create-menu workspace-demo"
-                aria-label="Create"
-              >
-                <Dropdown.Group>
-                  <For each={CREATE_ITEMS}>
-                    {(item) => (
-                      <Dropdown.Item
-                        as="a"
-                        href={item.href}
-                        onClick={(event: MouseEvent) =>
-                          navigate(event, item.page)
-                        }
-                      >
-                        <NavGlyph icon={item.icon} class="size-4" />
-                        <span>{item.label}</span>
-                      </Dropdown.Item>
-                    )}
-                  </For>
-                </Dropdown.Group>
-                <p>Open an interactive example</p>
-              </Dropdown.Content>
-            </Dropdown>
-            <button
-              type="button"
+          <div class="homepage-sidebar-rail">
+            <Show
+              when={expanded()}
+              fallback={
+                <span class="homepage-sidebar-create" aria-label="Create">
+                  <PlusIcon />
+                </span>
+              }
+            >
+              <Dropdown placement="right-start" gutter={10} modal={false}>
+                <Dropdown.Trigger
+                  class="homepage-sidebar-create"
+                  aria-label="Create in the workspace preview"
+                >
+                  <PlusIcon />
+                </Dropdown.Trigger>
+                <Dropdown.Content
+                  class="homepage-sidebar-create-menu workspace-demo"
+                  aria-label="Create"
+                >
+                  <Dropdown.Group>
+                    <For each={CREATE_ITEMS}>
+                      {(item) => (
+                        <Dropdown.Item onClick={() => navigate(item.page)}>
+                          <NavGlyph icon={item.icon} class="size-4" />
+                          <span>{item.label}</span>
+                        </Dropdown.Item>
+                      )}
+                    </For>
+                  </Dropdown.Group>
+                  <p>Open an interactive example</p>
+                </Dropdown.Content>
+              </Dropdown>
+            </Show>
+            <Dynamic
+              component={expanded() ? 'button' : 'span'}
+              type={expanded() ? 'button' : undefined}
               class="homepage-sidebar-search"
-              aria-label="Search the workspace preview"
-              aria-pressed={searching()}
-              onClick={toggleSearch}
+              aria-label="Search"
+              aria-pressed={expanded() ? searching() : undefined}
+              onClick={expanded() ? toggleSearch : undefined}
             >
               <SearchIcon aria-hidden="true" />
-            </button>
-            <button
-              type="button"
+            </Dynamic>
+            <Dynamic
+              component={expanded() ? 'button' : 'span'}
+              type={expanded() ? 'button' : undefined}
               class="homepage-sidebar-home"
               aria-label="Home"
               data-active={!expanded() || demo.navigation() === 'home'}
-              onClick={() => demo.open('home')}
+              onClick={expanded() ? () => navigate('home') : undefined}
             >
               <NavGlyph
                 icon={HomeIcon}
@@ -356,18 +344,19 @@ export function HomepageSidebar() {
                 filled
                 class="size-6"
               />
-            </button>
+            </Dynamic>
             <For each={CALLOUTS}>
               {(item) => (
-                <a
-                  href={item.href}
-                  aria-label={expanded() ? item.label : `Explore ${item.label}`}
+                <Dynamic
+                  component={expanded() ? 'button' : 'span'}
+                  type={expanded() ? 'button' : undefined}
+                  aria-label={item.label}
                   aria-current={
                     expanded() && demo.navigation() === item.id
                       ? 'page'
                       : undefined
                   }
-                  onClick={(event) => navigate(event, item.id)}
+                  onClick={expanded() ? () => navigate(item.id) : undefined}
                   data-rail-target={item.id}
                   data-highlighted={highlighted() === item.id}
                   data-pointer-target={
@@ -382,13 +371,13 @@ export function HomepageSidebar() {
                   <Show when={item.id === 'email' || item.id === 'messages'}>
                     <span class="homepage-sidebar-dot" />
                   </Show>
-                </a>
+                </Dynamic>
               )}
             </For>
             <span class="homepage-sidebar-profile">
               <HomepagePersonAvatar person="jacob" />
             </span>
-          </nav>
+          </div>
           <div class="homepage-sidebar-list">
             <div
               class="homepage-sidebar-breakdown-list"
@@ -414,8 +403,7 @@ export function HomepageSidebar() {
               <div class="homepage-sidebar-recents">
                 <For each={RECENT_ITEMS}>
                   {(item) => (
-                    <a
-                      href={item.href}
+                    <div
                       data-search-match={matches(item.label)}
                       data-highlighted={highlighted() === item.kind}
                       data-pointer-target={
@@ -425,35 +413,31 @@ export function HomepageSidebar() {
                       }
                       onMouseEnter={() => setHighlighted(item.kind)}
                       onMouseLeave={() => setHighlighted(undefined)}
-                      onFocus={() => setHighlighted(item.kind)}
-                      onBlur={() => setHighlighted(undefined)}
                     >
                       <NavGlyph icon={item.icon} class="size-5" />
                       <span>{item.label}</span>
                       <Show when={item.unread}>
                         <i class="homepage-sidebar-dot" />
                       </Show>
-                    </a>
+                    </div>
                   )}
                 </For>
               </div>
               <p class="homepage-sidebar-period">Earlier today</p>
-              <a
+              <div
                 class="homepage-sidebar-older"
-                href="#spreadsheet"
                 data-search-match={matches('Customers to reach')}
               >
                 <SheetIcon aria-hidden="true" />
                 <span>Customers to reach</span>
-              </a>
-              <a
+              </div>
+              <div
                 class="homepage-sidebar-older"
-                href="#documents"
                 data-search-match={matches('Julia Launch announcement')}
               >
                 <HomepagePersonAvatar person="julia" />
                 <span>Julia · Launch announcement</span>
-              </a>
+              </div>
               <div class="homepage-sidebar-list-fade" aria-hidden="true" />
             </div>
             <div
@@ -461,13 +445,17 @@ export function HomepageSidebar() {
               inert={!expanded() || demo.page() === 'calendar'}
               aria-hidden={!expanded() || demo.page() === 'calendar'}
             >
-              <HomepageWorkspaceList
-                demo={demo}
-                searching={searching()}
-                query={query()}
-                onSearch={setQuery}
-                onCloseSearch={closeSearch}
-              />
+              <Show when={FULL_DEMO_ENABLED && opened()}>
+                <Suspense>
+                  <HomepageWorkspaceList
+                    demo={demo}
+                    searching={searching()}
+                    query={query()}
+                    onSearch={setQuery}
+                    onCloseSearch={closeSearch}
+                  />
+                </Suspense>
+              </Show>
             </div>
           </div>
           <div
@@ -507,21 +495,18 @@ export function HomepageSidebar() {
         >
           <For each={CALLOUTS}>
             {(item) => (
-              <a
-                href={item.href}
+              <div
                 data-callout={item.id}
                 data-side={item.side}
                 data-highlighted={highlighted() === item.id}
                 onMouseEnter={() => setHighlighted(item.id)}
                 onMouseLeave={() => setHighlighted(undefined)}
-                onFocus={() => setHighlighted(item.id)}
-                onBlur={() => setHighlighted(undefined)}
               >
                 <span>{item.label}</span>
                 <Show when={item.description}>
                   <p>{item.description}</p>
                 </Show>
-              </a>
+              </div>
             )}
           </For>
         </div>

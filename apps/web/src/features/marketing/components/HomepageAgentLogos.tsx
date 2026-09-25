@@ -5,22 +5,22 @@ import { For } from 'solid-js';
 import GeminiIcon from '../assets/gemini.svg';
 
 const agents = [
-  { name: 'Claude', icon: ClaudeIcon },
-  { name: 'ChatGPT', icon: ChatGPTIcon },
-  { name: 'Cursor', icon: CursorIcon },
-  { name: 'Gemini', icon: GeminiIcon },
+  { name: 'Claude', icon: ClaudeIcon, opacity: 0.8 },
+  { name: 'ChatGPT', icon: ChatGPTIcon, opacity: 0.6 },
+  { name: 'Cursor', icon: CursorIcon, opacity: 0.4 },
+  { name: 'Gemini', icon: GeminiIcon, opacity: 0.2 },
 ];
 
 export function HomepageAgentLogos() {
   return (
     <ul
-      class="mx-auto mb-4 flex w-fit list-none items-center justify-center gap-5 p-0 text-ink-extra-muted"
+      class="m-0 flex w-fit shrink-0 list-none items-center gap-2 p-0 text-ink-muted"
       aria-label="Agents"
     >
       <For each={agents}>
         {(agent) => (
-          <li class="flex items-center">
-            <agent.icon class="size-7" aria-hidden="true" />
+          <li class="flex items-center" style={{ opacity: agent.opacity }}>
+            <agent.icon class="size-4 min-[700px]:size-5" aria-hidden="true" />
             <span class="sr-only">{agent.name}</span>
           </li>
         )}

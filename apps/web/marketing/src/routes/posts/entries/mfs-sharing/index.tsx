@@ -21,6 +21,7 @@ export const postMeta: PostMeta = {
   preview: ARTICLE_PREVIEW,
   tags: ['macro', 'engineering'],
   category: 'Engineering',
+  hideFromHome: true,
   coverBrand: 'mfs',
   image: '/og/mfs-sharing.png',
   showTOC: true,

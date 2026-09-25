@@ -8,8 +8,10 @@ export function HomepageFeatureHeading(props: {
 }) {
   return (
     <header class="homepage-feature-heading homepage-enter workspace-demo">
-      {props.children}
-      <h2 id={props.id}>{props.title}</h2>
+      <div class="homepage-feature-title">
+        {props.children}
+        <h2 id={props.id}>{props.title}</h2>
+      </div>
       <div class="homepage-section-break">
         <span aria-hidden="true" />
         <p>{props.description}</p>

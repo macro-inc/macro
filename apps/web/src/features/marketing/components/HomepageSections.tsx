@@ -16,10 +16,6 @@ import { HomepageSidebar } from './HomepageSidebar';
 import { HomepageTestimonials } from './HomepageTestimonials';
 import './workspace-story.css';
 
-const loadVersionHistory = () =>
-  import('./HomepageVersionHistory').then((module) => ({
-    default: module.HomepageVersionHistory,
-  }));
 const loadPullRequest = () => import('./HomepagePullRequest');
 const loadEmailCompose = () => import('./HomepageEmailCompose');
 const loadCollaborativeDoc = () => import('./HomepageCollaborativeDoc');
@@ -27,7 +23,6 @@ const loadCrm = () => import('./HomepageCrm');
 const HomepageCrm = lazy(loadCrm);
 const loadSpreadsheet = () => import('./HomepageSpreadsheet');
 
-const HomepageVersionHistory = lazy(loadVersionHistory);
 const HomepagePullRequest = lazy(loadPullRequest);
 const HomepageEmailCompose = lazy(loadEmailCompose);
 const HomepageCollaborativeDoc = lazy(loadCollaborativeDoc);
@@ -61,7 +56,7 @@ function Feature(props: {
   id: string;
   title: string;
   description: string;
-  eyebrow?: JSX.Element;
+  titleAdornment?: JSX.Element;
   messages?: readonly HomepageMessage[];
   children: JSX.Element;
 }) {
@@ -76,7 +71,7 @@ function Feature(props: {
         title={props.title}
         description={props.description}
       >
-        {props.eyebrow}
+        {props.titleAdornment}
       </HomepageFeatureHeading>
       <Show when={props.messages}>
         {(messages) => <HomepageConversation messages={messages()} />}
@@ -213,36 +208,27 @@ export function HomepageSections() {
             },
           ]}
         >
-          <div id="tasks">
-            <DeferredDemo
-              preload={loadCollaborativeDoc}
-              fallback={
-                <DemoPlaceholder label="Collaborative document and tasks preview" />
-              }
-            >
-              <HomepageCollaborativeDoc />
-            </DeferredDemo>
-          </div>
-          <figure class="homepage-doc-history" id="version-control">
+          <figure class="homepage-doc-history" id="tasks">
+            <div id="version-control">
+              <DeferredDemo
+                preload={loadCollaborativeDoc}
+                fallback={
+                  <DemoPlaceholder label="Collaborative document, tasks, and version history preview" />
+                }
+              >
+                <HomepageCollaborativeDoc />
+              </DeferredDemo>
+            </div>
             <figcaption>
-              <span>Every edit has a history.</span>
-              Compare changes and revisit earlier versions, whether the edits
-              came from a teammate or an agent.
+              <span>An audit log for every edit.</span>
+              Track changes by humans and agents over time.
             </figcaption>
-            <DeferredDemo
-              preload={loadVersionHistory}
-              fallback={
-                <DemoPlaceholder label="Document version history preview" />
-              }
-            >
-              <HomepageVersionHistory />
-            </DeferredDemo>
           </figure>
         </Feature>
         <Feature
           id="coding-agents"
-          title="Agents and pull requests"
-          eyebrow={<HomepageAgentLogos />}
+          title="Coding agents"
+          titleAdornment={<HomepageAgentLogos />}
           description="Bring your existing agent subs into channels and see the full agent trace inline through to PR."
         >
           <DeferredDemo
@@ -257,16 +243,6 @@ export function HomepageSections() {
           title="Sheets and databases"
           description="Live collaboration with humans and agents. Import your Google Sheets and Notion databases."
           messages={[
-            {
-              person: 'gabriel',
-              text: (
-                <>
-                  We should reach out personally to the people who already use
-                  Macro. <span class="homepage-person-mention">@Claude</span>,
-                  check PostHog and compile our top customers.
-                </>
-              ),
-            },
             {
               person: 'claude',
               text: (

@@ -1,8 +1,5 @@
-.homepage-email-demo { position: relative; isolation: isolate; height: var(--homepage-email-height, 560px); }
-@media (max-width: 767px) {
-  /* Reserve the generated draft's space, but let edits grow with the page. */
-  .homepage-email-demo { height: auto; min-height: var(--homepage-email-height); }
-}
+/* Reserve the generated draft's space, but let edits grow with the page. */
+.homepage-email-demo { position: relative; isolation: isolate; min-height: var(--homepage-email-height, 560px); }
 .homepage-email-demo::after {
   content: '';
   position: absolute;

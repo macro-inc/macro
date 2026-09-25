@@ -1,6 +1,6 @@
 import ArrowDownIcon from '@phosphor/arrow-down.svg';
 import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import { cn } from '@ui';
+import { cn } from '@ui/utils/classname';
 import { createMemo, createUniqueId, type JSX, Show } from 'solid-js';
 import { PageVignette } from '../../marketing/components/PageVignette';
 import { SiteHeader } from '../../marketing/components/SiteHeader';
@@ -93,6 +93,7 @@ export function OnboardingShell(props: {
       {/* Keep long connector catalogs and summaries inside the fixed frame. */}
       <div
         data-onboarding-scroll
+        role={props.landing ? 'main' : undefined}
         class="relative z-10 size-full overflow-x-hidden overflow-y-auto overscroll-contain"
       >
         <div

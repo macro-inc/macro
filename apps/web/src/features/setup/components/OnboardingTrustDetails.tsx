@@ -27,12 +27,12 @@ export function OnboardingTrustDetails(props: {
             title: 'Why does Google ask for these permissions?',
             answer: (
               <>
-                Macro is a full email client. Gmail access lets you read, send,
-                organize, and move messages to trash. Contacts help suggest
-                recipients; mail settings support your signature and filters.
-                When you connect Calendar, its permissions let Macro show your
-                calendars and create or update events. Google shows the exact
-                permissions before you approve.
+                Gmail access lets Macro read, send, organize, and move messages
+                to trash. Contacts help suggest recipients; mail settings
+                support your signature and filters. When you connect Calendar,
+                its permissions let Macro show your calendars and create or
+                update events. Google shows the exact permissions before you
+                approve.
               </>
             ),
           },
@@ -53,13 +53,12 @@ export function OnboardingTrustDetails(props: {
                 Data received through Google Workspace APIs is not used to
                 develop or train generalized AI models. Macro also maintains
                 zero data retention agreements with OpenAI and Anthropic for
-                model processing. These protect the information sent to those
-                providers when you use an agent.
+                model processing.
               </>
             ),
           },
           {
-            title: 'What if I change my mind?',
+            title: 'How do I revoke access?',
             answer: (
               <>
                 You can disconnect in Macro’s Settings or revoke access from
@@ -94,8 +93,6 @@ export function OnboardingTrustDetails(props: {
                 Production access is restricted to authorized engineering staff,
                 and development runs in a separate environment. Personnel who
                 process customer data are bound by confidentiality obligations.
-                These controls support the work of operating and securing Macro
-                while limiting access to customer information.
               </>
             ),
           },
@@ -119,16 +116,14 @@ export function OnboardingTrustDetails(props: {
             ),
           },
           {
-            title: 'Can I look beyond the promises?',
+            title: 'Is Macro open source?',
             answer: (
               <>
                 Macro is open source: you can inspect our{' '}
                 <EvidenceLink href="https://github.com/macro-inc/macro">
                   code on GitHub
                 </EvidenceLink>
-                . We are backed by Andreessen Horowitz and have raised more than
-                $30 million. You can review the code, policies, and security
-                materials before deciding what to connect.
+                .
               </>
             ),
           },
@@ -138,15 +133,13 @@ export function OnboardingTrustDetails(props: {
     <section class="mx-auto w-full max-w-[608px] px-6 pb-20 pt-20 font-[Inter_Variable] text-sm leading-7 text-ink-muted sm:pb-28 sm:pt-24 sm:text-[15px]">
       <div class="mb-10 h-px w-12 bg-edge" aria-hidden="true" />
       <p class="mb-4 text-xs text-ink-extra-muted">
-        {google() ? 'Your connection, explained' : 'Security & privacy'}
+        {google() ? 'Google account connection' : 'Security & privacy'}
       </p>
       <h2
         tabindex="-1"
         class="mb-7 text-2xl font-medium leading-8 tracking-tight text-ink outline-none sm:text-[28px] sm:leading-9"
       >
-        {google()
-          ? 'Your account. Your permission.'
-          : 'How we protect your work.'}
+        {google() ? 'Email and calendar permissions' : 'Data protection'}
       </h2>
       <div class="space-y-5">
         <Show
@@ -154,49 +147,41 @@ export function OnboardingTrustDetails(props: {
           fallback={
             <>
               <p>
-                Your workspace holds conversations, documents, and plans that
-                matter. Connecting those to Macro is a decision about trust. We
-                treat that access as a responsibility: your information is used
-                to provide your workspace and the features you choose. We do not
-                sell your data.
+                Macro stores your workspace content to provide the service. We
+                do not sell your data.
               </p>
               <p>
                 Your data is encrypted in transit and at rest. Production access
-                is restricted, and development is kept separate. Independent
-                audits and penetration testing help us assess these protections
-                over time, rather than treating security as a one-time check.
+                is restricted to authorized engineering staff. Development runs
+                in a separate environment.
               </p>
               <p>
-                We want you to be able to examine those commitments. Our code is
-                open source, our security program is independently assessed, and
-                our policies explain how information is processed. The details
-                below are here for you to read before you connect anything.
+                Macro is open source. Our security program includes independent
+                audits and penetration testing. The FAQs below link to our code,
+                security information, and data policies.
               </p>
             </>
           }
         >
           <p>
-            Google’s permission screen can feel like a big request. Macro asks
-            for access because it works as your email client and calendar: you
-            can read and organize messages, reply to people, and manage the
-            calendars you connect in one workspace.
+            Macro requests Google account access to read, send, and organize
+            email and manage connected calendars. Google lists the permissions
+            before you approve the connection.
           </p>
           <p>
-            Permission to connect your inbox is not permission for an agent to
-            send an email without review. Macro’s email agents show you the
-            message and ask for your approval before sending. You can read the
-            draft and decide whether it should go out.
+            Macro’s email agents show you the draft and ask for your approval
+            before sending.
           </p>
           <p>
-            You approve the connection on Google, and your password stays there.
-            Your work Google account becomes your Macro sign-in; adding a
-            personal account is optional. You can review the permissions before
-            connecting and revoke access later.
+            You sign in through Google. Macro does not receive your Google
+            password. Your work Google account becomes your Macro sign-in;
+            adding a personal account is optional. You can disconnect in Macro’s
+            Settings or revoke access from your Google account.
           </p>
         </Show>
       </div>
       <h3 class="mb-3 mt-12 text-base font-medium text-ink">
-        A few questions you might have
+        Frequently asked questions
       </h3>
       <div class="border-t border-edge-muted">
         <For each={questions()}>

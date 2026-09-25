@@ -23,6 +23,7 @@ const typesIn = (html: string) =>
   [...html.matchAll(/"@type"\s*:\s*"([^"]+)"/g)].map((match) => match[1]);
 
 const linksByRoute = new Map<string, string[]>();
+const documentsByRoute = new Map<string, ReturnType<typeof parse>>();
 for (const previous of baseline.routes) {
   assert(
     routes.includes(previous.path),
@@ -30,6 +31,11 @@ for (const previous of baseline.routes) {
   );
   const html = htmlFor(previous.path);
   const doc = parse(html);
+  documentsByRoute.set(previous.path, doc);
+  assert(
+    /<meta charset="[^"]+"\s*\/?>/i.test(html.slice(0, 1024)),
+    `${previous.path}: charset must precede large inline styles`
+  );
   linksByRoute.set(
     previous.path,
     [...doc.querySelectorAll('a[href]')].flatMap((link) => {
@@ -91,6 +97,55 @@ for (const previous of baseline.routes) {
       fs.existsSync(path.join(directory, new URL(og).pathname)),
       `${previous.path}: missing social image file`
     );
+}
+
+// Check destinations as well as reachability: a link to an unknown page or a
+// removed fragment can be crawlable while still sending readers to a dead end.
+let internalLinks = 0;
+let localAssets = 0;
+for (const [route, doc] of documentsByRoute) {
+  for (const link of doc.querySelectorAll('a[href]')) {
+    const url = new URL(link.getAttribute('href')!, `${origin}${route}`);
+    if (url.origin !== origin) continue;
+    // These paths belong to existing app/Ghost/OIDC CDN origins, not dist-site.
+    if (
+      /^\/(?:app(?:\/|$)|resources(?:\/|$)|\.well-known\/)/.test(url.pathname)
+    )
+      continue;
+    internalLinks++;
+    const destination = url.pathname.replace(/\/$/, '') || '/';
+    const filename = path.join(
+      directory,
+      destination,
+      path.extname(destination) ? '' : 'index.html'
+    );
+    assert(fs.existsSync(filename), `${route}: broken link ${url.href}`);
+    const target = documentsByRoute.get(destination);
+    if (url.hash && target) {
+      const fragment = decodeURIComponent(url.hash.slice(1));
+      assert(
+        target.getElementById(fragment) ||
+          [...target.querySelectorAll('a[name]')].some(
+            (anchor) => anchor.getAttribute('name') === fragment
+          ),
+        `${route}: missing fragment ${url.href}`
+      );
+    }
+  }
+  for (const element of doc.querySelectorAll(
+    'img[src], script[src], link[rel="stylesheet"], link[rel="preload"], link[rel="modulepreload"], video[src], source[src]'
+  )) {
+    const reference =
+      element.getAttribute('src') ?? element.getAttribute('href');
+    if (!reference) continue;
+    const url = new URL(reference, `${origin}${route}`);
+    if (url.origin !== origin) continue;
+    localAssets++;
+    assert(
+      fs.existsSync(path.join(directory, url.pathname)),
+      `${route}: missing asset ${url.pathname}`
+    );
+  }
 }
 
 // Follow the real HTML link graph, not just the sitemap: no orphaned pages.
@@ -168,6 +223,9 @@ assert(
 );
 console.log(
   `[seo] Preserved ${baseline.routes.length} live URLs, static content, schema, metadata, internal links and crawler rules.`
+);
+console.log(
+  `[seo] Validated ${internalLinks} internal links and ${localAssets} local assets.`
 );
 console.log(
   `[seo] Homepage HTML: ${gzipSync(Buffer.from(htmlFor('/'))).byteLength} bytes gzip. Initial JS: ${bytes} bytes gzip (demo code excluded from initial bundle).`

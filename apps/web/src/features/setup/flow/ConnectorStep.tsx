@@ -224,7 +224,7 @@ export function IntegrationConnectionPanel(props: {
                 type="button"
                 disabled={props.checking || props.busy}
                 onClick={props.onConnect}
-                class="glass flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-ink px-5 py-3 text-sm font-medium text-surface disabled:opacity-50"
+                class="flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-ink px-5 py-3 text-sm font-medium text-surface transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 <Show
                   when={!props.busy && !props.checking}
@@ -539,7 +539,7 @@ function GithubConnector(props: ConnectorStepProps) {
                     reauthenticate.isPending
                   }
                   onClick={() => void connect()}
-                  class="glass mt-1 flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-medium text-surface disabled:opacity-50"
+                  class="mt-1 flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-medium text-surface transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   <PipedreamConnectorIcon appSlug="github" class="size-4" />
                   {query.isPending
