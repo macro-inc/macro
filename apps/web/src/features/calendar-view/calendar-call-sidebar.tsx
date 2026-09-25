@@ -28,7 +28,7 @@ export function CalendarCallsSidePanelSection() {
 }
 
 /** Production wiring, mounted within the section's Suspense boundary. */
-function CalendarCallSidebar() {
+export function CalendarCallSidebar(props: { onSelectEvent?: () => void } = {}) {
   const calendar = useCalendarView();
   const userId = useUserId();
   const quickCalls = useQuickCallsFlag();
@@ -73,8 +73,10 @@ function CalendarCallSidebar() {
       actions={{
         openEvent: (event, anchor) => {
           const calendarEvent = upcoming.findEvent(event.id);
-          if (calendarEvent)
+          if (calendarEvent) {
             calendar.selectEvent(calendarEvent, anchor, 'agenda');
+            props.onSelectEvent?.();
+          }
         },
         join: (url) => {
           const target = calendarCallNavigation(url, getWebOrigin());
