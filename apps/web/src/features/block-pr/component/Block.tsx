@@ -12,22 +12,21 @@ export default function PrBlock() {
   return (
     <div class="size-full overflow-hidden flex flex-col relative">
       <SidePanel.Layout>
-        <PrSidePanelSections enrichment={detail.pullRequest()} />
+        <PrSidePanelSections enrichment={detail.data()?.pullRequest} />
         <div class="flex flex-col size-full min-w-0">
-          <Show when={detail.prRef()}>
-            {(ref) => (
+          <Show when={detail.data()}>
+            {(data) => (
               <PrSplitHeader
                 foreignEntityId={foreignEntityId}
-                prRef={ref()}
-                enrichment={detail.pullRequest()}
+                prRef={data().prRef}
+                enrichment={data().pullRequest}
               />
             )}
           </Show>
           <PrDetailBody
             foreignEntityId={foreignEntityId}
-            prRef={detail.prRef()}
-            pullRequest={detail.pullRequest()}
-            loadFailed={detail.loadFailed()}
+            data={detail.data()}
+            status={detail.query.status}
             discussionSource={detail.discussionSource}
           />
         </div>

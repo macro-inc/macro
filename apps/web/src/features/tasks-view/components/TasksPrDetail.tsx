@@ -2,7 +2,7 @@ import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useRouteParams } from '@app/lib/split-router';
 import { PrStatusIcon } from '@block-pr/component/PrStatus';
-import { prDisplayName } from '@block-pr/util/prKey';
+import { prDisplayName, prHtmlUrl } from '@block-pr/util/prKey';
 import {
   PrDetailActions,
   PrDetailContent,
@@ -60,10 +60,15 @@ export function TasksPrDetail(props: { foreignEntityId: string }) {
   const analytics = useAnalytics();
   const detail = usePrDetail(() => props.foreignEntityId);
   const name = () => {
-    const ref = detail.prRef();
+    const data = detail.data();
     return (
-      detail.pullRequest()?.name ?? (ref ? prDisplayName(ref) : 'Pull request')
+      data?.pullRequest.name ??
+      (data ? prDisplayName(data.prRef) : 'Pull request')
     );
+  };
+  const githubUrl = () => {
+    const data = detail.data();
+    return data ? data.pullRequest.url ?? prHtmlUrl(data.prRef) : undefined;
   };
   onMount(() => {
     analytics.pageView('pr');
@@ -79,21 +84,17 @@ export function TasksPrDetail(props: { foreignEntityId: string }) {
         <ViewShell.TopBar class="touch:flex">
           <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
           <ViewBreadcrumbs.Outlet aria-label="Pull request location" />
-          <PrDetailActions
-            prRef={detail.prRef()}
-            pullRequest={detail.pullRequest()}
-          />
+          <PrDetailActions url={githubUrl()} />
         </ViewShell.TopBar>
         <TasksPrBreadcrumb
           foreignEntityId={props.foreignEntityId}
           name={name()}
-          status={detail.pullRequest()?.status}
+          status={detail.data()?.pullRequest.status}
         />
         <PrDetailContent
           foreignEntityId={props.foreignEntityId}
-          prRef={detail.prRef()}
-          pullRequest={detail.pullRequest()}
-          loadFailed={detail.loadFailed()}
+          data={detail.data()}
+          status={detail.query.status}
           discussionSource={detail.discussionSource}
         />
       </div>

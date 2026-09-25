@@ -10,7 +10,7 @@ import { openExternalUrl } from '@core/util/url';
 import { DebouncedNotificationReadMarker } from '@notifications';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { Button, cn, Layer, Scroll } from '@ui';
-import { type Accessor, createMemo, Show } from 'solid-js';
+import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
 import {
   PrDescriptionSkeleton,
   PrMetadataSkeleton,
@@ -21,7 +21,10 @@ import { PR_PILL_CLASS, PrStatusChip, PrStatusIcon } from '../component/PrStatus
 import { PrTimeline } from '../component/PrTimeline';
 import { PrSidePanelSections } from '../component/sidepanel/PrSidePanelSections';
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
-import { usePrForeignEntityQuery } from '../data/queries';
+import {
+  type PrForeignEntityData,
+  usePrForeignEntityQuery,
+} from '../data/queries';
 import {
   cleanGithubMarkdown,
   githubAvatarUrl,
@@ -32,25 +35,32 @@ import { prDisplayName, prHtmlUrl } from '../util/prKey';
 
 /** Share PR query state without coupling the host's header to the detail body. */
 export function usePrDetail(foreignEntityId: Accessor<string>) {
-  const foreignEntityQuery = usePrForeignEntityQuery(foreignEntityId);
-  const data = () =>
-    foreignEntityQuery.isSuccess ? foreignEntityQuery.data : undefined;
-  const prRef = () => data()?.prRef;
-  const pullRequest = () => data()?.pullRequest;
-  const loadFailed = () => !pullRequest() && !!foreignEntityQuery.error;
-
+  const query = usePrForeignEntityQuery(foreignEntityId);
   // Detail-lifetime local Macro discussion (prototype-only, lost on reload).
   const discussionSource = createPrDiscussionSource();
-  return { prRef, pullRequest, loadFailed, discussionSource };
+  const data = (): PrForeignEntityData | undefined =>
+    query.isSuccess ? query.data : undefined;
+  return { query, data, discussionSource };
 }
 
 type PrDetailBodyProps = {
   foreignEntityId: string;
-  prRef?: PrRef;
-  pullRequest?: GithubPullRequestWithDetails;
-  loadFailed: boolean;
+  data?: PrForeignEntityData;
+  status: ReturnType<typeof usePrForeignEntityQuery>['status'];
   discussionSource: ReturnType<typeof createPrDiscussionSource>;
 };
+
+function PrDetailSkeleton() {
+  return (
+    <>
+      <PrTitleSkeleton />
+      <div class="spacer h-3" />
+      <PrMetadataSkeleton />
+      <PrDescriptionSkeleton />
+      <PrTimelineSkeleton />
+    </>
+  );
+}
 
 export function PrDetailBody(props: PrDetailBodyProps) {
   const notificationSource = useGlobalNotificationSource();
@@ -63,31 +73,34 @@ export function PrDetailBody(props: PrDetailBodyProps) {
       <Scroll class="flex-1 min-h-0">
         <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
           <Show
-            when={props.prRef}
+            when={props.data}
             fallback={
               <Show
-                when={!props.loadFailed}
-                fallback={<PrLoadErrorBanner loadFailed={props.loadFailed} />}
+                when={props.status !== 'error'}
+                fallback={<PrLoadErrorBanner />}
               >
-                <PrTitleSkeleton />
-                <div class="spacer h-3" />
-                <PrMetadataSkeleton />
-                <PrDescriptionSkeleton />
-                <PrTimelineSkeleton />
+                <PrDetailSkeleton />
               </Show>
             }
           >
-            {(ref) => (
+            {(data) => (
               <>
-                <PrTitle prRef={ref()} pullRequest={props.pullRequest} />
-                <div class="spacer h-3" />
-                <PrMetadata prRef={ref()} pullRequest={props.pullRequest} />
-                <PrDescription pullRequest={props.pullRequest} />
-                <PrLoadErrorBanner loadFailed={props.loadFailed} />
-                <PrTimeline
-                  githubItems={props.pullRequest?.comments ?? []}
-                  source={props.discussionSource}
+                <PrTitle
+                  prRef={data().prRef}
+                  pullRequest={data().pullRequest}
                 />
+                <div class="spacer h-3" />
+                <PrMetadata
+                  prRef={data().prRef}
+                  pullRequest={data().pullRequest}
+                />
+                <PrDescription pullRequest={data().pullRequest} />
+                <Suspense fallback={<PrTimelineSkeleton />}>
+                  <PrTimeline
+                    githubItems={data().pullRequest.comments ?? []}
+                    source={props.discussionSource}
+                  />
+                </Suspense>
               </>
             )}
           </Show>
@@ -101,36 +114,40 @@ export function PrDetailBody(props: PrDetailBodyProps) {
 export function PrDetailContent(props: PrDetailBodyProps) {
   return (
     <div class="relative min-h-0 min-w-0 flex-1">
-      <SidePanel.Layout headerToggle={false}>
-        <PrSidePanelSections enrichment={props.pullRequest} />
-        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <PrDetailBody
-            foreignEntityId={props.foreignEntityId}
-            prRef={props.prRef}
-            pullRequest={props.pullRequest}
-            loadFailed={props.loadFailed}
-            discussionSource={props.discussionSource}
-          />
-        </div>
-      </SidePanel.Layout>
+      <Suspense
+        fallback={
+          <Scroll class="size-full min-h-0">
+            <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
+              <PrDetailSkeleton />
+            </div>
+          </Scroll>
+        }
+      >
+        <SidePanel.Layout headerToggle={false}>
+          <PrSidePanelSections enrichment={props.data?.pullRequest} />
+          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <PrDetailBody
+              foreignEntityId={props.foreignEntityId}
+              data={props.data}
+              status={props.status}
+              discussionSource={props.discussionSource}
+            />
+          </div>
+        </SidePanel.Layout>
+      </Suspense>
     </div>
   );
 }
 
-export function PrDetailActions(props: {
-  prRef?: PrRef;
-  pullRequest?: GithubPullRequestWithDetails;
-}) {
+export function PrDetailActions(props: { url?: string }) {
   return (
     <div class="ml-auto flex shrink-0 items-center gap-2">
-      <Show when={props.prRef}>
-        {(ref) => (
+      <Show when={props.url}>
+        {(url) => (
           <Button
             variant="outline"
             size="sm"
-            onClick={() =>
-              openExternalUrl(props.pullRequest?.url ?? prHtmlUrl(ref()))
-            }
+            onClick={() => openExternalUrl(url())}
           >
             Open on GitHub
           </Button>
@@ -144,30 +161,31 @@ export function PrDetailActions(props: {
 export function StandalonePrDetail(props: { foreignEntityId: string }) {
   const detail = usePrDetail(() => props.foreignEntityId);
   const name = () => {
-    const ref = detail.prRef();
+    const data = detail.data();
     return (
-      detail.pullRequest()?.name ?? (ref ? prDisplayName(ref) : 'Pull request')
+      data?.pullRequest.name ??
+      (data ? prDisplayName(data.prRef) : 'Pull request')
     );
+  };
+  const githubUrl = () => {
+    const data = detail.data();
+    return data ? data.pullRequest.url ?? prHtmlUrl(data.prRef) : undefined;
   };
   return (
     <SidePanel.Root persistKey={`pr:${props.foreignEntityId}`}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
         <ViewShell.TopBar class="touch:flex">
           <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-          <Show when={detail.pullRequest()?.status}>
+          <Show when={detail.data()?.pullRequest.status}>
             {(status) => <PrStatusIcon status={status()} />}
           </Show>
           <span class="min-w-0 truncate text-sm font-semibold">{name()}</span>
-          <PrDetailActions
-            prRef={detail.prRef()}
-            pullRequest={detail.pullRequest()}
-          />
+          <PrDetailActions url={githubUrl()} />
         </ViewShell.TopBar>
         <PrDetailContent
           foreignEntityId={props.foreignEntityId}
-          prRef={detail.prRef()}
-          pullRequest={detail.pullRequest()}
-          loadFailed={detail.loadFailed()}
+          data={detail.data()}
+          status={detail.query.status}
           discussionSource={detail.discussionSource}
         />
       </div>
@@ -263,12 +281,10 @@ function PrDescription(props: { pullRequest?: GithubPullRequestWithDetails }) {
   );
 }
 
-function PrLoadErrorBanner(props: { loadFailed: boolean }) {
+function PrLoadErrorBanner() {
   return (
-    <Show when={props.loadFailed}>
-      <div class="mt-6 px-3 py-2 rounded-lg border border-edge-muted text-xs text-ink-muted">
-        Couldn't load this pull request from cached GitHub data.
-      </div>
-    </Show>
+    <div class="mt-6 px-3 py-2 rounded-lg border border-edge-muted text-xs text-ink-muted">
+      Couldn't load this pull request from cached GitHub data.
+    </div>
   );
 }
