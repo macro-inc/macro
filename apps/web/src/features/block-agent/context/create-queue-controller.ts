@@ -10,6 +10,13 @@
  * socket the socket is the only writer: any GET still in flight is
  * discarded, no further GETs are issued (own mutations included — the server
  * publishes for those too), and the last event wins unconditionally.
+ *
+ * Switching sessions remounts the pane (or rebinds this controller to a new
+ * id). The GET that re-baselines can come back empty from a replica that
+ * does not hold the in-memory queue, so the last snapshot per session is
+ * remembered here and restored immediately on switch. An empty GET does not
+ * overwrite that snapshot unless the socket has reopened — a real drain
+ * publishes an event.
  */
 
 import { toast } from '@core/component/Toast/Toast';
@@ -45,6 +52,18 @@ export type QueueController = {
   remove: (actionId: string) => Promise<void>;
 };
 
+/**
+ * Last full snapshot per session. Switching away would otherwise drop the
+ * rows until a GET landed, and that GET is a local replica read that can
+ * honestly be empty.
+ */
+const lastSnapshot = new Map<string, QueuedActionDto[]>();
+
+/** Test-only: drop remembered snapshots between cases. */
+export function resetQueueSnapshots(): void {
+  lastSnapshot.clear();
+}
+
 export function createQueueController(options: {
   /** Absent until a just-created session's `POST` lands. */
   sessionId: Accessor<string | undefined>;
@@ -63,6 +82,16 @@ export function createQueueController(options: {
   // response identifies itself by the session it was fetched for.
   let socketAuthoritative = false;
 
+  // An empty GET is what a non-managing replica returns. After a snapshot
+  // has been remembered for this session, ignore those until a reconnect
+  // makes a missed drain possible.
+  let acceptEmptyBaseline = true;
+
+  const show = (sessionId: string, entries: QueuedActionDto[]) => {
+    lastSnapshot.set(sessionId, entries);
+    setQueued(entries);
+  };
+
   const baseline = async () => {
     const sessionId = untrack(options.sessionId);
     if (!sessionId) return;
@@ -74,15 +103,30 @@ export function createQueueController(options: {
     // entries; the next socket event or reconnect supersedes it anyway.
     if (socketAuthoritative || sessionId !== untrack(options.sessionId)) return;
     if (result === undefined || result.isErr()) return;
-    setQueued(result.value.entries);
+    const entries = result.value.entries;
+    if (
+      entries.length === 0 &&
+      !acceptEmptyBaseline &&
+      (lastSnapshot.get(sessionId)?.length ?? 0) > 0
+    ) {
+      return;
+    }
+    show(sessionId, entries);
   };
 
-  // A session switch drops the old session's entries immediately — they were
-  // never this session's — then baselines the new one.
+  // A session switch drops the old session's rows from this view — they were
+  // never this session's — then restores whatever we last knew about the new
+  // one and re-baselines.
   createEffect(
-    on(options.sessionId, () => {
+    on(options.sessionId, (sessionId) => {
       socketAuthoritative = false;
-      setQueued([]);
+      if (!sessionId) {
+        setQueued([]);
+        return;
+      }
+      const remembered = lastSnapshot.get(sessionId) ?? [];
+      setQueued(remembered);
+      acceptEmptyBaseline = remembered.length === 0;
       void baseline();
     })
   );
@@ -93,7 +137,8 @@ export function createQueueController(options: {
     subscribeAgentSessionQueue((event) => {
       if (event.agentSessionId !== untrack(options.sessionId)) return;
       socketAuthoritative = true;
-      setQueued(event.entries);
+      acceptEmptyBaseline = false;
+      show(event.agentSessionId, event.entries);
     })
   );
 
@@ -102,7 +147,8 @@ export function createQueueController(options: {
   onCleanup(
     subscribeSocketSessionStarted(() => {
       socketAuthoritative = false;
-      baseline();
+      acceptEmptyBaseline = true;
+      void baseline();
     })
   );
 

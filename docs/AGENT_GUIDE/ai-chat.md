@@ -753,6 +753,8 @@ must stay hidden; subsequent live messages must still appear.
   harness restart — they must not disappear if the managing replica drains.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.
+  Switching to another session hides this session's queue; switching back shows it
+  again immediately, even if the baseline GET has not returned or comes back empty.
   Each row shows a `Queued` label (with `by {user}` when someone else queued it —
   several users can stack prompts in one session's queue) and an always-visible remove
   (`X`) button. A queued prompt's text is itself an editor: click in and type — changes
