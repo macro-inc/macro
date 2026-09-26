@@ -312,7 +312,9 @@ connected account. Search is `Ctrl+F` within the surface.
 `Favorites`, directly below Noise, lists starred Macro emails across Signal,
 Noise, and archived mail. It respects the selected inboxes and filters; search
 within the tab is also restricted to favorites. Removing a star removes the row
-from this view. The tab persists across reloads. With `enable-graphql-soup` on,
+from this view immediately while the remaining rows stay visible through the
+query refresh. Removing the last favorite goes directly to the empty state.
+The tab persists across reloads. With `enable-graphql-soup` on,
 favorite membership comes from the filtered GraphQL favorites query, then thread
 IDs scope the paginated GraphQL Soup query. With the flag off, the same scope
 uses the REST queries. An empty favorites list shows `No favorite emails`.

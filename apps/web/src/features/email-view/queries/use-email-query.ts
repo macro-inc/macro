@@ -87,6 +87,12 @@ type RetainedEmailPublication = AdmittedEmails & {
   resolved: Map<string, EmailEntity | undefined>;
 };
 
+type ScopedEmailResults = {
+  scope: string;
+  items: EntityData[];
+  ready: boolean;
+};
+
 /** Query, service search, and row assembly owned by the Email view. */
 export function useEmailDataSource(
   state: EmailDataSourceInput,
@@ -162,35 +168,53 @@ export function useEmailDataSource(
     buildRequest: (request) => buildEmailSearchRequest(queryContext(), request),
   });
 
-  const rawEntities = createMemo<EntityData[]>(() => {
-    // Disabled searches can retain placeholder data for the previous facets.
-    if (!filtersReady()) return [];
-
-    if (!search.isSearching()) {
-      // Previous-tab/inbox rows are not valid results for the new query.
-      // REST placeholders need the same treatment as pending GraphQL reads.
-      // Background refreshes still retain usable current-query cache results.
-      if (isListPending()) return [];
-
-      return query.data?.entities ?? [];
-    }
-
-    // Never admit the previous text/filter query's placeholder results.
-    if (!search.usesServiceSearch() || search.searchQuery.isPlaceholderData)
-      return [];
-    return search.data();
-  });
-
-  const hasReadFilter = () => (state.facets.read?.length ?? 0) > 0;
+  // Favorite membership changes the server query, not the user's view scope.
+  // Keep the last resolved rows through that reload and apply live membership
+  // below. Other scope changes must still discard previous-query results.
   const scope = createMemo(() =>
     JSON.stringify([
       userId(),
-      queryArgs().body,
+      state.tab,
+      buildEmailQuery({ ...queryContext(), favoriteThreadIds: undefined }).body,
       state.facets,
       state.search.trim(),
     ])
   );
+  const isSourcePending = () =>
+    search.isSearching()
+      ? !search.usesServiceSearch() ||
+        search.searchQuery.isPlaceholderData ||
+        search.isSearchServiceLoading()
+      : isListPending();
+  const rawResults = createMemo<ScopedEmailResults>(
+    (previous) => {
+      const currentScope = scope();
+      const empty = { scope: currentScope, items: [], ready: false };
+      if (!filtersReady()) return empty;
+      if (isSourcePending()) {
+        return showsFavorites() &&
+          previous.scope === currentScope &&
+          previous.ready
+          ? previous
+          : empty;
+      }
+      return {
+        scope: currentScope,
+        items: search.isSearching()
+          ? search.data()
+          : (query.data?.entities ?? []),
+        ready: true,
+      };
+    },
+    { scope: '', items: [], ready: false }
+  );
+  const rawEntities = () => rawResults().items;
+  const retainsFavoriteResults = () =>
+    showsFavorites() && rawResults().ready && isSourcePending();
+
+  const hasReadFilter = () => (state.facets.read?.length ?? 0) > 0;
   const matchesOtherFacets = (email: EmailEntity) =>
+    (!showsFavorites() || favoriteIds().has(email.id)) &&
     testFacets(
       { ...state.facets, read: [] },
       EMAIL_FACETS,
@@ -273,7 +297,10 @@ export function useEmailDataSource(
   const publication = createMemo<RetainedEmailPublication>(
     (previous) => {
       const currentScope = scope();
-      if (!filtersReady() || (!search.isSearching() && isListPending())) {
+      if (
+        !filtersReady() ||
+        (!search.isSearching() && isListPending() && !retainsFavoriteResults())
+      ) {
         return { scope: currentScope, items: [], resolved: new Map() };
       }
       if (!hasReadFilter()) {
@@ -323,7 +350,7 @@ export function useEmailDataSource(
   const usesServiceSearch = search.usesServiceSearch;
 
   const hasMore = () => {
-    if (!filtersReady()) return false;
+    if (!filtersReady() || retainsFavoriteResults()) return false;
     if (usesServiceSearch()) return search.hasNextPage();
     return !isListPending() && query.hasNextPage;
   };
@@ -355,6 +382,7 @@ export function useEmailDataSource(
   const isLoading = () => {
     if (showsFavorites() && favorites.isError) return false;
     if (!filtersReady()) return true;
+    if (retainsFavoriteResults()) return false;
     if (!search.isSearching()) {
       // A query held back for the tag sets is loading, not empty.
       return isListPending();

@@ -121,6 +121,8 @@ function mount(search = '') {
       []
     );
     const [favoritesError, setFavoritesError] = createSignal<Error>();
+    const [searchFetching, setSearchFetching] = createSignal(false);
+    const [searchPlaceholder, setSearchPlaceholder] = createSignal(false);
     favoritesQueryMock.mockReturnValue({
       get isSuccess() {
         return favoriteIds() !== undefined && !favoritesError();
@@ -170,8 +172,12 @@ function mount(search = '') {
           get isSuccess() {
             return discovery || !retentionLoading();
           },
-          isPlaceholderData: false,
-          isFetching: false,
+          get isPlaceholderData() {
+            return discovery && searchPlaceholder();
+          },
+          get isFetching() {
+            return discovery && searchFetching();
+          },
           isFetchingNextPage: false,
           hasNextPage: true,
           error: null,
@@ -245,6 +251,8 @@ function mount(search = '') {
       setTagSetsReady,
       setFavoriteIds,
       setFavoritesError,
+      setSearchFetching,
+      setSearchPlaceholder,
       searchEntities,
       setSearchEntities,
       setSearchDiscoveryEntities,
@@ -308,6 +316,118 @@ describe('Email list query transitions', () => {
     expect(source.isLoading()).toBe(false);
     expect(ids(source)).toEqual([]);
   });
+
+  it.each(['graphql', 'rest'] as const)(
+    'keeps remaining favorites visible while %s reloads the narrowed query',
+    (transport) => {
+      const view = mount();
+      batch(() => {
+        view.setState('tab', 'favorites');
+        view.setFavoriteIds(['remove', 'keep']);
+        view.setEntities([email('remove'), email('keep')]);
+      });
+      expect(ids(view.source)).toEqual(['remove', 'keep']);
+      batch(() => {
+        view.setFavoriteIds(['keep']);
+        if (transport === 'graphql') view.setLoading(true);
+        else view.setPlaceholder(true);
+      });
+      expect(ids(view.source)).toEqual(['keep']);
+      expect(view.source.isLoading()).toBe(false);
+      expect(view.source.hasMore()).toBe(false);
+
+      // A failed optimistic removal restores the original row during reload.
+      view.setFavoriteIds(['remove', 'keep']);
+      expect(ids(view.source)).toEqual(['remove', 'keep']);
+      batch(() => {
+        view.setEntities([email('keep')]);
+        view.setLoading(false);
+        view.setPlaceholder(false);
+      });
+      expect(ids(view.source)).toEqual(['keep']);
+    }
+  );
+
+  it('shows the empty view immediately when removing the last favorite', () => {
+    const view = mount();
+    batch(() => {
+      view.setState('tab', 'favorites');
+      view.setFavoriteIds(['only']);
+      view.setEntities([email('only')]);
+    });
+    expect(ids(view.source)).toEqual(['only']);
+    batch(() => {
+      view.setFavoriteIds([]);
+      view.setLoading(true);
+    });
+    expect(ids(view.source)).toEqual([]);
+    expect(view.source.isLoading()).toBe(false);
+  });
+
+  it('keeps remaining search hits visible when favorite membership changes', () => {
+    const view = mount('invoice');
+    batch(() => {
+      view.setState('tab', 'favorites');
+      view.setFavoriteIds(['remove', 'keep']);
+      view.setSearchEntities([email('remove'), email('keep')]);
+    });
+    expect(ids(view.source)).toEqual(['remove', 'keep']);
+    batch(() => {
+      view.setFavoriteIds(['keep']);
+      view.setSearchFetching(true);
+      view.setSearchPlaceholder(true);
+    });
+    expect(ids(view.source)).toEqual(['keep']);
+    expect(view.source.isLoading()).toBe(false);
+    expect(view.source.hasMore()).toBe(false);
+    batch(() => {
+      view.setSearchEntities([]);
+      view.setSearchFetching(false);
+      view.setSearchPlaceholder(false);
+    });
+    expect(ids(view.source)).toEqual([]);
+  });
+
+  it('keeps admitted read favorites while removing a different row', () => {
+    const view = mount();
+    batch(() => {
+      view.setState({ tab: 'favorites', facets: { read: ['unread'] } });
+      view.setFavoriteIds(['remove', 'keep']);
+      view.setEntities([email('remove'), email('keep')]);
+    });
+    expect(ids(view.source)).toEqual(['remove', 'keep']);
+    view.setEntities([email('remove'), { ...email('keep'), isRead: true }]);
+    expect(ids(view.source)).toEqual(['remove', 'keep']);
+    batch(() => {
+      view.setFavoriteIds(['keep']);
+      view.setLoading(true);
+      view.setRetentionLoading(true);
+    });
+    expect(ids(view.source)).toEqual(['keep']);
+    expect(view.source.isLoading()).toBe(false);
+  });
+
+  it.each(['inbox', 'tab', 'facets', 'search'] as const)(
+    'does not retain favorite rows across a %s change',
+    (change) => {
+      const view = mount();
+      batch(() => {
+        view.setState('tab', 'favorites');
+        view.setFavoriteIds(['keep']);
+        view.setEntities([email('keep')]);
+      });
+      expect(ids(view.source)).toEqual(['keep']);
+      batch(() => {
+        view.setLoading(true);
+        if (change === 'inbox') view.setState('inboxIds', ['inbox-b']);
+        if (change === 'tab') view.setState('tab', 'important');
+        if (change === 'facets') view.setState('facets', { read: ['unread'] });
+        if (change === 'search') view.setState('search', 'different');
+      });
+      expect(ids(view.source)).toEqual([]);
+      expect(view.source.isLoading()).toBe(true);
+    }
+  );
 
   it('lists the scheduled source on the Scheduled tab instead of soup rows', () => {
     scheduledRows.current = [
