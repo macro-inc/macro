@@ -169,7 +169,7 @@ async fn a_repository_rejection_is_typed_with_the_repository() {
         r#"{"error":{"code":"repository_access","message":"Repository not accessible"}}"#,
     );
     let error = client_against(base_url)
-        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
         .await
         .expect_err("the stand-in rejects every create");
     let unavailable = error
@@ -205,7 +205,7 @@ async fn a_branch_cursor_could_not_verify_is_retried() {
         ("200 OK".to_owned(), CREATED_BODY),
     ]);
     let (agent, run) = client_with_instant_retries(base_url, 2)
-        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
         .await
         .expect("the third answer is a created agent");
     assert_eq!(agent.as_str(), "bc-00000000-0000-0000-0000-000000000001");
@@ -231,7 +231,7 @@ async fn a_branch_still_unverifiable_after_retrying_is_typed_with_the_branch() {
         ("400 Bad Request".to_owned(), BRANCH_UNVERIFIABLE_BODY),
     ]);
     let error = client_with_instant_retries(base_url, 1)
-        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
         .await
         .expect_err("the stand-in never relents");
     let unavailable = error
@@ -305,7 +305,7 @@ async fn a_rate_limited_create_is_asked_again() {
         ("200 OK".to_owned(), CREATED_BODY),
     ]);
     let (agent, _) = client_with_instant_turn_retries(base_url, 3)
-        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
         .await
         .expect("the second answer is a created agent");
     assert_eq!(agent.as_str(), "bc-00000000-0000-0000-0000-000000000001");
@@ -321,7 +321,7 @@ async fn a_failing_gateway_is_asked_again() {
         ("200 OK".to_owned(), CREATED_BODY),
     ]);
     let (agent, _) = client_with_instant_turn_retries(base_url, 3)
-        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
         .await
         .expect("the second answer is a created agent");
     assert_eq!(agent.as_str(), "bc-00000000-0000-0000-0000-000000000001");
@@ -344,6 +344,7 @@ async fn a_rate_limited_follow_up_run_is_asked_again() {
             &CursorAgentId::new("bc-00000000-0000-0000-0000-000000000001".to_owned()),
             "prompt",
             None,
+            &[],
         )
         .await
         .expect("the second answer is a run");
@@ -360,7 +361,7 @@ async fn a_transient_that_outlasts_the_budget_fails_as_it_always_did() {
         ("429 Too Many Requests".to_owned(), RATE_LIMITED_BODY),
     ]);
     let error = client_with_instant_turn_retries(base_url, 1)
-        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
         .await
         .expect_err("the stand-in never relents");
     assert!(
@@ -381,7 +382,7 @@ async fn a_rejection_is_never_asked_again() {
         r#"{"error":{"code":"validation_error","message":"Model 'nope' does not match a known variant"}}"#,
     )]);
     client_with_instant_turn_retries(base_url, 3)
-        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
         .await
         .expect_err("the stand-in rejects the create");
     assert_eq!(requests.try_iter().count(), 1, "asked exactly once");
@@ -396,7 +397,7 @@ async fn other_validation_errors_are_not_retried() {
         r#"{"error":{"code":"validation_error","message":"Model 'nope' does not match a known variant"}}"#,
     )]);
     let error = client_with_instant_retries(base_url, 2)
-        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
         .await
         .expect_err("the stand-in rejects the create");
     assert!(
@@ -418,7 +419,7 @@ async fn an_unrelated_client_error_is_still_a_plain_rejection() {
         r#"{"error":{"code":"validation_error","message":"Model 'nope' does not match a known variant"}}"#,
     );
     let error = client_against(base_url)
-        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
         .await
         .expect_err("the stand-in rejects every create");
     assert!(
@@ -448,7 +449,7 @@ const USAGE_LIMIT_BODY: &str = r#"{"error":{"code":"usage_limit_exceeded","messa
 async fn an_exhausted_usage_limit_is_typed_with_a_notice() {
     let base_url = stand_in_server("400 Bad Request", USAGE_LIMIT_BODY);
     let error = client_against(base_url)
-        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
         .await
         .expect_err("the stand-in rejects every create");
     let exceeded = error
@@ -479,7 +480,7 @@ async fn an_exhausted_usage_limit_is_typed_with_a_notice() {
 async fn an_exhausted_usage_limit_on_a_follow_up_run_is_typed_too() {
     let base_url = stand_in_server("400 Bad Request", USAGE_LIMIT_BODY);
     let error = client_against(base_url)
-        .create_run(&agent(), "prompt", None)
+        .create_run(&agent(), "prompt", None, &[])
         .await
         .expect_err("the stand-in rejects every run");
     assert!(
@@ -500,7 +501,7 @@ async fn a_usage_limit_is_matched_on_the_code_not_the_message() {
         r#"{"error":{"code":"validation_error","message":"You need to increase your hard limit."}}"#,
     );
     let error = client_against(base_url)
-        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
         .await
         .expect_err("the stand-in rejects every create");
     assert!(

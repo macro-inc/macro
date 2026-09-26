@@ -299,8 +299,9 @@ fn forwardable_headers(headers: Vec<HttpHeader>) -> Vec<McpHeader> {
 /// suppressed context the agent handles fine. HTTP and SSE MCP servers are
 /// forwarded to Cursor at agent creation, so those are real too — while stdio
 /// is declined, which is why no capability claims it (see
-/// [`forwardable_mcp_servers`]). Cursor's prompt body is text-only as this
-/// crate models it, so image and audio stay false.
+/// [`forwardable_mcp_servers`]). Pasted links that fetch as images are sent
+/// as Cursor prompt images and as ACP image frames, so image is real. Audio
+/// is not.
 ///
 /// Nothing here can express the divergence that matters most: this agent
 /// never sends `session/request_permission`, because Cursor approves tool use
@@ -310,7 +311,7 @@ fn forwardable_headers(headers: Vec<HttpHeader>) -> Vec<McpHeader> {
 /// startup instead — see the binary's docs.
 fn agent_capabilities() -> AgentCapabilities {
     AgentCapabilities::default()
-        .prompt_capabilities(PromptCapabilities::new().embedded_context(true))
+        .prompt_capabilities(PromptCapabilities::new().embedded_context(true).image(true))
         .mcp_capabilities(McpCapabilities::new().http(true).sse(true))
         // Without this a client resuming a session it persisted never sends
         // `session/load` — it gives up on the session instead, which for the

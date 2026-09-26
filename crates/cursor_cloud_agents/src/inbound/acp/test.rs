@@ -252,8 +252,10 @@ async fn initialize_advertises_the_prompt_capabilities_we_actually_have() {
         capabilities.embedded_context,
         "resource links are handled, so embedded context must be advertised"
     );
-    // Cursor's prompt body is text-only; claiming these would be a lie.
-    assert!(!capabilities.image);
+    assert!(
+        capabilities.image,
+        "pasted image links are fetched and sent as prompt images"
+    );
     assert!(!capabilities.audio);
 }
 
@@ -569,7 +571,7 @@ async fn remote_mcp_servers_are_forwarded_to_the_agent() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _, _)] = calls.as_slice() else {
         panic!("expected one create_agent, got {calls:?}");
     };
     assert_eq!(
@@ -650,7 +652,7 @@ async fn stdio_mcp_servers_are_declined_without_failing_the_session() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _, _)] = calls.as_slice() else {
         panic!("expected one create_agent");
     };
     let names: Vec<&str> = servers.iter().map(|server| server.name.as_str()).collect();
@@ -1011,7 +1013,7 @@ async fn setting_the_model_changes_what_the_next_run_asks_for() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateAgent(_, _, _, _, model) => Some(model),
+            CursorCall::CreateAgent(_, _, _, _, model, _) => Some(model),
             _ => None,
         })
         .expect("the turn created an agent");
@@ -1166,7 +1168,7 @@ async fn a_restored_session_keeps_its_model() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateRun(_, _, model) => Some(model),
+            CursorCall::CreateRun(_, _, model, _) => Some(model),
             _ => None,
         })
         .expect("the restored agent got a follow-up run");
@@ -1228,7 +1230,7 @@ async fn a_restored_deployment_slug_falls_back_to_cursors_default() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateRun(_, _, model) => Some(model),
+            CursorCall::CreateRun(_, _, model, _) => Some(model),
             _ => None,
         })
         .expect("the restored agent got a follow-up run");
@@ -1286,7 +1288,7 @@ async fn session_load_restores_the_clients_mcp_servers() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _, _)] = calls.as_slice() else {
         panic!("expected one agent creation, got {calls:?}");
     };
     assert_eq!(servers.len(), 1);
@@ -1356,7 +1358,7 @@ async fn a_session_with_no_choice_rests_the_picker_on_auto() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateAgent(_, _, _, _, model) => Some(model),
+            CursorCall::CreateAgent(_, _, _, _, model, _) => Some(model),
             _ => None,
         })
         .expect("the prompt created an agent");
