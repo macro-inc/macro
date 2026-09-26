@@ -181,6 +181,36 @@ describe('queued message advancement', () => {
     expect(editor.clear).toHaveBeenCalledOnce();
   });
 
+  // Touch has no Enter to send with, so a draft typed during a turn is
+  // strandable unless the button itself queues it.
+  it('offers a queue button over a draft typed during a turn', () => {
+    const onSend = vi.fn();
+    const onStop = vi.fn();
+
+    render(() => <AgentInput busy onSend={onSend} onStop={onStop} />);
+
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
+
+    editor.change?.('queue this behind the turn');
+
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Queue message' }));
+
+    expect(onSend).toHaveBeenCalledWith('queue this behind the turn', []);
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  it('reads Send, not Queue message, once the turn is over', () => {
+    const onSend = vi.fn();
+
+    render(() => <AgentInput onSend={onSend} />);
+
+    editor.change?.('an idle prompt');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(onSend).toHaveBeenCalledWith('an idle prompt', []);
+  });
+
   it('sends attached files instead of advancing past them', () => {
     const onSend = vi.fn();
     const onStop = vi.fn();
@@ -203,13 +233,14 @@ describe('queued message advancement', () => {
       />
     ));
 
-    // Attached files are a draft, so this is the typed-text case: Enter sends
-    // them, and the control is Stop rather than the send-next Enter action,
-    // which would have stopped the agent and left the files behind.
+    // Attached files are a draft, so this is the typed-text case: the control
+    // queues them rather than being the send-next Enter action, which would
+    // have stopped the agent and left the files behind.
     expect(
       screen.queryByRole('button', { name: 'Send next queued message' })
     ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Queue message' })).toBeTruthy();
 
     editor.enter?.();
     expect(onSend).toHaveBeenCalledWith('', [uploaded]);

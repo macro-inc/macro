@@ -30,7 +30,15 @@ import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
 import { Button, ComposerSurface, SendButton } from '@ui';
-import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createSignal,
+  type JSX,
+  Match,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 
 /**
  * Id of the agent input's text-area wrapper. Exposed so callers (e.g. the
@@ -136,15 +144,26 @@ export function AgentInput(props: AgentInputProps) {
     props.onAttachFiles?.(files);
   };
 
+  // Something to post, even while a file still holds the send back. The
+  // control keeps reading Send over a draft rather than falling through to
+  // Stop: on a phone that button is the whole send affordance, so a draft
+  // written during a turn had no way out of the composer.
+  const hasDraft = () =>
+    markdown().trim().length > 0 || attachments().length > 0;
+
   // Sending while busy is allowed — the service queues prompts behind the
   // running turn. A file still uploading holds the send: its URL is not
   // known yet, and the agent gets exactly what the chips show.
   const canSend = () =>
-    (markdown().trim().length > 0 || attachments().length > 0) &&
+    hasDraft() &&
     !hasPendingAttachments() &&
     !props.disabled &&
     !props.readOnly &&
     !dictation.active();
+
+  // The prompt will wait in the server queue behind the open turn rather
+  // than reach the agent now, so the control says queue instead of send.
+  const sendQueues = () => props.busy === true;
 
   // The channel composer's chips, drop zone, and overlay read their state
   // from `Input.Root`'s context; this is that context, over this composer's
@@ -176,8 +195,7 @@ export function AgentInput(props: AgentInputProps) {
   // files are something to send in their own right, so they hold it back too.
   const canSendNext = () =>
     !dictation.active() &&
-    markdown().trim().length === 0 &&
-    attachments().length === 0 &&
+    !hasDraft() &&
     props.hasQueuedMessages === true &&
     !props.sendNextHeld &&
     !props.disabled &&
@@ -385,47 +403,47 @@ export function AgentInput(props: AgentInputProps) {
                       dictation={dictation}
                       disabled={props.disabled || props.readOnly}
                     />
-                    <Show
-                      when={canSendNext()}
+                    {/* A draft outranks both in-flight controls: it is what
+                        the user is asking to post, queued or not. */}
+                    <Switch
                       fallback={
-                        <Show
-                          when={props.busy && props.onStop}
-                          fallback={
-                            <SendButton
-                              appearance="composer"
-                              tooltip="Send"
-                              disabled={!canSend()}
-                              onClick={send}
-                            />
-                          }
-                        >
-                          <Button
-                            variant={isTouchDevice() ? 'ghost' : 'strong'}
-                            size="icon-composer"
-                            label="Stop"
-                            disabled={props.disabled || props.readOnly}
-                            onClick={() => props.onStop?.()}
-                            class={
-                              isTouchDevice()
-                                ? 'rounded-full size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
-                                : undefined
-                            }
-                          >
-                            <div class="size-3.5 not-touch:size-[13.125px] rounded-sm bg-current" />
-                          </Button>
-                        </Show>
+                        <SendButton
+                          appearance="composer"
+                          aria-label={sendQueues() ? 'Queue message' : 'Send'}
+                          tooltip={sendQueues() ? 'Queue message' : 'Send'}
+                          disabled={!canSend()}
+                          onClick={send}
+                        />
                       }
                     >
-                      <SendButton
-                        appearance="composer"
-                        aria-label="Send next queued message"
-                        tooltip="Send next queued message"
-                        shortcut="Enter"
-                        onClick={sendNext}
-                      >
-                        <EnterIcon />
-                      </SendButton>
-                    </Show>
+                      <Match when={canSendNext()}>
+                        <SendButton
+                          appearance="composer"
+                          aria-label="Send next queued message"
+                          tooltip="Send next queued message"
+                          shortcut="Enter"
+                          onClick={sendNext}
+                        >
+                          <EnterIcon />
+                        </SendButton>
+                      </Match>
+                      <Match when={!hasDraft() && props.busy && props.onStop}>
+                        <Button
+                          variant={isTouchDevice() ? 'ghost' : 'strong'}
+                          size="icon-composer"
+                          label="Stop"
+                          disabled={props.disabled || props.readOnly}
+                          onClick={() => props.onStop?.()}
+                          class={
+                            isTouchDevice()
+                              ? 'rounded-full size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
+                              : undefined
+                          }
+                        >
+                          <div class="size-3.5 not-touch:size-[13.125px] rounded-sm bg-current" />
+                        </Button>
+                      </Match>
+                    </Switch>
                   </div>
                 </div>
               </div>
