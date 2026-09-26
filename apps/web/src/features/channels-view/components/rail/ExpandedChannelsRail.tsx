@@ -196,6 +196,7 @@ function FavoriteOption(props: { favorite: Favorite }) {
         <FavoriteIcon favorite={props.favorite} class="size-4" />
       </ViewSidebar.Icon>
       <span class="min-w-0 flex-1 truncate">{displayName()}</span>
+      <ChannelMutedIndicator muted={item().muted} />
     </ViewSidebar.Item>
   );
 }
