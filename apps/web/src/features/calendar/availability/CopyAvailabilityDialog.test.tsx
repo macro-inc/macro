@@ -178,18 +178,22 @@ it('disables empty ranges with an explanation while leaving others available', (
   });
   expect(today.hasAttribute('disabled')).toBe(true);
   expect(today.className).toContain('disabled:opacity-50');
-  const unavailableLabel = screen.getByText('Today: No free time');
-  expect(unavailableLabel.closest('button')).toBe(today);
-  expect(unavailableLabel.className).toContain('touch:flex');
-  expect(unavailableLabel.querySelector('svg')).toBeTruthy();
+  const idle = today.querySelector('span[aria-hidden]')?.children[0];
+  expect(idle?.textContent).toBe('Today');
+  expect(idle?.querySelector('svg')).toBeTruthy();
   expect(screen.queryByText('No free time', { exact: true })).toBeNull();
+  expect(today.textContent).not.toContain('No free time');
   fireEvent.click(today);
   expect(mocks.writeClipboardData).not.toHaveBeenCalled();
-  expect(
-    screen
-      .getByRole('button', { name: 'Copy availability for This week' })
-      .hasAttribute('disabled')
-  ).toBe(false);
+  const thisWeek = screen.getByRole('button', {
+    name: 'Copy availability for This week',
+  });
+  expect(thisWeek.hasAttribute('disabled')).toBe(false);
+  expect(idle?.querySelector('svg')?.outerHTML).not.toEqual(
+    thisWeek
+      .querySelector('span[aria-hidden]')
+      ?.children[0].querySelector('svg')?.outerHTML
+  );
 });
 
 it('disables all options while checking availability', () => {

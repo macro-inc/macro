@@ -246,12 +246,16 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
                       <span
                         class={cn(
                           'col-start-1 row-start-1 flex items-center justify-center gap-1.5 transition-opacity duration-200 motion-reduce:transition-none',
-                          isCopying() || copied() ? 'opacity-0' : 'opacity-100',
-                          unavailable() && 'touch:hidden'
+                          isCopying() || copied() ? 'opacity-0' : 'opacity-100'
                         )}
                       >
                         {option.label}
-                        <CopyIcon class="size-4" />
+                        <Show
+                          when={unavailable()}
+                          fallback={<CopyIcon class="size-4" />}
+                        >
+                          <XIcon class="size-4" />
+                        </Show>
                       </span>
                       <span
                         class={cn(
@@ -276,12 +280,6 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
                         Copied
                         <CheckIcon class="size-4 text-success" />
                       </span>
-                      <Show when={unavailable()}>
-                        <span class="col-start-1 row-start-1 hidden items-center justify-center gap-1.5 touch:flex">
-                          {option.label}: No free time
-                          <XIcon class="size-4" />
-                        </span>
-                      </Show>
                     </span>
                   </Button>
                 </Tooltip>
