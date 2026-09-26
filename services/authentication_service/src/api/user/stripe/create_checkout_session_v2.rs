@@ -63,6 +63,9 @@ pub async fn create_checkout_session<Eas: EntityAccessService>(
     optional_team: OptionalMacroUserTeamExtractorV2<OwnerTeamRole, Eas, AuthorizationService>,
     Json(req): Json<CreateCheckoutSessionV2Request>,
 ) -> Result<Json<StripeSessionResponse>, StripeOperationError> {
+    let plan = req.plan.unwrap_or(PaidPlan::Premium);
+    let price_id = ctx.stripe_prices.price_id(plan)?.to_string();
+
     // Get the stripe customer ID from the database
     let stripe_customer_id = macro_db_client::user::get::get_stripe_customer_id_by_user_id(
         &ctx.db,
@@ -161,9 +164,6 @@ pub async fn create_checkout_session<Eas: EntityAccessService>(
             metadata: Some(metadata),
             ..Default::default()
         });
-
-    let plan = req.plan.unwrap_or(PaidPlan::Premium);
-    let price_id = ctx.stripe_prices.price_id(plan)?.to_string();
 
     // Create the checkout session
     let params = stripe::CreateCheckoutSession {

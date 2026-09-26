@@ -1188,6 +1188,12 @@ use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
 
+## Setup plan step — `/app/onboarding`
+
+The plan step shows two cards: Free and Premium. Premium starts Stripe Checkout.
+The step has no Max card or Max checkout path. A returning account that already
+has Max still sees Max named as its active plan.
+
 ## Settings — `/app/settings/<section>`
 
 ### Email signatures
@@ -1244,13 +1250,14 @@ list / delete personal keys; the secret is shown only once and is sent as
 backend), paid plans show an **AI usage** card with the period meter, credit
 balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
 Checkout, and a `Usage billing` toggle with per-period limit pills; these
-controls and usage-billing promotional copy are hidden outside dev; an
-`Upgrade`/`Upgrade to Max` card, or a `Switch to Premium` link on Max; on a team
-the plan change moves only the viewer's own seat),
+controls and usage-billing promotional copy are hidden outside dev; an `Upgrade`
+card for Free users to buy Premium, no Max purchase or upgrade control, and a
+`Switch to Premium` link on Max; on a team the downgrade moves only the viewer's
+own seat),
 `Appearance`, `Agents`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
 Workspace → `Team` (members list; on a paid team each row shows the seat's plan,
-and admins/owners change it with the `Seat plan` menu: `Premium` or `Max`,
-prorated at once), `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
+and admins/owners can move an existing Max seat to Premium with the `Seat plan`
+menu; Premium seats have no Max option; moves are prorated at once), `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`),
