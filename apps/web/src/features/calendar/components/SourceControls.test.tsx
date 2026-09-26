@@ -52,9 +52,8 @@ afterEach(() => {
 });
 function renderControls() {
   const onVisibilityChange = vi.fn<(id: string, visible: boolean) => void>();
-  const onGroupVisibilityChange = vi.fn<
-    (ids: string[], visible: boolean) => void
-  >();
+  const onGroupVisibilityChange =
+    vi.fn<(ids: string[], visible: boolean) => void>();
   const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
   const changeVisibility = (ids: readonly string[], visible: boolean) =>
     setHidden((current) => {
@@ -119,8 +118,13 @@ describe('SourceControls', () => {
   });
 
   it('places checkboxes before labels and keeps expansion separate from visibility', () => {
-    const { expandAccount, getByRole, getByText, headerFor, onVisibilityChange } =
-      renderControls();
+    const {
+      expandAccount,
+      getByRole,
+      getByText,
+      headerFor,
+      onVisibilityChange,
+    } = renderControls();
     const header = headerFor('gab@macro.com');
     const headerCheckbox = header.querySelector('input[type="checkbox"]');
     const headerText = header.querySelector('.truncate');
@@ -142,7 +146,8 @@ describe('SourceControls', () => {
     const child = getByRole('checkbox', { name: 'Holidays in United States' });
     const childText = getByText('Holidays in United States');
     expect(
-      child.compareDocumentPosition(childText) & Node.DOCUMENT_POSITION_FOLLOWING
+      child.compareDocumentPosition(childText) &
+        Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
   });
   it('reveals an account calendars once expanded', () => {

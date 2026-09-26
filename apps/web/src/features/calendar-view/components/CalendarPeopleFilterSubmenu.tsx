@@ -2,8 +2,8 @@ import { UserIcon } from '@core/component/UserIcon';
 import { emailToMacroId } from '@core/user/macroId';
 import type { IUser } from '@core/user/types';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { Dropdown } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
@@ -115,7 +115,9 @@ export function CalendarPeopleFilterSubmenu(props: {
   return (
     <Dropdown.Sub open={open()} onOpenChange={setMenuOpen}>
       <Dropdown.SubTrigger
-        onPointerEnter={(event: PointerEvent & { currentTarget: HTMLElement }) => {
+        onPointerEnter={(
+          event: PointerEvent & { currentTarget: HTMLElement }
+        ) => {
           if (event.pointerType !== 'mouse') return;
           event.currentTarget.focus({ preventScroll: true });
           if (!open()) setMenuOpen(true);
@@ -152,7 +154,11 @@ export function CalendarPeopleFilterSubmenu(props: {
           <Show
             when={!props.loading()}
             fallback={
-              <div role="status" aria-label="Loading contacts" class="space-y-1 p-1">
+              <div
+                role="status"
+                aria-label="Loading contacts"
+                class="space-y-1 p-1"
+              >
                 <div class="skeleton-shimmer h-8 rounded-md bg-skeleton" />
                 <div class="skeleton-shimmer h-8 rounded-md bg-skeleton" />
               </div>
@@ -174,7 +180,9 @@ export function CalendarPeopleFilterSubmenu(props: {
                     <Dropdown.CheckboxItem
                       class="h-8"
                       closeOnSelect={false}
-                      checked={props.values().includes(contact.email.toLowerCase())}
+                      checked={props
+                        .values()
+                        .includes(contact.email.toLowerCase())}
                       onChange={() => toggleEmail(contact.email.toLowerCase())}
                     >
                       <UserIcon
@@ -210,7 +218,9 @@ export function CalendarPeopleFilterSubmenu(props: {
               </span>
             </Dropdown.Item>
           </Show>
-          <Show when={!props.loading() && matches().length === 0 && !canAddEmail()}>
+          <Show
+            when={!props.loading() && matches().length === 0 && !canAddEmail()}
+          >
             <div class="px-2 py-3 text-center text-xs text-ink-muted">
               {props.error()
                 ? 'Contacts unavailable. Enter an email instead.'

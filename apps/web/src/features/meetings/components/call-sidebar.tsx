@@ -109,7 +109,9 @@ export function CallSidebar(props: {
                     {props.when(calendarEvent())}
                   </span>
                 </button>
-                <Show when={props.canJoin(calendarEvent()) && calendarEvent().url}>
+                <Show
+                  when={props.canJoin(calendarEvent()) && calendarEvent().url}
+                >
                   {(url) => (
                     <button
                       type="button"

@@ -1,4 +1,4 @@
-import { Dropdown, type ButtonSize } from '@ui';
+import { type ButtonSize, Dropdown } from '@ui';
 import type { JSX } from 'solid-js';
 
 /** Menu presentation; consumers compose its trigger and creation items. */

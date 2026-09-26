@@ -21,7 +21,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import CloseIcon from '@phosphor/x.svg';
-import { Calendar as MiniCalendar, cn, ToggleSwitch } from '@ui';
+import { cn, Calendar as MiniCalendar, ToggleSwitch } from '@ui';
 import { format } from 'date-fns';
 import {
   createEffect,
@@ -63,6 +63,7 @@ function CalendarMiniCalendar() {
     if (shell.aside.isOverlay()) shell.aside.collapse();
   };
   const navigateMonth = (month: Date) => {
+    const focused = focusedDay();
     const sameMonth =
       focused.getFullYear() === month.getFullYear() &&
       focused.getMonth() === month.getMonth();

@@ -120,9 +120,11 @@ export function useCalendarSearchPreviewsQuery(
     return {
       queryKey: calendarKeys.searchPreviews(items).queryKey,
       queryFn: async () => {
-        const result = await storageServiceClient.getBatchCalendarEventPreviews({
-          items,
-        });
+        const result = await storageServiceClient.getBatchCalendarEventPreviews(
+          {
+            items,
+          }
+        );
         if (result.isErr()) {
           throw new Error('Failed to fetch calendar search previews');
         }

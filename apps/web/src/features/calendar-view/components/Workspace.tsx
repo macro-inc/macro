@@ -9,6 +9,7 @@ import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeU
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Layer } from '@ui';
 import { Pager, PagerSwipeGestures } from '@ui/components/Pager';
@@ -28,6 +29,7 @@ import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
 import { SelectedEventDetails } from './SelectedEventDetails';
+import { SetupStatus } from './SetupStatus';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
@@ -35,16 +37,19 @@ function CalendarPages() {
   const calendarPager = useCalendarPager();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const viewportSize = createElementSize(viewport);
-  const breakpoints = createSizeBreakpoints(() => viewportSize.width, {
-    narrowDayHeaders: 519,
-  });
+  const breakpoints = createSizeBreakpoints(
+    () => viewportSize.width ?? undefined,
+    {
+      narrowDayHeaders: 519,
+    }
+  );
   let resizeFrame: number | undefined;
 
   createEffect(
     on(
       () => viewportSize.width,
       (width) => {
-        if (width === undefined) return;
+        if (width === null) return;
         if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
         resizeFrame = requestAnimationFrame(() => {
           resizeFrame = undefined;

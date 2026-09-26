@@ -29,7 +29,12 @@ function animateEnter(
   const height = `${size}px`;
   const frames: Keyframe[] = overlap
     ? [
-        { height: '0px', opacity: 0, transform: 'translateX(-100%)', offset: 0 },
+        {
+          height: '0px',
+          opacity: 0,
+          transform: 'translateX(-100%)',
+          offset: 0,
+        },
         {
           height: `${size * 0.75}px`,
           opacity: 0,
@@ -122,9 +127,8 @@ export function createSlidingListTransition() {
         const batch = departing >= 3 || enteringCount >= 3;
         const overlap = batch && departing > 0;
         // Grow batch replacements while old rows shrink, then reveal them.
-        const start = departing && !batch
-          ? 150 + (departing - 1) * ROW_STAGGER
-          : 0;
+        const start =
+          departing && !batch ? 150 + (departing - 1) * ROW_STAGGER : 0;
         let duration = ROW_DURATION;
         if (overlap) {
           duration = REPLACEMENT_DURATION;
@@ -143,7 +147,8 @@ export function createSlidingListTransition() {
         if (
           !(element instanceof HTMLElement) ||
           element.getAttribute('aria-hidden') === 'true'
-        ) return;
+        )
+          return;
         element.style.height = '';
         element.style.overflow = '';
         element.style.opacity = '';

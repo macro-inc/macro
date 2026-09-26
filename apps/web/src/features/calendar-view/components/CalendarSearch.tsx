@@ -24,9 +24,9 @@ import EmptyStateCalendarSearchGraphic from '@design/empty-state-calendar-search
 import type { EntityData, WithSearch } from '@entity';
 import { Popover } from '@kobalte/core/popover';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
 import QuotesIcon from '@phosphor/quotes.svg';
 import RepeatIcon from '@phosphor/repeat.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import VideoCameraIcon from '@phosphor/video-camera.svg';
 import XIcon from '@phosphor/x.svg';
 import {
@@ -111,8 +111,7 @@ function meetingLinkForEvent(
   if (event.isRecurring && (!event.occurrenceKey || !details)) return undefined;
 
   const description =
-    details?.description ??
-    (event.isRecurring ? undefined : event.description);
+    details?.description ?? (event.isRecurring ? undefined : event.description);
   const macro = calendarMacroCallUrl({
     description,
     location: details?.location,
@@ -120,8 +119,7 @@ function meetingLinkForEvent(
   if (macro) return { url: macro, kind: 'macro', label: 'Macro call' };
 
   const googleContent =
-    googleMeetUrlInText(details?.location) ??
-    googleMeetUrlInText(description);
+    googleMeetUrlInText(details?.location) ?? googleMeetUrlInText(description);
   if (googleContent) {
     return { url: googleContent, kind: 'google', label: 'Google Meet' };
   }
@@ -207,7 +205,10 @@ function CalendarEventPreviewContent(props: {
   }));
 
   const when = () =>
-    [formatEventWhen(props.event.time, props.timeFormat), props.location?.trim()]
+    [
+      formatEventWhen(props.event.time, props.timeFormat),
+      props.location?.trim(),
+    ]
       .filter(Boolean)
       .join(' · ');
   const organizer = () =>
@@ -467,7 +468,8 @@ function CalendarSearchControl(props: {
     return { byId, byOccurrence };
   });
   const colorForEvent = (eventId: string) =>
-    activeEventDetails().byId.get(eventId)?.color ?? DEFAULT_CALENDAR_SOURCE.color;
+    activeEventDetails().byId.get(eventId)?.color ??
+    DEFAULT_CALENDAR_SOURCE.color;
   const detailsForEvent = (event: CalendarSearchResult) => {
     const key = searchEventKey(event.id, event.occurrenceKey);
     return (
@@ -835,7 +837,9 @@ function CalendarSearchControl(props: {
                                         aria-hidden="true"
                                         class="size-2.5 shrink-0 rounded-sm"
                                         style={{
-                                          'background-color': colorForEvent(event.id),
+                                          'background-color': colorForEvent(
+                                            event.id
+                                          ),
                                         }}
                                       />
                                       <span class="min-w-0 truncate text-sm text-ink">
@@ -868,7 +872,9 @@ function CalendarSearchControl(props: {
                                             ? 'bg-blue text-[white] light-mode:not-touch:not-disabled:hover:text-[white] dark-mode:bg-blue-bg dark-mode:text-blue-ink dark-mode:not-touch:not-disabled:hover:bg-blue-hover dark-mode:not-touch:not-disabled:hover:text-blue-ink'
                                             : 'bg-hover text-ink not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:text-ink'
                                         )}
-                                        onClick={() => openExternalUrl(link().url)}
+                                        onClick={() =>
+                                          openExternalUrl(link().url)
+                                        }
                                       >
                                         <VideoCameraIcon class="size-3.5" />
                                         {link().kind === 'macro'

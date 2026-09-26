@@ -96,7 +96,10 @@ export function CalendarSearchFilters(props: {
             <Dropdown.SubTrigger>
               <SubmenuLabel
                 label="Search in"
-                active={props.value.searchOn !== DEFAULT_CALENDAR_SEARCH_FILTERS.searchOn}
+                active={
+                  props.value.searchOn !==
+                  DEFAULT_CALENDAR_SEARCH_FILTERS.searchOn
+                }
               />
             </Dropdown.SubTrigger>
             <Dropdown.SubContent
@@ -115,7 +118,10 @@ export function CalendarSearchFilters(props: {
                 >
                   <For each={SEARCH_FIELDS}>
                     {(option) => (
-                      <Dropdown.RadioItem closeOnSelect={false} value={option.value}>
+                      <Dropdown.RadioItem
+                        closeOnSelect={false}
+                        value={option.value}
+                      >
                         <span class="flex-1">{option.label}</span>
                         <Dropdown.ItemIndicator>
                           <CheckIcon class="size-3.5 text-accent" />
@@ -129,7 +135,10 @@ export function CalendarSearchFilters(props: {
           </Dropdown.Sub>
           <Dropdown.Sub>
             <Dropdown.SubTrigger>
-              <SubmenuLabel label="Status" active={props.value.statuses.length > 0} />
+              <SubmenuLabel
+                label="Status"
+                active={props.value.statuses.length > 0}
+              />
             </Dropdown.SubTrigger>
             <Dropdown.SubContent
               portalScope="local"

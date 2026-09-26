@@ -29,7 +29,14 @@ import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import { usePager } from '@ui/components/Pager';
-import { createMemo, createSignal, Match, onCleanup, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import {
   CalendarCreateCallItem,
   CalendarCreateEventItem,
@@ -114,7 +121,8 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
     if (!showNavigationArrows()) return false;
     return !breakpoints.compact() || !narrowSearchOpen();
   };
-  const usesSplitHeader = () => props.presentation === 'preview' || isTouchDevice();
+  const usesSplitHeader = () =>
+    props.presentation === 'preview' || isTouchDevice();
   const createItems = () => (
     <>
       <CalendarCreateEventItem />
@@ -190,60 +198,57 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
   return (
     <Switch>
       <Match when={usesSplitHeader()}>
-        <>
-          <SplitHeaderLeft>
-            <HeaderIsland class="min-w-0 shrink px-1">
-              <Show when={!isMobile() && shell?.aside.isCollapsed()}>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="shrink-0 rounded-full"
-                  label="Show calendar navigation"
-                  aria-expanded={shell?.aside.isOverlay() ?? false}
-                  onClick={() => shell?.aside.expand()}
-                >
-                  <ListIcon class="size-5" />
-                </Button>
-              </Show>
-              <MonthDrawer month={currentDate()} />
-              {todayButton(isTouchDevice())}
-              <Show when={props.presentation === 'preview'}>
-                <CalendarCreateMenu
-                  size="icon-lg"
-                  class="shrink-0 rounded-full border-transparent bg-transparent"
-                  label="New"
-                  trigger={<PlusIcon class="size-5" />}
-                >
-                  {createItems()}
-                </CalendarCreateMenu>
-              </Show>
-            </HeaderIsland>
-          </SplitHeaderLeft>
+        <SplitHeaderLeft>
+          <HeaderIsland class="min-w-0 shrink px-1">
+            <Show when={!isMobile() && shell?.aside.isCollapsed()}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="shrink-0 rounded-full"
+                label="Show calendar navigation"
+                aria-expanded={shell?.aside.isOverlay() ?? false}
+                onClick={() => shell?.aside.expand()}
+              >
+                <ListIcon class="size-5" />
+              </Button>
+            </Show>
+            <MonthDrawer month={currentDate()} />
+            {todayButton(isTouchDevice())}
+            <Show when={props.presentation === 'preview'}>
+              <CalendarCreateMenu
+                size="icon-lg"
+                class="shrink-0 rounded-full border-transparent bg-transparent"
+                label="New"
+                trigger={<PlusIcon class="size-5" />}
+              >
+                {createItems()}
+              </CalendarCreateMenu>
+            </Show>
+          </HeaderIsland>
+        </SplitHeaderLeft>
 
-          <SplitHeaderRight>
-            <HeaderIsland class="px-1">
-              <div class="flex items-center gap-1">
-                <Show when={!isMobile()}>
-                  <PeriodSelector isNarrow={isNarrow()} />
-                  <div class="flex shrink-0 items-center gap-1">
-                    {previous()}
-                    {next()}
-                  </div>
-                </Show>
-                <Show when={isMobile() && props.presentation === 'workspace'}>
-                  <CopyAvailabilityButton size="icon-lg" />
-                </Show>
-                <CalendarSearch />
-                <Show when={props.presentation === 'preview' || isMobile()}>
-                  <CalendarSettingsDropdown isNarrow={isNarrow()} />
-                </Show>
-              </div>
-            </HeaderIsland>
-          </SplitHeaderRight>
-        </>
+        <SplitHeaderRight>
+          <HeaderIsland class="px-1">
+            <div class="flex items-center gap-1">
+              <Show when={!isMobile()}>
+                <PeriodSelector isNarrow={isNarrow()} />
+                <div class="flex shrink-0 items-center gap-1">
+                  {previous()}
+                  {next()}
+                </div>
+              </Show>
+              <Show when={isMobile() && props.presentation === 'workspace'}>
+                <CopyAvailabilityButton size="icon-lg" />
+              </Show>
+              <CalendarSearch />
+              <Show when={props.presentation === 'preview' || isMobile()}>
+                <CalendarSettingsDropdown isNarrow={isNarrow()} />
+              </Show>
+            </div>
+          </HeaderIsland>
+        </SplitHeaderRight>
       </Match>
       <Match when={!usesSplitHeader()}>
-        <>
         <ViewShell.TopBar class="py-2">
           <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
             {dateTitle()}
@@ -275,7 +280,6 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
             </Show>
           </div>
         </ViewShell.Header>
-        </>
       </Match>
     </Switch>
   );

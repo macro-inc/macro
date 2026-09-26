@@ -69,7 +69,11 @@ export function MobilePageCreateButton() {
     const call = blocks.find((block) => block.blockName === 'call');
     const reminder = blocks.find((block) => block.blockName === 'reminder');
     return [
-      { label: 'Event', icon: CalendarIcon, onSelect: () => openEventComposer() },
+      {
+        label: 'Event',
+        icon: CalendarIcon,
+        onSelect: () => openEventComposer(),
+      },
       ...(call
         ? [
             {
@@ -124,7 +128,8 @@ export function MobilePageCreateButton() {
           >
             <MobileCreateMenu items={calendarActions()} />
           </Show>
-        }>
+        }
+      >
         <MobileCreateMenu items={quickActions()} />
       </Show>
     </Show>
