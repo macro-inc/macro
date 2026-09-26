@@ -25,6 +25,9 @@ import type {
 import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Message } from '../component/AgentMessage';
+import { EditToolCall } from '../component/parts/EditToolCall';
+import { PathsToolCall } from '../component/parts/PathsToolCall';
+import type { ToolCallCommon } from '../component/parts/shared';
 import { ReplyToSelection } from '../component/ReplyToSelection';
 import { initialValues, validate } from '../state/elicitation-form';
 import {
@@ -206,6 +209,18 @@ function useCounter(intervalMs = 1200) {
   );
   onCleanup(() => clearInterval(timer));
   return count;
+}
+
+function galleryToolCommon(label: string): ToolCallCommon {
+  return {
+    id: `gallery-${label}`,
+    label,
+    server: undefined,
+    status: 'completed',
+    muted: false,
+    trailing: undefined,
+    workspace: '/workspace',
+  };
 }
 
 const FIXTURE_DIFF = {
@@ -1114,6 +1129,39 @@ export default function AgentUiGallery() {
             >
               <PierreDiff diffs={[FIXTURE_DIFF]} />
             </ToolCard>
+            <div class="w-56">
+              <ToolCard
+                title="Edit"
+                icon={<PencilSimple />}
+                subtitle="/workspace/apps/web/src/features/block-agent/component/parts/EditToolCall.tsx"
+                trailing={<DiffChanges additions={4} deletions={3} />}
+                status="completed"
+              />
+            </div>
+          </Item>
+
+          <Item label="Workspace-relative tool paths">
+            <EditToolCall
+              detail={{
+                kind: 'edit',
+                diffs: [
+                  {
+                    ...FIXTURE_DIFF,
+                    path: '/workspace/crates/agent_fold/src/domain/fold.rs',
+                  },
+                ],
+              }}
+              common={galleryToolCommon('Edit')}
+            />
+            <PathsToolCall
+              detail={{
+                kind: 'read',
+                paths: [
+                  '/workspace/apps/web/src/features/block-agent/component/parts/EditToolCall.tsx',
+                ],
+              }}
+              common={galleryToolCommon('Read')}
+            />
           </Item>
 
           <Item label="ToolGroup (active / settled)">

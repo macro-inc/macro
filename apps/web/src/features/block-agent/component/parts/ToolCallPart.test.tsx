@@ -5,9 +5,22 @@
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import { render } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ToolCallContext } from './shared';
 import { ToolCallPart } from './ToolCallPart';
+
+const sessionWorkspace = vi.hoisted(() => ({
+  current: undefined as string | undefined,
+}));
+
+vi.mock('../../context/AgentSessionContext', () => ({
+  useOptionalAgentSession: () => {
+    const workspace = sessionWorkspace.current;
+    return workspace === undefined
+      ? undefined
+      : { session: () => ({ workspace }) };
+  },
+}));
 
 // Rich renderers own their result controls; this test verifies dispatch and
 // context without mounting their split-layout and query dependencies.
@@ -322,6 +335,57 @@ describe('ToolCallPart routing', () => {
     ));
     expect(rendered.getByTestId('subtitle').textContent).toBe('2 files');
     expect(rendered.getByTestId('path-list').textContent).toBe('a.rs,b.rs');
+  });
+
+  describe('session workspace prefixes', () => {
+    afterEach(() => {
+      sessionWorkspace.current = undefined;
+    });
+
+    it('drops the session workspace from an edit path in the row and the diff', () => {
+      sessionWorkspace.current = '/workspace';
+      const rendered = render(() => (
+        <ToolCallPart
+          part={toolUse({
+            kind: 'edit',
+            diffs: [
+              {
+                path: '/workspace/src/a.rs',
+                oldText: 'old\n',
+                newText: 'new\n',
+              },
+            ],
+          })}
+        />
+      ));
+      expect(rendered.getByTestId('subtitle').textContent).toBe('src/a.rs');
+      expect(rendered.getByTestId('pierre-diff').textContent).toBe('src/a.rs');
+    });
+
+    it('drops the session workspace from read paths in the row and the list', () => {
+      sessionWorkspace.current = '/workspace';
+      const rendered = render(() => (
+        <ToolCallPart
+          part={toolUse({
+            kind: 'read',
+            paths: ['/workspace/a.rs', '/workspace/b.rs'],
+          })}
+        />
+      ));
+      expect(rendered.getByTestId('subtitle').textContent).toBe('2 files');
+      expect(rendered.getByTestId('path-list').textContent).toBe('a.rs,b.rs');
+    });
+
+    it('leaves paths that are not under the session workspace unchanged', () => {
+      sessionWorkspace.current = '/workspace';
+      const rendered = render(() => (
+        <ToolCallPart
+          part={toolUse({ kind: 'read', paths: ['/tmp/out.rs'] })}
+        />
+      ));
+      expect(rendered.getByTestId('subtitle').textContent).toBe('/tmp/out.rs');
+      expect(rendered.getByTestId('path-list').textContent).toBe('/tmp/out.rs');
+    });
   });
 
   it('keeps unmodeled tool output hidden without a registered renderer', () => {

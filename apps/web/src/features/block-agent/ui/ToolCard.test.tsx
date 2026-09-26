@@ -102,6 +102,24 @@ describe('ToolCard', () => {
     expect(mounted).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the title fully visible so a long subtitle cannot clip it', () => {
+    const view = render(() => (
+      <ToolCard
+        title="Edit"
+        subtitle="/workspace/apps/web/src/features/block-agent/component/parts/EditToolCall.tsx"
+        status="completed"
+      />
+    ));
+    const title = view.container.querySelector('.shrink-0.whitespace-nowrap');
+    expect(title?.textContent).toContain('Edit');
+    expect(title?.className).not.toMatch(/\btruncate\b/);
+    expect(
+      view.container.querySelector('.truncate.font-mono')?.textContent
+    ).toBe(
+      '/workspace/apps/web/src/features/block-agent/component/parts/EditToolCall.tsx'
+    );
+  });
+
   it('renders default-open content and leaves bodyless cards noninteractive', () => {
     const view = render(() => (
       <>

@@ -19,7 +19,9 @@ export function PermissionRequest(props: { request: PendingPermission }) {
       );
   const detail = () => {
     const part = tool();
-    return part?.kind === 'tool_use' ? toolCallDetail(part) : undefined;
+    return part?.kind === 'tool_use'
+      ? toolCallDetail(part, session?.session()?.workspace)
+      : undefined;
   };
   const action = () => {
     const part = tool();

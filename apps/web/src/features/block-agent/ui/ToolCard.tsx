@@ -67,15 +67,9 @@ export function ToolCard(props: ToolCardProps) {
         {props.icon ?? <Wrench />}
       </span>
       <span class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-        <span class="min-w-0 truncate text-ink-muted">
+        <span class="shrink-0 whitespace-nowrap text-ink-muted">
           {typeof props.title === 'string' ? (
-            <Tooltip
-              label={props.title}
-              as="span"
-              class="min-w-0 max-w-full truncate"
-            >
-              <TextShimmer text={props.title} active={active()} />
-            </Tooltip>
+            <TextShimmer text={props.title} active={active()} />
           ) : (
             props.title
           )}
