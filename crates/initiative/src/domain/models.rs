@@ -3,10 +3,13 @@
 #[cfg(test)]
 mod test;
 
+use std::collections::HashSet;
 use std::fmt;
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
+#[cfg(feature = "ports")]
+use entity_access::domain::models::{AccessError, EditAccessLevel, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{
@@ -180,7 +183,8 @@ pub struct CreateInitiativeRequest {
     /// Optional member user ids. Invalid ids fail at the service boundary.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_ids: Option<Vec<String>>,
-    /// When true, share with the owner's team at create time.
+    /// Share with the owner's team at create time. Defaults to true; users without
+    /// a team create an unshared initiative. Explicit false skips the team grant.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub share_with_team: Option<bool>,
 }
@@ -194,7 +198,7 @@ pub struct UpdateInitiativeRequest {
     /// Replacement name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    /// Full replacement member list when present.
+    /// Full replacement collaborator list when present. Only the owner may send this field.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_ids: Option<Vec<String>>,
     /// Share permission patch. Only the owner may send this field.
@@ -209,6 +213,34 @@ pub struct UpdateInitiativeRequest {
 pub struct AssignTasksRequest {
     /// Task ids to assign, in request order.
     pub task_ids: Vec<String>,
+}
+
+/// A bounded, deduplicated task request, validated before looking up access receipts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskAssignmentBatch(Vec<String>);
+
+impl TaskAssignmentBatch {
+    /// Deduplicate in request order and enforce the assignment limit before access lookup.
+    pub fn try_new(task_ids: Vec<String>) -> Result<Self, InitiativeError> {
+        let mut seen = HashSet::new();
+        let mut unique = Vec::new();
+        for task_id in task_ids {
+            if seen.insert(task_id.clone()) {
+                if unique.len() == MAX_TASKS_PER_ASSIGN {
+                    return Err(InitiativeError::BadRequest(format!(
+                        "cannot assign more than {MAX_TASKS_PER_ASSIGN} tasks at once"
+                    )));
+                }
+                unique.push(task_id);
+            }
+        }
+        Ok(Self(unique))
+    }
+
+    /// Consume the batch for receipt generation.
+    pub fn into_task_ids(self) -> Vec<String> {
+        self.0
+    }
 }
 
 /// Per-task outcome of an assign call.
@@ -257,13 +289,14 @@ pub struct InitiativeList {
     pub initiatives: Vec<InitiativeSummary>,
 }
 
-/// One task in an assign-tasks service call, after inbound access filtering.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// One task in an assign-tasks service call, retaining the verified edit capability.
+#[cfg(feature = "ports")]
+#[derive(Debug, Clone)]
 pub enum TaskAssignment {
-    /// Inbound confirmed the caller can assign this task.
-    Candidate {
-        /// Task id.
-        task_id: String,
+    /// The caller can edit this document; persistence confirms its task subtype.
+    Authorized {
+        /// Verified capability for the task, retained through the domain boundary.
+        receipt: EntityAccessReceipt<EditAccessLevel>,
     },
     /// Inbound could not find this task.
     NotFound {
@@ -277,13 +310,37 @@ pub enum TaskAssignment {
     },
 }
 
+#[cfg(feature = "ports")]
 impl TaskAssignment {
+    /// Retain a verified task capability or classify the access failure for a partial batch.
+    pub fn from_access(
+        task_id: String,
+        result: Result<EntityAccessReceipt<EditAccessLevel>, AccessError>,
+    ) -> Result<Self, InitiativeError> {
+        match result {
+            Ok(receipt) if receipt.entity().entity_id == task_id => {
+                Ok(Self::Authorized { receipt })
+            }
+            Ok(_) => Err(InitiativeError::BadRequest(
+                "task receipt does not match the requested task".to_string(),
+            )),
+            Err(AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_)) => {
+                Ok(Self::SkippedNoPermission { task_id })
+            }
+            Err(AccessError::NotFound(_) | AccessError::BadRequest(_)) => {
+                Ok(Self::NotFound { task_id })
+            }
+            Err(error) => Err(InitiativeError::Internal(
+                rootcause::Report::new(error).into_dynamic(),
+            )),
+        }
+    }
+
     /// Task id this assignment refers to.
     pub fn task_id(&self) -> &str {
         match self {
-            Self::Candidate { task_id }
-            | Self::NotFound { task_id }
-            | Self::SkippedNoPermission { task_id } => task_id,
+            Self::Authorized { receipt } => &receipt.entity().entity_id,
+            Self::NotFound { task_id } | Self::SkippedNoPermission { task_id } => task_id,
         }
     }
 }
@@ -369,5 +426,19 @@ pub enum InitiativeError {
 impl From<rootcause::Report> for InitiativeError {
     fn from(report: rootcause::Report) -> Self {
         InitiativeError::Internal(report)
+    }
+}
+
+#[cfg(feature = "ports")]
+impl From<AccessError> for InitiativeError {
+    fn from(error: AccessError) -> Self {
+        match error {
+            AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
+                Self::Unauthorized
+            }
+            AccessError::NotFound(_) => Self::NotFound,
+            AccessError::BadRequest(message) => Self::BadRequest(message.to_string()),
+            other => Self::Internal(rootcause::Report::new(other).into_dynamic()),
+        }
     }
 }

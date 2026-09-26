@@ -215,7 +215,7 @@ pub enum TeamShareCreation {
     ExplicitTask,
     /// A new call initializes View only if its creator currently belongs to a team.
     Call,
-    /// A new initiative initializes Edit; missing membership is an error.
+    /// A new initiative initializes Edit when its creator currently belongs to a team.
     Initiative,
     /// The description document of a new initiative. Resolves like `Initiative`.
     InitiativeDescription,
@@ -237,10 +237,12 @@ impl TeamShareCreation {
                 team_id,
                 level: TeamShareLevel::View,
             })),
-            Self::Initiative | Self::InitiativeDescription => Ok(Some(TeamShareGrant {
-                team_id: owner_team_id.ok_or(TeamSharePolicyError::MissingTeam)?,
-                level: TeamShareLevel::Edit,
-            })),
+            Self::Initiative | Self::InitiativeDescription => {
+                Ok(owner_team_id.map(|team_id| TeamShareGrant {
+                    team_id,
+                    level: TeamShareLevel::Edit,
+                }))
+            }
         }
     }
 }

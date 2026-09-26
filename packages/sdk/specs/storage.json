@@ -20715,7 +20715,7 @@
           },
           "shareWithTeam": {
             "type": ["boolean", "null"],
-            "description": "When true, share with the owner's team at create time."
+            "description": "Share with the owner's team at create time. Defaults to true; users without\na team create an unshared initiative. Explicit false skips the team grant."
           }
         }
       },
@@ -32029,7 +32029,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Full replacement member list when present."
+            "description": "Full replacement collaborator list when present. Only the owner may send this field."
           },
           "name": {
             "type": ["string", "null"],

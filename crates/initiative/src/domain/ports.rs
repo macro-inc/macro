@@ -100,6 +100,9 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         task_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Clear any initiative association for a task. Already unassigned tasks succeed.
+    fn clear_task(&self, task_id: &str) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Delete the initiative and clean up its own rows in one transaction, returning the
     /// description document id for the caller to purge afterwards.
     fn delete(
@@ -142,18 +145,26 @@ pub trait InitiativeService: Send + Sync + 'static {
         request: UpdateInitiativeRequest,
     ) -> impl Future<Output = Result<InitiativeDetail, InitiativeError>> + Send;
 
-    /// Assign tasks the receipt already authorized for edit.
+    /// Assign or move tasks using destination and task edit capabilities for the same actor.
+    /// Source initiative edit access is deliberately not required.
     fn assign_tasks(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         assignments: Vec<TaskAssignment>,
     ) -> impl Future<Output = Result<AssignTasksResponse, InitiativeError>> + Send;
 
-    /// Unassign one task the receipt already authorized for edit.
+    /// Unassign one task using both initiative and task edit capabilities for the same actor.
     fn unassign_task(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        task_id: &str,
+        task_receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
+
+    /// Clear a task's initiative using task edit access alone, including after project access
+    /// is revoked. Already unassigned tasks succeed.
+    fn clear_task(
+        &self,
+        task_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 
     /// Delete the initiative the receipt already authorized as owner.

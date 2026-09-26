@@ -154,6 +154,28 @@ pub(super) async fn unassign_task(
     Ok(())
 }
 
+pub(super) async fn clear_task(pool: &PgPool, task_id: &str) -> Result<(), InitiativeError> {
+    sqlx::query_scalar!(
+        r#"
+        WITH removed AS (
+            DELETE FROM task_initiative
+            WHERE task_id = $1
+            RETURNING initiative_id
+        )
+        UPDATE initiative
+        SET updated_at = now()
+        WHERE id IN (SELECT initiative_id FROM removed)
+        RETURNING id
+        "#,
+        task_id,
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(AdapterError::Sqlx)
+    .map_err(map_sqlx)?;
+    Ok(())
+}
+
 async fn lock_initiative(
     tx: &mut Transaction<'_, Postgres>,
     initiative_id: Uuid,

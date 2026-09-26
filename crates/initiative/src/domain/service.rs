@@ -7,8 +7,8 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType,
-    OwnerAccessLevel, ViewAccessLevel,
+    AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+    EntityType, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -29,10 +29,16 @@ use crate::domain::ports::{InitiativeDescriptionDocuments, InitiativeRepo, Initi
 
 /// Concrete initiative service backed by an [`InitiativeRepo`] and the description document
 /// port.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct InitiativeServiceImpl<R, D> {
     repo: R,
     description_documents: D,
+}
+
+impl<R, D> std::fmt::Debug for InitiativeServiceImpl<R, D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("InitiativeServiceImpl")
+    }
 }
 
 impl<R, D> InitiativeServiceImpl<R, D>
@@ -112,7 +118,7 @@ where
             .await
             .map_err(Into::into)?;
         let share_permission = SharePermissionV2::new_initiative_share_permission(team_default);
-        let team_share = if request.share_with_team == Some(true) {
+        let team_share = if request.share_with_team.unwrap_or(true) {
             TeamShareCreation::Initiative
         } else {
             TeamShareCreation::Unshared
@@ -144,7 +150,11 @@ where
             )
             .await;
         match created {
-            Ok(detail) => Ok(detail),
+            Ok(mut detail) => {
+                detail.user_access_level = AccessLevel::Owner;
+
+                Ok(detail)
+            }
             Err(error) => {
                 if let Err(purge_error) = self
                     .description_documents
@@ -181,11 +191,14 @@ where
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<InitiativeDetail, InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        self.repo
+        let mut detail = self
+            .repo
             .get_detail(id)
             .await
             .map_err(Into::into)?
-            .ok_or(InitiativeError::NotFound)
+            .ok_or(InitiativeError::NotFound)?;
+        detail.user_access_level = receipt_access_level(&receipt)?;
+        Ok(detail)
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -203,7 +216,9 @@ where
         receipt: EntityAccessReceipt<EditAccessLevel>,
         request: UpdateInitiativeRequest,
     ) -> Result<InitiativeDetail, InitiativeError> {
-        if request.share_permission.is_some() && !receipt_is_owner(&receipt) {
+        if (request.share_permission.is_some() || request.member_ids.is_some())
+            && !receipt_is_owner(&receipt)
+        {
             return Err(InitiativeError::Unauthorized);
         }
 
@@ -236,7 +251,8 @@ where
             None
         };
 
-        self.repo
+        let mut detail = self
+            .repo
             .update(UpdateInitiativeRepoArgs {
                 id,
                 name,
@@ -246,7 +262,10 @@ where
                 team_share,
             })
             .await
-            .map_err(Into::into)
+            .map_err(Into::into)?;
+
+        detail.user_access_level = receipt_access_level(&receipt)?;
+        Ok(detail)
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -255,11 +274,7 @@ where
         receipt: EntityAccessReceipt<EditAccessLevel>,
         assignments: Vec<TaskAssignment>,
     ) -> Result<AssignTasksResponse, InitiativeError> {
-        if receipt.entity().entity_type != EntityType::Initiative {
-            return Err(InitiativeError::BadRequest(
-                "assign_tasks requires an initiative access receipt".to_string(),
-            ));
-        }
+        let id = initiative_id_from_receipt(&receipt)?;
 
         let assignments = dedupe_assignments(assignments);
         if assignments.len() > MAX_TASKS_PER_ASSIGN {
@@ -268,18 +283,19 @@ where
             )));
         }
 
-        let id = initiative_id_from_receipt(&receipt)?;
-        let candidate_ids: Vec<String> = assignments
-            .iter()
-            .filter_map(|assignment| match assignment {
-                TaskAssignment::Candidate { task_id } => Some(task_id.clone()),
-                TaskAssignment::NotFound { .. } | TaskAssignment::SkippedNoPermission { .. } => {
-                    None
-                }
-            })
-            .collect();
+        let mut candidate_ids = Vec::new();
+        for assignment in &assignments {
+            if let TaskAssignment::Authorized {
+                receipt: task_receipt,
+            } = assignment
+            {
+                validate_task_receipt(task_receipt)?;
+                require_same_actor(&receipt, task_receipt)?;
+                candidate_ids.push(task_receipt.entity().entity_id.clone());
+            }
+        }
 
-        let repo_results = if candidate_ids.is_empty() {
+        let results = if candidate_ids.is_empty() {
             Vec::new()
         } else {
             self.repo
@@ -289,7 +305,7 @@ where
         };
 
         Ok(AssignTasksResponse {
-            results: merge_assign_results(&assignments, repo_results),
+            results: merge_assign_results(&assignments, results),
         })
     }
 
@@ -297,11 +313,25 @@ where
     async fn unassign_task(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        task_id: &str,
+        task_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
+        validate_task_receipt(&task_receipt)?;
+        require_same_actor(&receipt, &task_receipt)?;
         self.repo
-            .unassign_task(id, task_id)
+            .unassign_task(id, &task_receipt.entity().entity_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn clear_task(
+        &self,
+        task_receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<(), InitiativeError> {
+        validate_task_receipt(&task_receipt)?;
+        self.repo
+            .clear_task(&task_receipt.entity().entity_id)
             .await
             .map_err(Into::into)
     }
@@ -353,11 +383,54 @@ fn receipt_is_owner<T: entity_access::domain::models::RequiredPermission>(
     )
 }
 
-fn initiative_id_from_receipt<T: entity_access::domain::models::RequiredPermission>(
+pub(super) fn initiative_id_from_receipt<T: entity_access::domain::models::RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
 ) -> Result<InitiativeId, InitiativeError> {
+    if receipt.entity().entity_type != EntityType::Initiative {
+        return Err(InitiativeError::BadRequest(
+            "requires an initiative access receipt".to_string(),
+        ));
+    }
     InitiativeId::from_str(&receipt.entity().entity_id)
         .map_err(|_| InitiativeError::BadRequest("invalid initiative id".to_string()))
+}
+
+fn receipt_access_level<T: entity_access::domain::models::RequiredPermission>(
+    receipt: &EntityAccessReceipt<T>,
+) -> Result<AccessLevel, InitiativeError> {
+    match receipt.entity_permission() {
+        EntityPermission::AccessLevel { access_level } => Ok(*access_level),
+        _ => Err(InitiativeError::Unauthorized),
+    }
+}
+
+fn validate_task_receipt(
+    receipt: &EntityAccessReceipt<EditAccessLevel>,
+) -> Result<(), InitiativeError> {
+    if receipt.entity().entity_type != EntityType::Document {
+        return Err(InitiativeError::BadRequest(
+            "requires a task document access receipt".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn require_same_actor(
+    initiative: &EntityAccessReceipt<EditAccessLevel>,
+    task: &EntityAccessReceipt<EditAccessLevel>,
+) -> Result<(), InitiativeError> {
+    let same_actor = match (initiative.auth(), task.auth()) {
+        (EntityAccessAuth::Authenticated(left), EntityAccessAuth::Authenticated(right)) => {
+            left == right
+        }
+        (EntityAccessAuth::Bot(left), EntityAccessAuth::Bot(right)) => left == right,
+        (EntityAccessAuth::Internal, EntityAccessAuth::Internal) => true,
+        _ => false,
+    };
+    if !same_actor {
+        return Err(InitiativeError::Unauthorized);
+    }
+    Ok(())
 }
 
 fn normalize_name(name: &str) -> Result<String, InitiativeError> {
@@ -443,10 +516,10 @@ fn merge_assign_results(
     assignments
         .iter()
         .map(|assignment| match assignment {
-            TaskAssignment::Candidate { task_id } => AssignTasksResult {
-                task_id: task_id.clone(),
+            TaskAssignment::Authorized { receipt } => AssignTasksResult {
+                task_id: receipt.entity().entity_id.clone(),
                 status: repo_by_id
-                    .get(task_id)
+                    .get(&receipt.entity().entity_id)
                     .copied()
                     .unwrap_or(AssignTaskStatus::NotFound),
             },

@@ -1,7 +1,8 @@
 //! Adapter that gives the initiative domain its description documents.
 
+#![deny(missing_docs)]
+
 use std::str::FromStr;
-use std::sync::Arc;
 
 use documents_hex::domain::create::{
     DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
@@ -10,12 +11,9 @@ use documents_hex::domain::models::DocumentError;
 use documents_hex::domain::ports::create::{DocumentBytesUploadPort, DocumentCreationService};
 use documents_hex::domain::ports::markdown::MarkdownInitializationPort;
 use documents_hex::domain::ports::mentions::DocumentMentionTrackingPort;
+use documents_hex::domain::purge::DocumentPurgeService;
 use initiative::domain::models::{DescriptionDocumentId, InitiativeError, NewDescriptionDocument};
 use initiative::domain::ports::InitiativeDescriptionDocuments;
-use macro_event_broker::MacroEventBroker;
-use sqlx::PgPool;
-
-use crate::service::document_event_publisher::publish_document_purged_event;
 
 macro_rules! internal {
     ($error:expr) => {
@@ -23,40 +21,33 @@ macro_rules! internal {
     };
 }
 
-pub struct InitiativeDescriptionDocumentsAdapter<Svc, MarkdownInit, BytesUpload, MentionTracker, B>
+/// Description document lifecycle composed from document-owned services.
+pub struct InitiativeDescriptionDocumentsAdapter<Svc, MarkdownInit, BytesUpload, MentionTracker, P>
 {
     creator: DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>,
-    db: PgPool,
-    sqs: Arc<sqs_client::SQS>,
-    event_broker: B,
+    purger: P,
 }
 
-impl<Svc, MarkdownInit, BytesUpload, MentionTracker, B>
-    InitiativeDescriptionDocumentsAdapter<Svc, MarkdownInit, BytesUpload, MentionTracker, B>
+impl<Svc, MarkdownInit, BytesUpload, MentionTracker, P>
+    InitiativeDescriptionDocumentsAdapter<Svc, MarkdownInit, BytesUpload, MentionTracker, P>
 {
+    /// Compose creation and permanent cleanup from owning document services.
     pub fn new(
         creator: DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>,
-        db: PgPool,
-        sqs: Arc<sqs_client::SQS>,
-        event_broker: B,
+        purger: P,
     ) -> Self {
-        Self {
-            creator,
-            db,
-            sqs,
-            event_broker,
-        }
+        Self { creator, purger }
     }
 }
 
-impl<Svc, MarkdownInit, BytesUpload, MentionTracker, B> InitiativeDescriptionDocuments
-    for InitiativeDescriptionDocumentsAdapter<Svc, MarkdownInit, BytesUpload, MentionTracker, B>
+impl<Svc, MarkdownInit, BytesUpload, MentionTracker, P> InitiativeDescriptionDocuments
+    for InitiativeDescriptionDocumentsAdapter<Svc, MarkdownInit, BytesUpload, MentionTracker, P>
 where
     Svc: DocumentCreationService + Send + Sync + 'static,
     MarkdownInit: MarkdownInitializationPort + Send + Sync + 'static,
     BytesUpload: DocumentBytesUploadPort + Send + Sync + 'static,
     MentionTracker: DocumentMentionTrackingPort + Send + Sync + 'static,
-    B: MacroEventBroker + Send + Sync + 'static,
+    P: DocumentPurgeService,
 {
     #[tracing::instrument(skip_all, err)]
     async fn create(
@@ -96,25 +87,10 @@ where
 
     #[tracing::instrument(skip(self), err)]
     async fn purge(&self, id: DescriptionDocumentId) -> Result<(), InitiativeError> {
-        let document_id = id.to_string();
-        macro_db_client::document::delete_document(&self.db, &document_id)
+        self.purger
+            .purge(id.as_uuid())
             .await
-            .map_err(|error| internal!(error))?;
-        comms_db_client::entity_mentions::delete_entity_mentions_by_source(
-            &self.db,
-            vec![document_id.clone()],
-        )
-        .await
-        .inspect_err(|error| {
-            tracing::error!(error = ?error, %document_id, "unable to delete entity mentions")
-        })
-        .ok();
-        self.sqs
-            .bulk_enqueue_document_delete(vec![document_id.clone()])
-            .await
-            .map_err(|error| internal!(error))?;
-        publish_document_purged_event(&self.event_broker, &document_id)
-            .map_err(|error| internal!(error))
+            .map_err(map_document_error)
     }
 }
 
