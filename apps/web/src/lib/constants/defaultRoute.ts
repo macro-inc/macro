@@ -1,4 +1,4 @@
-export const DEFAULT_ROUTE = '/inbox';
+export const DEFAULT_ROUTE = '/home';
 
 /**
  * Where leaving onboarding lands when no deep link was preserved (`?next=`)

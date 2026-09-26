@@ -3,15 +3,15 @@ import { parseDismissedCards } from './home-prefs';
 
 describe('parseDismissedCards', () => {
   it('accepts known home cards', () => {
-    expect(
-      parseDismissedCards('["examples","setup","getting-started-link"]')
-    ).toEqual(['examples', 'setup', 'getting-started-link']);
+    expect(parseDismissedCards('["getting-started-link"]')).toEqual([
+      'getting-started-link',
+    ]);
   });
 
-  it('drops unknown and non-string entries', () => {
-    expect(parseDismissedCards('["examples","unknown",12]')).toEqual([
-      'examples',
-    ]);
+  it('drops unknown, retired, and non-string entries', () => {
+    expect(
+      parseDismissedCards('["getting-started-link","examples","setup",12]')
+    ).toEqual(['getting-started-link']);
   });
 
   it('returns empty for a non-array shape', () => {

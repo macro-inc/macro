@@ -34,48 +34,44 @@ afterEach(() => {
 });
 
 describe('shared Home preferences', () => {
-  it('updates all mounted consumers immediately and preserves other dismissals', () => {
+  it('updates all mounted consumers immediately', () => {
     const { consumers } = mountPreferences();
-    const [home, homeChatStart] = consumers;
-    expect(home).toBe(homeChatStart);
+    const [first, second] = consumers;
+    expect(first).toBe(second);
     expect(screen.getAllByText('visible')).toHaveLength(2);
 
-    home.dismiss('setup');
-    homeChatStart.dismiss('getting-started-link');
+    second.dismiss('getting-started-link');
     expect(screen.getAllByText('hidden')).toHaveLength(2);
-    expect(homeChatStart.isDismissed('setup')).toBe(true);
     expect(
       JSON.parse(localStorage.getItem('macro:home:dismissed:user-1') ?? '[]')
-    ).toEqual(['setup', 'getting-started-link']);
+    ).toEqual(['getting-started-link']);
 
-    home.restore('getting-started-link');
+    first.restore('getting-started-link');
     expect(screen.getAllByText('visible')).toHaveLength(2);
-    expect(homeChatStart.isDismissed('setup')).toBe(true);
+    expect(localStorage.getItem('macro:home:dismissed:user-1')).toBe('[]');
   });
 
   it('keeps dismissals isolated when users change, including same-turn writes', () => {
-    localStorage.setItem('macro:home:dismissed:user-2', '["setup"]');
+    localStorage.setItem('macro:home:dismissed:user-2', '[]');
     const { consumers, setUserId } = mountPreferences();
     const [preferences] = consumers;
     preferences.dismiss('getting-started-link');
+    expect(screen.getAllByText('hidden')).toHaveLength(2);
 
     batch(() => {
       setUserId('user-2');
-      preferences.dismiss('examples');
+      preferences.dismiss('getting-started-link');
     });
-    expect(screen.getAllByText('visible')).toHaveLength(2);
-    expect(preferences.isDismissed('setup')).toBe(true);
+    expect(screen.getAllByText('hidden')).toHaveLength(2);
     expect(
       JSON.parse(localStorage.getItem('macro:home:dismissed:user-2') ?? '[]')
-    ).toEqual(['setup', 'examples']);
+    ).toEqual(['getting-started-link']);
 
     setUserId(undefined);
-    expect(preferences.isDismissed('setup')).toBe(false);
-    preferences.dismiss('examples');
+    expect(preferences.isDismissed('getting-started-link')).toBe(false);
+    preferences.dismiss('getting-started-link');
     setUserId('user-1');
     expect(screen.getAllByText('hidden')).toHaveLength(2);
-    expect(preferences.isDismissed('setup')).toBe(false);
-    expect(preferences.isDismissed('examples')).toBe(false);
     expect(localStorage.getItem('macro:home:dismissed:user-1')).toBe(
       '["getting-started-link"]'
     );

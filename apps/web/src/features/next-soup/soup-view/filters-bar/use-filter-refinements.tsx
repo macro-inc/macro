@@ -45,7 +45,7 @@ import {
 
 // Filter IDs that are set by tabs and should not be shown as removable chips
 const TAB_ONLY_FILTERS = new Set([
-  'inbox',
+  'home',
   'noise',
   'explicit-noise',
   'channels',
@@ -615,7 +615,7 @@ export function useFilterRefinements() {
             const filterId = id as FilterID;
             const wasActive = soup.predicates.isActive(filterId);
             const isInboxTypeFilter =
-              currentView() === 'inbox' && categoryId === 'type';
+              currentView() === 'home' && categoryId === 'type';
             const isDocumentTypeFilter =
               currentView() === 'documents' && categoryId === 'type';
             const previousDocumentTypeIds = isDocumentTypeFilter
@@ -675,7 +675,7 @@ export function useFilterRefinements() {
                 : [{ id, shouldBeActive }];
             });
             const isInboxTypeFilter =
-              currentView() === 'inbox' && categoryId === 'type';
+              currentView() === 'home' && categoryId === 'type';
             const isDocumentTypeFilter =
               currentView() === 'documents' && categoryId === 'type';
             const previousDocumentTypeIds = isDocumentTypeFilter
@@ -1065,7 +1065,7 @@ export function useFilterRefinements() {
 
   const getInboxTypeQuery = (activeTypeIds: string[]): Query | undefined => {
     const preset = currentPreset();
-    if (currentView() !== 'inbox' || !preset) return undefined;
+    if (currentView() !== 'home' || !preset) return undefined;
 
     let targetQuery: Query = {};
     for (const id of activeTypeIds) {

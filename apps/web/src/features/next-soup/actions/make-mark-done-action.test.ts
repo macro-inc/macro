@@ -279,7 +279,7 @@ describe('makeMarkDoneAction', () => {
 
   it('keeps whole-channel inbox writes ID-based to exclude thread rows', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
-    mocks.splitHandle.content.mockReturnValue({ id: 'inbox' });
+    mocks.splitHandle.content.mockReturnValue({ id: 'home' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['channel-notification'],
@@ -305,7 +305,7 @@ describe('makeMarkDoneAction', () => {
 
   it('uses the canonical message entity for inbox channel-thread rows', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
-    mocks.splitHandle.content.mockReturnValue({ id: 'inbox' });
+    mocks.splitHandle.content.mockReturnValue({ id: 'home' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['thread-notification'],

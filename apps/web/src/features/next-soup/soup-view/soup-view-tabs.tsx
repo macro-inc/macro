@@ -62,8 +62,8 @@ export const useVisibleViewTabs = () => {
   const remindersFlag = useFeatureFlag(enableReminders);
 
   return (view: TabbedListView): TabItem[] =>
-    view === 'inbox' && !remindersFlag().enabled
-      ? VIEW_TAB_LISTS.inbox.filter((tab) => tab.value !== 'reminders')
+    view === 'home' && !remindersFlag().enabled
+      ? VIEW_TAB_LISTS.home.filter((tab) => tab.value !== 'reminders')
       : VIEW_TAB_LISTS[view];
 };
 

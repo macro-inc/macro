@@ -40,6 +40,21 @@ import {
 import { z } from 'zod';
 import type { SplitContent } from '../layoutManager';
 
+/**
+ * Component ids that no longer exist, mapped to the view that replaced them.
+ * `inbox` was Home's path and component id before it moved to `/home`; the
+ * Preview Pair placeholders were retired with the old split layout.
+ */
+const RETIRED_COMPONENT_IDS: Readonly<Record<string, string>> = {
+  inbox: 'home',
+  'preview-empty': 'home',
+  'non-member-channel': 'home',
+};
+
+function resolveRetiredComponentId(id: string): string {
+  return RETIRED_COMPONENT_IDS[id] ?? id;
+}
+
 export function decodeLegacyPair(
   type: string,
   id: string
@@ -58,11 +73,8 @@ export function decodeLegacyPair(
   }
 
   if (type === 'component') {
-    // Retired Preview Pair placeholders must never reach the view registry.
-    return {
-      type: 'component',
-      id: id === 'preview-empty' || id === 'non-member-channel' ? 'inbox' : id,
-    };
+    // Retired ids must never reach the view registry.
+    return { type: 'component', id: resolveRetiredComponentId(id) };
   }
 
   const resolvedType =
@@ -245,7 +257,7 @@ export function splitLocationFromContent(
   }
 
   if (content.type === 'component') {
-    const viewId = `view-${content.id}`;
+    const viewId = `view-${resolveRetiredComponentId(content.id)}`;
     if (routes.byId.has(viewId)) {
       return { route: { matches: [{ id: viewId, params: {} }] } };
     }

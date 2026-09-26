@@ -289,7 +289,7 @@ export default function GlobalShortcuts() {
   const createNewSplit = () => {
     analytics.track('split_created', { from: 'global_hotkey' });
     openWithSplit(
-      { type: 'component', id: 'inbox' },
+      { type: 'component', id: 'home' },
       {
         referredFrom: 'hotkey',
         allowDuplicate: true,

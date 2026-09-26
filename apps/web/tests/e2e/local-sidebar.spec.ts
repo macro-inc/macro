@@ -9,7 +9,7 @@ import {
 } from './helpers/local-app';
 
 const SIDEBAR_LIST_VIEWS = [
-  { id: 'inbox', label: 'Inbox', tabs: ['Signal', 'Noise', 'All'] },
+  { id: 'home', label: 'Home', tabs: ['Signal', 'Noise', 'All'] },
   { id: 'search', label: 'Search', tabs: [] },
   {
     id: 'agents',
@@ -44,7 +44,7 @@ test.describe('local sidebar views', () => {
     test(`opens ${view.label} from the sidebar`, async ({ page }) => {
       await gotoApp(
         page,
-        view.id === 'documents' ? '/component/inbox' : '/component/documents'
+        view.id === 'documents' ? '/home' : '/component/documents'
       );
 
       await openSidebarView(page, view.id);

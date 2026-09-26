@@ -52,7 +52,7 @@ export function SplitCreateButton() {
         context.manager.createNewSplit({
           content: {
             type: 'component',
-            id: LIST_VIEW_ID.inbox,
+            id: LIST_VIEW_ID.home,
           },
           referredFrom: 'dock',
         });

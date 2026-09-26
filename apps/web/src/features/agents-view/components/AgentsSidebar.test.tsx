@@ -1,4 +1,4 @@
-import { HomeListEntity } from '@app/features/inbox-view/components/HomeListEntity';
+import { HomeListEntity } from '@app/features/home/components/HomeListEntity';
 import {
   cleanup,
   fireEvent,
@@ -32,7 +32,7 @@ vi.mock('@entity', () => ({
   MaybeEntityRow: (props: { children: JSX.Element }) => props.children,
 }));
 vi.mock('@entity/utils/filter', () => ({ unreadFilterFn: unreadFilter }));
-vi.mock('@app/features/inbox-view/components/HomeEntityIcon', () => ({
+vi.mock('@app/features/home/components/HomeEntityIcon', () => ({
   HomeEntityIcon: () => null,
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));

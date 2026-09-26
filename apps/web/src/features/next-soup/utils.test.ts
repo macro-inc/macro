@@ -6,10 +6,10 @@ import {
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  inboxCalendarNavigation,
-  inboxPreviewNavigation,
-} from '../inbox-view/inbox-preview-navigation';
-import { inboxPreviewTarget } from '../inbox-view/inbox-route';
+  homeCalendarNavigation,
+  homePreviewNavigation,
+} from '../home/home-preview-navigation';
+import { homePreviewTarget } from '../home/home-route';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -664,7 +664,7 @@ describe('calendar view navigation', () => {
       }),
     });
     expect(
-      inboxCalendarNavigation(target, 'timeGridWeek')?.search.calendar
+      homeCalendarNavigation(target, 'timeGridWeek')?.search.calendar
     ).toEqual({
       eventId: ['event-1'],
       occurrenceKey: ['2026-09-23T22:00:00+00:00'],
@@ -820,7 +820,7 @@ describe('Inbox calendar preview navigation', () => {
       endDate: '2025-01-02',
     };
     expect(
-      inboxCalendarNavigation(
+      homeCalendarNavigation(
         { eventId: 'event-1', occurrenceKey: 'occurrence-1', range },
         'timeGridWeek'
       )
@@ -836,13 +836,13 @@ describe('Inbox calendar preview navigation', () => {
         },
       },
     });
-    expect(inboxCalendarNavigation({}, 'timeGridWeek')).toBeUndefined();
+    expect(homeCalendarNavigation({}, 'timeGridWeek')).toBeUndefined();
   });
 });
 
 describe('Inbox channel preview navigation', () => {
   it('preserves explicit message targets on whole-channel selections', () => {
-    const result = inboxPreviewNavigation({
+    const result = homePreviewNavigation({
       type: 'channel',
       id: 'channel-1',
       target: { messageId: 'message-1', threadId: 'thread-1' },
@@ -857,12 +857,12 @@ describe('Inbox channel preview navigation', () => {
   });
   it('keeps untargeted channels at latest', () => {
     expect(
-      inboxPreviewNavigation({ type: 'channel', id: 'channel-1' }).search
+      homePreviewNavigation({ type: 'channel', id: 'channel-1' }).search
     ).toEqual({ channels: undefined });
   });
   it('names markdown subtypes in the path', () => {
     expect(
-      inboxPreviewNavigation({
+      homePreviewNavigation({
         type: 'document',
         id: 'task-1',
         fileType: 'md',
@@ -1283,14 +1283,14 @@ describe('getDocumentCommentTarget', () => {
   });
 
   it('carries the comment through the Inbox preview route', () => {
-    const result = inboxPreviewNavigation(
+    const result = homePreviewNavigation(
       documentRow([commentNotification('n1', 'comment-1')]) as never
     );
     expect(result.params).toEqual({ blockType: 'md', previewId: 'doc-1' });
     expect(result.search.drive).toEqual({
       commentId: ['comment-1'],
     });
-    const target = inboxPreviewTarget(result.params, {
+    const target = homePreviewTarget(result.params, {
       channel: { messageId: '', threadId: '' },
       document: { commentId: 'comment-1' },
     });

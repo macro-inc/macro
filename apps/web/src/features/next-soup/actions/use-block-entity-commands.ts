@@ -129,7 +129,7 @@ export const useBlockEntityCommands = (
   // use-soup-navigation-hotkeys.
   const canUseMarkDoneHotkey = () => {
     const referredFrom = splitPanel?.handle.referredFrom();
-    return referredFrom === 'inbox' || referredFrom === 'mail';
+    return referredFrom === 'home' || referredFrom === 'mail';
   };
 
   // The canvas block binds 'h' to its hand tool in this same scope
