@@ -21,7 +21,6 @@ import {
   MenuSeparator,
 } from '@core/component/ContextMenu';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
-import { toast } from '@core/component/Toast/Toast';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
@@ -400,9 +399,6 @@ const FavoriteRow = (props: {
       preferNewSplit,
       allowDuplicate: props.favorite.entityType === 'foreign_entity',
     });
-    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-      toast.alert('Content already open');
-    }
     const split = result.split;
     globalSplitManager()?.returnFocus();
     return split;

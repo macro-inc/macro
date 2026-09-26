@@ -170,11 +170,10 @@ Unmodified clicks keep each surface’s default (same split, preview, or new spl
 Existing-content deduplication and split-capacity limits still apply; touch devices
 continue to navigate in place.
 
-A block mounted in an inline detail is reused when opened elsewhere. Mentions
-and notifications activate its host without a toast; explicit list or Cmd+K
-selection shows `Content already open` to explain the move. Duplicate
-mounts reached through direct layout paths show the same message instead of a
-second block instance.
+A block mounted in an inline detail is reused when opened elsewhere. Mentions,
+notifications, and explicit list or Cmd+K selections activate its host without a
+toast. Duplicate mounts reached through direct layout paths show a placeholder
+instead of a second block instance.
 
 Desktop inline content previews use a 48px header with a muted bottom divider,
 aligned with the adjacent sidebar title bar (such as Home). Standalone block
@@ -523,18 +522,16 @@ time. Shell components may have duplicate splits when `allowDuplicate` is enable
 An Agents conversation route counts as the same entity as its agent or chat block.
 Following a mention or notification reuses the existing split or inline detail,
 activates its workspace, and navigates to any specified location without a toast.
-Explicit entity selections from lists or Cmd+K also reuse the existing view, but
-show the duplicate-content toast to explain the move. A list whose detail cannot
-claim that entity keeps its previous selection and history.
-Opening an entity already in a split focuses that split when activation is
-requested; the sidebar's **Open in new split** also shows a **Content already open** toast.
+Explicit entity selections from lists, Cmd+K, or the sidebar also reuse the
+existing view and focus it when activation is requested, without a toast. A list
+whose detail cannot claim that entity keeps its previous selection and history.
 Selecting an entity owned by another view from a detail view leaves the current
-detail and navigation history unchanged, focuses the owning view, and shows a
-**Content already open** toast. Close or navigate away
-from the owning view before opening it elsewhere. The same rule applies to mouse
-selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
-never render inline previews or detail views: a tap opens the entity in the
-split, so the toast only appears when the content is genuinely open elsewhere.
+detail and navigation history unchanged and focuses the owning view. Close or
+navigate away from the owning view before opening it elsewhere. The same rule
+applies to mouse selection, keyboard preview navigation, and detail breadcrumbs.
+Touch layouts never render inline previews or detail views: a tap opens the
+entity in the split, so reuse only happens when the content is genuinely open
+elsewhere.
 
 Split-router ownership checks use the final redirected destination. Concurrent
 opens of the same claimed resource wait for the first outstanding request rather

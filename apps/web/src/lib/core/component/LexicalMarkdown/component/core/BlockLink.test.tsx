@@ -3,7 +3,6 @@ import {
   createSplitLayout,
   type SplitManager,
 } from '@components/app/split-layout/layoutManager';
-import { toast } from '@core/component/Toast/Toast';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
@@ -28,7 +27,6 @@ vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => type,
   fileTypeToBlockName: (type: string) => type,
 }));
-vi.mock('@core/component/Toast/Toast', () => ({ toast: { alert: vi.fn() } }));
 vi.mock('@core/util/useSplitNavigationHandler', () => ({
   useSplitNavigationHandler: vi.fn(),
 }));
@@ -92,7 +90,6 @@ it.each([false, true])(
     expect(manager.activeSplitId()).toBe(chat.id);
     expect(manager.splits()).toHaveLength(2);
     expect(createBlockInstance).not.toHaveBeenCalled();
-    expect(toast.alert).not.toHaveBeenCalled();
   }
 );
 
@@ -100,13 +97,11 @@ it('keeps latest-message navigation when reusing an open channel', async () => {
   const { latest } = setup();
   openDocument('channel', 'channel');
   await vi.waitFor(() => expect(latest).toHaveBeenCalledOnce());
-  expect(toast.alert).not.toHaveBeenCalled();
 });
 
-it('orients users when an activity-list selection reuses a previewed channel', () => {
+it('reuses a previewed channel from an activity-list selection without toasting', () => {
   const { manager, chat, activate } = setup();
   openEntityInSplit({ block: 'channel', id: 'channel', newSplit: true });
   expect(activate).toHaveBeenCalledOnce();
   expect(manager.activeSplitId()).toBe(chat.id);
-  expect(toast.alert).toHaveBeenCalledWith('Content already open');
 });
