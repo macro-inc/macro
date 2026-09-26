@@ -5,27 +5,34 @@
  * GraphQL transport never populates, so a selection committed there would only
  * surface on a full reload. Here the optimism is a normalized-cache write of
  * the same property records Soup rows and the properties query already read.
+ *
+ * A property the entity has never carried gets a record under a temporary id,
+ * linked into the entity's `properties` with a record-rooted update, so a first
+ * tag shows at once and survives offline queueing. The response's `effects`
+ * carry the refreshed entity with its real assignments; the server never writes
+ * the temporary record, so settlement drops its link and the real one stands.
  */
 
 import {
+  type CacheHost,
   executeOptimisticMutation,
-  inspect,
+  type OptimisticUpdate,
   optimisticMutationDispositionOf,
-  type QueryRevalidation,
-  selectAll,
+  prependUnique,
+  readRecordsByKeys,
+  selectRecords,
+  updateEntityLinks,
 } from '@graphql-cache/index';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils/typeGuards';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyTargetEntityType } from '@service-properties/generated/schemas/propertyTargetEntityType';
 import {
-  GroupSoupDocument,
-  GroupSoupMembershipDocument,
-  SoupDocument,
-  SoupMembershipDocument,
-  UpdateEntityPropertyOptionsDocument,
-  type UpdateEntityPropertyOptionsMutation,
-  type UpdateEntityPropertyOptionsMutationVariables,
+  ApplyEntityPropertyOptionDeltasDocument,
+  type ApplyEntityPropertyOptionDeltasMutation,
+  type ApplyEntityPropertyOptionDeltasMutationVariables,
+  EntityPropertyAssignmentsFragmentDoc,
+  type GraphqlPropertyTargetEntityType,
 } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlCacheHost,
@@ -56,52 +63,52 @@ function getPropertyDefinitionId(
     : property.id;
 }
 
+/** Soup record type per property target; users have no Soup record. */
+const SOUP_TYPENAMES: Record<
+  GraphqlPropertyTargetEntityType,
+  string | undefined
+> = {
+  CALL_RECORD: 'GraphqlSoupCall',
+  CHANNEL: 'GraphqlSoupChannel',
+  CHAT: 'GraphqlSoupChat',
+  COMPANY: 'GraphqlSoupCrmCompany',
+  DOCUMENT: 'GraphqlSoupDocument',
+  PROJECT: 'GraphqlSoupProject',
+  THREAD: 'GraphqlSoupEmailThread',
+  USER: undefined,
+};
+
+const assignmentsSelection = selectRecords(
+  EntityPropertyAssignmentsFragmentDoc
+);
+
 /**
- * Queries that must re-read the entity after commit because a property record
- * the entity had never carried cannot be linked optimistically: the assignment
- * id arrives with the response, while `properties` is a link list on the entity
- * record that a bare record write does not extend.
- *
- * Only cached instances already holding the entity are revalidated, so an
- * unrelated loaded list is never refetched.
- *
- * Discovery reads through the id-only membership documents: a denormalized read
- * misses whenever ANY selected field was never written for ANY item in the
- * variant (a channel row carries no `properties`, so a full-item selection can
- * miss a variant that does hold the entity). Membership selects `__typename` and
- * `id` only, which every cached item has. Both membership documents select the
- * same cached fields as their list counterparts, so one inspection per field
- * finds every variant — including the single-entity ones the properties query
- * loads, which the list document then refetches as a superset.
+ * The entity's assignment id per property definition, read through the
+ * optimistic view when the commit executes. The picker's captured property can
+ * carry a temporary id an earlier commit has since replaced. `undefined` when
+ * the entity or its `properties` is not cached.
  */
-async function newPropertyLinkRevalidations(
-  entityId: string
-): Promise<QueryRevalidation[]> {
-  const host = getGraphqlCacheHost();
-  if (!host) return [];
-
-  const [flatPages, groupedPages] = await Promise.all([
-    inspect(
-      host,
-      selectAll(SoupMembershipDocument).field('user').field('soup')
-    ),
-    inspect(
-      host,
-      selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup')
-    ),
-  ]);
-
-  const holdsEntity = (items: readonly { id: string }[] | undefined) =>
-    items?.some((item) => item.id === entityId) ?? false;
-
-  return [
-    ...flatPages
-      .filter(({ value }) => holdsEntity(value?.items))
-      .map(({ variables }) => ({ document: SoupDocument, variables })),
-    ...groupedPages
-      .filter(({ value }) => value?.bins.some((bin) => holdsEntity(bin.items)))
-      .map(({ variables }) => ({ document: GroupSoupDocument, variables })),
-  ];
+async function cachedAssignmentIds(
+  host: CacheHost,
+  recordKey: string
+): Promise<Map<string, string> | undefined> {
+  try {
+    const { records } = await readRecordsByKeys(host, assignmentsSelection, [
+      recordKey,
+    ]);
+    const record = records[0]?.record;
+    if (!record) return undefined;
+    return new Map(
+      record.properties.map((property) => [
+        property.propertyDefinitionId,
+        property.id,
+      ])
+    );
+  } catch (error) {
+    // Optimism is an optimization; the commit itself stays authoritative.
+    console.warn('Failed to read cached property assignments', error);
+    return undefined;
+  }
 }
 
 /**
@@ -112,9 +119,10 @@ async function newPropertyLinkRevalidations(
 export async function updateGraphqlEntityPropertyOptions(
   input: GraphqlEntityPropertyOptionsInput
 ): Promise<EntityPropertyOptionSelection[]> {
-  const variables: UpdateEntityPropertyOptionsMutationVariables = {
+  const entityType = toGraphqlPropertyTargetEntityType(input.entityType);
+  const variables: ApplyEntityPropertyOptionDeltasMutationVariables = {
     input: {
-      entityType: toGraphqlPropertyTargetEntityType(input.entityType),
+      entityType,
       entityId: input.entityId,
       properties: input.properties.map((update) => {
         const deltas = getEntityPropertyOptionDeltas(
@@ -137,29 +145,70 @@ export async function updateGraphqlEntityPropertyOptions(
     })
   );
 
+  const host = getGraphqlCacheHost();
+  const typename = SOUP_TYPENAMES[entityType];
+  const soupEntity =
+    host && typename ? { __typename: typename, id: input.entityId } : undefined;
+  const cachedAssignments =
+    host && soupEntity
+      ? await cachedAssignmentIds(
+          host,
+          `${soupEntity.__typename}:${soupEntity.id}`
+        )
+      : undefined;
+
+  const updates: OptimisticUpdate[] = [];
   const optimisticProperties = input.properties.flatMap((update) => {
-    const record = buildOptimisticEntityPropertyOptions(
-      update.property,
-      update.nextOptionIds
+    const assignmentId = cachedAssignments
+      ? cachedAssignments.get(getPropertyDefinitionId(update.property))
+      : isInstantiatedProperty(update.property)
+        ? update.property.propertyId
+        : undefined;
+    if (assignmentId) {
+      return [
+        buildOptimisticEntityPropertyOptions(
+          update.property,
+          assignmentId,
+          update.nextOptionIds
+        ),
+      ];
+    }
+    // Without additions the server creates no assignment, and without a
+    // cached entity there is no list to link a temporary record into.
+    if (update.nextOptionIds.length === 0 || !soupEntity) return [];
+    const temporaryId = crypto.randomUUID();
+    updates.push(
+      updateEntityLinks(
+        soupEntity,
+        'properties',
+        prependUnique({ __typename: 'GraphqlProperty', id: temporaryId })
+      )
     );
-    return record ? [record] : [];
+    return [
+      buildOptimisticEntityPropertyOptions(
+        update.property,
+        temporaryId,
+        update.nextOptionIds
+      ),
+    ];
   });
-  const revalidations =
-    optimisticProperties.length < input.properties.length
-      ? await newPropertyLinkRevalidations(input.entityId)
-      : [];
 
   const result = await executeOptimisticMutation(
     getGraphqlSoupClient(),
-    UpdateEntityPropertyOptionsDocument,
+    ApplyEntityPropertyOptionDeltasDocument,
     variables,
-    { updateEntityPropertyOptions: optimisticProperties },
-    { uuid: crypto.randomUUID(), revalidations }
+    {
+      applyEntityPropertyOptionDeltas: {
+        properties: optimisticProperties,
+        effects: [],
+      },
+    },
+    { uuid: crypto.randomUUID(), updates }
   ).toPromise();
 
   const disposition = optimisticMutationDispositionOf<
-    UpdateEntityPropertyOptionsMutation,
-    UpdateEntityPropertyOptionsMutationVariables
+    ApplyEntityPropertyOptionDeltasMutation,
+    ApplyEntityPropertyOptionDeltasMutationVariables
   >(result);
   if (disposition?.kind === 'queued') return requested;
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
@@ -167,10 +216,10 @@ export async function updateGraphqlEntityPropertyOptions(
 
   const properties =
     disposition?.kind === 'committed'
-      ? disposition.data.updateEntityPropertyOptions
-      : result.data?.updateEntityPropertyOptions;
+      ? disposition.data.applyEntityPropertyOptionDeltas.properties
+      : result.data?.applyEntityPropertyOptionDeltas.properties;
   if (!properties) {
-    throw new Error('updateEntityPropertyOptions returned no data');
+    throw new Error('applyEntityPropertyOptionDeltas returned no data');
   }
 
   return properties.map((property) => ({

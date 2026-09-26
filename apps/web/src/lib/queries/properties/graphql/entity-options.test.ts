@@ -4,25 +4,53 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const executeOptimisticMutationMock = vi.hoisted(() => vi.fn());
 const optimisticMutationDispositionOfMock = vi.hoisted(() => vi.fn());
-const inspectMock = vi.hoisted(() => vi.fn());
+const readRecordsByKeysMock = vi.hoisted(() => vi.fn());
 const cacheHostState = vi.hoisted(() => ({ current: {} as unknown }));
 
-vi.mock('@graphql-cache/index', () => {
-  const selection = {
-    field: () => selection,
-  };
-  return {
-    executeOptimisticMutation: executeOptimisticMutationMock,
-    optimisticMutationDispositionOf: optimisticMutationDispositionOfMock,
-    inspect: inspectMock,
-    selectAll: () => selection,
-  };
-});
+vi.mock('@graphql-cache/index', () => ({
+  executeOptimisticMutation: executeOptimisticMutationMock,
+  optimisticMutationDispositionOf: optimisticMutationDispositionOfMock,
+  readRecordsByKeys: readRecordsByKeysMock,
+  selectRecords: () => ({}),
+  prependUnique: (entity: { __typename: string; id: string }) => ({
+    kind: 'prependUnique',
+    entity,
+  }),
+  updateEntityLinks: (
+    entity: { __typename: string; id: string },
+    field: string,
+    operation: { kind: string; entity: { __typename: string; id: string } }
+  ) => ({
+    recordKey: `${entity.__typename}:${entity.id}`,
+    field,
+    operation: {
+      kind: operation.kind,
+      entityKey: `${operation.entity.__typename}:${operation.entity.id}`,
+    },
+  }),
+}));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({}),
   getGraphqlCacheHost: () => cacheHostState.current,
 }));
+
+/** Caches `doc-1` carrying `assignments` (definition id → assignment id). */
+function cacheEntity(assignments: Record<string, string>) {
+  readRecordsByKeysMock.mockResolvedValue({
+    revision: {},
+    records: [
+      {
+        recordKey: 'GraphqlSoupDocument:doc-1',
+        record: {
+          properties: Object.entries(assignments).map(
+            ([propertyDefinitionId, id]) => ({ id, propertyDefinitionId })
+          ),
+        },
+      },
+    ],
+  });
+}
 
 vi.mock('./entity', () => ({
   toGraphqlPropertyTargetEntityType: (entityType: string) => entityType,
@@ -53,15 +81,18 @@ function committedWith(optionIds: string[]) {
   return {
     kind: 'committed' as const,
     data: {
-      updateEntityPropertyOptions: [
-        {
-          propertyDefinitionId: 'tag-def',
-          value: {
-            __typename: 'GraphqlSelectOptionPropertyValue',
-            optionIds,
+      applyEntityPropertyOptionDeltas: {
+        properties: [
+          {
+            propertyDefinitionId: 'tag-def',
+            value: {
+              __typename: 'GraphqlSelectOptionPropertyValue',
+              optionIds,
+            },
           },
-        },
-      ],
+        ],
+        effects: [],
+      },
     },
   };
 }
@@ -76,6 +107,7 @@ describe('updateGraphqlEntityPropertyOptions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cacheHostState.current = {};
+    cacheEntity({ 'tag-def': 'assignment-1' });
     executeOptimisticMutationMock.mockReturnValue({
       toPromise: () => Promise.resolve({ data: undefined, error: undefined }),
     });
@@ -115,7 +147,9 @@ describe('updateGraphqlEntityPropertyOptions', () => {
         ],
       },
     });
-    expect(optimisticData.updateEntityPropertyOptions).toMatchObject([
+    expect(
+      optimisticData.applyEntityPropertyOptionDeltas.properties
+    ).toMatchObject([
       {
         id: 'assignment-1',
         propertyDefinitionId: 'tag-def',
@@ -125,10 +159,14 @@ describe('updateGraphqlEntityPropertyOptions', () => {
         },
       },
     ]);
-    // The record already exists, so the entity's property link list is intact.
-    expect(options.revalidations).toEqual([]);
+    expect(optimisticData.applyEntityPropertyOptionDeltas.effects).toEqual([]);
+    expect(options).toEqual({ uuid: expect.any(String), updates: [] });
     expect(validateUuid(options.uuid)).toBe(true);
-    expect(inspectMock).not.toHaveBeenCalled();
+    expect(readRecordsByKeysMock).toHaveBeenCalledWith(
+      cacheHostState.current,
+      expect.anything(),
+      ['GraphqlSoupDocument:doc-1']
+    );
   });
 
   it('uses a fresh UUID for each non-coalescible delta batch', async () => {
@@ -154,29 +192,8 @@ describe('updateGraphqlEntityPropertyOptions', () => {
     expect(new Set(uuids).size).toBe(2);
   });
 
-  it('revalidates only the cached queries holding the entity when it has no record for the definition', async () => {
-    inspectMock
-      .mockResolvedValueOnce([
-        {
-          variables: { input: 'soup-with' },
-          value: { items: [{ id: 'doc-1' }] },
-        },
-        {
-          variables: { input: 'soup-without' },
-          value: { items: [{ id: 'other' }] },
-        },
-        { variables: { input: 'soup-unreadable' }, value: undefined },
-      ])
-      .mockResolvedValueOnce([
-        {
-          variables: { input: 'grouped-with' },
-          value: { bins: [{ items: [{ id: 'doc-1' }] }] },
-        },
-        {
-          variables: { input: 'grouped-without' },
-          value: { bins: [{ items: [] }] },
-        },
-      ]);
+  it('links a first tag optimistically under a temporary id', async () => {
+    cacheEntity({ 'status-def': 'assignment-9' });
 
     await updateGraphqlEntityPropertyOptions({
       entityType: 'DOCUMENT',
@@ -198,18 +215,55 @@ describe('updateGraphqlEntityPropertyOptions', () => {
         removeOptionIds: [],
       },
     ]);
-    // No assignment id exists yet, so nothing can be patched before the commit.
-    expect(optimisticData.updateEntityPropertyOptions).toEqual([]);
-    expect(
-      options.revalidations.map(
-        (revalidation: { variables: { input: string } }) =>
-          revalidation.variables.input
-      )
-    ).toEqual(['soup-with', 'grouped-with']);
+    const [record] = optimisticData.applyEntityPropertyOptionDeltas.properties;
+    expect(validateUuid(record.id)).toBe(true);
+    expect(record).toMatchObject({
+      propertyDefinitionId: 'tag-def',
+      displayName: 'Tags',
+      value: {
+        __typename: 'GraphqlSelectOptionPropertyValue',
+        optionIds: ['spotlight'],
+      },
+    });
+    // The server never writes the temporary record, so settlement drops this
+    // link and the response's refreshed entity carries the real assignment.
+    expect(options.updates).toEqual([
+      {
+        recordKey: 'GraphqlSoupDocument:doc-1',
+        field: 'properties',
+        operation: {
+          kind: 'prependUnique',
+          entityKey: `GraphqlProperty:${record.id}`,
+        },
+      },
+    ]);
   });
 
-  it('skips revalidation discovery when the normalized cache is unavailable', async () => {
-    cacheHostState.current = undefined;
+  it('targets the cached assignment over a stale captured id', async () => {
+    // An earlier first tag committed after the picker captured its temporary id.
+    cacheEntity({ 'tag-def': 'assignment-real' });
+
+    await updateGraphqlEntityPropertyOptions({
+      entityType: 'DOCUMENT',
+      entityId: 'doc-1',
+      properties: [
+        {
+          property: { ...tagProperty, propertyId: 'temporary-id' } as Property,
+          currentOptionIds: ['spotlight'],
+          nextOptionIds: ['spotlight', 'roadmap'],
+        },
+      ],
+    });
+
+    const { optimisticData, options } = optimisticArgs();
+    expect(
+      optimisticData.applyEntityPropertyOptionDeltas.properties
+    ).toMatchObject([{ id: 'assignment-real' }]);
+    expect(options.updates).toEqual([]);
+  });
+
+  it('builds nothing for a removal from an unassigned property', async () => {
+    cacheEntity({});
 
     await updateGraphqlEntityPropertyOptions({
       entityType: 'DOCUMENT',
@@ -217,14 +271,46 @@ describe('updateGraphqlEntityPropertyOptions', () => {
       properties: [
         {
           property: tagDefinition,
-          currentOptionIds: [],
-          nextOptionIds: ['spotlight'],
+          currentOptionIds: ['stale'],
+          nextOptionIds: [],
         },
       ],
     });
 
-    expect(inspectMock).not.toHaveBeenCalled();
-    expect(optimisticArgs().options.revalidations).toEqual([]);
+    const { optimisticData, options } = optimisticArgs();
+    expect(optimisticData.applyEntityPropertyOptionDeltas.properties).toEqual(
+      []
+    );
+    expect(options.updates).toEqual([]);
+  });
+
+  it('falls back to the captured assignment when the cache is unavailable', async () => {
+    cacheHostState.current = undefined;
+
+    await updateGraphqlEntityPropertyOptions({
+      entityType: 'DOCUMENT',
+      entityId: 'doc-1',
+      properties: [
+        {
+          property: tagProperty,
+          currentOptionIds: [],
+          nextOptionIds: ['spotlight'],
+        },
+        {
+          property: { ...tagDefinition, id: 'label-def' },
+          currentOptionIds: [],
+          nextOptionIds: ['urgent'],
+        },
+      ],
+    });
+
+    const { optimisticData, options } = optimisticArgs();
+    expect(readRecordsByKeysMock).not.toHaveBeenCalled();
+    // Without a cache there is no entity list to link a temporary record into.
+    expect(
+      optimisticData.applyEntityPropertyOptionDeltas.properties
+    ).toMatchObject([{ id: 'assignment-1', propertyDefinitionId: 'tag-def' }]);
+    expect(options.updates).toEqual([]);
   });
 
   it('resolves a queued commit with the requested selection', async () => {

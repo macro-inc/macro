@@ -12,7 +12,7 @@
 //! what makes the client-id-as-lookup-column design safe.
 
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
-use cache_core::link_patch::{LinkOperation, LinkPathSegment, OptimisticLinkPatch};
+use cache_core::link_patch::{LinkOperation, LinkPathSegment, OptimisticLinkPatch, QueryLinkPatch};
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::store::InMemoryStorage;
 use cache_core::value::EntityKey;
@@ -278,7 +278,7 @@ fn messages_patch() -> OptimisticLinkPatch {
 }
 
 fn messages_patch_with(operation: LinkOperation) -> OptimisticLinkPatch {
-    OptimisticLinkPatch {
+    OptimisticLinkPatch::Query(QueryLinkPatch {
         query: PAGE_QUERY.into(),
         operation_name: Some("EmailThreadPage".into()),
         variables_json: serde_json::to_string(&page_variables()).unwrap(),
@@ -294,7 +294,7 @@ fn messages_patch_with(operation: LinkOperation) -> OptimisticLinkPatch {
             },
         ],
         operation,
-    }
+    })
 }
 
 const DELETE_MUTATION: &str = r#"

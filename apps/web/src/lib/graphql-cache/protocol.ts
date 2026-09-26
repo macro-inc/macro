@@ -279,7 +279,26 @@ export type EmbeddedLinkPathSegment =
       };
     };
 
-export type OptimisticLinkPatchWire = {
+/** One mutation-scoped link-list update, rooted at a query or a record. */
+export type OptimisticLinkPatchWire = QueryLinkPatchWire | RecordLinkPatchWire;
+
+/**
+ * Update to an argument-free link-list field on one normalized record. An
+ * uncached record or field is left untouched, and no revalidation is implied:
+ * the mutation response must carry the settled list.
+ */
+export type RecordLinkPatchWire = {
+  /** Normalized key of the record owning the link list. */
+  recordKey: string;
+  /** Argument-free field holding the link list. */
+  field: string;
+  operation:
+    | { kind: 'remove'; entityKey: string }
+    | { kind: 'prependUnique'; entityKey: string };
+};
+
+/** Update located by a response-key path through a generated query. */
+export type QueryLinkPatchWire = {
   /** Generated GraphQL operation used as the typed graph entrypoint. */
   query: string;
   operationName?: string;

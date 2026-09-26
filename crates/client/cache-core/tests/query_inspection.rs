@@ -2,7 +2,7 @@
 
 use cache_core::engine::{BeginOptimisticWrite, Engine};
 use cache_core::link_patch::{
-    LinkOperation, LinkPathSegment, ListItemByScalar, OptimisticLinkPatch,
+    LinkOperation, LinkPathSegment, ListItemByScalar, OptimisticLinkPatch, QueryLinkPatch,
 };
 use cache_core::predicate::{OptimisticUpsertReconciliation, ProjectionMutation};
 use cache_core::query_inspection::{MAX_INSPECTED_VARIANTS, QueryInspection, QueryInspectionError};
@@ -455,7 +455,7 @@ fn inspection_reads_the_effective_optimistic_view() {
         ]}}});
         write_group(&mut engine, GROUP_QUERY, &variables, &data).await;
 
-        let patch = OptimisticLinkPatch {
+        let patch = OptimisticLinkPatch::Query(QueryLinkPatch {
             query: GROUP_QUERY.to_string(),
             operation_name: Some("GroupViews".to_string()),
             variables_json: serde_json::to_string(&variables).unwrap(),
@@ -482,7 +482,7 @@ fn inspection_reads_the_effective_optimistic_view() {
             operation: LinkOperation::Remove {
                 entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
             },
-        };
+        });
         let mutation = r#"
 mutation SetEntityProperty($input: SetEntityPropertyInput!) {
   setEntityProperty(input: $input) { id }

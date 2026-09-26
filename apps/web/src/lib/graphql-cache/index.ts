@@ -31,12 +31,14 @@ export {
   type OptimisticUpdate,
   optimisticMutationDispositionOf,
   prependUnique,
+  type QueryOptimisticUpdate,
   type QueryRevalidation,
   remove,
   removeEmbeddedLink,
   type Selection,
   select,
   update,
+  updateEntityLinks,
   upsertEmbeddedLink,
 } from './exchange/optimistic';
 export {

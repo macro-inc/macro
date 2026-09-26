@@ -1,0 +1,32 @@
+mutation ApplyEntityPropertyOptionDeltas(
+  $input: UpdateEntityPropertyOptionsInput!
+) {
+  applyEntityPropertyOptionDeltas(input: $input) {
+    properties {
+      ...SoupPropertyFields
+    }
+    # The refreshed entity carries its complete `properties` link list, so a
+    # newly created assignment reaches every cached Soup page holding it.
+    effects {
+      __typename
+      ... on SoupUpdated {
+        item {
+          __typename
+          id
+          properties {
+            ...SoupPropertyFields
+          }
+        }
+      }
+    }
+  }
+}
+
+# Record selection over a cached Soup entity's current assignments, resolved
+# when a tag commit executes rather than when the picker captured its state.
+fragment EntityPropertyAssignments on GraphqlSoupEntity {
+  properties {
+    id
+    propertyDefinitionId
+  }
+}

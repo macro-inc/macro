@@ -9,6 +9,7 @@ async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }
 graphql_common = { path = "../graphql_common" }
+graphql_soup = { path = "../graphql_soup" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 models_properties = { path = "../models_properties" }
@@ -20,3 +21,6 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+graphql_permission = { path = "../graphql_permission" }

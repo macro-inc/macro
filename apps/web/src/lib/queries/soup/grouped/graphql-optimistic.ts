@@ -1,7 +1,7 @@
 import { documentOperationName } from '@graphql-cache/exchange/generated-selection';
 import { inspectVariants, selectAll } from '@graphql-cache/exchange/inspection';
 import {
-  type OptimisticUpdate,
+  type QueryOptimisticUpdate,
   type QueryRevalidation,
   removeEmbeddedLink,
   select,
@@ -28,7 +28,7 @@ type BuildArgs = {
 };
 
 export type OptimisticGroupedPropertyUpdates = {
-  updates: OptimisticUpdate[];
+  updates: QueryOptimisticUpdate[];
   revalidations: QueryRevalidation[];
 };
 
@@ -139,7 +139,7 @@ export async function buildOptimisticGroupedPropertyUpdates(
     loadedPages.filter((page): page is GroupPage => page !== null)
   );
   const { removed, added } = changes;
-  const updates: OptimisticUpdate[] = [];
+  const updates: QueryOptimisticUpdate[] = [];
   for (const pages of views.values()) {
     const sourceGroupKeys = removed.length > 0 ? removed : args.oldGroupKeys;
     const sourcePages = pages.filter((page) =>
