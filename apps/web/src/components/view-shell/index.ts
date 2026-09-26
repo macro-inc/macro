@@ -40,6 +40,7 @@ export {
 } from './ViewBreadcrumbs';
 export {
   useViewShell,
+  ViewNavigationControls,
   ViewShell,
   type ViewShellLayout,
   type ViewShellRootProps,

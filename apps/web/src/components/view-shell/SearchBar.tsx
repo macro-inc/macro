@@ -19,6 +19,8 @@ export type SearchBarProps = Omit<
    * can restore keyboard focus to its list.
    */
   onEscape?: () => void;
+  /** Replaces the clear action with a close action in collapsible search fields. */
+  onClose?: () => void;
   class?: string;
   inputClass?: string;
 };
@@ -30,6 +32,7 @@ export function SearchBar(props: SearchBarProps) {
     'onValueChange',
     'hotkey',
     'onEscape',
+    'onClose',
     'class',
     'inputClass',
     'disabled',
@@ -98,15 +101,17 @@ export function SearchBar(props: SearchBarProps) {
             />
           )}
         </Show>
-        <Show when={local.value && !local.disabled && !local.readOnly}>
+        <Show
+          when={local.onClose || (local.value && !local.disabled && !local.readOnly)}
+        >
           <Button
             type="button"
             size="sm"
             square
-            label="Clear search"
+            label={local.onClose ? 'Close search' : 'Clear search'}
             class="rounded-lg"
             onPointerDown={(event) => event.preventDefault()}
-            onClick={clear}
+            onClick={() => (local.onClose ?? clear)()}
           >
             <XIcon />
           </Button>

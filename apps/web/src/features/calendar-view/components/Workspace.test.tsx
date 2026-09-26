@@ -78,6 +78,9 @@ vi.mock('./Header', () => ({
   ),
 }));
 vi.mock('./Page', () => ({ Page: () => <div>Calendar grid</div> }));
+vi.mock('./use-open-event-composer', () => ({
+  useOpenEventComposer: () => vi.fn(),
+}));
 vi.mock('./SelectedEventDetails', () => ({
   SelectedEventDetails: () => null,
 }));

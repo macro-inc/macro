@@ -1,5 +1,4 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
-import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
 import {
   type CalendarPageId,
   useCalendarPager,
@@ -26,10 +25,12 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import ListIcon from '@phosphor/list.svg';
 import PhoneIcon from '@phosphor/phone.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { usePager } from '@ui/components/Pager';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
 import { useOpenEventComposer } from './use-open-event-composer';
 
@@ -77,8 +78,12 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
   const navigate = useNavigate();
   const quickCalls = useQuickCallsFlag();
   const initialDate = new Date();
+  const [headerElement, setHeaderElement] = createSignal<HTMLElement>();
+  const headerSize = createElementSize(headerElement);
+  // The shell width includes the sidebar; only the header's main-pane width matters.
+  const isCompactHeader = () => (headerSize.width ?? 0) < 520;
   const today = createLocalToday();
-
+  const [narrowSearchOpen, setNarrowSearchOpen] = createSignal(false);
   useCalendarHotkeys({
     scopeId: panel.splitHotkeyScope,
     changeView: calendarPager.changeView,
@@ -94,69 +99,50 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
   const periodLabel = createMemo(() =>
     calendarPeriodLabel(calendarView.displaySettings.periodView).toLowerCase()
   );
-  const visibleRange = createMemo(() => {
-    const dateInfo = calendarPager.activeDateInfo();
-    return dateInfo ? { end: dateInfo.end, start: dateInfo.start } : undefined;
-  });
-  const isTodayVisible = createMemo(() => {
-    const range = visibleRange();
-    if (!range) return true;
-
-    const currentDay = today();
-    return currentDay >= range.start && currentDay < range.end;
-  });
   const isNarrow = () => shell?.aside.isCollapsed() ?? true;
 
   const previous = () => (
     <Button
       variant="ghost"
-      size="icon-sm"
-      class="rounded-lg"
+      size="icon-lg"
+      class="rounded-full border-transparent bg-transparent"
       label={`Previous ${periodLabel()}`}
       hotkey={TOKENS.calendar.period.previous}
       onClick={() => void pager.previous()}
     >
-      <CaretLeftIcon class="size-4" />
+      <CaretLeftIcon class="size-5" />
     </Button>
   );
   const next = () => (
     <Button
       variant="ghost"
-      size="icon-sm"
-      class="rounded-lg"
+      size="icon-lg"
+      class="rounded-full border-transparent bg-transparent"
       label={`Next ${periodLabel()}`}
       hotkey={TOKENS.calendar.period.next}
       onClick={() => void pager.next()}
     >
-      <CaretRightIcon class="size-4" />
+      <CaretRightIcon class="size-5" />
     </Button>
   );
-  const newEvent = (compact: boolean) => (
+  const newEvent = () => (
     <Button
       variant="ghost"
       size="sm"
-      class="shrink-0 gap-1 rounded-lg px-2 @max-[520px]/view-shell:size-7 @max-[520px]/view-shell:p-1 @max-[520px]/split-header:size-6 @max-[520px]/split-header:p-1 touch:rounded-full"
+      class="shrink-0 gap-1 rounded-lg px-2 @max-[520px]/split-header:size-6 @max-[520px]/split-header:p-1 touch:rounded-full"
       label="New event"
       onClick={() => openEventComposer()}
     >
       <PlusIcon class="size-3.5" />
-      <span
-        class={
-          compact
-            ? '@max-[520px]/split-header:hidden'
-            : '@max-[520px]/view-shell:hidden'
-        }
-      >
-        New event
-      </span>
+      <span class="@max-[520px]/split-header:hidden">New event</span>
     </Button>
   );
-  const newCall = (compact: boolean) => (
+  const newCall = () => (
     <Show when={quickCalls().enabled}>
       <Button
         variant="ghost"
         size="sm"
-        class="shrink-0 gap-1 rounded-lg px-2 @max-[520px]/view-shell:size-7 @max-[520px]/view-shell:p-1 @max-[520px]/split-header:size-6 @max-[520px]/split-header:p-1 touch:rounded-full"
+        class="shrink-0 gap-1 rounded-lg px-2 @max-[520px]/split-header:size-6 @max-[520px]/split-header:p-1 touch:rounded-full"
         label="New Call"
         hotkey={TOKENS.create.call}
         onClick={() => {
@@ -164,39 +150,33 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
         }}
       >
         <PhoneIcon class="size-3.5" />
-        <span
-          class={
-            compact
-              ? '@max-[520px]/split-header:hidden'
-              : '@max-[520px]/view-shell:hidden'
-          }
-        >
-          New Call
-        </span>
+        <span class="@max-[520px]/split-header:hidden">New Call</span>
       </Button>
     </Show>
   );
   const todayButton = (mobile: boolean) => (
-    <Show when={mobile || !isTodayVisible()}>
-      <Button
-        variant={mobile ? 'ghost' : 'accent'}
-        size={mobile ? 'icon-sm' : 'sm'}
-        class={mobile ? 'relative rounded-full' : 'rounded-lg px-3'}
-        label="Go to today"
-        hotkey={TOKENS.calendar.period.today}
-        onClick={calendarPager.navigateToToday}
-      >
-        <Show when={mobile} fallback="Today">
-          <CalendarBlankIcon aria-hidden="true" />
-          <span
-            aria-hidden="true"
-            class="pointer-events-none absolute inset-0 flex items-center justify-center pt-1 text-[8px] font-bold leading-none"
-          >
-            {today().getDate()}
-          </span>
-        </Show>
-      </Button>
-    </Show>
+    <Button
+      variant={mobile ? 'ghost' : 'outline'}
+      size={mobile ? 'icon-lg' : 'md'}
+      class={
+        mobile
+          ? 'relative rounded-full'
+          : 'rounded-full border-edge-button bg-transparent px-3'
+      }
+      label="Go to today"
+      hotkey={TOKENS.calendar.period.today}
+      onClick={calendarPager.navigateToToday}
+    >
+      <Show when={mobile} fallback="Today">
+        <CalendarBlankIcon aria-hidden="true" />
+        <span
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-0 flex items-center justify-center pt-1 text-[10px] font-bold leading-none"
+        >
+          {today().getDate()}
+        </span>
+      </Show>
+    </Button>
   );
 
   return (
@@ -225,7 +205,6 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
                     <span class="min-w-0 truncate text-base font-semibold text-ink">
                       {dateTitle()}
                     </span>
-                    <CopyAvailabilityButton class="ml-2" />
                   </>
                 }
               >
@@ -238,45 +217,98 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
             <HeaderIsland class="px-1">
               <div class="flex items-center gap-1">
                 {todayButton(isMobile())}
-                {newEvent(true)}
-                {newCall(true)}
+                {newEvent()}
+                {newCall()}
                 <Show when={!isMobile()}>
-                  <PeriodSelector isNarrow={isNarrow()} />
                   <div class="flex shrink-0 items-center gap-1">
                     {previous()}
                     {next()}
                   </div>
+                  <PeriodSelector isNarrow={isNarrow()} />
                 </Show>
                 <CalendarSearch />
-                <CalendarSettingsDropdown isNarrow={isNarrow()} />
+                <Show when={props.presentation === 'preview'}>
+                  <CalendarSettingsDropdown isNarrow={isNarrow()} />
+                </Show>
               </div>
             </HeaderIsland>
           </SplitHeaderRight>
         </>
       }
     >
-      <ViewShell.TopBar class="gap-3 border-b border-edge-frame">
-        <h1 class="min-w-0 flex-1 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-          {dateTitle()}
-        </h1>
-        <div class="ml-auto flex shrink-0 items-center gap-1">
-          <CalendarSearch />
-          {newEvent(false)}
-          {newCall(false)}
-          <CalendarSettingsDropdown isNarrow={isNarrow()} />
-        </div>
-      </ViewShell.TopBar>
-      <ViewShell.Header class="py-3">
-        <div class="flex min-w-0 flex-wrap items-center gap-2">
-          <PeriodSelector isNarrow={isNarrow()} />
-          <div class="flex items-center gap-1">
-            {previous()}
-            {next()}
-          </div>
-          {todayButton(false)}
-          <CopyAvailabilityButton class="ml-auto" />
-        </div>
-      </ViewShell.Header>
+      <>
+        <ViewShell.TopBar class="py-2">
+          <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
+            {dateTitle()}
+          </h1>
+          <Show when={isCompactHeader()}>
+            <div class="ml-auto flex shrink-0 items-center gap-1">
+              <CalendarCreateMenu
+                header
+                onCreateEvent={() => openEventComposer()}
+              />
+            </div>
+          </Show>
+          <Show
+            when={
+              !isCompactHeader() &&
+              shell?.aside.isCollapsed() &&
+              !shell?.aside.isOverlay()
+            }
+          >
+            <div class="ml-auto flex shrink-0 items-center gap-1">
+              <CalendarCreateMenu
+                header
+                onCreateEvent={() => openEventComposer()}
+              />
+            </div>
+          </Show>
+        </ViewShell.TopBar>
+        <ViewShell.Header ref={setHeaderElement}>
+          <Show
+            when={isCompactHeader()}
+            fallback={
+              <div class="flex min-w-0 items-center justify-between gap-3">
+                <div class="w-full min-w-0 max-w-md">
+                  <CalendarSearch inline />
+                </div>
+                <div class="ml-auto flex shrink-0 items-center gap-1">
+                  {todayButton(false)}
+                  {previous()}
+                  {next()}
+                  <PeriodSelector isNarrow={isNarrow()} />
+                </div>
+              </div>
+            }
+          >
+            <div class="flex h-10 min-w-0 items-center gap-2">
+              <div
+                class="w-full min-w-0 max-w-md"
+                onFocusIn={() => setNarrowSearchOpen(true)}
+                onFocusOut={(event) => {
+                  if (
+                    event.relatedTarget instanceof Node &&
+                    event.currentTarget.contains(event.relatedTarget)
+                  ) {
+                    return;
+                  }
+                  setNarrowSearchOpen(false);
+                }}
+              >
+                <CalendarSearch inline />
+              </div>
+              <Show when={!narrowSearchOpen()}>
+                <div class="ml-auto flex shrink-0 items-center gap-1">
+                  {todayButton(false)}
+                  {previous()}
+                  {next()}
+                  <PeriodSelector isNarrow={isNarrow()} />
+                </div>
+              </Show>
+            </div>
+          </Show>
+        </ViewShell.Header>
+      </>
     </Show>
   );
 }

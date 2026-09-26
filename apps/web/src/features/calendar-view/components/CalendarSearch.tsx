@@ -1,3 +1,4 @@
+import { SearchBar } from '@app/components/view-shell';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import type { CalendarTimeFormat } from '@app/features/calendar/types';
@@ -10,6 +11,7 @@ import { IS_MAC } from '@core/constant/isMac';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { debouncedDependent } from '@core/util/debounce';
+import EmptyStateCalendarSearchGraphic from '@design/empty-state-calendar-search.svg';
 import type { EntityData, WithSearch } from '@entity';
 import { Popover } from '@kobalte/core/popover';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
@@ -18,11 +20,13 @@ import RepeatIcon from '@phosphor/repeat.svg';
 import { useCalendarMentionPreviewQuery } from '@queries/calendar/mention-preview';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityFilters } from '@service-search/generated/models';
-import { Button, cn, Layer } from '@ui';
+import { Button, cn, EmptyStatePanel, Layer } from '@ui';
 import {
+  createEffect,
   createMemo,
   createSignal,
   For,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -188,16 +192,33 @@ function CalendarEventPreviewContent(props: {
  * header. Selecting a result re-aims the singleton Calendar view at that
  * occurrence, the same navigation an event mention or soup row performs.
  */
-export function CalendarSearch() {
+export function CalendarSearch(
+  props: {
+    inline?: boolean;
+    expanded?: boolean;
+    onExpand?: () => void;
+    onDismiss?: () => void;
+  } = {}
+) {
   const searchEnabled = useCalendarSearchUiFlag();
   return (
     <Show when={searchEnabled()}>
-      <CalendarSearchControl />
+      <CalendarSearchControl
+        inline={props.inline}
+        expanded={props.expanded}
+        onExpand={props.onExpand}
+        onDismiss={props.onDismiss}
+      />
     </Show>
   );
 }
 
-function CalendarSearchControl() {
+function CalendarSearchControl(props: {
+  inline?: boolean;
+  expanded?: boolean;
+  onExpand?: () => void;
+  onDismiss?: () => void;
+}) {
   const calendarView = useCalendarView();
   const panel = useSplitPanelOrThrow();
   const [open, setOpen] = createSignal(false);
@@ -223,7 +244,7 @@ function CalendarSearchControl() {
         filters: CALENDAR_ONLY_FILTERS,
       },
     }),
-    () => ({ enabled: open() })
+    () => ({ enabled: open() && query().length >= MIN_QUERY_LENGTH })
   );
 
   // Trust the results only once the debounce has caught up to what the user
@@ -296,12 +317,45 @@ function CalendarSearchControl() {
     inputRef?.focus();
     inputRef?.select();
   };
+  createEffect(
+    on(
+      () => props.expanded,
+      (expanded) => {
+        if (expanded === undefined) return;
+        if (!expanded) {
+          setOpen(false);
+          return;
+        }
+        focusInput();
+        setOpen(true);
+      }
+    )
+  );
+  const changeQuery = (value: string) => {
+    setRawQuery(value);
+    setActiveRow(0);
+    if (props.inline) setOpen(true);
+  };
 
-  // Cmd+F opens the search, matching the channel block's find-bar. Registered
-  // only while this control is mounted, which the calendar-search flag gates.
-  // Once the popover is open its portal holds focus outside the split scope, so
-  // this split-scoped handler only fires to open it — the re-select-while-open
-  // case is handled by `handleContentKeyDown` on the portal content instead.
+  const handleSearchKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveActive(1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveActive(-1);
+    } else if (event.key === 'Enter') {
+      const active = results()[activeIndex()];
+      if (active) {
+        event.preventDefault();
+        openResult(active);
+      }
+    }
+  };
+
+  // Cmd+F focuses the inline search or opens the compact search popover.
+  // The compact popover's portal holds focus outside the split scope; while open,
+  // handleContentKeyDown re-selects the query there.
   const searchHotkey = registerHotkey({
     hotkey: 'cmd+f',
     scopeId: panel.splitHotkeyScope,
@@ -309,7 +363,13 @@ function CalendarSearchControl() {
     description: 'Search events',
     runWithInputFocused: true,
     keyDownHandler: () => {
-      if (open()) focusInput();
+      if (props.inline) {
+        if (props.expanded === false) props.onExpand?.();
+        else {
+          focusInput();
+          setOpen(true);
+        }
+      } else if (open()) focusInput();
       else setOpen(true);
       return true;
     },
@@ -337,24 +397,57 @@ function CalendarSearchControl() {
       onOpenChange={(next) => {
         setOpen(next);
         if (!next) {
-          setRawQuery('');
+          if (!props.inline) setRawQuery('');
           setActiveRow(0);
           setPreviewTarget(null);
         }
       }}
-      placement="bottom-end"
+      placement={props.inline ? 'bottom-start' : 'bottom-end'}
       gutter={6}
       flip
     >
-      <Popover.Trigger
-        as={Button}
-        variant="ghost"
-        size="icon-sm"
-        class="rounded-lg"
-        aria-label="Search events"
+      <Show
+        when={props.inline}
+        fallback={
+          <Popover.Trigger
+            as={Button}
+            variant="ghost"
+            size="icon-lg"
+            class="rounded-full"
+            aria-label="Search events"
+          >
+            <SearchIcon class="size-5 mobile:size-6" />
+          </Popover.Trigger>
+        }
       >
-        <SearchIcon class="size-4 mobile:size-6" />
-      </Popover.Trigger>
+        <div class="min-w-0 max-w-md flex-1">
+          <Popover.Anchor as="div" class="w-full">
+            <SearchBar
+              ref={(element) => (inputRef = element)}
+              label="Search events"
+              onClose={
+                props.onDismiss
+                  ? () => {
+                      inputRef?.blur();
+                      props.onDismiss?.();
+                    }
+                  : undefined
+              }
+              value={rawQuery()}
+              onValueChange={changeQuery}
+              onClick={() => setOpen(true)}
+              onFocus={() => setOpen(true)}
+              onKeyDown={handleSearchKeyDown}
+              onEscape={() => {
+                setOpen(false);
+                props.onDismiss?.();
+              }}
+              hotkey="cmd+f"
+              placeholder="Search events"
+            />
+          </Popover.Anchor>
+        </div>
+      </Show>
 
       <Popover.Portal>
         <Layer depth={3}>
@@ -362,49 +455,69 @@ function CalendarSearchControl() {
             class="portal-scope z-modal outline-none"
             onOpenAutoFocus={(event) => {
               event.preventDefault();
-              inputRef?.focus();
+              if (!props.inline) inputRef?.focus();
+            }}
+            onCloseAutoFocus={(event) => {
+              if (props.inline) event.preventDefault();
             }}
             onKeyDown={handleContentKeyDown}
+            onInteractOutside={(event) => {
+              const target = event.detail.originalEvent.target;
+              if (
+                props.inline &&
+                target instanceof Node &&
+                inputRef?.closest('[data-search-bar]')?.contains(target)
+              ) {
+                event.preventDefault();
+              }
+            }}
           >
-            <div class="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl glass bg-menu-glass text-ink">
+            <div
+              class={cn(
+                'max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl glass bg-menu-glass text-ink',
+                props.inline ? 'w-[var(--kb-popper-anchor-width)]' : 'w-80'
+              )}
+            >
               <Show
                 when={previewTarget()}
                 fallback={
                   <>
-                    <div class="flex items-center gap-2 px-3 py-2">
-                      <SearchIcon class="size-4 shrink-0 text-ink-muted" />
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        value={rawQuery()}
-                        onInput={(event) => {
-                          setRawQuery(event.currentTarget.value);
-                          setActiveRow(0);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'ArrowDown') {
-                            event.preventDefault();
-                            moveActive(1);
-                          } else if (event.key === 'ArrowUp') {
-                            event.preventDefault();
-                            moveActive(-1);
-                          } else if (event.key === 'Enter') {
-                            const active = results()[activeIndex()];
-                            if (active) {
-                              event.preventDefault();
-                              openResult(active);
-                            }
+                    <Show when={!props.inline}>
+                      <div class="flex items-center gap-2 px-3 py-2">
+                        <SearchIcon class="size-4 shrink-0 text-ink-muted" />
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          value={rawQuery()}
+                          onInput={(event) =>
+                            changeQuery(event.currentTarget.value)
                           }
-                        }}
-                        placeholder="Search by event name"
-                        class="min-w-0 flex-1 bg-transparent text-sm caret-accent outline-none placeholder:text-ink-placeholder"
+                          onKeyDown={handleSearchKeyDown}
+                          placeholder="Search by event name"
+                          class="min-w-0 flex-1 bg-transparent text-sm caret-accent outline-none placeholder:text-ink-placeholder"
+                        />
+                      </div>
+                    </Show>
+                    <Show when={query().length < MIN_QUERY_LENGTH}>
+                      <EmptyStatePanel
+                        centered
+                        graphic={EmptyStateCalendarSearchGraphic}
+                        graphicClass="size-20"
+                        title="Find an event"
+                        titleClass="text-sm"
+                        description="Search by event name. Type at least 3 characters."
+                        descriptionClass="mt-1 text-xs/5"
+                        topSpacerClass="basis-0"
+                        class="h-auto min-h-44 px-4 pb-4 pt-3 touch:pt-3 @4xl:px-4"
                       />
-                    </div>
-
+                    </Show>
                     <Show when={query().length >= MIN_QUERY_LENGTH}>
                       <div
                         ref={listRef}
-                        class="max-h-80 overflow-y-auto border-t border-edge-muted p-1"
+                        class={cn(
+                          'max-h-80 overflow-y-auto p-1',
+                          !props.inline && 'border-t border-edge-muted'
+                        )}
                       >
                         <Show
                           when={!isLoading()}
@@ -417,9 +530,17 @@ function CalendarSearchControl() {
                           <Show
                             when={results().length > 0}
                             fallback={
-                              <div class="px-2 py-3 text-center text-xs text-ink-muted">
-                                No events found
-                              </div>
+                              <EmptyStatePanel
+                                centered
+                                graphic={EmptyStateCalendarSearchGraphic}
+                                graphicClass="size-20"
+                                title="No matching events"
+                                titleClass="text-sm"
+                                description={`No calendar events found for “${query()}”. Try another name.`}
+                                descriptionClass="mt-1 text-xs/5"
+                                topSpacerClass="basis-0"
+                                class="h-auto min-h-44 px-4 pb-4 pt-3 touch:pt-3 @4xl:px-4"
+                              />
                             }
                           >
                             <For each={results()}>

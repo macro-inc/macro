@@ -2,6 +2,7 @@
 export type UpcomingCalendarEvent = {
   id: string;
   title: string;
+  color: string;
   url?: string;
   start: string;
   end: string;

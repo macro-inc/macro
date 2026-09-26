@@ -73,8 +73,21 @@ export function SourceControls(props: SourceControlsProps) {
                   onChange={setGroupVisible}
                   class="flex min-w-0 flex-1 items-center py-1.5"
                 >
-                  <Checkbox.Label class="min-w-0 flex-1 truncate font-medium">
-                    {group.emailAddress}
+                  <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2 truncate font-medium">
+                    <span
+                      aria-hidden="true"
+                      class="size-2.5 shrink-0 rounded-sm"
+                      style={{
+                        'background-color': (
+                          group.calendars.find(
+                            (calendar) => calendar.isPrimary
+                          ) ?? group.calendars[0]
+                        )?.color,
+                      }}
+                    />
+                    <span class="min-w-0 flex-1 truncate">
+                      {group.emailAddress}
+                    </span>
                   </Checkbox.Label>
                   <Checkbox.Control />
                 </Checkbox>

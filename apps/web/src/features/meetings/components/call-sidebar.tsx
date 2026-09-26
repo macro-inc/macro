@@ -72,6 +72,11 @@ export function CallSidebar(props: {
               }
               aria-label={`Open ${calendarEvent.title}`}
             >
+              <span
+                aria-hidden="true"
+                class="size-2.5 shrink-0 rounded-sm"
+                style={{ 'background-color': calendarEvent.color }}
+              />
               <Tooltip
                 as="span"
                 class="min-w-0 flex-1"
@@ -81,7 +86,7 @@ export function CallSidebar(props: {
                   {calendarEvent.title}
                 </span>
               </Tooltip>
-              <span class="ml-auto shrink-0 text-[10px] tabular-nums text-ink-muted">
+              <span class="ml-auto shrink-0 text-xs tabular-nums text-ink-muted">
                 {props.when(calendarEvent)}
               </span>
             </button>

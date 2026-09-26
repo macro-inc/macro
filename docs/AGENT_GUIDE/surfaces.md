@@ -2,9 +2,9 @@
 
 ## Top bars
 
-Right-aligned split-header actions (including Calendar's New event and Channel's
-Call and Ask Macro) are borderless with a rounded-xl background on hover. Channel
-header tabs use fully rounded tracks and selected pills.
+Right-aligned split-header actions (including Calendar's touch/preview New event
+and Channel's Call and Ask Macro) are borderless with a rounded-xl background on
+hover. Channel header tabs use fully rounded tracks and selected pills.
 
 ## User cards
 
@@ -752,26 +752,42 @@ footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
 
-The standalone Calendar view has a left navigation sidebar with a mini calendar,
-collapsible `Upcoming events` and `Calendars` sections, and a feature-gated
-`Team out of office` section. The sidebar can be resized or collapsed on desktop;
-in narrow panes it opens over the grid. On phones, `Show calendar navigation`
-in the split header opens the same sidebar as a left drawer. Choose a date in
-the mini calendar to navigate and close the drawer. Inline Calendar previews
-retain their host's chrome rather than adding another sidebar.
+The standalone Calendar view has a left navigation sidebar. The `New` menu
+above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
+`Reminder`. An icon-only shortcut in the `Upcoming events` header opens the
+availability dialog with working-hour settings above rounded copy options.
+Collapsible `Upcoming events` and `Calendars` sections follow; calendar
+account headers show their primary color swatch. `Team out of office` is
+feature-gated and lists teammates with 24px avatars. The icon-only
+`Calendar settings` control fills the sidebar footer.
+The sidebar can be resized or collapsed on desktop; in narrow panes it opens
+over the grid. On phones, `Show calendar navigation` in the split header opens
+the same sidebar as a left drawer. Choose a date in the mini calendar to
+navigate and close the drawer. Inline Calendar previews retain their host's
+chrome and topbar actions rather than adding another sidebar.
 
-The in-view desktop topbar shows the month and year, `Search events`,
-`New event`, `New Call`, and `Calendar settings`. A row beneath it contains
-`Choose calendar view`, previous/next period, `Today` when needed, and
-`Copy availability`. The narrow layout keeps these actions available. On
-touch devices, the split header retains the compact controls and month picker.
-`New Call` opens call setup; it is no longer in a side panel. The mini calendar's
-month label opens a month picker; arrows also change months.
+The in-view desktop Calendar header follows Drive's two-level layout: the slim
+top bar shows the viewed month and year and, when the sidebar is closed, a
+compact `New` menu. At wide widths, the row beneath puts `Search events` on
+the left and a labeled `Today` button followed by previous/next arrows and
+the rounded period selector on the right. Clicking search opens a
+calendar-search hint until at least three characters are entered; empty results
+show an illustrated empty state. Availability is only in the sidebar's Upcoming
+events section.
+When the header narrows, the search field stays in the same fixed-height flex
+row instead of turning into an icon. Focusing it hides `Today` and the period
+controls to give search the full row; moving focus away restores them. A search
+with text retains its clear button when shrunk. The `New` menu stays in the top
+bar while search is expanded. Touch devices retain the split header's compact
+creation controls and month picker. The mini calendar's month label opens a
+month picker; arrows also change months.
+
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
-The active area is hidden when no calls are active. Event rows show the name and
-time; click one to open its details. An event with a call link shows `Join` while
-it is in progress. Upcoming events follow today's date even when you browse another week;
+The active area is hidden when no calls are active. Upcoming event rows show a
+calendar color swatch, the name, and the time; click one to open its details.
+An event with a call link shows `Join` while it is in progress. Upcoming events
+follow today's date even when you browse another week;
 hidden calendars, cancelled events, and invitations you declined are omitted.
 `New Call` opens `/app/meet/new` without creating a meeting. The `Invite Teammates`
 button above `Start call` opens the task assignee picker with name search, profile

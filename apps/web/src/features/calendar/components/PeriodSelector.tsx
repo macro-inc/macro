@@ -145,14 +145,13 @@ export function PeriodSelector(props: { isNarrow?: boolean }) {
       placement="bottom-end"
     >
       <Dropdown.Trigger
-        depth={2}
         aria-label="Choose calendar view"
-        size="sm"
-        class="shrink-0 gap-1 rounded-lg border-edge-muted text-xs font-medium text-ink"
+        size="md"
+        class="shrink-0 h-(--sidebar-row-height) gap-(--sidebar-label-gap) rounded-full px-(--sidebar-item-inset) touch:h-11"
       >
         {CALENDAR_VIEWS.find((view) => view.value === controls.activeView())
           ?.label ?? 'Week'}
-        <CaretDownIcon class="size-3 text-ink-muted" />
+        <CaretDownIcon class="size-4 text-ink-muted" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-36">
         <Dropdown.Group>

@@ -79,6 +79,13 @@ describe('SourceControls', () => {
     expect(queryByText('Holidays in United States')).toBeNull();
   });
 
+  it('shows the primary calendar color on the collapsed account header', () => {
+    const { headerFor } = renderControls();
+    const swatch = headerFor('gab@macro.com').querySelector<HTMLElement>(
+      '[aria-hidden="true"][style]'
+    );
+    expect(swatch?.style.backgroundColor).toBe('rgb(255, 0, 0)');
+  });
   it('reveals an account calendars once expanded', () => {
     const { expandAccount, getByText } = renderControls();
     expandAccount('gab@macro.com');

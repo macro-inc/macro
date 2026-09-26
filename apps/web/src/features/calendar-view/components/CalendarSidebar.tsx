@@ -3,7 +3,9 @@ import {
   useViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
 import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
+import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
 import {
@@ -13,6 +15,7 @@ import {
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -30,6 +33,7 @@ import {
   Switch,
 } from 'solid-js';
 import { CalendarCallSidebar } from '../calendar-call-sidebar';
+import { CalendarCreateMenu } from './CalendarCreateMenu';
 
 function CalendarMiniCalendar() {
   const calendarView = useCalendarView();
@@ -87,10 +91,13 @@ function UpcomingEventsSection() {
 
   return (
     <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-      <CollapsibleSection.Trigger>
-        <span class="min-w-0 truncate">Upcoming events</span>
-        <CollapsibleSection.Indicator />
-      </CollapsibleSection.Trigger>
+      <CollapsibleSection.Header>
+        <CollapsibleSection.Trigger class="min-w-0 flex-1">
+          <span class="min-w-0 truncate">Upcoming events</span>
+          <CollapsibleSection.Indicator />
+        </CollapsibleSection.Trigger>
+        <CopyAvailabilityButton iconOnly />
+      </CollapsibleSection.Header>
       <CollapsibleSection.Content>
         <CalendarCallSidebar
           onSelectEvent={() => {
@@ -175,25 +182,33 @@ function TeamOooUpcomingList() {
             {(window) => (
               <button
                 type="button"
-                class="flex w-full flex-col rounded-lg px-2 py-1.5 text-left text-xs hover:bg-hover"
+                class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-hover"
                 onClick={() => {
                   calendarPager.gotoDate(window.start);
                   if (shell.aside.isOverlay()) shell.aside.collapse();
                 }}
               >
-                <span class="flex w-full items-baseline gap-2">
-                  <span class="min-w-0 flex-1 truncate text-ink">
-                    {window.name}
+                <UserIcon
+                  id={window.ownerId}
+                  size="md"
+                  suppressClick
+                  showTooltip={false}
+                />
+                <span class="flex min-w-0 flex-1 flex-col">
+                  <span class="flex w-full items-baseline gap-2">
+                    <span class="min-w-0 flex-1 truncate text-ink">
+                      {window.name}
+                    </span>
+                    <span class="shrink-0 text-ink-muted">
+                      {windowDateLabel(window)}
+                    </span>
                   </span>
-                  <span class="shrink-0 text-ink-muted">
-                    {windowDateLabel(window)}
-                  </span>
+                  <Show when={window.title}>
+                    <span class="w-full truncate text-ink-muted">
+                      {window.title}
+                    </span>
+                  </Show>
                 </span>
-                <Show when={window.title}>
-                  <span class="w-full truncate text-ink-muted">
-                    {window.title}
-                  </span>
-                </Show>
               </button>
             )}
           </For>
@@ -255,7 +270,9 @@ function CalendarSidebarOverlayClose() {
   );
 }
 
-export function CalendarSidebar() {
+export function CalendarSidebar(props: { onCreateEvent: () => void }) {
+  const shell = useViewShell();
+
   return (
     <ViewSidebar.Root aria-label="Calendar navigation">
       <ViewSidebar.Header>
@@ -265,7 +282,16 @@ export function CalendarSidebar() {
         </div>
         <CalendarSidebarOverlayClose />
       </ViewSidebar.Header>
-      <ViewSidebar.Content>
+      <ViewSidebar.Primary>
+        <CalendarCreateMenu
+          sidebar
+          onCreateEvent={props.onCreateEvent}
+          onSelect={() => {
+            if (shell.aside.isOverlay()) shell.aside.collapse();
+          }}
+        />
+      </ViewSidebar.Primary>
+      <ViewSidebar.Content class="pt-2">
         <CalendarMiniCalendar />
         <UpcomingEventsSection />
         <CalendarSourcesSection />
@@ -273,6 +299,11 @@ export function CalendarSidebar() {
           <CalendarTeamOooSection />
         </ShowFeatureFlag>
       </ViewSidebar.Content>
+      <ViewSidebar.Footer class="border-0">
+        <ViewSidebar.Nav aria-label="Calendar tools">
+          <CalendarSettingsDropdown sidebar />
+        </ViewSidebar.Nav>
+      </ViewSidebar.Footer>
     </ViewSidebar.Root>
   );
 }

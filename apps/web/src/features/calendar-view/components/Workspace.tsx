@@ -25,6 +25,7 @@ import { Header } from './Header';
 import { Page } from './Page';
 import { SelectedEventDetails } from './SelectedEventDetails';
 import { SetupStatus } from './SetupStatus';
+import { useOpenEventComposer } from './use-open-event-composer';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
@@ -107,6 +108,7 @@ function CalendarPageContent() {
 function WorkspaceContent() {
   const panel = useSplitPanelOrThrow();
   const calendarView = useCalendarView();
+  const openEventComposer = useOpenEventComposer();
 
   // An inline preview keeps its host's name.
   onMount(() => {
@@ -145,7 +147,7 @@ function WorkspaceContent() {
             main={{ preferredWidth: 640 }}
           >
             <ViewShell.Aside>
-              <CalendarSidebar />
+              <CalendarSidebar onCreateEvent={openEventComposer} />
             </ViewShell.Aside>
             <ViewShell.Main>
               <Header presentation="workspace" />
