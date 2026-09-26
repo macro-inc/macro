@@ -1,14 +1,23 @@
 import ArrowsInSimpleIcon from '@phosphor/arrows-in-simple.svg';
 import ArrowsOutSimpleIcon from '@phosphor/arrows-out-simple.svg';
 import { Button } from '@ui';
+import { Show } from 'solid-js';
+import { describeFileCount } from '../core/changeset';
 
 /** Bulk collapse and expand controls for the file diffs. */
 export function ReviewBar(props: {
   anyExpanded: boolean;
   onToggleCollapsed: () => void;
+  /** Shown when no file tree is on screen to carry the count. */
+  fileCount?: number;
 }) {
   return (
     <div class="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-edge-muted bg-surface-1 py-1.5 pr-2 pl-3">
+      <Show when={props.fileCount !== undefined}>
+        <span class="text-[10px] tracking-[0.07em] text-ink-placeholder uppercase">
+          {describeFileCount(props.fileCount ?? 0)}
+        </span>
+      </Show>
       <span class="flex-1" />
       <Button
         variant="outline"

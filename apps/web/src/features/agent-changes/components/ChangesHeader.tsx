@@ -14,6 +14,11 @@ export type DiffStyleValue = 'unified' | 'split';
 export function ChangesHeader(props: {
   /** The pane fills the width; the session is off screen. */
   spotlit: boolean;
+  /**
+   * The pane covers the whole session frame (a phone). Back is the only
+   * way out, so the split controls stay off the row.
+   */
+  takeover?: boolean;
   /** `head → base`, when known. */
   range: string | undefined;
   diffStyle: DiffStyleValue;
@@ -35,11 +40,13 @@ export function ChangesHeader(props: {
   };
   return (
     <header class="flex h-12 shrink-0 items-center gap-1.5 border-b border-edge pr-2 pl-2.5">
-      <Show when={props.spotlit}>
+      <Show when={props.spotlit || props.takeover}>
         <Button
           variant="ghost"
           size="icon-sm"
-          tooltip="Bring the session back"
+          tooltip={
+            props.takeover ? 'Back to the session' : 'Bring the session back'
+          }
           onClick={() => props.onBack()}
         >
           <ArrowLeftIcon />
@@ -81,37 +88,53 @@ export function ChangesHeader(props: {
         <ArrowsClockwiseIcon class={cn(props.refreshing && 'animate-spin')} />
       </Button>
       <Show when={props.pullRequestUrl}>
-        <Button
-          variant="outline"
-          size="sm"
-          class="gap-1.5"
-          onClick={props.onViewPullRequest}
+        <Show
+          when={!props.takeover}
+          fallback={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              tooltip="View pull request"
+              onClick={props.onViewPullRequest}
+            >
+              <GitPullRequestIcon />
+            </Button>
+          }
         >
-          <GitPullRequestIcon class="size-3.5" />
-          <span>View pull request</span>
+          <Button
+            variant="outline"
+            size="sm"
+            class="gap-1.5"
+            onClick={props.onViewPullRequest}
+          >
+            <GitPullRequestIcon class="size-3.5" />
+            <span>View pull request</span>
+          </Button>
+        </Show>
+      </Show>
+      <Show when={!props.takeover}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-pressed={props.spotlit}
+          tooltip={
+            props.spotlit
+              ? 'Back to the split'
+              : 'Expand changes to the full width'
+          }
+          onClick={() => props.onSpotlight()}
+        >
+          {props.spotlit ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          tooltip="Close the changes pane"
+          onClick={() => props.onClose()}
+        >
+          <XIcon />
         </Button>
       </Show>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-pressed={props.spotlit}
-        tooltip={
-          props.spotlit
-            ? 'Back to the split'
-            : 'Expand changes to the full width'
-        }
-        onClick={() => props.onSpotlight()}
-      >
-        {props.spotlit ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        tooltip="Close the changes pane"
-        onClick={() => props.onClose()}
-      >
-        <XIcon />
-      </Button>
     </header>
   );
 }
