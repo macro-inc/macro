@@ -1049,6 +1049,36 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
             ..
         }
     ));
+    assert!(
+        events
+            .iter()
+            .all(|event| event.acting_user.as_ref().map(|user| user.as_ref())
+                == Some("macro|author@example.com")),
+        "the bot acts for the receipt's user whether or not the message credits them"
+    );
+}
+
+#[tokio::test]
+async fn a_team_scoped_bot_acts_for_no_one() {
+    use entity_access::domain::models::BotReceiptScope;
+    let receipt = EntityAccessReceipt::try_new_bot(
+        bot_id::MACRO_AI_BOT_ID.into_storage_id(),
+        BotReceiptScope::Team {
+            team_id: Uuid::from_u128(9),
+        },
+        access("macro|author@example.com", "doc", AccessLevel::Comment)
+            .entity()
+            .clone(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Comment,
+        },
+    )
+    .unwrap();
+    let events = Events::default();
+    let service =
+        MessageService::new(fixture(), events.clone()).with_mention_extractor(RawBotMentions);
+    service.post(receipt, post_input()).await.unwrap();
+    assert!(events.0.lock().unwrap()[0].acting_user.is_none());
 }
 
 #[derive(Clone)]
