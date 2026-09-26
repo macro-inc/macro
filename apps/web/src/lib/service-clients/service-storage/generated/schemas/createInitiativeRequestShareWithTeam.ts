@@ -6,6 +6,7 @@
  */
 
 /**
- * When true, share with the owner's team at create time.
+ * Share with the owner's team at create time. Defaults to true; users without
+a team create an unshared initiative. Explicit false skips the team grant.
  */
 export type CreateInitiativeRequestShareWithTeam = boolean | null;

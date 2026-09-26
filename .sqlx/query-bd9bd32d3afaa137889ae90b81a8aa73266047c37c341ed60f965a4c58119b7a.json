@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH removed AS (\n            DELETE FROM task_initiative\n            WHERE task_id = $1\n            RETURNING initiative_id\n        )\n        UPDATE initiative\n        SET updated_at = now()\n        WHERE id IN (SELECT initiative_id FROM removed)\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bd9bd32d3afaa137889ae90b81a8aa73266047c37c341ed60f965a4c58119b7a"
+}

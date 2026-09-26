@@ -73,11 +73,15 @@ fn create_request_deserializes_camel_case() {
     assert_eq!(request.share_with_team, Some(true));
 }
 
+#[cfg(feature = "ports")]
 #[test]
 fn task_assignment_exposes_task_id() {
     assert_eq!(
-        TaskAssignment::Candidate {
-            task_id: "t1".into()
+        TaskAssignment::Authorized {
+            receipt: EntityAccessReceipt::dangerously_assert_internal_user(
+                "t1",
+                entity_access::domain::models::EntityType::Document
+            )
         }
         .task_id(),
         "t1"
@@ -96,4 +100,33 @@ fn task_assignment_exposes_task_id() {
         .task_id(),
         "t3"
     );
+}
+
+#[test]
+fn assignment_batch_bounds_unique_ids_and_keeps_request_order() {
+    let batch =
+        TaskAssignmentBatch::try_new(vec!["b".into(), "a".into(), "b".into()]).expect("bounded");
+    assert_eq!(batch.into_task_ids(), ["b", "a"]);
+    assert!(TaskAssignmentBatch::try_new(vec!["same".into(); MAX_TASKS_PER_ASSIGN + 1]).is_ok());
+    assert!(matches!(
+        TaskAssignmentBatch::try_new(
+            (0..=MAX_TASKS_PER_ASSIGN)
+                .map(|i| format!("task-{i}"))
+                .collect()
+        ),
+        Err(InitiativeError::BadRequest(_))
+    ));
+}
+
+#[cfg(feature = "ports")]
+#[test]
+fn assignment_access_result_must_match_requested_task() {
+    let receipt = EntityAccessReceipt::dangerously_assert_internal_user(
+        "other",
+        entity_access::domain::models::EntityType::Document,
+    );
+    assert!(matches!(
+        TaskAssignment::from_access("requested".into(), Ok(receipt)),
+        Err(InitiativeError::BadRequest(_))
+    ));
 }

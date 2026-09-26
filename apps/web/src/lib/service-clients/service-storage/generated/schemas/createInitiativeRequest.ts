@@ -19,6 +19,7 @@ edits happen in the document editor. */
   memberIds?: CreateInitiativeRequestMemberIds;
   /** Display name. */
   name: string;
-  /** When true, share with the owner's team at create time. */
+  /** Share with the owner's team at create time. Defaults to true; users without
+a team create an unshared initiative. Explicit false skips the team grant. */
   shareWithTeam?: CreateInitiativeRequestShareWithTeam;
 }

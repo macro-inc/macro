@@ -1,4 +1,6 @@
 use entity_access_db_utils::AccessLevel;
+
+mod access;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -520,20 +522,23 @@ async fn get_detail_reports_each_channel_grant_once(pool: PgPool) -> anyhow::Res
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_share_with_team_without_owner_team_is_bad_request(
+async fn create_share_with_team_without_owner_team_succeeds_unshared(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
     let repo = repo(pool.clone());
-    let error = repo
+    let created = repo
         .create(
             create_args(&pool, OWNER, "Solo", &[]).await?,
             share_off(),
             TeamShareCreation::Initiative,
         )
-        .await
-        .expect_err("teamless owner cannot share with team");
-    assert!(matches!(error, InitiativeError::BadRequest(message) if message.contains("team")));
+        .await?;
+    let facts = repo.get_team_share_facts(created.id).await?;
+    assert_eq!(facts.initiative.current, None);
+    assert_eq!(facts.initiative.revision, 0);
+    assert_eq!(facts.description.current, None);
+    assert_eq!(facts.description.revision, 0);
     Ok(())
 }
 
