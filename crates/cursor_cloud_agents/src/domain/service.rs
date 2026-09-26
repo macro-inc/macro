@@ -392,6 +392,10 @@ struct SessionState {
     /// Pause background capture while the host loads, without refusing prompts
     /// it already dispatched before observing the recovery requirement.
     reload_pending: bool,
+    /// The run this session's last prompt started, which the last load found
+    /// with no terminal fact: the process that was streaming it died or was
+    /// fenced out. The next sync streams its remainder into the open turn.
+    continuing: Option<CursorRunId>,
     /// Set by cancel; read by the turn when its stream ends.
     ///
     /// The *verdict*, not the mechanism: a cancel that raced the stream's own
@@ -2487,6 +2491,7 @@ where
             state.ready_for_sync = false;
             state.journal_loaded = false;
             state.capture_failed = false;
+            state.continuing = None;
         }
         self.ensure_journal(id, &session).await?;
         let (agent, complete) = {
@@ -2579,11 +2584,17 @@ where
                 .expect("session state poisoned")
                 .last_run = Some(run.clone());
         }
-        session
-            .state
-            .lock()
-            .expect("session state poisoned")
-            .machine = machine;
+        // Said before the reply, so the host holds its next prompt instead of
+        // folding it into the turn this history leaves open.
+        let continuing = open_last_run(&entries, &machine);
+        if continuing.is_some() {
+            self.notifier.continue_turn(id).await?;
+        }
+        {
+            let mut state = session.state.lock().expect("session state poisoned");
+            state.machine = machine;
+            state.continuing = continuing;
+        }
         Ok(ReplayGuard {
             session,
             _gate: gate,
@@ -2609,21 +2620,84 @@ where
             let Ok(_turn) = session.turn_gate.try_lock() else {
                 continue;
             };
-            let agent = {
-                let state = session.state.lock().expect("session state poisoned");
-                (state.ready_for_sync && !state.reload_pending)
-                    .then(|| state.agent.clone())
-                    .flatten()
+            let ready = {
+                let mut state = session.state.lock().expect("session state poisoned");
+                match state.agent.clone() {
+                    Some(agent) if state.ready_for_sync && !state.reload_pending => {
+                        Some((agent, state.continuing.take()))
+                    }
+                    _ => None,
+                }
             };
-            let Some(agent) = agent else {
+            let Some((agent, continuing)) = ready else {
                 continue;
             };
+            if let Some(run) = continuing {
+                self.continue_run(&session_id, &session, &agent, &run).await;
+                continue;
+            }
             if let Err(error) = self
                 .backfill_foreign_runs(&session_id, &session, &agent, None)
                 .await
             {
                 tracing::warn!(%session_id, %agent, %error, "could not mirror cursor.com runs");
             }
+        }
+    }
+
+    /// Stream the rest of a run an earlier process left open into the turn
+    /// the load kept open, and end that turn.
+    ///
+    /// Called under the turn gate. The stream restarts from the top and skips
+    /// what the journal already holds, so nothing is appended twice; the
+    /// terminal record's capture emits the `turn_complete` the host is
+    /// holding its next prompt for. A run that cannot be followed still ends
+    /// the turn, as failed, so nothing is left held behind it.
+    async fn continue_run(
+        &self,
+        session_id: &SessionId,
+        session: &Session,
+        agent: &CursorAgentId,
+        run: &CursorRunId,
+    ) {
+        tracing::info!(%session_id, %agent, %run, "continuing a Cursor run an earlier process left open");
+        let cancel = {
+            let mut state = session.state.lock().expect("session state poisoned");
+            state.cancelled = false;
+            state.cancel = tokio_util::sync::CancellationToken::new();
+            state.cancel.clone()
+        };
+        let outcome = self
+            .ingest_run(session_id, session, agent, run, &cancel, IngestMode::LIVE)
+            .await;
+        let (terminal, cancelled) = {
+            let mut state = session.state.lock().expect("session state poisoned");
+            let reconciled = state
+                .journal_entries
+                .iter()
+                .any(|e| e.run.as_ref() == Some(run) && e.input == JournalInput::Reconciled);
+            if reconciled {
+                state.last_run = Some(run.clone());
+            }
+            (state.machine.terminal_status(run), state.cancelled)
+        };
+        if terminal.is_some() {
+            return;
+        }
+        use agent_runtime_protocol::domain::turn::TurnOutcome;
+        let ended = match outcome {
+            Ok(StopReason::Cancelled) => TurnOutcome::Cancelled,
+            Ok(_) if cancelled => TurnOutcome::Cancelled,
+            Ok(_) => TurnOutcome::Finished,
+            Err(error) => {
+                tracing::warn!(%session_id, %run, %error, "could not continue a Cursor run");
+                TurnOutcome::Failed {
+                    message: "Lost the connection to this Cursor run.".to_owned(),
+                }
+            }
+        };
+        if let Err(error) = self.notifier.turn_complete(session_id, ended).await {
+            tracing::warn!(%session_id, %run, %error, "could not end a continued Cursor turn");
         }
     }
 
@@ -2705,6 +2779,36 @@ fn project_entry(
     }
     updates.extend(machine.push(entry.run.as_ref(), &entry.input)?);
     Ok(updates)
+}
+
+/// The run the journal's last accepted prompt started, while nothing has
+/// ended it and it is the only run nothing has ended: a turn a process was
+/// streaming when it died or was fenced out.
+///
+/// Any other unsettled run - an older one a backfill was still capturing -
+/// has to reconcile first, so that journal keeps the backfill-and-reload
+/// recovery instead.
+fn open_last_run(entries: &[JournalEntry], machine: &ReplayMachine) -> Option<CursorRunId> {
+    let run = entries.iter().rev().find_map(|entry| {
+        matches!(entry.input, JournalInput::PromptAccepted(_))
+            .then(|| entry.run.clone())
+            .flatten()
+    })?;
+    let unsettled = |candidate: &CursorRunId| {
+        machine.terminal_status(candidate).is_none()
+            && !entries.iter().any(|entry| {
+                entry.run.as_ref() == Some(candidate)
+                    && matches!(
+                        entry.input,
+                        JournalInput::Reconciled | JournalInput::Interrupted(_)
+                    )
+            })
+    };
+    let alone = entries
+        .iter()
+        .filter_map(|entry| entry.run.as_ref())
+        .all(|other| other == &run || !unsettled(other));
+    (alone && unsettled(&run)).then_some(run)
 }
 
 fn turn_outcome(status: RunStatus) -> agent_runtime_protocol::domain::turn::TurnOutcome {

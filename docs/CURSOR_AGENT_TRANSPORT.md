@@ -503,6 +503,18 @@ the existing fenced ACP writer only covers ACP log appends. Wrapping a simple
 journal with a preflight ownership check would lose this atomicity. Retain the
 small storage fence rather than introduce a new generic transaction wrapper.
 
+The successor continues a run its predecessor was streaming. The load finds the
+journal's last accepted run with no terminal fact, and no other unsettled run
+ahead of it, so it leaves that turn open. Before the load reply it sends the host
+a local `turn_continuing` event. While that holds, the session machine returns
+turn-occupying actions with `TurnContinuing`, and the harness requeues them at the
+head of the durable queue. The next mirror tick re-reads the run's stream from the
+top, skips the captured prefix, and emits only the missing tail. The terminal
+record's `_session/turn_complete` closes the open turn, and the fold's `TurnEnded`
+dispatches the queued prompt. No reload replaces the transcript. A run that cannot
+be followed still ends the turn, as failed. A journal with an older run still
+unreconciled keeps the backfill-and-reload recovery.
+
 Native SSE records contain only event name, original data, and provider ID.
 Scripted providers emit the same wire-shaped records through the production
 decoder; recorded fixtures retain their original payloads rather than being
