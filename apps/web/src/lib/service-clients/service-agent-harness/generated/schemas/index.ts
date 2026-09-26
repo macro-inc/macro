@@ -134,6 +134,8 @@ export * from './logFrameDto';
 export * from './logFrameDtoContent';
 export * from './messageParent';
 export * from './messageParentOneOf';
+export * from './messageParentOneOfFive';
+export * from './messageParentOneOfFiveType';
 export * from './messageParentOneOfThree';
 export * from './messageParentOneOfThreeType';
 export * from './messageParentOneOfType';

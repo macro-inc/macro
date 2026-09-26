@@ -908,6 +908,12 @@ export type MessageParent = {
      */
     id: DocumentId;
     type: 'document';
+} | {
+    /**
+     * An initiative, presented as a project in the application.
+     */
+    id: string;
+    type: 'initiative';
 };
 
 /**

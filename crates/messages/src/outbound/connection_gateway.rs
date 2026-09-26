@@ -11,6 +11,7 @@ fn entity(parent: &MessageParent) -> Entity<'static> {
     let kind = match parent {
         MessageParent::Channel(_) => EntityType::Channel,
         MessageParent::Document(_) => EntityType::Document,
+        MessageParent::Initiative(_) => EntityType::Initiative,
     };
     kind.with_entity_string(parent.entity_id())
 }

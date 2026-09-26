@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n        EXISTS(SELECT 1 FROM comms_attachments WHERE message_id = ANY($1)) AS \"attachments!\",\n        EXISTS(SELECT 1 FROM comms_reactions WHERE message_id = ANY($1)) AS \"reactions!\",\n        EXISTS(SELECT 1 FROM comms_entity_mentions WHERE source_entity_type = 'message' AND source_entity_id = ANY($2)) AS \"mentions!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attachments!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "reactions!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "mentions!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e4534f23361e1fda0f47ae4c4cdf8f5eb2f2e2340e4b0ad8e8af0e306ab8d4d5"
+}

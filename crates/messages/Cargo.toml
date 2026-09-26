@@ -9,6 +9,8 @@ annotations = ["dep:model", "ports"]
 broker = ["dep:macro_event_broker", "dep:macro_event_topics", "ports"]
 default = []
 delivery = [
+  "dep:properties",
+  "dep:models_properties",
   "dep:connection_gateway_client",
   "dep:model-entity",
   "dep:model_notifications",
@@ -25,7 +27,7 @@ inbound = [
   "schema",
 ]
 json-schema = ["dep:schemars"]
-outbound = ["dep:macro_uuid", "dep:sqlx", "ports"]
+outbound = ["dep:initiative", "dep:macro_uuid", "dep:sqlx", "ports"]
 ports = ["dep:async-trait", "dep:entity_access", "dep:rootcause", "entity_access/ports"]
 schema = ["channel_sender/schema", "dep:utoipa"]
 test-utils = ["dep:mockall", "ports"]
@@ -38,6 +40,7 @@ channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 entity_access = { path = "../entity_access", default-features = false, optional = true }
+initiative = { path = "../initiative", default-features = false, features = ["ports"], optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ], optional = true }
@@ -51,6 +54,8 @@ model-entity = { path = "../model-entity", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }
 model_owner = { path = "../model_owner", optional = true }
 models_pagination = { path = "../models_pagination" }
+models_properties = { path = "../models_properties", optional = true }
+properties = { path = "../properties", default-features = false, features = ["ports"], optional = true }
 notification = { path = "../notification", optional = true }
 rootcause = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
@@ -65,5 +70,6 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+initiative = { path = "../initiative", default-features = false, features = ["postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

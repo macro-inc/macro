@@ -223,10 +223,10 @@ where
             if !agent.bot.has_agent {
                 return Ok(false);
             }
-            // Channel selection restricts channel placement. Document invocation
+            // Channel selection restricts channel placement. Discussion invocation
             // requires ownership or team membership and is independently bounded
-            // by the invoking user's document access at execution time.
-            if matches!(posted.parent, MessageParent::Document(_)) {
+            // by the invoking user's parent access at execution time.
+            if posted.parent.is_discussion() {
                 return self.owner_allows(&caller, agent.bot.owner.as_ref()).await;
             }
             let MessageParent::Channel(channel_id) = posted.parent else {
@@ -262,7 +262,9 @@ where
                         .bot_active_in_channel(*channel_id, bot_id)
                         .await
                 }
-                MessageParent::Document(_) => self.owner_allows(&caller, bot.owner.as_ref()).await,
+                MessageParent::Document(_) | MessageParent::Initiative(_) => {
+                    self.owner_allows(&caller, bot.owner.as_ref()).await
+                }
             },
         }
     }

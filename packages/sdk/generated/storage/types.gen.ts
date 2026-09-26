@@ -7250,6 +7250,12 @@ export type MessageParent = {
      */
     id: DocumentId;
     type: 'document';
+} | {
+    /**
+     * An initiative, presented as a project in the application.
+     */
+    id: string;
+    type: 'initiative';
 };
 
 /**
@@ -10344,7 +10350,7 @@ export type ThreadOrigin = {
 };
 
 /**
- * Partial changes to the lifecycle and placement of a document discussion.
+ * Partial changes to discussion lifecycle or document anchor placement.
  */
 export type ThreadPatch = {
     /**

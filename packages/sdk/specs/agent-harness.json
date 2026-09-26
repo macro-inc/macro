@@ -2636,6 +2636,22 @@
                 "enum": ["document"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "An initiative, presented as a project in the application.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "An initiative, presented as a project in the application."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["initiative"]
+              }
+            }
           }
         ],
         "description": "The entity whose permissions and lifecycle govern a message."
