@@ -229,8 +229,12 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
 >;
 
 /// GraphQL activity reader over the Postgres activity log (readonly pool).
-pub(crate) type DssActivityReader =
-    complete_graph::ActivityPortReader<activity::outbound::pg_activity_repo::PgActivityRepo>;
+pub(crate) type DssActivityReader = complete_graph::ActivityPortReader<
+    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+        activity::outbound::pg_activity_repo::PgActivityRepo,
+        EntityAccessService,
+    >,
+>;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;

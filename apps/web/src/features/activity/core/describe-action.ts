@@ -32,6 +32,8 @@ export function describeRun(entry: FeedEntry): {
 export function describeAction(action: ActivityAction, count = 1): string {
   if (count < 2) {
     return match(action)
+      .with({ kind: 'task-added' }, () => 'added a task')
+      .with({ kind: 'task-removed' }, () => 'removed a task')
       .with({ kind: 'created' }, () => 'created this')
       .with({ kind: 'edited' }, () => 'made an edit')
       .with({ kind: 'opened' }, () => 'opened this')
@@ -46,6 +48,8 @@ export function describeAction(action: ActivityAction, count = 1): string {
       .exhaustive();
   }
   return match(action)
+    .with({ kind: 'task-added' }, () => `added ${count} tasks`)
+    .with({ kind: 'task-removed' }, () => `removed ${count} tasks`)
     .with({ kind: 'created' }, () => `created this ${count} times`)
     .with({ kind: 'edited' }, () => `made ${count} edits`)
     .with({ kind: 'opened' }, () => `opened this ${count} times`)
@@ -77,6 +81,8 @@ export function describeActionForEntity(action: ActivityAction): {
   connector?: string;
 } {
   return match(action)
+    .with({ kind: 'task-added' }, () => ({ verb: 'added' }))
+    .with({ kind: 'task-removed' }, () => ({ verb: 'removed' }))
     .with({ kind: 'created' }, () => ({
       verb: 'created',
     }))

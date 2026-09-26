@@ -21,5 +21,6 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+activity = { path = "../activity", default-features = false }
 rootcause = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }

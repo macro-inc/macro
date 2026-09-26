@@ -237,17 +237,20 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),
     )));
-    let properties_service =
-        ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
-    let task_properties_service = ai_tools::build_task_properties_adapter(
-        db.clone(),
-        properties_service.clone(),
-        entity_access_service.clone(),
-    );
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
         event_task_tracker,
+    );
+    let properties_service = ai_tools::build_properties_service_with_broker(
+        db.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+    );
+    let task_properties_service = ai_tools::build_task_properties_adapter(
+        db.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
     );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,

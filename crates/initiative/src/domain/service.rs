@@ -3,6 +3,11 @@
 #[cfg(test)]
 mod test;
 
+use crate::domain::events::{
+    AssignedTasks, InitiativeChange, InitiativeEventPublisher, InitiativeMacroEvent,
+    InitiativeTasksChanged, InitiativeTopicEvent, receipt_attribution,
+};
+use chrono::Utc;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -38,6 +43,7 @@ pub struct InitiativeServiceImpl<R, D> {
     repo: R,
     description_documents: D,
     resources: Arc<dyn InitiativeResources>,
+    events: Option<Arc<dyn InitiativeEventPublisher>>,
 }
 
 impl<R, D> std::fmt::Debug for InitiativeServiceImpl<R, D> {
@@ -57,6 +63,25 @@ where
             repo,
             description_documents,
             resources,
+            events: None,
+        }
+    }
+
+    /// Attach the host's shared initiative event publisher.
+    pub fn with_event_publisher(mut self, publisher: Arc<dyn InitiativeEventPublisher>) -> Self {
+        self.events = Some(publisher);
+        self
+    }
+
+    async fn publish(&self, id: InitiativeId, event: InitiativeTopicEvent) {
+        if let Some(publisher) = &self.events {
+            if let Err(error) = publisher
+                .publish(InitiativeMacroEvent::new(id, event))
+                .await
+            {
+                // The write has committed. Returning an error would invite a duplicate mutation.
+                tracing::error!(?error, %id, "failed to publish committed initiative event");
+            }
         }
     }
 
@@ -144,6 +169,34 @@ where
         user_id: &MacroUserIdStr<'_>,
         request: CreateInitiativeRequest,
     ) -> Result<InitiativeDetail, InitiativeError> {
+        self.create_attributed(
+            user_id,
+            request,
+            activity::Attribution::direct(activity::Actor::new_from_user(
+                user_id.clone().into_owned(),
+            )),
+        )
+        .await
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn create_attributed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: CreateInitiativeRequest,
+        attribution: activity::Attribution,
+    ) -> Result<InitiativeDetail, InitiativeError> {
+        let authorized = match &attribution {
+            activity::Attribution::Direct { actor } => {
+                actor.as_user().is_some_and(|actor| actor == user_id)
+            }
+            activity::Attribution::Delegated { actor, subject } => {
+                actor.as_bot().is_some() && subject == user_id
+            }
+        };
+        if !authorized {
+            return Err(InitiativeError::Unauthorized);
+        }
         let name = normalize_name(&request.name)?;
         let prefill_markdown = normalize_description(request.description)?;
         let owner_id = user_id.clone().into_owned();
@@ -196,7 +249,15 @@ where
                     return Err(error);
                 }
                 detail.user_access_level = AccessLevel::Owner;
-
+                self.publish(
+                    id,
+                    InitiativeTopicEvent::Created(InitiativeChange {
+                        initiative_id: id,
+                        attribution: Some(attribution.into()),
+                        occurred_at: Utc::now(),
+                    }),
+                )
+                .await;
                 Ok(detail)
             }
             Err(error) => {
@@ -308,7 +369,15 @@ where
             })
             .await
             .map_err(Into::into)?;
-
+        self.publish(
+            id,
+            InitiativeTopicEvent::Updated(InitiativeChange {
+                initiative_id: id,
+                attribution: receipt_attribution(&receipt),
+                occurred_at: Utc::now(),
+            }),
+        )
+        .await;
         detail.user_access_level = receipt_access_level(&receipt)?;
         detail.task_ids = self.visible_tasks(receipt.auth(), detail.task_ids).await?;
         Ok(detail)
@@ -341,8 +410,8 @@ where
             }
         }
 
-        let results = if candidate_ids.is_empty() {
-            Vec::new()
+        let committed = if candidate_ids.is_empty() {
+            AssignedTasks::default()
         } else {
             self.repo
                 .assign_tasks(id, candidate_ids)
@@ -350,8 +419,19 @@ where
                 .map_err(Into::into)?
         };
 
+        if !committed.changes.is_empty() {
+            self.publish(
+                id,
+                InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
+                    attribution: receipt_attribution(&receipt),
+                    changes: committed.changes,
+                    occurred_at: Utc::now(),
+                }),
+            )
+            .await;
+        }
         Ok(AssignTasksResponse {
-            results: merge_assign_results(&assignments, results),
+            results: merge_assign_results(&assignments, committed.results),
         })
     }
 
@@ -364,10 +444,23 @@ where
         let id = initiative_id_from_receipt(&receipt)?;
         validate_task_receipt(&task_receipt)?;
         require_same_actor(&receipt, &task_receipt)?;
-        self.repo
+        let change = self
+            .repo
             .unassign_task(id, &task_receipt.entity().entity_id)
             .await
-            .map_err(Into::into)
+            .map_err(Into::into)?;
+        if let Some(change) = change {
+            self.publish(
+                id,
+                InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
+                    attribution: receipt_attribution(&receipt),
+                    changes: vec![change],
+                    occurred_at: Utc::now(),
+                }),
+            )
+            .await;
+        }
+        Ok(())
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -376,10 +469,25 @@ where
         task_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<(), InitiativeError> {
         validate_task_receipt(&task_receipt)?;
-        self.repo
+        let change = self
+            .repo
             .clear_task(&task_receipt.entity().entity_id)
             .await
-            .map_err(Into::into)
+            .map_err(Into::into)?;
+        if let Some(change) = change {
+            if let Some(id) = change.from {
+                self.publish(
+                    id,
+                    InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
+                        attribution: receipt_attribution(&task_receipt),
+                        changes: vec![change],
+                        occurred_at: Utc::now(),
+                    }),
+                )
+                .await;
+            }
+        }
+        Ok(())
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -400,8 +508,10 @@ where
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
         let description_document_id = self.repo.delete(id).await.map_err(Into::into)?;
-
+        self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
+            .await;
         // Cleanup follows an authorized deletion and is not a fresh user edit.
+        // Unattributed property cleanup cannot recreate history after the purge event.
         let cleanup_receipt = EntityAccessReceipt::try_new(
             EntityAccessAuth::Internal,
             receipt.entity().clone(),

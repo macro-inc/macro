@@ -46,7 +46,14 @@ impl InitiativeService for ReceiptService {
     ) -> Result<InitiativeDetail, InitiativeError> {
         unreachable!("unexpected domain call")
     }
-
+    async fn create_attributed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: CreateInitiativeRequest,
+        attribution: activity::Attribution,
+    ) -> Result<InitiativeDetail, InitiativeError> {
+        unreachable!("unexpected domain call")
+    }
     async fn internal_get_basic(
         &self,
         id: InitiativeId,

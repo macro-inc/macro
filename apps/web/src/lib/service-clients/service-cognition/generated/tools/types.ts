@@ -863,6 +863,12 @@ export type ToolActivityAction =
       type: 'callStarted';
     }
   | {
+      type: 'taskAdded';
+    }
+  | {
+      type: 'taskRemoved';
+    }
+  | {
       /**
        * The stored action tag.
        */

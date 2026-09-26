@@ -1,5 +1,6 @@
 import ChatCircle from '@phosphor/chat-circle.svg';
 import Eye from '@phosphor/eye.svg';
+import Minus from '@phosphor/minus.svg';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import PencilSimple from '@phosphor/pencil-simple.svg';
 import Phone from '@phosphor/phone.svg';
@@ -13,6 +14,8 @@ import type { ActivityAction } from '../core/event';
 
 const GLYPHS = {
   created: Plus,
+  'task-added': Plus,
+  'task-removed': Minus,
   edited: PencilSimple,
   opened: Eye,
   deleted: Trash,
