@@ -12,6 +12,7 @@ export function CallSidebar(props: {
   actions: CallSidebarActions;
   now: Accessor<Date>;
   when: (call: UpcomingCalendarEvent) => string;
+  selectedEventId?: string;
 }) {
   return (
     <Content
@@ -20,6 +21,7 @@ export function CallSidebar(props: {
       upcomingLoading={props.sources.upcoming.loading()}
       activeError={props.sources.active.error()}
       upcomingError={props.sources.upcoming.error()}
+      selectedEventId={props.selectedEventId}
       canJoin={(event) =>
         Boolean(event.url) && isCalendarEventOngoing(event, props.now())
       }
