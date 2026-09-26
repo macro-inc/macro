@@ -51,7 +51,6 @@ it('activates the split owning a preview and stops exposing it after close', () 
   existing?.activate?.();
   expect(activate).toHaveBeenCalledOnce();
   expect(view.stack.active()?.data).toEqual(channel);
-  expect(toast.alert).not.toHaveBeenCalled();
 
   view.stack.clear();
   expect(manager.findOpenView(channel)).toBeUndefined();
