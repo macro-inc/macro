@@ -419,6 +419,11 @@ if (DEV_MODE_ENV) {
   );
 
   registerComponent(
+    'loro-inspect',
+    lazy(() => import('@app/features/devtools/debug/LoroInspector'))
+  );
+
+  registerComponent(
     'md-parse',
     lazy(
       () =>

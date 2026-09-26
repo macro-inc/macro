@@ -55,3 +55,8 @@ migrate-d1-prod:
 # CI runs the same two steps (.github/workflows/deploy_sync_service.yml)
 deploy-prod: migrate-d1-prod
   npx wrangler deploy --env prod
+
+# Pull a document's raw Loro snapshot + op log out of its durable object into
+# local binary files. `just dump <document_id> [dev|prd]`
+dump document_id env="prd":
+  bun scripts/dump-do-state.ts {{document_id}} --env {{env}}
