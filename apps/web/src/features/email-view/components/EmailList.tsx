@@ -55,6 +55,7 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createEmailRowActionState } from '../primitives/row-action-state';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
@@ -288,28 +289,27 @@ export function EmailList(props: EmailListProps) {
     list.selection.setAnchor(row.rowId);
   }
 
-  const [isRowActionPending, setRowActionPending] = createSignal(false);
+  const rowActionState = createEmailRowActionState();
 
   async function runRowAction(
     row: EmailActionRow,
     actionId: 'favorite' | 'mark-done' | 'mark-not-done'
   ) {
-    if (isRowActionPending()) return;
     const action = actionGroupsFor(row)
       .flatMap((group) => group.items)
       .find((item) => item.id === actionId);
     if (!action || action.disabled) return;
 
-    focusActionRow(row);
-    setRowActionPending(true);
-    try {
-      await action.onClick();
-    } catch {
-      // Entity actions own their rollback and failure notification.
-    } finally {
-      setRowActionPending(false);
-      grid()?.focus();
-    }
+    await rowActionState.run(row.rowId, async () => {
+      focusActionRow(row);
+      try {
+        await action.onClick();
+      } catch {
+        // Entity actions own their rollback and failure notification.
+      } finally {
+        grid()?.focus();
+      }
+    });
   }
 
   function RowActions(props: { row: EmailActionRow }) {
@@ -320,7 +320,7 @@ export function EmailList(props: EmailListProps) {
       <EmailRowActions
         archived={archived()}
         canArchive={entityActionViewContext().supportsMarkDone}
-        pending={isRowActionPending()}
+        pending={rowActionState.isPending(props.row.rowId)}
         onFocus={() => focusActionRow(props.row)}
         onArchive={() =>
           void runRowAction(
@@ -568,7 +568,9 @@ export function EmailList(props: EmailListProps) {
                                             starred={isFavorited(
                                               entityRow().entity
                                             )}
-                                            pending={isRowActionPending()}
+                                            pending={rowActionState.isPending(
+                                              entityRow().id
+                                            )}
                                             onFocus={() =>
                                               focusActionRow({
                                                 entity: entityRow().entity,
