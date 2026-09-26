@@ -1,5 +1,8 @@
 //! Implicit-trigger judgement backed by the fast agent model.
 
+#[cfg(test)]
+mod test;
+
 use std::sync::Arc;
 
 use agent::structured_output::{DynamicSchema, dynamic_structured_completion};
@@ -11,6 +14,8 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::domain::service::ImplicitTriggerJudge;
+
+use super::image_caption::{ImageCaptioner, append_image_blurbs, blurbs_for_attachments};
 
 static SYSTEM_PROMPT: &str = "\
 You decide whether a channel message is addressed to an AI coding agent.
@@ -28,7 +33,14 @@ its work addressed to other people, or unrelated discussion.
 
 You are given the thread around the agent's part in it, as lines of \
 '[speaker] message' where the agent's own messages are marked '[agent]'. Some \
-messages may be hidden; judge on what you are shown.";
+messages may be hidden; judge on what you are shown.
+
+Attached images are not shown to you. Each one is written into the message \
+as <this is an image of ...>, a description of the picture rather than words \
+the author typed. Treat that description as what the image shows. \
+<this is an image> means a picture was attached but could not be described. \
+Those descriptions appear on the message to judge; the thread transcript \
+does not repeat them.";
 
 #[derive(Debug, Deserialize)]
 struct JudgeOutput {
@@ -42,14 +54,19 @@ struct JudgeOutput {
 pub struct FastModelTriggerJudge {
     model: PredefinedModel,
     recorder: Arc<dyn UsageRecorder>,
+    images: Arc<dyn ImageCaptioner>,
 }
 
 impl FastModelTriggerJudge {
     /// Creates a judge using the fast agent model.
-    pub fn new(recorder: Arc<dyn UsageRecorder>) -> Self {
+    ///
+    /// `images` turns attached pictures into the `<this is an image of ...>`
+    /// blurbs the text-only model reads. The forwarded message is unchanged.
+    pub fn new(recorder: Arc<dyn UsageRecorder>, images: impl ImageCaptioner + 'static) -> Self {
         Self {
             model: PredefinedModel::Fast,
             recorder,
+            images: Arc::new(images),
         }
     }
 }
@@ -89,14 +106,10 @@ impl ImplicitTriggerJudge for FastModelTriggerJudge {
             None => UsageContext::system(AiFeature::Automation),
         };
 
-        let prompt = if transcript.is_empty() {
-            format!("The message to judge:\n{}", posted.content)
-        } else {
-            format!(
-                "The thread so far:\n{transcript}\nThe message to judge:\n{}",
-                posted.content
-            )
-        };
+        let blurbs =
+            blurbs_for_attachments(self.images.as_ref(), &posted.attachments, ctx.clone()).await;
+        let content = append_image_blurbs(&posted.content, &blurbs);
+        let prompt = judge_user_prompt(transcript, &content);
 
         let value = dynamic_structured_completion(
             self.model,
@@ -112,5 +125,14 @@ impl ImplicitTriggerJudge for FastModelTriggerJudge {
             anyhow::anyhow!("implicit trigger judge returned malformed output: {error}")
         })?;
         Ok(output.addressed_to_agent)
+    }
+}
+
+/// The user prompt the judge scores. Image blurbs are already part of `content`.
+pub(crate) fn judge_user_prompt(transcript: &str, content: &str) -> String {
+    if transcript.is_empty() {
+        format!("The message to judge:\n{content}")
+    } else {
+        format!("The thread so far:\n{transcript}\nThe message to judge:\n{content}")
     }
 }
