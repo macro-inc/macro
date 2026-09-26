@@ -234,7 +234,10 @@ pub fn shared_message_service<E: messages::domain::ports::MessageEventPublisher>
     E,
 > {
     messages::domain::service::MessageService::new(
-        messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+        messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone())
+            .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+            )),
         effects,
     )
     .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(

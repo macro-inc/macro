@@ -29320,6 +29320,18 @@ export const messageTimelineResponse = zod
                     type: zod.enum(['document']),
                   })
                   .describe('A document, including tasks and PDFs.'),
+                zod
+                  .object({
+                    id: zod
+                      .uuid()
+                      .describe(
+                        'An initiative, presented as a project in the application.'
+                      ),
+                    type: zod.enum(['initiative']),
+                  })
+                  .describe(
+                    'An initiative, presented as a project in the application.'
+                  ),
               ])
               .describe(
                 'The entity whose permissions and lifecycle govern a message.'
@@ -29570,6 +29582,18 @@ export const messageTimelineResponse = zod
                                 })
                                 .describe(
                                   'A document, including tasks and PDFs.'
+                                ),
+                              zod
+                                .object({
+                                  id: zod
+                                    .uuid()
+                                    .describe(
+                                      'An initiative, presented as a project in the application.'
+                                    ),
+                                  type: zod.enum(['initiative']),
+                                })
+                                .describe(
+                                  'An initiative, presented as a project in the application.'
                                 ),
                             ])
                             .describe(
@@ -29862,6 +29886,18 @@ export const entityMessageCreateResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -29986,6 +30022,18 @@ export const entityMessageGetMessageResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -30114,6 +30162,18 @@ export const entityMessageDeleteMessageResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -30338,6 +30398,18 @@ export const entityMessageEditResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -30470,6 +30542,18 @@ export const entityMessageReactResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -30601,6 +30685,18 @@ export const entityMessageLegacyResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -30748,6 +30844,18 @@ export const entityMessageGetThreadResponse = zod
                     type: zod.enum(['document']),
                   })
                   .describe('A document, including tasks and PDFs.'),
+                zod
+                  .object({
+                    id: zod
+                      .uuid()
+                      .describe(
+                        'An initiative, presented as a project in the application.'
+                      ),
+                    type: zod.enum(['initiative']),
+                  })
+                  .describe(
+                    'An initiative, presented as a project in the application.'
+                  ),
               ])
               .describe(
                 'The entity whose permissions and lifecycle govern a message.'
@@ -30877,6 +30985,18 @@ export const entityMessageGetThreadResponse = zod
                 type: zod.enum(['document']),
               })
               .describe('A document, including tasks and PDFs.'),
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe(
+                    'An initiative, presented as a project in the application.'
+                  ),
+                type: zod.enum(['initiative']),
+              })
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
           ])
           .describe(
             'The entity whose permissions and lifecycle govern a message.'
@@ -31105,7 +31225,7 @@ export const entityMessagePatchThreadBody = zod
       ),
   })
   .describe(
-    'Partial changes to the lifecycle and placement of a document discussion.'
+    'Partial changes to discussion lifecycle or document anchor placement.'
   );
 
 export const entityMessagePatchThreadResponse = zod

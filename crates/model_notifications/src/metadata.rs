@@ -1627,15 +1627,14 @@ const AGENT_EXCERPT_MAX_CHARS: usize = 280;
 /// The session an agent-session notification is about, and where its magic
 /// chip lives when it was opened from a thread.
 ///
-/// The conversation an agent session was opened from: a channel or a
-/// document discussion. Spelled like the message API's parent so a client can
-/// route to either surface.
+/// The conversation an agent session was opened from: a channel, document,
+/// or initiative. Spelled like the message API's parent for client routing.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
 pub struct AgentSessionOriginParent {
-    /// `channel` or `document`.
+    /// `channel`, `document`, or `initiative`.
     #[serde(rename = "type")]
     pub kind: String,
-    /// The channel or document id.
+    /// The parent entity id.
     pub id: String,
 }
 
@@ -1865,3 +1864,5 @@ impl NotificationExtIos for AgentSessionMentionedMetadata {
         agent_session_apns(self, &self.session, sender_id, notification_id)
     }
 }
+mod initiative_discussion;
+pub use initiative_discussion::{InitiativeDiscussionMetadata, InitiativeDiscussionReason};

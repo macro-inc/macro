@@ -121,7 +121,7 @@ where
                 }
             }
         }
-        (MessageParent::Document(_), _) => None,
+        (MessageParent::Document(_) | MessageParent::Initiative(_), _) => None,
     };
 
     for decision in decisions {

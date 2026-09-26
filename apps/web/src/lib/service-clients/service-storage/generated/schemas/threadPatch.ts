@@ -8,7 +8,7 @@ import type { ThreadPatchNonce } from './threadPatchNonce';
 import type { ThreadPatchResolved } from './threadPatchResolved';
 
 /**
- * Partial changes to the lifecycle and placement of a document discussion.
+ * Partial changes to discussion lifecycle or document anchor placement.
  */
 export interface ThreadPatch {
   /** Move a Markdown discussion to the document when its marked text is removed. */

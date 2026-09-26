@@ -5,6 +5,7 @@ fn parent_identifiers_are_validated_and_round_trip() {
     for (kind, id) in [
         ("channel", "0194e3b0-121a-7000-8000-000000000001"),
         ("document", "legacy-document-id"),
+        ("initiative", "0194e3b0-121a-7000-8000-000000000003"),
     ] {
         let parent = MessageParent::parse(kind, id).unwrap();
         assert_eq!(parent.entity_type(), kind);
@@ -18,6 +19,8 @@ fn parent_identifiers_are_validated_and_round_trip() {
     for (kind, id) in [
         ("user", "macro|example@example.com"),
         ("channel", "not-a-uuid"),
+        ("initiative", "not-a-uuid"),
+        ("project", "0194e3b0-121a-7000-8000-000000000003"),
         ("email_thread", "not-a-uuid"),
         ("document", ""),
         ("document", " leading-space"),

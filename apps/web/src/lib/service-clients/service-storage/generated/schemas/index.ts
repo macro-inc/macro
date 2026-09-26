@@ -961,6 +961,8 @@ export * from './messagePageNextCursor';
 export * from './messagePagePreviousCursor';
 export * from './messageParent';
 export * from './messageParentOneOf';
+export * from './messageParentOneOfFive';
+export * from './messageParentOneOfFiveType';
 export * from './messageParentOneOfThree';
 export * from './messageParentOneOfThreeType';
 export * from './messageParentOneOfType';

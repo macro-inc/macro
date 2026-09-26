@@ -244,7 +244,7 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         root_id: Uuid,
     ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
-    /// Live messages before a prompt, in chronological order. Document context
+    /// Live messages before a prompt, in chronological order. Discussion context
     /// stays within the prompt's thread; channel context includes the timeline.
     fn preceding(
         &self,

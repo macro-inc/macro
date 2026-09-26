@@ -9,13 +9,12 @@
  * The session an agent-session notification is about, and where its magic
 chip lives when it was opened from a thread.
 
-The conversation an agent session was opened from: a channel or a
-document discussion. Spelled like the message API's parent so a client can
-route to either surface.
+The conversation an agent session was opened from: a channel, document,
+or initiative. Spelled like the message API's parent for client routing.
  */
 export interface AgentSessionOriginParent {
-  /** The channel or document id. */
+  /** The parent entity id. */
   id: string;
-  /** `channel` or `document`. */
+  /** `channel`, `document`, or `initiative`. */
   type: string;
 }

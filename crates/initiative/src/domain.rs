@@ -10,3 +10,6 @@ pub mod reads;
 pub mod resources;
 #[cfg(feature = "ports")]
 pub mod service;
+
+#[cfg(feature = "ports")]
+pub mod lookup;

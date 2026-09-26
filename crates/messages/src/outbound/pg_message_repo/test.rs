@@ -3,6 +3,8 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 const USER: &str = "macro|message-test@example.com";
 
+mod initiative;
+
 async fn setup(pool: &PgPool) {
     let user_id = macro_uuid::generate_uuid_v7();
     sqlx::query!(

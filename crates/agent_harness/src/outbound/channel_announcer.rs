@@ -152,7 +152,7 @@ fn announcement_reply_target(announcement: &SessionAnnouncement) -> AgentAnnounc
         parent: announcement.origin_parent.clone(),
         channel_id: match &announcement.origin_parent {
             MessageParent::Channel(channel_id) => Some(channel_id.to_string()),
-            MessageParent::Document(_) => None,
+            MessageParent::Document(_) | MessageParent::Initiative(_) => None,
         },
         target_message_id: announcement.origin_message_id.to_string(),
         target_thread_id: announcement.origin_thread_id.to_string(),

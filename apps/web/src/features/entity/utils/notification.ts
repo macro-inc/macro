@@ -73,6 +73,7 @@ const MUTEABLE_ITEM_TYPES = new Set([
   'foreign_entity',
   'project',
   'reminder',
+  'initiative',
 ]);
 
 /**
@@ -236,6 +237,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('document_mention', () => 'mentioned')
     .with('mentioned_in_document_comment', () => 'mentioned')
     .with('replied_to_document_comment_thread', () => 'replied')
+    .with('initiative_discussion', () => 'commented')
     .with('commented_on_document', () => 'commented')
     .with('channel_invite', () => 'invited')
     .with('new_email', () => 'emailed')
@@ -288,6 +290,7 @@ export function extractMessageContent(notification: Notification): string {
       { tag: 'replied_to_document_comment_thread' },
       (m) => m.content.text || ''
     )
+    .with({ tag: 'initiative_discussion' }, (m) => m.content.text || '')
     .with({ tag: 'commented_on_document' }, (m) => m.content.text || '')
     .with({ tag: 'new_email' }, (m) => m.content.subject || '')
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? '')

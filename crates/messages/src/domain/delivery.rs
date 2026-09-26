@@ -7,7 +7,7 @@ mod test;
 /// Parent and thread facts used when delivering a discussion event.
 #[derive(Debug, Clone)]
 pub struct DiscussionContext {
-    /// Document name.
+    /// Parent display name.
     pub name: String,
     /// Authenticated parent owner.
     pub owner: String,
@@ -17,7 +17,7 @@ pub struct DiscussionContext {
     pub is_task: bool,
     /// Prior authors in this thread.
     pub participants: Vec<String>,
-    /// Current task assignees.
+    /// Current task or initiative assignees.
     pub assignees: Vec<String>,
     /// Optional sender avatar used by push notification attachments.
     pub sender_profile_picture: Option<String>,
@@ -34,7 +34,7 @@ pub trait DiscussionContextReader: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send {
         async { Ok(None) }
     }
-    /// Load parent metadata, authors, and task assignments.
+    /// Load parent metadata, authors, and assignments.
     fn context(
         &self,
         parent: &MessageParent,
@@ -116,7 +116,7 @@ impl DiscussionMentionSharing for NoDiscussionSharing {
     }
 }
 
-/// Discussion delivery policy for document comments.
+/// Discussion delivery policy for comments on documents and initiatives.
 #[derive(Clone)]
 pub struct DiscussionDelivery<C, A, R, N, S = NoDiscussionSharing> {
     context: C,
@@ -164,7 +164,7 @@ impl<
     async fn publish(&self, event: MessageEvent) -> Result<(), rootcause::Report> {
         if !event.parent.is_discussion() {
             return Err(rootcause::report!(
-                "discussion delivery requires a document parent"
+                "discussion delivery requires an entity parent"
             ));
         }
         // Run notification delivery even if the transient transport is unavailable.

@@ -61,6 +61,7 @@ impl ContextAuthorizer for Authorizer {
             Entity {
                 entity_type: match parent {
                     MessageParent::Document(_) => EntityType::Document,
+                    MessageParent::Initiative(_) => EntityType::Initiative,
                     MessageParent::Channel(_) => EntityType::Channel,
                 },
                 entity_id: parent.entity_id(),
@@ -151,6 +152,39 @@ async fn document_origin_checks_its_parent_capability_and_root() {
         Arc::new(Lexical::none()),
     );
     adapter.authorize_origin(&actor(), &origin()).await.unwrap();
+}
+
+#[tokio::test]
+async fn initiative_origin_mints_parent_capability_and_rechecks_revocation() {
+    let parent = MessageParent::Initiative(Uuid::from_u128(901));
+    let origin = AnnounceOrigin {
+        parent: parent.clone(),
+        ..origin()
+    };
+    let mut source = MockMessageReader::new();
+    let expected_parent = parent.clone();
+    source
+        .expect_get()
+        .once()
+        .withf(move |access, _| {
+            access.entity().entity_type == EntityType::Initiative
+                && access.entity().entity_id == expected_parent.entity_id()
+        })
+        .return_once(move |_, _| {
+            Ok(Message {
+                parent,
+                ..message()
+            })
+        });
+    let adapter =
+        MessagePromptContextAdapter::new(Arc::new(source), Arc::new(Authorizer { allowed: true }));
+    adapter.authorize_origin(&actor(), &origin).await.unwrap();
+    let revoked = MessagePromptContextAdapter::new(
+        Arc::new(MockMessageReader::new()),
+        Arc::new(Authorizer { allowed: false }),
+    );
+    assert!(revoked.authorize_origin(&actor(), &origin).await.is_err());
+    assert!(revoked.preceding_messages(&actor(), &origin).await.is_err());
 }
 
 #[tokio::test]

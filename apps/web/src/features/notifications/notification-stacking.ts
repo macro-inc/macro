@@ -49,6 +49,7 @@ export function getThreadId(group: NotificationStack): string {
   }
   for (const notification of group.notifications) {
     const threadId = match(notification.notification_metadata)
+      .with({ tag: 'initiative_discussion' }, (m) => m.content.threadId)
       .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId ?? '')
       .with({ tag: 'channel_mention' }, (m) => m.content.threadId ?? '')
       .with({ tag: 'replied_to_document_comment_thread' }, (m) =>
@@ -103,14 +104,27 @@ export function stackNotifications(
   const docMentions = notifications.filter(
     (n) => n.notification_metadata.tag === 'document_mention'
   );
+  const initiativeThreads = groupBy(
+    notifications.filter(
+      (n) => n.notification_metadata.tag === 'initiative_discussion'
+    ),
+    (n) => {
+      const meta = n.notification_metadata;
+      return `${n.entity_id}:${meta.tag === 'initiative_discussion' ? meta.content.threadId : n.id}`;
+    }
+  );
   const others = notifications.filter(
     (n) =>
       !isChannelNotification(n) &&
       !isDocumentCommentNotification(n) &&
-      n.notification_metadata.tag !== 'document_mention'
+      n.notification_metadata.tag !== 'document_mention' &&
+      n.notification_metadata.tag !== 'initiative_discussion'
   );
 
   const groups: NotificationStack[] = [
+    ...[...initiativeThreads.values()].flatMap((items) =>
+      makeStack('initiative_discussion', items)
+    ),
     ...channelStacks,
     ...docCommentStacks,
     ...makeStack('document_mention', docMentions),
