@@ -10,6 +10,9 @@ export function CopyAvailabilityButton(props: {
   size?: ButtonSize;
 }) {
   const owner = getOwner();
+  if (!owner) {
+    throw new Error('CopyAvailabilityButton requires a Solid owner');
+  }
   const connectedInboxes = useCalendarConnectedInboxes();
   let dialog: DialogHandle | undefined;
   const showDialog = () => {

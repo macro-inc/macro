@@ -9,7 +9,7 @@ import {
   Panel,
   ToggleSwitch,
 } from '@ui';
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, onCleanup } from 'solid-js';
 import {
   AVAILABILITY_RANGE_OPTIONS,
   type AvailabilityRangeKey,
@@ -50,25 +50,36 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
   const getAvailabilityText = useAvailabilityText();
   const { settings, setStartTime, setEndTime, setExcludeWeekends } =
     useAvailabilitySettings();
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
 
   const copyRange = async (rangeKey: AvailabilityRangeKey) => {
-    if (copying()) return;
+    if (disposed || copying()) return;
     setCopying(rangeKey);
     try {
       const text = await getAvailabilityText(rangeKey);
+      if (disposed) return;
       if (!text) {
         toast.alert('No free time in that range');
         return;
       }
-      if (await writeClipboardData({ 'text/plain': text })) {
+      const copied = await writeClipboardData({ 'text/plain': text });
+      if (disposed) return;
+      if (copied) {
         toast.success('Availability copied');
       } else {
         toast.failure('Failed to copy availability');
       }
     } catch {
-      toast.failure('Failed to load availability');
+      if (!disposed) {
+        toast.failure('Failed to load availability');
+      }
     } finally {
-      setCopying(undefined);
+      if (!disposed) {
+        setCopying(undefined);
+      }
     }
   };
 
