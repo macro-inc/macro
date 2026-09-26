@@ -31,6 +31,7 @@ use notification::domain::ports::VoipPushSender;
 use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use subtle::ConstantTimeEq;
 
 use uuid::Uuid;
@@ -75,7 +76,7 @@ pub struct CallServiceImpl<
     B: MacroEventBroker = NoopMacroEventBroker,
 > {
     repo: R,
-    rtc_client: C,
+    rtc_client: Arc<C>,
     connection_service: Cn,
     entity_access_service: E,
     notification_ingress: N,
@@ -112,7 +113,7 @@ impl<
     ) -> Self {
         Self {
             repo,
-            rtc_client,
+            rtc_client: Arc::new(rtc_client),
             connection_service,
             entity_access_service,
             notification_ingress,
@@ -648,6 +649,13 @@ impl<
     async fn get_meeting(&self, token: MeetingToken) -> Result<Meeting, CallError> {
         self.resolve_invitation(&token).await
     }
+    async fn get_meeting_participants(
+        &self,
+        token: MeetingToken,
+        actor: Option<MacroUserIdStr<'_>>,
+    ) -> Result<super::meetings::MeetingParticipants, CallError> {
+        self.preview_invitation(token, actor).await
+    }
     async fn join_meeting(
         &self,
         token: MeetingToken,
@@ -1133,6 +1141,13 @@ impl<
     #[tracing::instrument(err, skip(self, body, auth_token))]
     async fn process_webhook_event(&self, body: &str, auth_token: &str) -> Result<(), CallError> {
         let event = self.rtc_client.receive_webhook(body, auth_token)?;
+        if matches!(event.event.as_str(), "egress_started" | "egress_ended") {
+            self.link_meeting_recording_webhook(
+                event.room_name.as_deref(),
+                event.egress_id.as_deref(),
+            )
+            .await?;
+        }
 
         tracing::info!(
             event_type = %event.event,

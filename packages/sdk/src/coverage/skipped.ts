@@ -326,10 +326,12 @@ export const storageExcluded = [
   'jobProcessingResultHandler',
   'joinChannelByCode',
   'leaveOrEndCall',
-  // Joining and leaving live meetings are app session flows.
+  // Live meeting admission and participant previews are app session flows.
   'meetingGuestJoin',
+  'meetingGuestParticipants',
   'meetingJoin',
   'meetingLeave',
+  'meetingParticipants',
   'mentionPreviews',
   'patchViewHandler',
   'postChannelMessages',

@@ -75,6 +75,15 @@ export function MeetingPage(props: {
 
   createEffect(on(inCall, (connected) => props.onCallStateChange?.(connected)));
 
+  async function warmup() {
+    try {
+      await props.session.warmup?.();
+    } catch (error) {
+      // The shared loader clears a failed import so Join can retry it.
+      console.warn('[meeting] call runtime preload failed', error);
+    }
+  }
+
   createEffect(
     on(
       () =>
@@ -84,8 +93,10 @@ export function MeetingPage(props: {
         !session.joining() &&
         !leaving(),
       (setup) => {
-        if (setup) void media.prepare();
-        else media.release();
+        if (setup) {
+          void media.prepare();
+          void warmup();
+        } else media.release();
       }
     )
   );

@@ -3436,3 +3436,59 @@ async fn meeting_schedule_rejects_partial_or_reversed_ranges(
     }
     Ok(())
 }
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attach_meeting_recording_survives_archival(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    assert!(
+        repo.attach_meeting_recording(&CALL1, "early-recording")
+            .await?
+    );
+    repo.archive_call(&CALL1).await?;
+    assert!(
+        repo.get_call_record_by_egress_id("early-recording")
+            .await?
+            .is_some()
+    );
+    assert!(
+        !repo
+            .attach_meeting_recording(&CALL1, "late-recording")
+            .await?
+    );
+    assert!(
+        repo.get_call_record_by_egress_id("late-recording")
+            .await?
+            .is_some()
+    );
+    assert!(
+        !repo
+            .attach_meeting_recording(&Uuid::now_v7(), "missing-recording")
+            .await?
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attach_meeting_recording_racing_archival_keeps_the_recording(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let (attachment, archival) = tokio::join!(
+        repo.attach_meeting_recording(&CALL1, "racing-recording"),
+        repo.archive_call(&CALL1),
+    );
+    attachment?;
+    archival?;
+    assert!(
+        repo.get_call_record_by_egress_id("racing-recording")
+            .await?
+            .is_some()
+    );
+    Ok(())
+}

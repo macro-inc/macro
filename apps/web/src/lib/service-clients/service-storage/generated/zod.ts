@@ -1923,6 +1923,35 @@ export const meetingLeaveResponse = zod
   .describe('Response for the leave\/end call operation.');
 
 /**
+ * @summary Read a standalone meeting preview without admitting a guest to the room.
+ */
+export const meetingGuestParticipantsParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingGuestParticipantsResponse = zod
+  .object({
+    participants: zod
+      .array(
+        zod
+          .object({
+            avatarUrl: zod
+              .string()
+              .nullish()
+              .describe('Profile image, when available for a Macro member.'),
+            displayName: zod
+              .string()
+              .describe('Name displayed in the waiting room.'),
+          })
+          .describe(
+            'Minimal waiting-room display data, without account identities or call content.'
+          )
+      )
+      .describe('Human attendees only; transcription agents are excluded.'),
+  })
+  .describe("People currently connected to a meeting's room.");
+
+/**
  * @summary Handle `GET /call/meetings` through the call domain service.
  */
 export const meetingListResponse = zod
@@ -2150,6 +2179,35 @@ export const meetingJoinResponse = zod
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Read the participant preview for an authenticated invitation holder.
+ */
+export const meetingParticipantsParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingParticipantsResponse = zod
+  .object({
+    participants: zod
+      .array(
+        zod
+          .object({
+            avatarUrl: zod
+              .string()
+              .nullish()
+              .describe('Profile image, when available for a Macro member.'),
+            displayName: zod
+              .string()
+              .describe('Name displayed in the waiting room.'),
+          })
+          .describe(
+            'Minimal waiting-room display data, without account identities or call content.'
+          )
+      )
+      .describe('Human attendees only; transcription agents are excluded.'),
+  })
+  .describe("People currently connected to a meeting's room.");
 
 /**
  * @summary Handle `DELETE /call/meetings/{meeting_id}` through the call domain service.

@@ -673,6 +673,13 @@ impl CallRtcClient for NoOpCallRtcClient {
         Ok(())
     }
 
+    async fn list_meeting_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<call::domain::meetings::MeetingRtcParticipant>>> {
+        Ok(None)
+    }
+
     async fn list_participant_identities(
         &self,
         _room_name: &str,
