@@ -8,7 +8,7 @@ describe('parseDismissedCards', () => {
     ]);
   });
 
-  it('drops unknown, retired, and non-string entries', () => {
+  it('drops unknown and non-string entries', () => {
     expect(
       parseDismissedCards('["getting-started-link","examples","setup",12]')
     ).toEqual(['getting-started-link']);

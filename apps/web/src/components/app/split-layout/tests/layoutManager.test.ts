@@ -1273,12 +1273,7 @@ describe('layoutManager', () => {
     it.each([
       ['/component/preview-empty', '/home'],
       ['/component/non-member-channel', '/home'],
-      ['/component/inbox', '/home'],
-      ['/inbox', '/home'],
-      ['/inbox/md/document-1', '/home/md/document-1'],
-      ['/inbox/channel/channel-1', '/home/channel/channel-1'],
-      ['/inbox/~/mail', '/home/~/mail'],
-      ['/mail/~/inbox', '/mail/~/home'],
+      ['/component/home', '/home'],
       ['/component/documents', '/drive'],
       ['/component/settings', '/settings/account'],
     ])('upgrades the legacy component URL %s', async (incoming, expected) => {
