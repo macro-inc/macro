@@ -94,10 +94,7 @@ impl ActivitySource for EmailTopicEvent {
                 }
                 _ => Ingest::Ignore,
             },
-            EmailTopicEvent::ThreadArchived(m) => user_edit(&m.actor, &m.origin, m.thread_id),
-            EmailTopicEvent::ThreadTrashed(m) => user_edit(&m.actor, &m.origin, m.thread_id),
             EmailTopicEvent::ThreadStarred(m) => user_edit(&m.actor, &m.origin, m.thread_id),
-            EmailTopicEvent::ThreadSpamChanged(m) => user_edit(&m.actor, &m.origin, m.thread_id),
             EmailTopicEvent::ThreadLabelsUpdated(m) => user_edit(&m.actor, &m.origin, m.thread_id),
             EmailTopicEvent::ThreadProjectChanged(m) => Ingest::Insert(vec![Activity::common(
                 event_id,
@@ -109,9 +106,16 @@ impl ActivitySource for EmailTopicEvent {
                 CommonAction::Edited,
                 now(),
             )]),
-            // Read-state, not a content mutation (and not view telemetry either —
-            // opens arrive via the interaction capability).
-            EmailTopicEvent::ThreadRead(_) => Ingest::Ignore,
+            // Inbox triage, not a content mutation. Archiving (mark done),
+            // trashing and spam take a thread out of the inbox, and read state
+            // is no mutation either (nor view telemetry — opens arrive via the
+            // interaction capability). Recording them would make dismissing a
+            // thread the user's latest touch of it, and the own-touch feed
+            // Home merges in would carry the thread back to the top of Home.
+            EmailTopicEvent::ThreadArchived(_)
+            | EmailTopicEvent::ThreadTrashed(_)
+            | EmailTopicEvent::ThreadSpamChanged(_)
+            | EmailTopicEvent::ThreadRead(_) => Ingest::Ignore,
             // Resolved by a later message_sent; counting both double-reports.
             EmailTopicEvent::MessageSendQueued(_) | EmailTopicEvent::MessageSendCancelled(_) => {
                 Ingest::Ignore
