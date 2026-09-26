@@ -195,8 +195,9 @@ def main():
 
     # Alternate the two songs; each resumes where it left off. Cuts land on bar lines,
     # with a 4 ms declick. The loop end is a cut too: no fade-out.
-    decoded = {k: load_stereo(f) for k, (f, _) in SONGS.items()}
-    pos = {k: off for k, (_, off) in SONGS.items()}
+    songs = {k: tuple(v) for k, v in (meta.get("songs") or SONGS).items()}
+    decoded = {k: load_stereo(f) for k, (f, _) in songs.items()}
+    pos = {k: off for k, (_, off) in songs.items()}
     parts = []
     for song, bpm, beats in meta["music"]:
         length = sum(beats) * 60 / bpm

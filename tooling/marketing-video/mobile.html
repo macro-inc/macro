@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Macro for iPhone</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* Macro mobile ad. Look: the marketing homepage (dark theme, blue accent, glass rims).
+   UI: the mobile app (apps/web/src/components/app/mobile/*, island chrome, float regions,
+   MobileDrawer sheets, SwipableRow, narrow inbox rows). */
+@font-face { font-family: "Inter"; src: url("fonts/inter-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "display"; src: url("fonts/roboto-slab-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+:root {
+  --c0: #ffffff; --c1: #dedede; --c2: #bebebe; --c3: #9e9e9e; --c4: #808080;
+  --a0: #61a3e6;                 /* accent oklch(0.7 0.12 250) */
+  --success: #23cf63;            /* --color-green, SwipableRow done */
+  --doc: #b590ff;
+  --panel: #0f0f10;              /* app surface in the phone */
+  --chrome: #1d1e20;             /* island chrome */
+  --bubble: #1c1c1d;
+  --edge: rgba(255,255,255,.09);
+  --edge-muted: #1f2022;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #000; }
+body { display: flex; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+html.render body { display: block; min-height: 0; }
+#stage { position: relative; overflow: hidden; flex: none; background: #000; color: var(--c1);
+  font-family: "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; font-feature-settings: "cv11", "ss01"; }
+#rings { position: absolute; width: 3000px; height: 3000px; margin: -1500px 0 0 -1500px; transform-origin: 50% 50%;
+  background: repeating-radial-gradient(circle at 50% 50%, transparent 0 37px, rgba(255,255,255,.05) 37px 38px), radial-gradient(circle at 50% 50%, rgba(255,255,255,.03), transparent 45%);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 10%, rgba(0,0,0,.5) 28%, transparent 50%); mask-image: radial-gradient(circle at 50% 50%, #000 10%, rgba(0,0,0,.5) 28%, transparent 50%); }
+#world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+#shape { position: absolute; overflow: hidden; transform-origin: 50% 50%; }
+.layer, .a { position: absolute; }
+.flex { display: flex; align-items: center; }
+.nowrap { white-space: nowrap; }
+.ic { display: inline-block; flex: none; }
+.rim::after, .glass::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.glass::after { background: linear-gradient(135deg, rgba(222,222,222,.28) 0%, rgba(222,222,222,.12) 18%, rgba(222,222,222,.04) 42%, rgba(222,222,222,.04) 58%, rgba(222,222,222,.12) 82%, rgba(222,222,222,.28) 100%); }
+/* @utility island: bg-chrome + dark-mode glass */
+.island { background: rgba(32,33,36,.82); border-radius: 999px; }
+.av { display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 600; flex: none; background: #2a2a2c; color: var(--c1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+.pill { color: var(--a0); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 30%, transparent); text-underline-offset: 3px; white-space: nowrap; }
+.ref { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ref u { text-decoration-color: rgba(222,222,222,.3); text-decoration-thickness: 1px; text-underline-offset: 3px; color: var(--c1); }
+.badge { font-size: 10px; font-weight: 500; color: var(--c3); background: rgba(255,255,255,.07); border-radius: 4px; padding: 3px 5px; line-height: 1; }
+.caret { display: inline-block; width: 2px; height: 20px; background: var(--a0); border-radius: 1px; margin-left: 1px; }
+.hair { height: 1px; background: rgba(255,255,255,.07); }
+/* narrow inbox row (narrow-inbox-layout.tsx) */
+.nrow { left: 0; width: 393px; height: 78px; background: var(--panel); }
+.nico { left: 12px; top: 12px; width: 44px; height: 44px; border-radius: 50%; background: var(--edge-muted); display: flex; align-items: center; justify-content: center; color: var(--c2); }
+.ntit { left: 68px; top: 12px; font-size: 15px; font-weight: 600; color: var(--c0); white-space: nowrap; }
+.ntim { right: 16px; top: 14px; font-size: 12px; font-weight: 300; color: var(--c4); }
+.nbody { left: 68px; top: 33px; width: 305px; font-size: 15px; line-height: 20px; color: var(--c3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ndot { left: 4px; top: 29px; width: 8px; height: 8px; border-radius: 50%; background: var(--a0); }
+/* channel message (Channel Message Layout) */
+.msg { left: 0; width: 393px; }
+.mname { left: 52px; top: 0; font-size: 14px; font-weight: 500; color: var(--c0); white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.mname span.t { font-size: 12px; color: var(--c4); font-weight: 400; }
+.mbody { left: 52px; top: 21px; width: 325px; font-size: 16px; line-height: 23px; color: var(--c1); }
+/* sheet rows (MobileDrawer) */
+.srow { left: 12px; width: 353px; height: 48px; border-radius: 20px; display: flex; align-items: center; gap: 12px; padding: 0 14px; font-size: 16px; color: var(--c0); white-space: nowrap; }
+#labels .lab { position: absolute; left: 0; right: 0; text-align: center; font-family: display; font-weight: 330; line-height: 1; letter-spacing: -0.035em; color: var(--c0); white-space: nowrap; }
+#labels .lab.side { display: flex; align-items: center; text-align: left; white-space: normal; line-height: 1.05; }
+#touch { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+#touch div { position: absolute; border-radius: 50%; }
+</style>
+<script src="icons.js"></script>
+</head>
+<body>
+<div id="stage">
+  <div id="rings"></div>
+  <div id="world"><div id="shape"></div></div>
+  <div id="lscrim" style="position:absolute;left:0;top:0;right:0;pointer-events:none"></div>
+  <div id="labels"></div>
+  <div id="touch"><div id="tRing"></div><div id="tDot"></div></div>
+</div>
+<script>
+"use strict";
+// ---------- format: 9:16 (default), 1:1, 16:9 ----------
+const FMT = new URLSearchParams(location.search).get("fmt") || "916";
+const [W, H] = { "916": [1080, 1920], "11": [1440, 1440], "169": [1920, 1080] }[FMT];
+const SIDE = FMT !== "916"; // square and landscape: label left, phone right
+const LABEL = { "916": { top: 150, size: 96, room: 270 }, "11": { top: 0, size: 92, room: 0 }, "169": { top: 0, size: 100, room: 0 } }[FMT];
+
+// ---------- music-driven timing ----------
+// One vibe: funk. "Gimme that Groove!" (Mixkit 872), 112 BPM, downbeat 18.750 s.
+// Each story step lasts a whole number of beats; 32 beats = 8 bars.
+const MUSIC = [["funk", 112.0, [3, 1, 2, 2, 2, 1, 3, 2, 3, 2, 1, 2, 3, 2, 3]]];
+const STEP_T = [0];
+for (const [, bpm, beats] of MUSIC) for (const n of beats) STEP_T.push(STEP_T[STEP_T.length - 1] + (n * 60) / bpm);
+const BEATS = STEP_T.length - 1, T = STEP_T[BEATS];
+function B(x) { const k = Math.floor(x / BEATS), r = x - k * BEATS, i = Math.min(BEATS - 1, Math.floor(r)); return k * T + STEP_T[i] + (r - i) * (STEP_T[i + 1] - STEP_T[i]); }
+function stepAt(t) { let i = 0; while (i < BEATS - 1 && STEP_T[i + 1] <= t) i++; return i + (t - STEP_T[i]) / (STEP_T[i + 1] - STEP_T[i]); }
+
+// ---------- math ----------
+const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
+const lerp = (a, b, p) => a + (b - a) * p;
+const sm = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+const TAU = Math.PI * 2;
+
+// Closed-form unit step response of a damped spring.
+// resp = undamped period (s), damp = damping ratio (<1 gives a tiny overshoot).
+function spr(t, resp = 0.42, damp = 0.82) {
+  if (t <= 0) return 0;
+  const w = TAU / resp;
+  if (damp >= 1) { const e = Math.exp(-w * t); return 1 - e * (1 + w * t); }
+  const wd = w * Math.sqrt(1 - damp * damp), e = Math.exp(-damp * w * t);
+  return 1 - e * (Math.cos(wd * t) + (damp * w / wd) * Math.sin(wd * t));
+}
+// Free response from displacement x0 and velocity v0 (used after a drag release).
+function free(t, x0, v0, resp, damp) {
+  const w = TAU / resp, wd = w * Math.sqrt(1 - damp * damp), e = Math.exp(-damp * w * t);
+  return e * (x0 * Math.cos(wd * t) + ((v0 + damp * w * x0) / wd) * Math.sin(wd * t));
+}
+const mj = (x) => { x = clamp(x); return x * x * x * (10 + x * (-15 + 6 * x)); }; // minimum-jerk
+const bell = (x) => (x <= 0 || x >= 1 ? 0 : 16 * x * x * (1 - x) * (1 - x));
+
+// A value that changes target many times is the sum of one spring per change.
+// Periodic: every change also contributes from the previous loop (t + T), so the
+// last frame flows into the first with matching position and velocity.
+function Track(evs, resp = 0.42, damp = 0.82) {
+  const E = evs.map(([bt, v, r, d]) => ({ t: B(bt), v, r: r ?? resp, d: d ?? damp }));
+  const n = E.length;
+  E.forEach((e, i) => { e.dv = e.v - E[(i + n - 1) % n].v; });
+  const base = E[n - 1].v;
+  const f = (t) => {
+    let v = base;
+    for (const e of E) if (e.dv !== 0) v += e.dv * (spr(t - e.t, e.r, e.d) + spr(t + T - e.t, e.r, e.d));
+    return v;
+  };
+  f.target = (t) => {
+    let best = -Infinity, v = base;
+    for (const e of E) for (const tt of [e.t, e.t - T]) if (tt <= t && tt > best) { best = tt; v = e.v; }
+    return v;
+  };
+  return f;
+}
+
+// Cursor path: sum of minimum-jerk moves, each with a slight perpendicular arc.
+function Path(segs) {
+  const S = segs.map(([b0, b1, x, y, bow]) => ({ t0: B(b0), t1: B(b1), x, y, bow: bow ?? 0.07 }));
+  const n = S.length;
+  S.forEach((s, i) => { const p = S[(i + n - 1) % n]; s.dx = s.x - p.x; s.dy = s.y - p.y; });
+  const bx = S[n - 1].x, by = S[n - 1].y;
+  return (t) => {
+    let x = bx, y = by;
+    for (const s of S) for (const tt of [t, t + T]) {
+      const u = (tt - s.t0) / (s.t1 - s.t0);
+      if (u <= 0) continue;
+      const m = mj(u), bb = bell(u) * s.bow;
+      x += s.dx * m - s.dy * bb;
+      y += s.dy * m + s.dx * bb;
+    }
+    return [x, y];
+  };
+}
+
+// Content enter/exit: its own timing, so swapped text never overlaps.
+function visAmt(t, tin, tout, inResp = 0.3) {
+  const f = (tt) => {
+    if (tt < tin) return null;
+    const pin = spr(tt - tin, inResp, 1);
+    const pout = tout == null ? 0 : sm((tt - tout) / 0.11);
+    return { pin, pout, o: pin * (1 - pout) };
+  };
+  let r = f(t) || { pin: 0, pout: 0, o: 0 };
+  if (tout != null && tout > T) { // only windows that wrap past the loop point
+    const r2 = f(t + T);
+    if (r2 && r2.o > r.o) r = r2;
+  }
+  return r;
+}
+
+
+
+
+// ---------- color & icons ----------
+const mixc = (a, b, p) => `rgb(${Math.round(lerp(a[0], b[0], p))},${Math.round(lerp(a[1], b[1], p))},${Math.round(lerp(a[2], b[2], p))})`;
+const ACC = [97, 163, 230], C4 = [128, 128, 128], WHITE = [255, 255, 255], INK = [10, 10, 10];
+const PH = { // Phosphor (regular) paths, 256 grid, stroke 16
+  bell: '<path d="M96 224h64M56 104a72 72 0 0 1 144 0c0 35.82 8.3 64.6 14.9 76A8 8 0 0 1 208 192H48a8 8 0 0 1-6.88-12C47.71 168.6 56 139.81 56 104Z"/>',
+  envelope: '<path d="M32 56h192v136a8 8 0 0 1-8 8H40a8 8 0 0 1-8-8V56Z"/><path d="m224 56-96 88-96-88"/>',
+  hash: '<path d="M40 96h176M40 160h176M96 40v176M160 40v176"/>',
+  files: '<path d="M168 224H56a8 8 0 0 1-8-8V72a8 8 0 0 1 8-8h80l40 40v112a8 8 0 0 1-8 8Z"/><path d="M88 64V40a8 8 0 0 1 8-8h80l40 40v112a8 8 0 0 1-8 8h-24"/>',
+  caretUp: '<path d="m48 160 80-80 80 80"/>',
+  caretLeft: '<path d="M160 208 80 128l80-80"/>',
+  caretDown: '<path d="m208 96-80 80-80-80"/>',
+  info: '<circle cx="128" cy="128" r="96"/><path d="M120 120h8v56h8"/><circle cx="126" cy="84" r="4" fill="currentColor"/>',
+  search: '<circle cx="116" cy="116" r="76"/><path d="m172 172 52 52"/>',
+  sliders: '<path d="M136 80h80M40 80h48M184 176h32M40 176h96"/><circle cx="112" cy="80" r="24"/><circle cx="160" cy="176" r="24"/>',
+  check: '<path d="m40 144 56 56L224 72"/>',
+  phone: '<path d="M92.5 39.9a8 8 0 0 0-9.4-5.8L50 40.8A16 16 0 0 0 36 56.6C36 150 106 220 199.4 220a16 16 0 0 0 15.9-14l6.7-33.2a8 8 0 0 0-5.8-9.4l-40-10a8 8 0 0 0-8 2.3l-15 17.3a124 124 0 0 1-58-58l17.3-15a8 8 0 0 0 2.3-8Z"/>',
+  sparkle: '<path d="M128 32c4 40 24 60 64 64-40 4-60 24-64 64-4-40-24-60-64-64 40-4 60-24 64-64ZM200 152c2 18 10 26 28 28-18 2-26 10-28 28-2-18-10-26-28-28 18-2 26-10 28-28Z"/>',
+  plus: '<path d="M40 128h176M128 40v176"/>',
+};
+const ph = (n, size, color = "currentColor", fill = false) =>
+  `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 256 256" fill="${fill ? color : "none"}" stroke="${fill ? "none" : color}" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" style="display:block">${PH[n]}</svg>`;
+const ic = (name, size, color = "currentColor") => `<span class="ic" style="width:${size}px;height:${size}px;color:${color}">${window.ICONS[name]}</span>`;
+const MARK = ["M0 10.014v6.801a.75.75 0 0 0 .225.513l2.742 2.644 2.002-.8v-7.099l-2.97-2.859z", "M4.078 4.8v5.786l1.36 1.309v1.313L12.481 20l2.002-.8-.001-7.1L6.078 4z", "M13.594 4.8v5.786l1.36 1.311-.013 1.3L22 20 24 19.2V12.42a.75.75 0 0 0-.225-.533L15.595 4z"];
+const markSVG = (size, color) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" style="display:block">${MARK.map((d) => `<path d="${d}"/>`).join("")}</svg>`;
+const avatar = (ch, size) => `<div class="av" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px">${ch}</div>`;
+const macroAv = (size) => `<div class="av" style="width:${size}px;height:${size}px;background:#000;border-radius:${Math.round(size * 0.3)}px">${markSVG(Math.round(size * 0.56), "#fff")}</div>`;
+const appIcon = (size) => `<div class="av" style="width:${size}px;height:${size}px;background:#000;border-radius:${Math.round(size * 0.225)}px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)">${markSVG(Math.round(size * 0.58), "#fff")}</div>`;
+const docRef = (label) => `<span class="ref">${ic("wide-file-md", 17, "var(--doc)")}<u>${label}</u></span>`;
+const island = (w, h, inner, extra = "") => `<div class="a island glass flex" style="width:${w}px;height:${h}px;justify-content:center;${extra}">${inner}</div>`;
+
+// ---------- world geometry: the phone screen is 393×852 pt, centered at 0,0 ----------
+const PW = 393, PH_ = 852, PX = -PW / 2, PY = -PH_ / 2;
+const S = (x, y) => [PX + x, PY + y];                       // screen point → world
+const R = (x0, y0, x1, y1) => [PX + x0, PY + y0, PX + x1, PY + y1];
+const BANNER = R(12, 58, 381, 140);                            // iOS notification banner
+const PHONE = R(0, 0, PW, PH_);
+// [step, rect, radius, phone (0 banner .. 1 phone)]
+const KF = [[0, BANNER, 26, 0], [2, PHONE, 55, 1], [14, BANNER, 26, 0]];
+const SH = [0.46, 0.84];
+const X0 = Track(KF.map((k) => [k[0], k[1][0]]), ...SH), Y0 = Track(KF.map((k) => [k[0], k[1][1]]), ...SH);
+const X1 = Track(KF.map((k) => [k[0], k[1][2]]), ...SH), Y1 = Track(KF.map((k) => [k[0], k[1][3]]), ...SH);
+const RAD = Track(KF.map((k) => [k[0], k[2]]), ...SH), PHN = Track(KF.map((k) => [k[0], k[3]]), 0.4, 1);
+
+// ---------- camera: each step frames a region of the phone, fitted per format ----------
+const FOCUS = [ // [step, rect]
+  [0, BANNER], [2, PHONE], [3, R(0, 360, PW, PH_)], [5, PHONE], [8, PHONE], [9, R(0, 40, PW, 520)], [11, PHONE],
+  [12, R(0, 380, PW, PH_)], [14, BANNER],
+];
+function camTarget(t) {
+  const bt = stepAt(t); let rc = FOCUS[0][1];
+  for (const [b0, r] of FOCUS) if (b0 <= bt) rc = r;
+  const lab = labelOn(bt), w = rc[2] - rc[0] + 50, h = rc[3] - rc[1] + 36;
+  if (SIDE) { // phone in the right ~55%, label on the left
+    const side = lab, availW = side ? W * 0.52 : W * 0.9, availH = H - 60;
+    const s = Math.min(availW / w, availH / h, rc === BANNER ? 2.4 * (H / 1080) : 99);
+    const sxc = side ? W * 0.7 : W / 2;
+    return [Math.log(s), (rc[0] + rc[2]) / 2 - (sxc - W / 2) / s, (rc[1] + rc[3]) / 2];
+  }
+  const top = lab ? LABEL.room : 60, availH = H - top - 70;
+  const s = Math.min((W * 0.9) / w, availH / h, rc === BANNER ? 2.6 * (W / 1080) : 99);
+  const cx = (rc[0] + rc[2]) / 2, cy = (rc[1] + rc[3]) / 2 - ((top - 70) / 2) / s;
+  return [Math.log(s), cx, cy];
+}
+const CAM_RATE = 240, CAM_N = Math.round(T * CAM_RATE), CR = 0.55, CD = 0.94;
+const camEv = [[], [], []];
+let camBase;
+function buildCam() {
+  camBase = camTarget((CAM_N - 1) / CAM_RATE); let prev = camBase;
+  for (let i = 0; i < CAM_N; i++) { const tt = i / CAM_RATE, v = camTarget(tt); for (let k = 0; k < 3; k++) { const dv = v[k] - prev[k]; if (Math.abs(dv) > 1e-9) camEv[k].push([tt, dv]); } prev = v; }
+}
+function camAt(t) { const out = [0, 0, 0]; for (let k = 0; k < 3; k++) { let v = camBase[k]; for (const [te, dv] of camEv[k]) v += dv * (spr(t - te, CR, CD) + spr(t + T - te, CR, CD)); out[k] = v; } return out; }
+
+// ---------- labels (none on the first slide) ----------
+const LABELS = [[2, 3, "Team chat"], [3, 6, "@mention agents"], [6, 7, "AI agents"], [7, 8, "Docs"], [8, 9, "Inbox"], [9, 11, "Swipe to done"], [11, 14, "Tasks + PRs"], [14, 14.72, "Macro for iPhone"]];
+const labelOn = (bt) => LABELS.some(([a, b]) => bt >= a && bt < b);
+
+// ---------- touch: a fingertip indicator (world-anchored) ----------
+const TOUCH = Path([ // [b0, b1, x, y] in world
+  [0.3, 2.6, ...S(150, 104)],                 // onto the notification
+  [1.35, 1.95, ...S(250, 190)],               // lift away
+  [2.4, 2.95, ...S(170, 741)],                // composer
+  [3.7, 3.95, ...S(120, 681)],                // Macro in the mentions menu
+  [4.4, 4.95, ...S(356, 741)],                // send
+  [5.3, 5.9, ...S(300, 520)],
+  [6.5, 6.95, ...S(175, 631)],                // the doc reference
+  [7.3, 7.95, ...S(42, 801)],                 // Notifications in the dock
+  [8.3, 8.95, ...S(300, 135)],                // grab the first row
+  [9.05, 9.9, ...S(40, 141), 0.01],           // swipe left (drag)
+  [10.15, 10.95, ...S(190, 135)],             // task row
+  [11.35, 11.95, ...S(75, 183)],              // status chip
+  [12.4, 12.95, ...S(196, 738)],              // Done in the sheet
+  [13.3, 13.95, ...S(300, 420)],
+  [14.3, 14.9, ...S(150, 104)],
+]);
+const TAPS = [1, 3, 4, 5, 7, 8, 11, 12, 13].map((b) => B(b) - 0.02); // press on the beat
+const GRAB = B(9), REL = B(10);
+function touchPress(t) {
+  let p = 0; for (const c of TAPS) p += spr(t - c + 0.03, 0.1, 1) - spr(t - c - 0.08, 0.16, 0.9);
+  p += spr(t - GRAB + 0.03, 0.1, 1) - spr(t - REL, 0.16, 0.9);
+  return clamp(p, 0, 1.1);
+}
+function touchVis(bt) { // visible while interacting
+  const on = [[0.25, 1.4], [2.35, 5.4], [6.4, 10.4], [10.1, 13.4], [14.25, 15]];
+  let v = 0; for (const [a, b] of on) v = Math.max(v, sm((bt - a) * 5) * (1 - sm((bt - b) * 5)));
+  return v;
+}
+
+// ---------- swipe to done: direct manipulation + threshold + commit ----------
+const GRAB_X = TOUCH(GRAB)[0];
+const THRESH = 110;
+function rowDx(t) {
+  if (t < GRAB) return 0;
+  const raw = Math.min(0, TOUCH(Math.min(t, REL))[0] - GRAB_X);
+  if (t <= REL) return raw < -300 ? -300 - (raw + 300) * 0.3 : raw;
+  const x0 = raw; return lerp(x0, -PW - 20, spr(t - REL, 0.26, 1));          // past threshold: commits off-screen
+}
+
+// ---------- screens: push navigation ----------
+const NAV = {   // [step, x offset] for each screen (0 on screen, PW pushed in from right, -110 parallax behind)
+  chan: Track([[0.1, 0], [7, -110], [8, -110]], 0.5, 0.92),
+  doc: Track([[0.1, PW], [7, 0], [8, 0]], 0.5, 0.92),
+  task: Track([[0.1, PW], [11, 0]], 0.5, 0.92),
+};
+const SCREEN = { chan: [2, 8.02], doc: [7, 8.02], home: [8, 14], task: [11, 14] };
+const STATUS_IND = Track([[1, 1], [13, 2]], 0.3, 0.86);
+const SHEET = Track([[1, 0], [12, 1], [13.35, 0]], 0.36, 0.9);
+const H_JAC = Track([[1, 0], [5, 80]], ...SH), H_MAC = Track([[1, 0], [6, 104]], ...SH);
+const TYPE1 = "@mac", T1 = [3.12, 3.28, 3.42, 3.56];
+const TYPE2 = " draft the launch plan", T2 = [...TYPE2].map((_, i) => 4.08 + i * 0.035);
+const typed = (bt, ts) => ts.filter((x) => x <= bt).length;
+
+// ---------- sound cues ----------
+const CUES = [];
+const cue = (bt, type, gain = 1, extra = {}) => CUES.push({ t: B(bt), type, gain, ...extra });
+cue(0.05, "blip", 0.7); cue(1, "click", 0.8); cue(1.02, "swoosh", 0.7); cue(3, "click", 0.7);
+T1.forEach((x, i) => cue(x, "key", 0.5, { seed: i })); cue(3.14, "blip", 0.4); cue(4, "pop");
+T2.forEach((x, i) => cue(x, "key", 0.3, { seed: 9 + i })); cue(5, "enter"); cue(5.02, "swish", 0.5);
+cue(6, "blip", 0.7); cue(7, "click", 0.8); cue(7.02, "swish", 0.6); cue(8, "click", 0.8); cue(8.02, "tick", 0.5);
+cue(9, "grab", 0.8); cue(9.55, "tick", 0.6, { pitch: 1.26 }); cue(10, "release"); cue(10.05, "swish", 0.6);
+cue(11, "click", 0.8); cue(11.02, "swish", 0.5); cue(12, "click", 0.8); cue(12.02, "swoosh", 0.55);
+cue(13, "click", 0.8); cue(13.03, "chime", 0.8); cue(14, "swoosh", 0.6);
+
+// =====================================================================
+// DOM
+// =====================================================================
+const $ = (id) => document.getElementById(id);
+const stage = $("stage"), world = $("world"), shape = $("shape"), rings = $("rings"), labelsEl = $("labels");
+stage.style.width = W + "px"; stage.style.height = H + "px";
+rings.style.left = W / 2 + "px"; rings.style.top = H / 2 + "px";
+const L = {};
+function layer(name, rect, html, z = 1) {
+  const el = document.createElement("div"); el.className = "layer"; el.id = "L-" + name;
+  el.style.width = rect[2] - rect[0] + "px"; el.style.height = rect[3] - rect[1] + "px"; el.style.zIndex = z;
+  el.innerHTML = html; shape.appendChild(el); L[name] = { el, rect };
+}
+
+// iOS notification banner (lock screen), content only; the shape is the glass
+layer("banner", BANNER, `
+  <div class="a" style="left:14px;top:17px">${appIcon(46)}</div>
+  <div class="a nowrap" style="left:72px;top:16px;font-size:16px;font-weight:600;color:#fff">Julia <span style="font-weight:400;color:var(--c3)">in #launch</span></div>
+  <div class="a nowrap" style="right:16px;top:17px;font-size:13px;color:var(--c3)">now</div>
+  <div class="a nowrap" style="left:72px;top:40px;font-size:16px;color:var(--c1)">Still on for Thursday? Dana’s team is in.</div>`);
+
+// status bar (UtilPhoneFrame): 9:41, Dynamic Island, signal / wifi / battery
+const statusBar = `
+  <div class="a nowrap" style="left:44px;top:17px;font-size:17px;font-weight:600;color:#fff">9:41</div>
+  <div class="a" style="left:133px;top:11px;width:126px;height:37px;border-radius:19px;background:#000"></div>
+  <div class="a flex" style="right:30px;top:20px;gap:6px">
+    <svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1" fill="#fff"/><rect x="5" y="5.5" width="3" height="6.5" rx="1" fill="#fff"/><rect x="10" y="3" width="3" height="9" rx="1" fill="#fff"/><rect x="15" y="0" width="3" height="12" rx="1" fill="#fff"/></svg>
+    <svg width="17" height="12" viewBox="0 0 17 12"><path d="M8.5 2.2c2.4 0 4.6.9 6.3 2.5l1.1-1.1A10.4 10.4 0 0 0 8.5.6 10.4 10.4 0 0 0 1.1 3.6l1.1 1.1A8.9 8.9 0 0 1 8.5 2.2Zm0 3.2c1.5 0 2.9.6 4 1.6l1.1-1.1a7.3 7.3 0 0 0-10.2 0L4.5 7a5.7 5.7 0 0 1 4-1.6Zm0 3.2c.7 0 1.3.3 1.8.7L8.5 11 6.7 9.3c.5-.4 1.1-.7 1.8-.7Z" fill="#fff"/></svg>
+    <svg width="27" height="13" viewBox="0 0 27 13"><rect x=".5" y=".5" width="23" height="12" rx="3.8" fill="none" stroke="rgba(255,255,255,.4)"/><rect x="2" y="2" width="20" height="9" rx="2.5" fill="#fff"/><path d="M25 4.5v4c.8-.3 1.3-1.1 1.3-2s-.5-1.7-1.3-2Z" fill="rgba(255,255,255,.45)"/></svg>
+  </div>`;
+
+// header islands (SplitHeader / HeaderIsland): back, title pill, action
+const header = (title, right) => `
+  ${island(40, 40, ph("caretLeft", 18, "var(--c1)"), "left:12px;top:56px")}
+  <div class="a island glass flex nowrap" style="left:60px;top:56px;height:40px;padding:0 12px;gap:6px;font-size:15px;font-weight:600;color:#fff">${title}${ph("caretDown", 13, "var(--c3)")}</div>
+  ${island(40, 40, right, "right:12px;top:56px")}`;
+
+// bottom dock (MobileDockRow): grouped pill of views + caret, separate Search island
+const DOCK_Y = PH_ - 28 - 46;
+const dockBtn = (n, x, id) => `<div class="a flex" id="${id}" style="left:${x}px;top:0;width:46px;height:46px;justify-content:center;color:var(--c2)">${ph(n, 25)}</div>`;
+const dock = (active) => `
+  <div class="a island glass" style="left:12px;top:${DOCK_Y}px;width:230px;height:46px">
+    ${dockBtn("bell", 0, "")}${dockBtn("envelope", 46, "")}${dockBtn("hash", 92, "")}${dockBtn("files", 138, "")}${dockBtn("caretUp", 184, "")}
+    <div class="a" style="left:${[0, 0, 92][active] ?? 0}px;top:0;width:46px;height:46px;display:flex;align-items:center;justify-content:center;color:var(--a0)">${ph(["bell", "bell", "hash"][active], 25, "var(--a0)", true)}</div>
+  </div>
+  ${island(46, 46, ph("search", 23, "var(--c1)"), `left:${PW - 12 - 46}px;top:${DOCK_Y}px`)}
+  <div class="a" style="left:131px;top:${PH_ - 8}px;width:131px;height:5px;border-radius:3px;background:rgba(255,255,255,.55)"></div>`;
+const fade = (y, h, dir) => `<div class="a" style="left:0;top:${y}px;width:${PW}px;height:${h}px;background:linear-gradient(${dir}, var(--panel) 30%, transparent)"></div>`;
+
+// --- #launch channel ---
+const msg = (id, av, name, body, extra = "") => `<div class="a msg" id="${id}"><div class="a" style="left:12px;top:2px">${av}</div>
+  <div class="a mname">${name}${extra}</div><div class="a mbody">${body}</div></div>`;
+layer("chan", PHONE, `
+  <div class="a" style="inset:0;background:var(--panel)"></div>
+  ${msg("mAus", avatar("A", 32), `Austin <span class="t">9:12 AM</span>`, `Rollout doc is ready for review ${docRef("Rollout")}`)}
+  ${msg("mDan", avatar("D", 32), `Dana <span class="t">9:30 AM</span>`, "Can my whole team join the Thursday call?")}
+  ${msg("mJul", avatar("J", 32), `Julia <span class="t">9:40 AM</span>`, "Still on for Thursday? Dana’s team is in.")}
+  ${msg("mJac", avatar("J", 32), `Jacob <span class="t">9:41 AM</span>`, `<span class="pill">@Macro</span> draft the launch plan`)}
+  ${msg("mMac", macroAv(32), `Macro <span class="badge">Agent</span><span class="t">9:41 AM</span>`, `<div id="macTxt">Drafted ${docRef("Q3 launch plan")} with owners and dates. Julia has the press kit.</div>
+      <div class="a flex" id="dots" style="left:2px;top:6px;gap:6px">${[0, 1, 2].map((k) => `<div id="dot${k}" style="width:8px;height:8px;border-radius:50%;background:var(--a0)"></div>`).join("")}</div>`)}
+  ${fade(0, 110, "to bottom")}${statusBar}
+  ${header(`${ph("hash", 16, "var(--c2)")}launch`, ph("phone", 18, "var(--c1)"))}
+  ${fade(PH_ - 220, 220, "to top")}
+  <div class="a island glass" id="comp" style="left:12px;top:${DOCK_Y - 12 - 50}px;width:369px;height:50px">
+    <div class="a" style="left:12px;top:13px;width:23px;height:23px;color:var(--c3)">${window.ICONS["paperclip"]}</div>
+    <div class="a flex nowrap" style="left:44px;top:12px;height:26px;font-size:16px;color:#fff"><span id="cph" style="color:var(--c4)">Message #launch</span><span id="cpre" style="color:var(--a0)"></span><span class="pill" id="cchip" style="margin-right:4px">@Macro</span><span id="crest"></span><span class="caret" id="ccar"></span></div>
+    <div class="a" id="csend" style="right:5px;top:5px;width:40px;height:40px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center">${ic("arrow-up", 18, "#0a0a0a")}</div>
+  </div>
+  <div class="a glass" id="menu" style="left:12px;width:369px;border-radius:13px;background:rgb(30,31,34);box-shadow:0 10px 28px -8px rgba(0,0,0,.4);overflow:hidden">
+    <div class="a nowrap" style="left:14px;top:10px;font-size:12px;font-weight:500;color:var(--c4)">All</div>
+    <div class="a" id="msel" style="left:6px;top:32px;width:357px;height:38px;border-radius:7px;background:rgba(255,255,255,.08)"></div>
+    <div class="a flex nowrap" id="mi0" style="left:14px;top:32px;height:38px;gap:10px;font-size:16px;font-weight:500;color:#fff">${macroAv(22)}Macro<span class="badge">Agent</span></div>
+    <div class="a flex nowrap" id="mi1" style="left:14px;top:70px;height:38px;gap:10px;font-size:16px;font-weight:500;color:#fff">${avatar("M", 22)}Maya Chen</div>
+    <div class="a flex nowrap" id="mi2" style="left:14px;top:108px;height:38px;gap:10px;font-size:16px;font-weight:500;color:#fff">${ic("wide-file-md", 20, "var(--doc)")}Marketing brief</div>
+  </div>
+  ${dock(2)}`, 2);
+
+// --- doc ---
+layer("doc", PHONE, `
+  <div class="a" style="inset:0;background:var(--panel);box-shadow:-24px 0 40px rgba(0,0,0,.5)"></div>
+  <div class="a nowrap" id="dTitle" style="left:20px;top:118px;font-size:30px;font-weight:620;letter-spacing:-0.03em;color:#fff">Q3 launch plan</div>
+  <div class="a flex nowrap" id="dMeta" style="left:20px;top:162px;gap:8px;font-size:14px;color:var(--c4)">${macroAv(20)}Drafted by Macro · linked to #launch</div>
+  ${["Ship Thursday. Email, messages, docs and", "tasks in one app, with agents that already", "know the work. Owners are tagged below."].map((l, i) =>
+    `<div class="a nowrap" id="dl${i}" style="left:20px;top:${206 + i * 27}px;font-size:17px;color:var(--c2)">${l}</div>`).join("")}
+  <div class="a nowrap" id="dHead" style="left:20px;top:306px;font-size:20px;font-weight:600;color:#fff">Checklist</div>
+  ${[["Press kit", "@Julia"], ["Changelog", "@Jacob"], ["Launch email", "@Macro"]].map(([a, b], i) =>
+    `<div class="a flex nowrap" id="di${i}" style="left:20px;top:${346 + i * 42}px;gap:10px;font-size:17px;color:var(--c1)"><div style="width:19px;height:19px;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--c4)"></div>${a}<span class="pill">${b}</span></div>`).join("")}
+  ${fade(0, 110, "to bottom")}${statusBar}
+  ${header(`${ic("wide-file-md", 16, "var(--doc)")}Q3 launch plan`, ph("info", 19, "var(--c1)"))}
+  ${fade(PH_ - 150, 150, "to top")}
+  ${dock(2)}`, 3);
+
+// --- notifications soup (Home) ---
+const nrow = (id, icon, title, time, body, unread = true) => `<div class="a nrow" id="${id}">
+  <div class="a" id="${id}bg" style="left:0;top:0;width:${PW}px;height:78px;background:var(--success)"><div class="a" id="${id}chk" style="right:28px;top:23px;color:#fff">${ph("check", 32, "#fff")}</div></div>
+  <div class="a" id="${id}fg" style="left:0;top:0;width:${PW}px;height:78px;background:var(--panel)">
+    ${unread ? '<div class="a ndot"></div>' : ""}<div class="a nico">${icon}</div>
+    <div class="a ntit">${title}</div><div class="a ntim">${time}</div><div class="a nbody">${body}</div>
+    <div class="a" style="left:68px;right:0;bottom:0"><div class="hair"></div></div></div></div>`;
+layer("home", PHONE, `
+  <div class="a" style="inset:0;background:var(--panel)"></div>
+  ${statusBar}
+  <div class="a nowrap" style="left:20px;top:64px;font-size:30px;font-weight:620;letter-spacing:-0.025em;color:#fff">Notifications</div>
+  ${nrow("n0", ph("envelope", 24), "Dana Whitfield", "9:38 AM", "Re: rollout · Can we add my whole team?")}
+  ${nrow("n1", ic("square-task-in-progress-circle", 22, "var(--c2)"), "Press kit", "9:41 AM", "Julia · due Thursday · linked PR #5120")}
+  ${nrow("n2", ph("hash", 24), "#launch", "9:41 AM", "Macro: Drafted Q3 launch plan")}
+  ${nrow("n3", ph("sparkle", 22), "Macro", "9:30 AM", "Summarized yesterday’s standup", false)}
+  ${fade(PH_ - 190, 190, "to top")}
+  <div class="a flex" style="left:12px;top:${DOCK_Y - 12 - 40}px;gap:8px">
+    ${`<div class="island glass flex" style="position:relative;width:40px;height:40px;justify-content:center">${ph("sliders", 18, "var(--c2)")}</div>`}
+    <div class="flex" style="height:40px;padding:0 14px;border-radius:20px;background:var(--a0);color:#0f0f10;font-size:12px;font-weight:500">Signal</div>
+    <div class="island glass flex" style="position:relative;height:40px;padding:0 14px;font-size:12px;font-weight:500;color:var(--c3)">Noise</div>
+    <div class="island glass flex" style="position:relative;height:40px;padding:0 14px;font-size:12px;font-weight:500;color:var(--c3)">All</div>
+  </div>
+  ${dock(0)}`, 4);
+
+// --- task, with its linked PR ---
+layer("task", PHONE, `
+  <div class="a" style="inset:0;background:var(--panel);box-shadow:-24px 0 40px rgba(0,0,0,.5)"></div>
+  <div class="a nowrap" style="left:20px;top:116px;font-size:30px;font-weight:620;letter-spacing:-0.03em;color:#fff">Press kit</div>
+  <div class="a flex nowrap" style="left:20px;top:166px;gap:8px">
+    <div class="island glass flex" id="tStat" style="position:relative;height:34px;padding:0 12px;gap:7px;font-size:14px;font-weight:500;color:var(--c1)">
+      <span id="tStatIc0">${ic("square-task-in-progress-circle", 15, "var(--c2)")}</span><span id="tStatIc1" style="display:none">${ic("square-task-done-circle", 15, "var(--a0)")}</span><span id="tStatTx">In progress</span></div>
+    <div class="island glass flex" style="position:relative;height:34px;padding:0 12px;gap:7px;font-size:14px;font-weight:500;color:var(--c1)">${ic("wide-priority-high", 15, "var(--a0)")}High</div>
+    <div class="island glass flex" style="position:relative;height:34px;padding:0 12px 0 5px;gap:7px;font-size:14px;font-weight:500;color:var(--c1)">${avatar("J", 24)}Julia</div>
+  </div>
+  <div class="a flex nowrap" style="left:20px;top:222px;gap:8px;font-size:14px;color:var(--c3)">${ic("git-pull-request", 16, "var(--c2)")}<span style="color:var(--c1)">feat(site): press kit page</span><span>macro-inc/macro#5120</span></div>
+  <div class="a flex nowrap" style="left:44px;top:246px;gap:8px;font-size:13px"><span style="color:#23cf63">+124</span><span style="color:#ff6b6b">−4</span><span style="color:var(--c4)">· checks passing</span></div>
+  <div class="a" style="left:20px;top:290px;width:353px;font-size:17px;line-height:25px;color:var(--c2)">Logo files, screenshots and the founder quote for Thursday. Linked from ${docRef("Q3 launch plan")}.</div>
+  ${fade(0, 110, "to bottom")}${statusBar}
+  ${header(`${ic("wide-file-md", 16, "var(--doc)")}Checklist`, ph("info", 19, "var(--c1)"))}
+  ${fade(PH_ - 150, 150, "to top")}
+  ${dock(0)}
+  <div class="a" id="scrim" style="inset:0;background:rgba(0,0,0,.35)"></div>
+  <div class="a glass" id="sheet" style="left:8px;width:377px;height:278px;border-radius:44px;background:rgba(34,35,38,.97);box-shadow:0 -10px 40px rgba(0,0,0,.4)">
+    <div class="a" style="left:170px;top:8px;width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.18)"></div>
+    <div class="a nowrap" style="left:24px;top:28px;font-size:12px;font-weight:500;color:var(--c4)">Status</div>
+    <div class="a" style="left:12px;top:48px;width:353px;height:204px;border-radius:24px;background:rgba(255,255,255,.03)"></div>
+    <div class="a" id="sHl" style="left:16px;width:345px;height:48px;border-radius:20px;background:rgba(255,255,255,.1)"></div>
+    ${[["square-task-created-circle", "Todo"], ["square-task-in-progress-circle", "In progress"], ["square-task-done-circle", "Done"], ["square-task-cancelled-circle", "Canceled"]].map(([i, l], k) =>
+      `<div class="a srow" style="top:${52 + k * 48}px">${ic(i, 18, k === 2 ? "var(--a0)" : "var(--c2)")}${l}</div>`).join("")}
+  </div>`, 5);
+
+const E = {};
+document.querySelectorAll("#shape [id]").forEach((el) => { E[el.id] = el; });
+labelsEl.innerHTML = LABELS.map(([, , txt], i) => SIDE
+  ? `<div class="lab side" id="lab${i}" style="top:0;height:${H}px;left:${Math.round(W * 0.07)}px;right:auto;width:${Math.round(W * 0.36)}px;font-size:${LABEL.size}px">${txt}</div>`
+  : `<div class="lab" id="lab${i}" style="top:${LABEL.top}px;font-size:${LABEL.size}px">${txt}</div>`).join("");
+const tRing = $("tRing"), tDot = $("tDot"), lscrim = $("lscrim");
+if (SIDE) { lscrim.style.height = H + "px"; lscrim.style.width = W * 0.5 + "px"; lscrim.style.right = "auto";
+  lscrim.style.background = "linear-gradient(to right, #000 0%, #000 70%, rgba(0,0,0,0) 100%)"; }
+else { lscrim.style.height = LABEL.room + 90 + "px"; lscrim.style.background = "linear-gradient(to bottom, #000 0%, #000 55%, rgba(0,0,0,0) 100%)"; }
+
+// =====================================================================
+// seek(t)
+// =====================================================================
+let BLUR = 3;
+const px = (v) => v.toFixed(3) + "px";
+function show(el, o) { if (o <= 0.002) { el.style.display = "none"; return false; } el.style.display = ""; el.style.opacity = Math.min(1, o).toFixed(4); return true; }
+function fx(el, o, blur, tr) { if (!show(el, o)) return false; el.style.filter = blur > 0.04 ? `blur(${blur.toFixed(3)}px)` : "none"; el.style.transform = tr || "none"; return true; }
+function swap(el, t, bin, bout, dy = 6) {
+  const r = visAmt(t, B(bin), bout == null ? null : B(bout));
+  fx(el, r.o, ((1 - r.pin) + r.pout * 0.9) * BLUR, `translate3d(0,${px((1 - r.pin) * dy)},0) scale(${((0.97 + 0.03 * r.pin) * (1 - 0.02 * r.pout)).toFixed(4)})`);
+  return r.o;
+}
+function write(el, t, b0, b1) { const p = sm((t - B(b0)) / (B(b1) - B(b0))); if (!show(el, p > 0 ? 0.25 + 0.75 * p : 0)) return; el.style.clipPath = p >= 1 ? "none" : `inset(-8px ${((1 - p) * 100).toFixed(2)}% -8px -8px)`; }
+function tap(t, at, depth) { return depth * (spr(t - at + 0.025, 0.12, 1) - spr(t - at - 0.08, 0.2, 0.8)); }
+
+function seek(tIn) {
+  const t = ((tIn % T) + T) % T, bt = stepAt(t);
+  const [ls, cx, cy] = camAt(t), s = Math.exp(ls);
+  BLUR = 9 / s;
+  world.style.transform = `translate(${W / 2}px,${H / 2}px) scale(${s.toFixed(5)}) translate(${px(-cx)},${px(-cy)})`;
+  rings.style.transform = `scale(${Math.pow(s / 1.6, 0.35).toFixed(4)})`;
+
+  // the one shape: notification banner ⇄ phone (bezel grows with it)
+  const x0 = X0(t), y0 = Y0(t), x1 = X1(t), y1 = Y1(t), phn = clamp(PHN(t)), r = RAD(t);
+  const st = shape.style;
+  st.left = px(x0); st.top = px(y0); st.width = px(x1 - x0); st.height = px(y1 - y0); st.borderRadius = px(r);
+  st.background = mixc([38, 39, 42], [15, 15, 16], phn);
+  st.transform = `scale(${(1 - tap(t, B(1) - 0.02, 0.04)).toFixed(5)})`;
+  const bz = 12 * phn;
+  st.boxShadow = `0 0 0 ${px(bz)} #1b1b1e, 0 0 0 ${px(bz + 1.5)} #3a3a40, 0 30px 90px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,${(0.12 * (1 - phn)).toFixed(3)})`;
+  for (const k in L) { const { el, rect } = L[k]; el.style.left = px(rect[0] - x0); el.style.top = px(rect[1] - y0); }
+
+  // banner content
+  swap(L.banner.el, t, 14.1, 17.0, 0);
+
+  // status bar lives with the phone
+  // (rendered inside each screen for correct stacking under push transitions)
+
+  // ----- channel -----
+  const chanV = visAmt(t, B(2.05), B(8.02), 0.34);
+  if (fx(L.chan.el, chanV.o, (1 - chanV.pin + chanV.pout) * BLUR, `translate3d(${px(NAV.chan(t))},0,0)`)) {
+    const bottom = DOCK_Y - 12 - 50 - 14;
+    const hJ = H_JAC(t), hM = H_MAC(t), macTop = bottom - hM, jacTop = macTop - hJ, julTop = jacTop - 80;
+    E.mJul.style.top = px(julTop); E.mDan.style.top = px(julTop - 80); E.mAus.style.top = px(julTop - 160); E.mJac.style.top = px(jacTop); E.mMac.style.top = px(macTop);
+    swap(E.mJac, t, 5, null, 14); swap(E.mMac, t, 6, null, 14);
+    const dv = visAmt(t, B(6.02), B(6.55));
+    if (fx(E.dots, dv.o, dv.pout * BLUR)) [0, 1, 2].forEach((k) => {
+      const ph_ = ((bt - 6) * 3 - k * 0.22) % 1, pulse = Math.pow(Math.max(0, Math.sin(Math.PI * ((ph_ + 1) % 1))), 3);
+      E["dot" + k].style.opacity = (0.35 + 0.65 * pulse).toFixed(3);
+    });
+    write(E.macTxt, t, 6.55, 7.3);
+    E.macTxt.style.transform = `scale(${(1 - tap(t, B(7) - 0.02, 0.02)).toFixed(4)})`;
+    // composer
+    const n1 = typed(bt, T1), n2 = typed(bt, T2), chip = bt >= 4, sent = bt >= 5;
+    E.cph.style.display = n1 === 0 || sent ? "" : "none";
+    E.cpre.style.display = !chip && n1 > 0 && !sent ? "" : "none"; E.cpre.textContent = TYPE1.slice(0, n1);
+    const cp = spr(t - B(4), 0.3, 0.72);
+    E.cchip.style.display = chip && !sent ? "" : "none"; E.cchip.style.opacity = clamp(cp * 1.4).toFixed(3);
+    E.crest.style.display = chip && !sent ? "" : "none"; E.crest.textContent = TYPE2.slice(0, n2).replace(/^ /, "");
+    E.ccar.style.opacity = bt > 3.02 && !sent && (((bt >= 3 && bt < 3.7) || (bt >= 4 && bt < 5)) || (t * 1.8) % 1 < 0.5) ? "1" : "0";
+    const armed = n1 > 0 && !sent;
+    fx(E.csend, armed ? 1 : 0, 0, `scale(${(1 - tap(t, B(5) - 0.02, 0.1)).toFixed(4)})`);
+    E.comp.style.boxShadow = bt > 3 && bt < 5 ? "0 0 0 1.5px rgba(97,163,230,.5)" : "none";
+    // mentions menu (floating glass popover, merged "All" list)
+    const mv = visAmt(t, B(3.14), B(4.0), 0.26);
+    if (fx(E.menu, mv.o, (1 - mv.pin + mv.pout) * BLUR, `translate3d(0,${px((1 - mv.pin) * 10)},0)`)) {
+      const n = typed(bt, [3.28, 3.42]), mh = n >= 2 ? 78 : n === 1 ? 116 : 154;
+      E.menu.style.height = px(mh); E.menu.style.top = px(DOCK_Y - 12 - 50 - 8 - mh);
+      fx(E.mi2, 1 - sm((bt - 3.28) * 12), 0); fx(E.mi1, 1 - sm((bt - 3.42) * 12), 0);
+      E.msel.style.background = `rgba(255,255,255,${(0.08 + 0.08 * clamp(tap(t, B(4) - 0.02, 1))).toFixed(3)})`;
+    }
+  }
+
+  // ----- doc -----
+  const docV = visAmt(t, B(6.95), B(8.02), 0.2);
+  if (fx(L.doc.el, docV.o * (bt < 7.02 ? 0 : 1), docV.pout * BLUR, `translate3d(${px(NAV.doc(t))},0,0)`)) {
+    write(E.dTitle, t, 7.1, 7.4); write(E.dMeta, t, 7.3, 7.5);
+    write(E.dl0, t, 7.4, 7.65); write(E.dl1, t, 7.55, 7.8); write(E.dl2, t, 7.7, 7.92);
+    swap(E.dHead, t, 7.75, null, 6); swap(E.di0, t, 7.8, null, 6); swap(E.di1, t, 7.86, null, 6); swap(E.di2, t, 7.92, null, 6);
+  }
+
+  // ----- notifications (Home) + swipe to done -----
+  const homeV = visAmt(t, B(8.02), B(14.02), 0.3);
+  if (fx(L.home.el, homeV.o, (1 - homeV.pin + homeV.pout) * BLUR)) {
+    const dx = rowDx(t), gone = t > REL ? spr(t - REL - 0.18, 0.32, 1) : 0;
+    E.n0fg.style.transform = `translate3d(${px(dx)},0,0)`;
+    const past = clamp((-dx - THRESH + 20) / 40), chk = spr(t - GRAB - 0.3, 0.24, 1);
+    E.n0chk.style.transform = `scale(${(0.5 + 0.5 * past).toFixed(4)})`; E.n0chk.style.opacity = (0.4 + 0.6 * past).toFixed(3);
+    E.n0bg.style.opacity = dx < -2 ? "1" : "0";
+    const rowH = 78 * (1 - gone);
+    E.n0.style.top = px(96); E.n0.style.height = px(Math.max(0, rowH)); E.n0.style.overflow = "hidden";
+    [1, 2, 3].forEach((k) => {
+      const el = E["n" + k]; el.style.top = px(96 + rowH + (k - 1) * 78);
+      const tin = B(8.1) + k * 0.05, p = spr(t - tin, 0.34, 1);
+      fx(el, t < tin ? 0 : p, (1 - p) * BLUR, `translate3d(0,${px((1 - p) * 12)},0)`);
+    });
+    const p0 = spr(t - B(8.1), 0.34, 1); E.n0.style.opacity = p0.toFixed(3);
+    E.n1fg.style.background = `rgba(255,255,255,${(0.06 * clamp(tap(t, B(11) - 0.02, 1))).toFixed(3)})`;
+    E.n1fg.style.backgroundColor = "var(--panel)";
+  }
+
+  // ----- task + status sheet -----
+  const taskV = visAmt(t, B(10.95), B(14.02), 0.2);
+  if (fx(L.task.el, taskV.o * (bt < 11.0 ? 0 : 1), taskV.pout * BLUR, `translate3d(${px(NAV.task(t))},0,0)`)) {
+    const sh = SHEET(t);
+    E.sheet.style.top = px(PH_ - 8 - 278 + (1 - sh) * 300);
+    show(E.scrim, clamp(sh) * 0.9);
+    E.sheet.style.display = sh > 0.003 ? "" : "none";
+    E.sHl.style.top = px(52 + 48 * STATUS_IND(t));
+    const done = bt >= 13.05;
+    E.tStatIc0.style.display = done ? "none" : ""; E.tStatIc1.style.display = done ? "" : "none";
+    E.tStatTx.textContent = done ? "Done" : "In progress";
+    E.tStat.style.transform = `scale(${(1 - tap(t, B(12) - 0.02, 0.05) + tap(t, B(13.35), -0.06)).toFixed(4)})`;
+  }
+
+  // ----- labels (over a black fade so zoomed UI dissolves beneath them) -----
+  let lmax = 0;
+  LABELS.forEach(([a, b]) => { const rr = visAmt(t, B(a) - 0.1, B(b) + 0.1, 0.4); lmax = Math.max(lmax, rr.o); });
+  lscrim.style.opacity = lmax.toFixed(3);
+  LABELS.forEach(([a, b], i) => {
+    const rr = visAmt(t, B(a) + 0.06, B(b) - 0.02, 0.34);
+    fx($("lab" + i), rr.o, (1 - rr.pin) * 12 + rr.pout * 10, `translate3d(0,${px((1 - rr.pin) * 14)},0)`);
+  });
+
+  // ----- fingertip -----
+  const [wx, wy] = TOUCH(t), sx = W / 2 + (wx - cx) * s, sy = H / 2 + (wy - cy) * s;
+  const pr = touchPress(t), v = touchVis(bt), d = 44 * s * (1 - 0.18 * pr);
+  Object.assign(tRing.style, { left: px(sx - d / 2), top: px(sy - d / 2), width: px(d), height: px(d), opacity: (v * (0.55 + 0.45 * pr)).toFixed(3),
+    background: `rgba(255,255,255,${(0.16 + 0.22 * pr).toFixed(3)})`, boxShadow: `inset 0 0 0 ${px(1.5 * s)} rgba(255,255,255,.55), 0 ${px(4 * s)} ${px(14 * s)} rgba(0,0,0,.35)` });
+  tDot.style.display = "none";
+}
+
+// ---------- boot ----------
+buildCam();
+window.SONGS = { funk: ["song-funk-gimme-that-groove.mp3", 18.750] }; // Mixkit 872, "Gimme that Groove!"
+window.seek = seek; window.DURATION = T; window.CUES = CUES; window.B = B; window.MUSIC = MUSIC; window.FMT = [W, H];
+window.probe = (t) => { t = ((t % T) + T) % T; const c = camAt(t), u = TOUCH(t); return [X0(t), Y0(t), X1(t), Y1(t), RAD(t), PHN(t), Math.exp(c[0]), c[1], c[2], u[0], u[1], rowDx(t), 0]; };
+window.ready = Promise.all(['400 20px "Inter"', '500 20px "Inter"', '600 20px "Inter"', '330 40px "display"'].map((f) => document.fonts.load(f))).then(() => document.fonts.ready).then(() => { seek(0); return true; });
+const params = new URLSearchParams(location.search);
+if (params.has("render")) document.documentElement.classList.add("render");
+else {
+  const fit = () => { const k = Math.min(innerWidth / W, innerHeight / H); Object.assign(stage.style, { position: "fixed", left: "50%", top: "50%", transformOrigin: "50% 50%", transform: `translate(-50%,-50%) scale(${k})` }); };
+  addEventListener("resize", fit); fit();
+  const at = params.has("t") ? parseFloat(params.get("t")) : null;
+  window.ready.then(() => { if (at != null) { seek(at); return; } const t0 = performance.now(); const loop = () => { seek((performance.now() - t0) / 1000); requestAnimationFrame(loop); }; requestAnimationFrame(loop); });
+}
+</script>
+</body>
+</html>

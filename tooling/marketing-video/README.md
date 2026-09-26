@@ -5,6 +5,7 @@ One shape morphs through Macro's product without a cut. A cursor drives every
 change on a 120 BPM grid: 28 steps, one every other beat (14 bars), so each moment has room to land.
 
 - `VIBE=ambient|funk OUT=name ./build.sh` renders one single-vibe cut (1440 master and 1080)
+- `mobile.html` + `mbuild.sh`: the Macro for iPhone ad (9:16, 1:1, 16:9 from one scene; `FMT=916|11|169`), X copy in `macro-mobile-X.md`
 - `PROMPT.md`: the template for new feature videos; `ROUTINE.md`: the weekday routine
 - `trailer.html`: the source. Open it in a browser to watch it play live; click to start the audio.
   Add `?t=7.25` to freeze on any time. If your browser blocks fonts over `file://`, run `npx serve .`

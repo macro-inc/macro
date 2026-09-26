@@ -7,11 +7,12 @@ try { ({ chromium } = await import("playwright")); } catch { ({ chromium } = awa
 import fs from "node:fs";
 import path from "node:path";
 
-const HTML = "file://" + path.resolve(process.env.PAGE || "trailer.html") + "?render=1" + (process.env.VIBE ? "&vibe=" + process.env.VIBE : "");
+const HTML = "file://" + path.resolve(process.env.PAGE || "trailer.html") + "?render=1" + (process.env.VIBE ? "&vibe=" + process.env.VIBE : "") + (process.env.FMT ? "&fmt=" + process.env.FMT : "");
+const [VW, VH] = { "916": [1080, 1920], "11": [1440, 1440], "169": [1920, 1080] }[process.env.FMT || "11"];
 const FPS = 60, SUB = 4, SHUTTER = 0.5; // 180° shutter, 4 samples per frame
 
 async function openPage(browser) {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 1440 }, deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => console.error("pageerror:", e.message));
   page.on("console", (m) => { if (m.type() === "error") console.error("console:", m.text()); });
@@ -24,7 +25,7 @@ async function openPage(browser) {
 async function shot(p, t, file) {
   await p.page.evaluate((tt) => window.seek(tt), t);
   const { data } = await p.cdp.send("Page.captureScreenshot", {
-    format: "png", clip: { x: 0, y: 0, width: 1440, height: 1440, scale: 1 }, optimizeForSpeed: true,
+    format: "png", clip: { x: 0, y: 0, width: VW, height: VH, scale: 1 }, optimizeForSpeed: true,
   });
   fs.writeFileSync(file, Buffer.from(data, "base64"));
 }
@@ -34,7 +35,7 @@ const browser = await chromium.launch({ args: ["--force-color-profile=srgb", "--
 try {
   if (mode === "cues") {
     const p = await openPage(browser);
-    const cues = await p.page.evaluate(() => ({ duration: window.DURATION, music: window.MUSIC, cues: window.CUES }));
+    const cues = await p.page.evaluate(() => ({ duration: window.DURATION, music: window.MUSIC, cues: window.CUES, songs: window.SONGS }));
     fs.writeFileSync(out, JSON.stringify(cues, null, 1));
     console.log("cues:", cues.cues.length);
   } else if (mode === "stills") {
