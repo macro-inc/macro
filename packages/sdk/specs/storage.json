@@ -1352,6 +1352,55 @@
         }
       }
     },
+    "/call/join/{token}/participants": {
+      "get": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Read a standalone meeting preview without admitting a guest to the room.",
+        "operationId": "meeting_guest_participants",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingParticipants"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/meetings": {
       "get": {
         "tags": ["call::inbound::axum_router::meetings"],
@@ -1730,6 +1779,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/join/{token}/participants": {
+      "get": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Read the participant preview for an authenticated invitation holder.",
+        "operationId": "meeting_participants",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingParticipants"
                 }
               }
             }
@@ -26099,6 +26187,35 @@
           "canInvite": {
             "type": "boolean",
             "description": "True for the owner of an uncancelled standalone meeting."
+          }
+        }
+      },
+      "MeetingParticipant": {
+        "type": "object",
+        "description": "Minimal waiting-room display data, without account identities or call content.",
+        "required": ["displayName"],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "Profile image, when available for a Macro member."
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Name displayed in the waiting room."
+          }
+        }
+      },
+      "MeetingParticipants": {
+        "type": "object",
+        "description": "People currently connected to a meeting's room.",
+        "required": ["participants"],
+        "properties": {
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeetingParticipant"
+            },
+            "description": "Human attendees only; transcription agents are excluded."
           }
         }
       },

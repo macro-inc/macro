@@ -24,6 +24,8 @@ use uuid::Uuid;
 
 mod active_meetings;
 mod meeting_invites;
+mod meeting_participants;
+mod meeting_startup;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
@@ -169,6 +171,13 @@ impl CallRtcClient for MockRtcClient {
             participant_identity.as_ref().to_string(),
         ));
         Ok(())
+    }
+
+    async fn list_meeting_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<crate::domain::meetings::MeetingRtcParticipant>>> {
+        Ok(None)
     }
 
     async fn list_participant_identities(

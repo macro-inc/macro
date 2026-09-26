@@ -882,7 +882,16 @@ Guests enter `Your name`, choose their microphone and camera preferences, and
 press `Join call`. Setup requests device
 permissions and previews video locally; sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
+Shared-link setup shows the people currently connected, with avatars, names, and
+an attendee count. It refreshes every 15 seconds while setup is open; guests see
+this only for standalone links. Empty calls show `No one else is here yet`; a
+failed roster request leaves joining available. Transcription agents and past
+attendees are excluded.
+
 The preview and full-width join button retain their size while joining.
+The call runtime preloads while setup is open. Entry waits for the room connection;
+teammate invitations continue afterward. For a newly started call, transcription
+and recording start in the background instead of delaying join credentials.
 Copying the meeting URL is available after joining, in the in-call header.
 
 The creator presses `Start call`; invitees press `Join call`. Loading the page or

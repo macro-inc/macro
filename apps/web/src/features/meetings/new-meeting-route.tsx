@@ -18,6 +18,7 @@ import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { Show, Suspense } from 'solid-js';
 import { browserMeetingMedia } from './browser/meeting-media';
+import { preloadMeetingRuntime } from './browser/meeting-runtime';
 import type { MeetingPageState } from './context/meeting-session';
 import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
 import { createNewMeeting } from './primitives/new-meeting';
@@ -111,6 +112,7 @@ function NewMeetingSetup(props: {
       )}
       session={{
         lifecycle,
+        warmup: preloadMeetingRuntime,
         shareToken,
         prepare: draft.prepare,
         isInCall: call.isInCall,
@@ -123,7 +125,9 @@ function NewMeetingSetup(props: {
             useBrowserSession: true,
           });
           if (call.isInCall() && call.activeCallId() === credentials.callId) {
-            await draft.ring();
+            // Invitations report failures in the call; they must not hold
+            // the host on the setup screen after LiveKit connects.
+            void draft.ring();
           }
         },
         disconnect: call.meetingSession.disconnect,
