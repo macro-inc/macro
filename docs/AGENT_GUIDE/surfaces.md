@@ -767,11 +767,15 @@ date, opens read-only event details, and marks the row active. The icon-only
 An account checkbox toggles its calendars together in one update. The checkbox
 responds immediately; the upcoming list and each grid page refresh on deferred
 tasks rather than re-rendering all pages during the click.
-The sidebar can be resized or collapsed on desktop; in narrow panes it opens
-over the grid. On phones, `Show calendar navigation` in the split header opens
-the same sidebar as a left drawer. Choose a date in the mini calendar to
-navigate and close the drawer. Inline Calendar previews retain their host's
-chrome and topbar actions rather than adding another sidebar.
+The sidebar can be resized or collapsed on desktop; in narrow desktop panes
+it opens over the grid. Phones do not show the sidebar or its navigation drawer.
+The mobile split header places a month selector and Today in its left island;
+selecting the month opens the date-selection drawer. The right island keeps
+full-sized Availability, Search, and Settings actions. The New menu
+beside the bottom AI input offers Event, feature-gated Call, and feature-gated
+Reminder. Inline Calendar previews retain their host's chrome without adding
+another sidebar; their left header island has a compact New menu because the
+bottom New action follows the foreground host view.
 
 The in-view desktop Calendar header follows Drive's two-level layout: the slim
 top bar shows the viewed month and year and, when the sidebar is closed, a
@@ -799,15 +803,17 @@ All Join buttons use a camera icon. Generated Macro invitation paragraphs are
 hidden from event descriptions. Google Meet URLs in an event's location or
 description also supply Join actions. Recurring results wait for matching
 occurrence details before showing Join. Selecting a result preserves the search
-text. Availability is only in the sidebar's Upcoming events section.
+text. Availability lives in the desktop sidebar's Upcoming events section and
+in the mobile header.
 
 Resizing the split keeps the same search field mounted in the fixed-height
 header row. At narrow widths the row hides `Today` and the period selector,
 then the navigation arrows when space becomes scarce; focusing search also
 hides the remaining controls to give the field room. Its clear button remains
-available when a query is present. The `New` menu stays in the top bar. Touch
-devices retain the split header's compact creation controls and month picker.
-The mini calendar's month label opens a month picker; arrows change months.
+available when a query is present. The `New` menu stays in the desktop top
+bar. Touch devices keep the month selector and header controls without separate
+create or call buttons in the right island. The desktop sidebar's mini
+calendar remains navigable by date and month.
 
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.

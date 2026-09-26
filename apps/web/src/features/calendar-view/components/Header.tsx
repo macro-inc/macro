@@ -1,4 +1,5 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
+import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
 import {
   type CalendarPageId,
   useCalendarPager,
@@ -9,7 +10,6 @@ import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
   SplitHeaderLeft,
@@ -23,10 +23,7 @@ import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import ListIcon from '@phosphor/list.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { usePager } from '@ui/components/Pager';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
@@ -75,8 +72,6 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
   const pager = usePager<CalendarPageId>();
   const calendarView = useCalendarView();
   const openEventComposer = useOpenEventComposer();
-  const navigate = useNavigate();
-  const quickCalls = useQuickCallsFlag();
   const initialDate = new Date();
   const [headerElement, setHeaderElement] = createSignal<HTMLElement>();
   const headerSize = createElementSize(headerElement);
@@ -127,35 +122,6 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
       <CaretRightIcon class="size-5" />
     </Button>
   );
-  const newEvent = () => (
-    <Button
-      variant="ghost"
-      size="sm"
-      class="shrink-0 gap-1 rounded-lg px-2 @max-[520px]/split-header:size-6 @max-[520px]/split-header:p-1 touch:rounded-full"
-      label="New event"
-      onClick={() => openEventComposer()}
-    >
-      <PlusIcon class="size-3.5" />
-      <span class="@max-[520px]/split-header:hidden">New event</span>
-    </Button>
-  );
-  const newCall = () => (
-    <Show when={quickCalls().enabled}>
-      <Button
-        variant="ghost"
-        size="sm"
-        class="shrink-0 gap-1 rounded-lg px-2 @max-[520px]/split-header:size-6 @max-[520px]/split-header:p-1 touch:rounded-full"
-        label="New Call"
-        hotkey={TOKENS.create.call}
-        onClick={() => {
-          if (quickCalls().enabled) navigate('/meet/new');
-        }}
-      >
-        <PhoneIcon class="size-3.5" />
-        <span class="@max-[520px]/split-header:hidden">New Call</span>
-      </Button>
-    </Show>
-  );
   const todayButton = (mobile: boolean) => (
     <Button
       variant={mobile ? 'ghost' : 'outline'}
@@ -187,12 +153,12 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
       fallback={
         <>
           <SplitHeaderLeft>
-            <HeaderIsland class="shrink">
-              <Show when={shell?.aside.isCollapsed()}>
+            <HeaderIsland class="min-w-0 shrink px-1">
+              <Show when={!isMobile() && shell?.aside.isCollapsed()}>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  class="shrink-0 rounded-lg"
+                  class="shrink-0 rounded-full"
                   label="Show calendar navigation"
                   aria-expanded={shell?.aside.isOverlay() ?? false}
                   onClick={() => shell?.aside.expand()}
@@ -200,17 +166,13 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
                   <ListIcon class="size-5" />
                 </Button>
               </Show>
-              <Show
-                when={isMobile()}
-                fallback={
-                  <>
-                    <span class="min-w-0 truncate text-base font-semibold text-ink">
-                      {dateTitle()}
-                    </span>
-                  </>
-                }
-              >
-                <MonthDrawer month={currentDate()} />
+              <MonthDrawer month={currentDate()} />
+              {todayButton(isTouchDevice())}
+              <Show when={props.presentation === 'preview'}>
+                <CalendarCreateMenu
+                  iconOnly
+                  onCreateEvent={() => openEventComposer()}
+                />
               </Show>
             </HeaderIsland>
           </SplitHeaderLeft>
@@ -218,9 +180,6 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
           <SplitHeaderRight>
             <HeaderIsland class="px-1">
               <div class="flex items-center gap-1">
-                {todayButton(isMobile())}
-                {newEvent()}
-                {newCall()}
                 <Show when={!isMobile()}>
                   <PeriodSelector isNarrow={isNarrow()} />
                   <div class="flex shrink-0 items-center gap-1">
@@ -228,8 +187,11 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
                     {next()}
                   </div>
                 </Show>
+                <Show when={isMobile() && props.presentation === 'workspace'}>
+                  <CopyAvailabilityButton iconOnly largeIcon />
+                </Show>
                 <CalendarSearch />
-                <Show when={props.presentation === 'preview'}>
+                <Show when={props.presentation === 'preview' || isMobile()}>
                   <CalendarSettingsDropdown isNarrow={isNarrow()} />
                 </Show>
               </div>

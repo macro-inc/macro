@@ -143,12 +143,14 @@ function WorkspaceContent() {
             class="calendar-workspace-shell"
             asidePreferenceKey="calendar"
             resizable
-            aside={{ preserveDuringResize: false }}
+            aside={isMobile() ? false : { preserveDuringResize: false }}
             main={{ preferredWidth: 640 }}
           >
-            <ViewShell.Aside>
-              <CalendarSidebar onCreateEvent={openEventComposer} />
-            </ViewShell.Aside>
+            <Show when={!isMobile()}>
+              <ViewShell.Aside>
+                <CalendarSidebar onCreateEvent={openEventComposer} />
+              </ViewShell.Aside>
+            </Show>
             <ViewShell.Main>
               <Header presentation="workspace" />
               <ViewShell.Content class="flex min-h-0 flex-1">

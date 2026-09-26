@@ -7,6 +7,7 @@ const panel = vi.hoisted(() => ({
   isInlinePreview: false,
   handle: { setDisplayName: vi.fn() },
 }));
+const mobile = vi.hoisted(() => ({ current: false }));
 
 vi.mock('@app/features/calendar/components/CalendarPagerContext', () => ({
   CALENDAR_PAGE_IDS: ['current'],
@@ -55,7 +56,7 @@ vi.mock('@components/app/split-panel', () => {
   const Slot = (props: { children?: JSX.Element }) => <>{props.children}</>;
   return { SplitPanel: { Root: Slot, Body: Slot } };
 });
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mobile.current }));
 vi.mock('@solid-primitives/resize-observer', () => ({
   createResizeObserver: () => {},
 }));
@@ -88,6 +89,7 @@ vi.mock('./SetupStatus', () => ({ SetupStatus: () => null }));
 
 beforeEach(() => {
   panel.isInlinePreview = false;
+  mobile.current = false;
   panel.handle.setDisplayName.mockClear();
 });
 afterEach(cleanup);
@@ -98,6 +100,14 @@ it('puts the standalone calendar in a sidebar and in-view topbar', () => {
   expect(screen.getByText('Calendar workspace header')).toBeTruthy();
   expect(screen.getByText('Calendar grid')).toBeTruthy();
   expect(panel.handle.setDisplayName).toHaveBeenCalledWith('Calendar');
+});
+
+it('omits calendar navigation on mobile', () => {
+  mobile.current = true;
+  render(() => <Workspace />);
+  expect(screen.queryByText('Calendar sidebar')).toBeNull();
+  expect(screen.getByText('Calendar workspace header')).toBeTruthy();
+  expect(screen.getByText('Calendar grid')).toBeTruthy();
 });
 
 it('keeps an inline preview in its host chrome without a nested sidebar', () => {

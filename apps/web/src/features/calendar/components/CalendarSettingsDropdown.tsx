@@ -340,7 +340,7 @@ function MobileCalendarSettings(props: {
       <MobileDrawer.Trigger
         as={Button}
         variant="ghost"
-        size={props.sidebar ? 'md' : 'icon-sm'}
+        size={props.sidebar ? 'md' : 'icon-lg'}
         class={props.sidebar ? 'w-full rounded-full' : 'shrink-0 rounded-full'}
         aria-label="Calendar settings"
       >

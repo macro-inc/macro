@@ -17,6 +17,7 @@ export function CalendarCreateMenu(props: {
   onSelect?: () => void;
   sidebar?: boolean;
   header?: boolean;
+  iconOnly?: boolean;
 }) {
   const navigate = useNavigate();
   const quickCalls = useQuickCallsFlag();
@@ -24,24 +25,36 @@ export function CalendarCreateMenu(props: {
   return (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
-        size={props.sidebar || props.header ? 'md' : 'sm'}
+        size={
+          props.iconOnly ? 'icon-lg' : props.sidebar || props.header ? 'md' : 'sm'
+        }
+        label={props.iconOnly ? 'New' : undefined}
         class={
-          props.sidebar
-            ? 'h-(--sidebar-row-height) w-full min-w-0 justify-start gap-(--sidebar-label-gap) px-(--sidebar-item-inset) text-left touch:h-11'
-            : props.header
-              ? 'h-(--sidebar-row-height) gap-(--sidebar-label-gap) rounded-full px-(--sidebar-item-inset) touch:h-11'
-              : 'gap-1 rounded-lg px-2'
+          props.iconOnly
+            ? 'shrink-0 rounded-full border-transparent bg-transparent'
+            : props.sidebar
+              ? 'h-(--sidebar-row-height) w-full min-w-0 justify-start gap-(--sidebar-label-gap) px-(--sidebar-item-inset) text-left touch:h-11'
+              : props.header
+                ? 'h-(--sidebar-row-height) gap-(--sidebar-label-gap) rounded-full px-(--sidebar-item-inset) touch:h-11'
+                : 'gap-1 rounded-lg px-2'
         }
       >
-        <Show when={props.sidebar} fallback={<PlusIcon class="size-3.5" />}>
+        <Show
+          when={props.sidebar}
+          fallback={
+            <PlusIcon class={props.iconOnly ? 'size-5' : 'size-3.5'} />
+          }
+        >
           <ViewSidebar.Icon>
             <PlusIcon class="size-4" />
           </ViewSidebar.Icon>
         </Show>
-        <span class={props.sidebar ? 'min-w-0 flex-1 truncate' : undefined}>
-          New
-        </span>
-        <CaretDownIcon class="size-3.5 shrink-0" />
+        <Show when={!props.iconOnly}>
+          <span class={props.sidebar ? 'min-w-0 flex-1 truncate' : undefined}>
+            New
+          </span>
+          <CaretDownIcon class="size-3.5 shrink-0" />
+        </Show>
       </Dropdown.Trigger>
       <Dropdown.Content
         class={

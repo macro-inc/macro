@@ -79,7 +79,7 @@ export function CopyAvailabilityButton(props: {
     <Show when={connectedInboxes().length > 0}>
       <Button
         variant="ghost"
-        size={props.iconOnly ? (props.largeIcon ? 'icon-md' : 'icon-sm') : 'sm'}
+        size={props.iconOnly ? (props.largeIcon ? 'icon-lg' : 'icon-sm') : 'sm'}
         class={cn(
           props.iconOnly &&
             (props.largeIcon
@@ -95,7 +95,7 @@ export function CopyAvailabilityButton(props: {
         <CalendarCheckIcon
           class={
             props.largeIcon
-              ? 'size-4'
+              ? 'size-5 mobile:size-6'
               : props.iconOnly
                 ? 'size-3.5'
                 : 'size-4 shrink-0'
