@@ -9,7 +9,7 @@ import GitMergeBold from '@phosphor-icons/core/bold/git-merge-bold.svg';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HomeEntityIcon } from '../../inbox-view/components/HomeEntityIcon';
+import { HomeEntityIcon } from '../../home/components/HomeEntityIcon';
 import { EntityIcon } from '../extractors/entity-icon';
 import type {
   ChannelEntity,

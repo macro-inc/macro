@@ -106,7 +106,7 @@ describe('layoutManager', () => {
       (withBackground) => {
         createRoot((dispose) => {
           const manager = createSplitLayout(createMockOrchestrator(), [
-            { type: 'component', id: 'inbox' },
+            { type: 'component', id: 'home' },
           ]);
           const split = manager.getSplit(manager.splits()[0].id)!;
           const list: SplitContent = {
@@ -133,7 +133,7 @@ describe('layoutManager', () => {
           expect(split.content()).toEqual(list);
           expect(split.canGoForward()).toBe(true);
           split.goBack();
-          expect(split.content()).toEqual({ type: 'component', id: 'inbox' });
+          expect(split.content()).toEqual({ type: 'component', id: 'home' });
           dispose();
         });
       }
@@ -146,7 +146,7 @@ describe('layoutManager', () => {
         ]);
         const split = manager.getSplit(manager.splits()[0].id)!;
         closeSplitOrReturnToList(manager, split);
-        expect(split.content()).toEqual({ type: 'component', id: 'inbox' });
+        expect(split.content()).toEqual({ type: 'component', id: 'home' });
         expect(split.canGoBack()).toBe(false);
         dispose();
       });
@@ -189,7 +189,7 @@ describe('layoutManager', () => {
         const content = { type: 'email', id: 'already-open' } as const;
         const manager = createSplitLayout(createMockOrchestrator(), [
           content,
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const [existing, other] = manager.splits();
         manager.activateSplit(other.id);
@@ -231,7 +231,7 @@ describe('layoutManager', () => {
           const orchestrator = createMockOrchestrator();
           const manager = createSplitLayout(orchestrator, [
             initial,
-            { type: 'component', id: 'inbox' },
+            { type: 'component', id: 'home' },
           ]);
           const [existing, other] = manager.splits();
           const mount = existing.mount;
@@ -271,7 +271,7 @@ describe('layoutManager', () => {
           expect(manager.splits()).toHaveLength(2);
           expect(existing.mount).toBe(mount);
           expect(existing.content).toEqual(initial);
-          expect(other.content).toEqual({ type: 'component', id: 'inbox' });
+          expect(other.content).toEqual({ type: 'component', id: 'home' });
           expect(toast.alert).not.toHaveBeenCalled();
 
           manager.openWithSplit(target);
@@ -286,7 +286,7 @@ describe('layoutManager', () => {
     createRoot((dispose) => {
       const orchestrator = createMockOrchestrator();
       const manager = createSplitLayout(orchestrator, [
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
       ]);
       const release = manager.registerOpenViews(() => [
         {
@@ -352,7 +352,7 @@ describe('layoutManager', () => {
         const orchestrator = createMockOrchestrator();
         const manager = createSplitLayout(orchestrator, [
           { type: 'component', id: 'channels' },
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const [chat, inbox] = manager.splits();
         manager.activateSplit(inbox.id);
@@ -403,7 +403,7 @@ describe('layoutManager', () => {
     createRoot((dispose) => {
       const manager = createSplitLayout(createMockOrchestrator(), [
         { type: 'channel', id: 'channel' },
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
       ]);
       const [channel, inbox] = manager.splits();
       manager.activateSplit(inbox.id);
@@ -425,7 +425,7 @@ describe('layoutManager', () => {
       const content = { type: 'component', id: 'channels' } as const;
       const manager = createSplitLayout(createMockOrchestrator(), [
         content,
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
       ]);
       const [channels, inbox] = manager.splits();
       manager.activateSplit(inbox.id);
@@ -455,7 +455,7 @@ describe('layoutManager', () => {
   it('distinguishes opening new content from reusing content in the source split', () => {
     createRoot((dispose) => {
       const manager = createSplitLayout(createMockOrchestrator(), [
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
       ]);
       const handle = manager.getSplit(manager.splits()[0].id)!;
       const content = { type: 'email', id: 'selected' } as const;
@@ -479,7 +479,7 @@ describe('layoutManager', () => {
   it('restoring occupied content does not focus or notify its owner', () => {
     createRoot((dispose) => {
       const manager = createSplitLayout(createMockOrchestrator(), [
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
       ]);
       const source = manager.splits()[0];
       const content = { type: 'email', id: 'occupied' } as const;
@@ -634,7 +634,7 @@ describe('layoutManager', () => {
   it('navigates and closes adjacent list and detail splits independently', () => {
     createRoot((dispose) => {
       const manager = createSplitLayout(createMockOrchestrator(), [
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
         { type: 'md', id: 'detail' },
       ]);
       const [list, detail] = manager.splits();
@@ -650,7 +650,7 @@ describe('layoutManager', () => {
       expect(manager.splits()).toHaveLength(2);
 
       listHandle.goBack();
-      expect(listHandle.content()).toEqual({ type: 'component', id: 'inbox' });
+      expect(listHandle.content()).toEqual({ type: 'component', id: 'home' });
       expect(detailHandle.content()).toEqual({ type: 'md', id: 'detail' });
       listHandle.close();
       expect(manager.splits().map((split) => split.id)).toEqual([detail.id]);
@@ -661,7 +661,7 @@ describe('layoutManager', () => {
   it('navigates and closes adjacent list and detail splits independently', () => {
     createRoot((dispose) => {
       const manager = createSplitLayout(createMockOrchestrator(), [
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
         { type: 'md', id: 'detail' },
       ]);
       const [list, detail] = manager.splits();
@@ -677,7 +677,7 @@ describe('layoutManager', () => {
       expect(manager.splits()).toHaveLength(2);
 
       listHandle.goBack();
-      expect(listHandle.content()).toEqual({ type: 'component', id: 'inbox' });
+      expect(listHandle.content()).toEqual({ type: 'component', id: 'home' });
       expect(detailHandle.content()).toEqual({ type: 'md', id: 'detail' });
       listHandle.close();
       expect(manager.splits().map((split) => split.id)).toEqual([detail.id]);
@@ -689,7 +689,7 @@ describe('layoutManager', () => {
     it('swaps adjacent splits and delegates the panel reorder to Resize', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
           { type: 'component', id: 'calendar' },
         ]);
         const [first, second] = manager.splits();
@@ -716,7 +716,7 @@ describe('layoutManager', () => {
     it('uses the retained split id for history ownership after reconciliation', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const handle = manager.getSplit(manager.splits()[0].id)!;
         const content = { type: 'email', id: 'same-entity' } as const;
@@ -734,11 +734,11 @@ describe('layoutManager', () => {
     it('keeps history availability configured after reset', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const handle = manager.getSplit(manager.splits()[0].id)!;
         handle.reset();
-        expect(handle.history()).toEqual([{ type: 'component', id: 'inbox' }]);
+        expect(handle.history()).toEqual([{ type: 'component', id: 'home' }]);
         expect(handle.canGoBack()).toBe(false);
         handle.replace({ next: { type: 'email', id: 'occupied' } });
         handle.replace({ next: { type: 'email', id: 'current' } });
@@ -747,7 +747,7 @@ describe('layoutManager', () => {
         ]);
         expect(handle.canGoBack()).toBe(true);
         handle.goBack();
-        expect(handle.content().id).toBe('inbox');
+        expect(handle.content().id).toBe('home');
         handle.goForward();
         expect(handle.content().id).toBe('current');
         release();
@@ -842,7 +842,7 @@ describe('layoutManager', () => {
     ) {
       return createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const routes = createRoutesManifest(appSplitRoutes);
         const location = createMemorySplitRouterLocation(url);
@@ -1002,7 +1002,7 @@ describe('layoutManager', () => {
     });
 
     it('uses the Reviews PR route for existing split navigation', async () => {
-      const { manager, location, router, dispose } = ingressRouter('/inbox');
+      const { manager, location, router, dispose } = ingressRouter('/home');
       await router.settled();
       manager.getSplit(manager.splits()[0].id)!.replace({
         next: { type: 'pr', id: 'pr-2' },
@@ -1019,7 +1019,7 @@ describe('layoutManager', () => {
     });
 
     it('upgrades stored PR route metadata to Reviews content', async () => {
-      const { manager, router, dispose } = ingressRouter('/inbox');
+      const { manager, router, dispose } = ingressRouter('/home');
       await router.settled();
       const split = manager.getSplit(manager.splits()[0].id)!;
       split.replace({
@@ -1045,16 +1045,16 @@ describe('layoutManager', () => {
       dispose();
     });
 
-    it.each(['/inbox/channel', '/not-a-block/example'])(
+    it.each(['/home/channel', '/not-a-block/example'])(
       'rejects an invalid legacy pair %s without mounting a block',
       async (path) => {
         const { manager, location, router, dispose } = ingressRouter(path);
         await router.settled();
         expect(manager.splits()[0].content).toMatchObject({
           type: 'component',
-          id: 'inbox',
+          id: 'home',
         });
-        expect(location.read().pathname).toBe('/inbox');
+        expect(location.read().pathname).toBe('/home');
         router.dispose();
         dispose();
       }
@@ -1097,7 +1097,7 @@ describe('layoutManager', () => {
     });
 
     it('upgrades old call route metadata without losing transcript search', async () => {
-      const { manager, router, dispose } = ingressRouter('/inbox');
+      const { manager, router, dispose } = ingressRouter('/home');
       await router.settled();
       const split = manager.getSplit(manager.splits()[0].id)!;
       split.replace({
@@ -1126,7 +1126,7 @@ describe('layoutManager', () => {
     });
 
     it('uses the Drive call detail route for existing split navigation', async () => {
-      const { manager, location, router, dispose } = ingressRouter('/inbox');
+      const { manager, location, router, dispose } = ingressRouter('/home');
       await router.settled();
       manager.getSplit(manager.splits()[0].id)!.replace({
         next: { type: 'call', id: 'call-2' },
@@ -1143,7 +1143,7 @@ describe('layoutManager', () => {
     });
 
     it('retains pane-local transcript targeting during call navigation', async () => {
-      const { manager, router, dispose } = ingressRouter('/inbox');
+      const { manager, router, dispose } = ingressRouter('/home');
       await router.settled();
       const split = manager.getSplit(manager.splits()[0].id)!;
       split.replace({
@@ -1271,9 +1271,9 @@ describe('layoutManager', () => {
     });
 
     it.each([
-      ['/component/preview-empty', '/inbox'],
-      ['/component/non-member-channel', '/inbox'],
-      ['/component/inbox', '/inbox'],
+      ['/component/preview-empty', '/home'],
+      ['/component/non-member-channel', '/home'],
+      ['/component/home', '/home'],
       ['/component/documents', '/drive'],
       ['/component/settings', '/settings/account'],
     ])('upgrades the legacy component URL %s', async (incoming, expected) => {
@@ -1354,7 +1354,7 @@ describe('layoutManager', () => {
 
     it('migrates legacy channel targets on Inbox preview routes', async () => {
       const { manager, location, router, dispose } = ingressRouter(
-        '/inbox/channel/c1?channel_message_id=first&channel_message_id=last&channel_thread_id=thread'
+        '/home/channel/c1?channel_message_id=first&channel_message_id=last&channel_thread_id=thread'
       );
       await router.settled();
       const split = manager.splits()[0];
@@ -1380,7 +1380,7 @@ describe('layoutManager', () => {
       'migrates unprefixed %s comments on Inbox document routes',
       async (type, key) => {
         const { manager, location, router, dispose } = ingressRouter(
-          `/inbox/${type}/document-1?${key}=comment-1`
+          `/home/${type}/document-1?${key}=comment-1`
         );
         await router.settled();
         const split = manager.splits()[0];
@@ -1397,7 +1397,7 @@ describe('layoutManager', () => {
 
     it('prefers an explicit Inbox document comment over an unprefixed key', async () => {
       const { manager, router, dispose } = ingressRouter(
-        '/inbox/md/document-1?comment_id=legacy&s0.drive.commentId=explicit'
+        '/home/md/document-1?comment_id=legacy&s0.drive.commentId=explicit'
       );
       await router.settled();
       expect(router.search(manager.splits()[0].id, 'drive')).toEqual({
@@ -1409,7 +1409,7 @@ describe('layoutManager', () => {
 
     it('preserves Drive facets during comment link migration', async () => {
       const { manager, router, dispose } = ingressRouter(
-        '/inbox/md/document-1?comment_id=comment-1&s0.drive.tags=first&s0.drive.tags=second'
+        '/home/md/document-1?comment_id=comment-1&s0.drive.tags=first&s0.drive.tags=second'
       );
       await router.settled();
       expect(router.search(manager.splits()[0].id, 'drive')).toEqual({
@@ -2037,7 +2037,7 @@ describe('layoutManager', () => {
     it('marks mergeHistory content changes as replace navigation', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -2051,7 +2051,7 @@ describe('layoutManager', () => {
           type: SplitEvent.ContentChange,
           cause: 'replace',
           newContent: { type: 'md', id: 'created-doc' },
-          previousContent: { type: 'component', id: 'inbox' },
+          previousContent: { type: 'component', id: 'home' },
         });
 
         dispose();
@@ -2094,7 +2094,7 @@ describe('layoutManager', () => {
     it('jumps back to the nearest earlier entry matching a predicate', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const split = manager.getSplit(manager.splits()[0].id)!;
 
@@ -2124,7 +2124,7 @@ describe('layoutManager', () => {
       (owner) => {
         createRoot((dispose) => {
           const manager = createSplitLayout(createMockOrchestrator(), [
-            { type: 'component', id: 'inbox' },
+            { type: 'component', id: 'home' },
           ]);
           const handle = manager.getSplit(manager.splits()[0].id)!;
           const occupied = { type: 'email', id: 'occupied' } as const;
@@ -2148,14 +2148,14 @@ describe('layoutManager', () => {
 
           expect(handle.canGoBack()).toBe(true);
           handle.goBack();
-          expect(handle.content().id).toBe('inbox');
+          expect(handle.content().id).toBe('home');
           expect(handle.canGoBack()).toBe(false);
           expect(handle.canGoForward()).toBe(true);
           handle.goForward();
           expect(handle.content().id).toBe('end');
           expect(handle.canGoForward()).toBe(false);
           expect(handle.history().map((entry) => entry.id)).toEqual([
-            'inbox',
+            'home',
             'occupied',
             'end',
           ]);
@@ -2177,7 +2177,7 @@ describe('layoutManager', () => {
           { type: 'email', id: 'before' },
         ]);
         const handle = manager.getSplit(manager.splits()[0].id)!;
-        handle.replace({ next: { type: 'component', id: 'inbox' } });
+        handle.replace({ next: { type: 'component', id: 'home' } });
         handle.replace({ next: { type: 'email', id: 'after' } });
         handle.goBack();
         const canGoBack = createMemo(handle.canGoBack);
@@ -2195,7 +2195,7 @@ describe('layoutManager', () => {
         expect(canGoForward()).toBe(false);
         handle.goBack();
         handle.goForward();
-        expect(handle.content().id).toBe('inbox');
+        expect(handle.content().id).toBe('home');
         setOccupied([]);
         expect(canGoBack()).toBe(true);
         expect(canGoForward()).toBe(true);
@@ -2212,7 +2212,7 @@ describe('layoutManager', () => {
     it('skips history entries another split already displays', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
           { type: 'email', id: 'other' },
         ]);
         const [listSplitState, docSplitState] = manager.splits();
@@ -2248,7 +2248,7 @@ describe('layoutManager', () => {
     it('leaves the split put when nothing earlier matches', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const split = manager.getSplit(manager.splits()[0].id)!;
 
@@ -2270,7 +2270,7 @@ describe('layoutManager', () => {
     it('updates the current mount through a retained split handle', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const handle = manager.getSplit(manager.splits()[0].id)!;
         const inboxMeta = handle.meta()!;
@@ -2306,7 +2306,7 @@ describe('layoutManager', () => {
     it('delivers one-shot params on same-split forward navigation', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -2321,7 +2321,7 @@ describe('layoutManager', () => {
     it('delivers one-shot params on mergeHistory navigation', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -2336,7 +2336,7 @@ describe('layoutManager', () => {
     it('strips params when re-visiting an entry via history back/forward', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -2345,7 +2345,7 @@ describe('layoutManager', () => {
         split.goBack();
         expect(split.content()).toMatchObject({
           type: 'component',
-          id: 'inbox',
+          id: 'home',
         });
 
         split.goForward();
@@ -2359,7 +2359,7 @@ describe('layoutManager', () => {
     it('strips params when removeFromHistory reattaches a prior entry', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -2378,7 +2378,7 @@ describe('layoutManager', () => {
     it('keeps params on history navigation when preserveParams is set', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -2486,7 +2486,7 @@ describe('layoutManager', () => {
           id: 'documents',
         } satisfies SplitContent;
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
           target,
           { type: 'component', id: 'documents' },
           { type: 'md', id: 'right' },
@@ -2513,7 +2513,7 @@ describe('layoutManager', () => {
     it('keeps the 0th split and replaces it when the target content is not open', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
           { type: 'md', id: 'right' },
         ]);
         const keptSplitId = manager.splits()[0].id;
@@ -2535,7 +2535,7 @@ describe('layoutManager', () => {
         expect(handle.isSpotLight()).toBe(false);
         expect(handle.previousContent()).toEqual({
           type: 'component',
-          id: 'inbox',
+          id: 'home',
         });
 
         dispose();
@@ -2618,14 +2618,14 @@ describe('layoutManager', () => {
           createRoot((dispose) => {
             const manager = createSplitLayout(createMockOrchestrator(), [
               position === 'foreground'
-                ? { type: 'component', id: 'inbox' }
+                ? { type: 'component', id: 'home' }
                 : initial,
             ]);
             const swipe = createMobileSwipeLayout(manager);
             manager.openWithSplit(
               position === 'foreground'
                 ? initial
-                : { type: 'component', id: 'inbox' }
+                : { type: 'component', id: 'home' }
             );
             const owner = manager.findOpenView(target)!.topLevelSplit!;
             const mount = manager
@@ -2647,7 +2647,7 @@ describe('layoutManager', () => {
             swipe.swipeBack();
             expect(
               manager.getSplit(manager.activeSplitId()!)!.content().id
-            ).toBe('inbox');
+            ).toBe('home');
             dispose();
           });
         }
@@ -2680,7 +2680,7 @@ describe('layoutManager', () => {
       (result) => {
         createRoot((dispose) => {
           const manager = createSplitLayout(createMockOrchestrator(), [
-            { type: 'component', id: 'inbox' },
+            { type: 'component', id: 'home' },
           ]);
           const swipe = createMobileSwipeLayout(manager);
           manager.openWithSplit({ type: 'email', id: 'foreground' });
@@ -2733,7 +2733,7 @@ describe('layoutManager', () => {
     it('skips already-mounted history when rebuilding the mobile background', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const handle = manager.getSplit(manager.splits()[0].id)!;
         handle.replace({ next: { type: 'chat', id: 'conversation' } });
@@ -2746,12 +2746,12 @@ describe('layoutManager', () => {
         expect(swipe.slotASplitId()).not.toBe(swipe.slotBSplitId());
         expect(manager.splits().map((split) => split.content.id)).toEqual([
           'conversation',
-          'inbox',
+          'home',
         ]);
         expect(toast.alert).not.toHaveBeenCalled();
         swipe.swipeBack();
         expect(manager.getSplit(manager.activeSplitId()!)!.content().id).toBe(
-          'inbox'
+          'home'
         );
         dispose();
       });

@@ -55,7 +55,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(view: MobileNavViewId = 'inbox') {
+function setup(view: MobileNavViewId = 'home') {
   const [calendar, setCalendar] = createSignal(false);
   const [blocks, setBlocks] = createSignal<CreatableBlock[]>([]);
   sources.view.mockReturnValue(view);

@@ -14,7 +14,7 @@ const SoupView = lazy(async () => ({
 
 export const RemindersRouteView = withAuth(() => {
   if (!isFeatureEnabled(enableReminders))
-    return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
+    return <RedirectSplit to={{ type: 'component', id: 'home' }} />;
   usePageViewTracking('reminders');
   const preset = getViewPreset('reminders');
   return (

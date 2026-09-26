@@ -131,18 +131,18 @@ function migrateLegacySearch({
   if (!externalSearch) return;
 
   const leafId = to.location.route.matches.at(-1)?.id;
-  const inboxChannel =
-    leafId === 'inbox-channel' ||
-    (leafId === 'inbox-preview' &&
+  const homeChannel =
+    leafId === 'home-channel' ||
+    (leafId === 'home-preview' &&
       routeParams(to.location.route).blockType === 'channel');
-  const inboxDocumentType =
-    leafId === 'inbox-document'
+  const homeDocumentType =
+    leafId === 'home-document'
       ? routeParams(to.location.route).documentType
-      : leafId === 'inbox-preview'
+      : leafId === 'home-preview'
         ? routeParams(to.location.route).blockType
         : undefined;
   const commentKey = (() => {
-    switch (inboxDocumentType) {
+    switch (homeDocumentType) {
       case 'md':
       case 'task':
       case 'skill':
@@ -153,7 +153,7 @@ function migrateLegacySearch({
         return PDF_URL_PARAMS.annotationId;
     }
   })();
-  const inboxDocumentMapping = commentKey
+  const homeDocumentMapping = commentKey
     ? {
         namespace: driveSearch.namespace,
         fields: [[commentKey, 'commentId']] as const,
@@ -166,7 +166,7 @@ function migrateLegacySearch({
       fields: [[EMAIL_URL_PARAMS.messageId, 'messageId']] as const,
     }))
     .when(
-      (id) => id === 'channels-channel' || inboxChannel,
+      (id) => id === 'channels-channel' || homeChannel,
       () => ({
         namespace: channelsSearch.namespace,
         fields: [
@@ -176,8 +176,8 @@ function migrateLegacySearch({
       })
     )
     .when(
-      (id) => id === 'inbox-document' || id === 'inbox-preview',
-      () => inboxDocumentMapping
+      (id) => id === 'home-document' || id === 'home-preview',
+      () => homeDocumentMapping
     )
     .with(CALENDAR_ROUTE_ID, () => ({
       namespace: CALENDAR_SEARCH_NAMESPACE,

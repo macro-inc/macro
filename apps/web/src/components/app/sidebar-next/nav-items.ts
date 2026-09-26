@@ -46,13 +46,13 @@ export type SidebarNextNavItem = SidebarItem & {
  */
 const SIDEBAR_NEXT_NAV_ITEMS = [
   {
-    id: 'inbox',
+    id: 'home',
     label: 'Home',
-    href: LIST_VIEW_PATHS.inbox,
+    href: LIST_VIEW_PATHS.home,
     icon: HouseIcon,
     iconActive: HouseFillIcon,
     hotkey: 'h',
-    hotkeyToken: TOKENS.sidebar.goTo.inbox,
+    hotkeyToken: TOKENS.sidebar.goTo.home,
   },
   {
     id: 'documents',

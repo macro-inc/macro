@@ -29,11 +29,11 @@ import type {
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
-  'inbox-signal',
-  'inbox-noise',
+  'home-signal',
+  'home-noise',
   // Marking a pending reminder done cancels it before it fires — same as the
   // standalone Reminders view's Scheduled tab below.
-  'inbox-reminders',
+  'home-reminders',
   'mail-important',
   'mail-all',
   'mail-noise',
@@ -112,8 +112,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   // rework how notifications are sent to not be under just the 'channel'
   // entity
   const scopeChannelNotificationsToEntity = () =>
-    splitPanel?.handle.content().id === 'inbox' ||
-    splitPanel?.handle.referredFrom() === 'inbox';
+    splitPanel?.handle.content().id === 'home' ||
+    splitPanel?.handle.referredFrom() === 'home';
 
   const { notificationSource, hotkeyGroup } = options;
   const mutation = useUndoableMutation<

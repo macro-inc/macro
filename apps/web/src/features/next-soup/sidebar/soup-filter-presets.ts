@@ -187,7 +187,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
-  inbox: {
+  home: {
     default: 'signal',
     tabs: {
       // Signal and Noise order by when the viewer was last notified about

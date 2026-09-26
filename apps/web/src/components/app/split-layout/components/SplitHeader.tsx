@@ -298,7 +298,7 @@ function SoupNavigationButtons() {
 
   const navigationReferredFrom = createMemo(() => {
     const referredFrom = context.handle.referredFrom();
-    if (referredFrom !== 'inbox' && referredFrom !== 'mail') {
+    if (referredFrom !== 'home' && referredFrom !== 'mail') {
       return;
     }
 
@@ -312,7 +312,7 @@ function SoupNavigationButtons() {
 
     const referredFrom = navigationReferredFrom();
     const isNavigableListView =
-      referredFrom === 'inbox' || referredFrom === 'mail';
+      referredFrom === 'home' || referredFrom === 'mail';
 
     return isNavigableListView && rows().length > 0;
   });
@@ -400,7 +400,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
 
   const newSplitContent = () => ({
     type: 'component' as const,
-    id: LIST_VIEW_ID.inbox,
+    id: LIST_VIEW_ID.home,
   });
 
   const duplicateContent = (): SplitContent => ({ ...panel.handle.content() });

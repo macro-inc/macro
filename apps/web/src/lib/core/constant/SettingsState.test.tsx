@@ -34,7 +34,7 @@ vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => ({
     splits: () => [
       ...(mocks.otherSplit
-        ? [{ id: 'app-split', content: { type: 'component', id: 'inbox' } }]
+        ? [{ id: 'app-split', content: { type: 'component', id: 'home' } }]
         : []),
       ...(mocks.hasSettingsSplit
         ? [
@@ -65,7 +65,7 @@ vi.mock('@components/app/split-layout/layout', () => ({
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => mocks.navigate,
   useLocation: () => ({
-    pathname: '/app/component/inbox',
+    pathname: '/app/home',
     search: '?keep=1',
     hash: '#position',
   }),
@@ -304,10 +304,9 @@ describe('settings entry points', () => {
     mocks.hasSettingsSplit = true;
     mocks.solo = true;
     state.closeSettings();
-    expect(mocks.navigate).toHaveBeenLastCalledWith(
-      '/component/inbox?keep=1#position',
-      { replace: true }
-    );
+    expect(mocks.navigate).toHaveBeenLastCalledWith('/home?keep=1#position', {
+      replace: true,
+    });
   });
 
   it('restores the app and docks the selected page without constructing a split URL', async () => {
@@ -319,10 +318,9 @@ describe('settings entry points', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/settings/connected');
     mocks.solo = true;
     await state.moveSettingsToSplit('Billing');
-    expect(mocks.navigate).toHaveBeenLastCalledWith(
-      '/component/inbox?keep=1#position',
-      { replace: true }
-    );
+    expect(mocks.navigate).toHaveBeenLastCalledWith('/home?keep=1#position', {
+      replace: true,
+    });
     expect(mocks.managerOpenWithSplit).toHaveBeenCalledWith(
       expect.objectContaining({
         entryMetadata: {
@@ -337,7 +335,7 @@ describe('settings entry points', () => {
     mocks.hasSettingsSplit = true;
     const { state } = mountSettings();
     state.restoreMobileDeepLink();
-    expect(mocks.navigate).toHaveBeenCalledWith('/inbox', { replace: true });
+    expect(mocks.navigate).toHaveBeenCalledWith('/home', { replace: true });
     mocks.otherSplit = true;
     state.restoreMobileDeepLink();
     expect(mocks.removeSplit).toHaveBeenCalledWith('settings-split');

@@ -14,8 +14,7 @@ import { companiesRoute } from '@app/features/companies/route';
 import { driveSplitRoute } from '@app/features/drive-view/route';
 import { emailSplitRoute } from '@app/features/email-view/route';
 import { gettingStartedRoute } from '@app/features/getting-started/route';
-import { homeRoute } from '@app/features/home/route';
-import { inboxSplitRoute } from '@app/features/inbox-view/route';
+import { homeSplitRoute } from '@app/features/home/route';
 import {
   callsRoute,
   foldersRoute,
@@ -37,9 +36,8 @@ export const appSplitRoutes = defineRoutes({
     agentsRoute,
     codersRoute,
     agentChatsRoute,
-    homeRoute,
+    homeSplitRoute,
     gettingStartedRoute,
-    inboxSplitRoute,
     recentRoute,
     activityRoute,
     remindersRoute,
@@ -63,6 +61,6 @@ export const appSplitRoutes = defineRoutes({
   globalSearch: ['referral_code', DIFF_SEARCH_PARAM],
   unmatchedPathHandlers: [handleLegacySplitPath],
   defaultEntry: () => ({
-    location: { route: { matches: [{ id: 'view-inbox', params: {} }] } },
+    location: { route: { matches: [{ id: 'view-home', params: {} }] } },
   }),
 });

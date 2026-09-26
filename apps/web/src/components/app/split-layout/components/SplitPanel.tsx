@@ -91,7 +91,7 @@ export function SplitPanel(props: SplitPanelProps) {
       );
       if (wentBack) return;
       props.handle.replace({
-        next: { type: 'component', id: LIST_VIEW_ID.inbox },
+        next: { type: 'component', id: LIST_VIEW_ID.home },
         referredFrom: 'hotkey',
       });
     },

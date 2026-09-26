@@ -85,7 +85,7 @@ that entity's last operation in the batch. Emitted `SoupUpdated` items are non-n
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
 
-## Home (desktop) / Notifications (mobile) — `/app/component/inbox`
+## Home (desktop) / Notifications (mobile) — `/app/home`
 
 Every form factor waits for new-app-views flag readiness before choosing the
 new view or its legacy fallback. With the flag enabled, touch devices render
@@ -1123,7 +1123,7 @@ closing a document without edits must not add an event.
 
 Requires authentication and the `enable-activity-feed` flag. Direct navigation and
 restored splits wait for flags to load; when disabled, they redirect to Home
-(`/app/component/inbox`) without loading the activity feed.
+(`/app/home`) without loading the activity feed.
 
 When checking Activity, enable GraphQL Soup as well as the activity flag. Verify
 that an initial visit resolves entity names in both the feed and Most active,
@@ -1231,11 +1231,11 @@ starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms
 scroll, including with the keyboard open. On desktop, `/app/settings/<tab>`
-opens settings fullscreen, while `/app/inbox/~/settings/<tab>` docks it beside
-Inbox. **Open fullscreen** pushes a standalone settings URL; browser Back
+opens settings fullscreen, while `/app/home/~/settings/<tab>` docks it beside
+Home. **Open fullscreen** pushes a standalone settings URL; browser Back
 restores the preceding split layout. **Move to split** restores the app layout
 and docks the selected tab, while closing a docked settings pane minimizes it.
-A direct fullscreen link returns to Inbox when there is no prior app layout.
+A direct fullscreen link returns to Home when there is no prior app layout.
 
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as

@@ -459,7 +459,7 @@ describe('required navigation', () => {
   });
 });
 
-describe.each(['inbox', 'channels', 'tasks', 'email'])(
+describe.each(['home', 'channels', 'tasks', 'email'])(
   '%s responsive sidebar',
   (app) => {
     it('restores automatic collapse but preserves an explicit desktop collapse', () => {

@@ -718,7 +718,7 @@ export function createSplitLayout(
 
   const DEFAULT_SPLIT_CONTENT = defaultSplitContent ?? {
     type: 'component',
-    id: LIST_VIEW_ID.inbox,
+    id: LIST_VIEW_ID.home,
   };
 
   function dispatchEvent(

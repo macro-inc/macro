@@ -71,7 +71,7 @@ export function MobilePageCreateButton() {
   return (
     <Show when={foregroundView() !== 'agents' && !virtualKeyboardVisible()}>
       <Show
-        when={foregroundView() === 'inbox'}
+        when={foregroundView() === 'home'}
         fallback={
           <MobileDockIsland class="shrink-0">
             <button

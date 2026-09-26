@@ -8,7 +8,7 @@ export const DOCS_BASE = 'https://docs.macro.com';
  * docs page yet, so callers should render no link for them.
  */
 export const LIST_VIEW_DOCS_URL: Partial<Record<ListView, string>> = {
-  inbox: `${DOCS_BASE}/product/inbox`,
+  home: `${DOCS_BASE}/product/inbox`,
   agents: `${DOCS_BASE}/product/agents`,
   mail: `${DOCS_BASE}/product/email`,
   documents: `${DOCS_BASE}/product/docs`,

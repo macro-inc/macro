@@ -70,7 +70,7 @@ const FOCUS_DEBOUNCE_MS = 50;
 function mountFreshLoad() {
   return createRoot((dispose) => {
     const manager = createSplitLayout(createMockOrchestrator(), [
-      { type: 'component', id: 'inbox' },
+      { type: 'component', id: 'home' },
       { type: 'md', id: 'doc-1' },
     ]);
 

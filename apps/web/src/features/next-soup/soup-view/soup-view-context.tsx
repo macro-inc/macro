@@ -284,7 +284,7 @@ const resolveTabId = (
   // `useVisibleViewTabs`): restoring the inbox onto Reminders with the flag
   // off would leave a hidden tab active, still querying reminders.
   if (
-    view === 'inbox' &&
+    view === 'home' &&
     remembered === 'reminders' &&
     !isFeatureEnabled(enableReminders)
   ) {
@@ -654,7 +654,7 @@ export const SoupViewContextProvider: FlowComponent<
     () =>
       soup.grouping.activeGroupId() === 'date' &&
       // The inbox shouldn't have any date-grouping on mobile/tablet.
-      !(activeListView() === 'inbox' && isTouchDevice())
+      !(activeListView() === 'home' && isTouchDevice())
   );
 
   const groupByField = createMemo((): GroupByField | undefined => {
@@ -783,7 +783,7 @@ export const SoupViewContextProvider: FlowComponent<
   // the root sender, anyone who replied, or anyone @-mentioned — via the
   // `channelThreadParticipantId` filter, since soup otherwise only surfaces
   // whole channels.
-  const isInboxView = () => activeListView() === 'inbox';
+  const isHomeView = () => activeListView() === 'home';
 
   const applyInboxFilter = (state: QueryState): QueryState => {
     const inboxes = inboxFilter();
@@ -798,7 +798,7 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const applyInboxThreadFilter = (state: QueryState): QueryState => {
-    if (!isInboxView()) {
+    if (!isHomeView()) {
       return {
         ...state,
         include: { ...state.include, channelThreadId: [NIL_UUID] },
@@ -819,7 +819,7 @@ export const SoupViewContextProvider: FlowComponent<
   // Unread/read/all filter for the inbox: injects the per-entity-type seen
   // filters ('all' leaves them unset). Matches the experimental inbox.
   const applyInboxReadFilter = (state: QueryState): QueryState => {
-    if (!isInboxView()) return state;
+    if (!isHomeView()) return state;
     const filter = readFilter();
     if (filter === 'all') return state;
     const seen = filter === 'read';
@@ -846,7 +846,7 @@ export const SoupViewContextProvider: FlowComponent<
   // its place.
   const entityMatchesInboxReadFilter = (entity: EntityData): boolean => {
     const filter = readFilter();
-    if (filter === 'all' || !isInboxView()) return true;
+    if (filter === 'all' || !isHomeView()) return true;
     const isUnread = unreadFilterFn(entity);
     return (
       (filter === 'unread' ? isUnread : !isUnread) ||
@@ -971,7 +971,7 @@ export const SoupViewContextProvider: FlowComponent<
   // when completely migrated
   const attachNotifications = (entity: EntityData) =>
     withEntityNotifications(entity, notificationSource, {
-      scopeChannelThreads: isInboxView(),
+      scopeChannelThreads: isHomeView(),
     });
 
   // Active tag option ids and combine mode, used to gate optimistic websocket
@@ -1138,7 +1138,7 @@ export const SoupViewContextProvider: FlowComponent<
     const scope = `${activeListView()}:${activeTab()}:${filter}`;
     const ids = prev?.scope === scope ? new Set(prev.ids) : new Set<string>();
 
-    if (filter !== 'all' && isInboxView()) {
+    if (filter !== 'all' && isHomeView()) {
       const wantUnread = filter === 'unread';
       for (const entity of items()) {
         if (unreadFilterFn(entity) === wantUnread) ids.add(entity.id);
