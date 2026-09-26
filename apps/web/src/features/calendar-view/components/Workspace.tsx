@@ -6,44 +6,53 @@ import {
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
+import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import { isMobile } from '@core/mobile/isMobile';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { Layer } from '@ui';
 import { Pager, PagerSwipeGestures } from '@ui/components/Pager';
 import {
+  createEffect,
   createSignal,
   For,
+  Match,
+  on,
   onCleanup,
   onMount,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
 import { SelectedEventDetails } from './SelectedEventDetails';
-import { SetupStatus } from './SetupStatus';
-import { useOpenEventComposer } from './use-open-event-composer';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
 function CalendarPages() {
   const calendarPager = useCalendarPager();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
-  const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
+  const viewportSize = createElementSize(viewport);
+  const breakpoints = createSizeBreakpoints(() => viewportSize.width, {
+    narrowDayHeaders: 519,
+  });
   let resizeFrame: number | undefined;
 
-  createResizeObserver(viewport, ({ width }) => {
-    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
-
-    resizeFrame = requestAnimationFrame(() => {
-      resizeFrame = undefined;
-      setUseNarrowDayHeaders(width < 520);
-      calendarPager.updateSize();
-    });
-  });
+  createEffect(
+    on(
+      () => viewportSize.width,
+      (width) => {
+        if (width === undefined) return;
+        if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+        resizeFrame = requestAnimationFrame(() => {
+          resizeFrame = undefined;
+          calendarPager.updateSize();
+        });
+      }
+    )
+  );
 
   onCleanup(() => {
     if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
@@ -70,7 +79,7 @@ function CalendarPages() {
                     <Page
                       id={pageId}
                       initialDate={calendarPager.initialDateFor(pageId)}
-                      useNarrowDayHeaders={useNarrowDayHeaders()}
+                      useNarrowDayHeaders={breakpoints.narrowDayHeaders()}
                     />
                   </Suspense>
                 </Pager.Page>
@@ -108,7 +117,6 @@ function CalendarPageContent() {
 function WorkspaceContent() {
   const panel = useSplitPanelOrThrow();
   const calendarView = useCalendarView();
-  const openEventComposer = useOpenEventComposer();
 
   // An inline preview keeps its host's name.
   onMount(() => {
@@ -125,43 +133,40 @@ function WorkspaceContent() {
   );
 
   return (
-    <Show
-      when={!panel.isInlinePreview}
-      fallback={
-        <>
-          <Header presentation="preview" />
-          {eventDetails()}
-          <main class="flex size-full min-h-0">
-            <CalendarPageContent />
-          </main>
-        </>
-      }
-    >
-      <SplitPanel.Root>
-        <SplitPanel.Body>
-          <ViewShell.Root
-            class="calendar-workspace-shell"
-            asidePreferenceKey="calendar"
-            resizable
-            aside={isMobile() ? false : { preserveDuringResize: false }}
-            main={{ preferredWidth: 640 }}
-          >
-            <Show when={!isMobile()}>
-              <ViewShell.Aside>
-                <CalendarSidebar onCreateEvent={openEventComposer} />
-              </ViewShell.Aside>
-            </Show>
-            <ViewShell.Main>
-              <Header presentation="workspace" />
-              <ViewShell.Content class="flex min-h-0 flex-1">
-                <CalendarPageContent />
-              </ViewShell.Content>
-            </ViewShell.Main>
-          </ViewShell.Root>
-          {eventDetails()}
-        </SplitPanel.Body>
-      </SplitPanel.Root>
-    </Show>
+    <Switch>
+      <Match when={panel.isInlinePreview}>
+        <Header presentation="preview" />
+        {eventDetails()}
+        <main class="flex size-full min-h-0">
+          <CalendarPageContent />
+        </main>
+      </Match>
+      <Match when={!panel.isInlinePreview}>
+        <SplitPanel.Root>
+          <SplitPanel.Body>
+            <ViewShell.Root
+              asidePreferenceKey="calendar"
+              resizable
+              aside={isMobile() ? false : { preserveDuringResize: false }}
+              main={{ preferredWidth: 640 }}
+            >
+              <Show when={!isMobile()}>
+                <ViewShell.Aside>
+                  <CalendarSidebar />
+                </ViewShell.Aside>
+              </Show>
+              <ViewShell.Main>
+                <Header presentation="workspace" />
+                <ViewShell.Content class="flex min-h-0 flex-1">
+                  <CalendarPageContent />
+                </ViewShell.Content>
+              </ViewShell.Main>
+            </ViewShell.Root>
+            {eventDetails()}
+          </SplitPanel.Body>
+        </SplitPanel.Root>
+      </Match>
+    </Switch>
   );
 }
 

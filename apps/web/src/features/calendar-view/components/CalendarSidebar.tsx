@@ -19,8 +19,10 @@ import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import CloseIcon from '@phosphor/x.svg';
-import { Calendar as MiniCalendar, ToggleSwitch } from '@ui';
+import { Calendar as MiniCalendar, cn, ToggleSwitch } from '@ui';
 import { format } from 'date-fns';
 import {
   createEffect,
@@ -33,6 +35,11 @@ import {
   Switch,
 } from 'solid-js';
 import { CalendarCallSidebar } from '../calendar-call-sidebar';
+import {
+  CalendarCreateCallItem,
+  CalendarCreateEventItem,
+  CalendarCreateReminderItem,
+} from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 
 function CalendarMiniCalendar() {
@@ -47,9 +54,8 @@ function CalendarMiniCalendar() {
   );
   const highlightedRange = createMemo(() => {
     const dateInfo = calendarPager.activeDateInfo();
-    return dateInfo?.view.type === 'timeGridWeek'
-      ? { end: dateInfo.end, start: dateInfo.start }
-      : undefined;
+    if (dateInfo?.view.type !== 'timeGridWeek') return undefined;
+    return { end: dateInfo.end, start: dateInfo.start };
   });
 
   const navigateToDate = (date: Date) => {
@@ -58,15 +64,11 @@ function CalendarMiniCalendar() {
     if (shell.aside.isOverlay()) shell.aside.collapse();
   };
   const navigateMonth = (month: Date) => {
-    const focused = focusedDay();
-    navigateToDate(
+    const sameMonth =
       focused.getFullYear() === month.getFullYear() &&
-        focused.getMonth() === month.getMonth()
-        ? focused
-        : month
-    );
+      focused.getMonth() === month.getMonth();
+    navigateToDate(sameMonth ? focused : month);
   };
-
   createEffect(on(currentDate, setFocusedDay));
 
   return (
@@ -96,7 +98,7 @@ function UpcomingEventsSection() {
           <span class="min-w-0 truncate">Upcoming events</span>
           <CollapsibleSection.Indicator />
         </CollapsibleSection.Trigger>
-        <CopyAvailabilityButton iconOnly />
+        <CopyAvailabilityButton class="size-(--sidebar-control-size) rounded-lg" />
       </CollapsibleSection.Header>
       <CollapsibleSection.Content>
         <CalendarCallSidebar
@@ -186,11 +188,10 @@ function TeamOooUpcomingList() {
             {(window) => (
               <button
                 type="button"
-                class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
-                classList={{
-                  'bg-active': isActive(window),
-                  'hover:bg-hover': !isActive(window),
-                }}
+                class={cn(
+                  'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs',
+                  isActive(window) ? 'bg-active' : 'hover:bg-hover'
+                )}
                 aria-current={isActive(window) ? 'true' : undefined}
                 onClick={(event) => {
                   calendarPager.gotoDate(window.start);
@@ -284,8 +285,11 @@ function CalendarSidebarOverlayClose() {
   );
 }
 
-export function CalendarSidebar(props: { onCreateEvent: () => void }) {
+export function CalendarSidebar() {
   const shell = useViewShell();
+  const closeOverlay = () => {
+    if (shell.aside.isOverlay()) shell.aside.collapse();
+  };
 
   return (
     <ViewSidebar.Root aria-label="Calendar navigation">
@@ -298,12 +302,23 @@ export function CalendarSidebar(props: { onCreateEvent: () => void }) {
       </ViewSidebar.Header>
       <ViewSidebar.Primary>
         <CalendarCreateMenu
-          sidebar
-          onCreateEvent={props.onCreateEvent}
-          onSelect={() => {
-            if (shell.aside.isOverlay()) shell.aside.collapse();
-          }}
-        />
+          size="md"
+          class="h-(--sidebar-row-height) w-full min-w-0 justify-start gap-(--sidebar-label-gap) px-(--sidebar-item-inset) text-left touch:h-11"
+          contentClass="w-[var(--kb-popper-anchor-width)] min-w-40"
+          trigger={
+            <>
+              <ViewSidebar.Icon>
+                <PlusIcon class="size-4" />
+              </ViewSidebar.Icon>
+              <span class="min-w-0 flex-1 truncate">New</span>
+              <CaretDownIcon class="size-3.5 shrink-0" />
+            </>
+          }
+        >
+          <CalendarCreateEventItem onSelect={closeOverlay} />
+          <CalendarCreateCallItem onSelect={closeOverlay} />
+          <CalendarCreateReminderItem onSelect={closeOverlay} />
+        </CalendarCreateMenu>
       </ViewSidebar.Primary>
       <ViewSidebar.Content class="pt-2">
         <CalendarMiniCalendar />
