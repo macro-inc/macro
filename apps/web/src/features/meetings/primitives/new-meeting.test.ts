@@ -67,7 +67,7 @@ function setup(overrides: Partial<NewMeetingCapabilities> = {}) {
       join,
       connect: async () => {
         await connect();
-        await draft.ring();
+        void draft.ring();
       },
       disconnect: async () => {
         setActiveCallId(null);
@@ -104,6 +104,24 @@ describe('new meeting setup', () => {
       bob.id,
     ]);
     expect(session.joinedCallId()).toBe(credentials.callId);
+  });
+
+  it('enters the connected call while invitations are still pending', async () => {
+    let finish!: () => void;
+    const invite = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const { draft, session } = setup({ invite });
+    draft.select(new Set([alice.id]));
+    await session.join(undefined, preferences);
+    expect(session.joining()).toBe(false);
+    expect(session.joinedCallId()).toBe(credentials.callId);
+    expect(draft.inviting()).toBe(true);
+    finish();
+    await vi.waitFor(() => expect(draft.inviting()).toBe(false));
   });
 
   it('starts without invitees and reuses its meeting without ringing again on rejoin', async () => {

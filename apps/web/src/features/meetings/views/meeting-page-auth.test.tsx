@@ -12,6 +12,7 @@ it('waits for confirmed membership before rendering setup or requesting devices'
   const request = vi.fn(async () => {
     throw new DOMException('Denied', 'NotAllowedError');
   });
+  const warmup = vi.fn(async () => {});
   const join = vi.fn(async () => {
     throw new Error('Must not join automatically');
   });
@@ -30,6 +31,7 @@ it('waits for confirmed membership before rendering setup or requesting devices'
       mediaAccess={{ request }}
       session={{
         lifecycle: createMeetingSessionLifecycle(),
+        warmup,
         shareToken: () => 'token',
         isInCall: () => false,
         activeCallId: () => null,
@@ -43,11 +45,14 @@ it('waits for confirmed membership before rendering setup or requesting devices'
   ));
   expect(screen.queryByRole('textbox', { name: 'Your name' })).toBeNull();
   expect(request).not.toHaveBeenCalled();
+  expect(warmup).not.toHaveBeenCalled();
   setAuthenticated(false);
   expect(request).not.toHaveBeenCalled();
+  expect(warmup).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
   setAuthenticated(true);
   await waitFor(() => expect(request).toHaveBeenCalled());
   expect(screen.getByRole('button', { name: 'Join call' })).toBeTruthy();
   expect(join).not.toHaveBeenCalled();
+  expect(warmup).toHaveBeenCalledOnce();
 });

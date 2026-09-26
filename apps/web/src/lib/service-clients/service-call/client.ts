@@ -22,6 +22,11 @@ export type CallTokenResponse = Required<ApiCallTokenResponse>;
 export type Meeting = Required<ApiMeeting>;
 export type ActiveMeeting = Required<ApiActiveMeeting>;
 
+/** Display-only waiting-room data; no account identities or call contents. */
+export type MeetingParticipants = {
+  participants: { displayName: string; avatarUrl: string | null }[];
+};
+
 const host: string = SERVER_HOSTS['document-storage-service'];
 
 export const callServiceClient = {
@@ -109,6 +114,15 @@ export const callServiceClient = {
       `${host}/call/join/${encodeURIComponent(shareToken)}`,
       { credentials: 'omit' }
     );
+  },
+
+  getMeetingParticipants(shareToken: string, authenticated: boolean) {
+    const path = `/join/${encodeURIComponent(shareToken)}/participants`;
+    return authenticated
+      ? fetchWithToken<MeetingParticipants>(`${host}/call/meetings${path}`)
+      : safeFetch<MeetingParticipants>(`${host}/call${path}`, {
+          credentials: 'omit',
+        });
   },
 
   joinMeeting(shareToken: string) {

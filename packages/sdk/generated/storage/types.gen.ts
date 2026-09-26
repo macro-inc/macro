@@ -7032,6 +7032,30 @@ export type MeetingInvitePermissions = {
 };
 
 /**
+ * Minimal waiting-room display data, without account identities or call content.
+ */
+export type MeetingParticipant = {
+    /**
+     * Profile image, when available for a Macro member.
+     */
+    avatarUrl?: string | null;
+    /**
+     * Name displayed in the waiting room.
+     */
+    displayName: string;
+};
+
+/**
+ * People currently connected to a meeting's room.
+ */
+export type MeetingParticipants = {
+    /**
+     * Human attendees only; transcription agents are excluded.
+     */
+    participants: Array<MeetingParticipant>;
+};
+
+/**
  * A bearer capability that grants access only to a meeting's RTC room.
  */
 export type MeetingToken = string;
@@ -11831,6 +11855,28 @@ export type MeetingLeaveResponses = {
 
 export type MeetingLeaveResponse = MeetingLeaveResponses[keyof MeetingLeaveResponses];
 
+export type MeetingGuestParticipantsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}/participants';
+};
+
+export type MeetingGuestParticipantsErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingGuestParticipantsError = MeetingGuestParticipantsErrors[keyof MeetingGuestParticipantsErrors];
+
+export type MeetingGuestParticipantsResponses = {
+    200: MeetingParticipants;
+};
+
+export type MeetingGuestParticipantsResponse = MeetingGuestParticipantsResponses[keyof MeetingGuestParticipantsResponses];
+
 export type MeetingListData = {
     body?: never;
     path?: never;
@@ -11985,6 +12031,27 @@ export type MeetingJoinResponses = {
 };
 
 export type MeetingJoinResponse = MeetingJoinResponses[keyof MeetingJoinResponses];
+
+export type MeetingParticipantsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/join/{token}/participants';
+};
+
+export type MeetingParticipantsErrors = {
+    404: ErrorResponse;
+};
+
+export type MeetingParticipantsError = MeetingParticipantsErrors[keyof MeetingParticipantsErrors];
+
+export type MeetingParticipantsResponses = {
+    200: MeetingParticipants;
+};
+
+export type MeetingParticipantsResponse = MeetingParticipantsResponses[keyof MeetingParticipantsResponses];
 
 export type MeetingCancelData = {
     body?: never;

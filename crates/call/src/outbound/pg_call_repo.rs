@@ -878,6 +878,37 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn attach_meeting_recording(
+        &self,
+        call_id: &Uuid,
+        egress_id: &str,
+    ) -> Result<bool, Self::Err> {
+        // This UPDATE takes the same row lock as archival. If it wins, archival
+        // copies the egress ID. If archival wins, the second statement sees the
+        // committed archived record under READ COMMITTED.
+        let active = sqlx::query!(
+            r#"
+            UPDATE calls SET egress_id = $2 WHERE id = $1
+            "#,
+            call_id,
+            egress_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        if active.rows_affected() > 0 {
+            return Ok(true);
+        }
+        sqlx::query!(
+            "UPDATE call_records SET egress_id = $2 WHERE id = $1",
+            call_id,
+            egress_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(false)
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_team_share_facts(&self, call_id: &Uuid) -> Result<TeamShareFacts, CallError> {
         team_share::get_team_share_facts(&self.pool, call_id).await
     }

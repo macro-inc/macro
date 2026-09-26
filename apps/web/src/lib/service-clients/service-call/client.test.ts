@@ -81,3 +81,19 @@ describe('meeting transport authorization', () => {
     expect(requests.authenticated).not.toHaveBeenCalled();
   });
 });
+
+it('previews members through the authenticated endpoint without joining', async () => {
+  await callServiceClient.getMeetingParticipants('secret', true);
+  expect(requests.authenticated).toHaveBeenCalledWith(
+    'https://gateway.example/dss/call/meetings/join/secret/participants'
+  );
+  expect(requests.public).not.toHaveBeenCalled();
+});
+it('previews guests without account credentials or a join request', async () => {
+  await callServiceClient.getMeetingParticipants('secret', false);
+  expect(requests.public).toHaveBeenCalledWith(
+    'https://gateway.example/dss/call/join/secret/participants',
+    { credentials: 'omit' }
+  );
+  expect(requests.authenticated).not.toHaveBeenCalled();
+});

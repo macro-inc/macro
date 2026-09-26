@@ -24,7 +24,8 @@ use crate::domain::models::{
 
 use super::meetings::{
     ActiveMeeting, CreateMeetingRequest, GuestId, GuestJoinRequest, InviteMeetingUsersRequest,
-    Meeting, MeetingInvitePermissions, MeetingToken, UpdateMeetingRequest,
+    Meeting, MeetingInvitePermissions, MeetingParticipants, MeetingRtcParticipant, MeetingToken,
+    UpdateMeetingRequest,
 };
 
 use super::models::{
@@ -245,6 +246,15 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
         egress_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Attach a recording started asynchronously. Persists on the active call,
+    /// or its archived record if the call ended during startup. Returns whether
+    /// it was attached to an active call; otherwise the caller must stop egress.
+    fn attach_meeting_recording(
+        &self,
+        call_id: &Uuid,
+        egress_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Load the canonical team-share facts (persisted creator, the creator's
     /// team, current explicit grant, revision) the owner policy authorizes
@@ -631,6 +641,12 @@ pub trait CallRtcClient: Send + Sync + 'static {
     /// Delete an RTC room.
     fn delete_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
+    /// Read connected identities and names without joining the room.
+    fn list_meeting_participants(
+        &self,
+        room_name: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<MeetingRtcParticipant>>>> + Send;
+
     /// Generate an access token for a participant to join a room.
     fn generate_token<'a>(
         &self,
@@ -766,6 +782,13 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         token: MeetingToken,
     ) -> impl Future<Output = Result<Meeting, CallError>> + Send;
+    /// Preview connected people using the invitation; channel links require sign-in.
+    fn get_meeting_participants<'a>(
+        &self,
+        token: MeetingToken,
+        actor: Option<MacroUserIdStr<'a>>,
+    ) -> impl Future<Output = Result<MeetingParticipants, CallError>> + Send;
+
     /// Join using an authenticated Macro identity.
     fn join_meeting<'a>(
         &self,

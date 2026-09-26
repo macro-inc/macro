@@ -306,3 +306,31 @@ impl UpdateMeetingRequest {
         })
     }
 }
+
+/// Connected RTC participant facts; never expose identities in public previews.
+#[derive(Debug, Clone)]
+pub struct MeetingRtcParticipant {
+    /// RTC identity used to distinguish members, guests, and service agents.
+    pub identity: String,
+    /// Room display name, used for guests.
+    pub name: String,
+}
+
+/// Minimal waiting-room display data, without account identities or call content.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct MeetingParticipant {
+    /// Name displayed in the waiting room.
+    pub display_name: String,
+    /// Profile image, when available for a Macro member.
+    pub avatar_url: Option<String>,
+}
+
+/// People currently connected to a meeting's room.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct MeetingParticipants {
+    /// Human attendees only; transcription agents are excluded.
+    pub participants: Vec<MeetingParticipant>,
+}

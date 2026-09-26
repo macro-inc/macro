@@ -18,6 +18,29 @@ export function useMeetingQuery(shareToken: Accessor<string>) {
   }));
 }
 
+/** Poll only while setup is visible, with separate caches for guests and members. */
+export function useMeetingParticipantsQuery(
+  shareToken: Accessor<string>,
+  viewerId: Accessor<string | undefined>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => ({
+    queryKey: callKeys.meetingParticipants(shareToken(), viewerId()).queryKey,
+    queryFn: () =>
+      throwOnErr(() =>
+        callServiceClient.getMeetingParticipants(
+          shareToken(),
+          Boolean(viewerId())
+        )
+      ),
+    enabled: Boolean(shareToken()) && enabled(),
+    refetchInterval: 15_000,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  }));
+}
+
 export function useInviteMeetingUsersMutation() {
   return useMutation(() => ({
     gcTime: 0,
