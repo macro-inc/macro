@@ -32,6 +32,7 @@ describe('agent session entity mapping', () => {
         pullRequestId: 'linked-pr',
         turnState: 'running',
         threadId: 'thread',
+        isArchived: false,
         status: 'session/end',
         createdAt: '2026-01-01',
         updatedAt: '2026-01-02',

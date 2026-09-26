@@ -1030,6 +1030,11 @@ where
         &self.0.name
     }
 
+    /// Whether the session is archived and read-only.
+    async fn is_archived(&self) -> bool {
+        self.0.is_archived
+    }
+
     /// The principal identifier of the owner.
     async fn owner_id(&self) -> String {
         self.0.owner_id.principal_id()

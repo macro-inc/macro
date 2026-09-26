@@ -176,6 +176,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
         name: &str,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Archive or unarchive a session after owner access has been verified.
+    fn set_archived(
+        &self,
+        access: &EntityAccessReceipt<OwnerAccessLevel>,
+        is_archived: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// A bounded batch of sessions owned by this user, including inactive sessions.
     /// Used by account cleanup, not access-based discovery.
     fn sessions_for_user_cleanup(
@@ -686,15 +693,10 @@ where
         name: &str,
     ) -> Result<()> {
         let name = validate_agent_session_name(name)?;
-        if access.entity().entity_type != EntityType::AgentSession {
-            return Err(AgentSessionError::Unknown(anyhow::anyhow!(
-                "agent session rename received access for another entity type"
-            )));
+        let id = owner_access_session_id(access, "rename")?;
+        if self.repo.get(id).await?.is_archived {
+            return Err(AgentSessionError::Archived(id));
         }
-        let id =
-            AgentSessionId::new_from_uuid(Uuid::parse_str(&access.entity().entity_id).map_err(
-                |error| anyhow::anyhow!("invalid agent session access receipt: {error}"),
-            )?);
         self.repo.set_name(id, name).await?;
         self.realtime
             .publish_renamed(AgentSessionRenamed {
@@ -707,6 +709,23 @@ where
             })
             .ok();
         publish_renamed_lifecycle(&self.repo, &self.lifecycle_publisher, id).await;
+        Ok(())
+    }
+
+    async fn set_archived(
+        &self,
+        access: &EntityAccessReceipt<OwnerAccessLevel>,
+        is_archived: bool,
+    ) -> Result<()> {
+        let id = owner_access_session_id(access, "archive")?;
+        self.repo.set_archived(id, is_archived).await?;
+        self.realtime
+            .publish_updated(id)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, %id, "failed to publish agent session archive update");
+            })
+            .ok();
         Ok(())
     }
 
@@ -915,6 +934,9 @@ where
         action: AgentAction,
         action_id: AgentActionId,
     ) -> Result<()> {
+        if self.repo.get(id).await?.is_archived {
+            return Err(AgentSessionError::Archived(id));
+        }
         let initial_prompt = initial_prompt_for_rename(&self.folds, id, &action).await;
 
         self.deliver_action(id, user_id, action, action_id).await?;
@@ -1165,6 +1187,21 @@ fn validate_agent_session_name(raw: &str) -> Result<&str> {
         ));
     }
     Ok(name)
+}
+
+fn owner_access_session_id(
+    access: &EntityAccessReceipt<OwnerAccessLevel>,
+    operation: &str,
+) -> Result<AgentSessionId> {
+    if access.entity().entity_type != EntityType::AgentSession {
+        return Err(AgentSessionError::Unknown(anyhow::anyhow!(
+            "agent session {operation} received access for another entity type"
+        )));
+    }
+    Ok(AgentSessionId::new_from_uuid(
+        Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| anyhow::anyhow!("invalid agent session access receipt: {error}"))?,
+    ))
 }
 
 /// How long a streamed frame may sit buffered before it must be written and
@@ -1621,6 +1658,10 @@ where
 
     async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
         self.repo.set_name(id, name).await
+    }
+
+    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
+        self.repo.set_archived(id, is_archived).await
     }
 
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {

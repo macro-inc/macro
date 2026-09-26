@@ -106,6 +106,7 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
         pull_request_url: None,
         id,
         name: agent_session::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
+        is_archived: false,
         owner_id: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@example.com").expect("valid macro user id"),
         ),

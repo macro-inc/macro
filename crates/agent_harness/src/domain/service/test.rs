@@ -1922,6 +1922,38 @@ async fn answering_a_disconnected_session_does_not_wake_its_sandbox() {
 }
 
 #[tokio::test]
+async fn an_archived_session_rejects_new_controls() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+    repo.set_archived(id, true).await.expect("archive session");
+
+    let error = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("do not send"),
+                action_id: None,
+                actor: Some(staff_sender()),
+            },
+        )
+        .await
+        .expect_err("archived sessions are read-only");
+
+    assert!(matches!(error, AgentSessionError::Archived(archived) if archived == id));
+    assert_eq!(containers.resumed(), 0);
+
+    let resize_error = service
+        .set_sandbox_size(id, SandboxSize::Large)
+        .await
+        .expect_err("archived sessions cannot be resized");
+    assert!(matches!(
+        resize_error,
+        AgentSessionError::Archived(archived) if archived == id
+    ));
+    assert!(containers.resizes().is_empty());
+}
+
+#[tokio::test]
 async fn a_staff_control_event_can_drive_a_sandboxed_coder_session() {
     let ((service, _repo, containers, _announcer, _runtimes), mut turns) =
         harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
@@ -2115,6 +2147,40 @@ async fn a_resume_restores_the_persisted_queue() {
     assert_eq!(queued.len(), 1);
     assert_eq!(queued[0].action, AgentAction::prompt("wake up"));
     assert_ne!(queued[0].action_id, waiting_id);
+}
+
+#[tokio::test]
+async fn archiving_drops_prompts_queued_behind_a_running_turn() {
+    let ((service, repo, containers, _announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+
+    service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("do not dispatch"),
+                action_id: None,
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("the prompt queues before the archive");
+    repo.set_archived(id, true).await.expect("archive session");
+
+    agent.completes_prompt().await;
+    turns.settled(id).await;
+
+    assert_eq!(prompts(&agent).len(), 1);
+    assert!(
+        service
+            .queued_controls(id)
+            .await
+            .expect("queue lists")
+            .is_empty()
+    );
 }
 
 #[tokio::test]

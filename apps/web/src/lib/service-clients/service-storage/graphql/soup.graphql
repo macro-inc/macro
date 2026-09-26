@@ -98,6 +98,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	...SoupEntityIdentityFields
 	... on GraphqlSoupAgentSession {
 		sessionName: name
+		isArchived
 		ownerId
 		botId
 		harness

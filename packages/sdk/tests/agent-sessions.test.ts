@@ -16,6 +16,7 @@ const session: AgentSessionResponse = {
   model: 'claude-sonnet',
   modifiedAt: '2026-08-24T12:00:00Z',
   name: 'Agent Session',
+  isArchived: false,
   ownerId: 'macro|owner@example.com',
   sandboxSize: 'default',
   status: { kind: 'no_messages' },
@@ -116,6 +117,30 @@ describe('AgentSession', () => {
     );
     expect(request?.headers.get('authorization')).toBe('Bearer user-token');
     await expect(request?.json()).resolves.toEqual({ name: 'Fix Flaky Tests' });
+  });
+
+  test('archives and unarchives a session through the agent-harness service', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      requests.push(input instanceof Request ? input : new Request(input));
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+    const agentSession = macro.agentSessions.byId(sessionId);
+
+    await agentSession.archive();
+    await agentSession.unarchive();
+
+    expect(requests.map((request) => request.method)).toEqual(['PUT', 'PUT']);
+    expect(requests.map((request) => request.url)).toEqual([
+      `https://agent.example.test/agent-sessions/${sessionId}/archived`,
+      `https://agent.example.test/agent-sessions/${sessionId}/archived`,
+    ]);
+    await expect(requests[0]?.json()).resolves.toEqual({ isArchived: true });
+    await expect(requests[1]?.json()).resolves.toEqual({ isArchived: false });
   });
 
   test('resizes a session sandbox through the agent-harness service', async () => {

@@ -350,6 +350,10 @@ export type AgentSessionResponse = {
      */
     instructions?: string | null;
     /**
+     * Whether the session is archived and read-only.
+     */
+    isArchived: boolean;
+    /**
      * Model slug.
      */
     model: string;
@@ -1085,6 +1089,16 @@ export type SessionStatusDto = {
     kind: 'disconnected';
 };
 
+/**
+ * Request body for archiving or unarchiving an agent session.
+ */
+export type SetAgentSessionArchivedRequest = {
+    /**
+     * The requested archive state.
+     */
+    isArchived: boolean;
+};
+
 export type SharePermissionV2 = {
     /**
      * The channel share permissions for the item
@@ -1423,6 +1437,32 @@ export type GetAgentSessionResponses = {
 
 export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
 
+export type SetAgentSessionArchivedData = {
+    body: SetAgentSessionArchivedRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/archived';
+};
+
+export type SetAgentSessionArchivedErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type SetAgentSessionArchivedError = SetAgentSessionArchivedErrors[keyof SetAgentSessionArchivedErrors];
+
+export type SetAgentSessionArchivedResponses = {
+    204: void;
+};
+
+export type SetAgentSessionArchivedResponse = SetAgentSessionArchivedResponses[keyof SetAgentSessionArchivedResponses];
+
 export type GetAgentSessionChangesData = {
     body?: never;
     path: {
@@ -1574,6 +1614,10 @@ export type RenameAgentSessionErrors = {
     400: string;
     401: string;
     403: string;
+    /**
+     * The session is archived
+     */
+    409: string;
     500: string;
 };
 

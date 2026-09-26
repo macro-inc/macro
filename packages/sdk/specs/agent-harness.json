@@ -478,6 +478,70 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/archived": {
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Archive or unarchive an agent session.",
+        "operationId": "set_agent_session_archived",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAgentSessionArchivedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/changes": {
       "get": {
         "tags": ["agent-sessions"],
@@ -868,6 +932,16 @@
           },
           "403": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The session is archived",
             "content": {
               "text/plain": {
                 "schema": {
@@ -1917,6 +1991,7 @@
         "required": [
           "id",
           "name",
+          "isArchived",
           "ownerId",
           "canEdit",
           "botId",
@@ -1970,6 +2045,10 @@
           "instructions": {
             "type": ["string", "null"],
             "description": "Instructions the session's runtime works under, when any were stated\nat creation. Absent otherwise, so existing payloads are unchanged."
+          },
+          "isArchived": {
+            "type": "boolean",
+            "description": "Whether the session is archived and read-only."
           },
           "model": {
             "type": "string",
@@ -2855,6 +2934,17 @@
           }
         ],
         "description": "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
+      },
+      "SetAgentSessionArchivedRequest": {
+        "type": "object",
+        "description": "Request body for archiving or unarchiving an agent session.",
+        "required": ["isArchived"],
+        "properties": {
+          "isArchived": {
+            "type": "boolean",
+            "description": "The requested archive state."
+          }
+        }
       },
       "SharePermissionV2": {
         "type": "object",

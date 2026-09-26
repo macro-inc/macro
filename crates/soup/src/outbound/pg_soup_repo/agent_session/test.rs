@@ -25,6 +25,7 @@ fn persisted_row_metadata_survives_property_enrichment() {
         pull_request_url: Some("https://github.com/macro/macro/pull/6712".to_owned()),
         turn_state: Some("running".to_owned()),
         thread_id: None,
+        is_archived: false,
         status: "event".to_owned(),
         status_event_name: Some("acp_ready".to_owned()),
         created_at,

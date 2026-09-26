@@ -180,6 +180,7 @@ export type ChatEntity = EntityBase & {
 
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
+  isArchived?: boolean;
   botId: string;
   harness?: string;
   repoUrl?: string | null;

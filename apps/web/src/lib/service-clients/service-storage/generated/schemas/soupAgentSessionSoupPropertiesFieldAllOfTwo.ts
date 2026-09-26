@@ -23,6 +23,8 @@ export type SoupAgentSessionSoupPropertiesFieldAllOfTwo = {
   harness: string;
   /** The agent session uuid */
   id: string;
+  /** Whether the session is archived and read-only. */
+  isArchived: boolean;
   /** The user-facing name of the session */
   name: string;
   /** Who the session belongs to */
