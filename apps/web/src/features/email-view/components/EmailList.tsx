@@ -1,5 +1,6 @@
 import '@entity/composed/ListEntity.css';
 import { type ListActivation, useListInteractions } from '@app/components/list';
+import { CommandState } from '@app/features/command/state';
 import {
   resolveEntityActionViewContext,
   toEntityActionListState,
@@ -58,6 +59,7 @@ import type { EmailDataSourceItem } from '../queries/use-email-query';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
+import { EmailRowActions, EmailStarAction } from './EmailRowActions';
 
 type EmailActionRow = {
   entity: WithNotification<EntityData>;
@@ -129,7 +131,7 @@ export function EmailList(props: EmailListProps) {
 
   registerListActivationHandler(onActivate);
 
-  const { buildActionGroups } = createSoupEntityActions();
+  const { buildActionGroups, isFavorited } = createSoupEntityActions();
   const entityActionViewContext = () =>
     resolveEntityActionViewContext({
       activeListView: panel.handle.content().id,
@@ -284,6 +286,54 @@ export function EmailList(props: EmailListProps) {
   function focusActionRow(row: EmailActionRow) {
     list.focus.set(row.rowId, { reason: 'pointer', force: true });
     list.selection.setAnchor(row.rowId);
+  }
+
+  const [isRowActionPending, setRowActionPending] = createSignal(false);
+
+  async function runRowAction(
+    row: EmailActionRow,
+    actionId: 'favorite' | 'mark-done' | 'mark-not-done'
+  ) {
+    if (isRowActionPending()) return;
+    const action = actionGroupsFor(row)
+      .flatMap((group) => group.items)
+      .find((item) => item.id === actionId);
+    if (!action || action.disabled) return;
+
+    focusActionRow(row);
+    setRowActionPending(true);
+    try {
+      await action.onClick();
+    } catch {
+      // Entity actions own their rollback and failure notification.
+    } finally {
+      setRowActionPending(false);
+      grid()?.focus();
+    }
+  }
+
+  function RowActions(props: { row: EmailActionRow }) {
+    const archived = () =>
+      props.row.entity.type === 'email' && props.row.entity.done;
+
+    return (
+      <EmailRowActions
+        archived={archived()}
+        canArchive={entityActionViewContext().supportsMarkDone}
+        pending={isRowActionPending()}
+        onFocus={() => focusActionRow(props.row)}
+        onArchive={() =>
+          void runRowAction(
+            props.row,
+            archived() ? 'mark-not-done' : 'mark-done'
+          )
+        }
+        onCommands={() => {
+          focusActionRow(props.row);
+          CommandState.openForEntityAction([props.row.entity]);
+        }}
+      />
+    );
   }
 
   let restoredScroll = false;
@@ -512,6 +562,41 @@ export function EmailList(props: EmailListProps) {
                                   <div role="gridcell">
                                     <ListEntity
                                       entity={entityRow().entity}
+                                      leadingAction={
+                                        <Show when={!isTouchDevice()}>
+                                          <EmailStarAction
+                                            starred={isFavorited(
+                                              entityRow().entity
+                                            )}
+                                            pending={isRowActionPending()}
+                                            onFocus={() =>
+                                              focusActionRow({
+                                                entity: entityRow().entity,
+                                                rowId: entityRow().id,
+                                              })
+                                            }
+                                            onStar={() =>
+                                              void runRowAction(
+                                                {
+                                                  entity: entityRow().entity,
+                                                  rowId: entityRow().id,
+                                                },
+                                                'favorite'
+                                              )
+                                            }
+                                          />
+                                        </Show>
+                                      }
+                                      actions={
+                                        <Show when={!isTouchDevice()}>
+                                          <RowActions
+                                            row={{
+                                              entity: entityRow().entity,
+                                              rowId: entityRow().id,
+                                            }}
+                                          />
+                                        </Show>
+                                      }
                                       checked={list.selection.isSelected(
                                         entityRow().id
                                       )}

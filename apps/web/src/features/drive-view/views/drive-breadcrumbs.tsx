@@ -2,7 +2,10 @@ import { ViewBreadcrumbs } from '@app/components/view-shell';
 import type { ParentProps } from 'solid-js';
 import { DriveLocationBreadcrumbItems } from '../components/DriveBreadcrumbs';
 import { useDriveView } from '../context/drive-context';
-import type { DriveLocationBreadcrumb } from '../core/breadcrumbs';
+import {
+  type DriveLocationBreadcrumb,
+  driveCallBreadcrumbValue,
+} from '../core/breadcrumbs';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
 
 export function DriveBreadcrumbs(
@@ -12,9 +15,15 @@ export function DriveBreadcrumbs(
 
   const navigation = useDriveDetailNavigation();
 
+  const activeValue = () => {
+    const callId = navigation.activeCallId();
+    return callId
+      ? driveCallBreadcrumbValue(callId)
+      : (navigation.active()?.value ?? props.entries.at(-1)!.value);
+  };
   return (
     <ViewBreadcrumbs.Root
-      value={navigation.active()?.value ?? props.entries.at(-1)!.value}
+      value={activeValue()}
       onChange={(value) => {
         const breadcrumb = props.entries.find((entry) => entry.value === value);
 

@@ -14,7 +14,6 @@ import { buildMentionMarkdownString } from '@macro-inc/lexical-core';
 import type { Accessor, JSX } from 'solid-js';
 import { Show } from 'solid-js';
 import { EmailTaskButton } from './component/EmailTaskButton';
-import { ModalsProvider } from './component/ModalsProvider';
 import { EmailSidePanelSections } from './component/sidepanel/EmailSidePanelSections';
 
 export type EmailThreadHostViewContext = {
@@ -28,9 +27,9 @@ export type EmailThreadHostViewProps = {
   threadTransport: EmailThreadProps['threadTransport'];
   host: EmailThreadHost;
   topBar?: (context: EmailThreadHostViewContext) => JSX.Element;
+  /** Host chrome that stays mounted for both drafts and message threads. */
+  chrome?: (context: EmailThreadHostViewContext) => JSX.Element;
   sidePanelHeaderToggle?: boolean;
-  shareOpen?: boolean;
-  onShareOpenChange?: (open: boolean) => void;
 };
 
 /**
@@ -68,12 +67,8 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       header={props.topBar?.({ createTask })}
       actions={<ThreadActions title={props.title} onCreateTask={createTask} />}
       frame={(content) => (
-        <ModalsProvider
-          threadId={props.threadId()}
-          subject={props.title}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
-        >
+        <>
+          {props.chrome?.({ createTask })}
           <SidePanel.Layout
             defaultOpen={false}
             headerToggle={props.sidePanelHeaderToggle}
@@ -84,7 +79,7 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
               title={props.title}
             />
           </SidePanel.Layout>
-        </ModalsProvider>
+        </>
       )}
     />
   );

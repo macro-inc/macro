@@ -41,6 +41,8 @@ export function NewChatPage(props: {
   registerFocus?: (focus: () => void) => void;
   roster: RosterAgent[];
   rosterLoading: boolean;
+  /** Agents are listed but whether they can start is still unknown. */
+  availabilityLoading?: boolean;
   onStart: (start: StartConversation) => void;
   /** Opens the roster page on the given kind's tab. */
   onOpenRoster: (kind: AgentKind) => void;
@@ -61,15 +63,17 @@ export function NewChatPage(props: {
   const setDraft = (text: string) =>
     props.onDraftChange ? props.onDraftChange(text) : setLocalDraft(text);
   const [branchOverride, setBranchOverride] = createSignal<string>();
+  const recentAgentId = () => {
+    const ids = recentAgents.ids();
+    // Falling back to Macro before availability is known would open the
+    // compact composer, then swap to the last agent's layout once it settles.
+    if (props.rosterLoading || props.availabilityLoading) return ids[0];
+    return ids.find((id) =>
+      options().some((agent) => agent.id === id && !agent.unavailableReason)
+    );
+  };
   const selected = createMemo(() => {
-    const wanted =
-      agentId() ??
-      recentAgents
-        .ids()
-        .find((id) =>
-          options().some((agent) => agent.id === id && !agent.unavailableReason)
-        ) ??
-      MACRO_PERSONA_ID;
+    const wanted = agentId() ?? recentAgentId() ?? MACRO_PERSONA_ID;
     return options().find((agent) => agent.id === wanted) ?? options()[0];
   });
   const macro = () => options().find((agent) => agent.id === MACRO_PERSONA_ID);

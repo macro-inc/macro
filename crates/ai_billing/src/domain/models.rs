@@ -1,5 +1,6 @@
 //! Plans, the margin math, billing periods, and the API-facing snapshot.
 
+use ai_usage::AiFeature;
 use chrono::{DateTime, Datelike, Months, TimeZone, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -14,6 +15,15 @@ use utoipa::ToSchema;
 pub const TARGET_GROSS_MARGIN_BPS: i64 = 6_000;
 
 const BPS_PER_UNIT: i64 = 10_000;
+
+/// Features whose provider costs are recorded but never consume allowances,
+/// prepaid credits, or overage. Dictation is the Whispr transcription feature.
+pub const NON_BILLABLE_AI_FEATURES: [AiFeature; 4] = [
+    AiFeature::Memory,
+    AiFeature::AiProjection,
+    AiFeature::CallSummary,
+    AiFeature::Dictation,
+];
 
 /// Convert a provider cost in USD to Macro's list rate in whole cents,
 /// rounding up so fractional cents never accrue in the customer's favour.

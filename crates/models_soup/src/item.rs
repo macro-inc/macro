@@ -372,6 +372,7 @@ impl<T> SoupItem<T> {
                 status,
                 attended,
                 participants,
+                guests,
                 extra,
             }) => SoupItem::Call(SoupCallRecord {
                 call_id,
@@ -387,6 +388,7 @@ impl<T> SoupItem<T> {
                 status,
                 attended,
                 participants,
+                guests,
                 extra: f(extra),
             }),
             SoupItem::CalendarEvent(SoupCalendarEvent {

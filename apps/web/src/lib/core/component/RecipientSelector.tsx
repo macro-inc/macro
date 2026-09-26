@@ -26,9 +26,12 @@ import {
 } from '@kobalte/core/combobox';
 import CheckIcon from '@phosphor/check.svg';
 import HashIcon from '@phosphor/hash.svg';
+import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
+import RobotIcon from '@phosphor/robot.svg';
 import XIcon from '@phosphor/x.svg';
+import type { Bot } from '@service-storage/generated/schemas/bot';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn, Layer } from '@ui';
+import { Avatar, cn, Layer } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   type Accessor,
@@ -91,6 +94,25 @@ function RecipientChip(props: {
   );
 }
 
+function AgentAvatar(props: { agent: Bot }) {
+  return (
+    <Avatar size="sm">
+      <Show
+        when={props.agent.avatar_url}
+        fallback={
+          <Avatar.Fallback>
+            <RobotIcon aria-hidden="true" class="size-3.5" />
+          </Avatar.Fallback>
+        }
+      >
+        {(avatarUrl) => (
+          <Avatar.Image src={avatarUrl()} alt={props.agent.name} />
+        )}
+      </Show>
+    </Avatar>
+  );
+}
+
 function getRecipientOptionEmail(
   option: CombinedRecipientItem
 ): string | undefined {
@@ -98,6 +120,7 @@ function getRecipientOptionEmail(
     case 'user':
       return option.data.email;
     case 'channel':
+    case 'agent':
       return undefined;
     case 'contact':
       return option.data.email;
@@ -114,6 +137,8 @@ function getRecipientOptionName(option: CombinedRecipientItem) {
       return undefined;
     case 'channel':
       return option.data.name;
+    case 'agent':
+      return option.data.name;
     case 'contact':
       return option.data.name;
     case 'custom':
@@ -127,6 +152,8 @@ function getRecipientOptionValue(option: CombinedRecipientItem) {
       return `user-${option.data.id}`;
     case 'channel':
       return `channel-${option.data.id}`;
+    case 'agent':
+      return `agent-${option.data.id}`;
     case 'contact':
       return `contact-${option.data.email}`;
     case 'custom':
@@ -140,6 +167,8 @@ function getRecipientOptionLabel(option: CombinedRecipientItem) {
       return option.data.email;
     case 'channel':
       return option.data.id;
+    case 'agent':
+      return option.data.name;
     case 'contact':
       return option.data.email;
     case 'custom':
@@ -156,12 +185,18 @@ function getRecipientOptionTextValue(option: CombinedRecipientItem) {
       return name ? `${name} ${email}` : (email ?? '');
     case 'channel':
       return option.data.name ?? '';
+    case 'agent':
+      return [option.data.name, option.data.handle, option.data.description]
+        .filter(Boolean)
+        .join(' ');
     case 'custom':
       return option.data.email;
   }
 }
 
-type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem>;
+type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem> & {
+  inviteExternalEmails?: boolean;
+};
 
 const RECIPIENT_OPTION_HEIGHT_PX = 36;
 const RECIPIENT_OPTION_MAX_VISIBLE_COUNT = 6;
@@ -215,16 +250,35 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
 
             return (
               <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink select-none text-sm">
-                <UserIcon id={iconId ?? ''} size="sm" isDeleted={false} />
+                <Show
+                  when={props.inviteExternalEmails && option.kind === 'custom'}
+                  fallback={
+                    <UserIcon id={iconId ?? ''} size="sm" isDeleted={false} />
+                  }
+                >
+                  <PaperPlaneTiltIcon
+                    aria-hidden="true"
+                    class="size-4 shrink-0"
+                  />
+                </Show>
                 <p
                   class={cn(
                     'ph-no-capture truncate my-auto',
                     props.disabled && 'italic'
                   )}
                 >
-                  <Show when={showEmail} fallback={name || email}>
-                    {name}
-                    <span class="ml-[0.5em] opacity-50">{email}</span>
+                  <Show
+                    when={
+                      props.inviteExternalEmails && option.kind === 'custom'
+                    }
+                    fallback={
+                      <Show when={showEmail} fallback={name || email}>
+                        {name}
+                        <span class="ml-[0.5em] opacity-50">{email}</span>
+                      </Show>
+                    }
+                  >
+                    <strong class="font-semibold">Invite</strong> {email}
                   </Show>
                 </p>
               </Combobox.ItemLabel>
@@ -246,6 +300,19 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
               </Combobox.ItemLabel>
             );
           }}
+        </Match>
+        <Match when={matches(props.rawValue, (i) => i.kind === 'agent')}>
+          {(item) => (
+            <Combobox.ItemLabel class="flex min-w-0 w-full items-center gap-2 text-sm text-ink select-none">
+              <AgentAvatar agent={item().data} />
+              <span class="min-w-0 truncate font-medium">
+                {item().data.name}
+              </span>
+              <span class="min-w-0 truncate text-xs text-ink-muted">
+                @{item().data.handle}
+              </span>
+            </Combobox.ItemLabel>
+          )}
         </Match>
       </Switch>
 
@@ -281,6 +348,8 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   class?: string;
   depth?: 0 | 1 | 2 | 3 | 4;
   portalScope?: 'local';
+  /** Show an invite action for a complete email outside the known recipients. */
+  inviteExternalEmails?: boolean;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -395,7 +464,8 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     if (
       newestSelection.kind === 'user' ||
       newestSelection.kind === 'contact' ||
-      newestSelection.kind === 'custom'
+      newestSelection.kind === 'custom' ||
+      newestSelection.kind === 'agent'
     ) {
       setCustomUsers(
         value.filter((o) => {
@@ -721,6 +791,19 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                             }}
                           </Match>
                           <Match
+                            when={matches(option, (o) => o.kind === 'agent')}
+                          >
+                            {(agentOption) => (
+                              <RecipientChip
+                                icon={
+                                  <AgentAvatar agent={agentOption().data} />
+                                }
+                                label={agentOption().data.name}
+                                onRemove={() => state.remove(option)}
+                              />
+                            )}
+                          </Match>
+                          <Match
                             when={matches(option, (o) => o.kind === 'custom')}
                           >
                             {(customOption) => {
@@ -731,12 +814,19 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                   chip={
                                     <RecipientChip
                                       icon={
-                                        <UserIcon
-                                          id={email}
-                                          size="sm"
-                                          isDeleted={false}
-                                          showTooltip={false}
-                                        />
+                                        props.inviteExternalEmails ? (
+                                          <PaperPlaneTiltIcon
+                                            aria-hidden="true"
+                                            class="size-4"
+                                          />
+                                        ) : (
+                                          <UserIcon
+                                            id={email}
+                                            size="sm"
+                                            isDeleted={false}
+                                            showTooltip={false}
+                                          />
+                                        )
                                       }
                                       label={email}
                                       onRemove={() => state.remove(option)}
@@ -931,7 +1021,12 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                       ref={setHandle}
                     >
                       {(item) => {
-                        return <RecipientComboboxItem {...item} />;
+                        return (
+                          <RecipientComboboxItem
+                            {...item}
+                            inviteExternalEmails={props.inviteExternalEmails}
+                          />
+                        );
                       }}
                     </VList>
                   );

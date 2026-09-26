@@ -1137,6 +1137,737 @@
         }
       }
     },
+    "/call/join/{token}": {
+      "get": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Handle `GET /call/join/{token}` through the call domain service.",
+        "operationId": "meeting_lookup",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meeting"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Handle `POST /call/join/{token}` through the call domain service.",
+        "operationId": "meeting_guest_join",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestJoinRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/join/{token}/leave": {
+      "post": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Handle `POST /call/join/{token}/leave` through the call domain service.",
+        "operationId": "meeting_leave",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaveCallResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings": {
+      "get": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Handle `GET /call/meetings` through the call domain service.",
+        "operationId": "meeting_list",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Handle `POST /call/meetings` through the call domain service.",
+        "operationId": "meeting_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMeetingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meeting"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/active": {
+      "get": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "List the authenticated actor's active quick calls.",
+        "operationId": "meeting_list_active",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveMeetingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/invite/{token}": {
+      "get": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Read the authenticated caller's invitation capability without exposing the creator.",
+        "operationId": "meeting_invite_permissions",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingInvitePermissions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Queue an owner-authorized guest invitation email.",
+        "operationId": "meeting_invite",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteMeetingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/invite/{token}/users": {
+      "post": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Ring registered teammates selected by the standalone meeting owner.",
+        "operationId": "meeting_invite_users",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteMeetingUsersRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/join/{token}": {
+      "post": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Handle `POST /call/meetings/join/{token}` through the call domain service.",
+        "operationId": "meeting_join",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/{meeting_id}": {
+      "delete": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Handle `DELETE /call/meetings/{meeting_id}` through the call domain service.",
+        "operationId": "meeting_cancel",
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Handle owner-authorized meeting title and schedule edits.",
+        "operationId": "meeting_update",
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMeetingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meeting"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/record/preview": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -1393,6 +2124,76 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/record/{call_id}/link": {
+      "post": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Handle `POST /call/record/{call_id}/link` through the call domain service.",
+        "operationId": "meeting_share",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meeting"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -1796,7 +2597,7 @@
         }
       }
     },
-    "/call/{channel_id}/transcript": {
+    "/call/{room_name}/transcript": {
       "post": {
         "tags": ["call::inbound::axum_router"],
         "summary": "Handler for `POST /call/{channel_id}/transcript`.",
@@ -1804,9 +2605,9 @@
         "operationId": "ingest_transcript",
         "parameters": [
           {
-            "name": "channel_id",
+            "name": "room_name",
             "in": "path",
-            "description": "Channel ID",
+            "description": "RTC room name; the transcription agent passes its LiveKit room verbatim",
             "required": true,
             "schema": {
               "type": "string",
@@ -14692,6 +15493,39 @@
           }
         }
       },
+      "ActiveMeeting": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Meeting",
+            "description": "Existing meeting metadata, with the same fields as other meeting responses."
+          },
+          {
+            "type": "object",
+            "required": ["createdBy"],
+            "properties": {
+              "createdBy": {
+                "type": "string",
+                "description": "Creator identity for displaying the caller in the authenticated active list."
+              }
+            }
+          }
+        ],
+        "description": "Active quick-call metadata available to its authenticated owner or attendees."
+      },
+      "ActiveMeetingsResponse": {
+        "type": "object",
+        "description": "The authenticated actor's active quick calls, including their creators.",
+        "required": ["meetings"],
+        "properties": {
+          "meetings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActiveMeeting"
+            },
+            "description": "Persistent meeting invitations for currently active sessions."
+          }
+        }
+      },
       "ActivityType": {
         "type": "string",
         "description": "The kind of activity a user performs in a channel.",
@@ -17478,13 +18312,13 @@
         "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
         "required": [
           "callId",
-          "channelId",
           "roomName",
           "createdBy",
           "startedAt",
           "shareWithTeam",
           "isActive",
           "participants",
+          "guests",
           "transcript"
         ],
         "properties": {
@@ -17494,7 +18328,7 @@
             "description": "The call identifier."
           },
           "channelId": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The channel this call belongs to."
           },
@@ -17524,6 +18358,13 @@
             "format": "date-time",
             "description": "When the call ended (None if still active)."
           },
+          "guests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordGuest"
+            },
+            "description": "Non-account guests (both active and historic). Guests only ever exist\non standalone meeting calls, never on channel calls."
+          },
           "isActive": {
             "type": "boolean",
             "description": "Whether the call is currently active (from `calls` table)."
@@ -17533,7 +18374,7 @@
             "items": {
               "$ref": "#/components/schemas/CallRecordParticipant"
             },
-            "description": "Participants (both active and historic)."
+            "description": "Macro-account participants (both active and historic)."
           },
           "recordingPreviewUrl": {
             "type": ["string", "null"],
@@ -17607,6 +18448,31 @@
           }
         }
       },
+      "CallRecordGuest": {
+        "type": "object",
+        "description": "A non-account guest as returned in a [`CallRecord`].",
+        "required": ["id", "displayName", "joinedAt"],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Guest-provided display name."
+          },
+          "id": {
+            "$ref": "#/components/schemas/GuestId",
+            "description": "Opaque guest identity; matches the guest's transcript `speaker_id`."
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the guest joined the call."
+          },
+          "leftAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the guest left (None if still in an active call)."
+          }
+        }
+      },
       "CallRecordParticipant": {
         "type": "object",
         "description": "A participant as returned in a [`CallRecord`] (historic — includes `left_at`).",
@@ -17624,7 +18490,7 @@
           },
           "userId": {
             "type": "string",
-            "description": "The user id."
+            "description": "The Macro user id."
           }
         }
       },
@@ -17674,7 +18540,7 @@
       "CallRecordPreviewData": {
         "type": "object",
         "description": "Preview payload returned for each found call id.",
-        "required": ["callId", "channelId", "startedAt"],
+        "required": ["callId", "startedAt"],
         "properties": {
           "callId": {
             "type": "string",
@@ -17682,7 +18548,7 @@
             "description": "The call identifier."
           },
           "channelId": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The channel this call belongs to."
           },
@@ -17763,7 +18629,13 @@
       "CallTokenResponse": {
         "type": "object",
         "description": "Response returned when creating or joining a call.",
-        "required": ["callId", "channelId", "token", "roomName", "serverUrl"],
+        "required": [
+          "participantId",
+          "callId",
+          "token",
+          "roomName",
+          "serverUrl"
+        ],
         "properties": {
           "callId": {
             "type": "string",
@@ -17771,9 +18643,13 @@
             "description": "The call identifier."
           },
           "channelId": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The channel this call is associated with."
+          },
+          "participantId": {
+            "type": "string",
+            "description": "RTC participant identity."
           },
           "roomName": {
             "type": "string",
@@ -17782,6 +18658,10 @@
           "serverUrl": {
             "type": "string",
             "description": "The RTC server URL for the frontend SDK to connect to."
+          },
+          "shareToken": {
+            "type": ["string", "null"],
+            "description": "Meeting link capability, when joined using a link."
           },
           "token": {
             "type": "string",
@@ -19888,6 +20768,26 @@
           "token": {
             "type": "string",
             "description": "A pre-generated permission token that you can use for SS"
+          }
+        }
+      },
+      "CreateMeetingRequest": {
+        "type": "object",
+        "description": "Inputs for creating a meeting without starting its RTC room.",
+        "properties": {
+          "scheduledEnd": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Optional scheduled end."
+          },
+          "scheduledStart": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Optional scheduled start."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Optional display title."
           }
         }
       },
@@ -24509,6 +25409,22 @@
         "description": "Sort method for grouped queries (frecency not supported).",
         "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
       },
+      "GuestId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "A non-account guest of a single call session.\n\nThe id doubles as the guest's RTC participant identity, so identities are\nopaque UUIDs and never share a namespace (or a column) with Macro user\nids. Only the server mints them; Macro users keep `macro|…` identities,\nso an RTC identity classifies as exactly one of the two."
+      },
+      "GuestJoinRequest": {
+        "type": "object",
+        "description": "Public guest join inputs. The server generates the participant identity.",
+        "required": ["displayName"],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Guest's name, displayed to everyone in the room."
+          }
+        }
+      },
       "Harness": {
         "type": "object",
         "description": "A registered user-run harness.\n\nClients deserialize this, so both derives are used.",
@@ -24914,6 +25830,31 @@
         "description": "Why a document interaction was reported.",
         "enum": ["edited", "first_join", "last_leave"]
       },
+      "InviteMeetingRequest": {
+        "type": "object",
+        "description": "A single email recipient for a call invitation.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Recipient email; no Macro account is required."
+          }
+        }
+      },
+      "InviteMeetingUsersRequest": {
+        "type": "object",
+        "description": "Registered teammates selected for an incoming call invitation.",
+        "required": ["userIds"],
+        "properties": {
+          "userIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Human user principals; bot principals and historical bare bot UUIDs are invalid."
+          }
+        }
+      },
       "Item": {
         "oneOf": [
           {
@@ -25109,6 +26050,75 @@
       },
       "MacroUserIdStr": {
         "type": "string"
+      },
+      "Meeting": {
+        "type": "object",
+        "description": "Persistent meeting metadata. No channel contents or archived media are exposed.",
+        "required": ["id", "shareToken", "title"],
+        "properties": {
+          "callId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Currently active call session, if any."
+          },
+          "channelId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Associated channel, for links to existing channel calls only."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Persistent meeting identifier."
+          },
+          "scheduledEnd": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Scheduled end, or none for an instant meeting."
+          },
+          "scheduledStart": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Scheduled start, or none for an instant meeting."
+          },
+          "shareToken": {
+            "$ref": "#/components/schemas/MeetingToken",
+            "description": "Bearer capability embedded in the invitation URL."
+          },
+          "title": {
+            "type": "string",
+            "description": "Human-readable meeting title."
+          }
+        }
+      },
+      "MeetingInvitePermissions": {
+        "type": "object",
+        "description": "Whether the authenticated caller can invite teammates to this meeting.",
+        "required": ["canInvite"],
+        "properties": {
+          "canInvite": {
+            "type": "boolean",
+            "description": "True for the owner of an uncancelled standalone meeting."
+          }
+        }
+      },
+      "MeetingToken": {
+        "type": "string",
+        "description": "A bearer capability that grants access only to a meeting's RTC room."
+      },
+      "MeetingsResponse": {
+        "type": "object",
+        "description": "Uncancelled standalone meetings visible in the requested meeting list.",
+        "required": ["meetings"],
+        "properties": {
+          "meetings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Meeting"
+            },
+            "description": "Persistent meeting invitations, most recently created first."
+          }
+        }
       },
       "Mentions": {
         "type": "object",
@@ -28685,9 +29695,35 @@
           }
         }
       },
+      "SoupCallRecordGuest": {
+        "type": "object",
+        "description": "A non-account guest of a call record, as displayed in Soup.",
+        "required": ["id", "displayName", "joinedAt"],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Guest-provided display name."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Opaque guest identity; matches the guest's transcript speaker id."
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the guest joined the call."
+          },
+          "leftAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the guest left (None if still in an active call)."
+          }
+        }
+      },
       "SoupCallRecordParticipant": {
         "type": "object",
-        "description": "A participant in a call record, as displayed in Soup.",
+        "description": "A Macro-account participant in a call record, as displayed in Soup.",
         "required": ["userId", "joinedAt"],
         "properties": {
           "joinedAt": {
@@ -28702,7 +29738,7 @@
           },
           "userId": {
             "type": "string",
-            "description": "The user id."
+            "description": "The Macro user id."
           }
         }
       },
@@ -28726,13 +29762,13 @@
             "type": "object",
             "required": [
               "callId",
-              "channelId",
               "createdBy",
               "startedAt",
               "isActive",
               "status",
               "attended",
-              "participants"
+              "participants",
+              "guests"
             ],
             "properties": {
               "attended": {
@@ -28745,7 +29781,7 @@
                 "description": "The call identifier."
               },
               "channelId": {
-                "type": "string",
+                "type": ["string", "null"],
                 "format": "uuid",
                 "description": "The channel this call belongs to."
               },
@@ -28771,6 +29807,13 @@
                 "format": "date-time",
                 "description": "When the call ended (None if still active)."
               },
+              "guests": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupCallRecordGuest"
+                },
+                "description": "Non-account guests in the call."
+              },
               "isActive": {
                 "type": "boolean",
                 "description": "Whether the call is currently active."
@@ -28780,7 +29823,7 @@
                 "items": {
                   "$ref": "#/components/schemas/SoupCallRecordParticipant"
                 },
-                "description": "Participants in the call."
+                "description": "Macro-account participants in the call."
               },
               "startedAt": {
                 "type": "string",
@@ -31002,6 +32045,30 @@
                 "description": "Share permission patch. Only the owner may send this field."
               }
             ]
+          }
+        }
+      },
+      "UpdateMeetingRequest": {
+        "type": "object",
+        "description": "Changes to a meeting's title or scheduled time; omitted values stay unchanged.",
+        "properties": {
+          "clearSchedule": {
+            "type": "boolean",
+            "description": "Remove timed scheduling, for example when the calendar event becomes all-day."
+          },
+          "scheduledEnd": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Replacement scheduled end; requires a matching start."
+          },
+          "scheduledStart": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Replacement scheduled start; requires a matching end."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Replacement title, when supplied."
           }
         }
       },

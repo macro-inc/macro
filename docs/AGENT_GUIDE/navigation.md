@@ -15,12 +15,12 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 
 | Route | Surface |
 | --- | --- |
-| `/app` | Redirects to inbox |
+| `/app` | Redirects to Home |
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/inbox/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/inbox/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
+| `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
+| `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
 | `/app/channels` | Channels list |
@@ -39,7 +39,6 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/calls` | Calls list |
 | `/app/companies` | Customers (CRM; needs a team) |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/home` | Assistant (AI-first landing) |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
@@ -53,7 +52,7 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
 
 When an event opens inline from Home, changing the Calendar period stays under
-`/app/inbox/calendar/`, updates the period segment, and re-focuses that event.
+`/app/home/calendar/`, updates the period segment, and re-focuses that event.
 Back/Forward restores the period and its event locator from `sN.calendar.*`.
 
 Home uses the shared channel and file details for channel conversations and
@@ -61,7 +60,7 @@ supported documents, with a **Home** breadcrumb that returns to the list. A
 channel message or thread target stays in its conversation. Document comment
 targets, spreadsheets, unknown items, and other unsupported block types retain
 the legacy inline preview so their navigation still works. The URL shape stays
-`/app/inbox/<block-type>/<uuid>` in either rendering mode.
+`/app/home/<block-type>/<uuid>` in either rendering mode.
 
 On touch devices, documents (including tasks) open in legacy blocks rather than
 inline Drive details. Canonical `/app/drive/.../<document-type>/<uuid>` links also
@@ -69,14 +68,19 @@ fall back to legacy document routes. This uses touch detection, not the native-a
 check: in DevTools, enable touch emulation rather than only narrowing the viewport.
 Legacy document URLs upgrade to Drive only when desktop detail rendering is enabled.
 
-Splits: the app is a tiling window manager. Public variable-length routes use
+The outer navigation rail uses 20px icons in 40px buttons with 4px gaps.
+Command and create-menu headers have 20px horizontal and 12px vertical padding.
+
+Splits: the app is a tiling window manager. Active light-theme panes are white;
+inactive desktop panes are slightly darker than the active pane across themes,
+while retaining the theme hue. Public variable-length routes use
 `~` as the boundary between panes
 (`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`
 pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
 to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
 namespaced query parameters such as `s0.drive.sort=created_at`; route identity
 and breadcrumb nesting remain in the path. Home, Email, Tasks, and Channels
-store the selected tab under `sN.inbox.tab`, `sN.mail.tab`, `sN.tasks.tab`,
+store the selected tab under `sN.home.tab`, `sN.mail.tab`, `sN.tasks.tab`,
 and `sN.channels.tab`, respectively. Channels also stores the phone list
 selection as `sN.channels.mobileTab`. Omitted tab keys mean each view's default;
 changing tabs updates the URL, and browser Back/Forward restores the selection
@@ -136,7 +140,10 @@ workspaces reopen navigation as an overlay; the backdrop or **Hide navigation**
 closes it temporarily. Opening or closing the narrow overlay never changes the
 saved wide-layout preference. Widening restores that preference, including in
 Home and Chat: navigation returns unless explicitly hidden at desktop width.
-Shrinking again starts with the overlay closed.
+Shrinking again starts with the overlay closed. Chat is the exception while no
+conversation is selected: its navigation stays docked with no **Hide
+navigation** control, and narrow Chat opens the overlay on its own (see
+[Chat navigation rail](channels.md#chat-navigation-rail)).
 The overlay never contains the split's **Close** button. Mobile keeps
 its existing navigation controls. Block detail panels (including Calendar) have
 **Hide side panel** in their own header and a hamburger **Show side panel** beside
@@ -183,7 +190,7 @@ stay centered and the preview body fills the remaining height below the divider.
   new split, including when Search is already active. This left-click menu shares
   its surface and item styling with the sidebar right-click menus, in both the
   compact rail and expanded sidebar.
-- Nav: `Go to Assistant`, `Go to Getting Started`, `Go to Home`, `Go to Recent`, `Go to Activity`.
+- Nav: `Go to Home`, `Go to Getting Started`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
   `Go to Calendar`, `Go to Agents`, `Go to Customers`.
 - Then `Favorites` (pinned items) and `Latest` (recent channels/DMs with an `Unread` switch).
@@ -237,7 +244,7 @@ logical split has no sidebar close button; mobile chrome is unchanged.
 A lone non-list content split still shows a header X labeled **Return to list**,
 which returns that split to the most recent list in its history, preserving
 that list’s state. If there is no prior list, it replaces the current entry with
-inbox. Excluded background panels do not count toward close eligibility.
+Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
@@ -371,8 +378,10 @@ dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touc
 drops in favour of the card's DM action.
 
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
-Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
+Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task and Channel open dialogs.
+When calls are enabled, `C C` (Create → Call) opens `/app/meet/new`. The call is
+created only after `Start call`; Escape closes the Create menu.
 
 Mobile glass presses animate the enclosing surface over 300ms. Round buttons
 retain roughly 20% growth; wide pills and grouped controls extend their glass
@@ -446,8 +455,7 @@ Shared Mail restart rules still apply.
 - `c` then `d`/`t`/`e`/`m`/`a` — create doc / task / email / channel / AI chat.
   Single-letter shortcuts only work when no editor has focus; press `Escape` first.
 - `/` — search everything. `j`/`k` — move in lists. `e` — mark done.
-- `g` then `h` — Home (inbox); `g` then `i` remains an alias. Assistant is
-  available through its sidebar link or the `Go to Assistant` command.
+- `g` then `h` — Home; `g` then `i` remains an alias.
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.

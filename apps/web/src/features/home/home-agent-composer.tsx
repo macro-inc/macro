@@ -83,6 +83,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
       <NewChatPage
         roster={roster.roster()}
         rosterLoading={roster.loading()}
+        availabilityLoading={roster.availabilityLoading()}
         draft={draft()}
         onDraftChange={(value) => {
           draftVersion++;

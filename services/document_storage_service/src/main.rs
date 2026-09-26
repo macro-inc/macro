@@ -724,12 +724,30 @@ async fn run() -> anyhow::Result<()> {
             .with_event_broker(macro_event_broker.clone()),
     );
 
+    consumer_tracker.spawn({
+        let service = call_service.clone();
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            cancellation_token
+                .run_until_cancelled(call::inbound::stale_call_sweeper::run_stale_call_sweeper(
+                    service,
+                    call::inbound::stale_call_sweeper::SWEEP_INTERVAL,
+                ))
+                .await;
+        }
+    });
+
     let call_state = CallRouterState::new(
         call_service.clone(),
         entity_access_service.clone(),
         authorization_state.clone(),
     );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
+    let call_public_rate_limiter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        },
+    };
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
     let webhook_endpoint_scheme_policy = if matches!(env, Environment::Local) {
@@ -1622,6 +1640,7 @@ async fn run() -> anyhow::Result<()> {
         channel_bot_webhook_state,
         call_state,
         call_webhook_state,
+        call_public_rate_limiter,
         webhook_state,
         sse_stream_state,
         call_internal_state,

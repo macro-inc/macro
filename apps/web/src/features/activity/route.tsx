@@ -26,7 +26,7 @@ export const ActivityRouteView = withAuth(() => {
       when={enabled()}
       fallback={
         <Show when={posthog.flagsLoaded()}>
-          <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+          <RedirectSplit to={{ type: 'component', id: 'home' }} />
         </Show>
       }
     >

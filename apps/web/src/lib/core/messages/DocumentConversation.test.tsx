@@ -130,6 +130,13 @@ function discussion(
 }
 
 describe('DocumentConversation placement', () => {
+  it('renders the Discussion disclosure as an icon instead of a text glyph', () => {
+    const view = discussion([[]]);
+    const button = view.getByRole('button', { name: 'Discussion' });
+    expect(button.querySelector('svg')).toBeTruthy();
+    expect(button.textContent?.trim()).toBe('Discussion');
+  });
+
   it('leaves the inline composer to a floating placement and hides an empty conversation on request', () => {
     const view = discussion([[]], undefined, {
       canWrite: true,

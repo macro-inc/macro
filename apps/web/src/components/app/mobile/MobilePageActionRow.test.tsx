@@ -325,7 +325,7 @@ describe('Mobile page action row', () => {
     expect(mocks.createMenu).toHaveBeenCalledWith(true);
   });
   it('opens Home’s quick create actions in the requested order and restores focus on dismissal', async () => {
-    mocks.view = 'inbox';
+    mocks.view = 'home';
     render(() => <MobilePageActionRow />);
     const trigger = screen.getByRole('button', { name: 'New' });
     expect(screen.queryByRole('button', { name: 'New message' })).toBeNull();
@@ -346,7 +346,7 @@ describe('Mobile page action row', () => {
   it.each(['Email', 'Message', 'Document', 'Event', 'Task', 'More'])(
     'hands off Home’s %s action after closing the quick menu',
     async (label) => {
-      mocks.view = 'inbox';
+      mocks.view = 'home';
       render(() => <MobilePageActionRow />);
       fireEvent.click(screen.getByRole('button', { name: 'New' }));
       const menu = await screen.findByRole('dialog', { name: 'Create new' });

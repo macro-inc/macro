@@ -50,6 +50,7 @@ function createCalendarEventSelection(
 ) {
   const [event, setEvent] = createSignal<CalendarEvent>();
   const [anchor, setAnchor] = createSignal<HTMLElement>();
+  const [origin, setOrigin] = createSignal<'grid' | 'agenda'>('grid');
 
   const close = (notify = true) => {
     const hadSelection = event() !== undefined || anchor() !== undefined;
@@ -59,10 +60,15 @@ function createCalendarEventSelection(
     });
     if (notify && hadSelection) onFocusedEventIdChange?.(undefined);
   };
-  const select = (nextEvent: CalendarEvent, nextAnchor: HTMLElement) => {
+  const select = (
+    nextEvent: CalendarEvent,
+    nextAnchor: HTMLElement,
+    nextOrigin: 'grid' | 'agenda' = 'grid'
+  ) => {
     batch(() => {
       setEvent(() => nextEvent);
       setAnchor(nextAnchor);
+      setOrigin(nextOrigin);
     });
     onFocusedEventIdChange?.(nextEvent.eventId);
   };
@@ -70,7 +76,7 @@ function createCalendarEventSelection(
     if (event()?.id === nextEvent.id) setEvent(nextEvent);
   };
 
-  return { anchor, close, event, refresh, select };
+  return { anchor, close, event, origin, refresh, select };
 }
 
 export const [CalendarViewContextProvider, useCalendarView] =
@@ -146,6 +152,23 @@ export const [CalendarViewContextProvider, useCalendarView] =
 
       const closeEventDetails = () => selection.close();
 
+      const refreshSelectedEventFromPage = (
+        eventsById: ReadonlyMap<string, CalendarEvent>,
+        rangeIsCurrent: boolean
+      ) => {
+        const selected = selection.event();
+        if (!selected) return;
+        const event = eventsById.get(selected.id);
+        if (event) {
+          if (isCalendarEventVisible(event, isSourceVisible))
+            selection.refresh(event);
+          else closeEventDetails();
+        } else if (rangeIsCurrent && selection.origin() === 'grid') {
+          // Agenda selections can be outside the visible grid's date range.
+          closeEventDetails();
+        }
+      };
+
       const setSourceVisibility = (sourceId: string, visible: boolean) => {
         setPreferences('hiddenSourceIds', (current) =>
           visible
@@ -186,6 +209,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
         closeEventDetails,
         selectEvent: selection.select,
         refreshSelectedEvent: selection.refresh,
+        refreshSelectedEventFromPage,
       };
     }
   );

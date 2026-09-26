@@ -451,9 +451,11 @@ export type SplitRouterLayoutOpenResult<TSplitId> =
 
 export interface SplitRouterLayout<TSplitId> {
   snapshot(): SplitRouterLayoutSnapshot<TSplitId>;
+  /** The replace flag controls split history when mounted content changes. */
   updateCurrentLocation(
     splitId: TSplitId,
-    update: (current: SplitRouterLayoutEntry<TSplitId>) => SplitLocation
+    update: (current: SplitRouterLayoutEntry<TSplitId>) => SplitLocation,
+    replace?: boolean
   ): void;
   open(request: {
     location: SplitLocation;

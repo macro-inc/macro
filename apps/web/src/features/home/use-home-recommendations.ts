@@ -105,7 +105,7 @@ export function useHomeRecommendations() {
           { activate: true, preferNewSplit: true }
         );
       })
-      .otherwise(() => navigate(LIST_VIEW_PATHS.inbox));
+      .otherwise(() => navigate(LIST_VIEW_PATHS.home));
   };
 
   const retry = () => {

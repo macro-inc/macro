@@ -19,6 +19,8 @@ export type EmailQueryContext = {
   inboxIds: string[] | undefined;
   facets: FacetSelection;
   facetContext: EmailFacetContext;
+  /** Macro favorites, resolved before listing or searching the Favorites tab. */
+  favoriteThreadIds?: readonly string[];
 };
 
 /**
@@ -33,27 +35,28 @@ export const emailViewForTab = (tab: EmailTab): string =>
     // Soup source on drafts so its query shape remains valid while disabled.
     .with('scheduled', () => 'drafts')
     .with('sent', () => 'sent')
-    .with('calendar', 'shared', 'all', () => 'all')
+    .with('favorites', 'calendar', 'shared', 'all', () => 'all')
     .exhaustive();
 
 const anyThread = (): TargetExpr => clause.not(clause.eq('threadId', NIL_UUID));
 
 // Preserve a shallow tree through both the REST and GraphQL AST compilers.
 // A flat 100-way clause.or becomes a linear tree and exceeds JSON ingress depth.
-function admittedThreads(ids: readonly string[]): TargetExpr {
+function threadIdsClause(ids: readonly string[]): TargetExpr {
   if (ids.length < 2) return clause.eq('threadId', ids[0] ?? NIL_UUID);
   const middle = Math.floor(ids.length / 2);
   return clause.or(
-    admittedThreads(ids.slice(0, middle)),
-    admittedThreads(ids.slice(middle))
+    threadIdsClause(ids.slice(0, middle)),
+    threadIdsClause(ids.slice(middle))
   );
 }
 
 // Deliberately no `!isDraft` exclusion here: `isDraft` is thread-level, so
 // excluding it hid whole conversations the moment a reply draft saved (#5940).
-function tabClause(tab: EmailTab): TargetExpr {
+function tabClause(context: EmailQueryContext): TargetExpr {
   return (
-    match(tab)
+    match(context.tab)
+      .with('favorites', () => threadIdsClause(context.favoriteThreadIds ?? []))
       .with('important', () =>
         clause.and(
           clause.eq('emailImportance', true),
@@ -98,9 +101,9 @@ export function buildEmailQuery(
   context: EmailQueryContext,
   admittedIds?: readonly string[]
 ): SoupAstItemsQueryArgs {
-  const expressions = [tabClause(context.tab)];
+  const expressions = [tabClause(context)];
   if (admittedIds) {
-    expressions.push(admittedThreads(admittedIds));
+    expressions.push(threadIdsClause(admittedIds));
   }
   const inbox = inboxClause(context.inboxIds);
   if (inbox) expressions.push(inbox);

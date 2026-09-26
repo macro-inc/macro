@@ -8,9 +8,9 @@ import { useItemRawName } from '@queries/preview';
 import type { ItemEntity } from '@queries/preview/types';
 import { Show } from 'solid-js';
 import type {
-  EntityDetailNavigationStackEntry,
+  EntityDetailNavigationEntry,
   EntityDetailTarget,
-} from './EntityDetailNavigationStack';
+} from './entity-detail-target';
 
 function breadcrumbIcon(target: EntityDetailTarget): EntityIconSelector {
   if (target.type === 'document') {
@@ -45,7 +45,7 @@ function fallbackBreadcrumbName(target: EntityDetailTarget) {
 }
 
 function BreadcrumbItem(props: {
-  entry: EntityDetailNavigationStackEntry;
+  entry: EntityDetailNavigationEntry;
   order: number;
   name: string;
 }) {
@@ -75,7 +75,7 @@ function BreadcrumbItem(props: {
 }
 
 function LiveBreadcrumbItem(props: {
-  entry: EntityDetailNavigationStackEntry;
+  entry: EntityDetailNavigationEntry;
   order: number;
   previewItem: ItemEntity;
 }) {
@@ -93,7 +93,7 @@ function LiveBreadcrumbItem(props: {
 }
 
 export function EntityDetailBreadcrumbItem(props: {
-  entry: EntityDetailNavigationStackEntry;
+  entry: EntityDetailNavigationEntry;
   order: number;
 }) {
   return (

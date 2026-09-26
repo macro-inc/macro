@@ -219,6 +219,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
+    /// Get direct user grants only, excluding inherited channel, team, and project access.
+    fn get_direct_entity_users(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
     /// Get all active participant user IDs in a channel.
     fn get_channel_users(
         &self,

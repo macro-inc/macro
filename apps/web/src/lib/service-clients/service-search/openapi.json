@@ -645,7 +645,6 @@
           "id",
           "owner_id",
           "call_id",
-          "channel_id",
           "participant_ids",
           "call_search_results"
         ],
@@ -661,7 +660,7 @@
             }
           },
           "channel_id": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "id": {
@@ -3269,7 +3268,6 @@
       "SearchGotoCallRecord": {
         "type": "object",
         "required": [
-          "channel_id",
           "transcript_id",
           "speaker_id",
           "sequence_num",
@@ -3278,7 +3276,7 @@
         ],
         "properties": {
           "channel_id": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "ended_at": {
@@ -3549,7 +3547,6 @@
         "type": "object",
         "required": [
           "call_id",
-          "channel_id",
           "user_id",
           "participant_ids",
           "started_at",
@@ -3562,7 +3559,7 @@
             "type": "string"
           },
           "channel_id": {
-            "type": "string"
+            "type": ["string", "null"]
           },
           "channel_name": {
             "type": ["string", "null"]

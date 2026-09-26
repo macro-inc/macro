@@ -47,6 +47,20 @@ describe('channel selection hydration', () => {
     expect(full.target?.messageId).toBe('explicit-search-target');
   });
 
+  it('keeps the pre-await channel id if the store proxy loses it mid-fetch', async () => {
+    const row = channel([
+      { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
+    ]);
+    fetchNotifications.mockImplementation(async () => {
+      (row as { id?: string }).id = undefined;
+      return [{ id: 'one' }];
+    });
+    const full = await hydrateChannelNotificationSelection(row);
+    expect(full.id).toBe('channel');
+    expect(full.type).toBe('channel');
+    expect(full.notifications?.()).toEqual([{ id: 'one' }]);
+  });
+
   it('does not silently mark a partial selection on a failed full read', async () => {
     fetchNotifications.mockRejectedValue(new Error('offline and uncached'));
     await expect(

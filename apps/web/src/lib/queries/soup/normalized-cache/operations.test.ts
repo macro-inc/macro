@@ -731,7 +731,7 @@ describe('optimisticUpdateSoupItemUpdatedAt', () => {
 
 // -- Normalized grouped cache tests --
 
-import { soupItemMatchesInboxTab } from '@app/features/inbox-view/queries/inbox-item-filter';
+import { soupItemMatchesHomeTab } from '@app/features/home/queries/home-item-filter';
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import {
   soupItemMatchesProjectMembership,
@@ -1631,7 +1631,7 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
  * queries both carry `emailView: 'inbox'`, so a websocket notification for a
  * cached noise email restored the row into the Signal feed (and vice versa)
  * until an unrelated refetch corrected it. The inbox now attaches
- * `soupItemMatchesInboxTab` as each tab query's `insertFilter`.
+ * `soupItemMatchesHomeTab` as each tab query's `insertFilter`.
  */
 describe('inbox tab gate (Signal vs Noise)', () => {
   function inboxEmailItem(id: string, isSignal: boolean): SoupApiItem {
@@ -1650,7 +1650,7 @@ describe('inbox tab gate (Signal vs Noise)', () => {
     ];
     testQueryClient.setQueryDefaults(key, {
       meta: {
-        insertFilter: (item: SoupApiItem) => soupItemMatchesInboxTab(item, tab),
+        insertFilter: (item: SoupApiItem) => soupItemMatchesHomeTab(item, tab),
       },
     });
     const data: InfiniteData<SoupAstItemsFlatPage, unknown> = {

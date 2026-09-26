@@ -103,6 +103,9 @@ describe('favorites transport', () => {
   it('maps agent sessions to their canonical favorite entity type', () => {
     expect(favoriteEntityType('agent_session')).toBe('agent_session');
   });
+  it('maps foreign entities to backend favorites', () => {
+    expect(favoriteEntityType('foreign')).toBe('foreign_entity');
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();

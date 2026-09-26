@@ -398,6 +398,7 @@ const FavoriteRow = (props: {
       referredFrom: 'sidebar',
       activate: true,
       preferNewSplit,
+      allowDuplicate: props.favorite.entityType === 'foreign_entity',
     });
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
       toast.alert('Content already open');

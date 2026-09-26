@@ -527,6 +527,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             ai_billing::outbound::PgUsageReader::new(pool.clone()),
             ai_billing::outbound::PgBillingRepo::new(pool.clone()),
             ai_billing::outbound::NoOpPaymentGateway,
+            macro_env::Environment::Local,
         )),
         user_permissions_service,
         config: Arc::new(Config::new_empty_for_test()),

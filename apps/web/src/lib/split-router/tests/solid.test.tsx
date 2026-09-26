@@ -1,5 +1,11 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
-import { type Accessor, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  onCleanup,
+  onMount,
+  startTransition,
+} from 'solid-js';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
@@ -7,6 +13,7 @@ import {
   type SetSearchParams,
 } from '../create-search-params';
 import { createMemorySplitRouterLocation } from '../integrations/memory';
+import { createSolidRouterLocation } from '../integrations/solid-router';
 import { defineRoute, defineRoutes } from '../routes';
 import {
   SplitRouter,
@@ -102,6 +109,7 @@ const schema = z.object({
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe('Solid split router hooks', () => {
@@ -396,6 +404,84 @@ describe('Solid split router hooks', () => {
 
     expect(mounts).toBe(2);
     expect(disposals).toBe(1);
+  });
+
+  it('mounts keyed details before synchronizing their browser URLs', async () => {
+    vi.useFakeTimers();
+    const [external, setExternal] = createSignal({
+      pathname: '/detail/one',
+      state: undefined as unknown,
+    });
+    let mountedId: string | undefined;
+    let router!: ReturnType<typeof useSplitRouter<string>>;
+    const commits: Array<{ url: string; mountedId: string | undefined }> = [];
+    const location = createSolidRouterLocation({
+      pathname: () => external().pathname,
+      state: () => external().state,
+      navigate: (url, options) => {
+        commits.push({ url, mountedId });
+        return startTransition(() =>
+          setExternal({ pathname: url, state: options.state })
+        );
+      },
+    });
+    const View = () => {
+      router = useSplitRouter<string>();
+      const { id } = useParams<{ id: string }>();
+      onMount(() => {
+        mountedId = id;
+      });
+      onCleanup(() => {
+        mountedId = undefined;
+      });
+      return <article>{id}</article>;
+    };
+    const view = render(() => (
+      <SplitRouter.Root
+        layout={createLayout()}
+        routes={{
+          definitions: [
+            {
+              id: 'detail',
+              path: 'detail/:id',
+              component: View,
+              remountKey: (params) =>
+                typeof params.id === 'string' ? params.id : undefined,
+            },
+          ],
+        }}
+        location={location}
+      >
+        <SplitRouter.Outlet splitId="split" />
+      </SplitRouter.Root>
+    ));
+    await vi.runAllTimersAsync();
+    commits.length = 0;
+
+    for (const id of ['two', 'three', 'two', 'one']) {
+      router.navigate('split', `/detail/${id}`);
+      expect(view.getByRole('article').textContent).toBe(id);
+      await vi.runAllTimersAsync();
+      expect(commits.at(-1)).toEqual({ url: `/detail/${id}`, mountedId: id });
+    }
+    expect(commits).toHaveLength(4);
+  });
+
+  it('cancels pending browser URL updates when the router is disposed', async () => {
+    vi.useFakeTimers();
+    const navigate = vi.fn();
+    const location = createSolidRouterLocation({
+      pathname: () => '/drive',
+      navigate,
+    });
+    const unsubscribe = location.subscribe(() => {});
+    location.commit(
+      { pathname: '/drive/folder/one', search: '', hash: '' },
+      { history: 'push' }
+    );
+    unsubscribe();
+    await vi.runAllTimersAsync();
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it.each(['invalid', 'updated_at'])(

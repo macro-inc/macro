@@ -17,7 +17,6 @@ import { useTeamOooEvents } from '@app/features/calendar/hooks/use-team-ooo';
 import {
   type CalendarEvent,
   DEFAULT_CALENDAR_SOURCE,
-  isCalendarEventVisible,
 } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import {
@@ -30,6 +29,7 @@ import {
   timeGridScroller,
 } from '@app/features/calendar/utils/time-grid-scroller';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
@@ -218,6 +218,7 @@ export function Page(props: {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
   const openEventComposer = useOpenEventComposer();
+  const quickCalls = useQuickCallsFlag();
   const calendarsQuery = useVisibleCalendarsQuery();
   const firstWritableCalendar = createMemo(() =>
     calendarsQuery.data?.find((calendar) => calendar.isWritable)
@@ -261,7 +262,10 @@ export function Page(props: {
     setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
     openEventComposer({
       initialValues: {
-        ...calendarSelectionToEditorInitialValues(selection),
+        ...calendarSelectionToEditorInitialValues(
+          selection,
+          quickCalls().enabled && !quickCalls().loading
+        ),
         ...(calendar ? { calendarId: calendar.id } : {}),
       },
       onCalendarChange: (_calendarId: string, color: string) =>
@@ -443,21 +447,11 @@ function CalendarPageHost(props: {
 
         // Placeholder data is the previous range, so an absent event proves
         // nothing yet.
-        const selectedEvent = eventsById.get(selectedEventId);
-        if (selectedEvent) {
-          if (
-            isCalendarEventVisible(selectedEvent, calendarView.isSourceVisible)
-          ) {
-            calendarView.refreshSelectedEvent(selectedEvent);
-          } else {
-            calendarView.closeEventDetails();
-          }
-        } else if (
+        calendarView.refreshSelectedEventFromPage(
+          eventsById,
           props.data.occurrencesQuery.isSuccess &&
-          !props.data.occurrencesQuery.isPlaceholderData
-        ) {
-          calendarView.closeEventDetails();
-        }
+            !props.data.occurrencesQuery.isPlaceholderData
+        );
       }
     )
   );
